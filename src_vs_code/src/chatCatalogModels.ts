@@ -1,6 +1,6 @@
 import { legacyPick, type ChatProviderList, type LegacyPick } from './chatModels';
 import { chatModelPresetsFrom, type ModelPreset } from './chatPresets';
-import { movedRecordFrom, wasMoved, type MovedPreset } from './chatPresetMove';
+import { entryOf, movedRecordFrom, wasMoved, type MovedPreset } from './chatPresetMove';
 import { vendorsFrom, type Vendor } from './vendors';
 
 /**
@@ -68,9 +68,13 @@ export function chatModelsReading(presets: unknown, read: (key: string) => unkno
 /**
  * The row a saved value names now: an old preset id — a conversation's record, or `coai.chatModel` — is followed to
  * the row the move made of it; anything else is returned as it is.
+ *
+ * <p>The NEWEST entry of that id (`chatPresetMove.entryOf`), as `catalogChatStep.recordedEntryOf` reads it: a record epic
+ * 4's build wrote can hold two for one preset — an older build's edit moved into a second row — and the two readers
+ * disagreed, this one taking the revision the person had edited away (R7, epic 5 prerequisite (a)).</p>
  */
 export function movedTo(saved: string, record: readonly MovedPreset[]): string {
-  return record.find((one) => one.presetId === saved)?.rowId ?? saved;
+  return entryOf(saved, record)?.rowId ?? saved;
 }
 
 /**

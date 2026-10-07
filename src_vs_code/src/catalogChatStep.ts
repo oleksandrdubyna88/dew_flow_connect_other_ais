@@ -136,7 +136,7 @@ function preferredOf(layer: ChatLayer): readonly MovedPreset[] {
 /** The rows, the record, and — in the user layer — the model the chat opens on. */
 function stepOf(layer: ChatLayer, moved: ChatMove): ChatStep {
   const added = moved.record.slice(movedRecordFrom(layer.chatPresetsMoved).length);
-  const chatKeys = ownsChatModel(layer) ? opensOn(layer, added, moved.main) : inheritedFix(layer, moved.record);
+  const chatKeys = ownsChatModel(layer) ? opensOn(layer, added, moved.main, moved.rows) : inheritedFix(layer, moved.record);
 
   return { rows: moved.rows, writes: [{ key: 'chatPresetsMoved', value: moved.record }, ...chatKeys], changed: true };
 }
@@ -152,8 +152,15 @@ function ownsChatModel(layer: ChatLayer): boolean {
 /**
  * The model the chat opens on, after this run: the main preset's row AND its model — a stale model name would open
  * another model on that row — else the row the saved choice named, when this run moved it; else nothing is written.
+ *
+ * <p>A run that moved nothing and still writes — it gave an entry written before R7 its snapshot — owes what a run with
+ * nothing to write owes: the remap of an interrupted run ({@link remapped}), which it would otherwise put off to a run
+ * nothing triggers.</p>
  */
-function opensOn(layer: ChatLayer, added: readonly MovedPreset[], main: ChatMove['main']): readonly ChatWrite[] {
+function opensOn(layer: ChatLayer, added: readonly MovedPreset[], main: ChatMove['main'], rows: readonly RawRow[]): readonly ChatWrite[] {
+  if (added.length === 0) {
+    return remapOf(layer, rows);
+  }
   if (main !== undefined) {
     return [{ key: 'chatModel', value: main.rowId }, { key: 'chatModelName', value: main.model }];
   }

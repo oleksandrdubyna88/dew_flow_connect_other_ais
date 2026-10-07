@@ -8,10 +8,31 @@ import { freeVendorId, normaliseId } from './vendors';
  *
  * <p>Each preset the chat sees becomes a catalog row of its OWN, ticked Chat: never joined to an existing row, because
  * the launch match ignores the Team server and two presets' starting texts would collapse into one. What a later run
- * skips by is the RECORD this writes — each moved preset's id with its fingerprint (runtime, model, name) and the row it
- * became — never the row's key name, which a person can change, duplicate or delete. So a deleted row stays deleted,
- * and a positional id (`preset-N`) that shifted onto a different preset is moved as the different preset it is.</p>
+ * skips by is the RECORD this writes — each moved preset's id, the row it became, and a snapshot of everything the move
+ * copied ({@link COPIED_FIELDS}) — never the row's key name, which a person can change, duplicate or delete. So a deleted
+ * row stays deleted.</p>
+ *
+ * <p>A preset is matched to its entry by its id alone (R7, epic 5 prerequisite (a)): an older build that edits it after
+ * the move makes a REVISION of the same preset, which `chatPresetRevision.ts` raises on Chat, never a second row. So a
+ * positional id (`preset-N`) that shifted onto a different preset is raised the same way — the person sees both and
+ * chooses — where it used to be moved into a row of its own.</p>
  */
+
+/**
+ * Every field a moved row takes from its preset — what {@link rowOf} copies, under the row's own names — and so every
+ * field an entry's snapshot holds (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7).
+ *
+ * <p>ONE list, which `rowOf` is built from ({@link copiedOf}), so a field the move learns to copy is a field the snapshot
+ * compares the day it is added. The record used to fingerprint on three of these and nothing else, and an older build's
+ * edit of a CLI path, an endpoint, a starting text or a Team server after the move was then silently `unchanged`: the
+ * chat kept the old values and nobody was told (the plan round, finding 2).</p>
+ */
+export const COPIED_FIELDS = ['name', 'runtime', 'model', 'baseUrl', 'executablePath', 'chatStartingPrompt', 'vaultKeyName', 'teamServerId', 'remoteVendor'] as const;
+
+export type CopiedField = (typeof COPIED_FIELDS)[number];
+
+/** What the move copied from a preset, by the row's field names — a field it did not write is absent. */
+export type MovedCopy = Readonly<Partial<Record<CopiedField, string>>>;
 
 /** One moved preset, as the record keeps it. */
 export interface MovedPreset {
@@ -20,6 +41,12 @@ export interface MovedPreset {
   readonly model: string;
   readonly name: string;
   readonly rowId: string;
+  /**
+   * The preset as it was moved — or as it was last resolved — field by field ({@link COPIED_FIELDS}). Optional: an
+   * entry written before R7 has none, and takes one from its row on disk the first time this build reads it
+   * ({@link snapshotted}). A preset that differs from it is a conflicting revision (`chatPresetRevision.ts`).
+   */
+  readonly copied?: MovedCopy;
 }
 
 /** A raw catalog row, as the settings file holds it. */
@@ -45,9 +72,13 @@ export interface ChatMove {
   readonly changed: boolean;
 }
 
-/** The record as stored — every entry that has its five strings; anything else left out. */
+/**
+ * The record as stored — every entry that has its five strings; anything else left out. A snapshot that is not an
+ * object is dropped rather than the entry: an entry without one is still a preset that moved, and takes its snapshot from
+ * its row again ({@link snapshotted}) — dropping the ENTRY would move the preset a second time.
+ */
 export function movedRecordFrom(raw: unknown): readonly MovedPreset[] {
-  return (Array.isArray(raw) ? raw : []).filter(isMoved);
+  return (Array.isArray(raw) ? raw : []).filter(isMoved).map(withReadSnapshot);
 }
 
 const FIELDS = ['presetId', 'runtime', 'model', 'name', 'rowId'] as const;
@@ -58,18 +89,80 @@ function isMoved(value: unknown): value is MovedPreset {
   return one !== undefined && FIELDS.every((field) => typeof one[field] === 'string');
 }
 
-/** Whether a preset is the one an entry recorded — the same id, and still the same model under it. */
-export function wasMoved(preset: ModelPreset, record: readonly MovedPreset[]): boolean {
-  return record.some((one) => one.presetId === preset.id && one.runtime === preset.runtime && one.model === preset.model && one.name === preset.name);
+/** The entry with its snapshot as it can be read — its known string fields only — or without one. */
+function withReadSnapshot(one: MovedPreset): MovedPreset {
+  const { copied, ...entry } = one;
+  const raw: unknown = copied;
+
+  return isObject(raw) ? { ...entry, copied: copyFrom(raw) } : entry;
 }
 
-/** Every preset the record does not hold yet becomes its own row, in the presets' order. */
+function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The copied fields a stored value holds as strings — a snapshot as written, or a row on disk. */
+function copyFrom(value: Readonly<Record<string, unknown>>): MovedCopy {
+  return Object.fromEntries(COPIED_FIELDS.flatMap((field) => {
+    const held = value[field];
+
+    return typeof held === 'string' ? [[field, held]] : [];
+  }));
+}
+
+/**
+ * Whether the record holds a preset — by its id, whatever the preset says now (R7). It used to be a fingerprint of id,
+ * runtime, model and name, so an older build's edit of any of the three after the move was a preset the record did not
+ * hold, and was moved again into a second row (`chat-<id>-2`); an edit of anything else was not seen at all. An edit
+ * after the move is a revision of the SAME preset, raised as a conflict (`chatPresetRevision.ts`), never a new row.
+ */
+export function wasMoved(preset: ModelPreset, record: readonly MovedPreset[]): boolean {
+  return record.some((one) => one.presetId === preset.id);
+}
+
+/**
+ * The entry a preset answers to: the NEWEST of its id. Two exist only where epic 4's build moved an older build's edit
+ * into a second row, and the newest is the row that edit went to — the one `catalogChatStep.recordedEntryOf` and
+ * `chatCatalogModels.movedTo` read too.
+ */
+export function entryOf(presetId: string, record: readonly MovedPreset[]): MovedPreset | undefined {
+  return [...record].reverse().find((one) => one.presetId === presetId);
+}
+
+/**
+ * The record with a snapshot for every entry in force that has none — an entry written before R7 — taken from its ROW on
+ * disk, so an edit an older build already made to the preset differs from it and is raised rather than silently lost (the
+ * plan round, finding 4). Where the row is gone (a deleted row stays deleted) or the preset is (finding 3), the entry is
+ * left as it is: nothing is read from a value that is not there. The SAME array when nothing was taken, so a caller can
+ * tell a run that has something to write.
+ */
+export function snapshotted(record: readonly MovedPreset[], presets: readonly ModelPreset[], rows: readonly RawRow[]): readonly MovedPreset[] {
+  const taken = record.map((one) => (owesSnapshot(one, record, presets) ? withRowSnapshot(one, rows) : one));
+
+  return taken.some((one, index) => one !== record[index]) ? taken : record;
+}
+
+function owesSnapshot(one: MovedPreset, record: readonly MovedPreset[], presets: readonly ModelPreset[]): boolean {
+  return one.copied === undefined && entryOf(one.presetId, record) === one && presets.some((preset) => preset.id === one.presetId);
+}
+
+function withRowSnapshot(one: MovedPreset, rows: readonly RawRow[]): MovedPreset {
+  const row = rows.find((candidate) => candidate['id'] === one.rowId);
+
+  return row === undefined ? one : { ...one, copied: copyFrom(row) };
+}
+
+/**
+ * Every preset the record does not hold yet becomes its own row, in the presets' order; an entry written before R7 takes
+ * its snapshot first. A preset the record holds is never moved again, edited or not.
+ */
 export function chatMove(input: ChatMoveInput): ChatMove {
-  const due = input.presets.filter((preset) => !wasMoved(preset, input.record));
+  const record = snapshotted(input.record, input.presets, input.rows);
+  const due = input.presets.filter((preset) => !wasMoved(preset, record));
 
   const preferred = input.preferred ?? [];
 
-  return due.reduce<ChatMove>((acc, preset) => movedOne(acc, preset, preferred), { rows: input.rows, record: input.record, changed: false });
+  return due.reduce<ChatMove>((acc, preset) => movedOne(acc, preset, preferred), { rows: input.rows, record, changed: record !== input.record });
 }
 
 /** The row id a preset takes: the one another layer gave it when it is free here, else the next free `chat-<id>`. */
@@ -81,7 +174,7 @@ function rowIdFor(preset: ModelPreset, taken: ReadonlySet<string>, preferred: re
 
 /** The row id another layer gave this preset — '' when it gave none. */
 function preferredId(preset: ModelPreset, preferred: readonly MovedPreset[]): string {
-  return preferred.find((one) => wasMoved(preset, [one]))?.rowId ?? '';
+  return entryOf(preset.id, preferred)?.rowId ?? '';
 }
 
 /**
@@ -103,7 +196,7 @@ export function takenRowIds(rows: readonly Readonly<Record<string, unknown>>[]):
 function movedOne(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedPreset[]): ChatMove {
   const adopted = adoptedRow(acc, preset, preferred);
   const rowId = adopted ?? rowIdFor(preset, takenRowIds(acc.rows), preferred);
-  const entry: MovedPreset = { presetId: preset.id, runtime: preset.runtime, model: preset.model, name: preset.name, rowId };
+  const entry: MovedPreset = { presetId: preset.id, runtime: preset.runtime, model: preset.model, name: preset.name, rowId, copied: copiedOf(preset) };
 
   return {
     rows: adopted === undefined ? [...acc.rows, rowOf(preset, rowId)] : acc.rows,
@@ -157,31 +250,50 @@ function mainAfter(acc: ChatMove, preset: ModelPreset, rowId: string): Pick<Chat
  * filed under the old id when that id is one a key name can hold.
  */
 function rowOf(preset: ModelPreset, rowId: string): RawRow {
+  const { name, runtime, model, baseUrl, executablePath, ...rest } = copiedOf(preset);
+
   return {
     id: rowId,
-    name: preset.name,
-    runtime: preset.runtime,
-    model: preset.model,
+    name,
+    runtime,
+    model,
     enabled: true,
     // Reviews nothing, in this build and in an older one: an older build reads these three flags too.
     plan: false,
     code: false,
     document: false,
+    baseUrl,
+    executablePath,
+    uses: ['chat'],
+    ...rest,
+  };
+}
+
+/**
+ * Everything a preset's row takes from it ({@link COPIED_FIELDS}) — what {@link rowOf} writes, and what the record's
+ * snapshot keeps, so the two cannot list different fields.
+ */
+export function copiedOf(preset: ModelPreset): MovedCopy {
+  return {
+    name: preset.name,
+    runtime: preset.runtime,
+    model: preset.model,
     baseUrl: preset.baseUrl,
     executablePath: preset.executablePath,
-    uses: ['chat'],
     ...startingText(preset),
     ...keyName(preset),
     ...teamServer(preset),
   };
 }
 
-function startingText(preset: ModelPreset): RawRow {
-  return (preset.startingPrompt ?? '').length > 0 ? { chatStartingPrompt: preset.startingPrompt } : {};
+function startingText(preset: ModelPreset): MovedCopy {
+  const words = preset.startingPrompt ?? '';
+
+  return words.length > 0 ? { chatStartingPrompt: words } : {};
 }
 
 /** The old id as the key name, only when it is a clean id: `vendorsFrom` lower-cases the field, so any other would drift. */
-function keyName(preset: ModelPreset): RawRow {
+function keyName(preset: ModelPreset): MovedCopy {
   return normaliseId(preset.id) === preset.id && preset.id.length > 0 ? { vaultKeyName: preset.id } : {};
 }
 
@@ -189,7 +301,7 @@ function keyName(preset: ModelPreset): RawRow {
  * A Team-server preset's server and the vendor THAT SERVER knows, written out: it used to be read off the id's
  * `<server>-` prefix, which a `chat-` id no longer carries.
  */
-function teamServer(preset: ModelPreset): RawRow {
+function teamServer(preset: ModelPreset): MovedCopy {
   const server = preset.teamServerId ?? '';
 
   return preset.runtime === 'remote' && server.length > 0 ? { teamServerId: server, remoteVendor: serverVendorOf(preset, server) } : {};

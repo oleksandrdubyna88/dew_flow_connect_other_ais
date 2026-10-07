@@ -14,11 +14,20 @@ import { textControlFrom } from './textControls';
  * close a ring the import-cycle ratchet (`importCycles.test.mjs`) refuses.</p>
  */
 
+/**
+ * The two answers to a preset an older build edited after the move (todo/PLAN_one_model_catalog.md, epic 5 prerequisite
+ * (a), R7): `use` — the row takes the edited values — or `keep` — the row stays as it is. Either way the record's
+ * snapshot takes the preset's whole state (`chatPresetRevision.ts`). Declared here, beside the message that carries it,
+ * because this module imports nothing of the chat's.
+ */
+export type RevisionChoice = 'use' | 'keep';
+
 /** Every message a presets page can send, decided without a host so a test can reach the decision. */
 export type PresetCommand =
   | { readonly kind: 'edit'; readonly list: 'prompt' | 'model'; readonly id: string; readonly field: string; readonly value: string | boolean }
   | { readonly kind: 'add'; readonly list: 'prompt' | 'model' }
   | { readonly kind: 'remove'; readonly list: 'prompt' | 'model'; readonly id: string }
+  | { readonly kind: 'revision'; readonly presetId: string; readonly choice: RevisionChoice }
   | { readonly kind: 'zoom'; readonly delta: number }
   | { readonly kind: 'tone'; readonly delta: number }
   | { readonly kind: 'ignore' };
