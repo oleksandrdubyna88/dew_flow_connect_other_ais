@@ -53,7 +53,7 @@ public sealed class TheFeatureRoundAnswersInItsOwnSchemaTests : IDisposable
     private static IReadOnlyList<string> Launch(PanelService service, Stage stage)
     {
         var roles = service.Settings.Rounds.RolesForRound(stage, 1);
-        var work = service.Roster.BuildWork(roles, Path.GetTempPath(), "## the context", 1, stage, readsCheckout: false);
+        var work = service.Roster.BuildWork(roles, Path.GetTempPath(), "## the context", 1, stage, readsCheckout: false, codexTiers: CodexTiers.None);
 
         return [.. work.Reviewers.Select(w => string.Join('\n', [.. w.Invocation.Request.Arguments, w.Invocation.Request.StdIn]))];
     }

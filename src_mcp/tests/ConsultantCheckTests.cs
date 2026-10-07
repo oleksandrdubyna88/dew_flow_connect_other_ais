@@ -26,7 +26,7 @@ public sealed class ConsultantCheckTests : IDisposable
 {
     private static readonly string[] Steering =
         ["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_OUTFILE_TEXT", "FAKECLI_EXIT", "FAKECLI_STDERR", "FAKECLI_SLEEP_MS",
-         "FAKECLI_RECORD_DIR", "FAKECLI_HELP_STDOUT", "FAKECLI_HELP_EXIT", "FAKECLI_SIDE_EFFECT", "FAKECLI_REPAIR_MARKER",
+         "FAKECLI_RECORD_DIR", "FAKECLI_HELP_STDOUT", "FAKECLI_HELP_EXIT", "FAKECLI_SIDE_EFFECT", "FAKECLI_REPAIR_MARKER", "FAKECLI_VERSION_STDOUT",
          "FAKECLI_TURN1_REPAIR_STDOUT", "FAKECLI_TURN1_REPAIR_STDERR"];
 
     private const string Session = "67289235-65f7-40b5-9532-e63515d90f30";
@@ -129,6 +129,27 @@ public sealed class ConsultantCheckTests : IDisposable
         Text(StateFile(), "state").Should().Be("answered");
         Text(StateFile(), "finishedUtc").Should().NotBeEmpty();
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch repository is deleted at the end");
+    }
+
+    /// <summary>
+    /// The check launches its consultant the way a consultation does, so it asks the installed codex its release first
+    /// (todo/PLAN_codex_tier_floor.md): an Off row on 0.120.0 — which refuses <c>service_tier=default</c> at config load,
+    /// and so would fail every check — is sent no tier; one on 0.160.0 is sent exactly what it was before.
+    /// </summary>
+    [Theory]
+    [InlineData("0.120.0", new string[0])]
+    [InlineData("0.160.0", new[] { "service_tier=default" })]
+    public async Task ACheckOfACodexConsultant_TellsItOnlyWhatItsReleaseTakes(string release, string[] sent)
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", $"codex-cli {release}\n");
+        CodexAnswers("marker: {{cwd-file:CHECK.md}}\ncanary: CANNOT");
+
+        var (code, said, _) = await Check(Settings(), "--caller", "claude");
+
+        code.Should().Be(0, said.ToString());
+        var argv = File.ReadAllText(Directory.EnumerateFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
+        argv.Zip(argv.Skip(1)).Where(pair => pair.First == "-c" && pair.Second.StartsWith("service_tier=", StringComparison.Ordinal))
+            .Select(pair => pair.Second).Should().Equal(sent, $"codex {release} with fast Off");
     }
 
     // ---------- --check-model <row on stdin> (PLAN_one_model_catalog.md D10, epic 2 story 4) ----------

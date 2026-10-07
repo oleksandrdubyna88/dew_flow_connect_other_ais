@@ -67,4 +67,47 @@ public sealed class FastModeIsDataTests
 
         read.Should().Throw<InvalidOperationException>().WithMessage("*'models' source lists its models*");
     }
+
+    /// <summary>
+    /// codex 0.110.0–0.130.0 refuse <c>service_tier=default</c> at config load (todo/PLAN_codex_tier_floor.md, change 2) —
+    /// and the range is the file's, beside the measurement, compared as numbers: <c>0.12.0</c> is NOT in it, which a
+    /// string comparison ("0.110" &lt; "0.12" &lt; "0.130") would say it is.
+    /// </summary>
+    [Theory]
+    [InlineData("0.110.0", true)]
+    [InlineData("0.120.0", true)]
+    [InlineData("0.130.0", true)]
+    [InlineData("0.107.0", false)]
+    [InlineData("0.131.0", false)]
+    [InlineData("0.160.0", false)]
+    [InlineData("0.12.0", false)]
+    public void TheCodexRow_NamesTheReleasesThatRefuseTheStandardTier(string release, bool refuses)
+    {
+        File.FastModeOf("codex").RefusesStandard.Contains(Version.Parse(release)).Should().Be(refuses);
+    }
+
+    [Fact]
+    public void NoOtherRow_NamesAReleaseRange()
+    {
+        File.FastMode.Where(row => row.Runtime != "codex").Should().OnlyContain(row => row.RefusesStandard == ReleaseRange.None);
+    }
+
+    [Theory]
+    [InlineData("codex", "0.110", "0.130.0", "is not a release")]
+    [InlineData("codex", "0.110.0", "latest", "is not a release")]
+    [InlineData("codex", "0.130.0", "0.110.0", "ends before it starts")]
+    [InlineData("codex", "0.110.0", null, "is not a release")]
+    [InlineData("claude", "0.110.0", "0.130.0", "only codex")]
+    public void AMalformedRange_RefusesTheSeed_AsTheGeneratorRefusesIt(string runtime, string from, string? through, string said)
+    {
+        var seed = new FeatureAvailabilitySeed(
+            [runtime], new FeatureListsSeed([runtime], [runtime]),
+            [new(runtime, "none", [], "", "x")],
+            [new(runtime, "none", "x")],
+            [new(runtime, "every-model", [], "", "x", new ReleaseRangeSeed(from, through))]);
+
+        var read = () => FeatureAvailability.FromSeed(seed);
+
+        read.Should().Throw<InvalidOperationException>().WithMessage($"*refusesStandard*{said}*");
+    }
 }

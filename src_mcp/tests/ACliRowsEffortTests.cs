@@ -25,7 +25,7 @@ public sealed class ACliRowsEffortTests
         VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     private static IReadOnlyList<ReviewerWork> Work(PanelService service) =>
-        service.Roster.BuildWork([RoleCatalog.ArchitectureRole], string.Empty, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false).Reviewers;
+        service.Roster.BuildWork([RoleCatalog.ArchitectureRole], string.Empty, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false, codexTiers: CodexTiers.None).Reviewers;
 
     private static ProviderSettings Row(string runtime, string effort) =>
         new(runtime) { Enabled = true, Runtime = runtime, CliEffort = effort };

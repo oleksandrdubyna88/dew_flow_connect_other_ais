@@ -352,5 +352,5 @@ public sealed class AnApiRowIsSettableTests : IDisposable
     private static RoundWork Work(PanelService service) =>
         service.Roster.BuildWork(
             [RoleCatalog.FeatureRole], Directory.CreateTempSubdirectory("coai-api-row-work-").FullName, "ctx",
-            round: 1, stage: Stage.FeatureReview, readsCheckout: false);
+            round: 1, stage: Stage.FeatureReview, readsCheckout: false, codexTiers: CodexTiers.None);
 }

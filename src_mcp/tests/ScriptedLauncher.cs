@@ -25,9 +25,12 @@ internal sealed class ScriptedLauncher(IProcessLauncher inner, Func<ScriptedLaun
     /// <summary>Every request this launcher was handed, in arrival order, with the prompt it carried.</summary>
     public IReadOnlyList<(ProcessRequest Request, DateTime StartedUtc, string Prompt)> Launches => [.. _launches];
 
-    /// <summary>The vendor launches alone — anything that is not git.</summary>
+    /// <summary>
+    /// The vendor launches alone — anything that is not git, and not a codex row's tier probe: a bare <c>--version</c>
+    /// asked before the launch (todo/PLAN_codex_tier_floor.md) is a question about the installed CLI, not a launch of it.
+    /// </summary>
     public IReadOnlyList<(ProcessRequest Request, DateTime StartedUtc, string Prompt)> Vendors =>
-        [.. _launches.Where(l => !string.Equals(l.Request.Executable, "git", StringComparison.OrdinalIgnoreCase))];
+        [.. _launches.Where(l => !string.Equals(l.Request.Executable, "git", StringComparison.OrdinalIgnoreCase) && l.Request.Arguments is not ["--version"])];
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {

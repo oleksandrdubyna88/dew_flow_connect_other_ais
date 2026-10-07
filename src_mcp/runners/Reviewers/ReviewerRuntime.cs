@@ -157,6 +157,21 @@ public sealed record ReviewerSettings(string Provider)
     /// review). The claude REVIEWER does not read this field yet.</para>
     /// </remarks>
     public ClaudeCapability ClaudeCli { get; init; } = ClaudeCapability.Unprobed;
+
+    /// <summary>
+    /// For a <c>codex</c> vendor only: whether the INSTALLED CLI can be told the standard tier — read off its own
+    /// <c>--version</c> by <see cref="CodexTierSupport.ProbeAsync(IProcessLauncher, string, string, CancellationToken)"/>
+    /// before the launch is built (todo/PLAN_codex_tier_floor.md).
+    /// </summary>
+    /// <remarks>
+    /// <para>Launch data beside <see cref="ClaudeCli"/>, for the same reason: it changes what is SENT, not what the vendor
+    /// is, and the argv builders stay pure. <c>CodexRuntime.TierArgs</c> reads it: an Off row on a release that refuses
+    /// <c>service_tier=default</c> (0.110.0–0.130.0) is sent no tier at all.</para>
+    /// <para>Defaults to <see cref="CodexTierSupport.Unprobed"/>, which — unlike claude's — is a SAFE default: it sends what
+    /// was sent before the probe existed. So a launch nobody probed behaves exactly as it did in 0.44.0, and the tests per
+    /// site are what prove each site asks.</para>
+    /// </remarks>
+    public CodexTierSupport CodexTier { get; init; } = CodexTierSupport.Unprobed;
 }
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>
@@ -418,14 +433,29 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     /// override), which has no codex service tier. Unquoted, as <c>sandbox_mode=read-only</c> is (CodexConsultant).
     /// Measured 2026-10-07 on codex-cli 0.160.0: the key is read and checked per model; a value the model does not
     /// advertise is dropped with a warning, never a refusal (research/RESULTS_fast_mode_measured_2026-10-07.md).
+    /// <para>Except where the installed release cannot take it (todo/PLAN_codex_tier_floor.md): codex 0.110.0–0.130.0
+    /// refuse <c>default</c> at config load and fail the whole launch, so an Off row there is sent NOTHING — the release has
+    /// no way to say "standard" (<see cref="ReviewerSettings.CodexTier"/>, probed per launch). A release nobody asked, or
+    /// that could not say, is sent <c>default</c> as before: omitting it would hand a person's own
+    /// <c>service_tier = "priority"</c> every review, unasked.</para>
     /// </summary>
     public IReadOnlyList<string> TierArgs(ReviewerSettings settings) =>
-        ProviderOverrides.Any() ? [] : settings.Fast switch
-        {
-            Core.Catalog.FastMode.Off => ["-c", "service_tier=default"],
-            Core.Catalog.FastMode.On => ["-c", "service_tier=fast"],
-            _ => [],
-        };
+        ProviderOverrides.Any() ? [] : TierOf(settings.Fast, settings.CodexTier);
+
+    /// <summary>
+    /// Whether what this row is told depends on the INSTALLED release — an Off row on codex's own service, the one
+    /// <see cref="TierArgs"/> sends <c>default</c> to — so a launch path asks the CLI only where the answer can change the
+    /// argv: On sends <c>fast</c> to every release, "As the CLI is set" sends nothing, an endpoint row no tier at all.
+    /// </summary>
+    public bool TierDependsOnRelease(Core.Catalog.FastMode fast) => !ProviderOverrides.Any() && fast == Core.Catalog.FastMode.Off;
+
+    /// <summary>The tier codex's own service is told, for a row's fast mode and what its installed release can take.</summary>
+    private static IReadOnlyList<string> TierOf(Core.Catalog.FastMode fast, CodexTierSupport installed) => fast switch
+    {
+        Core.Catalog.FastMode.Off => installed.RefusesStandard ? [] : ["-c", "service_tier=default"],
+        Core.Catalog.FastMode.On => ["-c", "service_tier=fast"],
+        _ => [],
+    };
 
     /// <summary>
     /// The <c>-c</c> overrides that point the Codex CLI at this row's provider — empty for codex's own service — for a

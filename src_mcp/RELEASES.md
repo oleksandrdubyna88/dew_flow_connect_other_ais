@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.44.1...mcp-v0.44.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **fast-mode:** codex 0.110–0.130 are never told the standard tier they refuse ([#702](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/702)) ([652b127](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/652b127016f499e3f349b7a8f1d330a9ed5d4195))
+
 ## [0.44.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.44.0...mcp-v0.44.1) (2026-10-07)
 
 

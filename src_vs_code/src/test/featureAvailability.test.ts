@@ -22,11 +22,19 @@ import { RUNTIMES } from '../models';
 const SEED = join(__dirname, '..', '..', '..', 'shared', 'feature-availability.json');
 const GENERATOR = join(__dirname, '..', '..', 'scripts', 'generate-feature-availability.mjs');
 
+/** One `fastMode` row as the seed writes it — `refusesStandard` left unknown, since the tests hand it bad shapes on purpose. */
+type FastRow = { runtime: string; refusesStandard?: unknown };
+
+/**
+ * `shared/feature-availability.json` as these tests read it. NOTE: `seed()` reaches it through `JSON.parse(...) as Seed`
+ * — the one cast, at the file boundary, where the generator itself is what checks the shape.
+ */
 interface Seed {
   runtimes: string[];
   features: { consultant: string[]; chat: string[] };
   effort: { runtime: string; source: string; levels: string[]; measuredWith: string; note: string }[];
   thinking: { runtime: string; source: string; note: string }[];
+  fastMode: FastRow[];
 }
 
 const seed = (): Seed => JSON.parse(readFileSync(SEED, 'utf8')) as Seed;
@@ -143,4 +151,44 @@ test('a listed source needs levels and a measurement; another source holds none'
 
   assert.equal(generate({ ...s, effort: claudeEmpty }).status, 1);
   assert.equal(generate({ ...s, effort: codexListed }).status, 1);
+});
+
+// The codex releases that refuse `service_tier=default` (todo/PLAN_codex_tier_floor.md, change 2): coai-mcp reads the
+// range, the extension does not use it yet — but both halves accept and check the same file, so a range one half would
+// refuse can never reach the other. The C# twin is `FastModeIsDataTests.AMalformedRange_RefusesTheSeed_*`.
+/** The seed with one fast-mode row's `refusesStandard` replaced — or removed, when `range` is undefined. */
+function withRange(runtime: string, range: unknown): unknown {
+  const s = seed();
+  const fastMode = s.fastMode.map(({ refusesStandard: _dropped, ...row }) =>
+    row.runtime === runtime && range !== undefined ? { ...row, refusesStandard: range } : row);
+
+  return { ...s, fastMode };
+}
+
+test('the generator accepts the codex row\'s range of releases that refuse the standard tier', () => {
+  const run = generate(seed());
+
+  assert.equal(run.status, 0, run.stderr);
+});
+
+test('a malformed refusesStandard range is refused, saying what is wrong with it', () => {
+  const cases: readonly (readonly [string, unknown, RegExp])[] = [
+    ['codex', { from: '0.110', through: '0.130.0' }, /refusesStandard.*X\.Y\.Z/u],
+    ['codex', { from: '0.110.0', through: 'latest' }, /refusesStandard.*X\.Y\.Z/u],
+    ['codex', { from: '0.110.0' }, /refusesStandard.*X\.Y\.Z/u],
+    ['codex', { from: '0.110.0', through: '0.130.0', why: 'x' }, /refusesStandard.*X\.Y\.Z/u],
+    ['codex', { from: '0.130.0', through: '0.110.0' }, /refusesStandard ends before it starts/u],
+    ['codex', { from: '0.110.0', through: '0.12.0' }, /refusesStandard ends before it starts/u],
+    ['claude', { from: '0.110.0', through: '0.130.0' }, /refusesStandard.*only codex/u],
+  ];
+  for (const [runtime, range, said] of cases) {
+    const run = generate(withRange(runtime, range));
+
+    assert.equal(run.status, 1, `${runtime} ${JSON.stringify(range)} was accepted`);
+    assert.match(run.stderr, said, `${runtime} ${JSON.stringify(range)}`);
+  }
+});
+
+test('a range compares releases as numbers: 0.12.0 is below 0.110.0, so 0.12.0 to 0.110.0 is accepted', () => {
+  assert.equal(generate(withRange('codex', { from: '0.12.0', through: '0.110.0' })).status, 0);
 });

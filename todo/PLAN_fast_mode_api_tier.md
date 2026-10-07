@@ -19,13 +19,15 @@ Fast mode shipped for codex and claude rows (PR #693). Two things it planned wer
    call was made: the key is not exported.
 2. **A codex version floor.** codex 0.160.0 reads `-c service_tier` and DROPS a value its model does not advertise,
    with a warning. How an OLDER codex treats the key was never measured. If one refuses it, Off — sent on every codex
-   launch by default — would break that launch.
+   launch by default — would break that launch. **Measured 2026-10-07, and one does:** 0.110.0–0.130.0 refuse
+   `default` at config load ([RESULTS_codex_service_tier_versions_2026-10-07.md](../research/RESULTS_codex_service_tier_versions_2026-10-07.md)).
+   The fix is its own plan, [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md) — built on branch
+   `fix/codex-tier-floor`, waiting for its merge — and this item is no longer this plan's work.
 
 ## What to do
 
-1. **Measure an older codex** (the oldest the panel still accepts) with `-c service_tier=default` and `=fast`: accepted,
-   ignored or refused. Record it in `research/`. Only if one refuses: a floor in `shared/feature-availability.json`'s
-   codex row, the flag sent only at or above it, and a `VendorDiagnosis` pattern naming the refusal (RED tests first).
+1. ~~**Measure an older codex**~~ — done (see Goal 2); the floor, the probe and the diagnosis are
+   [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md), where the measured refusal turned "a floor" into a RANGE.
 2. **The owner's go and a key** for the api part: an xAI vault entry that exports its key; one short call per state,
    approved before it is sent.
 3. **The xai value**, measured: the request member and value for each state, and what the answer reports. Recorded.
@@ -41,6 +43,7 @@ Fast mode shipped for codex and claude rows (PR #693). Two things it planned wer
 
 ## Definition of Done
 
-- [ ] The older-codex measurement recorded; a floor shipped only if a refusal was seen.
+- [x] The older-codex measurement recorded; a refusal was seen, and the fix moved to
+  [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md).
 - [ ] The owner approved the xAI calls; the measured value recorded in `research/`.
 - [ ] The api tier end to end with tests written first; module docs updated; this plan promoted.

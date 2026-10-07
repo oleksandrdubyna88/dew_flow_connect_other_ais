@@ -2308,3 +2308,58 @@ Which runtime and model has a tier is data: the `fastMode` block of `shared/feat
 (`FeatureAvailability.FastMode` / `HasFastTier`, one row per runtime, refused whole when a runtime has none or two, or
 when a row's `models` does not match its source — a `models` source lists its models and every other lists none —
 the extension's generator checks the same, `FAST_RULES`).
+
+### The codex floor: a release that refuses Off is not told Off (2026-10-07, todo/PLAN_codex_tier_floor.md)
+
+Measured (`research/RESULTS_codex_service_tier_versions_2026-10-07.md`): codex **0.110.0 through 0.130.0** take only
+`fast` or `flex` for `service_tier`, and refuse `-c service_tier=default` at config load — exit 1, before any request,
+naming a `config.toml` the person never edited. 0.107.0 and older ignore the key; 0.131.0 and newer accept it. So from
+coai-mcp 0.44.0 every Off codex launch on those releases failed. Three parts make it not happen:
+
+- **The range is data.** The codex row of `fastMode` carries `"refusesStandard": { "from": "0.110.0", "through":
+  "0.130.0" }`, read onto `FastModeRow.RefusesStandard` (a `ReleaseRange`, compared as NUMBERS — `0.12.0` is below
+  `0.110.0`; `ReleaseRange.None` on every other row). A range that is not `X.Y.Z` at both ends, ends before it starts,
+  or sits on a row other than codex refuses the whole seed — in `FeatureAvailability.RangeOf` and in the extension
+  generator's `FAST_RULES` alike (the TS side checks it, and neither generates nor uses it).
+- **The installed release is asked, every launch path, never cached.** `CodexTierSupport.ProbeAsync` runs
+  `codex --version` through the shared `IProcessLauncher` (10 s ceiling; the launcher kills the whole tree at it —
+  `ProcessLauncher.EndItAsync`), reads `codex-cli X.Y.Z` and answers `Accepts`, `RefusesStandard` or `Unknown` (did not
+  start, timed out, exited non-zero, named no release). The answer is `ReviewerSettings.CodexTier`, default `Unprobed`.
+  It is asked only where it can change the argv — `CodexRuntime.TierDependsOnRelease`: an Off row on codex's own
+  service — and per site:
+  - a review round (plan, code, document, feature): `RosterBuilder.CodexTiersAsync` asks each distinct runnable codex
+    executable once, the stage passes the `CodexTiers` into `BuildWork`, and `SettingsFor` copies it onto every codex
+    row — the security lane's too, through `Security(tiers)`;
+  - a consultation turn and the consultant check: `CodexConsultant.PrepareAsync` (the `IConsultantRuntime` hook claude
+    already used; it never refuses, and the answer rides the preparation's note into the log);
+  - a codex question row: `QuestionRowLaunch.TierProbedAsync`, through that same `PrepareAsync`, inside the row's
+    deadline. Claude question rows are untouched (`todo/PLAN_a_question_row_on_an_old_claude.md`).
+- **`TierArgs` reads it.** Off on `RefusesStandard` sends NO tier (the release has no way to say "standard"); On sends
+  `fast` on every release; Cli sends nothing; `Unprobed`, `Unknown` and `Accepts` send `default` exactly as before.
+
+**Why `Unknown` still sends `default`** (the plan round's finding 4): omitting the tier on a version nobody could read
+would let a person's own `service_tier = "priority"` make every review fast at 2–2.5× the cost, unasked — the reason
+Off exists. `Unknown` arises when `--version` cannot run (then the launch cannot either) or prints a shape no release has
+printed (only a future one could, and those accept `default`) — or names TWO releases, as a wrapper's banner before the
+CLI's own line would (the code round: neither is believed). If the refusal is met anyway, `VendorDiagnosis` names it —
+``unknown variant `default`, expected `fast` or `flex` `` → "update codex to 0.131 or newer. Or set this row's fast mode
+to 'As the CLI is set', which then runs on whatever tier your codex config asks for", kind `UnknownOption`. Updating
+comes first because the other way out follows the person's config, which may ask for the dearer tier.
+
+`RosterBuilder.BuildWork` takes `codexTiers` as a REQUIRED argument, beside `stage` and for the same reason: a stage that
+forgot to ask would otherwise have compiled and failed every launch on 0.110–0.130. A caller that does not ask —
+every test that builds a roster by hand — passes `CodexTiers.None` and says so.
+
+```mermaid
+sequenceDiagram
+    participant Site as Round / consult / question row
+    participant Probe as CodexTierSupport
+    participant CLI as codex --version
+    participant Args as CodexRuntime.TierArgs
+    Site->>Probe: ProbeAsync (Off row on codex's own service only)
+    Probe->>CLI: --version (10 s, tree killed past it)
+    CLI-->>Probe: codex-cli X.Y.Z
+    Probe-->>Site: Accepts / RefusesStandard / Unknown
+    Site->>Args: ReviewerSettings.CodexTier
+    Args-->>Site: Off+RefusesStandard: no tier, else as before
+```
