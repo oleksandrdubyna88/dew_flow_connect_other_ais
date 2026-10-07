@@ -46,7 +46,8 @@ test('a record keeps the row it was spoken to, and a resume reads that row back'
   // is an old preset id resolves to `chat-a/sonnet`, and a thread that kept `a` asked for `chat-a/a` on its first turn
   // and was refused (the risk consultation of epic 4, finding R5).
   assert.doesNotMatch(restore, /\bmodelId: saved\.modelId,/u, 'a restored thread asks for the saved value, not the resolved model');
-  assert.match(restore, /modelId: ready\.ok \? ready\.modelId : restored\.modelId,/u);
+  // Both restore paths take it from the one decision, which `aResumedChatKeepsItsModel.test.ts` runs (CodeRabbit on #688).
+  assert.equal(restore.match(/modelId: restoredThreadModel\(ready, restored\.modelId\),/gu)?.length, 2);
 });
 
 test('the pin writes the session id AND the folder it was found in, and saves for itself', () => {

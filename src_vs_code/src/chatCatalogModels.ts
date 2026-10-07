@@ -99,3 +99,12 @@ export function resumedPick(
 
   return legacyPick(list, specs, named);
 }
+
+/**
+ * The model a restored conversation's thread holds (the risk consultation, R5): the model the row RESOLVED to when it
+ * answers, else the resumed pick's — never the value saved on the record, which may be an old preset id the move
+ * replaced, and would ask that row for a model it does not have.
+ */
+export function restoredThreadModel(ready: { readonly ok: true; readonly modelId: string } | { readonly ok: false }, picked: string): string {
+  return ready.ok ? ready.modelId : picked;
+}

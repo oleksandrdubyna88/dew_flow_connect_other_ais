@@ -14,8 +14,10 @@ import { Node } from './rolesPageHarness';
 export class PageNode extends Node {
   readonly id: string;
   readonly children: PageNode[] = [];
-  /** The text directly inside it; {@link PageNode.text} is the whole subtree's. */
+  /** The text directly inside it — what a `<textarea>` takes as its value; {@link PageNode.text} is the whole subtree's. */
   own = '';
+  /** Its text and its child elements in the order the page wrote them, so {@link PageNode.text} reads as a DOM does. */
+  readonly parts: (string | PageNode)[] = [];
   disabled: boolean;
 
   constructor(tagName: string, readonly attrs: Readonly<Record<string, string>>) {
@@ -31,7 +33,7 @@ export class PageNode extends Node {
 
   /** Everything written inside it, tags left out. */
   text(): string {
-    return this.own + this.children.map((child) => child.text()).join('');
+    return this.parts.map((part) => (typeof part === 'string' ? part : part.text())).join('');
   }
 
   /** Every element under it, depth first. */
@@ -103,11 +105,13 @@ export function pageTree(html: string): PageNode {
     const at = open[open.length - 1]!;
     if (text !== undefined) {
       at.own += decoded(text);
+      at.parts.push(decoded(text));
     } else if (opening !== undefined) {
       const tag = opening.toLowerCase();
       const node = new PageNode(tag, attrsOf(attributes ?? ''));
       node.under(at);
       at.children.push(node);
+      at.parts.push(node);
       if (SKIPPED.has(tag)) {
         skipUntil = tag;
       } else if (!VOID.has(tag) && !whole.endsWith('/>')) {

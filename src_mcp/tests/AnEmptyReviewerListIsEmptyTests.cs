@@ -29,6 +29,14 @@ public sealed class AnEmptyReviewerListIsEmptyTests
     }
 
     [Fact]
+    public void A_list_whose_rows_name_no_vendor_is_not_an_empty_choice_and_runs_the_defaults()
+    {
+        // CodeRabbit on #688: only a list that SAYS nothing is empty; rows with no usable id are not a choice of nobody.
+        ProvidersOf(new() { ["COAI_VENDORS"] = "[{}]" }).Should().Equal("codex", "antigravity");
+        ProvidersOf(new() { ["COAI_VENDORS"] = "[{\"id\":\"  \"}]" }).Should().Equal("codex", "antigravity");
+    }
+
+    [Fact]
     public void No_list_at_all_is_still_not_configured_and_runs_the_defaults()
     {
         ProvidersOf([]).Should().Equal("codex", "antigravity");

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catalogBody, catalogHtml } from '../catalogPage';
+import { catalogHtml } from '../catalogPage';
 import { type PanelState } from '../panelView';
 import { composed, type RoleRow } from '../roles';
 import { roleSwitchFollows } from '../rolesSwitch';
@@ -71,7 +71,8 @@ test('a code role switched off by EITHER switch is drawn off: one switch, read a
 });
 
 test('Roles & prompts no longer says where it is', () => {
-  assert.doesNotMatch(catalogBody(stateWith()), /Roles &amp; prompts is still on the current Settings page/);
+  // The pane's text after the page's script ran — decoded, as a person reads it — never the generated source (CodeRabbit on #688).
+  assert.doesNotMatch(rolesPage().pane.text(), /Roles & prompts is still on the current Settings page/);
 });
 
 test('the roles\' controls post `roles` edits — a pick numbered, typing not — and report focus', () => {

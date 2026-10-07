@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { movedTo, resumedPick } from '../chatCatalogModels';
+import { movedTo, restoredThreadModel, resumedPick } from '../chatCatalogModels';
 import { catalogUsing, EMPTY_DISCOVERY } from '../chatDiscovery';
 import { chatProvidersFromPresets, legacyPick } from '../chatModels';
 import { chatRunSpec, type ModelPreset } from '../chatPresets';
@@ -69,4 +69,15 @@ test('the record keeps the row it was spoken to; one written before it existed r
   assert.equal(recordFrom(at)?.providerId, undefined);
   assert.ok(recordFrom({ ...at, providerId: 42 }) !== undefined, 'a malformed field threw the whole conversation away');
   assert.equal(recordFrom({ ...at, providerId: 42 })?.providerId, undefined);
+});
+
+test('a restored legacy conversation\'s thread holds the RESOLVED model, never the saved preset id (R5)', () => {
+  // CodeRabbit on #688: executed rather than read from the source — the pick a legacy record resolves to, and the
+  // model the restored thread then holds, whether the row answers or is refused.
+  const restored = resumedPick(list, specs, RECORD, '', 'preset-7');
+  assert.equal(restored.providerId, 'chat-deep', 'the fixture: the old preset id did not resolve to its row');
+
+  assert.equal(restoredThreadModel({ ok: true, modelId: 'sonnet' }, restored.modelId), 'sonnet');
+  assert.equal(restoredThreadModel({ ok: false }, restored.modelId), restored.modelId);
+  assert.notEqual(restoredThreadModel({ ok: false }, restored.modelId), 'preset-7', 'the saved preset id would ask for chat-deep/preset-7 and be refused');
 });

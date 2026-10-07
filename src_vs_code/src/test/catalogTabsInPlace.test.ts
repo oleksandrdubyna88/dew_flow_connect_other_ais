@@ -29,16 +29,30 @@ function paneOf(state: PanelState, place: string): PageNode {
 const PICKING = ['consultant', 'questionconsultant', 'securityLane', 'chat'];
 const MOVED_WHOLE = PANEL_SECTIONS.filter((spec) => spec.surface === 'settings' && !['reviewers', 'prompts', 'keys', ...PICKING].includes(spec.id));
 
+/** What the page's scripts select at load, so they bind to what the page drew. */
+const AT_LOAD = ['[data-setting]', '[data-prompt]', '[data-command]', '[data-tab]', '[data-pane]'];
+
+/** A drawn subtree's controls and named elements, in order — what a section IS, beyond its words. */
+const signature = (node: PageNode): string =>
+  node.all().map((one) => one.dataset.setting ?? (one.id.length > 0 ? `#${one.id}` : '')).filter((one) => one.length > 0).join('|');
+
 test('every old section that moves whole is drawn in its place, by its own builder', () => {
+  // Read off the page AFTER its script ran, inside the place's own pane — a section moved into a later pane goes red
+  // (CodeRabbit on #688: a search of the source past the pane's start would have stayed green).
   const state = panelState('reviewers');
-  const body = catalogBody(state);
+  const html = catalogHtml(state, 'test-nonce', 'models');
+  const tree = pageTree(html);
+  runPageHtml(html, selectorsOf(tree, AT_LOAD), undefined, { value: undefined });
 
   for (const spec of MOVED_WHOLE) {
     const place = OLD_TAB_PLACES[spec.id];
     assert.ok(place !== undefined, `${spec.id} has no place on the new page`);
-    // The builder's own output, byte for byte, inside the place's pane: drawn by it, not by a copy of it.
-    const start = body.indexOf(`data-pane="${place}"`);
-    assert.ok(start >= 0 && body.indexOf(spec.body(state, BLANK_REGIONS), start) > start, `${spec.title} is not drawn in ${place}`);
+    const pane = tree.one((node) => node.dataset.pane === place, `a pane for ${place}`);
+    const builder = pageTree(spec.body(state, BLANK_REGIONS));
+    const said = builder.text().replace(/\s+/gu, ' ').trim();
+    assert.ok(said.length > 0 || signature(builder).length > 0, `the fixture: ${spec.title} draws nothing to look for`);
+    assert.ok(pane.text().replace(/\s+/gu, ' ').includes(said), `${spec.title}'s words are not in ${place}`);
+    assert.ok(signature(pane).includes(signature(builder)), `${spec.title}'s controls are not in ${place}, in its order`);
   }
 });
 
