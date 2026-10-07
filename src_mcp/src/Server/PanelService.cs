@@ -100,7 +100,7 @@ public sealed class PanelService
         // a consultId against the question records, and runs the consultants beside a production risk.
         _askHuman = new AskHumanService(settings, _store, _escalations, log, noticing, AddressOf,
             new AskGateDesk(_questions, cadenceStore, new QuestionPhaseStore(settings.DataDir), _escalations, Environment.GetEnvironmentVariable, log));
-        _retention = new EscalationRetention(_escalations, _store.HoldsQuestion, message => _log.Warning("escalations: {Detail}", message));
+        _retention = new EscalationRetention(_escalations, _store.HeldQuestions, message => _log.Warning("escalations: {Detail}", message));
         // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
         // consultation records, and every decision a round makes about it — kept out of this file.
         _cadence = new CadenceDesk(
@@ -180,9 +180,11 @@ public sealed class PanelService
         // configuration, and its server long gone. A leaked directory costs disk; a leaked
         // reviewer holds a rate limit, a GPU, or a paid token budget.
         //
-        // Startup is the right moment: a previous server's orphans are lying around exactly then,
-        // and this process has no children of its own yet, so there is nothing of ours to get
-        // wrong. What protects a SECOND live server's reviewers is `OrphanSweep`, not the timing.
+        // Startup is the right moment: a previous server's orphans are lying around exactly then.
+        // Since the start runs in the background (StartingHost, 2026-10-06) this process may already
+        // have children — the `creds` read, the consultants survey's probes — and they are safe for
+        // the same reason a SECOND live server's reviewers are: `OrphanSweep` skips every record whose
+        // owner is alive, this process included. The timing was never the protection.
         _tracking = new Runners.Processes.ProcessTracking(
             settings.DataDir,
             message => _log.Warning("process tracking: {Detail}", message));
@@ -211,6 +213,12 @@ public sealed class PanelService
     /// question without running a round.
     /// </summary>
     internal RoundEngine Engine => _engine;
+
+    /// <summary>
+    /// The session store this service reads — internal so a test can count what an idle beat reads
+    /// (<see cref="SessionStore.HeldQuestionReads"/>).
+    /// </summary>
+    internal SessionStore Store => _store;
 
     /// <summary>Every sentence this round says instead of reviewing — see <see cref="RoundRefusals"/>.</summary>
     /// <remarks>

@@ -1907,14 +1907,17 @@ internal static class Program
                 settings.DataDir,
                 message => log.Warning("process tracking: {Detail}", message));
             var launcher = new ProcessLauncher(tracking);
-            // The key from the layered configuration above, where the panel wrote it — not the raw
-            // environment, which no spawn of the extension's puts it in (2026-10-01).
-            var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration);
-            var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
-            log.Information("starting: {Providers} enabled, vault: {Vault}",
-                string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
-                keys.Available ? "keys loaded" : keys.Unavailability);
-            GeminiFamilyServersSaid(settings, log);
+
+            // The vault read and the first service — every startup sweep — are the slow half of a start, and a client
+            // gives a server about thirty seconds to answer `initialize`. They used to run before the transport, and on
+            // 2026-10-06 that took 19–32 s in the logs and 30–62 s on a copy of the data: the client killed the server
+            // and started another, seven sessions at once. So they run in the BACKGROUND, the transport starts at once,
+            // and the first tool call waits for them (StartingHost; todo/PLAN_an_idle_server_is_idle_and_starts_at_once.md, D2).
+            // Its own stop, linked to the signal and cancelled when serving ends however it ends: a client closing stdin
+            // sends no signal, and must not leave a `creds` child and a half-built service running behind it.
+            using var startStop = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
+            var starting = StartingHost.Start(
+                () => StartedAsync(configuration, settings, launcher, noticing, log, startStop.Token), startStop.Token);
 
             // A setting this build cannot understand is said out loud at startup, because the
             // alternative is what actually happened: a configuration that had been applied, read and
@@ -1929,62 +1932,76 @@ internal static class Program
             var storage = PanelSettings.StorageNotes(Environment.GetEnvironmentVariable);
             StartupNotices.Record(settings, storage, noticing, log);
 
-            // The file the panel writes is re-read per call, so a vendor or a threshold changed
-            // in the Settings tab reaches the NEXT round without restarting the MCP client.
-            // ONE composition, handed to the host, which holds it and gives it to every service it
-            // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
-            // that road is the trap the plan round named: production takes the quiet path while
-            // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
-            var host = new PanelServiceHost(
-                Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing);
-            var options = new McpServerOptions
-            {
-                ServerInfo = new Implementation
-                {
-                    Name = ServerName,
-                    Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
-                },
-                ServerInstructions = Instructions,
-            };
-            options.ToolCollection ??= [];
-            foreach (var tool in Tools.All(host))
-            {
-                options.ToolCollection.Add(tool);
-            }
-
-            // And the one PROMPT, which is the person's own trigger: `/mcp__coai__consult` in a
-            // client that lists them. A prompt calls nothing — it hands the assistant a message —
-            // so every cap, refusal and invariant the tool has still applies to what it decides.
-            options.PromptCollection ??= [];
-            foreach (var prompt in Prompts.All())
-            {
-                options.PromptCollection.Add(prompt);
-            }
-
-            await using var transport = new StdioServerTransport(ServerName);
-            // The token alone does not end a blocked stdin read — measured on Linux, RunAsync was still running
-            // three seconds after the signal and the deadline had to end the process, notices undrained. So the
-            // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)
-            using var unblock = stopping.Token.Register(() => _ = transport.DisposeAsync().AsTask());
-            await using var server = McpServer.Create(transport, options);
-            // The consultation sweep, while serving and not only at start: an idle consultation is closed
-            // within a minute of its budget instead of reading `open` until the next start. Its own token,
-            // cancelled when serving ends however it ends — a client closing stdin sends no signal.
-            using var serving = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
-            var sweeping = ConsultationSweeper.RunAsync(() => host.Current, ConsultationSweeper.Every, log, serving.Token);
-            // What `--consultants` would answer, written ONCE for the other side to read (epic 4, E4.1): fire-and-forget on
-            // the thread pool, its own catch-all inside, never awaited — startup does not wait on four CLIs' versions, and
-            // nothing it does touches stdout. Cancelled with serving, which kills a probe still running.
-            _ = ConsultantsReadMode.WriteInBackground(settings, launcher, log, noticing, serving.Token);
             try
             {
-                await server.RunAsync(stopping.Token);
+                var options = new McpServerOptions
+                {
+                    ServerInfo = new Implementation
+                    {
+                        Name = ServerName,
+                        Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                    },
+                    ServerInstructions = Instructions,
+                };
+                options.ToolCollection ??= [];
+                foreach (var tool in Tools.All(starting))
+                {
+                    options.ToolCollection.Add(tool);
+                }
+
+                // And the one PROMPT, which is the person's own trigger: `/mcp__coai__consult` in a
+                // client that lists them. A prompt calls nothing — it hands the assistant a message —
+                // so every cap, refusal and invariant the tool has still applies to what it decides.
+                options.PromptCollection ??= [];
+                foreach (var prompt in Prompts.All())
+                {
+                    options.PromptCollection.Add(prompt);
+                }
+
+                await using var transport = new StdioServerTransport(ServerName);
+                // The token alone does not end a blocked stdin read — measured on Linux, RunAsync was still running
+                // three seconds after the signal and the deadline had to end the process, notices undrained. So the
+                // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)
+                using var unblock = stopping.Token.Register(() => _ = transport.DisposeAsync().AsTask());
+                // A start that FAILS closes the transport as well, so serving ends and the crash is recorded below — what
+                // happened when the start still ran before serving.
+                _ = starting.Started.ContinueWith(
+                    _ => { if (starting.Failed) { _ = transport.DisposeAsync().AsTask(); } },
+                    CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion, TaskScheduler.Default);
+                await using var server = McpServer.Create(transport, options);
+                // The consultation sweep, while serving and not only at start: an idle consultation is closed
+                // within a minute of its budget instead of reading `open` until the next start. Its own token,
+                // cancelled when serving ends however it ends — a client closing stdin sends no signal. It begins
+                // once the start has built the service, and beats as often as COAI_SWEEP_SECONDS says.
+                using var serving = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
+                var sweeping = starting.SweepAsync(settings.Pace.SweepEvery, log, serving.Token);
+                // What `--consultants` would answer, written for the other side to read (epic 4, E4.1): on the thread pool,
+                // its own catch-all inside — startup does not wait on four CLIs' versions, and nothing it does touches stdout.
+                // Once per window for every server on this data directory (ConsultantsSurveyClaim). Cancelled with serving,
+                // which kills a probe still running.
+                var surveying = ConsultantsReadMode.WriteInBackground(settings, launcher, log, noticing, serving.Token);
+                try
+                {
+                    await server.RunAsync(stopping.Token);
+                }
+                finally
+                {
+                    await serving.CancelAsync();
+                    await startStop.CancelAsync();
+                    await sweeping;
+                    // ONE bounded wait, well inside the signal's grace so the notices still drain: the stop cuts a survey's
+                    // probes and the vault read short, and an ending process does not wait on a start still sweeping.
+                    await StartingHost.Ended(Task.WhenAll(surveying, starting.Started), StartingHost.EndBudget);
+                }
             }
-            finally
+            catch (Exception) when (starting.Failed)
             {
-                await serving.CancelAsync();
-                await sweeping;
+                // Whatever serving met — a read that ended because the failed start closed the transport, a transport
+                // already disposed when the server was built over it — the failed start is the story, told below as
+                // the crash it is (ServerStartFailed, so no filter below takes it for a client that went away).
             }
+
+            starting.ThrowIfFailed();
             return Ended(stopping, string.Empty);
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
@@ -2031,6 +2048,41 @@ internal static class Program
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// The slow half of a start, run in the background (<see cref="StartingHost"/>): the vault, the <c>starting:</c>
+    /// line, and the first service with every startup sweep.
+    /// </summary>
+    private static async Task<PanelServiceHost> StartedAsync(
+        Func<string, string?> configuration,
+        PanelSettings settings,
+        ProcessLauncher launcher,
+        Noticing noticing,
+        Serilog.ILogger log,
+        CancellationToken stop)
+    {
+        // The key from the layered configuration, where the panel wrote it — not the raw environment,
+        // which no spawn of the extension's puts it in (2026-10-01). The stop reaches the child: a server
+        // asked to end while `creds` is still answering does not wait the vault's thirty seconds.
+        var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration, stop);
+        var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
+        log.Information("starting: {Providers} enabled, vault: {Vault}",
+            string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
+            keys.Available ? "keys loaded" : keys.Unavailability);
+        GeminiFamilyServersSaid(settings, log);
+
+        // The file the panel writes is re-read per call, so a vendor or a threshold changed
+        // in the Settings tab reaches the NEXT round without restarting the MCP client.
+        // ONE composition, handed to the host, which holds it and gives it to every service it
+        // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
+        // that road is the trap the plan round named: production takes the quiet path while
+        // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
+        var host = new PanelServiceHost(
+            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing);
+        log.Debug("started: the first service is built and its startup sweeps are done");
+
+        return host;
     }
 
     /// <summary>
@@ -2252,6 +2304,8 @@ internal static class Program
         COAI_REVIEWER_TIMEOUT_MINUTES,
         COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS, COAI_ESCALATION_MINUTES
         (or COAI_ESCALATION_SECONDS, which wins),
+        COAI_SWEEP_SECONDS (the background sweep's beat, 60, 10–3600),
+        COAI_CONSULTANTS_REUSE_SECONDS (one consultants survey per window per data directory, 300),
         COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),
         COAI_LOG_LEVEL.
         """;

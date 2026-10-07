@@ -583,18 +583,22 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     }
 
     /// <summary>
-    /// Whether any session on disk still holds this question — on its hold (<see cref="SessionState.HoldQuestions"/>)
-    /// or as a feature session's request (<see cref="SessionState.RequestQuestions"/>). What
-    /// <see cref="EscalationRetention"/> asks before it takes a card: a hold is bound to its question by identity,
-    /// and the file is what the person answers.
+    /// Every question the sessions on disk hold — on a hold (<see cref="SessionState.HoldQuestions"/>) or as a feature
+    /// session's request (<see cref="SessionState.RequestQuestions"/>) — read again only when the sessions directory
+    /// changed. What <see cref="EscalationRetention"/> asks before it takes a card: a hold is bound to its question by
+    /// identity, and the file is what the person answers. It used to be asked per id, reading every session each
+    /// time — the idle-CPU defect of 2026-10-06 (<see cref="SessionHolds"/> says the rest).
     /// </summary>
-    public bool HoldsQuestion(string id) =>
-        Directory.Exists(SessionsDir)
-        && Directory.EnumerateFiles(SessionsDir, "session-*.json")
-            .Select(TryRead)
-            .OfType<PersistedSession>()
-            .Any(session => session.State.HoldQuestions.Contains(id, StringComparer.Ordinal)
-                || session.State.RequestQuestions.Contains(id, StringComparer.Ordinal));
+    public HeldQuestions HeldQuestions() => Holds.Read();
+
+    /// <summary>How many times <see cref="HeldQuestions"/> actually read the session files — for the idle-budget tests.</summary>
+    internal int HeldQuestionReads => Holds.Reads;
+
+    /// <summary>
+    /// Built on first use: it needs <see cref="TryRead"/>, which a field initializer cannot name. Two threads racing the
+    /// first use can each build one; the loser's cache is simply dropped.
+    /// </summary>
+    private SessionHolds Holds => field ??= new SessionHolds(SessionsDir, TryRead);
 
     /// <summary>One session file, or nothing — torn, busy or not a session is nothing, and a sweep walks on.</summary>
     private PersistedSession? TryRead(string file)

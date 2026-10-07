@@ -584,6 +584,9 @@ public sealed record PanelSettings
     /// <summary>How long an open consultation may sit unasked before it is closed and its handle dropped.</summary>
     public TimeSpan ConsultIdle { get; init; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>How often a serving process does its background work — <see cref="ServerPace"/>.</summary>
+    public ServerPace Pace { get; init; } = ServerPace.Default;
+
     /// <summary>Whether the <c>consult</c> tool answers at all.</summary>
     /// <remarks>
     /// <para>On unless somebody switched it off, and read through <see cref="NotSwitchedOff"/> rather
@@ -883,6 +886,7 @@ public sealed record PanelSettings
             ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
             ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
             ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
+            Pace = ServerPace.From(env),
             ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
             ConsultantsUnreadable = consultants.Unreadable,
             GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),

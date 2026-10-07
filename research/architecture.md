@@ -40,7 +40,7 @@ C4Container
   Rel(mcp, codex, "spawn, read-only sandbox")
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn, approval-mode plan")
-  Rel(mcp, creds, "creds config <key>, at startup")
+  Rel(mcp, creds, "creds config <key>, once per start, in the background")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
   Rel(ext, srv, "Microsoft sign-in, then a session token; and a CHAT turn, as a job with no role")
@@ -287,6 +287,19 @@ tool reads a file and ships its contents to other vendors' models, so an unrestr
 been an exfiltration primitive with a friendly name. It bounds which FILE may be reviewed and says
 nothing about where the review runs; plan 5 is the decision about that, and it is a person's to make
 per vendor rather than one this product takes for them.
+
+## Many servers on one machine: the start and the idle beat cost nothing the client waits for (2026-10-06)
+
+Every editor session starts its own stdio `coai-mcp`, so a machine runs several at once — seven in WSL on
+2026-10-06, all on one data directory. Two things that were cheap for one server were not for seven
+([RESULTS_idle_cpu_and_slow_start.md](RESULTS_idle_cpu_and_slow_start.md)): the one-minute beat re-read every session
+file per question card (20–54 % of a core per idle server), and the start read the vault and ran every startup sweep
+before answering `initialize` (19–32 s in the logs, 30–62 s reproduced on a copy of the data, against Claude Code's 30 s connect budget — a restart storm). Since then the
+transport starts first and the slow half runs in the background (`StartingHost`), the beat reads nothing when nothing
+is due, and the consultants survey that every start wrote for the other side is taken once per window for every server
+on the data directory (`ConsultantsSurveyClaim`). No wire or file a client reads changed; a `.claim` file is new in
+`consultations/health/` and the extension does not read it. Details: [module_server.md](module_server.md), *A start
+answers `initialize` at once*.
 
 ## Module map
 

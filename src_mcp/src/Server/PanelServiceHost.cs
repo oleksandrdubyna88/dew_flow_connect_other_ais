@@ -21,7 +21,7 @@ namespace CoaiMcp.Server;
 /// <para>Environment variables still win over the file, exactly as before: a variable set in the
 /// client's config is more specific than a file any window may rewrite.</para>
 /// </remarks>
-public sealed class PanelServiceHost
+public sealed class PanelServiceHost : IPanelServiceSource
 {
     private readonly Func<string, string?> _env;
     private readonly VaultKeys _keys;
@@ -80,6 +80,9 @@ public sealed class PanelServiceHost
             }
         }
     }
+
+    /// <summary>The same service as <see cref="Current"/>, for a caller that may also be served by a <see cref="StartingHost"/>.</summary>
+    public ValueTask<PanelService> CurrentAsync(CancellationToken ct = default) => ValueTask.FromResult(Current);
 
     /// <param name="first">
     /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to

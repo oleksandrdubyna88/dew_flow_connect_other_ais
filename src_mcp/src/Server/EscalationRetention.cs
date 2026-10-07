@@ -12,10 +12,16 @@ namespace CoaiMcp.Server;
 /// <para><b>Held is kept, whatever its age or status.</b> A hold is bound to its question by identity
 /// (<c>SessionState.HoldQuestions</c>, <c>RequestQuestions</c>): deleting the file would leave the hold with an id
 /// nothing can answer. A session that no longer holds the id releases it to the clock.</para>
+/// <para><b>Judged first, held asked second, once per sweep</b> (<c>todo/PLAN_an_idle_server_is_idle_and_starts_at_once.md</c>,
+/// D1, 2026-10-06). What the sessions hold costs a read of every session file; asked per file, before the file was even
+/// judged, it made each one-minute beat (escalation files × session files) JSON parses — 40 % of a core per idle
+/// server. Now a file is judged first, and only a file that is DUE asks — the set read lazily, once per
+/// <see cref="Sweep(DateTime)"/>. The outcome is unchanged: a held id still keeps all its files. A set that could not
+/// be read whole (<see cref="HeldQuestions.Complete"/>) keeps every due file this beat.</para>
 /// <para>Each file is judged under the turn its readers and writers take, through <see cref="Escalations"/>' own
 /// readers — there is one reader of a question file and one of an answer file, and this is not a third.</para>
 /// </remarks>
-public sealed class EscalationRetention(Escalations escalations, Func<string, bool> isHeld, Action<string>? warn = null)
+public sealed class EscalationRetention(Escalations escalations, Func<HeldQuestions> heldQuestions, Action<string>? warn = null)
 {
     /// <summary>How long a finished question outlives its end (A4: seven days).</summary>
     public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
@@ -34,62 +40,85 @@ public sealed class EscalationRetention(Escalations escalations, Func<string, bo
     }
 
     /// <summary>Sweeps these files in this order — the seam that lets a test hold the order a platform's listing does not promise.</summary>
-    internal int Sweep(IReadOnlyList<string> paths, DateTime nowUtc) => paths.Sum(path => SweepOne(path, nowUtc));
+    internal int Sweep(IReadOnlyList<string> paths, DateTime nowUtc)
+    {
+        var held = new Lazy<HeldQuestions>(heldQuestions, LazyThreadSafetyMode.None);
 
-    private int SweepOne(string path, DateTime nowUtc)
+        return paths.Sum(path => SweepOne(path, nowUtc, held));
+    }
+
+    private int SweepOne(string path, DateTime nowUtc, Lazy<HeldQuestions> held)
+    {
+        // HELD WINS, whatever the file says (S4b item 7): an answered pair, an orphan answer, a torn question — the hold
+        // is bound to the id, and deleting any of its files leaves it unanswerable. Asked only of a file that is DUE.
+        var due = DueFiles(path, nowUtc);
+
+        return due.Paths.Count == 0 || (due.Id.Length > 0 && held.Value.MayHold(due.Id)) ? 0 : due.Paths.Sum(Deleted);
+    }
+
+    /// <summary>What the end of this file's question would take now, and the id a hold would be bound to (none for a temp file).</summary>
+    private sealed record Due(string Id, IReadOnlyList<string> Paths);
+
+    private Due DueFiles(string path, DateTime nowUtc)
     {
         // Gone since the listing — its pair's question took it, or a session answered and cleaned up. Judging it anyway
         // reads a missing file's write time as 1601 and counts a deletion that did not happen.
         if (!File.Exists(path))
         {
-            return 0;
+            return new(string.Empty, []);
         }
 
         var name = Path.GetFileName(path);
-        if (name.EndsWith(".tmp", StringComparison.Ordinal))
-        {
-            return Older(File.GetLastWriteTimeUtc(path), nowUtc) ? Deleted(path) : 0;
-        }
 
-        var id = name.EndsWith(Answer, StringComparison.Ordinal) ? name[..^Answer.Length]
-            : name.EndsWith(".json", StringComparison.Ordinal) ? Path.GetFileNameWithoutExtension(path)
-            : string.Empty;
-
-        // HELD WINS, whatever the file says (S4b item 7): an answered pair, an orphan answer, a torn question — the hold
-        // is bound to the id, and deleting any of its files leaves it unanswerable. Asked before the file is judged.
-        return id.Length == 0 || isHeld(id) ? 0
-            : name.EndsWith(Answer, StringComparison.Ordinal) ? OrphanAnswer(path, id, nowUtc)
-            : Question(path, id, nowUtc);
+        return name.EndsWith(".tmp", StringComparison.Ordinal)
+            ? new(string.Empty, Older(File.GetLastWriteTimeUtc(path), nowUtc) ? [path] : [])
+            : Judged(name, path, nowUtc);
     }
 
+    private Due Judged(string name, string path, DateTime nowUtc)
+    {
+        var id = IdOf(name, path);
+
+        return id.Length == 0 ? new(id, []) : new(id, DueOf(name, path, id, nowUtc));
+    }
+
+    private static string IdOf(string name, string path) =>
+        name.EndsWith(Answer, StringComparison.Ordinal) ? name[..^Answer.Length]
+        : name.EndsWith(".json", StringComparison.Ordinal) ? Path.GetFileNameWithoutExtension(path)
+        : string.Empty;
+
+    /// <summary>The files the end of this question would take now — none when it is not yet seven days over.</summary>
+    private IReadOnlyList<string> DueOf(string name, string path, string id, DateTime nowUtc) =>
+        name.EndsWith(Answer, StringComparison.Ordinal) ? OrphanAnswer(path, id, nowUtc) : Question(path, id, nowUtc);
+
     /// <summary>An answer whose question is gone: judged alone, by its own stamp. One with a question is judged with it.</summary>
-    private int OrphanAnswer(string path, string id, DateTime nowUtc)
+    private IReadOnlyList<string> OrphanAnswer(string path, string id, DateTime nowUtc)
     {
         if (File.Exists(escalations.QuestionPath(id)))
         {
-            return 0;
+            return [];
         }
 
         var ended = Parsed(escalations.ReadAnswer(id)?.AnsweredUtc) ?? File.GetLastWriteTimeUtc(path);
 
-        return Older(ended, nowUtc) ? Deleted(path) : 0;
+        return Older(ended, nowUtc) ? [path] : [];
     }
 
-    private int Question(string path, string id, DateTime nowUtc)
+    private IReadOnlyList<string> Question(string path, string id, DateTime nowUtc)
     {
         if (escalations.Read(id) is not { } question)
         {
-            return Older(File.GetLastWriteTimeUtc(path), nowUtc) ? Deleted(path) : 0;
+            return Older(File.GetLastWriteTimeUtc(path), nowUtc) ? [path] : [];
         }
 
         if (escalations.ReadAnswer(id) is { } answer)
         {
             var answered = Parsed(answer.AnsweredUtc) ?? File.GetLastWriteTimeUtc(escalations.AnswerPath(id));
 
-            return Older(answered, nowUtc) ? Deleted(path) + Deleted(escalations.AnswerPath(id)) : 0;
+            return Older(answered, nowUtc) ? [path, escalations.AnswerPath(id)] : [];
         }
 
-        return Older(Ended(question, path), nowUtc) ? Deleted(path) : 0;
+        return Older(Ended(question, path), nowUtc) ? [path] : [];
     }
 
     /// <summary>When an unanswered question ended: its expiry, or — never expired — when it was asked.</summary>

@@ -15,9 +15,11 @@ namespace CoaiMcp.Server;
 /// </remarks>
 public static class ConsultationSweeper
 {
-    /// <summary>How often: the budget is set in minutes, so the card is at most this late.</summary>
-    public static readonly TimeSpan Every = TimeSpan.FromMinutes(1);
-
+    /// <param name="every">
+    /// How often — <see cref="ServerPace.SweepEvery"/> (<c>COAI_SWEEP_SECONDS</c>, a minute unless set): the budget is set in
+    /// minutes, so the card is at most this late. Each beat must stay cheap on an idle server: the escalation retention
+    /// once read every session file per card on every beat, 40 % of a core (2026-10-06).
+    /// </param>
     public static async Task RunAsync(Func<PanelService> current, TimeSpan every, Serilog.ILogger log, CancellationToken stop)
     {
         using var beat = new PeriodicTimer(every);
