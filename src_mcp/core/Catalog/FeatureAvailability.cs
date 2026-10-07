@@ -27,7 +27,7 @@ public sealed record ThinkingRow(string Runtime, string Source, string Note);
 public sealed record FastModeRowSeed(string? Runtime, string? Source, IReadOnlyList<string>? Models, string? MeasuredWith, string? Note);
 
 /// <summary>
-/// Whether a runtime has a fast tier (todo/PLAN_fast_mode.md, decision 2): on <c>every-model</c>, on the listed
+/// Whether a runtime has a fast tier (research/PLAN_fast_mode.md, decision 2): on <c>every-model</c>, on the listed
 /// <c>models</c> only, or <c>none</c> — and, always, why.
 /// </summary>
 public sealed record FastModeRow(string Runtime, string Source, IReadOnlyList<string> Models, string Note);

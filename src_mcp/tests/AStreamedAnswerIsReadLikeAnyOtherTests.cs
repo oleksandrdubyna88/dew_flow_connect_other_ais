@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A streamed completion (<c>"stream": true</c>, server-sent events) assembled into the ONE answer shape the
-/// non-streaming path reads (todo/PLAN_api_streaming.md, S4 and S5): <see cref="SseEvents"/> turns lines into
+/// non-streaming path reads (research/PLAN_api_streaming.md, S4 and S5): <see cref="SseEvents"/> turns lines into
 /// payloads by the SSE rules, <see cref="StreamAssembler"/> turns payloads into a completion that
 /// <see cref="CompletionReader"/> reads unchanged — or into a failure, or a broken stream, never an answer it is not.
 /// </summary>

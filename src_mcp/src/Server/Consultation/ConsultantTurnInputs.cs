@@ -65,7 +65,7 @@ internal static class ConsultantTurnInputs
         DataDir = dataDir,
         // A consultant starts no MCP server either (issue #514).
         McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
-        // The row's fast mode, as for a reviewer (todo/PLAN_fast_mode.md).
+        // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).
         Fast = row.Fast,
     };
 

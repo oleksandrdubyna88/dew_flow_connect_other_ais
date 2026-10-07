@@ -116,7 +116,7 @@ public sealed record ProviderSettings(string Provider)
     public Core.Api.ApiRowSettings Api { get; init; } = Core.Api.ApiRowSettings.None;
 
     /// <summary>
-    /// The row's fast mode (todo/PLAN_fast_mode.md): Off unless the row says <c>on</c> or <c>cli</c> — the owner's
+    /// The row's fast mode (research/PLAN_fast_mode.md): Off unless the row says <c>on</c> or <c>cli</c> — the owner's
     /// default, a row written before the field existed included.
     /// </summary>
     public Core.Catalog.FastMode Fast { get; init; }

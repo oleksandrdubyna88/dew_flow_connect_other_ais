@@ -227,7 +227,7 @@ public sealed class ConfinementPlannerTests
 
         args.Should().Equal(
             "--search", "exec", "-s", "read-only", "--ephemeral", "--skip-git-repo-check", "--color", "never",
-            // The row's fast mode, Off by default (todo/PLAN_fast_mode.md), before the instructions on stdin.
+            // The row's fast mode, Off by default (research/PLAN_fast_mode.md), before the instructions on stdin.
             "--json", "-o", output, "-m", "gpt-6-astra", "-c", "service_tier=default", "-");
         Path.GetDirectoryName(Path.GetFullPath(output)).Should().Be(Path.GetFullPath(Answers));
         web.Request.WorkingDirectory.Should().Be(Scratch);

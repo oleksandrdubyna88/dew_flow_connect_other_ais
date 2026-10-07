@@ -2276,7 +2276,7 @@ sequenceDiagram
   its cleanup in `BoundedScheduler` (a retry launches the same invocation again). One `LaunchFiles.Forget` for both.
 - `ConsultantCheckMode.IsModelCheck` holds the mode predicate; a real-binary test pins the `--check-model` dispatch.
 
-## An api row's stream switch reaches every api launch (2026-10-06, todo/PLAN_api_streaming.md)
+## An api row's stream switch reaches every api launch (2026-10-06, research/PLAN_api_streaming.md)
 
 `ReviewerSettings.Stream`, and ONE helper, `ReviewerSettings.WithApi(ApiEffective)`, that carries an api row's effort,
 ceiling, thinking switch and stream into launch settings. The roster (`RosterBuilder`), the consultant and the model
@@ -2284,7 +2284,7 @@ card's ✓ Check (`ConsultantTurnInputs`) and the question consultant (`Question
 of them from carrying the fields by hand again. `ApiRuntime.Build` adds `--stream on` only when the row's switch is
 on, so every launch before the switch is spelled as it was.
 
-## A row's fast mode reaches every codex and claude launch (2026-10-07, todo/PLAN_fast_mode.md, Story A)
+## A row's fast mode reaches every codex and claude launch (2026-10-07, research/PLAN_fast_mode.md, Story A)
 
 `ReviewerSettings.Fast` (`Core.Catalog.FastMode`: `Off` — the default —, `On`, `Cli`) is set from the row at all three
 places a row becomes a launch (`RosterBuilder.SettingsFor`, `ConsultantTurnInputs.Plain`, `QuestionFanOut.SettingsFor`)

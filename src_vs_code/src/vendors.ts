@@ -149,9 +149,9 @@ export interface Vendor {
   readonly timeoutMinutes?: number | undefined;
   /** What the chat composer opens with for this instance, ≤ 8 KiB. */
   readonly chatStartingPrompt?: string | undefined;
-  /** An api row asks for its answer as a stream (todo/PLAN_api_streaming.md). Absent = off, today's call. */
+  /** An api row asks for its answer as a stream (research/PLAN_api_streaming.md). Absent = off, today's call. */
   readonly stream?: boolean | undefined;
-  /** The row's fast mode (todo/PLAN_fast_mode.md): `on` or `cli`; absent = Off, the default — forces the standard tier. */
+  /** The row's fast mode (research/PLAN_fast_mode.md): `on` or `cli`; absent = Off, the default — forces the standard tier. */
   readonly fast?: FastSetting | undefined;
 }
 

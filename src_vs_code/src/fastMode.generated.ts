@@ -1,10 +1,10 @@
 // GENERATED FILE — do not edit by hand.
 //
 // Written by `node scripts/generate-feature-availability.mjs` from the `fastMode` block of
-// `shared/feature-availability.json` (todo/PLAN_fast_mode.md). Edit the seed and run the script;
+// `shared/feature-availability.json` (research/PLAN_fast_mode.md). Edit the seed and run the script;
 // `generatedFilesAreCurrent.test.ts` fails if this file and the generator disagree. It imports nothing, on purpose.
 
-/** Where a runtime's fast tier is (todo/PLAN_fast_mode.md): on every model, on the listed models, or none. */
+/** Where a runtime's fast tier is (research/PLAN_fast_mode.md): on every model, on the listed models, or none. */
 export type FastSource = 'every-model' | 'models' | 'none';
 
 /** One runtime's fast tier — and, always, why. */

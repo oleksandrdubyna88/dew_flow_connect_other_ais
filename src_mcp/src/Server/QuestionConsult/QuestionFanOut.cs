@@ -310,7 +310,7 @@ public sealed class QuestionFanOut(
             DataDir = panel.DataDir,
             // A question row starts no MCP server either (issue #514).
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(env),
-            // The row's fast mode, as for a reviewer (todo/PLAN_fast_mode.md).
+            // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
         };
         if (row.Runtime is not ApiConsultant)

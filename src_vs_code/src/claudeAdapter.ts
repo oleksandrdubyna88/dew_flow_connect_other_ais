@@ -49,7 +49,7 @@ export const claudeAdapter: ChatAdapter = {
   // reviewers (ClaudeRuntime). Empty sends nothing, so the CLI keeps its own default.
   // `--effort` is the flag coai-mcp hands the same CLI for a reviewer (ClaudeRuntime), so a row chats at the effort it
   // reviews at (E4.6c); `chatLaunchFor` passes only a level the CLI accepts.
-  // `--settings` with the chat's own one-key file (todo/PLAN_fast_mode.md), as coai-mcp hands a claude reviewer one.
+  // `--settings` with the chat's own one-key file (research/PLAN_fast_mode.md), as coai-mcp hands a claude reviewer one.
   argv: ({ model, access, effort, fastSettings }) => [
     ...(access === 'agent' ? CLAUDE_AGENT_ARGS : CLAUDE_ARGS),
     ...flagged('--model', model),

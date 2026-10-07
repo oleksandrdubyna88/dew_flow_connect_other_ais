@@ -124,7 +124,7 @@ export function systemPromptField(vendor: Vendor, id: string, mark = ''): string
     + `<div class="hint"><span data-bytes-for="sp-${id}">${ENCODER.encode(text).length}</span> of ${MAX_PROMPT_BYTES} bytes</div></div>`;
 }
 
-/** The three states of a row's fast mode (todo/PLAN_fast_mode.md), Off — the default — first. */
+/** The three states of a row's fast mode (research/PLAN_fast_mode.md), Off — the default — first. */
 const FAST_STATES: readonly (readonly [string, string])[] = [['', 'Off — the standard tier'], ['on', 'On — the fast tier'], ['cli', 'As the CLI is set']];
 
 /** A row's fast mode — drawn by the new Settings page's card only, and only for a row that has a tier. */
@@ -136,7 +136,7 @@ export function fastField(vendor: Vendor, id: string, mark = ''): string {
     + `<select id="fast-${id}" data-setting="fast" data-vendor="${id}">${options}</select></div>`;
 }
 
-/** An api row's stream switch (todo/PLAN_api_streaming.md) — drawn by the new Settings page's card only. */
+/** An api row's stream switch (research/PLAN_api_streaming.md) — drawn by the new Settings page's card only. */
 export function streamField(vendor: Vendor, id: string, mark = ''): string {
   return `<div class="check-row"><label class="check"><input type="checkbox" data-setting="stream" data-vendor="${id}"${vendor.stream === true ? ' checked' : ''}>`
     + ` stream the answer${mark}</label>${help('apiStream')}</div>`;

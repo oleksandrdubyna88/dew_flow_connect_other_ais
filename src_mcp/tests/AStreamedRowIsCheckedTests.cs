@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The person's flow of todo/PLAN_api_streaming.md, Story D, below the page: an api row with its stream switch on is
+/// The person's flow of research/PLAN_api_streaming.md, Story D, below the page: an api row with its stream switch on is
 /// handed to <c>--check-model</c> exactly as the card's ✓ Check hands it, the real <c>coai-mcp --ask-api</c> child is
 /// launched against a local endpoint, and the check's record says whether the answer came as a stream.
 /// </summary>

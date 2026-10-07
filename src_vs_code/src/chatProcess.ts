@@ -45,7 +45,7 @@ export function chatProcessFor(
   workspace = '',
 ): (resume: string) => ProcessHandle {
   return (resume) => {
-    // The row's fast mode — a claude chat's settings file in the chat's own folder (todo/PLAN_fast_mode.md, Story C).
+    // The row's fast mode — a claude chat's settings file in the chat's own folder (research/PLAN_fast_mode.md, Story C).
     const spec = launchSpecFor(vendor, home, chatLaunchFor(vendor, resume, model, access, (on) => chatFastSettingsFile(on)), resolved, undefined, workspace);
     // A refused spec carries an empty executable and an empty argv, and handing those to `launch`
     // spawns "" — a spawn ENOENT, or nothing, in place of the sentence that says why. Found on this

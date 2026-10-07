@@ -22,7 +22,7 @@ public sealed record ProviderStatus(
     public ApiRowReport? Api { get; init; }
 
     /// <summary>
-    /// The fast mode this row's launches REQUEST — <c>off</c>, <c>on</c> or <c>cli</c> (todo/PLAN_fast_mode.md) — for a
+    /// The fast mode this row's launches REQUEST — <c>off</c>, <c>on</c> or <c>cli</c> (research/PLAN_fast_mode.md) — for a
     /// row that has a tier; absent for every other, so its JSON reads as it did. What the seam reads back.
     /// </summary>
     /// <remarks>

@@ -396,7 +396,7 @@ async function apiSettingsSeam() {
 await apiSettingsSeam();
 console.log('  ok  an api row\'s effort, thinking switch and review limit reach the server and come back as what it runs with');
 
-// The stream switch (todo/PLAN_api_streaming.md): written by the extension's own settings writer to a binary that lists
+// The stream switch (research/PLAN_api_streaming.md): written by the extension's own settings writer to a binary that lists
 // `apiStream`, the server must run the row streamed — and held back from one that does not, it must run it as always.
 // Read off the server's effective settings for the row, which it can only report if the field reached it.
 async function apiStreamSeam() {
@@ -431,7 +431,7 @@ async function apiStreamSeam() {
 await apiStreamSeam();
 console.log('  ok  an api row\'s stream switch reaches a server that lists apiStream, and never one that does not');
 
-// A row's fast mode (todo/PLAN_fast_mode.md): written by the extension's own writer, read back as the binary's own word
+// A row's fast mode (research/PLAN_fast_mode.md): written by the extension's own writer, read back as the binary's own word
 // for the state it applies — `on` to a binary that lists fastMode; held back from one that does not, which then runs Off.
 async function fastModeSeam() {
   const { serverSettingsJsonWith } = await import('../out/serverSettingsFile.js');

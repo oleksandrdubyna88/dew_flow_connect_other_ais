@@ -127,7 +127,7 @@ export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf:
 }
 
 /**
- * A row's fast mode, to a binary that lists `fastMode` (todo/PLAN_fast_mode.md) — and to no other, which would skip the
+ * A row's fast mode, to a binary that lists `fastMode` (research/PLAN_fast_mode.md) — and to no other, which would skip the
  * member while the card said it was set. Off crosses as nothing: the binary's own default is Off.
  */
 function fastOnTheWire(v: Vendor, features: readonly string[]): { fast?: 'on' | 'cli' } {
@@ -135,7 +135,7 @@ function fastOnTheWire(v: Vendor, features: readonly string[]): { fast?: 'on' | 
 }
 
 /**
- * An api row's stream switch, to a binary that lists `apiStream` (todo/PLAN_api_streaming.md) — and to no other: an older
+ * An api row's stream switch, to a binary that lists `apiStream` (research/PLAN_api_streaming.md) — and to no other: an older
  * binary skips the member, so the card would say "streamed" over a call that is not. Only when on.
  */
 function streamOnTheWire(v: Vendor, features: readonly string[]): { stream?: true } {

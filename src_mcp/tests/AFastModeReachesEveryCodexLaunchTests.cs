@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A codex row's fast mode reaches every codex launch (todo/PLAN_fast_mode.md, Story A): Off — the default, a row that
+/// A codex row's fast mode reaches every codex launch (research/PLAN_fast_mode.md, Story A): Off — the default, a row that
 /// never set it included — sends <c>-c service_tier=default</c>, On sends <c>fast</c>, "As the CLI is set" sends
 /// nothing. The spelling was measured first (research/RESULTS_fast_mode_measured_2026-10-07.md): codex reads the key,
 /// checks it per model, and drops a value the model does not advertise with a warning — never a refusal.

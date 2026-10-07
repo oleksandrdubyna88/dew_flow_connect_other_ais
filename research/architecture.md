@@ -109,7 +109,7 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   from that report alone, and the row carries `effort` / `thinking` / `reviewMinutes` on the wire only when
   they differ from the default — held back for a server known to be older than 0.40.0, which ignores them
   ([module_extension.md](module_extension.md), *An api reviewer's own settings on its card*).
-  *Since [PLAN_api_streaming.md](../todo/PLAN_api_streaming.md) (2026-10-06):* an `api` row may ask for its answer
+  *Since [PLAN_api_streaming.md](PLAN_api_streaming.md) (2026-10-06):* an `api` row may ask for its answer
   as a STREAM. The switch is drawn only on the NEW Settings page's model card; the row's `stream` crosses
   `COAI_VENDORS` only to a binary whose `--features` lists `apiStream`, reaches all three launch places (review,
   consult, question consult) through `ReviewerSettings.WithApi`, and becomes the child's `--stream on`. The child
@@ -119,6 +119,15 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   `"streamed":true` only when a stream was read, so a ✓ Check of the row records `streamed` / `not-streamed` and the
   card says when the switch did nothing (a gateway that ignored it, or an older coai-mcp reached through
   `executablePath`).
+  *Since [PLAN_fast_mode.md](PLAN_fast_mode.md) (2026-10-07, PR #693):* a CLI row has a three-state **fast mode**
+  — Off (the default: the standard tier, whatever the CLI's own config says), On, or As the CLI is set — drawn only
+  on the new page's model card, and only for a row whose runtime and model have a tier. Which do is DATA, read by
+  both halves: the `fastMode` block of `shared/feature-availability.json` (codex: every model; claude: the Opus
+  family), generated into `fastMode.generated.ts` for the extension; a seam leg asks both halves the same rows. The
+  row's `fast` crosses `COAI_VENDORS` only to a binary listing `fastMode`, and reaches every launch of the row —
+  reviewer, consultant, question row — as codex's `-c service_tier=default|fast` or claude's one-key `--settings`
+  file; the chat applies the same rule with its own file. `--providers` reports the REQUESTED state; what the
+  vendor grants is the vendor's (a claude account without usage credits holds On off).
 - **The settings file now depends on the installed server's version.** An older coai-mcp turns a
   runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
   against xAI's endpoint under its own name. So the extension threads the installed server version
