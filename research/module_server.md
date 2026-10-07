@@ -6538,3 +6538,13 @@ row's fast mode*). `--features` lists `fastMode`, so the extension sends the fie
 (`FeatureAvailability.RowHasFastTier`), and it is the REQUESTED state, never the one the vendor grants: `on` is held off
 by a claude account whose usage credits are off, and a codex model that does not advertise the tier drops it with a
 warning (research/RESULTS_fast_mode_measured_2026-10-07.md).
+
+**An Off codex row on a release that refuses the standard tier** (codex 0.110.0–0.130.0, todo/PLAN_codex_tier_floor.md)
+still reports `fast: "off"` — the requested state — and its `note` says beside the health sentence that this release
+cannot be told the standard tier, so its launches carry no tier at all (module_runners.md, *The codex floor*). Read off
+the version the health probe ALREADY asked for (`CodexTierSupport.OfVersion(health.Version)`), so `--providers` runs one
+`--version` per row, as before. In the note, not a new field: the panel renders one note per row, and a field it does
+not read would say nothing to the person. An On row, a row outside the range, and one whose version did not parse get
+no such sentence. The review stages ask before they build (`RosterBuilder.CodexTiersAsync` → `BuildWork(codexTiers:)`,
+from `ReviewPlanAsync`, `ReviewCodeAsync`, `ReviewDocumentAsync` and `FeatureStage`); a codex question row asks in
+`QuestionRowLaunch.TierProbedAsync`, which now takes the fan-out's launcher.

@@ -242,10 +242,13 @@ internal sealed class FeatureStage(
         var securitySources = await SecuritySources.ReadAsync(settings.SecurityLane,
             roster.Security().Due(Stage.FeatureReview, round), securityDiff,
             new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), ct);
+        // As every review stage does before it builds: an Off codex row on 0.110–0.130 is sent no tier
+        // (todo/PLAN_codex_tier_floor.md).
+        var tiers = await roster.CodexTiersAsync(launcher, workingDir, ct);
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
             stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
-            source: source, securityFiles: securityDiff, securitySources: securitySources);
+            source: source, securityFiles: securityDiff, securitySources: securitySources, codexTiers: tiers);
 
         // A retry asks ONLY the reviewers that failed in round 1 (D23); every other round is the work as built.
         // The RESOLVED base, as the code stage records it: what the outline was actually compared against.

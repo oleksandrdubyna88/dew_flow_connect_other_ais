@@ -92,7 +92,7 @@ public class CodeWorkspaceTests
     {
         var worktree = Worktree();
 
-        var work = Service("none").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        var work = Service("none").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         work.Should().NotBeEmpty();
         work[0].Invocation.Request.WorkingDirectory.Should().NotBe(worktree,
@@ -107,7 +107,7 @@ public class CodeWorkspaceTests
     {
         var worktree = Worktree();
 
-        var work = Service("worktree").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        var work = Service("worktree").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(worktree);
     }
@@ -128,7 +128,7 @@ public class CodeWorkspaceTests
         // A CLI reviewer: only a reviewer that can READ a checkout is told it has one (PLAN_one_model_catalog.md E2.1,
         // ReviewerMaterial). This test used a local model, which is one HTTP request with no tools — telling it about a
         // checkout was the defect E2.1 removed, not the guarantee this test is about.
-        var work = Service("worktree", runtime: "codex").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        var work = Service("worktree", runtime: "codex").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         Sent(work[0].Repair!).Should().Contain("no tool you can call",
             "the repair launch runs in an empty temp directory whatever the review got");
@@ -136,7 +136,7 @@ public class CodeWorkspaceTests
         Sent(work[0].Invocation).Should().Contain("READ-ONLY checkout",
             "the REVIEW launch really was given the tree, and must still be told so");
 
-        var local = Service("worktree").Roster.BuildWork([RoleCatalog.ArchitectureRole], Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        var local = Service("worktree").Roster.BuildWork([RoleCatalog.ArchitectureRole], Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
         Sent(local[0].Invocation).Should().NotContain("READ-ONLY checkout",
             "a local model is sent the change in its prompt and has no tool to open a file with");
     }
@@ -156,7 +156,7 @@ public class CodeWorkspaceTests
             + "repository checkout read-only and the diff below. Review the change, not the whole codebase.\n");
 
         var work = Service("none", dataDir)
-            .Roster.BuildWork([RoleCatalog.ArchitectureRole], Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            .Roster.BuildWork([RoleCatalog.ArchitectureRole], Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         Sent(work[0].Invocation).Should().NotContain("checkout read-only",
             "a person's own copy of a prompt cannot know which mode is running either");
@@ -189,7 +189,7 @@ public class CodeWorkspaceTests
         var scratch = Worktree();
 
         var work = Service("none").Roster.BuildWork([RoleCatalog.PlanRole], scratch, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["plan-critique"]).Reviewers;
+            planPrompts: ["plan-critique"], codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(scratch);
     }

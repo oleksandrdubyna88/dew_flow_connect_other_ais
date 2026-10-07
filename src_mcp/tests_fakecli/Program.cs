@@ -57,6 +57,15 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT
 //                        — what a bare `--help` prints and exits with (a claude's capability probe); stdin is
 //                          not read for it. Unset: the help prints nothing useful and exits 0
+//   FAKECLI_VERSION_STDOUT / FAKECLI_VERSION_EXIT / FAKECLI_VERSION_SLEEP_MS
+//                        — what a bare `--version` prints, exits with, and waits first (a codex's tier probe,
+//                          todo/PLAN_codex_tier_floor.md, and the health probe). Each falls back to the bare
+//                          variable EXCEPT the wait: a launch's FAKECLI_SLEEP_MS is how a test makes the REVIEW
+//                          slow, and a probe that slept on it would spend the probe's whole timeout before every
+//                          launch of every such test. A `--version` is never recorded and never reads stdin.
+//   FAKECLI_VERSION_COUNT — a file that gets one line per `--version` asked (how "never cached" is counted)
+//   FAKECLI_VERSION_PID   — a file a `--version` writes its own process id into before it waits (how "the hung
+//                           child was killed" is checked rather than assumed)
 //
 // Two placeholders are filled in FAKECLI_STDOUT and FAKECLI_OUTFILE_TEXT (the consultant check, epic 4 — its
 // marker and canary are random, so the answer cannot be scripted in advance):
@@ -89,6 +98,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     {
         Console.Out.Write(read("FAKECLI_HELP_STDOUT") ?? "Usage: fake [options]\n");
         return int.TryParse(read("FAKECLI_HELP_EXIT"), out var helpExit) ? helpExit : 0;
+    }
+
+    // A codex asks its CLI's --version before every launch (the tier probe), and `providers` asks it too.
+    if (args is ["--version"])
+    {
+        return VersionAnswer.Give(read);
     }
 
     // Raw stdin, byte for byte, before any decoder can tidy it up. This exists because a
@@ -410,8 +425,60 @@ static class MinimalSteering
     /// <summary>The first arguments a vendor launch starts with: codex's `exec`/`--search`, claude's `-p`, agy's `--print=`.</summary>
     private static readonly HashSet<string> VendorFirstArguments = new(["exec", "--search", "-p", "--print="], StringComparer.Ordinal);
 
+    /// <summary>
+    /// A vendor launch's shape — or a bare <c>--version</c>, which a codex question row's tier probe asks with the
+    /// SERVER's environment, where a test that steers by this file has set nothing (todo/PLAN_codex_tier_floor.md).
+    /// </summary>
     private static bool IsVendorShape(string[] args) =>
-        VendorFirstArguments.Contains(args[0]) || args.Contains("--ask-api", StringComparer.Ordinal);
+        VendorFirstArguments.Contains(args[0]) || args.Contains("--ask-api", StringComparer.Ordinal) || args is ["--version"];
+}
+
+/// <summary>
+/// A bare <c>--version</c> in vendor mode: the version steering first, the bare variables second — and its OWN wait only.
+/// </summary>
+/// <remarks>
+/// Before the tier probe a <c>--version</c> fell through to the launch's own answer: it read stdin, wrote an argv record,
+/// and slept on <c>FAKECLI_SLEEP_MS</c>. Harmless while only <c>providers</c> asked it; once every codex launch is
+/// preceded by one, a test that records launches would count the probe, and a test that makes the review slow would
+/// make every probe hang to its timeout first.
+/// </remarks>
+static class VersionAnswer
+{
+    public static int Give(Func<string, string?> read)
+    {
+        Append(read("FAKECLI_VERSION_COUNT"), "V\n");
+        if (read("FAKECLI_VERSION_PID") is { Length: > 0 } pidFile)
+        {
+            File.WriteAllText(pidFile, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (int.TryParse(read("FAKECLI_VERSION_SLEEP_MS"), out var napMs) && napMs > 0)
+        {
+            Thread.Sleep(napMs);
+        }
+
+        Console.Error.Write(Either(read, "STDERR"));
+        Console.Out.Write(Either(read, "STDOUT"));
+
+        return int.TryParse(Either(read, "EXIT"), out var exit) ? exit : 0;
+    }
+
+    /// <summary>The <c>FAKECLI_VERSION_</c> value, else the bare <c>FAKECLI_</c> one, else nothing.</summary>
+    private static string Either(Func<string, string?> read, string name) =>
+        read($"FAKECLI_VERSION_{name}") ?? read($"FAKECLI_{name}") ?? string.Empty;
+
+    /// <summary>One line more in a counter file, shared with whatever else is appending — or nothing, with no file named.</summary>
+    private static void Append(string? path, string line)
+    {
+        if (path is not { Length: > 0 })
+        {
+            return;
+        }
+
+        using var counter = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        using var writer = new StreamWriter(counter);
+        writer.Write(line);
+    }
 }
 
 [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>), TypeInfoPropertyName = "DictionaryStringString")]

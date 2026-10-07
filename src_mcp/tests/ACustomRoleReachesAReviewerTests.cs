@@ -71,7 +71,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
     public void ItIsBuiltIntoTheRound_UnderItsOwnName()
     {
         var work = Service(WithRequirements())
-            .Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            .Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         work.Should().ContainSingle().Which.Invocation.Role.Should().Be("Requirements",
             "the role travels as the person spelled it — there is no enum left to fold it into");
@@ -81,7 +81,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
     public void ItsOwnPromptTextIsWhatTheReviewerIsHanded()
     {
         var work = Service(WithRequirements())
-            .Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            .Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         Handed(work[0]).Should().Contain(TheText,
             "the text comes from <dataDir>/prompts/<prompt id>.md, which is where a role nobody "
@@ -95,7 +95,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         // The other half of the claim: making the catalog data changed nothing about the five roles
         // that were already there.
         var work = Service(WithRequirements())
-            .Roster.BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            .Roster.BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Invocation.Role.Should().Be(RoleCatalog.ArchitectureRole);
         work[0].Prompt.Should().Be("architecture");
@@ -121,7 +121,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         File.WriteAllText(Path.Combine(_dataDir, "prompts", "brief-gaps.md"), "What does it leave out?");
 
         var work = service.Roster.BuildWork(["Brief"], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["brief-gaps"]).Reviewers;
+            planPrompts: ["brief-gaps"], codexTiers: CodexTiers.None).Reviewers;
 
         work.Should().ContainSingle().Which.Prompt.Should().Be("brief-gaps");
         Handed(work[0]).Should().Contain("What does it leave out?");
@@ -153,7 +153,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
 
         var work = service.Roster.BuildWork(
             [RoleCatalog.PlanRole, "Brief"], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["brief-gaps"]).Reviewers;
+            planPrompts: ["brief-gaps"], codexTiers: CodexTiers.None).Reviewers;
 
         work.Should().ContainSingle().Which.Invocation.Role.Should().Be("Brief",
             "brief-gaps is the brief role's lens, and the shipped plan role has never heard of it");
@@ -185,7 +185,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
 
         var work = service.Roster.BuildWork(
             [RoleCatalog.PlanRole], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false,
-            planPrompts: ["brief-gaps", "plan-critique"]).Reviewers;
+            planPrompts: ["brief-gaps", "plan-critique"], codexTiers: CodexTiers.None).Reviewers;
 
         work.Should().ContainSingle().Which.Prompt.Should().Be("plan-critique",
             "the brief's lens belongs to a role this round is not running");
@@ -199,7 +199,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         // a compiled list that has never heard of it.
         var work = Service(WithRequirements()).Roster.BuildWork(
             ["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true,
-            planPrompts: ["a-prompt-that-was-deleted"]).Reviewers;
+            planPrompts: ["a-prompt-that-was-deleted"], codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Prompt.Should().Be("req-general", "the role's first prompt is its general one");
         Handed(work[0]).Should().Contain(TheText);
@@ -213,7 +213,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         // live round, the usage rows and the session record, and a later `Architecture` run would be
         // a second identity for one role. (codex, this story's code round.)
         var work = Service(WithRequirements())
-            .Roster.BuildWork(["architecture"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            .Roster.BuildWork(["architecture"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         work[0].Invocation.Role.Should().Be("Architecture");
     }
@@ -226,7 +226,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         // answer file, ledger row and rounds-database row already written said the old word.
         // (codex, B1's plan round.)
         var work = Service(WithRequirements())
-            .Roster.BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            .Roster.BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         var arguments = work[0].Invocation.Request.Arguments;
         arguments[arguments.ToList().IndexOf("--out") + 1]

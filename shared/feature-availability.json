@@ -13,7 +13,12 @@
     "effort.source: `list` - the levels below, read off the runtime's own CLI (measuredWith says where);",
     "`probe` - the levels the model's probe report lists (ApiCapabilities.EffortLevels), judged per model;",
     "`unmeasured` - nobody has shown which levels the runtime accepts, so an effort is refused until a measurement",
-    "lands (PLAN_one_model_catalog.md D6); `none` - the runtime takes no effort at all."
+    "lands (PLAN_one_model_catalog.md D6); `none` - the runtime takes no effort at all.",
+    "",
+    "fastMode.refusesStandard (codex only): the releases, both ends included and compared as numbers, that refuse to be",
+    "told the standard tier - they take only `fast` or `flex`, and `service_tier=default` fails the launch at config load",
+    "(measured: research/RESULTS_codex_service_tier_versions_2026-10-07.md; the fix: todo/PLAN_codex_tier_floor.md). An",
+    "Off row on such a release is sent no tier at all; On still sends `fast`."
   ],
   "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api"],
   "features": {
@@ -114,7 +119,8 @@
       "source": "every-model",
       "models": [],
       "measuredWith": "codex-cli 0.160.0",
-      "note": "-c service_tier=default (Off) or =fast (On), on codex’s OWN service only — a row on another endpoint has no codex tier. Measured 2026-10-07: the key is read and checked per model; a value the model does not advertise is dropped with a warning, never a refusal."
+      "note": "-c service_tier=default (Off) or =fast (On), on codex’s OWN service only — a row on another endpoint has no codex tier. Measured 2026-10-07: the key is read and checked per model; a value the model does not advertise is dropped with a warning, never a refusal.",
+      "refusesStandard": { "from": "0.110.0", "through": "0.130.0" }
     },
     {
       "runtime": "gemini",

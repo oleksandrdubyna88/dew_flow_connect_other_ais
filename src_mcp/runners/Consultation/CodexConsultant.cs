@@ -38,6 +38,33 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
 
+    /// <summary>
+    /// The launch with <see cref="ReviewerSettings.CodexTier"/> read off the installed CLI's own <c>--version</c> — on every
+    /// turn and the consultant check alike, never cached (todo/PLAN_codex_tier_floor.md).
+    /// </summary>
+    /// <remarks>
+    /// <para>codex 0.110.0–0.130.0 refuse <c>-c service_tier=default</c> at config load, and every branch of
+    /// <see cref="Argv"/> carries <see cref="CodexRuntime.TierArgs"/> — so an Off row on one of those releases failed every
+    /// turn before this asked. Asked only where the answer can change the argv
+    /// (<see cref="CodexRuntime.TierDependsOnRelease"/>); every other row is launched unchanged, as before.</para>
+    /// <para>Never a refusal, unlike claude's: a version nobody could read sends what was always sent
+    /// (<see cref="CodexTierSupport"/> says why), and the turn itself names the refusal with its cure if it is met anyway.
+    /// The confinement word stays empty — a codex row's limitations do not depend on its release — and the answer rides
+    /// the note, which the consultation logs.</para>
+    /// </remarks>
+    public async Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct)
+    {
+        if (!inner.TierDependsOnRelease(launch.Settings.Fast))
+        {
+            return new ConsultantPreparation.Ready(launch, string.Empty, string.Empty);
+        }
+
+        var tier = await CodexTierSupport.ProbeAsync(launcher, Executable(launch.Settings), launch.RepoPath, ct);
+
+        return new ConsultantPreparation.Ready(
+            launch with { Settings = launch.Settings with { CodexTier = tier } }, string.Empty, $"service tier: {tier.Reason}");
+    }
+
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);

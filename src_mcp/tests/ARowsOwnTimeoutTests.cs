@@ -59,7 +59,7 @@ public sealed class ARowsOwnTimeoutTests
             },
             VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.Roster.BuildWork([RoleCatalog.ArchitectureRole], string.Empty, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false).Reviewers;
+        var work = service.Roster.BuildWork([RoleCatalog.ArchitectureRole], string.Empty, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false, codexTiers: CodexTiers.None).Reviewers;
 
         work.Should().ContainSingle().Which.Invocation.Request.Timeout.Should().Be(TimeSpan.FromMinutes(3));
     }

@@ -85,6 +85,17 @@ public static class VendorDiagnosis
         ("command not found",
             "the CLI is not on this machine's PATH — set an explicit executable path for this vendor.",
             DiagnosisKind.NotOnPath),
+        // Measured 2026-10-07 (research/RESULTS_codex_service_tier_versions_2026-10-07.md): codex 0.110.0 through 0.130.0
+        // take only `fast` or `flex` for `service_tier`, so the `-c service_tier=default` every Off row has carried since
+        // 0.44.0 fails the whole launch at config load, before any request — naming config.toml, a file the person never
+        // edited. Those releases have no way to say "standard", so the cure is a newer codex, or a row that sends no tier.
+        // Before the general "unknown option" row by the table's specific-first order, though the two markers never meet.
+        // The cure names updating FIRST (the code round): "As the CLI is set" sends no tier, so the run then takes whatever
+        // tier your codex config asks for — a `service_tier = "priority"` there makes it fast at 2–2.5× the cost.
+        ("unknown variant `default`, expected `fast` or `flex`",
+            "the installed codex (0.110–0.130) cannot be told the standard tier — update codex to 0.131 or newer. " +
+            "Or set this row's fast mode to 'As the CLI is set', which then runs on whatever tier your codex config asks for.",
+            DiagnosisKind.UnknownOption),
         // Measured 2026-10-02 (research/RESULTS_claude_consultant_confinement.md): claude 2.1.197, handed the
         // confined consultant argv, answered `error: unknown option '--restricted'` and exit 1 — a CLI older
         // than the flags this product sends. It is not a model failure and not a sign-in: the cure is the

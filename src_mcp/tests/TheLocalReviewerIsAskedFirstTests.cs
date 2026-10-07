@@ -82,7 +82,7 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     private List<string> Rows(PanelService service, int seed) =>
         [.. service.Roster.BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
-                Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: seed)
+                Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: seed, codexTiers: CodexTiers.None)
             .Reviewers
             .Select(w => w.Invocation.Provider)];
 

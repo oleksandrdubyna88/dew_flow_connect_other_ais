@@ -84,8 +84,30 @@ internal sealed class RosterBuilder(
     /// The security lane's roster for these settings — the one place its decisions are made, shared by
     /// the work it appends and the source reader that must not read for a pairing that will not run.
     /// </summary>
-    internal SecurityRoster Security() => new(_settings, _prompts, _canRun, _runtimeFor,
-        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi), log);
+    internal SecurityRoster Security() => Security(CodexTiers.None);
+
+    /// <summary>
+    /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
+    /// standard tier (todo/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
+    /// like every other row, so they read the same answers.
+    /// </summary>
+    internal SecurityRoster Security(CodexTiers tiers) => new(_settings, _prompts, _canRun, _runtimeFor,
+        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers), log);
+
+    /// <summary>
+    /// Asks every runnable codex executable whose answer can change an argv whether it can be told the standard tier —
+    /// once each, before this round's roster is built — for <see cref="BuildWork"/>'s <c>codexTiers</c>.
+    /// </summary>
+    /// <remarks>
+    /// Every runnable row, not only the ones serving the stage: the security lane names its own vendors, and one more
+    /// distinct executable asked costs half a second where a missed one fails every launch on 0.110–0.130.
+    /// </remarks>
+    internal Task<CodexTiers> CodexTiersAsync(Runners.Processes.IProcessLauncher launcher, string workingDirectory, CancellationToken ct) =>
+        CodexTiers.AskAsync(
+            _settings.Providers.Where(_canRun).SelectMany(RuntimeRow), launcher, workingDirectory, log, ct);
+
+    private IEnumerable<(ProviderSettings Provider, IReviewerRuntime Runtime)> RuntimeRow(ProviderSettings provider) =>
+        _runtimeFor(provider) is { } runtime ? [(provider, runtime)] : [];
 
     /// <summary>
     /// The prompt this round of this role gets — from the session's CATALOG, not from the compiled
@@ -125,6 +147,11 @@ internal sealed class RosterBuilder(
         // two questions stopped being honest the moment there were three stages.
         Stage stage,
         bool readsCheckout,
+        // What this round's codex executables said about the standard tier (CodexTiersAsync), asked by the stage before
+        // it builds. REQUIRED, for the reason `stage` is (the code round of PLAN_codex_tier_floor.md): an optional one
+        // defaulted a future stage into "nobody asked", which on codex 0.110–0.130 fails every launch at config load,
+        // with no compile error. A caller that has not asked says so — `CodexTiers.None` — in so many words.
+        CodexTiers codexTiers,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
         bool deal = false,
@@ -135,6 +162,7 @@ internal sealed class RosterBuilder(
         IReadOnlyDictionary<string, string>? securitySources = null)
     {
         var turns = source ?? Runners.Feature.SourceTurns.None;
+        var tiers = codexTiers;
         // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
         // with catalog ids, so this changes nothing today — it is the boundary the Team server has
         // at its endpoint and the local path did not: a caller that schedules `architecture` would
@@ -228,7 +256,7 @@ internal sealed class RosterBuilder(
         Assemble(runnable, items, deal, seed, Add, CanCarry);
 
         var ordinary = new RoundWork(LocalRowsFirst(work), notAsked, excluded) { OrdinaryDue = roles.Count > 0 };
-        return securityFiles is null ? ordinary : Security().Append(ordinary, securityFiles, stage, round, securitySources);
+        return securityFiles is null ? ordinary : Security(tiers).Append(ordinary, securityFiles, stage, round, securitySources);
 
         // One sentence per ROLE however many vendors would have carried it: a person reading a round
         // needs to know the role did not run, not that four vendors each did not run it.
@@ -311,7 +339,7 @@ internal sealed class RosterBuilder(
                 return;
             }
 
-            var launch = SettingsFor(provider, runtime, api);
+            var launch = SettingsFor(provider, runtime, api, tiers);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
             var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
             // Once, for the body AND the redaction list below: two calls that must agree are one value.
@@ -370,7 +398,7 @@ internal sealed class RosterBuilder(
     /// module's view (the row over the environment over the calibrated default); a CLI row's from the
     /// panel's local-engine settings, as they always have.
     /// </summary>
-    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api)
+    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers)
     {
         var settings = new ReviewerSettings(provider.Provider)
         {
@@ -389,6 +417,9 @@ internal sealed class RosterBuilder(
             MaxTokens = _settings.LocalMaxTokens,
             // Every runtime with a tier reads it — codex and claude here; the others ignore it (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
+            // Only CodexRuntime reads it: whether this row's installed codex can be told the standard tier, as the stage
+            // asked it before building (todo/PLAN_codex_tier_floor.md) — Unprobed for every row nobody asked about.
+            CodexTier = tiers.For(provider, runtime),
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,
             // A reviewer starts no MCP server (issue #514); read per round, so a server added to

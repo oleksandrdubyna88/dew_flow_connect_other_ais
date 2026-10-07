@@ -267,7 +267,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.Roster.BuildWork(
-            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
+            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None);
 
         work.Reviewers.Should().ContainSingle()
             .Which.Invocation.Role.Should().Be(RoleCatalog.ArchitectureRole, "the shipped role still runs");
@@ -292,7 +292,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
+        var work = service.Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None);
 
         work.NotAsked.Should().ContainSingle("a person needs to know the ROLE did not run");
     }
@@ -338,7 +338,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.Roster.BuildWork(
-            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
+            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None);
 
         work.Reviewers.Where(w => w.Invocation.Role == "Requirements").Select(w => w.Invocation.Provider)
             .Should().Equal(["local"], "the custom role goes to the vendors this machine runs itself");
