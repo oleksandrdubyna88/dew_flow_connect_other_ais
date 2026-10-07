@@ -2265,3 +2265,11 @@ sequenceDiagram
   the scheduler's cleanup never ran for them and an api consultant's prompt file outlived its turn. A review keeps
   its cleanup in `BoundedScheduler` (a retry launches the same invocation again). One `LaunchFiles.Forget` for both.
 - `ConsultantCheckMode.IsModelCheck` holds the mode predicate; a real-binary test pins the `--check-model` dispatch.
+
+## An api row's stream switch reaches every api launch (2026-10-06, todo/PLAN_api_streaming.md)
+
+`ReviewerSettings.Stream`, and ONE helper, `ReviewerSettings.WithApi(ApiEffective)`, that carries an api row's effort,
+ceiling, thinking switch and stream into launch settings. The roster (`RosterBuilder`), the consultant and the model
+card's ✓ Check (`ConsultantTurnInputs`) and the question consultant (`QuestionFanOut`) all call it; a test keeps any
+of them from carrying the fields by hand again. `ApiRuntime.Build` adds `--stream on` only when the row's switch is
+on, so every launch before the switch is spelled as it was.

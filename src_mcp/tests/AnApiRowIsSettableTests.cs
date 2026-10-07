@@ -258,6 +258,72 @@ public sealed class AnApiRowIsSettableTests : IDisposable
         api.GetProperty("effective").GetProperty("thinkingOn").GetBoolean().Should().BeFalse("the wire sends qwen's thinking-off level");
     }
 
+    // ---------- the stream switch (todo/PLAN_api_streaming.md) ----------
+
+    [Fact]
+    public void A_rows_stream_switch_is_read_and_absent_or_false_is_off()
+    {
+        PanelSettings.ParseVendors(Row(",\"stream\":true")).Single().Api.Stream.Should().BeTrue();
+        PanelSettings.ParseVendors(Row(",\"stream\":false")).Single().Api.Stream.Should().BeFalse();
+        PanelSettings.ParseVendors(Row(string.Empty)).Single().Api.Stream.Should().BeFalse("a row written before the switch streams nothing");
+    }
+
+    [Fact]
+    public void A_reviewer_on_a_streaming_row_is_launched_with_the_stream_and_one_without_is_launched_as_always()
+    {
+        FeatureReviewer(Service(",\"stream\":true")).Invocation.Request.Arguments.Should().ContainInOrder("--stream", "on");
+        FeatureReviewer(Service(string.Empty)).Invocation.Request.Arguments.Should().NotContain("--stream");
+    }
+
+    [Fact]
+    public void The_adapter_spells_the_stream_only_when_the_row_asked()
+    {
+        var runtime = new ApiRuntime("qwen", "https://api.example/v1");
+        var schema = Path.Combine(_dir, "schema.json");
+        File.WriteAllText(schema, FindingSchema.Json);
+        var settings = new ReviewerSettings("qwen") { Model = "qwen3.8-max", ApiKey = Key, Dialect = "dashscope", Timeout = TimeSpan.FromMinutes(5) };
+
+        runtime.Build("r", "p", _dir, schema, _dir, settings).Request.Arguments.Should().NotContain("--stream");
+        runtime.Build("r", "p", _dir, schema, _dir, settings with { Stream = true }).Request.Arguments.Should().ContainInOrder("--stream", "on");
+    }
+
+    [Fact]
+    public void A_consultant_or_a_check_on_a_streaming_row_streams_too()
+    {
+        // The consultant's turn and the model card's Check run through ConsultantTurnInputs (ConsultantCheck): a switch on
+        // the card that the Check then ignored would measure a row that is not the one configured.
+        var row = PanelSettings.ParseVendors(Row(",\"stream\":true")).Single();
+
+        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), _dir, VaultKeys.None("t"), ApiOverrides.None).Stream.Should().BeTrue();
+    }
+
+    [Fact]
+    public void One_helper_hands_an_api_row_its_effective_settings_effort_ceiling_thinking_and_stream()
+    {
+        var effective = new ApiEffective("low", ThinkingOn: false, MaxTokens: 4096, FollowUps: 3, ReviewMinutes: 20, Stream: true);
+
+        var settings = new ReviewerSettings("qwen").WithApi(effective);
+
+        (settings.ReasoningEffort, settings.MaxTokens, settings.ThinkingOn, settings.Stream).Should().Be(("low", 4096, false, true));
+    }
+
+    [Fact]
+    public void Every_place_an_api_row_becomes_a_reviewer_uses_that_one_helper()
+    {
+        // The roster, the consultant (and Check) and the question consultant each turned an api row into launch settings
+        // by hand; a field added to one and not another is the drift this guards (the stream switch's plan review).
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        var byHand = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where((file) => !file.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}") && !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .Where((file) => File.ReadAllText(file).Contains("ThinkingOn = api", StringComparison.Ordinal))
+            .Select(Path.GetFileName);
+        var helped = new[] { "RosterBuilder.cs", "ConsultantTurnInputs.cs", "QuestionFanOut.cs" }
+            .Where((name) => Directory.EnumerateFiles(root, name, SearchOption.AllDirectories).Any((file) => File.ReadAllText(file).Contains(".WithApi(", StringComparison.Ordinal)));
+
+        byHand.Should().BeEquivalentTo(["ReviewerRuntime.cs"], "an api row's settings are carried field by field only inside ReviewerSettings.WithApi itself");
+        helped.Should().BeEquivalentTo(["RosterBuilder.cs", "ConsultantTurnInputs.cs", "QuestionFanOut.cs"]);
+    }
+
     // ---------- helpers ----------
 
     private const string QwenRow =

@@ -110,6 +110,13 @@ public sealed record ConsultCheckRecord
     /// <summary>The answer carries the marker word of <c>CHECK.md</c> — the file was READ, not guessed.</summary>
     public bool MarkerRead { get; init; }
 
+    /// <summary>
+    /// For an api row that asked for a stream (todo/PLAN_api_streaming.md, Story C): <c>streamed</c> when the answer came as
+    /// one, <c>not-streamed</c> when it did not — a gateway that ignored the request, or a coai-mcp too old to read the
+    /// switch. Empty for every other check.
+    /// </summary>
+    public string Streamed { get => field ?? string.Empty; init; } = string.Empty;
+
     /// <summary>A word of <see cref="CanaryReadings"/>, or empty when the consultant answered nothing.</summary>
     public string Canary { get => field ?? string.Empty; init; } = string.Empty;
 

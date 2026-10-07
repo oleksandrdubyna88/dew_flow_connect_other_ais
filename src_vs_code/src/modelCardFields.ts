@@ -1,6 +1,7 @@
 import { CATALOG_USES, type CatalogUse } from './catalogFields';
 import { MAX_PROMPT_BYTES } from './catalogRules';
 import { escapeHtml } from './escapeHtml';
+import { help } from './panelControls';
 import { CHAT, CONSULTING, EFFORT, type EffortRow, THINKING } from './featureAvailability.generated';
 import type { Runtime } from './models';
 import type { Vendor } from './vendors';
@@ -121,6 +122,12 @@ export function systemPromptField(vendor: Vendor, id: string, mark = ''): string
     + `<textarea id="sp-${id}" rows="3" data-setting="systemPrompt" data-vendor="${id}"`
     + ` placeholder="Empty: the feature’s own prompt is sent unchanged">${escapeHtml(text)}</textarea>`
     + `<div class="hint"><span data-bytes-for="sp-${id}">${ENCODER.encode(text).length}</span> of ${MAX_PROMPT_BYTES} bytes</div></div>`;
+}
+
+/** An api row's stream switch (todo/PLAN_api_streaming.md) — drawn by the new Settings page's card only. */
+export function streamField(vendor: Vendor, id: string, mark = ''): string {
+  return `<div class="check-row"><label class="check"><input type="checkbox" data-setting="stream" data-vendor="${id}"${vendor.stream === true ? ' checked' : ''}>`
+    + ` stream the answer${mark}</label>${help('apiStream')}</div>`;
 }
 
 /** The row's own time limit for one answer — empty follows Limits › Reviewer timeout (D1; never a stand-in number). */

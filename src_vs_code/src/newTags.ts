@@ -18,6 +18,7 @@ export const NEW_CONTROLS: readonly string[] = [
   'settings.preview',
   'model.systemPrompt',
   'model.effort',
+  'model.stream',
 ];
 
 /**

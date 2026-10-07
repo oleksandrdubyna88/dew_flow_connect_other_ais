@@ -32,8 +32,22 @@ const JUDGED: Readonly<Record<string, (reason: string) => CheckFacts>> = {
   failed: (reason) => ({ checking: false, said: `checked: no answer${reason.length > 0 ? ` — ${reason}` : ''}`, tone: 'err' }),
 };
 
+/**
+ * An answer from a row that asked to stream says whether it came as one (todo/PLAN_api_streaming.md, Story C): a gateway
+ * that ignored the request, or a coai-mcp too old to read the switch, answers all the same — so "answered" alone would
+ * hide that the setting did nothing.
+ */
+const STREAMED: Readonly<Record<string, CheckFacts>> = {
+  'streamed': { checking: false, said: 'checked: it answered · streamed', tone: 'ok' },
+  'not-streamed': { checking: false, said: 'checked: it answered, but NOT streamed — the endpoint or this coai-mcp ignored the switch', tone: 'warn' },
+};
+
 function judged(record: CheckRecord, nowMs: number): CheckFacts {
   const check = checkStateOnThisDisk(record, nowMs);
+  const streamed = check.state === 'answered' ? STREAMED[record.streamed] : undefined;
+  if (streamed !== undefined) {
+    return streamed;
+  }
 
   return (JUDGED[check.state] ?? ((reason) => ({ checking: false, said: `checked: ${check.state}${reason.length > 0 ? ` — ${reason}` : ''}`, tone: 'warn' })))(check.reason);
 }

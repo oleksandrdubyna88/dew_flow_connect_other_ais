@@ -30,6 +30,8 @@ export const FEATURES = {
   securityWords: 'securityWords',
   /** E2.4: `--check-security [--validate]` on stdin. */
   checkSecurity: 'checkSecurity',
+  /** An api row's `stream`: its answer asked for as a stream (todo/PLAN_api_streaming.md). */
+  apiStream: 'apiStream',
 } as const;
 
 export interface BinaryFeatures {

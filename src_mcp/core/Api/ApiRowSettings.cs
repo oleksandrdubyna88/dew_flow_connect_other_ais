@@ -20,7 +20,8 @@ public enum ThinkingSetting
 /// <param name="Effort">The effort to send, in the vendor's spelling; empty is unset.</param>
 /// <param name="Thinking">The thinking switch; <see cref="ThinkingSetting.Default"/> is unset.</param>
 /// <param name="ReviewMinutes">The whole-review limit in minutes; zero is unset.</param>
-public sealed record ApiRowSettings(string Effort = "", ThinkingSetting Thinking = ThinkingSetting.Default, int ReviewMinutes = 0)
+/// <param name="Stream">Whether the answer is asked for as a stream (todo/PLAN_api_streaming.md); off is today's call.</param>
+public sealed record ApiRowSettings(string Effort = "", ThinkingSetting Thinking = ThinkingSetting.Default, int ReviewMinutes = 0, bool Stream = false)
 {
     public static readonly ApiRowSettings None = new();
 }
@@ -64,7 +65,7 @@ public sealed record ApiOverrides(string Effort = "", int MaxTokens = 0, int Rev
 /// <para><b><see cref="ThinkingOn"/> says what the wire does</b>: an effort that is the module's thinking-off
 /// level (a row's own <c>none</c> on qwen) reports thinking off.</para>
 /// </remarks>
-public sealed record ApiEffective(string Effort, bool ThinkingOn, int MaxTokens, int FollowUps, int ReviewMinutes)
+public sealed record ApiEffective(string Effort, bool ThinkingOn, int MaxTokens, int FollowUps, int ReviewMinutes, bool Stream = false)
 {
     /// <summary>The variable the environment's effort comes from — named in the sentence that sets it aside.</summary>
     public const string EffortVariable = "COAI_LOCAL_REASONING_EFFORT";
@@ -79,7 +80,9 @@ public sealed record ApiEffective(string Effort, bool ThinkingOn, int MaxTokens,
             ThinkingOf(vendor, row.Thinking) && !IsThinkingOff(vendor, effort),
             First(overrides.MaxTokens, vendor.Defaults.MaxTokens),
             vendor.Defaults.FollowUps,
-            First(row.ReviewMinutes, overrides.ReviewMinutes, vendor.Defaults.ReviewMinutes));
+            First(row.ReviewMinutes, overrides.ReviewMinutes, vendor.Defaults.ReviewMinutes),
+            // The row's alone: no environment knob and no module default — a stream is a person's choice per row.
+            row.Stream);
     }
 
     /// <summary>What the environment's effort is, for this row, when it is sent without being one of the module's levels — or empty.</summary>

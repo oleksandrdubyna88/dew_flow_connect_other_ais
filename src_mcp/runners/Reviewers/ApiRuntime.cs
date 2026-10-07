@@ -41,6 +41,9 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// <summary>The shim's spelling of a row's thinking switch turned off.</summary>
     private static readonly string[] ThinkingOff = ["--thinking", "off"];
 
+    /// <summary>A key WITH a value — the shim's flag reader drops a bare flag (todo/PLAN_api_streaming.md).</summary>
+    private static readonly string[] StreamOn = ["--stream", "on"];
+
     public string Provider => id;
 
     /// <summary>This binary, however it was started — see <see cref="LocalRuntime.SelfInvocation"/>.</summary>
@@ -105,6 +108,8 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
                     // (the roster refused it otherwise): absent means on, which is every calibrated default,
                     // so every launch that predates the switch is spelled exactly as it was.
                     ..(settings.ThinkingOn ? [] : ThinkingOff),
+                    // The row's stream switch, only when a person turned it on: every launch before it is spelled as it was.
+                    ..(settings.Stream ? StreamOn : []),
                 ],
                 worktreePath)
             {

@@ -1255,7 +1255,8 @@ public sealed record PanelSettings
     private static Core.Api.ApiRowSettings ApiRowOf(VendorDto v) => new(
         v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
         ThinkingOf(v.Thinking),
-        v.ReviewMinutes is { } minutes && minutes > 0 ? minutes : 0);
+        v.ReviewMinutes is { } minutes && minutes > 0 ? minutes : 0,
+        v.Stream == true);
 
     private static Core.Api.ThinkingSetting ThinkingOf(bool? thinking) => thinking switch
     {

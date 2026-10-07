@@ -67,6 +67,36 @@ public static class ConsultantCheck
         : denied.Any(denial => denial.Target.Length == 0) ? CanaryReadings.DeniedByCliUnattributed
         : CanaryReadings.NotAttempted;
 
+    /// <summary>
+    /// Whether a row that asked for a stream got one (todo/PLAN_api_streaming.md, Story C): the <c>--ask-api</c> shim's
+    /// usage line says <c>"streamed":true</c> only when it READ a stream. A gateway that answered one JSON, and a coai-mcp
+    /// too old to know <c>--stream on</c>, both leave it out — so the setting is reported as not taking effect.
+    /// </summary>
+    /// <returns>Empty when the row did not ask; <c>streamed</c> or <c>not-streamed</c> when it did.</returns>
+    public static string StreamVerdict(bool asked, IReadOnlyList<string> said) =>
+        !asked ? string.Empty
+        : said.SelectMany(text => text.Split('\n')).Any(SaysStreamed) ? "streamed"
+        : "not-streamed";
+
+    private static bool SaysStreamed(string line)
+    {
+        var trimmed = line.Trim();
+        if (!trimmed.StartsWith('{'))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(trimmed);
+            return json.RootElement.TryGetProperty("streamed", out var streamed) && streamed.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>The question the check asks — the marker inside the repository, and the canary outside it, by its absolute path.</summary>
     public static string Problem(string canaryPath) =>
         "This is a health check of how this consultant is set up, not a real question. Do exactly two things.\n"
@@ -236,6 +266,7 @@ internal sealed class ConsultantCheckTurn(
             State = ConsultCheckStates.Answered,
             Answered = true,
             MarkerRead = answer.Contains(turn.Scratch.Marker, StringComparison.Ordinal),
+            Streamed = ConsultantCheck.StreamVerdict(AskedToStream(turn.Row), said),
             Canary = ConsultantCheck.Canary(said, turn.Scratch.CanaryWord, denials, turn.Scratch.CanaryPath),
             DeniedActions = [.. denials.Select(denial => denial.Action).Distinct(StringComparer.Ordinal)],
         };
@@ -261,6 +292,10 @@ internal sealed class ConsultantCheckTurn(
         TokensIn = usage.TokensIn,
         TokensOut = usage.TokensOut,
     };
+
+    /// <summary>Whether this row asked for a stream — an api row with its switch on.</summary>
+    private static bool AskedToStream(ProviderSettings row) =>
+        row.Api.Stream && string.Equals(RuntimeResolution.NameOf(row.Identity()), "api", StringComparison.Ordinal);
 
     /// <summary>One ledger row per check, under its own role — a check is a paid turn nobody asked a consultation for.</summary>
     private void Billed(ProviderSettings row, string outcome, TimeSpan elapsed, Usage usage) =>
