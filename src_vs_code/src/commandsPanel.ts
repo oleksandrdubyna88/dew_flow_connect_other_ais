@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { bindCommands, commandRows, commandTexts, flushCommandEdits, onCommandsRedraw, queueCommandEdit, reportCommandsFailure, commandsSide } from './commandsHost';
-import { commandEdit, commandsHtml } from './commandsPage';
+import { commandsHtml } from './commandsPage';
+import { commandEdit } from './commandsMessages';
 import { serverOnThisSide } from './installer';
 import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';

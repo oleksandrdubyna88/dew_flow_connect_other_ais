@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { webviewNonce } from './webviewNonce';
 
-import { DEFAULT_ROLE_TAB, nextTab, roleEdit, rolesHtml } from './rolesPage';
+import { DEFAULT_ROLE_TAB, nextTab, rolesHtml } from './rolesPage';
+import { roleEdit } from './rolesMessages';
 import { serverOnThisSide } from './installer';
 import { bindRoles, flushRoleEdits, onRolesRedraw, queueRoleEdit, reportRolesFailure, roleRows, roleTexts, rolesSide } from './rolesHost';
 import { roleDeletions, whenDeletionsChange } from './roleDeletionsHost';

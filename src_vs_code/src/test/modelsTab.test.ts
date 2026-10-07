@@ -6,7 +6,7 @@ import { skewSaid } from '../modelCard';
 import { cardContextFor, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { click, lastWrite, panelState, runPanel, withoutSeq } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { Node, runPageHtml } from './pageScriptHarness';
 
 /**
  * The Models tab, RUN (todo/PLAN_one_model_catalog.md E3.2): one card per catalog row, every control writing that row

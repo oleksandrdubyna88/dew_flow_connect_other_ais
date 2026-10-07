@@ -4,9 +4,11 @@ import { test } from 'node:test';
 import { BUSY_AFTER_MS } from '../busyMark';
 import { type BusySnapshot } from '../busySnapshot';
 import { RESULT_STAGE, type RoleRow } from '../roles';
-import { CUSTOM_ROLES_SINCE, type RolesPageState } from '../rolesPage';
+import { type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { PageClock } from './panelPageHarness';
-import { Node, type Page, runRolesPage } from './rolesPageHarness';
+import { runRolesPage } from './rolesPageHarness';
+import { Node, type Page } from './pageScriptHarness';
 
 /**
  * The roles tab shows that a structural change is working (research/PLAN_busy_marks_on_every_webview.md, E3).

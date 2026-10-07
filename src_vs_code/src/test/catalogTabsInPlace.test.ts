@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogBody, catalogHtml } from '../catalogPage';
-import { OLD_TAB_PLACES } from '../catalogPlaces';
-import { BLANK_REGIONS } from '../panelSurface';
-import { PANEL_SECTIONS, type PanelState } from '../panelView';
+import { gateBody, limitsSection, serverBody, sideBody, teamServersSection, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { panelState, runPanel } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
-import { runPageHtml } from './rolesPageHarness';
+import { runPageHtml } from './pageScriptHarness';
 
 /**
  * E4.1 of todo/PLAN_one_model_catalog.md: every old Settings section is drawn in the sub-tab that owns it on the new
@@ -21,13 +19,22 @@ function paneOf(state: PanelState, place: string): PageNode {
 }
 
 /**
- * The old sections that move as they are: every Settings section but the reviewers (now Models), the prompts (split),
- * the keys (counted over every row), and the three that pick from the catalog since E4.2 — the consultant, the question
- * consultant and the Security lane (consultantPicks, qconsultRowPicks and securityPicks tests) — and Chat, drawn from the
- * rows ticked Chat with its prompt presets inline since E4.6b (chatOnTheNewPage.test.ts).
+ * The old sections that move as they are, each with the place that holds it and the builder BOTH pages draw it with:
+ * every Settings section but the reviewers (now Models), the prompts (split), the keys (counted over every row, below),
+ * and the three that pick from the catalog since E4.2 — the consultant, the question consultant and the Security lane
+ * (consultantPicks, qconsultRowPicks and securityPicks tests) — and Chat, drawn from the rows ticked Chat with its
+ * prompt presets inline since E4.6b (chatOnTheNewPage.test.ts).
+ *
+ * <p>LISTED, not read off the old page's `PANEL_SECTIONS` as it was until E5's prerequisite (b): E5.1 deletes that
+ * list, and an inventory derived from it would have shrunk to nothing with it and passed, checking no section at all.</p>
  */
-const PICKING = ['consultant', 'questionconsultant', 'securityLane', 'chat'];
-const MOVED_WHOLE = PANEL_SECTIONS.filter((spec) => spec.surface === 'settings' && !['reviewers', 'prompts', 'keys', ...PICKING].includes(spec.id));
+const MOVED_WHOLE: readonly { readonly title: string; readonly place: string; readonly body: (state: PanelState) => string }[] = [
+  { title: 'The gate', place: 'reviews/gate', body: gateBody },
+  { title: 'Limits', place: 'reviews/limits', body: limitsSection },
+  { title: 'Team servers', place: 'setup/team', body: teamServersSection },
+  { title: 'This side', place: 'setup/side', body: sideBody },
+  { title: 'MCP server', place: 'setup/mcp', body: serverBody },
+];
 
 /** What the page's scripts select at load, so they bind to what the page drew. */
 const AT_LOAD = ['[data-setting]', '[data-prompt]', '[data-command]', '[data-tab]', '[data-pane]'];
@@ -44,16 +51,19 @@ test('every old section that moves whole is drawn in its place, by its own build
   const tree = pageTree(html);
   runPageHtml(html, selectorsOf(tree, AT_LOAD), undefined, { value: undefined });
 
+  let checked = 0;
   for (const spec of MOVED_WHOLE) {
-    const place = OLD_TAB_PLACES[spec.id];
-    assert.ok(place !== undefined, `${spec.id} has no place on the new page`);
+    const place = spec.place;
     const pane = tree.one((node) => node.dataset.pane === place, `a pane for ${place}`);
-    const builder = pageTree(spec.body(state, BLANK_REGIONS));
+    const builder = pageTree(spec.body(state));
     const said = builder.text().replace(/\s+/gu, ' ').trim();
     assert.ok(said.length > 0 || signature(builder).length > 0, `the fixture: ${spec.title} draws nothing to look for`);
     assert.ok(pane.text().replace(/\s+/gu, ' ').includes(said), `${spec.title}'s words are not in ${place}`);
     assert.ok(signature(pane).includes(signature(builder)), `${spec.title}'s controls are not in ${place}, in its order`);
+    checked += 1;
   }
+  // The count, so a list emptied or cut down — by hand or by a refactor — is a red test rather than a loop over nothing.
+  assert.equal(checked, 5, 'five old sections move whole: the gate, limits, team servers, this side and the MCP server');
 });
 
 test('the prompts section is split: the switches and budgets on Stages, the round pickers on Prompts per round', () => {

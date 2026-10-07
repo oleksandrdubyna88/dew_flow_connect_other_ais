@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { CommandRow } from '../commands';
-import { commandEdit, commandsHtml, commandsSkewNote, type CommandsPageState } from '../commandsPage';
-import { Node, presses, runPageHtml } from './rolesPageHarness';
+import { commandsHtml, type CommandsPageState } from '../commandsPage';
+import { commandsSkewNote } from '../commandsBlocks';
+import { commandEdit } from '../commandsMessages';
+import { Node, presses, runPageHtml } from './pageScriptHarness';
 
 /**
  * The Edit commands page, RUN — issue #467, Epic B. Its script is executed against the roles page's DOM

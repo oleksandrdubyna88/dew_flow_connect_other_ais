@@ -14,7 +14,7 @@ import { scalePx } from '../zoomControl';
 import { blanked } from './blankedSource';
 import { stylesheet } from './cssRules';
 import { panelState } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { Node, runPageHtml } from './pageScriptHarness';
 
 /**
  * The shared text-controls unit, and what the pages that took it must keep

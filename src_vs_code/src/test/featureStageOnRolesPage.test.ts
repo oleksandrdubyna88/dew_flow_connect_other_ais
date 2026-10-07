@@ -3,8 +3,11 @@ import { test } from 'node:test';
 
 import { FEATURE_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
 import { rowsAfter } from '../rolesEdit';
-import { CUSTOM_ROLES_SINCE, roleEdit, rolesHtml, type RolesPageState } from '../rolesPage';
-import { Node, runRolesPage, presses } from './rolesPageHarness';
+import { rolesHtml, type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
+import { roleEdit } from '../rolesMessages';
+import { runRolesPage } from './rolesPageHarness';
+import { Node, presses } from './pageScriptHarness';
 
 /**
  * A role of one's own can be put in the FEATURE stage from the roles page (story S3.3 of

@@ -7,7 +7,7 @@ import { roleSwitchFollows } from '../rolesSwitch';
 import { DEFAULTS, envBlock } from '../settingsShape';
 import { panelState } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
-import { runPageHtml } from './rolesPageHarness';
+import { runPageHtml } from './pageScriptHarness';
 
 /**
  * E4.3 of todo/PLAN_one_model_catalog.md: Roles & prompts on the new page — the Review roles tab's content drawn by the

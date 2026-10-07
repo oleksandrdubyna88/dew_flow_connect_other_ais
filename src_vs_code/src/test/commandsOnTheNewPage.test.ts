@@ -5,7 +5,7 @@ import { SHIPPED_COMMANDS, type CommandRow } from '../commands';
 import { type PanelState } from '../panelView';
 import { panelState } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
-import { runPageHtml } from './rolesPageHarness';
+import { runPageHtml } from './pageScriptHarness';
 
 /**
  * E4.4 of todo/PLAN_one_model_catalog.md: Reviews › Commands on the new page — the Gate commands tab's own blocks, drawn
