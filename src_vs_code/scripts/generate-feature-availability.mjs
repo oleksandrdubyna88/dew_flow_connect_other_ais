@@ -62,8 +62,14 @@ const LEVEL = /^[a-z][a-z0-9-]{0,31}$/u;
 const THINKING_FIELDS = ['runtime', 'source', 'note'];
 const THINKING_SOURCES = ['probe', 'unmeasured', 'none'];
 // Fast mode (research/PLAN_fast_mode.md): a tier on every model of the runtime, on the listed models only, or none.
-const FAST_FIELDS = ['runtime', 'source', 'models', 'measuredWith', 'note'];
+const FAST_FIELDS = ['runtime', 'source', 'models', 'measuredWith', 'note', 'refusesStandard'];
 const FAST_SOURCES = ['every-model', 'models', 'none'];
+// The codex releases that refuse to be told the standard tier (todo/PLAN_codex_tier_floor.md): `{ from, through }`, both
+// ends included, each a release as `codex --version` prints it. coai-mcp reads it (`FeatureAvailability.RangeOf`) and
+// checks it exactly as below; this half does not use it yet, and does not generate it — it only refuses a range the
+// server would refuse, so neither half can ship a file the other cannot start with.
+const RANGE_FIELDS = ['from', 'through'];
+const RELEASE = /^[0-9]+\.[0-9]+\.[0-9]+$/u;
 
 /**
  * The effort rules, in the order they are checked: what must hold, and what is said when it does not. A table rather
@@ -89,7 +95,25 @@ const FAST_RULES = [
   [(row) => FAST_SOURCES.includes(row.source), (row) => ` has source '${row.source}'; the sources are ${FAST_SOURCES.join(', ')}`],
   [(row) => strings(row.models) && typeof row.measuredWith === 'string' && typeof row.note === 'string' && row.note.length > 0, () => ': models is a list, measuredWith a string, and the note says why'],
   [(row) => (row.source === 'models') === (row.models.length > 0), () => ": a 'models' source lists its models, and every other source lists none"],
+  [(row) => row.refusesStandard === undefined || row.runtime === 'codex', () => ': refusesStandard is a range only codex may carry — the one runtime told a tier it can refuse'],
+  [(row) => row.refusesStandard === undefined || isRange(row.refusesStandard), () => ': refusesStandard is { from, through }, each a release (X.Y.Z)'],
+  [(row) => row.refusesStandard === undefined || notAfter(row.refusesStandard.from, row.refusesStandard.through), () => ': refusesStandard ends before it starts'],
 ];
+
+/** A `{ from, through }` object and nothing else, each end a release. */
+const isRange = (range) => typeof range === 'object' && range !== null && unknown(range, RANGE_FIELDS) === undefined
+  && RANGE_FIELDS.every((end) => typeof range[end] === 'string' && RELEASE.test(range[end]));
+
+/**
+ * Whether release `a` is not after release `b`, compared as NUMBERS part by part — `0.12.0` is below `0.110.0`, which a
+ * string comparison gets backwards. Equal releases are not after each other.
+ */
+function notAfter(a, b) {
+  const [left, right] = [a.split('.').map(Number), b.split('.').map(Number)];
+  const differs = left.findIndex((part, at) => part !== right[at]);
+
+  return differs < 0 || left[differs] < right[differs];
+}
 
 const unknown = (fields, known) => Object.keys(fields).find((field) => !known.includes(field));
 const strings = (list) => Array.isArray(list) && list.every((one) => typeof one === 'string');

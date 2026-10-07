@@ -24,13 +24,39 @@ public sealed record ThinkingRowSeed(string? Runtime, string? Source, string? No
 /// <summary>Whether a runtime has a thinking switch (PLAN_one_model_catalog.md D12), and why when it has none.</summary>
 public sealed record ThinkingRow(string Runtime, string Source, string Note);
 
-public sealed record FastModeRowSeed(string? Runtime, string? Source, IReadOnlyList<string>? Models, string? MeasuredWith, string? Note);
+public sealed record FastModeRowSeed(
+    string? Runtime, string? Source, IReadOnlyList<string>? Models, string? MeasuredWith, string? Note,
+    ReleaseRangeSeed? RefusesStandard = null);
+
+/// <summary>A range of CLI releases as written: two <c>X.Y.Z</c> strings, both ends included.</summary>
+public sealed record ReleaseRangeSeed(string? From, string? Through);
+
+/// <summary>
+/// A closed range of CLI releases, both ends included, compared as NUMBERS — <c>0.12.0</c> is below <c>0.110.0</c>,
+/// which a string comparison would get backwards.
+/// </summary>
+public sealed record ReleaseRange(Version From, Version Through)
+{
+    /// <summary>The range no release is in — a row with no such range says nothing about any release.</summary>
+    public static ReleaseRange None { get; } = new(new Version(int.MaxValue, 0, 0), new Version(0, 0, 0));
+
+    public bool Contains(Version release) => release >= From && release <= Through;
+}
 
 /// <summary>
 /// Whether a runtime has a fast tier (research/PLAN_fast_mode.md, decision 2): on <c>every-model</c>, on the listed
 /// <c>models</c> only, or <c>none</c> — and, always, why.
 /// </summary>
-public sealed record FastModeRow(string Runtime, string Source, IReadOnlyList<string> Models, string Note);
+public sealed record FastModeRow(string Runtime, string Source, IReadOnlyList<string> Models, string Note)
+{
+    /// <summary>
+    /// The releases that refuse to be told the STANDARD tier (todo/PLAN_codex_tier_floor.md): codex 0.110.0–0.130.0
+    /// take only <c>fast</c> or <c>flex</c> for <c>service_tier</c> and fail the whole launch on <c>default</c>
+    /// (research/RESULTS_codex_service_tier_versions_2026-10-07.md). Data beside the measurement that found it, so the
+    /// next measured release is a file edit; <see cref="ReleaseRange.None"/> on every row that names none.
+    /// </summary>
+    public ReleaseRange RefusesStandard { get; init; } = ReleaseRange.None;
+}
 
 /// <summary>
 /// Which runtime serves which feature, and which efforts each accepts — read from the file the extension generates its
@@ -50,6 +76,9 @@ public sealed class FeatureAvailability
     private static readonly string[] ThinkingSources = ["probe", "unmeasured", "none"];
 
     private static readonly string[] FastSources = ["every-model", "models", "none"];
+
+    /// <summary>One end of a <c>refusesStandard</c> range: three dot-separated numbers, nothing around them.</summary>
+    private static readonly System.Text.RegularExpressions.Regex ReleaseShape = new("^[0-9]+\\.[0-9]+\\.[0-9]+$");
 
     public static FeatureAvailability Builtin { get; } = LoadBuiltin();
 
@@ -192,9 +221,32 @@ public sealed class FeatureAvailability
         var source = row.Source ?? string.Empty;
 
         return runtimes.Contains(runtime, StringComparer.Ordinal) && FastSources.Contains(source, StringComparer.Ordinal)
-            ? Listed(new FastModeRow(runtime, source, row.Models ?? [], row.Note ?? string.Empty))
+            ? Listed(new FastModeRow(runtime, source, row.Models ?? [], row.Note ?? string.Empty) { RefusesStandard = RangeOf(runtime, row.RefusesStandard) })
             : throw Broken($"fast-mode row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", FastSources)}");
     }
+
+    /// <summary>
+    /// A row's <c>refusesStandard</c> range, checked as the generator checks it (<c>FAST_RULES</c>): on codex only — the one
+    /// runtime told a tier through <c>-c service_tier</c>, so a range anywhere else would be read by nothing — with both
+    /// ends <c>X.Y.Z</c> and the first not after the second. A row that names none has <see cref="ReleaseRange.None"/>.
+    /// </summary>
+    private static ReleaseRange RangeOf(string runtime, ReleaseRangeSeed? seed) => seed switch
+    {
+        null => ReleaseRange.None,
+        _ when runtime != "codex" => throw Broken($"fast-mode row '{runtime}' has a refusesStandard range, which only codex may carry"),
+        _ => Ordered(runtime, new ReleaseRange(ReleaseOf(runtime, seed.From), ReleaseOf(runtime, seed.Through))),
+    };
+
+    private static ReleaseRange Ordered(string runtime, ReleaseRange range) =>
+        range.From <= range.Through
+            ? range
+            : throw Broken($"fast-mode row '{runtime}' has a refusesStandard range that ends before it starts ({range.From} to {range.Through})");
+
+    /// <summary>One end of a range: exactly three dot-separated numbers, as <c>codex --version</c> prints them.</summary>
+    private static Version ReleaseOf(string runtime, string? text) =>
+        text is not null && ReleaseShape.IsMatch(text)
+            ? Version.Parse(text)
+            : throw Broken($"fast-mode row '{runtime}' has a refusesStandard end '{text}', which is not a release (X.Y.Z)");
 
     /// <summary>
     /// The generator's rule (<c>FAST_RULES</c>, PR #693's review): a <c>models</c> source lists its models, and every
