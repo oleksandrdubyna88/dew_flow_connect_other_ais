@@ -1163,33 +1163,72 @@ public sealed record PanelSettings
         }
     }
 
+    /// <summary>Whether the text is a JSON array with nothing in it — said, not malformed and not absent.</summary>
+    private static bool IsEmptyList(string json)
+    {
+        try
+        {
+            using var parsed = System.Text.Json.JsonDocument.Parse(json);
+
+            return parsed.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array && parsed.RootElement.GetArrayLength() == 0;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// The reviewers, from `COAI_VENDORS` — a JSON array, because a comma-separated list cannot
     /// carry a runtime and a base URL, and a second encoding for those would be a format nobody
     /// could read in a config file. `COAI_PROVIDERS` still works for the simple case.
     /// </summary>
-    private PanelSettings WithProvidersFrom(Func<string, string?> env)
+    private PanelSettings WithProvidersFrom(Func<string, string?> env) => this with
     {
-        if (env("COAI_VENDORS") is { Length: > 0 } json && ParseVendors(json) is { Count: > 0 } vendors)
-        {
-            // The env variable still answers for a vendor the list did not place. It predates the
-            // panel, it is what a scripted or containerised run has, and dropping it the moment a
-            // vendor list appeared is what made an executable path unsettable from either side.
-            return this with { Providers = [.. vendors.Select(v => WithExecutable(v, env))] };
-        }
+        // The env variable still answers for a vendor the list did not place. It predates the
+        // panel, it is what a scripted or containerised run has, and dropping it the moment a
+        // vendor list appeared is what made an executable path unsettable from either side.
+        Providers = VendorListFrom(env) is { Configured: true } list
+            ? [.. list.Vendors.Select(v => WithExecutable(v, env))]
+            : DefaultProviders(env),
+    };
 
-        var listed = env("COAI_PROVIDERS");
-        var providers = (listed is { Length: > 0 }
-                ? listed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                : ["codex", "antigravity"])
-            .Select(p => new ProviderSettings(p.ToLowerInvariant())
-            {
-                Model = env($"COAI_MODEL_{p.ToUpperInvariant()}") ?? string.Empty,
-                ExecutablePath = env($"COAI_EXE_{p.ToUpperInvariant()}") ?? string.Empty,
-            })
-            .ToList();
-        return this with { Providers = providers };
+    /// <summary>`COAI_VENDORS` as read: whether it configures the reviewers, and the rows it holds.</summary>
+    private sealed record VendorList(bool Configured, IReadOnlyList<ProviderSettings> Vendors);
+
+    /// <summary>
+    /// An EMPTY list is empty: a catalog whose rows review nothing arrives as `[]`, and reading that as "not configured"
+    /// ran Codex and Antigravity, reviewers the person never chose (the cadence consultation for epics 1-3, finding 3).
+    /// The round then refuses with its own sentence. Unset, blank, or rows that name no vendor still mean not configured.
+    /// </summary>
+    private static VendorList VendorListFrom(Func<string, string?> env)
+    {
+        var json = env("COAI_VENDORS") ?? string.Empty;
+        if (json.Trim().Length == 0)
+        {
+            return new VendorList(false, []);
+        }
+        var vendors = ParseVendors(json);
+
+        return new VendorList(vendors.Count > 0 || IsEmptyList(json), vendors);
     }
+
+    /// <summary>`COAI_PROVIDERS`, or the shipped pair, each with its model and CLI path from its own env variables.</summary>
+    private static List<ProviderSettings> DefaultProviders(Func<string, string?> env)
+    {
+        var listed = env("COAI_PROVIDERS") ?? string.Empty;
+        string[] names = listed.Length > 0
+            ? listed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            : ["codex", "antigravity"];
+
+        return [.. names.Select(name => ProviderFromEnv(name, env))];
+    }
+
+    private static ProviderSettings ProviderFromEnv(string name, Func<string, string?> env) => new(name.ToLowerInvariant())
+    {
+        Model = env($"COAI_MODEL_{name.ToUpperInvariant()}") ?? string.Empty,
+        ExecutablePath = env($"COAI_EXE_{name.ToUpperInvariant()}") ?? string.Empty,
+    };
 
     /// <summary>Where this vendor's CLI is: the list first, then its own env variable.</summary>
     private static ProviderSettings WithExecutable(ProviderSettings vendor, Func<string, string?> env) =>

@@ -31,7 +31,8 @@ public sealed record ConsultantChoice(
     string Model = "",
     string Runtime = "",
     string BaseUrl = "",
-    string ExecutablePath = "")
+    string ExecutablePath = "",
+    string Row = "")
 {
     /// <summary>Whether this entry says which CLI answers — a definition — rather than naming a reviewer row.</summary>
     public bool IsDefinition => Runtime.Length > 0;
@@ -124,7 +125,8 @@ public static class ConsultantRouting
                     Trimmed(row.Model),
                     Trimmed(row.Runtime),
                     Trimmed(row.BaseUrl),
-                    Trimmed(row.ExecutablePath));
+                    Trimmed(row.ExecutablePath),
+                    RowText(row.Row));
             }
         }
 
@@ -132,4 +134,8 @@ public static class ConsultantRouting
     }
 
     private static string Trimmed(string? value) => value?.Trim() ?? string.Empty;
+
+    /// <summary>The row as it was written, for the resolver to read — empty when the entry carries none.</summary>
+    private static string RowText(JsonElement? row) =>
+        row is { ValueKind: not (JsonValueKind.Undefined or JsonValueKind.Null) } written ? written.GetRawText() : string.Empty;
 }

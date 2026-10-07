@@ -33,6 +33,23 @@ test('a record is written with the conversation’s OWN source and root, not wit
   assert.doesNotMatch(built, /kind: 'none'/u, 'the placeholder is still there');
 });
 
+test('a record keeps the row it was spoken to, and a resume reads that row back', () => {
+  // PLAN_one_model_catalog.md E4.6a. `resumedPick` is tested without a host in aResumedChatKeepsItsModel.test.ts; this
+  // is the half it cannot see — that the row is WRITTEN, and that the restore passes it rather than the model alone.
+  const built = bodyOf(source('chatPersist.ts'), 'export function recordOf(');
+  const restore = source('chatConversationRestore.ts');
+
+  assert.match(built, /providerId: thread\.providerId/u, 'a record is written without the row that answered');
+  assert.match(restore, /resumedPickFor\(config, saved\.providerId \?\? '', saved\.modelId\)/u, 'a resume does not read the recorded row');
+  assert.doesNotMatch(restore, /savedPick\(config, saved\.modelId\)/u, 'a resume still reads the model name alone');
+  // And the thread goes on with the model the resume RESOLVED, never the saved value: a legacy record's `modelId` that
+  // is an old preset id resolves to `chat-a/sonnet`, and a thread that kept `a` asked for `chat-a/a` on its first turn
+  // and was refused (the risk consultation of epic 4, finding R5).
+  assert.doesNotMatch(restore, /\bmodelId: saved\.modelId,/u, 'a restored thread asks for the saved value, not the resolved model');
+  // Both restore paths take it from the one decision, which `aResumedChatKeepsItsModel.test.ts` runs (CodeRabbit on #688).
+  assert.equal(restore.match(/modelId: restoredThreadModel\(ready, restored\.modelId\),/gu)?.length, 2);
+});
+
 test('the pin writes the session id AND the folder it was found in, and saves for itself', () => {
   // A UUID names no directory, so the root cannot be worked out later from the source — it has to be
   // captured here, from the search that found the session. Three reviewers refused the alternative.

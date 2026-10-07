@@ -121,17 +121,37 @@ const IGNORED: readonly { readonly feature: string; readonly what: string; reado
   { feature: 'timeoutMinutes', what: 'its own time limit', set: (vendor) => vendor.runtime !== 'api' && vendor.timeoutMinutes !== undefined },
   { feature: 'cliEffort', what: 'its effort', set: (vendor) => vendor.runtime !== 'api' && (vendor.effort ?? '').length > 0 },
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
+  // A consultation reads the row's settings only from a binary that takes the whole row (C2; the epics 4–5 consultation).
+  { feature: 'consultantRow', what: 'its own settings when it consults', set: (vendor) => consults(vendor) && hasOwnSettings(vendor) },
   // Off is the default for every binary that reads it; only a state the person CHOSE is said ignored.
   { feature: 'fastMode', what: 'its fast mode', set: (vendor) => vendor.fast !== undefined },
 ];
+
+/** Whether the row is ticked for a consultant or a question consultant. */
+function consults(vendor: Vendor): boolean {
+  return (vendor.uses ?? []).some((use) => use === 'consultant' || use === 'qconsult');
+}
+
+/** Whether the row sets anything a consultation would read from it beyond its five launch fields. */
+function hasOwnSettings(vendor: Vendor): boolean {
+  return [vendor.systemPrompt, vendor.effort].some((one) => (one ?? '').length > 0) || vendor.timeoutMinutes !== undefined;
+}
 
 /** The sentences a row's card says about what this side's coai-mcp ignores on it — a decision, tested as a value. */
 export function ignoredSaid(vendor: Vendor, binary: BinarySays): readonly string[] {
   return [...new Set(IGNORED.filter((one) => one.set(vendor)).map((one) => skew(one.feature, one.what, binary)).filter((one) => one.length > 0))];
 }
 
-function ignoredNote(vendor: Vendor, binary: BinarySays): string {
-  const said = ignoredSaid(vendor, binary);
+/**
+ * Everything the card's one note says about this side's coai-mcp: an api row it cannot run at all (the current page's
+ * note, kept on the new page — the epics 4–5 consultation, §7 parity), then what it ignores on the row.
+ */
+export function skewSaid(vendor: Vendor, binary: BinarySays, apiNote: string): readonly string[] {
+  return [...(apiNote.length > 0 ? [apiNote] : []), ...ignoredSaid(vendor, binary)];
+}
+
+function ignoredNote(vendor: Vendor, binary: BinarySays, apiNote: string): string {
+  const said = skewSaid(vendor, binary, apiNote);
 
   return said.length === 0 ? '' : `<p class="skew">${escapeHtml(said.join(' '))}</p>`;
 }
@@ -143,7 +163,7 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
     + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${verdictBadge(vendor.id, facts.context)}`
     + `${cannotRun(vendor.id, facts.context.reported)}${cliBadge(vendor, facts.context.cli)}${healthBadge(facts.check)}</div>`
     + `<div class="world">${worldButtons(vendor, id, facts.context)}</div>`
-    + `${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}${ignoredNote(vendor, facts.binary)}</div>`;
+    + `${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}${ignoredNote(vendor, facts.binary, facts.context.apiNote)}</div>`;
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {

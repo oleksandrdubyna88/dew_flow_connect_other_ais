@@ -112,7 +112,12 @@ internal sealed record ConsultantDto(
     string? Model = null,
     string? Runtime = null,
     string? BaseUrl = null,
-    string? ExecutablePath = null);
+    string? ExecutablePath = null,
+    /// <summary>
+    /// The consultant's WHOLE catalog row, as the extension writes a reviewer's (todo/PLAN_one_model_catalog.md, C2) —
+    /// written only to a binary that lists <c>consultantRow</c>. Absent is the five fields above and nothing more.
+    /// </summary>
+    System.Text.Json.JsonElement? Row = null);
 
 /// <summary>One caller kind's row of <c>COAI_COMMAND_MODELS</c> (issue #117).</summary>
 /// <remarks>Nullable for the reason <see cref="ConsultantDto"/> gives: an omitted field arrives null.</remarks>

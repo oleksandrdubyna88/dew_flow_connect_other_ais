@@ -3,7 +3,7 @@ import { ChatHome } from './cliChatLaunch';
 import type { ChatAccess } from './chatAdapter';
 import { ChatMessage } from './chatPage';
 import { ChatModelChoice } from './chatContracts';
-import { ChatSession } from './chatSession';
+import { ChatSession, TurnResult } from './chatSession';
 import { ConversationSource } from './chatStore';
 import { TurnSpend } from './chatSpend';
 import type { WaitingQuestion } from './chatPage';
@@ -37,6 +37,11 @@ export interface Thread extends ChatMemory {
    * to know how a turn is sent would buy nothing and cost that.</p>
    */
   session: ChatSession;
+  /**
+   * The session that has heard the row's system prompt (PLAN_one_model_catalog.md E4.6c). A turn to any OTHER session —
+   * a new conversation, a model switch, a reload — carries it again; absent until the first turn is sent.
+   */
+  instructed?: ChatSession | undefined;
   /** The directory that session runs in. Replaced with it, and released with it. */
   home: ChatHome;
   /**
@@ -310,6 +315,8 @@ export interface Thread extends ChatMemory {
   /** What was last written to the store, so a push that changed nothing writes nothing. */
   savedMessages?: readonly ChatMessage[];
   savedModelId?: string;
+  /** The row last written down (E4.6a), so a switch between two rows that offer one model is still saved. */
+  savedProviderId?: string;
   /** The mark last written down, so a press that changed only it is still saved. */
   savedCarryFrom?: number;
   /** The access last written down, so ticking the box alone is still saved. */
@@ -326,3 +333,21 @@ export interface Thread extends ChatMemory {
 }
 
 export const threads = new WeakMap<object, Thread>();
+
+/**
+ * Whether the next turn carries the row's system prompt (PLAN_one_model_catalog.md E4.6c): when the session sending it has
+ * not heard it — a new conversation, a model switch, a reload, a reset — and on every turn of a session that forgets each.
+ */
+export function hearsRowInstruction(thread: Pick<Thread, 'forgetful' | 'instructed' | 'session'>): boolean {
+  return thread.forgetful || thread.instructed !== thread.session;
+}
+
+/**
+ * The session that has heard the row's system prompt once a turn ended (E4.6c): the one asked, when it ANSWERED and the
+ * same process did — else none, so the next turn carries it again. One session object outlives its process (a stop or a
+ * crash starts a new child on the same object), so the object alone does not say a process heard it; marking it before
+ * the send dropped the instruction for the rest of the conversation after a stop. (our own reviewer, E4.6.)
+ */
+export function instructedAfter(asked: ChatSession, result: TurnResult): ChatSession | undefined {
+  return result.ok && result.contextLost !== true ? asked : undefined;
+}

@@ -25,6 +25,64 @@ const TOKENS = `
 /** The shell: the two levels of tabs, the panes, the dialog and the shared marks. */
 const SHELL = `
   .catalog .pane { max-width: none; }
+  /* The old page's sections, moved whole (E4.1): the width they were written for. */
+  .catalog .moved { max-width: 760px; padding: 4px 2px 16px; }
+  /* The MCP server, one and a half times the size, as on the old page — the tab people read rather than set. */
+  .catalog [data-pane="setup/mcp"] .moved { zoom: 1.5; }
+  .catalog .used-by { margin: 8px 0 10px; color: var(--muted); }
+  /* Setup's tables (E4.5): the CLIs and the MCP clients. */
+  .catalog table.map { border-collapse: collapse; margin: 6px 0 12px; }
+  .catalog table.map th, .catalog table.map td { text-align: left; vertical-align: top; padding: 5px 16px 5px 0; border-bottom: 1px solid var(--border); }
+  .catalog table.map td button { width: auto; margin: 0 4px 0 0; }
+  .catalog .moved-from { margin: 10px 0; }
+  /* Roles & prompts (E4.3): the Review roles tab's own layout, scoped — the panel's sheet uses .role for Stages. */
+  .roles-embed .role { padding: 6px 10px; margin: 8px 0; }
+  .roles-embed .role > summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
+  .roles-embed .role .title { font-weight: 600; }
+  .roles-embed .role .id, .roles-embed .badge { font-size: 0.82em; opacity: 0.65; }
+  .roles-embed .badge { border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
+  .roles-embed .fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+  .roles-embed .fields label { display: flex; gap: 6px; align-items: center; }
+  .roles-embed .fields input[type="text"], .roles-embed .fields select { width: auto; min-width: 14em; }
+  .roles-embed .hint { flex-basis: 100%; }
+  .roles-embed .prompt { border-left: 2px solid var(--border); padding: 4px 8px; margin: 6px 0; }
+  .roles-embed .prompt.mine { border: 1px solid var(--vscode-charts-green, var(--ok)); border-radius: 3px; }
+  .roles-embed .prompt .head { display: flex; gap: 6px; margin-bottom: 4px; }
+  .roles-embed .prompt .head input { flex: 1; width: auto; }
+  .roles-embed .prompt .head .purpose { flex: 2; }
+  .roles-embed .prompt textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+  .roles-embed button { width: auto; margin: 4px 6px 0 0; }
+  .roles-embed .prompt .head button { margin: 0; }
+  /* Commands (E4.4): the Gate commands tab's cards, scoped like the roles. */
+  .commands-embed .command { border-left: 3px solid var(--link); padding: 6px 10px; margin: 8px 0; background: var(--card); }
+  .commands-embed .command h3 { font-size: 1em; margin: 0 0 6px; }
+  .commands-embed .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .commands-embed .row input[type="text"] { flex: 1 1 12rem; min-width: 0; width: auto; }
+  .commands-embed .row select { width: auto; }
+  .commands-embed textarea { width: 100%; box-sizing: border-box; font-family: var(--vscode-editor-font-family); }
+  .commands-embed button { width: auto; margin: 6px 6px 0 0; }
+  .commands-embed .note, .commands-embed .lead { color: var(--muted); }
+  .commands-embed .badge { font-size: 0.8em; color: var(--link); }
+  /* Chat (E4.6b): the opening model's blocks and the prompt presets, scoped like the commands. */
+  .chat-embed .block { border-left: 3px solid var(--border-strong); padding: 6px 10px; margin: 8px 0; background: var(--card); }
+  .chat-embed .block label.inline { display: flex; gap: 8px; align-items: baseline; justify-content: flex-start; }
+  .chat-embed .block label.inline .hint { flex-basis: auto; }
+  .chat-embed .block label.field { display: block; margin-top: 6px; }
+  .chat-embed .block label.field > span { display: block; margin-bottom: 2px; color: var(--muted); }
+  .chat-embed .block.stranded { border-left-color: var(--vscode-editorWarning-foreground, var(--link)); }
+  .chat-embed .preset { border-left: 3px solid var(--link); padding: 6px 10px; margin: 8px 0; background: var(--card); }
+  .chat-embed .preset .head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .chat-embed .preset .head input[type="text"] { flex: 1 1 12rem; min-width: 0; width: auto; }
+  .chat-embed textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+  .chat-embed button { width: auto; margin: 6px 6px 0 0; }
+  .chat-embed .preset .head button { margin: 0; }
+  .chat-embed .note, .chat-embed .lead { color: var(--muted); }
+  .roles-embed button.remove, .roles-embed button.restore, .commands-embed button.remove, .chat-embed button.remove {
+    background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
+  }
+  .catalog .used-by button.link {
+    background: none; border: none; padding: 0; margin: 0 0 0 6px; color: var(--link); cursor: pointer; text-decoration: underline;
+  }
   .catalog .pane .tabs { margin: 10px 0 6px; gap: 6px; border-bottom: none; }
   .catalog .pane .tabs .tab {
     border: 1px solid var(--border-strong); border-radius: 14px; padding: 3px 12px; color: var(--muted);

@@ -198,6 +198,8 @@ const SETTING_ALIAS: Record<string, string> = {
   // the extension, by the words the article uses for them.
   'coai.catalogMigration': 'moved into the catalog',
   'coai.migratedFrom': 'a copy of them as they were',
+  // The chat presets' move (E4.6a): its record.
+  'coai.chatPresetsMoved': 'remembers which chat presets moved',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {

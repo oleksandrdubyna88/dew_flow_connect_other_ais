@@ -10535,9 +10535,9 @@ Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
   the per-side seeding (`vendors`) — all five now pass `userLayer(config)` (PR #681 review).
 - On activation, `sideConfig.noticeIgnoredWorkspaceModels` says once per window which key a workspace or folder
   tried to set (`model-setting-from-workspace`, a refusal), and offers *Copy to my settings* only when the person's
-  own layer holds nothing — so it never overwrites what they set. "Holds" is judged where the copy LANDS
-  (`modelKeys.copyWouldReplace`): this side's own settings when it keeps them and `saveSetting` writes the key there
-  (`writesTheOverlay`, the one rule both use), else the user layer — asked when the notice is shown and again at the
+  own layer holds nothing — so it never overwrites what they set. "Holds" is judged where the copy LANDS
+  (`modelKeys.copyWouldReplace`): this side's own settings when it keeps them and `saveSetting` writes the key there
+  (`writesTheOverlay`, the one rule both use), else the user layer — asked when the notice is shown and again at the
   click (PR #681 review).
 
 ```mermaid
@@ -10593,6 +10593,12 @@ flowchart LR
 - Byte-identical env block, three pieces (each shown red when removed): `resolveConsultant` rule (a) gives back the
   row's `vaultKeyName` through a row that lists `consultant`; `qconsultSettingsFrom` resolves a question row that
   names a row listing `qconsult` to its definition in the row's own key order (`COAI_QCONSULT_ROWS` IS the wire);
+  (C2, 2026-10-06) For a binary that lists `consultantRow` (`FEATURES.consultantRow`), a consultant entry that refers
+  to a catalog row, and a question row that does, also carry that row as `row` — written by `vendorsWire.rowOnTheWire`,
+  the ONE field list `vendorsEnv` and `--check-model` use (switched on, as a consultant-only row reviews nothing).
+  `settingsShape.catalogRowOnTheWire` finds it by id; a question row's catalog id is kept beside the rows
+  (`QconsultSettings.catalogRows`), because a resolved row keeps only the key name and two rows may share one. A
+  binary that does not list the feature reads the bytes it always did.
   `catalogRules.rowsOnTheWire` leaves out of `COAI_VENDORS` a row that reviews nothing and whose `uses` are all
   features that cross resolved — kept when it lists `security`, a Security lane run names it, or the lane could not be
   read. A row with no `uses` is a row from before the catalog and crosses as it always did.
@@ -10634,8 +10640,8 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
-  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
+  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
+  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
   (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
@@ -10810,7 +10816,8 @@ so flipping the switch — the old page's **Try the new Settings page**, the new
   binary); `newTag(controlId, firstSeen, now)` for a week after a control was first seen (`newTags.ts`: a bounded
   `globalState` record stamped at activation, pruned after 60 days — no version number guessed); one confirm
   (`confirmButton` with `data-asks`, never `data-command`, and `CONFIRM_DIALOG`, sending only on its action button
-  through the shared `send`); `stillOnTheOldPage` for the five tabs E4 builds.
+  through the shared `send`); `stillOnTheOldPage` for a place E4 has not drawn yet (since E4.1: Roles & prompts and
+  Commands).
 - **Nonce:** every panel takes its CSP nonce from `webviewNonce.ts` (128 bits, base64url); the Settings panel's was
   `Math.random()`. `everyPanelTakesItsNonceFromOneHelper.test.ts` fails on a panel that makes its own.
 - **Help:** the Settings article says how to switch, in all five languages (`coai.settingsPreview`'s help alias).
@@ -10877,6 +10884,308 @@ flowchart LR
   `endpointButton` — the same commands, by name).
 - A local engine whose endpoint is not this machine says where the diff goes (`remoteWarning`); a remote row on a
   Team server that speaks contract 1 says its effort and system prompt are not applied (E2.5).
+
+## The new Settings page — every tab in its place (2026-10-05, PLAN_one_model_catalog.md E4.1)
+
+Every place of the new page but Models draws the CURRENT page's section for it, by that section's own builder —
+`catalogSections.placeBody(place, state)` looks the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`, so no
+builder is copied and a control behaves the same on both pages until E5 retires the old one. The page wraps it in a
+`.moved` column (760 px, the width the sections were written for); the MCP server keeps its 1.5× zoom on its new pane.
+
+- **The prompts section is split in two** by one parameter, `promptsBody(state, half)` (`PromptsHalf`): `both` is the
+  current page, unchanged; `stages` (Reviews → Stages) is the switches, rounds, thresholds, lens deals and workspace;
+  `prompts` (Reviews → Prompts per round) is each role's round pickers alone, or "Switched off on Stages". Each control
+  is drawn once on a page — a test fails on an id drawn twice.
+- **Keys across every row:** Setup → Vendor keys counts `catalogRows`, so a row that exists for a feature alone (a
+  migrated consultant on an endpoint) is still named as needing a key.
+- **The "used by" strip** on Consultant, Question consultant, Security lane and Chat names the rows ticked for that
+  feature (switched-off ones marked), or says none is — and for the consultant, D2's rule: each caller asks the pair it
+  ships with. **Change on Models** sets the Models filter to that use and opens Models, in the page alone
+  (`data-models-uses`; nothing stored, nothing posted but the place).
+- **Script:** the security lane's own script (`securityLaneScript`, block-scoped) joins the page's.
+- **Still on the current page:** Roles & prompts and Commands — E4.3 and E4.4 fold their pages in.
+- **Tests:** `catalogTabsInPlace.test.ts` (each section in its place, the split, unique ids, the strip, Change on
+  Models run through the page's script); `catalogTabsWrite.test.ts` changes every setting control of the current
+  page (515) on BOTH pages and compares what each posted — a section left out goes red with "not drawn".
+
+```mermaid
+flowchart LR
+  T[CATALOG_TABS place] --> B{placeBody}
+  B -->|reviews/stages| PS["promptsBody(state, 'stages')"]
+  B -->|reviews/prompts| PP["promptsBody(state, 'prompts')"]
+  B -->|other places| L[OLD_TAB_PLACES → PANEL_SECTIONS spec.body]
+  L -->|setup/keys| K[keysBody over catalogRows]
+  B -->|feature places| U[used-by strip → Change on Models]
+  B -->|reviews/roles, reviews/commands| O[stillOnTheOldPage until E4.3/E4.4]
+```
+
+## The new Settings page — consultants from the catalog (2026-10-05, PLAN_one_model_catalog.md E4.2)
+
+**The consultant's callers pick a row.** On the new page Consultants → Consultant draws `consultantSection(state,
+callerRows)` with the callers' rows replaced by `consultantPicks.consultantPicksHtml`: per caller one select
+(`data-setting="consultantRow"`, `data-caller`) of **the shipped pair** (`''` — absence, D2) and every row ticked
+Consultant on Models, and under it what the pick runs on (resolved). The model, effort and prompt are edited on the
+row's Models card, never here. The caps, prompt and cadence are the current page's controls, unchanged.
+
+- **Never cleared (D3):** a stored pick of a row no longer ticked, or no longer on Models, stays selected as
+  "(stranded)" with a sentence saying so; only the person moves it. The caller's own vendor is offered, never refused,
+  with a word that it shares the caller's blind spots.
+- **Stored as a reference:** `consultantPickWrites` writes `consultants[caller] = { vendor: <row id> }`, or removes the
+  key for the shipped pair — and never the rows. It refuses a caller this build does not emit and a row not ticked
+  Consultant (both arrive in a webview message).
+- **Written without the fold.** The host (`PanelProvider.savePick`) reads and writes in ONE catalog turn
+  (`inCatalogTurn`), from a fresh read, and does NOT go through `catalogEdit.foldedWrite`: the current page's fold reads
+  a caller re-pointed away from a row only it used as that row's REMOVAL (E1.4) — right for a definition only that page
+  could see, wrong for a model the person now sees on Models. A test pins that the fold still drops it, so the bypass
+  is removed the day it stops. A refusal is reported and the picker snaps back (`saveOrSnapBack`).
+
+**The question consultant's rows pick a row.** `catalogPicks.ts` holds the half every feature's picker shares (the rows
+ticked for a use, the stranded pick kept and named — `rowPicks`, `pickRefusal`); the consultant's callers and the
+question rows both use it. On the new page `questionConsultantSection(state, pickFrom)` draws each question row with a
+**Model** select (`data-setting="qconsultRowPick"`, `data-caller=<row id>`) instead of its vendor, model, endpoint, key
+name and CLI path; the switch, prompt, caveat and Remove are unchanged. The write is one more rule in the existing edit
+table (`qconsultWrite.EDITS.qconsultRowPick` → `rowPicked`): the row becomes a reference `{ vendor: <row id>, runtime:
+'' }`, keeps its id and prompt, and goes OFF as a vendor change does; a row not ticked "question consultant" is refused
+and the control snaps back. It goes through the usual fold, which drops a row only when its question row is REMOVED.
+
+**Fixed on the way (both pages):** the Question consultant section resolved its rows against the panel's `vendors` —
+the current page's reviewers since E1.4 — so a row epic 1 had migrated into a reference to an `ask-<id>` row read as
+having no runtime and its switch was disabled. It resolves against `catalogRows` now
+(`aMigratedQuestionRowStillRuns.test.ts`, red before the fix). The current page still labels such a row "not in the
+catalogue" (its picker lists the vendor presets); E5 retires that page.
+
+**The Security lane's pairs come from the catalog, and "Try it" asks the binary.** On the new page
+`securityLaneSection(state, offered, allRows)` passes `rowsFor('security', rows)` as the rows a pair may name — the
+pairs' Reviewer selects and the prompt cards' reviewer ticks — and every row as `allRows`: the "enable an ordinary
+reviewer too" note is judged on all of them, and a pair whose row is not ticked (or gone) is kept, selected and named
+(`rowPicks` note, D3). The host checks a Security lane write against the same list while the new page is showing
+(`securityRowsOffered(rows, settingsPreviewOn())`: one slot shows one page, so the page showing is the page that wrote);
+the current page keeps every row.
+
+**Try it** (`securityTry.ts`): a sample box and a button (`data-security-try`); the page posts command `trySecurity` with
+the sample as its id. The host (`PanelProvider.trySecurity`) refuses before a spawn when coai-mcp is not installed, does
+not list `checkSecurity`, or the sample passes 64 K characters; otherwise it sends `{ text, lane }` — the lane as a round
+sends it to THIS binary (`securityWire`, words only for `securityWords`) — to `coai-mcp --check-security` on STDIN
+(`serverRun`, 15 s cap) and keeps the answer for the window (`PanelState.securityTry`): signals, cards that would be due,
+refused patterns, complaints, and "the detector did not finish" — or the failure, named. No JavaScript copy of the
+matcher, and no notification. Checked against the binary built from this branch: a SQL + JWT sample answered `sql`,
+`auth-token` and three cards due, and parsed exactly.
+
+```mermaid
+sequenceDiagram
+  participant P as New page (Security lane)
+  participant H as PanelProvider
+  participant B as coai-mcp --check-security
+  P->>H: command trySecurity, id = sample
+  H->>H: securityTryRefusal (installed? checkSecurity? ≤ 64 K)
+  H->>B: stdin {text, lane: securityWire(lane, features)}
+  B-->>H: {signals, cards, refused, complaints, detectionIncomplete}
+  H->>P: repaint with PanelState.securityTry
+```
+
+## The new Settings page — Setup (2026-10-05, PLAN_one_model_catalog.md E4.5)
+
+Setup's four places draw the current page's sections (E4.1), and two of them add, after the section, what the mockup's
+Setup holds (`catalogSections.AFTER`; markup and decisions in `setupTab.ts`, pure):
+
+- **Vendor keys** — the keys are counted over every catalog row (E4.1), and **CLIs your models run on**: the rows
+  grouped by the CLI they run on (`cliGroups`: runtime + CLI path, so a row with its own path is a CLI of its own;
+  `local`, `api` and `remote` run on none), the models on each, the version (`PanelState.cliStatus`, which the host
+  already reads for every row) and the current card's own ▶ ⤓ ⟳ buttons (`panelView.cliButtons`, exported) for the
+  first model on each.
+- **MCP server** — the data folder's last move (`movedFromHtml`): `coai.lastDataMove` survives a reload, so the page says
+  where the data was moved from and, only when `mayDeleteTheOldCopy` allows it, offers **Delete the old folder…**
+  (panel command `deleteOldDataFolder` → the registered `coai.deleteOldDataFolder`, which keeps every check of its own).
+  And **MCP clients**: Claude Code (`~/.claude.json`, top level), Claude Code for this project (`.mcp.json`) and VS Code
+  (`.vscode/mcp.json`, whose member is `servers`) — each `registered`, `not registered`, `no file` or `unreadable`, with
+  the note that a `projects["<this folder>"]` entry in `~/.claude.json` takes precedence. `mcpClientsRead.ClientReader`
+  reads each file — never writes it, launches nothing — and `clientRegistration` returns ONLY that answer: no other
+  entry, value or secret of the file. A file is read again only when its time or size changed (`~/.claude.json` can
+  run to megabytes), and one past 32 MB is `unreadable`.
+
+## The new Settings page — Roles & prompts (2026-10-05, PLAN_one_model_catalog.md E4.3)
+
+**One editing core, two pages.** The Review roles tab's writes, refusals, prompt files, deletions and its ONE
+settled-write queue moved, unchanged, from `rolesPanel.ts` into `rolesHost.ts` (`queueRoleEdit`, `flushRoleEdits`,
+`roleRows`, `roleTexts`, `rolesEmbedState`, `onRolesRedraw`); the roles are bound to this window's side at activation
+(`bindRoles`). `rolesPanel.ts` keeps only the tab: its panel, its open section, its busy marks, its redraw. An edit
+from either page lands in the same queue, so one cannot overtake the other, and every page that draws the roles is
+redrawn after a change of shape.
+
+**Drawn by the panel.** Reviews › Roles & prompts draws `rolesEmbed.rolesEmbedded` — the tab's own `roleBlock` (widened
+with `RoleBlockOptions`, never copied) under four stage headings, inside `.roles-embed`, whose layout `catalogCss.ts`
+scopes because the panel's sheet already uses `.role` for Stages. Two attributes differ: a prompt is
+`data-role-prompt` (the panel's script binds every `data-prompt` as a round pick, and would post a prompt's text as
+one), and there is no second tab strip inside a place the page's strip already selects. `rolesEmbeddedScript` is
+block-scoped on the panel's own `vscode` and `send`: a pick or a press is posted numbered as `{ type: 'roles', edit }`
+(`roles` joins `PANEL_TRACKED`, so it carries the busy mark), typing plainly; focus is reported as `roles|<role>|<prompt>|<field>`
+so the panel withholds a repaint while somebody types, and a focus release FLUSHES the roles queue before it repaints —
+the repaint reads the prompt files. The host reads the roles only while the new page can show them.
+
+**ONE switch per role** (`rolesSwitch.ts`). A role had two: the catalog's `active` (`COAI_ROLES`) and the panel's
+`roleEnabled` (`COAI_ENABLED_*`, read from 0.18.13, `ROLE_SWITCH_SINCE`). On the new page a role's switch reads both
+(`switchedOn`: on only when both are) and writes both: `active` through the roles' every refusal, and — once that has
+landed — `roleEnabled` follows (`roleSwitchFollows`, `PanelProvider.roleEdited`). A server below 0.18.13 reads the
+catalog row, a newer one reads both, and both say the same. Stages draws the role's state in words ("Off — its switch
+is under Roles & prompts"), not a tick of its own. The current page keeps its two switches until E5.
+
+```mermaid
+sequenceDiagram
+  participant P as New page (Roles & prompts)
+  participant H as PanelProvider
+  participant R as rolesHost (one queue)
+  participant T as Review roles tab
+  P->>H: {type: roles, edit} (numbered for a pick)
+  H->>R: queueRoleEdit(roleEdit(edit))
+  T->>R: queueRoleEdit(...)
+  R->>R: rowsAfter + refusals, write roles / prompt files
+  R-->>H: onRolesRedraw → render
+  R-->>T: onRolesRedraw → render
+  H->>H: roleSwitchFollows → save roleEnabled (a switch edit only)
+```
+
+## The new Settings page — Commands (2026-10-05, PLAN_one_model_catalog.md E4.4)
+
+The Gate commands tab, folded in the way Roles & prompts was (E4.3). Its writes, refusals, text files and ONE
+settled-write queue moved, unchanged, from `commandsPanel.ts` into `commandsHost.ts` (`queueCommandEdit`,
+`flushCommandEdits`, `commandRows`, `commandTexts`, `commandsEmbedState`, `onCommandsRedraw`; bound at activation by
+`bindCommands`); the tab keeps its panel, busy marks and redraw. Reviews › Commands draws `commandsEmbed.commandsEmbedded`
+— the tab's own `customBlock` / `shippedBlock`, which now take their attribute names (`CommandAttrs`) — inside
+`.commands-embed`. The page also draws the roles, whose wiring reads `data-field`, `data-remove` and `data-restore`, so a
+command block here is `data-cmd-*` throughout and each wiring reads only its own (a test fires one of each and checks
+neither posts the other's edit). `commandsEmbeddedScript` posts `{ type: 'commands', edit }` — the tab's own message,
+read by its own `commandEdit` — numbered for a switch, a stage, Add, Remove and Restore (`commands` joins
+`PANEL_TRACKED`), plainly for typing, and reports focus as `commands|<file or row>|<field>`; a focus release flushes the
+commands' queue and the roles' before the repaint. With E4.4 no place of the new page points at the current page.
+
+Found on the way: `theTextControlsHoldUpEverywhere.test.ts` sliced each panel's handler up to a queue call the roles and
+commands panels stopped making in E4.3 / E4.4; `indexOf` answered -1, the slice ran to the end of the file, and the
+check passed on anything. It names the new calls now and fails when one is missing.
+
+**Tests read the page as drawn (PR #688's review).** `test/pageTree.ts` turns the rendered html into the page harness's
+`Node` tree — real parents, `data-*` as a dataset, values, ticks, text; `<script>`/`<style>` skipped — and `bubbled`
+fires an event up through every ancestor's own listeners before the document's, as a browser does (`Node.runOwn`). The
+new page's tests take the control they fire at from that tree, never a node built with the attributes they expected,
+and assert on what the page posts or draws. That is what showed, executed rather than claimed, that a prompt typed on
+Roles & prompts is never read as a round pick, and that the roles' and the commands' wiring never read each other's
+controls (each red when the attribute is put back). The MCP clients' files are read only while the new page can show
+them (`PanelProvider.newPageReads`), with the roles' prompt files and the command texts.
+
+## Chat model presets move into the catalog (2026-10-06, PLAN_one_model_catalog.md E4.6a)
+
+Each chat model preset becomes its own catalog row ticked Chat, and the chat reads its models from the rows.
+
+- **The move** is a step of the catalog migration (`catalogChatStep.chatStep`, run in `migrateLayer`, so it shares the
+  migration's turn, backup and write order). `chatPresetMove.chatMove` turns each preset the record does not hold into
+  a row: id `chat-<normalised id>` (or `chat-model`), `uses: ['chat']`, its name, launch fields and starting text
+  (`chatStartingPrompt`), `vaultKeyName` = the old id when that id is already clean, and an explicit `remoteVendor` for
+  a Team-server preset. It is never joined to an existing row.
+- **The record** `coai.chatPresetsMoved` (`{ presetId, runtime, model, name, rowId }`, declared, overlaid per side) is
+  the identity: a run skips a preset the record holds with the same fingerprint (`wasMoved`), so a deleted row stays
+  deleted and a positional `preset-N` that shifted is moved as the new preset it is. `chatModelPresets` itself is
+  never written by the move (an older build still reads it until E5).
+- **The model the chat opens on:** the run that moves the MAIN preset writes `coai.chatModel` = its row and
+  `coai.chatModelName` = its model; otherwise a saved `chatModel` naming a moved preset is remapped to its row. Both
+  are per side (`OVERLAID_SETTINGS`) and backed up with the record. A side that keeps no `vendors` of its own is left
+  alone. `chatModelPresets` is a migration trigger, so an imported preset moves on the next run.
+- **The chat reads the rows.** `chatCatalogModels.chatModelsReading` (over `chatModelsOf`): this side's rows ticked
+  Chat, as the preset shape every chat path takes, plus a preset only while the record lacks it (before the first
+  move, after a refused one, in a restored layer). It is the ONE composition: `chatConfig.savedModels` (the chat) and
+  `chatSettings.chatSettingsFrom` (the settings' "Which model answers" picker) both call it — the picker listed the
+  raw presets at first, and so showed the row `coai.chatModel` names after the move as one that cannot answer. Every chat path reads its settings through `chatRead(config)`, this
+  side's reader (`bindChatSide` at activation).
+- **The presets page edits one store** (`chatModelEdits.chatModelEdit`): a row id edits the row (name, model, starting
+  text; Remove drops a chat-only row and only unticks Chat on a reviewer; Main sets `coai.chatModel`); an unmoved
+  preset keeps its own path. *Add a model* adds a row ticked Chat. `noSecondPresetStore.test.ts` pins the presets
+  page's two writes to `chatModelPresets` (that path, and the prune of dead rows) and the modules that name the key.
+- **A resumed conversation** keeps its model. `ConversationRecord` gains an optional `providerId` (absent on an old
+  record, no version move; a malformed value is dropped, the conversation kept), written by `chatPersist.recordOf`.
+  `chatConversationRestore` opens it through `chatConfig.resumedPickFor` → `chatCatalogModels.resumedPick`: the
+  recorded row while it is offered, else `legacyPick` of the saved model value after `movedTo` maps an old preset id
+  through the record. `savedPick` (`coai.chatModel`) maps the same way.
+
+```mermaid
+flowchart LR
+  P[coai.chatModelPresets] -->|chatMove, in migrateLayer| R[catalog rows ticked Chat]
+  P -->|record| M[coai.chatPresetsMoved]
+  R --> S[savedModels = chatModelsOf]
+  P -->|only presets the record lacks| S
+  M --> S
+  S --> C[every chat path]
+  M -->|movedTo| Q[resumedPick]
+  K[ConversationRecord.providerId] --> Q
+  Q --> T[a restored conversation]
+```
+
+## The new Settings page — Chat (2026-10-06, PLAN_one_model_catalog.md E4.6b)
+
+The Chat place draws its own tab (`chatTabEmbed.chatTabHtml`, `SPLIT['chat']`), no longer the current page's section:
+
+- **Which model a chat opens on** — one radio per chat model that can answer (`panelView.chatProviderListFor`, the
+  panel's discoveries in it — extracted from `chatBody`, which calls it too), each with an *Opens with* box (the row's
+  `chatStartingPrompt`). Checked: `coai.chatModel`, else the model ticked main. A saved choice that no longer resolves
+  is drawn checked and disabled, with the reason; with nothing chosen the page names the model that answers first; a
+  model the chat cannot speak to is listed with its reason. "Saved for this side" when `perSideSettings` is on. No
+  *Add a model* here: models are added on Models.
+- **Sending** — what to ask, the answer language and who presses send, from `panelView.chatSendingFields`, the ONE
+  builder the current page's `chatBody` also calls; written through `data-setting`.
+- **Prompt presets** — inline: `chatPresetsPage.promptBlock`, the presets tab's own block, with attribute names
+  passed in (`PresetAttrs`, `data-chp-*`), because the page also draws the roles and the commands.
+
+**One editing core.** The presets tab's reads and writes moved from `chatPresetsPanel.ts` into `chatPresetsHost.ts`
+(`queueChatPresetEdit`, `flushChatPresetEdits`, `onChatPresetsRedraw`, bound at activation by `bindChatPresets`) behind
+ONE settled-write queue, as `rolesHost` and `commandsHost`; the add-model dialogs moved to `chatModelWizard.ts`.
+`chatPresetsPage.presetSettlesAs` decides what settles: typed fields per list/row/field; a tick, a pick or a press goes
+straight through. The tab (`chatPresetsPanel.ts`) now only draws: it queues each message, redraws on the host's
+redraw, and flushes on close. The new page's script (`chatTabEmbeddedScript`) posts `{ type: 'chatPresets', edit }` —
+the tab's own message, read by its own `presetEdit` — numbered for the opening model, a main tick, Add and Remove
+(`chatPresets` is in `PANEL_TRACKED`), plainly for typing, and reports focus as `chatPresets|<id>|<field>`; a focus
+release flushes this queue with the roles' and the commands'. Picking the opening model is the presets' `main` edit,
+so `coai.chatModel` is set and a stale `chatModelName` cleared (`chatModelEdits`).
+
+```mermaid
+flowchart LR
+  T[Chat presets tab] -->|presetEdit| Q[chatPresetsHost queue]
+  N[new page Chat] -->|chatPresets message, presetEdit| Q
+  Q -->|chatModelEdit| R[catalog rows / coai.chatModel]
+  Q -->|prompts| P[coai.chatPromptPresets]
+  Q -->|redraw| T
+  Q -->|redraw| N
+  N -->|data-setting| S[chatPromptChoice, chatLanguage, chatAutoSend]
+```
+
+## A row chats as it reviews — effort and system prompt (2026-10-06, PLAN_one_model_catalog.md E4.6c, D8)
+
+A catalog row's `effort` and `systemPrompt` reach the chat by coai-mcp's own rules (E2.2), so one row behaves the same
+in a review and in a chat:
+
+- **Carried.** `ModelPreset` has optional `effort` and `systemPrompt`; `chatCatalogModels.OPTIONAL` copies them from
+  the row and `chatRunSpec` hands them to the run spec (`carriedOf`, one table for every optional field).
+- **Effort.** `cliChatLaunch.chatLaunchFor` builds every chat launch: a claude row gets the row's effort as
+  `ChatLaunch.effort` only when `featureAvailability.effortRefusal` accepts it, and `claudeAdapter` writes
+  `--effort <level>` — the flag the server's `ClaudeRuntime` uses. codex and agy get none (the server sends them none).
+  A Team-server row sends `effort` in the request (`remoteAsk.requestBody`, via `RemoteVendor.effort`); the server
+  applies it to a vendor with measured levels and drops it otherwise.
+- **System prompt.** `chatPrompt.rowInstructed` puts a section — "## What the person asked of this model", the text,
+  one framing line — before what is SENT, never in argv. `chatThread.hearsRowInstruction` decides when: the session
+  sending the turn has not heard it (`Thread.instructed` names the session that has — a new conversation, a switch, a
+  reload or a reset is a new session object; `chatThread.instructedAfter` sets it from the turn's RESULT, so a stopped
+  or failed turn, or one a new process answered, leaves it unset), or the session forgets every turn (a Team server).
+  A switch between two rows that offer one model is saved too (`savedProviderId` in the save guard). Not a request field
+  for a Team server: the server drops a system prompt from a prompt with no finding contract, which a chat never has.
+  What is shown and stored stays what the person typed.
+
+```mermaid
+flowchart LR
+  R[catalog row: effort, systemPrompt] -->|OPTIONAL| M[ModelPreset]
+  M -->|chatRunSpec| V[run spec Vendor]
+  V -->|chatLaunchFor| L[ChatLaunch.effort, claude only]
+  L -->|claudeAdapter| A["--effort level"]
+  V -->|RemoteVendor.effort| B[request field effort]
+  V -->|systemPrompt| P[rowInstructed]
+  H[hearsRowInstruction] --> P
+  P --> S[the text sent, not the transcript]
+```
 
 ## An api row's "stream the answer" switch (2026-10-06, todo/PLAN_api_streaming.md)
 

@@ -332,11 +332,24 @@ function kindHint(role: RoleRow): string {
   }
 }
 
-function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpose?: string }, texts: Readonly<Record<string, string>>): string {
+/**
+ * How a role block is drawn on the page that draws it. The new Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
+ * a prompt `data-role-prompt` — its shared script reads `data-prompt` as a round pick — and shows ONE switch per role,
+ * the catalog's and the panel's read as one (`rolesSwitch.ts`).
+ */
+export interface RoleBlockOptions {
+  readonly promptAttr: string;
+  readonly on: (role: RoleRow) => boolean;
+}
+
+/** This tab's own: the catalog switch alone, and the attribute its script reads. */
+const OWN_PAGE: RoleBlockOptions = { promptAttr: 'data-prompt', on: isActive };
+
+function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpose?: string }, texts: Readonly<Record<string, string>>, promptAttr: string): string {
   const shipped = isShippedPrompt(role.id, prompt.id);
   const text = texts[prompt.id] ?? '';
 
-  return `  <div class="prompt${shipped ? '' : ' mine'}" data-prompt="${escapeHtml(prompt.id)}">
+  return `  <div class="prompt${shipped ? '' : ' mine'}" ${promptAttr}="${escapeHtml(prompt.id)}">
     <div class="head">
       <input type="text" data-field="label" value="${escapeHtml(prompt.label ?? prompt.id)}" placeholder="What the picker shows"${shipped ? ' readonly' : ''}>
       <input type="text" class="purpose" data-field="purpose" value="${escapeHtml(prompt.purpose ?? '')}" placeholder="The picker's tooltip"${shipped ? ' readonly' : ''}>
@@ -365,13 +378,15 @@ function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): 
       + `every round, unless another prompt is chosen for it. ${escapeHtml(why)}</p>`;
 }
 
-function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>): string {
+export function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions = OWN_PAGE): string {
   const shipped = isBuiltIn(role.id);
-  const on = isActive(role);
-  const may = isActive(role) ? canDeactivate(rows, role) : canActivate(rows, role);
-  const last = isActive(role) && !canDeactivate(rows, role);
+  const on = options.on(role);
+  // Off by the panel's switch alone, a role the catalog holds active may always be switched on: that write moves no
+  // count of the catalog's.
+  const may = on ? canDeactivate(rows, role) : canActivate(rows, role) || isActive(role);
+  const last = on && !canDeactivate(rows, role);
   const stage = stageOf(role);
-  const prompts = (role.prompts ?? []).map((p) => promptBlock(role, p, texts)).join('\n');
+  const prompts = (role.prompts ?? []).map((p) => promptBlock(role, p, texts, options.promptAttr)).join('\n');
 
   return `<details class="role role-${roleTone(role.id, stage)}${on ? '' : ' off'}" data-id="${escapeHtml(role.id)}"${on ? ' open' : ''}>
   <summary>
@@ -473,7 +488,7 @@ function older(version: string, since: string): boolean {
  * saying beside the button is the other reason it would stay off: the stage is full. A new role always
  * joins the code bucket of the result stage, so that is the only count to take.</p>
  */
-function stageIsFull(all: readonly RoleRow[]): boolean {
+export function stageIsFull(all: readonly RoleRow[]): boolean {
   return activeCount(all, RESULT_CODE) >= MAX_ACTIVE_PER_BUCKET;
 }
 
@@ -517,7 +532,7 @@ function rolesTabs(openTab: string): string {
  * carry the row</i> — describes the same fact without naming what it does to the person.
  * (antigravity, the plan round.)</p>
  */
-function strandedHtml(stranded: readonly Tombstone[]): string {
+export function strandedHtml(stranded: readonly Tombstone[]): string {
   if (stranded.length === 0) {
     return '';
   }

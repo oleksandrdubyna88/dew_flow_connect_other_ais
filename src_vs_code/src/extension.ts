@@ -9,10 +9,14 @@ import * as vscode from 'vscode';
 
 import { usersPanel } from './bugsKeysPanel';
 import { askForContributorKey, offerOldBugzKeys, settleOldBugzKeys } from './bugzKeyFlows';
-import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
+import { openChatPresets } from './chatPresetsPanel';
+import { bindChatPresets } from './chatPresetsHost';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
+import { bindRoles } from './rolesHost';
+import { bindCommands } from './commandsHost';
+import { bindChatSide } from './chatConfig';
 import { openCommands } from './commandsPanel';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
@@ -99,6 +103,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
+  // The review roles know this window's side from the start: the new Settings page edits them as well as the Review
+  // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
+  bindRoles(context);
+  bindCommands(context);
+  // The chat reads this side's catalog rows (E4.6a).
+  bindChatSide(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
@@ -108,7 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // reached is closed by ordering rather than argued about. Four reviewers raised it in one round,
   // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
   chatReadsThisSide(context);
-  presetsReadDiscoveriesFrom(context);
+  bindChatPresets(context);
   const watcher = new EscalationWatcher(dataDir());
   // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
   // has no modal and no status-bar item — it appears in the sidebar where a person is already

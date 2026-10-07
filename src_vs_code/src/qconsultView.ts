@@ -1,5 +1,6 @@
 import type { Admission } from './capabilityAdmission';
 import { RUNTIMES as QUESTION_RUNTIMES } from './capabilityAdmission';
+import { optionHtml, rowPicks } from './catalogPicks';
 import { type ProbeResult } from './claudeModels';
 import { consultableVendors } from './consultSettings';
 import { type VendorOption, catalogueOptions } from './consultantView';
@@ -45,6 +46,11 @@ export interface QconsultViewState {
   readonly promptOverrides?: Readonly<Record<string, string>> | undefined;
   /** Where a disk root may not be on this machine; absent draws no refusal beside a root. */
   readonly places?: RootPlaces | undefined;
+  /**
+   * The new Settings page's catalog rows (PLAN_one_model_catalog.md E4.2): given, each row PICKS one ticked "question
+   * consultant" instead of drawing its own vendor, model, endpoint, key and CLI path; absent, the current page.
+   */
+  readonly pickFrom?: readonly Vendor[] | undefined;
 }
 
 /** One option of a row's prompt picker: the prompt, and — when this row's runtime cannot run it — why. */
@@ -182,24 +188,18 @@ function rowsBlock(settings: QconsultSettings, state: QconsultViewState): string
   const on = settings.rows.filter((r) => r.enabled).length;
 
   return `<h3>${help('qconsultRows')}Who answers</h3>
-${settings.rows.map((row) => rowHtml(questionRowView(row, settings, state))).join('\n')}
+${settings.rows.map((row) => rowHtml(questionRowView(row, settings, state), state.pickFrom)).join('\n')}
 <button type="button" class="link" data-command="qconsultAddRow" data-id="">Add a row</button>
 <div class="hint">${on} of at most ${MAX_ACTIVE_ROWS} on. One row is a model and exactly one prompt; the same prompt may sit on several rows. A row is added switched off.</div>`;
 }
 
-/** One row: its switch, model, prompt, the caveat and its tick, and Remove. */
-function rowHtml(view: QuestionRowView): string {
+/** One row: its switch, who answers, its prompt, the caveat and its tick, and Remove. */
+function rowHtml(view: QuestionRowView, pickFrom: readonly Vendor[] | undefined): string {
   const id = escapeHtml(view.id);
 
   return `<div class="field qconsult-row" data-row="${id}">
   ${rowSwitch(view)}
-  <select id="qconsultRowVendor-${id}" data-setting="qconsultRowVendor" data-caller="${id}">
-${optionsWithKept(view.vendors, view.vendor)}
-  </select>
-  ${modelControl(view)}
-${view.takesBaseUrl ? textField(view.id, 'qconsultRowBaseUrl', 'Endpoint', view.baseUrl, 'https://api.example.com/v1') : ''}
-${view.takesKey ? textField(view.id, 'qconsultRowKey', 'Vault key name', view.key, 'empty = the vendor id') : ''}
-${view.takesExecutablePath ? textField(view.id, 'qconsultRowExecutablePath', 'Where its CLI is', view.executablePath, 'leave empty to look it up on PATH') : ''}
+${pickFrom === undefined ? definitionFields(view) : pickField(view, pickFrom)}
   <label for="qconsultRowPrompt-${id}">${help('qconsultRowPrompt')}Prompt</label>
   <select id="qconsultRowPrompt-${id}" data-setting="qconsultRowPrompt" data-caller="${id}">
 ${promptOptions(view)}
@@ -208,6 +208,29 @@ ${flagBlock(view)}
 ${rowHints(view)}
   <button type="button" class="link" data-command="qconsultRemoveRow" data-id="${id}">Remove</button>
 </div>`;
+}
+
+/** The current page: the row's own vendor, model, endpoint, key name and CLI path. */
+function definitionFields(view: QuestionRowView): string {
+  const id = escapeHtml(view.id);
+
+  return `  <select id="qconsultRowVendor-${id}" data-setting="qconsultRowVendor" data-caller="${id}">
+${optionsWithKept(view.vendors, view.vendor)}
+  </select>
+  ${modelControl(view)}
+${view.takesBaseUrl ? textField(view.id, 'qconsultRowBaseUrl', 'Endpoint', view.baseUrl, 'https://api.example.com/v1') : ''}
+${view.takesKey ? textField(view.id, 'qconsultRowKey', 'Vault key name', view.key, 'empty = the vendor id') : ''}
+${view.takesExecutablePath ? textField(view.id, 'qconsultRowExecutablePath', 'Where its CLI is', view.executablePath, 'leave empty to look it up on PATH') : ''}`;
+}
+
+/** The new page: the catalog row this row asks, picked from the rows ticked "question consultant" (E4.2). */
+function pickField(view: QuestionRowView, rows: readonly Vendor[]): string {
+  const id = escapeHtml(view.id);
+  const picks = rowPicks('qconsult', view.vendor, rows, 'This row');
+  const note = picks.note.length === 0 ? '' : `\n  <div class="hint stranded">${escapeHtml(picks.note)}</div>`;
+
+  return `  <label for="qconsultRowPick-${id}">Model</label>
+  <select id="qconsultRowPick-${id}" data-setting="qconsultRowPick" data-caller="${id}">${picks.options.map((one) => optionHtml(one, view.vendor)).join('')}</select>${note}`;
 }
 
 function rowSwitch(view: QuestionRowView): string {

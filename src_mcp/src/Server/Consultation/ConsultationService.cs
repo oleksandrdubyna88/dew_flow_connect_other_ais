@@ -626,6 +626,8 @@ public sealed class ConsultationService(
             Plan = aimed.Aim.Plan,
             Epics = aimed.Aim.Epics,
             RepoId = aimed.RepoId,
+            // Frozen with the model: the row's own instruction as it stands now, for every turn of this conversation (C2).
+            RowInstruction = consultant.Row.SystemPrompt,
         };
     }
 
@@ -650,7 +652,9 @@ public sealed class ConsultationService(
         }
 
         var ready = (ConsultantPreparation.Ready)prepared;
-        var launch = consultant.Runtime.Build(ready.Launch);
+        // The row's system prompt is redacted from what the child says, as a reviewer's is: a CLI echoes its prompt, and a
+        // failing one quotes it into the reason that reaches the record and the reply (todo/PLAN_one_model_catalog.md, C2).
+        var launch = consultant.Runtime.Build(ready.Launch) with { Redact = ConsultantTurnInputs.Redacted(record.RowInstruction) };
         // What the turn is SENT rides the record from here on, so every ending — answered or failed — carries it.
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow), Confinement = ready.Confinement };
         if (ready.Note.Length > 0)
@@ -673,7 +677,7 @@ public sealed class ConsultationService(
         // (ConsultationDeadline / RoundBudget). Longer than the launch, so the launcher's own kill of a
         // hung child wins and that turn stays resumable; this fires only for what the launcher does not
         // bound.
-        var deadline = ConsultationDeadline.For(settings.ReviewerTimeout);
+        var deadline = ConsultationDeadline.For(ConsultantTurnInputs.TurnTimeout(consultant.Row, settings.ReviewerTimeout));
         using var turn = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turn.CancelAfter(deadline);
 
@@ -758,7 +762,9 @@ public sealed class ConsultationService(
                 ? ConsultantPrompt.Transcript([.. record.Turns.Select(t => (t.Problem, t.Advice))], record.CarryBudget)
                 : string.Empty,
             PreviousAnswerLost: record.Status == ConsultationStatuses.Interrupted,
-            Toolbox: toolbox));
+            Toolbox: toolbox,
+            // The consultant's row's own instruction, FROZEN when the consultation opened (C2) — from the record, like the rest.
+            RowInstruction: record.RowInstruction));
     }
 
     private string Settle(ConsultationRecord record, TurnConsultant consultant, ConsultantTurnResult turned, string problem, string nonce, TimeSpan elapsed)

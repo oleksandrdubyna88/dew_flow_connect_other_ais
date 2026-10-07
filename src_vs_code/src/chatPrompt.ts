@@ -386,3 +386,22 @@ function serviceLineAt(draft: string): number {
 export function chatInstruction(role: string, task: string): string {
   return [role.trim(), task.trim()].filter((part) => part.length > 0).join('\n\n');
 }
+
+/** The heading of a row's own instruction in a chat turn — the reviewer's section (`PersonInstruction.Heading`), for a chat. */
+export const ROW_INSTRUCTION_HEADING = '## What the person asked of this model';
+
+/**
+ * The turn as SENT with the row's system prompt before it (PLAN_one_model_catalog.md E4.6c, D8) — as coai-mcp places it
+ * in a reviewer's prompt (`PersonInstruction.Section`): inside the text, never a flag, so it is in no process listing.
+ * What is shown and stored stays what the person typed.
+ *
+ * @param first whether this is the first turn the session hears — a new process, a switch, a reload — or a turn of a
+ *   session that forgets each one; a session that remembers has the instruction already
+ */
+export function rowInstructed(text: string, systemPrompt: string, first: boolean): string {
+  const instruction = systemPrompt.trim();
+
+  return first && instruction.length > 0
+    ? `${ROW_INSTRUCTION_HEADING}\n\n${instruction}\n\nIt stands for this whole conversation. The person's message follows.\n\n${text}`
+    : text;
+}

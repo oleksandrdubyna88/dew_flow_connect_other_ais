@@ -91,6 +91,17 @@ export interface ModelPreset {
   readonly teamServerId?: string | undefined;
   /** For a `remote` preset: the vendor name THAT SERVER knows — `codex`, not the preset's own id. */
   readonly remoteVendor?: string | undefined;
+  /**
+   * The vault key a model read from a catalog row is filed under (PLAN_one_model_catalog.md E4.6a): a moved preset's row
+   * keeps its key under the preset's old id. Absent = the id, as a preset always was.
+   */
+  readonly vaultKeyName?: string | undefined;
+  /**
+   * A catalog row's effort and system prompt (PLAN_one_model_catalog.md E4.6c, D8): a row chats as it reviews. Absent for
+   * a preset, which never had either, and for a row that says neither.
+   */
+  readonly effort?: string | undefined;
+  readonly systemPrompt?: string | undefined;
 }
 
 
@@ -459,9 +470,17 @@ export function chatRunSpec(preset: ModelPreset): Vendor {
     executablePath: preset.executablePath,
     pricePerMillionIn: 0,
     pricePerMillionOut: 0,
-    ...(preset.teamServerId !== undefined ? { teamServerId: preset.teamServerId } : {}),
-    ...(preset.remoteVendor !== undefined ? { remoteVendor: preset.remoteVendor } : {}),
+    ...carriedOf(preset),
   };
+}
+
+/** The optional fields a chat model hands its run spec — each only when it has it. */
+const CARRIED: readonly ('teamServerId' | 'remoteVendor' | 'vaultKeyName' | 'effort' | 'systemPrompt')[] = [
+  'teamServerId', 'remoteVendor', 'vaultKeyName', 'effort', 'systemPrompt',
+];
+
+function carriedOf(preset: ModelPreset): Partial<Vendor> {
+  return Object.fromEntries(CARRIED.filter((key) => preset[key] !== undefined).map((key) => [key, preset[key]]));
 }
 
 /**

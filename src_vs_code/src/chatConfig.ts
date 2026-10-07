@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import {
   ModelPreset,
   PromptPreset,
-  chatModelPresetsFrom,
   chatPromptPresetsFrom,
   chatRunSpec,
   mainPrompt,
@@ -13,7 +12,6 @@ import {
   LegacyPick,
   chatModelsFrom,
   chatProvidersFromPresets,
-  legacyPick,
   resolveChatPick,
 } from './chatModels';
 import { ChatModelChoice } from './chatContracts';
@@ -21,7 +19,10 @@ import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './c
 import { teamServersFrom } from './teamServers';
 import { chatRuntimeRefusal } from './cliChatLaunch';
 import { Vendor } from './vendors';
-import { userLayer } from './sideConfig';
+import { readerFor, userLayer } from './sideConfig';
+import type { ConfigReader } from './settingsShape';
+import { chatModelsReading, resumedPick } from './chatCatalogModels';
+import { movedRecordFrom } from './chatPresetMove';
 
 /**
  * What the chat reads out of the settings, and the host it reads the panel's discoveries on.
@@ -135,8 +136,27 @@ export function savedPrompts(config: vscode.WorkspaceConfiguration): readonly Pr
   );
 }
 
+/** The window this extension runs in — which side's rows the chat reads (E4.6a). Bound at activation. */
+let chatSide: vscode.ExtensionContext | undefined;
+
+export function bindChatSide(context: vscode.ExtensionContext): void {
+  chatSide = context;
+}
+
+/**
+ * This side's reader once the extension bound its window — the chat's model and its name are per side (D8) — and the
+ * user layer before that (a test drives no activation).
+ */
+export function chatRead(config: vscode.WorkspaceConfiguration): ConfigReader {
+  return chatSide === undefined ? userLayer(config) : readerFor(chatSide, config);
+}
+
+/**
+ * The chat's models (PLAN_one_model_catalog.md E4.6a): this side's catalog rows ticked Chat, and a preset only while
+ * the move has not taken it (`chatCatalogModels.ts`). Every chat path reads its models here, so it is the one switch.
+ */
 export function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPreset[] {
-  return chatModelPresetsFrom(userLayer(config)('chatModelPresets'));
+  return chatModelsReading(userLayer(config)('chatModelPresets'), chatRead(config));
 }
 
 /**
@@ -182,9 +202,18 @@ export function taskOf(config: vscode.WorkspaceConfiguration, promptId: string, 
  * place so the two callers cannot drift.</p>
  */
 export function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
-  const specs = savedModels(config).map(chatRunSpec);
+  return resumedPickFor(config, '', saved);
+}
 
-  return legacyPick(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), specs, saved);
+/**
+ * The pair a resumed conversation opens on (PLAN_one_model_catalog.md E4.6a): the row its record names while that row
+ * is offered, else `savedPick`'s reading — an old preset id followed through this side's record of moved presets first.
+ */
+export function resumedPickFor(config: vscode.WorkspaceConfiguration, providerId: string, modelId: string): LegacyPick {
+  const models = savedModels(config);
+  const record = movedRecordFrom(chatRead(config)('chatPresetsMoved'));
+
+  return resumedPick(chatProvidersFromPresets(models, chatCatalogFrom(config)), models.map(chatRunSpec), record, providerId, modelId);
 }
 
 /**

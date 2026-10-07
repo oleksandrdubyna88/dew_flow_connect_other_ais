@@ -13,6 +13,10 @@ namespace CoaiMcp.Core.Consultation;
 /// nothing. The adapter's fact (<c>IConsultantRuntime.Toolbox</c>), stated by us rather than written into the
 /// prompt file, for the reason this class gives about the launch: the file is a person's to edit.
 /// </param>
+/// <param name="RowInstruction">
+/// The consultant's catalog row's system prompt — the person's own instruction for that model
+/// (todo/PLAN_one_model_catalog.md, C2). Empty for none.
+/// </param>
 public sealed record ConsultantPromptInput(
     string Instruction,
     TurnBudget Budget,
@@ -25,7 +29,8 @@ public sealed record ConsultantPromptInput(
     bool TreeUnchangedSinceTurnOne = false,
     string CarriedTranscript = "",
     bool PreviousAnswerLost = false,
-    string Toolbox = "");
+    string Toolbox = "",
+    string RowInstruction = "");
 
 /// <summary>
 /// Composes the prompt a consultant reads, in an order that is a rule rather than a habit.
@@ -197,6 +202,8 @@ public static class ConsultantPrompt
     {
         var text = new StringBuilder();
         text.AppendLine(input.Instruction.TrimEnd()).AppendLine();
+        // The row's own instruction (C2): after the product's, before the turn's rules, so they come after it again.
+        text.Append(Catalog.PersonInstruction.ConsultantSection(input.RowInstruction.Trim()));
         text.AppendLine("## What you have");
         text.AppendLine("A READ-ONLY checkout in your working directory, and the uncommitted change below. "
                         + "Do not edit anything. The AI asking is blocked on your answer.");

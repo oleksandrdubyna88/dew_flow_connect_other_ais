@@ -98,24 +98,32 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
       // row still crosses, so a person's codex and antigravity keep reviewing while the api row waits
       // for the update. Unknown is not old — see `apiRuntimeOnServer`.
       .filter((v) => v.runtime !== 'api' || apiRuntimeOnServer(installedServerVersion))
-      .map((v) => ({
-        id: v.id,
-        runtime: v.runtime,
-        model: v.model,
-        baseUrl: v.baseUrl,
-        executablePath: v.executablePath,
-        ...saidOnTheWire(v),
-        ...featureOnTheWire(v, installedServerVersion),
-        ...apiOnTheWire(v, priceOf),
-        // The three per-model settings (S3.8): an api row's own, and never to a server known to predate them.
-        ...apiSettingsOnTheWire(v, installedServerVersion),
-        ...promptOnTheWire(v, features),
-        ...timeoutOnTheWire(v, features),
-        ...cliEffortOnTheWire(v, features),
-        ...streamOnTheWire(v, features),
-        ...fastOnTheWire(v, features),
-      })),
+      .map((v) => rowOnTheWire(v, installedServerVersion, priceOf, features)),
   );
+}
+
+/**
+ * ONE row as `COAI_VENDORS` writes it — the one field list, also what a consultant entry and a question row carry as
+ * `row` (todo/PLAN_one_model_catalog.md, C2) and what `--check-model` is handed. A field the wire gains is gained by all.
+ */
+export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf: RowPriceLookup, features: readonly string[]): Record<string, unknown> {
+  return {
+    id: v.id,
+    runtime: v.runtime,
+    model: v.model,
+    baseUrl: v.baseUrl,
+    executablePath: v.executablePath,
+    ...saidOnTheWire(v),
+    ...featureOnTheWire(v, installedServerVersion),
+    ...apiOnTheWire(v, priceOf),
+    // The three per-model settings (S3.8): an api row's own, and never to a server known to predate them.
+    ...apiSettingsOnTheWire(v, installedServerVersion),
+    ...promptOnTheWire(v, features),
+    ...timeoutOnTheWire(v, features),
+    ...cliEffortOnTheWire(v, features),
+    ...streamOnTheWire(v, features),
+    ...fastOnTheWire(v, features),
+  };
 }
 
 /**

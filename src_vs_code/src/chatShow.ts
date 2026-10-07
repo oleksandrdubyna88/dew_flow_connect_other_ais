@@ -7,14 +7,13 @@ import { AnsweredBy } from './chatPage';
 import { chatSettingsFrom } from './chatSettings';
 import { LanguageCode } from './settingsShape';
 import { reaskFrom, retryFrom } from './chatPresets';
-import { savedModels, savedPrompts, taskOf, vendorFor } from './chatConfig';
+import { chatRead, savedModels, savedPrompts, taskOf, vendorFor } from './chatConfig';
 import { serviceLines } from './chatPrompt';
 import { spendLabel, spendSoFar } from './chatSpend';
 import { remoteIsFull } from './remoteAsk';
 import { pushChatState } from './chatPanel';
 import { isRemote } from './chatModels';
 import { agentOffered } from './chatAccessRules';
-import { userLayer } from './sideConfig';
 
 /**
  * What the page is told, and the five small facts every caller of it needs first.
@@ -81,7 +80,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
     // the two apart for as long as an answer lasts, and what is marked has to be what is THERE.
     marks: {
       role: thread.role,
-      task: taskOf(config, thread.promptId, chatSettingsFrom(userLayer(config)).prompt),
+      task: taskOf(config, thread.promptId, chatSettingsFrom(chatRead(config)).prompt),
       service: serviceLines(chatLanguage()),
     },
     queued,
@@ -122,13 +121,15 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
   if (thread.savedMessages === thread.messages
     && thread.savedModelId === thread.modelId
     && thread.savedCarryFrom === thread.carryFrom
-    && thread.savedAccess === thread.access) {
+    && thread.savedAccess === thread.access
+    && thread.savedProviderId === thread.providerId) {
     return;
   }
   thread.savedMessages = thread.messages;
   thread.savedModelId = thread.modelId;
   thread.savedCarryFrom = thread.carryFrom;
   thread.savedAccess = thread.access;
+  thread.savedProviderId = thread.providerId;
   // AND WHEN. Below the guard, so it records that something CHANGED rather than that a page redrew —
   // the picker orders its Open section by this, and a conversation nobody has spoken in must not
   // climb to the top of it because its tab repainted. See `Thread.usedAt`.
@@ -159,7 +160,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
 
 /** The answer language, read fresh: a follow-up turn is asked long after the command ran. */
 export function chatLanguage(): LanguageCode {
-  return chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai'))).language;
+  return chatSettingsFrom(chatRead(vscode.workspace.getConfiguration('coai'))).language;
 }
 
 /** A thrown thing, as a sentence. */

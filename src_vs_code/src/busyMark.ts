@@ -61,7 +61,9 @@ export function busyMarkScript(painted: BusySnapshot, tracked: readonly string[]
 }
 
 /** What the panel's two pages number (research/PLAN_model_search_and_busy_marks.md §3.7). */
-export const PANEL_TRACKED: readonly string[] = ['setting', 'prompt', 'command'];
+// `roles` and `commands`: an edit of the review roles or the gate's commands on the new Settings page
+// (PLAN_one_model_catalog.md E4.3, E4.4), numbered like a setting.
+export const PANEL_TRACKED: readonly string[] = ['setting', 'prompt', 'command', 'roles', 'commands', 'chatPresets'];
 
 /** The constants, the two halves of the mark, and drawing the bar from them. */
 function busyStateScript(painted: BusySnapshot): string {

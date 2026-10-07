@@ -161,6 +161,55 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         launcher.Vendors.Should().OnlyContain(l => l.Request.Executable == "claude");
     }
 
+    /// <summary>A question row's catalog row sets its CLI effort, and the launch is told it (todo/PLAN_one_model_catalog.md, C2).</summary>
+    [Fact]
+    public async Task AQuestionRowsEffort_ReachesItsLaunch()
+    {
+        var settings = Settings([
+            Row("on", "claude", "claude", "sonnet", "question-opinion") with { Row = """{"id":"claude-high","runtime":"claude","model":"sonnet","effort":"high"}""" },
+        ]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+
+        await FanOut(launcher, settings).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        launcher.Vendors.Single().Request.Arguments.Should().ContainInConsecutiveOrder("--effort", "high");
+    }
+
+    /// <summary>
+    /// A question row reads its catalog row's system prompt; a WEB row is still given strictly the question (A2) — the
+    /// person's instruction is not the sanitiser's to vet (todo/PLAN_one_model_catalog.md, C2).
+    /// </summary>
+    [Fact]
+    public async Task AQuestionRowsInstruction_ReachesItsPrompt_ButNeverAWebRow()
+    {
+        const string Said = """{"id":"r","runtime":"claude","model":"sonnet","systemPrompt":"Answer in plain English."}""";
+        var settings = Settings([
+            Row("opinion", "claude", "claude", "sonnet", "question-opinion") with { Row = Said },
+            Row("web", "codex", "codex", "gpt-6-astra", "question-web") with { Row = """{"id":"w","runtime":"codex","model":"gpt-6-astra","systemPrompt":"Answer in plain English."}""" },
+        ]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+
+        await FanOut(launcher, settings).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        launcher.Vendors.Single(l => l.Request.Executable == "claude").Prompt
+            .Should().Contain("## What the person asked of this consultant").And.Contain("Answer in plain English.");
+        launcher.Vendors.Single(l => l.Request.Executable == "codex").Prompt.Should().NotContain("Answer in plain English.");
+    }
+
+    /// <summary>A question row's CLI that quotes its prompt in a failure never carries the row's instruction into the record (C2).</summary>
+    [Fact]
+    public async Task AQuestionRowThatEchoesItsInstruction_NeverCarriesItIntoTheRecord()
+    {
+        var settings = Settings([
+            Row("opinion", "claude", "claude", "sonnet", "question-opinion") with { Row = """{"id":"r","runtime":"claude","model":"sonnet","systemPrompt":"Answer in plain English."}""" },
+        ]);
+        var launcher = new ScriptedLauncher(_real, _ => Task.FromResult<ScriptedAnswer?>(new ScriptedAnswer(ExitCode: 1, StdErr: "error: the prompt was: Answer in plain English.")));
+
+        var settled = await FanOut(launcher, settings).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        settled.Rows.Single().Reason.Should().NotContain("Answer in plain English.");
+    }
+
     // ---------- A2 / D10: what each row is given ----------
 
     [Fact]

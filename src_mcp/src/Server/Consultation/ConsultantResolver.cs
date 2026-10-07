@@ -166,9 +166,48 @@ public static class ConsultantResolver
     /// half that would launch it.</para>
     /// </remarks>
     private static ResolvedConsultant Defined(ConsultantChoice choice, string callerKind) =>
-        Consulting(choice.Runtime) is { } runtime
-            ? new ResolvedConsultant.Definition(AsProvider(choice with { Runtime = runtime }))
-            : new ResolvedConsultant.Unavailable(ForeignRuntime(choice, callerKind));
+        Consulting(choice.Runtime) is not { } runtime ? new ResolvedConsultant.Unavailable(ForeignRuntime(choice, callerKind))
+        : OptionsOf(choice) is not { } options ? new ResolvedConsultant.Unavailable(RowUnreadable(choice, callerKind))
+        : new ResolvedConsultant.Definition(WithOptions(AsProvider(choice with { Runtime = runtime }), options));
+
+    /// <summary>
+    /// The entry's catalog row, read by the reviewer row's own parser (todo/PLAN_one_model_catalog.md, C2): a row with no
+    /// options when the entry carries none; null when it carries one that does not read — refused by name, never a quiet
+    /// fall back to the five fields.
+    /// </summary>
+    internal static ProviderSettings? OptionsOf(ConsultantChoice choice)
+    {
+        if (choice.Row.Length == 0)
+        {
+            return new ProviderSettings(choice.Vendor);
+        }
+
+        try
+        {
+            return PanelSettings.ParseVendors($"[{choice.Row}]") is [var one] ? one : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The row's OPTIONS — key name, dialect, price, api settings, system prompt, timeout, CLI effort — over a launch whose
+    /// identity is already decided: the row never changes who the consultant is, what runs it, or where.
+    /// </summary>
+    internal static ProviderSettings WithOptions(ProviderSettings who, ProviderSettings options) => who with
+    {
+        Dialect = options.Dialect,
+        VaultKey = options.VaultKey,
+        Price = options.Price,
+        Api = options.Api,
+        SystemPrompt = options.SystemPrompt,
+        TimeoutMinutes = options.TimeoutMinutes,
+        CliEffort = options.CliEffort,
+        // The row's fast mode too (todo/PLAN_fast_mode.md): a consultant runs on the tier its row says.
+        Fast = options.Fast,
+    };
 
     private static ResolvedConsultant Legacy(ConsultantChoice choice, string callerKind, IReadOnlyList<ProviderSettings> rows)
     {
@@ -193,14 +232,14 @@ public static class ConsultantResolver
     };
 
     /// <summary>Rule (a): the row's runtime, endpoint and CLI path — its model only where the entry names none — under the entry's own id, enabled or not.</summary>
-    internal static ProviderSettings FromRow(ConsultantChoice choice, ProviderSettings row) => new(choice.Vendor)
+    internal static ProviderSettings FromRow(ConsultantChoice choice, ProviderSettings row) => WithOptions(new(choice.Vendor)
     {
         Runtime = row.Runtime,
         Model = choice.Model.Length > 0 ? choice.Model : row.Model,
         BaseUrl = row.BaseUrl,
         ExecutablePath = row.ExecutablePath,
         Enabled = true,
-    };
+    }, row);
 
     /// <summary>Rule (b): the runtime the id names, under that runtime's own name, borrowing nothing.</summary>
     internal static ProviderSettings FromRuntime(ConsultantChoice choice, string runtime) => new(runtime)
@@ -226,6 +265,11 @@ public static class ConsultantResolver
     private static string Allowlist => string.Join(", ", ConsultantResolution.Consulting);
 
     // ---------- the sentences ----------
+
+    /// <summary>An entry whose catalog row does not read: who, and what to do. Nothing was built for it.</summary>
+    private static string RowUnreadable(ConsultantChoice choice, string callerKind) =>
+        $"the consultant for a '{callerKind}' caller is '{choice.Vendor}', whose model settings could not be read — "
+        + $"nothing was built or launched; open its model on the Models tab and save it again, or choose another consultant in {Section}";
 
     /// <summary>A definition on a runtime outside the allowlist: who, what, on which runtime, and what may run instead. Nothing was built for it.</summary>
     private static string ForeignRuntime(ConsultantChoice choice, string callerKind) =>

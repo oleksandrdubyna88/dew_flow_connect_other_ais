@@ -2,7 +2,8 @@ import { CHAT } from './featureAvailability.generated';
 import * as fs from 'node:fs';
 import { needsShell } from './cliVersions';
 import { Platform } from './hostSide';
-import { ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
+import { ChatAccess, ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
+import { effortRefusal } from './featureAvailability';
 import { agyAdapter } from './agyAdapter';
 import { claudeAdapter } from './claudeAdapter';
 import { codexAdapter } from './codexAdapter';
@@ -293,4 +294,23 @@ export function launchSpecFor(
     env: launch.access === 'agent' ? NO_CWD_SEARCH : {},
     refusal: '',
   };
+}
+
+/**
+ * The launch a chat process is started with — what it resumes, its model, its access, and the row's effort where the
+ * server would hand this runtime one (PLAN_one_model_catalog.md E4.6c): claude takes the level coai-mcp sends a claude
+ * reviewer (`RosterBuilder.EffortFor`), and only one the CLI accepts (`effortRefusal`, the TS mirror of the server's
+ * check), so a refused level is never on its command line. codex and agy are handed none, as the server hands none.
+ */
+export function chatLaunchFor(vendor: Vendor, resume: string, model: string, access: ChatAccess): ChatLaunch {
+  const effort = claudeEffortOf(vendor);
+
+  return effort.length > 0 ? { resume, model, access, effort } : { resume, model, access };
+}
+
+/** A claude row's effort when the CLI accepts it; '' for any other runtime, no effort, or a refused level. */
+function claudeEffortOf(vendor: Vendor): string {
+  const effort = vendor.effort ?? '';
+
+  return vendor.runtime === 'claude' && effortRefusal('claude', effort) === '' ? effort : '';
 }

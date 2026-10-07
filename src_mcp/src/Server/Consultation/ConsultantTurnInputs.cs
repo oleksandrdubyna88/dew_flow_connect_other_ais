@@ -26,6 +26,22 @@ internal static class ConsultantTurnInputs
     public static ReviewerSettings Settings(ProviderSettings row, string model, TimeSpan timeout, string dataDir, VaultKeys keys, Core.Api.ApiOverrides overrides) =>
         RuntimeResolution.NameOf(row.Identity()) == "api" ? WithModule(Plain(row, model, timeout, dataDir, keys), row, overrides) : Plain(row, model, timeout, dataDir, keys);
 
+    /// <summary>
+    /// The row's own timeout, else the caller's (todo/PLAN_one_model_catalog.md, C2) — the reviewers' rule
+    /// (<c>RosterBuilder.TimeoutFor</c>): an api row keeps the caller's, its own limit being the whole conversation's
+    /// (<c>reviewMinutes</c>). Bounds the launch AND the turn's backstop, so neither cuts the other short.
+    /// </summary>
+    public static TimeSpan TurnTimeout(ProviderSettings row, TimeSpan callers) =>
+        row.TimeoutMinutes > 0 && RuntimeResolution.NameOf(row.Identity()) != "api" ? TimeSpan.FromMinutes(row.TimeoutMinutes) : callers;
+
+    /// <summary>
+    /// The texts a consultation or question launch must not hand back into a record — the row's system prompt, when it has
+    /// one (todo/PLAN_one_model_catalog.md, C2), as a reviewer's (<c>ReviewerInvocation.Redact</c>).
+    /// </summary>
+    /// <remarks>Trimmed as the composers trim it before sending (epic 4's code round): a CLI echoes what it was SENT, and
+    /// whitespace alone is no text — redacting it would rewrite every gap in the child's output.</remarks>
+    public static IReadOnlyList<string> Redacted(string systemPrompt) => systemPrompt.Trim() is { Length: > 0 } sent ? [sent] : [];
+
     /// <summary>An api row's effort, ceiling and thinking switch: the row's over the environment over the module's calibrated defaults.</summary>
     private static ReviewerSettings WithModule(ReviewerSettings settings, ProviderSettings row, Core.Api.ApiOverrides overrides)
     {
@@ -42,7 +58,10 @@ internal static class ConsultantTurnInputs
         Price = row.Price,
         ExecutablePath = row.ExecutablePath,
         Model = model,
-        Timeout = timeout,
+        Timeout = TurnTimeout(row, timeout),
+        // The row's CLI effort by the reviewers' own rule — claude's level, a local row's; nothing for a runtime that does
+        // not take one (C2). An api row's is its module's (WithModule). The panel's local default is a reviewer setting.
+        ReasoningEffort = RosterBuilder.EffortFor(row, string.Empty),
         DataDir = dataDir,
         // A consultant starts no MCP server either (issue #514).
         McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),

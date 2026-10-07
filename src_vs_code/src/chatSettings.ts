@@ -1,5 +1,6 @@
 import { DEFAULT_CHAT_PROMPT } from './chatPrompt';
-import { ModelPreset, PromptPreset, chatModelPresetsFrom, chatPromptPresetsFrom, mainPrompt } from './chatPresets';
+import { chatModelsReading } from './chatCatalogModels';
+import { ModelPreset, PromptPreset, chatPromptPresetsFrom, mainPrompt } from './chatPresets';
 import { LANGUAGES, LanguageCode } from './settingsShape';
 
 /**
@@ -103,7 +104,9 @@ export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
     prompt: chosen?.text ?? DEFAULT_CHAT_PROMPT,
     promptChoice: choice,
     prompts,
-    models: chatModelPresetsFrom(read('chatModelPresets')),
+    // The rows ticked Chat, and a preset only while the move has not taken it (PLAN_one_model_catalog.md E4.6a) —
+    // the list the chat opens from, so the picker never strands the row `coai.chatModel` names after the move.
+    models: chatModelsReading(read('chatModelPresets'), read),
     modelName: text(read('chatModelName'), ''),
     // English by default, and NOT `coai.helpLanguage`: that one is set to English on the owner's
     // machine, so borrowing it would have delivered English explanations — exactly what the feature

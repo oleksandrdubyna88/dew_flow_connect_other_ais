@@ -1,17 +1,17 @@
 import * as vscode from 'vscode';
 import { ChatEntry } from './chatPanels';
-import { Thread, threads } from './chatThread';
+import { Thread, hearsRowInstruction, instructedAfter, threads } from './chatThread';
 import { answeredBy, asText, chatLanguage, pairOf, show } from './chatShow';
 import { cliFor, remoteFor, started } from './chatLaunch';
 import { retire } from './retireSession';
-import { readyToChat, taskOf, vendorFor } from './chatConfig';
+import { chatRead, readyToChat, taskOf, vendorFor } from './chatConfig';
 import { TurnResult } from './chatSession';
 import { isRemote, memoryOf } from './chatModels';
 import { reaskFrom, retryFrom } from './chatPresets';
 import { sameSlate, turnEnded } from './chatFresh';
 import { imageTurn } from './chatImage';
 import { carriedFrom, carryMark } from './chatCarry';
-import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn } from './chatPrompt';
+import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, rowInstructed } from './chatPrompt';
 import { chatSettingsFrom } from './chatSettings';
 import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
@@ -22,7 +22,6 @@ import { MOST_WAITING, NotJoined, began as leftTheQueue, isWanted, join } from '
 import { randomUUID } from 'node:crypto';
 import { remoteIsFull } from './remoteAsk';
 import { accessOn } from './chatAccessRules';
-import { userLayer } from './sideConfig';
 
 /**
  * One turn of a conversation, start to finish — and the three gestures that are turns wearing
@@ -388,7 +387,7 @@ export async function oneTurn(
       task: taskOf(
         vscode.workspace.getConfiguration('coai'),
         thread.promptId,
-        chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai'))).prompt,
+        chatSettingsFrom(chatRead(vscode.workspace.getConfiguration('coai'))).prompt,
       ),
     },
   }];
@@ -444,11 +443,17 @@ export async function oneTurn(
   // does on every poll, which is the difference between "the model is thinking" and "somebody else's
   // round has the vendor and you are fourth". Guarded by the flag, because a turn that finished
   // while a poll was in flight must not re-open the thinking line. (gemini, the code round.)
-  const result = await thread.session.send(sent, (position) => {
+  // The row's system prompt goes with the first turn a session hears, and with every turn of one that forgets each (E4.6c,
+  // D8) — in the text, as coai-mcp places it for a reviewer; what is shown stays what was typed.
+  // Marked by the turn's RESULT, never before it: a stop, a failure or a new process means nothing has heard it yet.
+  const instructing = hearsRowInstruction(thread);
+  const heard = thread.session;
+  const result = await heard.send(rowInstructed(sent, answering?.systemPrompt ?? '', instructing), (position) => {
     if (thread.running) {
       show(entry, true, '', position);
     }
   });
+  thread.instructed = instructedAfter(heard, result);
   if (!turnEnded(thread, mySlate)) {
     // THE SLATE WAS WIPED WHILE THIS TURN WAS IN FLIGHT. Not the same question as the generation
     // check above: a reset bumps the generation first and clears the conversation only once this
