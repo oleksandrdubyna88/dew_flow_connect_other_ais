@@ -4,8 +4,9 @@
 > Harness: [`scripts/probe-agy-consult-follow-up.mjs`](../scripts/probe-agy-consult-follow-up.mjs) in its QUESTION-ROW mode
 > (two more arguments, a root and a question). Subject: agy **1.3.1**, model `gemini-3.8-flash-low`, the flags a
 > `question-disk` row is launched with (`--print= --input-format stream-json --output-format stream-json --mode plan
-> --add-dir <root>`, run from the root), `--conversation <id>` on the follow-up. The person's agy settings were not
-> touched. Sibling record for the stuck consultant: [RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md).
+> --add-dir <root>`, run from the root), `--conversation <id>` on the follow-up. This measurement did not change the
+> person's agy settings; in WSL they had been deleted earlier the same day by an unrelated cleanup and rebuilt by agy
+> (§2). Sibling record for the stuck consultant: [RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md).
 
 ## 1. What a question row's first launch does
 
@@ -40,14 +41,21 @@ permission that headless mode cannot prompt for"*) and the turn ended empty agai
   'read_file' permission was denied)" — instead of "exited cleanly but answered nothing". Telling a model refused a read
   to read more would not help it; `AntigravityFollowUps.For` sends a follow-up only for a refused command.
 
-The first WSL attempt (earlier the same day) could not be measured past turn 1: agy in WSL stopped and asked to sign in
-again ("Waiting for authentication… paste the authorization code"), and a run that hung on that prompt ignored SIGTERM
-and had to be killed by pid; `timeout -s KILL` is the safe wrapper there. The person signed in, and the three runs above
-followed.
+The first attempt at these follow-up runs (earlier the same day) could not start: agy in WSL stopped at launch and asked
+to sign in again ("Waiting for authentication… paste the authorization code"), and a run that hung on that prompt ignored
+SIGTERM and had to be killed by pid; `timeout -s KILL` is the safe wrapper there. The person signed in, and the three
+probe runs in the table — each a turn 1 and a turn 2 — followed.
 
 Why Windows answers and WSL does not is not explained by this record: same agy version, same model, same follow-up
 text, and no Windows turn 2 reported a refusal (which paths its failed `view_file` calls tried was not kept). Six
 follow-ups on Windows and three in WSL — enough to say the WSL row does not answer, not why.
+
+**Every WSL agy run here ran on a freshly rebuilt agy state.** At about 12:00 local the same day, an unrelated agent
+cleanup deleted most of `~/.gemini` in the WSL home (agy's settings, its sign-in and its conversation state). agy
+recreated its state at 12:02 (`antigravity-cli/installation_id`), the person signed in again, and its `settings.json` now
+holds only `trustedWorkspaces`. Every WSL run in this record — the operator's live failure included — came after that.
+So there is no WSL result from agy's earlier state, and this record cannot say whether that state would have behaved
+differently.
 
 **What these WSL runs are, and are not.** They are the probe: agy launched by hand with a question row's flags and the
 shipped follow-up text, not coai-mcp. No WSL run through the PRODUCT with the fix (coai-mcp 0.44.0) has been made. The
@@ -66,7 +74,8 @@ The fix shipped in **coai-mcp 0.44.0** (PR #692). Before the release, the branch
 Debug, Windows) ran against a scratch data directory holding the operator's Windows settings with one antigravity
 `question-disk` row and root `D:/rsd`: `ask_consultants` came back `complete`, the row `answered` in 29.6 s, ONE ledger
 line (kind `question`, 55 681 tokens in). That build did not yet log whether the turn was continued (the log line came
-after it), so this run alone does not prove the follow-up ran — what it shows is the row answering where every
-uncontinued first launch in §1 did not: 11 of 11 (6 on Windows; 5 in WSL — 1 by hand, 1 through the product, 3 by the
-probe). There is no product run in WSL with the fix (§2).
+after it), so this run alone does not prove the follow-up ran. What it shows is one row on Windows answering through
+the product with the fix. For comparison, §1's first launches — 11, with no follow-up (6 on Windows; 5 in WSL: 1 by
+hand, 1 through the product, 3 by the probe) — answered none. There is no product run in WSL with the fix, and the WSL
+follow-ups that were run (by the probe, §2) answered none either.
 `D:/rsd` is not a git checkout, so the invariant did not watch it and the follow-up's tree check had nothing to compare.
