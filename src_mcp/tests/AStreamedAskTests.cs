@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <c>--ask-api --stream on</c> end to end against a local endpoint (todo/PLAN_api_streaming.md, S4 and S5): the request
+/// <c>--ask-api --stream on</c> end to end against a local endpoint (research/PLAN_api_streaming.md, S4 and S5): the request
 /// asks for a stream and its usage; a streamed answer reaches the out file exactly as an unstreamed one does; and every
 /// way a stream that began with a 200 can end prints its usage line FIRST — the last usage seen, or "not captured",
 /// never a zero for a paid generation — then its exit.

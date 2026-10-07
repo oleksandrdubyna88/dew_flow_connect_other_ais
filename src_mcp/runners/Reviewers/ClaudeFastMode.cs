@@ -3,7 +3,7 @@ using CoaiMcp.Core.Catalog;
 namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
-/// A claude row's fast mode, as the CLI is told it (todo/PLAN_fast_mode.md): <c>--settings &lt;file&gt;</c>, the file
+/// A claude row's fast mode, as the CLI is told it (research/PLAN_fast_mode.md): <c>--settings &lt;file&gt;</c>, the file
 /// holding exactly ONE key, <c>fastMode</c>. The documented headless spelling (code.claude.com/docs/en/fast-mode.md:
 /// "<c>claude -p --settings '{"fastMode": true}'</c>", v2.1.205+), given as a PATH: an inline JSON argument carries double
 /// quotes, which an npm <c>.cmd</c> shim re-tokenises. <c>--settings</c> loads ADDITIONAL settings merged over the

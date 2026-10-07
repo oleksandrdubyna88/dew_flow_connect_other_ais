@@ -1,6 +1,6 @@
 # RESULTS — fast mode, measured on this machine before any code (2026-10-07)
 
-> Status: **record, 2026-10-07, Story 0 of [PLAN_fast_mode.md](../todo/PLAN_fast_mode.md) — in progress.** The plan
+> Status: **record, 2026-10-07, Story 0 of [PLAN_fast_mode.md](PLAN_fast_mode.md) — in progress.** The plan
 > gate asked for the spellings to be measured BEFORE the server, the wire and the card are built on them. Each call
 > below sent only the prompt "Reply with the single word OK." — no repository content — through the person's own
 > CLI and its own sign-in. Raw outputs were kept in the session's scratch folder, not in git (they hold account ids).

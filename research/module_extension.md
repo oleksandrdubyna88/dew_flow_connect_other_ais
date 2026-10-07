@@ -11188,7 +11188,7 @@ flowchart LR
   P --> S[the text sent, not the transcript]
 ```
 
-## An api row's "stream the answer" switch (2026-10-06, todo/PLAN_api_streaming.md)
+## An api row's "stream the answer" switch (2026-10-06, research/PLAN_api_streaming.md)
 
 New Settings page only (the owner's rule: new controls go on the new page). `catalogFields` keeps `stream` on an api
 row only when it is `true` (a saved `false` reads as a row that never had it); `vendorsWire.streamOnTheWire` sends it
@@ -11203,7 +11203,7 @@ streamed" (ok), or "…but NOT streamed — the endpoint or this coai-mcp ignore
 (`modelCardWorld.STREAMED`); the landed-check notice says the same (`consultantHealthHost.streamClause`). A row that did
 not ask hears nothing about streams.
 
-## A row's fast mode on the new model card (2026-10-07, todo/PLAN_fast_mode.md, Story B)
+## A row's fast mode on the new model card (2026-10-07, research/PLAN_fast_mode.md, Story B)
 
 New Settings page only. `catalogFields.fastField` keeps a row's `fast` — `on` or `cli` — only where
 `fastTier.rowHasFastTier` says the row has a tier (its runtime and model by the generated `FAST_MODE` rows of
@@ -11218,7 +11218,7 @@ the fast tier, As the CLI is set; help `fastMode`, the "new" tag `model.fast`) i
 The seam writes a codex row set to On and reads `--providers`' `fast` back: `on` from a binary that lists `fastMode`,
 `off` from one handed nothing.
 
-## A chat runs on its row's fast mode (2026-10-07, todo/PLAN_fast_mode.md, Story C)
+## A chat runs on its row's fast mode (2026-10-07, research/PLAN_fast_mode.md, Story C)
 
 `cliChatLaunch.chatLaunchFor` adds the tier a chat forces, by the review launch's rule (`forcedTier`): the row's state
 where `rowHasFastTier` holds for the CONVERSATION's model (what the CLI is told, not the row's default) — On, else Off;

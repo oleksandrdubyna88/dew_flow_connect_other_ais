@@ -1,7 +1,7 @@
 # RESULTS — streaming (`"stream": true`, SSE) across the OpenAI-compatible APIs coai's api rows call
 
 > Status: **research record, 2026-10-06.** Vendor documentation read on 2026-10-06; only Alibaba's pages carry a date
-> (last updated 2026-09-28). Input to `todo/PLAN_api_streaming.md`. Nothing here is measured on a live call yet.
+> (last updated 2026-09-28). Input to `research/PLAN_api_streaming.md`. Nothing here is measured on a live call yet.
 
 ## Why this was looked at
 

@@ -27,7 +27,7 @@ export interface CatalogFields {
   fast?: FastSetting;
 }
 
-/** A fast mode that is not the default (todo/PLAN_fast_mode.md): On, or As the CLI is set. Off is stored as nothing. */
+/** A fast mode that is not the default (research/PLAN_fast_mode.md): On, or As the CLI is set. Off is stored as nothing. */
 export type FastSetting = 'on' | 'cli';
 
 /** The catalog fields off a stored row, each only when it holds a value somebody could have meant. */
@@ -62,7 +62,7 @@ function promptField(field: 'systemPrompt' | 'chatStartingPrompt', raw: unknown)
 }
 
 /**
- * A row's fast mode (todo/PLAN_fast_mode.md) — `on` or `cli` kept only on a row that has a tier; Off, the default, is
+ * A row's fast mode (research/PLAN_fast_mode.md) — `on` or `cli` kept only on a row that has a tier; Off, the default, is
  * kept as nothing, so a row that never set it and one set to Off read alike.
  */
 function fastField(v: Record<string, unknown>): CatalogFields {
@@ -78,7 +78,7 @@ function launchOf(v: Record<string, unknown>): { readonly runtime: string; reado
   return { runtime: saidText(v['runtime']) ?? '', model: saidText(v['model']) ?? '', baseUrl: saidText(v['baseUrl']) ?? '' };
 }
 
-/** An api row's stream switch (todo/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */
+/** An api row's stream switch (research/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */
 function streamField(runtime: unknown, raw: unknown): CatalogFields {
   return runtime === 'api' && raw === true ? { stream: true } : {};
 }

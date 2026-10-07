@@ -2,7 +2,7 @@ namespace CoaiMcp.Core.Api;
 
 /// <summary>
 /// Server-sent events, one line at a time, turned into the <c>data</c> payloads a streamed completion is made of
-/// (todo/PLAN_api_streaming.md). Pure: the caller reads the lines; this decides what they mean.
+/// (research/PLAN_api_streaming.md). Pure: the caller reads the lines; this decides what they mean.
 /// </summary>
 /// <remarks>
 /// <para>The SSE rules every vendor's stream was read against (research/RESULTS_api_streaming_vendors.md): a blank
@@ -28,7 +28,7 @@ public sealed class SseEvents
     /// <summary>
     /// The characters of the event still open — its <c>data:</c> lines, held until a blank line closes it. Each line
     /// is under the reader's ceiling; this is what keeps the EVENT under it too (the code round of
-    /// todo/PLAN_api_streaming.md: an endpoint could otherwise fill the child's memory below every per-line limit).
+    /// research/PLAN_api_streaming.md: an endpoint could otherwise fill the child's memory below every per-line limit).
     /// </summary>
     public long PendingChars { get; private set; }
 

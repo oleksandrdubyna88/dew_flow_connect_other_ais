@@ -37,7 +37,7 @@ public static class ChatRequest
     /// <param name="seed">Per-prompt, sent only when the dialect says so.</param>
     /// <param name="reasoningEffort">What the panel configured; the dialect decides what is sent.</param>
     /// <param name="maxTokens">The answer ceiling; zero or less sends none.</param>
-    /// <param name="streamed">Ask for the answer as a stream, and for its usage in it (todo/PLAN_api_streaming.md); off writes
+    /// <param name="streamed">Ask for the answer as a stream, and for its usage in it (research/PLAN_api_streaming.md); off writes
     /// exactly the body every golden holds.</param>
     /// <exception cref="JsonException">The schema does not parse — refused before any request is
     /// sent, because an unconstrained request buys a full generation and an unusable answer.</exception>

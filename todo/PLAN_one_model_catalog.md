@@ -1,7 +1,8 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-06 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
-> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.6 built; the owed consultations and the epic's code gate open); E5 open.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-07 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
+> the measured live calls wait on the operator); E3 merged (PR #687); E4 merged (PR #688, its consultations and code
+> gate passed); E5 open — R7 first, then extract-before-delete, with the rollout order as its own milestone.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request

@@ -61,7 +61,7 @@ const LEVEL = /^[a-z][a-z0-9-]{0,31}$/u;
 // Thinking (D12): whether a runtime has an on/off switch — no `list`: a switch has two positions, not levels.
 const THINKING_FIELDS = ['runtime', 'source', 'note'];
 const THINKING_SOURCES = ['probe', 'unmeasured', 'none'];
-// Fast mode (todo/PLAN_fast_mode.md): a tier on every model of the runtime, on the listed models only, or none.
+// Fast mode (research/PLAN_fast_mode.md): a tier on every model of the runtime, on the listed models only, or none.
 const FAST_FIELDS = ['runtime', 'source', 'models', 'measuredWith', 'note'];
 const FAST_SOURCES = ['every-model', 'models', 'none'];
 
@@ -275,10 +275,10 @@ ${thinking.map(thinkingRow).join('\n')}
 const fastFile = `// GENERATED FILE — do not edit by hand.
 //
 // Written by \`node scripts/generate-feature-availability.mjs\` from the \`fastMode\` block of
-// \`shared/feature-availability.json\` (todo/PLAN_fast_mode.md). Edit the seed and run the script;
+// \`shared/feature-availability.json\` (research/PLAN_fast_mode.md). Edit the seed and run the script;
 // \`generatedFilesAreCurrent.test.ts\` fails if this file and the generator disagree. It imports nothing, on purpose.
 
-/** Where a runtime's fast tier is (todo/PLAN_fast_mode.md): on every model, on the listed models, or none. */
+/** Where a runtime's fast tier is (research/PLAN_fast_mode.md): on every model, on the listed models, or none. */
 export type FastSource = ${FAST_SOURCES.map(lit).join(' | ')};
 
 /** One runtime's fast tier — and, always, why. */

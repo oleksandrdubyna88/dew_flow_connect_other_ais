@@ -68,7 +68,7 @@ public static class ConsultantCheck
         : CanaryReadings.NotAttempted;
 
     /// <summary>
-    /// Whether a row that asked for a stream got one (todo/PLAN_api_streaming.md, Story C): the <c>--ask-api</c> shim's
+    /// Whether a row that asked for a stream got one (research/PLAN_api_streaming.md, Story C): the <c>--ask-api</c> shim's
     /// usage line says <c>"streamed":true</c> only when it READ a stream. A gateway that answered one JSON, and a coai-mcp
     /// too old to know <c>--stream on</c>, both leave it out — so the setting is reported as not taking effect.
     /// </summary>

@@ -10,7 +10,7 @@ import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
- * A row's fast mode (todo/PLAN_fast_mode.md, Story B): three states — Off (the default, stored as nothing), On, and
+ * A row's fast mode (research/PLAN_fast_mode.md, Story B): three states — Off (the default, stored as nothing), On, and
  * "As the CLI is set" — kept only on a row whose runtime and model have a fast tier (the data in
  * shared/feature-availability.json), sent to coai-mcp only when the binary lists `fastMode`, and switched on the NEW
  * Settings page's model card only (the owner's rule: new controls go on the new page).

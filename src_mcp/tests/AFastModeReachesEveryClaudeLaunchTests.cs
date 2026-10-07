@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A claude row's fast mode reaches every claude launch (todo/PLAN_fast_mode.md, Story A): a <c>--settings</c> FILE
+/// A claude row's fast mode reaches every claude launch (research/PLAN_fast_mode.md, Story A): a <c>--settings</c> FILE
 /// holding exactly one key, <c>fastMode</c> — the documented headless spelling (research/RESULTS_fast_mode_measured_
 /// 2026-10-07.md), as a path rather than inline JSON, whose quotes an npm <c>.cmd</c> shim re-tokenises. Only an Opus
 /// model has a fast tier; any other model, and an empty one (the CLI's own default), is sent nothing in either state.

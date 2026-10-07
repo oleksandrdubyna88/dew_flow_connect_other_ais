@@ -10,7 +10,7 @@ import { codexAdapter } from '../codexAdapter';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 
 /**
- * A chat runs on its row's fast mode (todo/PLAN_fast_mode.md, Story C), by the rule a review launch follows: codex is told
+ * A chat runs on its row's fast mode (research/PLAN_fast_mode.md, Story C), by the rule a review launch follows: codex is told
  * `-c service_tier=default|fast`, claude a one-key `--settings` file — the extension's own pair, under the chat's own
  * folder, never coai-mcp's. Judged by the CONVERSATION's model, which is what the CLI is told, not the row's default.
  */

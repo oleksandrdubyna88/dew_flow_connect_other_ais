@@ -206,7 +206,7 @@ test('every way a press can land has its own sentence', () => {
   assert.match(landedSentence('codex', reported({ state: 'failed', failureKind: 'quota' })), /failed — Quota spent/u);
   assert.match(landedSentence('codex', reported({ state: 'already-checking', reason: 'another check holds the lock' })), /already-checking — another check holds the lock/u);
   assert.match(landedSentence('codex', { kind: 'too-old' }), /update the MCP server/u);
-  // A row that asked to stream hears whether it did (todo/PLAN_api_streaming.md, Story C); one that did not, nothing.
+  // A row that asked to stream hears whether it did (research/PLAN_api_streaming.md, Story C); one that did not, nothing.
   assert.match(landedSentence('qwen', reported({ markerRead: true, streamed: 'streamed' })), /the answer was streamed/u);
   assert.match(landedSentence('qwen', reported({ markerRead: true, streamed: 'not-streamed' })), /NOT streamed — the endpoint or this coai-mcp ignored the switch/u);
   assert.doesNotMatch(landedSentence('qwen', reported({ markerRead: true })), /stream/u);

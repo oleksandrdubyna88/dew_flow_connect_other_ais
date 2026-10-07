@@ -1,12 +1,15 @@
 # PLAN — api rows can stream their answer (`"stream": true`), switched per row on the new Settings page
 
-> Status: **in progress, 2026-10-06 — Stories A–D built on `feat/api-streaming` and through the code gate (`proceed`);
-> the live call (waits for the owner's key export), two tests of the test plan and the promotion open (see Progress).** Revised the same day after an own plan review. Scope:
-> coai-mcp's `--ask-api` path, one new catalog row field, and one control on the new Settings page's model card.
+> Status: **IMPLEMENTED, 2026-10-07.** Stories A–D merged as PR #689 (2026-10-06); the two tests the test plan still
+> owed landed 2026-10-07 (see Progress). Deviations: a failure inside a 200 stream exits 70, not 75; `SseReader` shipped
+> as `SseEvents`; the parity tests re-tell the recorded goldens as SYNTHETIC streams. Open tail, extracted: the one live
+> streamed call (build step 5), which waits for the owner's key export —
+> [PLAN_api_streaming_live_call.md](../todo/PLAN_api_streaming_live_call.md). Scope: coai-mcp's `--ask-api` path, one
+> new catalog row field, and one control on the new Settings page's model card.
 >
-> Related docs: [RESULTS_api_streaming_vendors.md](../research/RESULTS_api_streaming_vendors.md) (what each vendor
-> does), [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (the catalog and its new page),
-> [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) §3 (streaming for `--ask-local`, not this plan).
+> Related docs: [RESULTS_api_streaming_vendors.md](RESULTS_api_streaming_vendors.md) (what each vendor
+> does), [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) (the catalog and its new page),
+> [PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md) §3 (streaming for `--ask-local`, not this plan).
 
 ## Goal, and what the evidence says
 
@@ -152,12 +155,14 @@ Fable's monthly spend limit is reached, so it was made with Opus). Built on this
 
 ## Definition of Done
 
-- [ ] Every test above written first (RED), then green; the extension suite, lint, the seam, the C# suite and the
-      family checks pass.
-- [ ] A streamed and an unstreamed answer are judged by one reader, shown by the parity tests.
-- [ ] The switch is on the new page's model card only.
-- [ ] One live streamed call measured and kept as a fixture; the plan says which vendor and which model.
-- [ ] The four `research/module_*.md` files updated; this plan promoted with `IMPLEMENTED <date>` and its deviations.
+- [x] Every test above written, then green; the extension suite, lint, the seam, the C# suite and the family checks
+      pass. (The two tests of 2026-10-07 hold code that already shipped, so they could not start red — each was
+      instead broken on purpose and went red with the real symptom; see Progress.)
+- [x] A streamed and an unstreamed answer are judged by one reader, shown by the parity tests.
+- [x] The switch is on the new page's model card only.
+- [ ] One live streamed call measured and kept as a fixture — **extracted** to
+      [PLAN_api_streaming_live_call.md](../todo/PLAN_api_streaming_live_call.md); it waits for the owner's key export.
+- [x] The four `research/module_*.md` files updated; this plan promoted with `IMPLEMENTED <date>` and its deviations.
 
 ## Progress
 
@@ -186,7 +191,16 @@ Fable's monthly spend limit is reached, so it was made with Opus). Built on this
   directory. The own reviewer beside it found that the reader waited for the body to END after `[DONE]` — a proxy that
   holds the connection turned a whole answer into a timeout; it now stops at `[DONE]` (RED test first) — plus a
   misplaced doc comment and two methods over complexity 4.
-- **Not built yet, from the test plan:** the per-module parity tests (each module's recorded non-streaming golden
-  re-told as a stream, giving the same usage line and exit) — S4 is held today by the assembler tests and one end-to-end
-  ask test; and the `ApiRuntime.ReadUsage`-level "never 0" test — today the usage line is checked at the shim's own
-  output (`AStreamedAskTests`), which is what `ReadUsage` parses. `SseReader` shipped as `SseEvents`.
+- **Merged 2026-10-06 as PR #689.** `SseReader` shipped as `SseEvents`.
+- **The two owed tests, 2026-10-07:**
+  - Parity (S4) — `AStreamedGoldenIsReadLikeItsRecordingTests`: every recorded golden (`fixtures/api-goldens`) read
+    through each module that answers in its shape (xai, qwen, deepseek, glm, openai — nine cases), once whole and once
+    re-told as a SYNTHETIC stream (reasoning delta, content in two deltas, `finish_reason`, the recorded `usage`
+    verbatim on a `choices: []` chunk, `[DONE]`). Same exit, same usage line plus `"streamed":true`, same answer file.
+    Teeth: with the assembler ignoring a usage object on a `choices: []` chunk, the usage lines differ.
+  - Usage, never 0 — `AStreamsUsageIsNeverZeroTests`: a cut stream, an error inside the stream (with and without a
+    usage), the answer cap and a mid-stream deadline, each read by `ApiRuntime.ReadUsage` on a PRICED row: counted or
+    unknown, never `Usage.None`. The mid-stream deadline is served by a handler, since the stub cannot hold a stream
+    open. Teeth: with the usage line printed only for a stream that ended, the cap case reads `Usage.None` and fails.
+  - `Trickle` (the slow stream body) moved out of `AStreamIsReadAgainstItsLimitsTests` into its own test file, so both
+    classes share one; `ApiVendorGoldensTests.Fixture` became `internal` for the same reason.
