@@ -954,24 +954,35 @@ those four, so an older build's edit of a CLI path, endpoint, starting text, Tea
 is silently `unchanged`, and an edit of name, model or runtime is a second row (`chat-<id>-2`) with a second entry for the
 same `presetId`. And two readers disagree about such a pair: `catalogChatStep.recordedEntryOf` takes the NEWEST entry,
 `chatCatalogModels.movedTo` (a legacy conversation id) the OLDEST.
-- **The record carries a snapshot.** A new entry gains an optional `launch` — the launch fields `rowOf` copies, as they
-  were moved. Optional, so every record written before it still parses (`movedRecordFrom` keeps a 5-field entry).
+- **The record carries a snapshot of EVERYTHING the move copies** (the plan round, finding 2): a new entry gains an
+  optional `copied` — the name, runtime and model AND every launch field `rowOf` copies, as they were moved. A conflict
+  compares the preset with the snapshot, never with the live row, so resolving one ends it. Optional, so every record
+  written before it still parses (`movedRecordFrom` keeps a 5-field entry).
 - **An edit after the move is a conflicting revision of the SAME preset, never a new row.** The move matches a preset to
-  its entry by `presetId` alone; it is a revision when anything the move copies differs from the entry — the four
-  fingerprint fields, or the snapshot's launch fields. A revision is not moved and does not touch the row: it is recorded
-  as pending, and the row keeps working as it is.
-- **An entry with no snapshot** (written before it existed) is snapshotted from the preset as it stands at its first
-  read by this build, and raises nothing — there is no record of what it was, so no edit can be shown.
+  its entry by `presetId`, taking the NEWEST entry for that id (finding 5 — as `recordedEntryOf` does); it is a revision
+  when anything in the snapshot differs from the preset. A revision is not moved and does not touch the row: it is
+  recorded as pending, and the row keeps working as it is.
+- **An entry with no snapshot** (written before it existed) takes its snapshot from its ROW on disk, at its first read
+  by this build (finding 4): an older build's edit already made to the preset then differs from the row, and is raised
+  as a conflict instead of being silently lost. Where the row is gone (the person deleted it — and a deleted row stays
+  deleted), or the preset is gone, the entry is left as it is and raises nothing (finding 3); nothing is read from a
+  value that is not there. Known cost: a row the person edited in the NEW page differs from its old preset too, so it
+  may be raised once; *Keep the row* ends it.
 - **The conflict shows on Chat** (the Settings page's Chat tab, beside the stranded-pick block, `chatTabEmbed`): the row
-  as it is, the preset's edited values, and two choices — *Use the edited values* (the row takes them; the snapshot is
-  updated) or *Keep the row* (the snapshot takes the preset's values, so the same edit is not raised again).
+  as it is, the preset's edited values, and two choices — *Use the edited values* (the row takes them; the snapshot
+  takes the preset's whole state) or *Keep the row* (the snapshot takes the preset's whole state, the row unchanged).
 - **The choice is durable**: it is written to the record (the snapshot), not to memory, so it survives a reload, a
   window and a restart; a later, DIFFERENT edit raises the conflict again.
 - **One reader for a pair already on disk** (a record that holds two entries for one id, written by epic 4's code):
   both readers take the NEWEST, the row an older-build edit went to — `movedTo` changes to match `recordedEntryOf`.
-- **Tests, first**: both kinds of edit (a launch field; the name) raise a conflict and make no second row; each choice;
-  the choice surviving a reload (the record read back); a 5-field record snapshotted silently; a legacy conversation
-  id on a two-entry record resolving to the newest; the restore still clearing the record.
+- **Tests, first**: an edit of EACH field the snapshot holds — the list derived from what `rowOf` copies, not written
+  out by hand (finding 1) — raises a conflict and makes no second row; each choice, and the conflict gone after it; the
+  choice surviving a reload (the record read back); a later different edit raising it again (finding 7); a 5-field
+  record snapshotted from its row, raising an older-build edit and nothing for an unedited preset; a deleted row or a
+  deleted preset raising nothing and throwing nothing; a legacy conversation id on a two-entry record resolving to the
+  newest; the restore still clearing the record. **And the page itself** (findings 0, 6): the assembled Settings page
+  run against the DOM shim, as `bundledPage.test.ts` runs pages, both choices clicked — the right message posted, no
+  other row's action triggered — and the host applying it to the record.
 
 **Progress, 2026-10-07: prerequisite (b) is done and merged (PR #699)** — on branch `refactor/catalog-e5-extract`, as a pure move (no behaviour
 or markup change). The builders, contracts and handlers are in `rolesMessages.ts`, `rolesBlocks.ts`, `commandsMessages.ts`,
