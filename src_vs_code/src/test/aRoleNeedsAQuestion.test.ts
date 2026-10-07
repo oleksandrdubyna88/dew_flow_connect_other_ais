@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { RESULT_STAGE, isActive, whyNotAskable, type RoleRow } from '../roles';
 import { rowsAfter, type RowsOutcome } from '../rolesEdit';
-import { CUSTOM_ROLES_SINCE, rolesHtml, type RolesPageState } from '../rolesPage';
+import { rolesHtml, type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { Node, runRolesPage } from './rolesPageHarness';
 
 /**

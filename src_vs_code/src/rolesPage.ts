@@ -1,10 +1,10 @@
-import { FEATURE_CODE, FEATURE_DOCUMENT, FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
-import { ROLE_TABS, isShippedPrompt, type RolesCommand } from './rolesMessages';
+import { FEATURE_CODE, FEATURE_DOCUMENT, PLAN_CODE, PLAN_DOCUMENT, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, type RoleRow } from './roles';
+import { ROLE_TABS, type RolesCommand } from './rolesMessages';
+import { roleBlock, stageIsFull, strandedHtml, tooOldFor, unknownServerNote } from './rolesBlocks';
 import { formBodyCss } from './formPageStyle';
 import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textOf } from './textControls';
-import { STOOD_DOWN, type Tombstone } from './roleDeletion';
-import { escapeHtml } from './webviewHtml';
-import { ROLE_TONE_CSS, roleTone } from './roleTone';
+import type { Tombstone } from './roleDeletion';
+import { ROLE_TONE_CSS } from './roleTone';
 import { tabCss, tabStrip } from './tabStrip';
 import { type BusySnapshot, IDLE } from './busySnapshot';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
@@ -21,20 +21,11 @@ import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
  * shipped; here it is their own name for their own role, and somebody will paste a `&lt;script&gt;`
  * into it to see what happens. The answer must be that they see a `&lt;script&gt;`.</p>
  *
- * <p><b>What this page may not offer.</b> Every refusal below has a twin in `RoleComposition` on the
+ * <p><b>What this page may not offer.</b> Every refusal it draws (`rolesBlocks.ts`) has a twin in `RoleComposition` on the
  * server, which is the boundary that actually holds — a page is not one. They are here so the page
  * never offers an action the server would refuse: a control that saves and then does nothing is
  * worse than one that is disabled with the reason beside it.</p>
  */
-
-/**
- * How tall a prompt box starts.
- *
- * <p>A prompt is often a paragraph and sometimes several, and a box three lines high is reading one
- * three lines at a time. It is a starting HEIGHT and nothing else — the box scrolls, it is
- * `resize: vertical`, and what it holds is its value however much of it is on screen.</p>
- */
-const PROMPT_ROWS = 10;
 
 /** Where a page with no choice yet opens: the first section. */
 export const DEFAULT_ROLE_TAB = 'plan';
@@ -120,221 +111,6 @@ export interface RolesPageState {
   readonly tab?: string;
 }
 
-/**
- * Whether this role's switch may be turned ON.
- *
- * <p>Five active per BUCKET, and the sixth is refused HERE rather than dropped by the server. A page
- * that let somebody tick a sixth and then showed them five would be a page that lies about what it
- * saved — the server does cap, and it names what it capped, so nothing is at risk except the truth.</p>
- */
-export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
-  return isActive(role) || activeCount(rows, bucketOf(role)) < MAX_ACTIVE_PER_BUCKET;
-}
-
-/**
- * Whether this role's switch may be turned OFF.
- *
- * <p>The last one standing in a bucket cannot be: a bucket with no role in it produces a round with
- * no reviewer, which the session counts as unresolved and never lets a person retry. The server
- * refuses such a round with a sentence — `review_plan` and `review_code` both do — and refusing it
- * HERE, where the pointer is, beats refusing it at round time, after somebody has waited for a
- * review that was never going to happen.</p>
- *
- * <p>It is the rule the sidebar's code-role ticks have had since they shipped, applied to the plan
- * stage as well, which is what the operator asked for when they asked for plan-stage switches.</p>
- */
-export function canDeactivate(rows: readonly RoleRow[], role: RoleRow): boolean {
-  return !isActive(role) || activeCount(rows, bucketOf(role)) > 1;
-}
-
-/**
- * What a role's KIND means for whether it runs — said only where the answer is surprising.
- *
- * <p>Until plan 4 every non-programming role ran in nothing and every one of them carried the same
- * sentence. Now one of the two buckets HAS a round, so repeating it there would be a page saying a
- * role does nothing while the round it takes part in is running — and dropping it from the other
- * would leave the one case that is still true unsaid. "Not built yet" and "does not exist" are
- * different states, and this is where a person meets the difference.</p>
- */
-function kindHint(role: RoleRow): string {
-  if (isProgramming(role)) {
-    return '';
-  }
-
-  switch (stageOf(role)) {
-    case PLAN_STAGE:
-      return '<p class="hint">A plan-stage role that is not a programming task is kept and takes part in '
-        + 'no round yet — there is no plan gate for non-programming work. Move it to the result stage and '
-        + '<code>review_document</code> will run it.</p>';
-    case FEATURE_STAGE:
-      return '<p class="hint">A feature-stage role that is not a programming task is kept and takes part in '
-        + 'no round — a feature review reads code, outlined. Mark it a programming task and '
-        + '<code>review_feature</code> will run it.</p>';
-    default:
-      return '';
-  }
-}
-
-/**
- * How a role block is drawn on the page that draws it. The new Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
- * a prompt `data-role-prompt` — its shared script reads `data-prompt` as a round pick — and shows ONE switch per role,
- * the catalog's and the panel's read as one (`rolesSwitch.ts`).
- */
-export interface RoleBlockOptions {
-  readonly promptAttr: string;
-  readonly on: (role: RoleRow) => boolean;
-}
-
-/** This tab's own: the catalog switch alone, and the attribute its script reads. */
-const OWN_PAGE: RoleBlockOptions = { promptAttr: 'data-prompt', on: isActive };
-
-function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpose?: string }, texts: Readonly<Record<string, string>>, promptAttr: string): string {
-  const shipped = isShippedPrompt(role.id, prompt.id);
-  const text = texts[prompt.id] ?? '';
-
-  return `  <div class="prompt${shipped ? '' : ' mine'}" ${promptAttr}="${escapeHtml(prompt.id)}">
-    <div class="head">
-      <input type="text" data-field="label" value="${escapeHtml(prompt.label ?? prompt.id)}" placeholder="What the picker shows"${shipped ? ' readonly' : ''}>
-      <input type="text" class="purpose" data-field="purpose" value="${escapeHtml(prompt.purpose ?? '')}" placeholder="The picker's tooltip"${shipped ? ' readonly' : ''}>
-      ${shipped
-        ? `<button type="button" class="restore" data-restore="${escapeHtml(prompt.id)}"${text.length === 0 ? ' disabled' : ''}>Restore</button>`
-        : `<button type="button" class="remove" data-remove-prompt="${escapeHtml(prompt.id)}">Remove</button>`}
-    </div>
-    <textarea data-field="text" rows="${PROMPT_ROWS}" placeholder="${shipped ? 'The text this product ships. Write here to replace it.' : 'The question this prompt asks.'}">${escapeHtml(text)}</textarea>
-  </div>`;
-}
-
-/**
- * The mark on an ACTIVE role that will not be asked — issue #338, for the routes the refusal to switch
- * one on cannot see: a text erased after the switch, a settings file edited by hand, a prompt file
- * deleted. Until this the only signal was one line in a round reply, naming a generated id and a path.
- * A role that is off needs no mark: it is not asked anyway, and switching it on says why it cannot be.
- */
-function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): string {
-  const why = isActive(role) ? whyNotAskable(role, texts) : '';
-
-  return why.length === 0
-    ? ''
-    // "A round that asks its first prompt", not "never": a per-round choice of a later prompt WITH text
-    // is still asked. (CodeRabbit, PR #495.)
-    : `<p class="hint warn">It is switched on, but a round that asks its first prompt will skip it — `
-      + `every round, unless another prompt is chosen for it. ${escapeHtml(why)}</p>`;
-}
-
-export function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions = OWN_PAGE): string {
-  const shipped = isBuiltIn(role.id);
-  const on = options.on(role);
-  // Off by the panel's switch alone, a role the catalog holds active may always be switched on: that write moves no
-  // count of the catalog's.
-  const may = on ? canDeactivate(rows, role) : canActivate(rows, role) || isActive(role);
-  const last = on && !canDeactivate(rows, role);
-  const stage = stageOf(role);
-  const prompts = (role.prompts ?? []).map((p) => promptBlock(role, p, texts, options.promptAttr)).join('\n');
-
-  return `<details class="role role-${roleTone(role.id, stage)}${on ? '' : ' off'}" data-id="${escapeHtml(role.id)}"${on ? ' open' : ''}>
-  <summary>
-    <span class="title">${escapeHtml(role.name ?? role.id)}</span>
-    <span class="id">${escapeHtml(role.id)}</span>
-    ${shipped ? '<span class="badge">shipped</span>' : ''}
-  </summary>
-  <div class="fields">
-    <label>Name
-      <input type="text" data-field="name" value="${escapeHtml(role.name ?? role.id)}" placeholder="What this role is called"${shipped ? ' readonly' : ''}>
-    </label>
-    <label>Stage
-      <select data-field="stage"${shipped ? ' disabled' : ''}>
-        <option value="${PLAN_STAGE}"${stage === PLAN_STAGE ? ' selected' : ''}>Plan review</option>
-        <option value="${RESULT_STAGE}"${stage === RESULT_STAGE ? ' selected' : ''}>Code review</option>
-        <option value="${FEATURE_STAGE}"${stage === FEATURE_STAGE ? ' selected' : ''}>Feature review</option>
-      </select>
-    </label>
-    <label class="flag"><input type="checkbox" data-field="programmingTask"${role.programmingTask ?? true ? ' checked' : ''}${shipped ? ' disabled' : ''}> A programming task</label>
-    <label class="flag"><input type="checkbox" data-field="active"${on ? ' checked' : ''}${may ? '' : ' disabled'}> Active</label>
-    ${may ? '' : last
-      ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
-      : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`}
-    ${kindHint(role)}
-    ${unaskableHint(role, texts)}
-    ${shipped ? '<p class="hint">A role this product ships. Its id, its name, its stage and its kind are fixed — they key your settings, your open sessions and every round already recorded, and the review server reads none of them from your configuration. Its switch and its prompt text are yours.</p>' : ''}
-  </div>
-${prompts}
-  <button type="button" class="add" data-add-prompt="${escapeHtml(role.id)}">Add a prompt</button>
-  ${shipped ? '' : `<button type="button" class="remove role" data-remove="${escapeHtml(role.id)}">Remove this role</button>`}
-</details>`;
-}
-
-/**
- * The banner for a server too old to read any of this.
- *
- * <p>The third of its kind, and the same shape as the two in the panel: shown only when the server
- * is KNOWN and strictly older, naming the version that is there. Below 0.19.0 the key is never
- * read — the roles are on this page and in no round, and nothing anywhere fails. That is precisely
- * why it is said out loud.</p>
- */
-export function tooOldFor(serverVersion: string, rows: readonly RoleRow[]): string {
-  if (serverVersion.length === 0 || rows.length === 0 || !older(serverVersion, CUSTOM_ROLES_SINCE)) {
-    return '';
-  }
-
-  return `<div class="stale">The coai-mcp you have installed (${escapeHtml(serverVersion)}) does not read `
-    + `roles at all, so nothing on this page will run. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} `
-    + `or later — the <b>MCP server</b> tab of ConnectOtherAIs Settings.</div>`;
-}
-
-/**
- * The note for a server this window has not identified yet.
- *
- * <p>`coai.editRoles` is on the command palette, so this page can be the FIRST thing opened in a
- * window — before the panel has rendered, which is what detects the installed server. An unknown
- * server draws no banner, and no banner reads exactly like "checked, and fine". Saying the check has
- * not run is the honest shape, and it disappears the moment the version arrives, because the host
- * repaints when it learns one.</p>
- *
- * <p>Only when there is something that could fail to run: a machine with no roles of its own has
- * nothing at stake in the answer.</p>
- */
-export function unknownServerNote(serverVersion: string, rows: readonly RoleRow[]): string {
-  if (serverVersion.length > 0 || rows.length === 0) {
-    return '';
-  }
-
-  return `<div class="stale">Whether the coai-mcp you have installed can read these roles has `
-    + `<b>not been checked yet</b> — it needs ${escapeHtml(CUSTOM_ROLES_SINCE)} or later. Open the `
-    + `ConnectOtherAIs panel and this line will answer itself.</div>`;
-}
-
-/** The first `coai-mcp` that reads `COAI_ROLES`. Below it, this page writes into a void. */
-export const CUSTOM_ROLES_SINCE = '0.19.0';
-
-/** Whether `version` is strictly older than `since`, comparing numbers rather than text. */
-function older(version: string, since: string): boolean {
-  const mine = version.split('.').map((n) => Number.parseInt(n, 10));
-  const theirs = since.split('.').map((n) => Number.parseInt(n, 10));
-  for (let i = 0; i < Math.max(mine.length, theirs.length); i += 1) {
-    const a = mine[i] ?? 0;
-    const b = theirs[i] ?? 0;
-    if (Number.isNaN(a) || Number.isNaN(b)) {
-      return false;
-    }
-    if (a !== b) {
-      return a < b;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Whether a role added now could not be switched on even once its question is written.
- *
- * <p>Every new role arrives switched off since issue #338 — it has no question yet — so what is worth
- * saying beside the button is the other reason it would stay off: the stage is full. A new role always
- * joins the code bucket of the result stage, so that is the only count to take.</p>
- */
-export function stageIsFull(all: readonly RoleRow[]): boolean {
-  return activeCount(all, RESULT_CODE) >= MAX_ACTIVE_PER_BUCKET;
-}
-
 /** What each tab is called — the headings they replace, so nothing was renamed out from under anyone. */
 const TAB_NAMES: Readonly<Record<string, string>> = {
   plan: 'Plan review',
@@ -359,41 +135,6 @@ function rolesTabs(openTab: string): string {
   const tabs = ROLE_TABS.map((id) => ({ key: id, label: TAB_NAMES[id] }));
 
   return tabStrip(tabs, openTab, { tab: 'tab-', panel: 'section-', label: 'Which roles to edit' });
-}
-
-/**
- * The deletions that are stuck, and the two things that can be done about them.
- *
- * <p><b>Reload Window comes first when the mirror STOOD DOWN</b>, because that is the thing which
- * actually ends one: a newer build owns the settings file, and reloading is how this window becomes
- * that build. Offering the destructive action first for a condition with a cure would be offering
- * the wrong one.</p>
- *
- * <p><b>And the other action costs something, which it says here rather than afterwards.</b> While
- * the server still carries the row, deleting the prompt text IS the incident: rounds run the role,
- * find no text, and complain each time. The softer wording this had first — <i>the server may still
- * carry the row</i> — describes the same fact without naming what it does to the person.
- * (antigravity, the plan round.)</p>
- */
-export function strandedHtml(stranded: readonly Tombstone[]): string {
-  if (stranded.length === 0) {
-    return '';
-  }
-  const rows = stranded.map((one) => {
-    const reload = one.reason === STOOD_DOWN
-      ? '<button type="button" class="act" data-reload="1">Reload Window</button>'
-      : '';
-
-    return `<li><b>${escapeHtml(one.name)}</b> was removed here, and the server has not been told yet.`
-      + ` <span class="why">${escapeHtml(one.reason)}</span>`
-      + ` Its prompts are kept until the server has it.`
-      + `${reload}`
-      + `<button type="button" class="act" data-finish="${escapeHtml(one.roleId)}">Finish the deletion anyway</button>`
-      + `<span class="cost">The server may go on running this role without its text until its settings`
-      + ` catch up, and rounds against it will complain each time.</span></li>`;
-  }).join('');
-
-  return `<section class="stranded" aria-label="Deletions the server has not been told about"><ul>${rows}</ul></section>`;
 }
 
 /**

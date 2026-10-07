@@ -1,10 +1,10 @@
 import { SHIPPED_COMMANDS, type CommandRow } from './commands';
-import { commandsSkewNote, customBlock, shippedBlock, type CommandAttrs } from './commandsPage';
+import { commandsSkewNote, customBlock, shippedBlock, type CommandAttrs } from './commandsBlocks';
 import { escapeHtml } from './escapeHtml';
 
 /**
  * Reviews › Commands on the new Settings page (todo/PLAN_one_model_catalog.md E4.4): the Gate commands tab's own blocks
- * (`commandsPage.customBlock`, `shippedBlock` — never a copy), drawn in the panel's document and edited through the one
+ * (`commandsBlocks.customBlock`, `shippedBlock` — never a copy), drawn in the panel's document and edited through the one
  * editing core (`commandsHost.ts`) by `commands` messages.
  *
  * <p>The page draws the roles as well, whose wiring reads `data-field`, `data-remove` and `data-restore`; so a command

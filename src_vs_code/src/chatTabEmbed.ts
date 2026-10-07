@@ -1,6 +1,6 @@
 import type { ChatProviderList } from './chatModels';
 import type { ModelPreset } from './chatPresets';
-import { promptBlock, type PresetAttrs } from './chatPresetsPage';
+import { promptBlock, type PresetAttrs } from './chatPresetBlocks';
 import type { ChatSettings } from './chatSettings';
 import { escapeHtml } from './escapeHtml';
 import { DEFAULT_CHAT, chatProviderListFor, chatSendingFields, type PanelState } from './panelView';

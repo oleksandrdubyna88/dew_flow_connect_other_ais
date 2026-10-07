@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
-import { CUSTOM_ROLES_SINCE, type RolesPageState } from '../rolesPage';
+import { type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { RESULT_STAGE, type RoleRow } from '../roles';
 import { STOOD_DOWN } from '../roleDeletion';
 import { Node, type Page, runRolesPage, presses } from './rolesPageHarness';

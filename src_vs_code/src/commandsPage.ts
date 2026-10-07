@@ -1,7 +1,5 @@
-import { COMMAND_MODELS_SINCE } from './commandModels';
-import { SHIPPED_COMMANDS, fileIdOf, hasText, shippedTextOf, type CommandRow, type CommandStageName, type ShippedCommand } from './commands';
-import { STAGE_NAMES } from './commandsMessages';
-import { compareVersions } from './coaiInstall';
+import { SHIPPED_COMMANDS, type CommandRow } from './commands';
+import { commandsSkewNote, customBlock, shippedBlock, type CommandAttrs } from './commandsBlocks';
 import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
 import { textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
@@ -9,9 +7,9 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 
 /**
- * The Edit commands page — issue #467, Epic B. Pure: the markup and its script; the parser of what the
- * script posts is `commandsMessages.ts`, which the new Settings page shares. `commandsPanel.ts` is the
- * only part that touches VS Code.
+ * The Edit commands page — issue #467, Epic B. Pure: the markup and its script. The blocks it draws are
+ * `commandsBlocks.ts` and the parser of what the script posts is `commandsMessages.ts`, both shared with
+ * the new Settings page. `commandsPanel.ts` is the only part that touches VS Code.
  */
 
 /** Everything the page is drawn from. `texts` are the command files on disk, by file id. */
@@ -26,17 +24,6 @@ export interface CommandsPageState {
   readonly textTone?: number;
   /** What the host had running when this tab was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
   readonly busy?: BusySnapshot;
-}
-
-/**
- * The note for a server too old to read any of this — the texts and the commands arrived in the same
- * release as the per-caller models (`COMMAND_MODELS_SINCE`).
- */
-export function commandsSkewNote(serverVersion: string): string {
-  return serverVersion.length === 0 || compareVersions(COMMAND_MODELS_SINCE, serverVersion) <= 0
-    ? ''
-    : `The installed coai-mcp is ${serverVersion}: it ignores these texts and commands and gives the shipped orders. `
-      + `Update it to ${COMMAND_MODELS_SINCE} or later.`;
 }
 
 /**
@@ -74,69 +61,10 @@ ${script(nonce, state.busy ?? IDLE)}
 </html>`;
 }
 
-/**
- * The attributes a command block carries. This tab's own, or — on the new Settings page, which also draws the roles
- * (todo/PLAN_one_model_catalog.md E4.4) — names of its own, so the roles' wiring never reads a command's control.
- */
-export interface CommandAttrs {
-  readonly row: string;
-  readonly field: string;
-  readonly text: string;
-  readonly remove: string;
-  readonly restore: string;
-  readonly file: string;
-  readonly add: string;
-}
-
+/** This tab's own attribute names — the ones its script reads. */
 const OWN_ATTRS: CommandAttrs = {
   row: 'data-id', field: 'data-field', text: 'data-text', remove: 'data-remove', restore: 'data-restore', file: 'data-file', add: 'data-add',
 };
-
-export function customBlock(row: CommandRow, texts: Readonly<Record<string, string>>, a: CommandAttrs): string {
-  const fileId = fileIdOf(row.id);
-
-  return `<section class="command" ${a.row}="${escapeHtml(row.id)}">
-<div class="row">
-<input type="text" ${a.field}="title" aria-label="Title" value="${escapeHtml(row.title)}">
-<select ${a.field}="stage" aria-label="Rounds">${STAGE_NAMES.map((stage) => stageOption(stage, row.stage)).join('')}</select>
-<label><input type="checkbox" ${a.field}="enabled"${row.enabled ? ' checked' : ''}> On</label>
-<button type="button" class="remove" ${a.remove}>Remove</button>
-</div>
-<textarea ${a.text}="${escapeHtml(fileId)}" aria-label="What it tells the AI" rows="3">${escapeHtml(texts[fileId] ?? '')}</textarea>
-</section>`;
-}
-
-const STAGE_LABEL: Readonly<Record<CommandStageName, string>> = { any: 'Every round', plan: 'Plan rounds', code: 'Code rounds' };
-
-function stageOption(stage: CommandStageName, chosen: CommandStageName): string {
-  return `<option value="${stage}"${stage === chosen ? ' selected' : ''}>${STAGE_LABEL[stage]}</option>`;
-}
-
-export function shippedBlock(one: ShippedCommand, texts: Readonly<Record<string, string>>, a: CommandAttrs): string {
-  // Only an override that SAYS something is one — a blank file is the shipped text, as the server reads it.
-  const written = hasText(texts, one.id) ? texts[one.id] ?? '' : '';
-
-  return `<section class="command" ${a.file}="${escapeHtml(one.id)}">
-<h3>${escapeHtml(one.title)}${written.length > 0 ? ' <span class="badge">yours</span>' : ''}</h3>
-${placeholderNote(one)}${markerLine(one.marker)}
-<textarea ${a.text}="${escapeHtml(one.id)}" aria-label="${escapeHtml(one.title)}" rows="4" placeholder="${escapeHtml(shippedTextOf(one.id))}">${escapeHtml(written)}</textarea>
-${restoreButton(one.id, written, a.restore)}
-</section>`;
-}
-
-function markerLine(marker: string): string {
-  return marker.length > 0 ? `<p class="marker"><b>${escapeHtml(marker)}</b>…</p>` : '';
-}
-
-function restoreButton(fileId: string, written: string, attr: string): string {
-  return written.length > 0 ? `<button type="button" ${attr}="${escapeHtml(fileId)}">Restore the shipped text</button>` : '';
-}
-
-function placeholderNote(one: ShippedCommand): string {
-  return one.placeholders.length === 0
-    ? ''
-    : `<p class="note">The server fills in ${one.placeholders.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}.</p>`;
-}
 
 function styles(size: number, tone: number): string {
   // The Chat presets look (formPageStyle.ts), the operator's ask of 2026-09-29: this page had drifted

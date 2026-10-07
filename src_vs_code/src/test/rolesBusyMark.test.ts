@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { BUSY_AFTER_MS } from '../busyMark';
 import { type BusySnapshot } from '../busySnapshot';
 import { RESULT_STAGE, type RoleRow } from '../roles';
-import { CUSTOM_ROLES_SINCE, type RolesPageState } from '../rolesPage';
+import { type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { PageClock } from './panelPageHarness';
 import { Node, type Page, runRolesPage } from './rolesPageHarness';
 

@@ -811,7 +811,7 @@
   },
   "src/rolesPage.ts": {
     "complexity": {
-      "count": 4
+      "count": 1
     },
     "max-lines-per-function": {
       "count": 3

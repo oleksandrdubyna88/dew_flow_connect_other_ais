@@ -1,5 +1,6 @@
 import { ChatProvider } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
+import { promptBlock } from './chatPresetBlocks';
 import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
 import { textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
@@ -21,9 +22,6 @@ import { escapeHtml } from './webviewHtml';
  * lines at a time. It also sizes itself to its content where the engine can.</p>
  */
 
-/** The rows the prompt editor opens at. Twelve is about a screenful of a real instruction. */
-const PROMPT_ROWS = 14;
-
 export interface PresetsPageState {
   readonly prompts: readonly PromptPreset[];
   readonly models: readonly ModelPreset[];
@@ -41,34 +39,6 @@ export interface PresetsPageState {
 
 function option(id: string, label: string, chosen: string): string {
   return `<option value="${escapeHtml(id)}"${id === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-}
-
-/**
- * The attribute names a prompt block carries. The tab's own are the defaults; the new Settings page's Chat draws the
- * same block with names of its own (todo/PLAN_one_model_catalog.md E4.6b), because that page also draws the roles,
- * whose wiring reads `data-field` and `data-remove` — the commands' arrangement (`commandsPage.CommandAttrs`).
- */
-export interface PresetAttrs {
-  readonly row: string;
-  readonly list: string;
-  readonly field: string;
-  readonly remove: string;
-}
-
-const TAB_ATTRS: PresetAttrs = { row: 'data-id', list: 'data-list', field: 'data-field', remove: 'data-remove' };
-
-/** One saved prompt: its name, the main tick, Remove, and its words in a large box. */
-export function promptBlock(preset: PromptPreset, attrs: PresetAttrs = TAB_ATTRS): string {
-  const id = escapeHtml(preset.id);
-
-  return `<div class="preset" ${attrs.row}="${id}">
-  <div class="head">
-    <input type="text" ${attrs.list}="prompt" ${attrs.field}="name" value="${escapeHtml(preset.name)}" placeholder="A name for this prompt">
-    <label class="main"><input type="checkbox" ${attrs.list}="prompt" ${attrs.field}="main"${preset.main ? ' checked' : ''}> main</label>
-    <button type="button" class="remove" ${attrs.remove}="prompt" ${attrs.row}="${id}">Remove</button>
-  </div>
-  <textarea ${attrs.list}="prompt" ${attrs.field}="text" rows="${PROMPT_ROWS}" placeholder="What the captured passage travels with">${escapeHtml(preset.text)}</textarea>
-</div>`;
 }
 
 /**

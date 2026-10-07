@@ -67,7 +67,7 @@ import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
 import { type WatchedDir } from './escalationDirs';
 import { roleOnServers } from './serverRoles';
-import { CUSTOM_ROLES_SINCE } from './rolesPage';
+import { CUSTOM_ROLES_SINCE } from './rolesBlocks';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
