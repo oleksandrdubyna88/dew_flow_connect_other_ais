@@ -948,7 +948,32 @@ now, by the owner's decision): an OLD coai-mcp still running re-reads the settin
 before the new fields are enabled; then the installed binary's `--features` are checked, the extension activated, and
 the written file read back. Full consultant behaviour needs a binary that lists `consultantRow`.
 
-**Progress, 2026-10-07: prerequisite (b) is done** on branch `refactor/catalog-e5-extract`, as a pure move (no behaviour
+**R7, designed 2026-10-07 (prerequisite (a)).** Mapped first: the move record (`chatPresetMove.MovedPreset`, stored as
+`coai.chatPresetsMoved`) holds `presetId, runtime, model, name, rowId` and no launch fields; `wasMoved` fingerprints on
+those four, so an older build's edit of a CLI path, endpoint, starting text, Team server, remote vendor or the main tick
+is silently `unchanged`, and an edit of name, model or runtime is a second row (`chat-<id>-2`) with a second entry for the
+same `presetId`. And two readers disagree about such a pair: `catalogChatStep.recordedEntryOf` takes the NEWEST entry,
+`chatCatalogModels.movedTo` (a legacy conversation id) the OLDEST.
+- **The record carries a snapshot.** A new entry gains an optional `launch` — the launch fields `rowOf` copies, as they
+  were moved. Optional, so every record written before it still parses (`movedRecordFrom` keeps a 5-field entry).
+- **An edit after the move is a conflicting revision of the SAME preset, never a new row.** The move matches a preset to
+  its entry by `presetId` alone; it is a revision when anything the move copies differs from the entry — the four
+  fingerprint fields, or the snapshot's launch fields. A revision is not moved and does not touch the row: it is recorded
+  as pending, and the row keeps working as it is.
+- **An entry with no snapshot** (written before it existed) is snapshotted from the preset as it stands at its first
+  read by this build, and raises nothing — there is no record of what it was, so no edit can be shown.
+- **The conflict shows on Chat** (the Settings page's Chat tab, beside the stranded-pick block, `chatTabEmbed`): the row
+  as it is, the preset's edited values, and two choices — *Use the edited values* (the row takes them; the snapshot is
+  updated) or *Keep the row* (the snapshot takes the preset's values, so the same edit is not raised again).
+- **The choice is durable**: it is written to the record (the snapshot), not to memory, so it survives a reload, a
+  window and a restart; a later, DIFFERENT edit raises the conflict again.
+- **One reader for a pair already on disk** (a record that holds two entries for one id, written by epic 4's code):
+  both readers take the NEWEST, the row an older-build edit went to — `movedTo` changes to match `recordedEntryOf`.
+- **Tests, first**: both kinds of edit (a launch field; the name) raise a conflict and make no second row; each choice;
+  the choice surviving a reload (the record read back); a 5-field record snapshotted silently; a legacy conversation
+  id on a two-entry record resolving to the newest; the restore still clearing the record.
+
+**Progress, 2026-10-07: prerequisite (b) is done and merged (PR #699)** — on branch `refactor/catalog-e5-extract`, as a pure move (no behaviour
 or markup change). The builders, contracts and handlers are in `rolesMessages.ts`, `rolesBlocks.ts`, `commandsMessages.ts`,
 `commandsBlocks.ts`, `chatPresetsMessages.ts` and `chatPresetBlocks.ts`; the page-test shim is `test/pageScriptHarness.ts`
 (`rolesPageHarness.ts` keeps `runRolesPage`); `panelView` exports the moved sections' builders and
