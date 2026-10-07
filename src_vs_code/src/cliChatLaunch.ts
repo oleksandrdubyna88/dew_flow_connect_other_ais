@@ -286,7 +286,7 @@ export function launchSpecFor(
     shell,
     // From the adapter, because the command line and the wire protocol are one decision: a vendor
     // launched with another's flags answers in a shape nobody here can read.
-    args: forTheShell(known.adapter.argv(launch), shell),
+    args: shell ? quotedForTheShell(known.adapter.argv(launch)) : known.adapter.argv(launch),
     // In text mode an empty temp directory, never the workspace. The task is to explain a paragraph:
     // handing a third-party agent the source tree buys nothing but startup time, and on Windows a
     // working directory is also something `cmd.exe` searches before the PATH. In AGENT mode the
@@ -301,10 +301,11 @@ export function launchSpecFor(
 /**
  * The arguments as the platform shell must see them: `shell: true` joins them with spaces and quotes nothing, so an
  * argument with whitespace in it — a settings file under a profile folder with a space (the fast-mode code round) — is
- * wrapped in double quotes to reach the CLI whole. Without the shell they are passed as they are.
+ * wrapped in double quotes to reach the CLI whole. Only a launch through the shell is given these; any other passes
+ * its arguments as they are.
  */
-function forTheShell(args: readonly string[], shell: boolean): readonly string[] {
-  return shell ? args.map((one) => (/\s/u.test(one) ? `"${one}"` : one)) : args;
+function quotedForTheShell(args: readonly string[]): readonly string[] {
+  return args.map((one) => (/\s/u.test(one) ? `"${one}"` : one));
 }
 
 /**

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +32,7 @@ const STATES = {
 /** Through a staging file of this write's OWN, renamed into place. */
 function replace(dir: string, path: string, text: string): void {
   mkdirSync(dir, { recursive: true });
-  const staging = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  const staging = `${path}.${randomUUID()}.tmp`;
   writeFileSync(staging, text, 'utf8');
   renameSync(staging, path);
 }

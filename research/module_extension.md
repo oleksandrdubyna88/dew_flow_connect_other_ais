@@ -11231,5 +11231,5 @@ Where that file lives (the code round): not in the chat's text-mode folder, whic
 directory with nothing in it", and not at a fixed shared temp path another local user could plant first — in a private
 folder made once per extension process with a random name (`mkdtemp` of `coai-chat-fast-*`). And because an npm
 `claude.cmd` is started with `shell: true`, which joins arguments with spaces and quotes nothing, `launchSpecFor` wraps
-an argument holding whitespace in double quotes for the shell only (`forTheShell`) — a profile folder with a space would
+an argument holding whitespace in double quotes for the shell only (`quotedForTheShell`) — a profile folder with a space would
 otherwise have split the settings path in two. Without the shell the arguments go as they are.
