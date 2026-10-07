@@ -12,10 +12,12 @@
 
 import { rowsOnTheWire } from './catalogRules';
 import { DEFAULT_VENDORS, Vendor } from './vendors';
-import { RowPriceLookup, vendorsEnv } from './vendorsWire';
+import { RowPriceLookup, rowOnTheWire, vendorsEnv } from './vendorsWire';
+import { FEATURES } from './binaryFeatures';
 import { RESULT_CODE, bucketOf, composed, isActive, rolesFrom, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
+  ConsultantChoice,
   ConsultSettings,
   DEFAULT_CONSULT,
   ResolvedConsultant,
@@ -24,7 +26,7 @@ import {
   sameChoice,
 } from './consultSettings';
 import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadenceSettingsFrom } from './cadenceSettings';
-import { DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
+import { type CatalogRowOnTheWire, DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
 import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
 import { DEFAULT_SECURITY, securityEnv, securityLaneFrom, type SecurityLane } from './securityLane';
@@ -548,8 +550,9 @@ export function envBlock(
     // One JSON key rather than four scalars, for the reason `COAI_VENDORS` already carries: a
     // compound value needs a structured encoding, and four key spellings is four chances for the two
     // halves to disagree about one of them.
+    const rowOf = consultantRowOf(catalogRowOnTheWire(vendors, installedServerVersion, priceOf, features));
     env['COAI_CONSULTANTS'] = JSON.stringify(Object.fromEntries(
-      crossing.map((id) => [id, wireEntry(settings.consult.byCaller[id]!)])));
+      crossing.map((id) => [id, wireEntry(settings.consult.byCaller[id]!, rowOf(settings.consult.stored[id]))])));
   }
   if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
     env['COAI_CONSULT_TURNS'] = String(settings.consult.turns);
@@ -569,7 +572,7 @@ export function envBlock(
   Object.assign(env, cadenceEnv(settings.cadence));
   // The question consultant's eight, each only when it differs — and none for a server known to be too old to
   // read them (`QCONSULT_SINCE`), which the section then says in a banner.
-  Object.assign(env, qconsultEnv(settings.qconsult, installedServerVersion));
+  Object.assign(env, qconsultEnv(settings.qconsult, installedServerVersion, catalogRowOnTheWire(vendors, installedServerVersion, priceOf, features)));
   if (settings.maxConcurrency !== DEFAULTS.maxConcurrency) {
     env['COAI_MAX_CONCURRENCY'] = String(settings.maxConcurrency);
   }
@@ -626,10 +629,39 @@ function callersOnTheWire(consult: ConsultSettings): readonly string[] {
  * runtime, so the server's rule (c) refuses it by name: a runtime invented here would be a definition
  * the server builds a provider for, sending a working tree to a vendor nobody chose.</p>
  */
-function wireEntry(one: ResolvedConsultant): Record<string, string> {
+function wireEntry(one: ResolvedConsultant, row: Readonly<Record<string, unknown>> | undefined): Record<string, unknown> {
   return one.kind === 'unavailable'
     ? { vendor: one.vendor, model: one.model }
-    : { vendor: one.vendor, model: one.model, runtime: one.runtime, baseUrl: one.baseUrl, executablePath: one.executablePath };
+    : { vendor: one.vendor, model: one.model, runtime: one.runtime, baseUrl: one.baseUrl, executablePath: one.executablePath, ...(row === undefined ? {} : { row }) };
+}
+
+/**
+ * The catalog row a stored reference names, as `COAI_VENDORS` would write it — the consultant's effort, system prompt,
+ * timeout and key travel with it (todo/PLAN_one_model_catalog.md, C2). Only to a binary that lists `consultantRow`: an
+ * older one skips an unknown member without a word, so the person would believe settings applied that were not. Found
+ * by the rule `resolveConsultant` uses for a reference — the row with that id, switched on or off — and written switched
+ * on, as `--check-model` is handed it, because a consultant-only row reviews nothing.
+ */
+function consultantRowOf(rowOf: CatalogRowOnTheWire): (choice: ConsultantChoice | undefined) => Readonly<Record<string, unknown>> | undefined {
+  return (choice) => (choice?.runtime === '' ? rowOf(choice.vendor) : undefined);
+}
+
+/**
+ * A catalog row by its id (any case), as `COAI_VENDORS` writes it — switched on, as `--check-model` is handed it,
+ * because a consultant-only row reviews nothing. Nothing at all for a binary that does not list `consultantRow`.
+ */
+function catalogRowOnTheWire(
+  vendors: readonly Vendor[], installedServerVersion: string, priceOf: RowPriceLookup, features: readonly string[],
+): CatalogRowOnTheWire {
+  if (!features.includes(FEATURES.consultantRow)) {
+    return () => undefined;
+  }
+
+  return (catalogId) => {
+    const row = vendors.find((one) => one.id.toLowerCase() === catalogId.toLowerCase());
+
+    return row === undefined ? undefined : rowOnTheWire({ ...row, enabled: true }, installedServerVersion, priceOf, features);
+  };
 }
 
 function asString(value: unknown): string {

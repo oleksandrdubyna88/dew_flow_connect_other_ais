@@ -67,6 +67,14 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
     private static string[] DisallowedTools(ReviewerSettings settings) =>
         settings.Confined ? [.. WriteTools, .. ReachTools] : WriteTools;
 
+    /// <summary>
+    /// A row's effort, as the installed CLI spells it (2.1.289: <c>--effort &lt;level&gt;</c>; the levels are
+    /// shared/feature-availability.json's) — nothing when the row sets none. An older CLI refuses the flag itself, and
+    /// VendorDiagnosis names it. One spelling for a reviewer and a consultant (todo/PLAN_one_model_catalog.md, C2).
+    /// </summary>
+    internal static string[] EffortArguments(ReviewerSettings settings) =>
+        settings.ReasoningEffort.Length > 0 ? ["--effort", settings.ReasoningEffort] : [];
+
     public ReviewerInvocation Build(
         string role,
         string prompt,
@@ -86,9 +94,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 NoMcpServers.ClaudeFlag,
                 "--add-dir", worktreePath,
                 .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
-                // A row's effort, as the installed CLI spells it (2.1.289: `--effort <level>`; the levels are
-                // shared/feature-availability.json's). An older CLI refuses the flag itself — VendorDiagnosis names it.
-                .. settings.ReasoningEffort.Length > 0 ? (string[])["--effort", settings.ReasoningEffort] : [],
+                .. EffortArguments(settings),
             ],
             worktreePath)
         {

@@ -861,7 +861,30 @@ row); the new page reads it. Done, RED first.
   [RESULTS_catalog_consultations_2026-10-06.md](../research/RESULTS_catalog_consultations_2026-10-06.md). Fixed on
   this branch, each RED first: C1, C3, C4 (epics 1–3) and R1–R6 (epic 4). Still open:
   - *C2 — a row's options never reach a consultation* (effort, system prompt, timeout, key name): `COAI_CONSULTANTS`
-    carries the launch fields only and `ConsultantResolver` rebuilds only those. Next on this branch.
+    carries the launch fields only and `ConsultantResolver` rebuilds only those. **Built 2026-10-06 (C2a–C2c), each
+    step RED first; the deviations from the design below:** a consultation FREEZES the system prompt in its record
+    (`ConsultationRecord.RowInstruction`), because a turn's prompt is composed from the record alone; a question row keeps
+    the question consultant's `RowBudget`, not the catalog row's timeout (the sweep and the fan-out deadline derive from
+    it); a question row's catalog id is kept beside the rows (`QconsultSettings.catalogRows`). **Design (2026-10-06,
+    from a read of every path):**
+    - *The wire carries the WHOLE row.* A consultant entry of `COAI_CONSULTANTS` and a row of `COAI_QCONSULT_ROWS` gain
+      `row`: exactly what `vendorsEnv` writes for that one row (the precedent is `modelCheckInput.ts`, which hands
+      `--check-model` one row the same way), through one mapper factored out of `vendorsEnv` — never a second field
+      list. It is written only to a binary whose `--features` lists `consultantRow` (an older one skips an unknown
+      member silently, so a version check would not do). `vendor` does not change: an open consultation resumes by it.
+    - *The server parses it with the reviewer row's own parser* (`PanelSettings.ParseVendors` over one row, as
+      `ConsultantCheckMode.RowsOf` does) and takes the row's price, api settings, key name, dialect, system prompt,
+      timeout and CLI effort; identity (id, runtime, the remote allowlist) stays the choice's. A `row` that does not
+      parse refuses the consultant BY NAME — never a silent fall back to the five fields. `Frozen` (a resumed turn)
+      takes today's row fields too.
+    - *The fields reach the launch.* The row's own timeout bounds its turn when set; CLI effort reaches the claude and
+      local consultants through the reviewers' own rule (`RosterBuilder.EffortFor`, shared, not copied); api effort and
+      thinking already apply once the row's `Api` is filled. The system prompt is a person's instruction in the
+      consultant prompt and the question prompt, redacted in the record as a reviewer's is. A `web` question row still
+      gets the question and nothing else — the policy that row exists for.
+    - *Build order:* C2a the wire and the parse (a consultant's `ProviderSettings` carries every field — tested at the
+      resolver); C2b timeout and effort at the launch (tested at the adapters' requests); C2c the prompt slot (tested
+      at the composed prompt). `panelServerDefaultsAgreement` learns the `row` member; every step RED first.
   - *R7 — the answer to the open question above:* a preset edited in an older build after the move is a conflicting
     revision of the SAME preset, not a new model. Planned, not built: keep the edited revision and show the conflict on
     Chat (the person chooses); widening the fingerprint alone would duplicate rows.

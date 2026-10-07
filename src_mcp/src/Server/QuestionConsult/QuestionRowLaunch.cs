@@ -78,7 +78,8 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         while (true)
         {
             var turnStarted = started.Elapsed;
-            var launched = await executor.LaunchOnceAsync(input.Row.Runtime.Build(launch), ct);
+            // The row's system prompt is redacted from what the child says, as a reviewer's is (todo/PLAN_one_model_catalog.md, C2).
+            var launched = await executor.LaunchOnceAsync(input.Row.Runtime.Build(launch) with { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) }, ct);
             usage = usage.Add(launched.Usage);
             Record(input, launched, started.Elapsed - turnStarted);
             if (Unanswered(launched) is { } ended)

@@ -10593,6 +10593,12 @@ flowchart LR
 - Byte-identical env block, three pieces (each shown red when removed): `resolveConsultant` rule (a) gives back the
   row's `vaultKeyName` through a row that lists `consultant`; `qconsultSettingsFrom` resolves a question row that
   names a row listing `qconsult` to its definition in the row's own key order (`COAI_QCONSULT_ROWS` IS the wire);
+  (C2, 2026-10-06) For a binary that lists `consultantRow` (`FEATURES.consultantRow`), a consultant entry that refers
+  to a catalog row, and a question row that does, also carry that row as `row` — written by `vendorsWire.rowOnTheWire`,
+  the ONE field list `vendorsEnv` and `--check-model` use (switched on, as a consultant-only row reviews nothing).
+  `settingsShape.catalogRowOnTheWire` finds it by id; a question row's catalog id is kept beside the rows
+  (`QconsultSettings.catalogRows`), because a resolved row keeps only the key name and two rows may share one. A
+  binary that does not list the feature reads the bytes it always did.
   `catalogRules.rowsOnTheWire` leaves out of `COAI_VENDORS` a row that reviews nothing and whose `uses` are all
   features that cross resolved — kept when it lists `security`, a Security lane run names it, or the lane could not be
   read. A row with no `uses` is a row from before the catalog and crosses as it always did.

@@ -30,6 +30,8 @@ export const FEATURES = {
   securityWords: 'securityWords',
   /** E2.4: `--check-security [--validate]` on stdin. */
   checkSecurity: 'checkSecurity',
+  /** C2 (the epics 1–3 consultation): a consultant entry's and a question row's `row` — the whole catalog row. */
+  consultantRow: 'consultantRow',
 } as const;
 
 export interface BinaryFeatures {
