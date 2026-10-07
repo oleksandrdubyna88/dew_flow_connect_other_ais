@@ -115,6 +115,20 @@ public sealed record ProviderSettings(string Provider)
     /// </summary>
     public Core.Api.ApiRowSettings Api { get; init; } = Core.Api.ApiRowSettings.None;
 
+    /// <summary>
+    /// The row's fast mode (todo/PLAN_fast_mode.md): Off unless the row says <c>on</c> or <c>cli</c> — the owner's
+    /// default, a row written before the field existed included.
+    /// </summary>
+    public Core.Catalog.FastMode Fast { get; init; }
+
+    /// <summary>A row's <c>fast</c> as written: <c>on</c> and <c>cli</c> by name, any case; anything else — absent included — is Off.</summary>
+    internal static Core.Catalog.FastMode FastOf(string? said) => said?.Trim().ToLowerInvariant() switch
+    {
+        "on" => Core.Catalog.FastMode.On,
+        "cli" => Core.Catalog.FastMode.Cli,
+        _ => Core.Catalog.FastMode.Off,
+    };
+
     /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
     /// <remarks>
     /// The same question <c>PanelService.Remote</c> asked privately, asked of the row instead: the
@@ -1266,6 +1280,7 @@ public sealed record PanelSettings
                         VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
                         Price = PriceOf(v.Price),
                         Api = ApiRowOf(v),
+                        Fast = ProviderSettings.FastOf(v.Fast),
                         // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
                         SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
                         // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.

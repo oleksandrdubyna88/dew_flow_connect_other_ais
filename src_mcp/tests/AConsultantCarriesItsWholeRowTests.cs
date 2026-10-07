@@ -57,6 +57,16 @@ public sealed class AConsultantCarriesItsWholeRowTests
     }
 
     [Fact]
+    public void ARowsFastMode_ReachesTheConsultant()
+    {
+        // todo/PLAN_fast_mode.md: the consultant runs on the row it carries, fast mode included.
+        var resolved = Resolve(
+            """{"claude":{"vendor":"codex","runtime":"codex","model":"gpt-6","row":{"id":"codex","runtime":"codex","model":"gpt-6","fast":"on"}}}""");
+
+        resolved.Should().BeOfType<ResolvedConsultant.Definition>().Subject.Vendor.Fast.Should().Be(Core.Catalog.FastMode.On);
+    }
+
+    [Fact]
     public void TheRowNeverChangesWhoTheConsultantIs()
     {
         // A row naming another runtime or id is the row's word against the entry's: the entry decides who is launched.

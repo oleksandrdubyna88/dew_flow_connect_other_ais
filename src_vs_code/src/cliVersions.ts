@@ -228,8 +228,17 @@ export function unquoted(executable: string): string {
  * is the other half of why this is safe: the only variable part is the path, and it is quoted.</p>
  */
 export function shimCommandLine(executable: string): string {
+  return expandedByTheShell(executable) ? '' : `"${executable}" --version`;
+}
+
+/**
+ * Whether `cmd.exe` would still read something in this text when it is wrapped in double quotes: a `"` that closes
+ * the quoting, `%` and `!` that it expands inside quotes, or a control character that ends the line. The one rule for
+ * every string handed to a shim — the executable here, a chat's arguments in `cliChatLaunch`.
+ */
+export function expandedByTheShell(text: string): boolean {
   // eslint-disable-next-line no-control-regex
-  return /["%!]|[\u0000-\u001f]/.test(executable) ? '' : `"${executable}" --version`;
+  return /["%!]|[\u0000-\u001f]/.test(text);
 }
 
 /** What the panel shows for one vendor's CLI. Both empty means "could not tell", which is grey. */

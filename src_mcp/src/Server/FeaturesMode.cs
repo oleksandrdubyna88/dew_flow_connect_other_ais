@@ -39,6 +39,8 @@ internal static class FeaturesMode
         // C2 (the epics 1–3 consultation): a consultant entry's and a question row's `row` — the whole catalog row, read
         // by the reviewer row's parser, its options applied to the consultation.
         "consultantRow",
+        // A row's `fast`: its fast mode, Off by default, for codex and claude launches (todo/PLAN_fast_mode.md).
+        "fastMode",
     ];
 
     internal static async Task<int> RunAsync()

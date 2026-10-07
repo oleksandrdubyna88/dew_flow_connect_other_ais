@@ -120,6 +120,13 @@ export interface ChatLaunch {
    * the server's own rule (`RosterBuilder.EffortFor`), and absent or empty sends no flag.
    */
   readonly effort?: string;
+  /**
+   * The tier to force, when the row has one (todo/PLAN_fast_mode.md): `off` — the default — or `on`; absent sends nothing
+   * ("As the CLI is set", or a runtime and model with no tier). codex reads it as `-c service_tier`.
+   */
+  readonly fast?: 'on' | 'off';
+  /** For claude: the one-key settings file that says `fast` — the chat's own (`chatFastSettings`). */
+  readonly fastSettings?: string;
 }
 
 /** What a chat's model may do: answer from text, or act on the computer. See `ChatLaunch.access`. */

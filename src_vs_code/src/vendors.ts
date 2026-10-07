@@ -3,7 +3,7 @@ import { storedApiSettings } from './apiSettings';
 import { reviewsFeatures } from './featureGate';
 import { Runtime, RUNTIMES } from './models';
 import { saidText } from './saidText';
-import { catalogFields, CatalogUse } from './catalogFields';
+import { catalogFields, CatalogUse, type FastSetting } from './catalogFields';
 
 /** Every CLI shape this build can drive. Kept beside the parser that has to recognise them. */
 
@@ -151,6 +151,8 @@ export interface Vendor {
   readonly chatStartingPrompt?: string | undefined;
   /** An api row asks for its answer as a stream (todo/PLAN_api_streaming.md). Absent = off, today's call. */
   readonly stream?: boolean | undefined;
+  /** The row's fast mode (todo/PLAN_fast_mode.md): `on` or `cli`; absent = Off, the default — forces the standard tier. */
+  readonly fast?: FastSetting | undefined;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */

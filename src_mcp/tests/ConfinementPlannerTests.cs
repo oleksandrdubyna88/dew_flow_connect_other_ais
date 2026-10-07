@@ -227,7 +227,8 @@ public sealed class ConfinementPlannerTests
 
         args.Should().Equal(
             "--search", "exec", "-s", "read-only", "--ephemeral", "--skip-git-repo-check", "--color", "never",
-            "--json", "-o", output, "-m", "gpt-6-astra", "-");
+            // The row's fast mode, Off by default (todo/PLAN_fast_mode.md), before the instructions on stdin.
+            "--json", "-o", output, "-m", "gpt-6-astra", "-c", "service_tier=default", "-");
         Path.GetDirectoryName(Path.GetFullPath(output)).Should().Be(Path.GetFullPath(Answers));
         web.Request.WorkingDirectory.Should().Be(Scratch);
 
@@ -333,7 +334,8 @@ public sealed class ConfinementPlannerTests
 
         var codex = new CodexConsultant(new CodexRuntime()).Build(launch).Request.Arguments.ToList();
         codex.Should().Equal(
-            "exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", Repo, "--json", "-o", codex[codex.IndexOf("-o") + 1], "-m", "m", "-");
+            "exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", Repo, "--json", "-o", codex[codex.IndexOf("-o") + 1], "-m", "m",
+            "-c", "service_tier=default", "-");
 
         new AntigravityConsultant(new AntigravityRuntime()).Build(launch).Request.Arguments.Should().Equal(
             "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--model", "m", "--add-dir", Repo);

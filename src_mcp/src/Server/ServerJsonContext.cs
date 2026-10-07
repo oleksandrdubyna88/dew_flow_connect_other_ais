@@ -20,6 +20,18 @@ public sealed record ProviderStatus(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ApiRowReport? Api { get; init; }
+
+    /// <summary>
+    /// The fast mode this row's launches REQUEST — <c>off</c>, <c>on</c> or <c>cli</c> (todo/PLAN_fast_mode.md) — for a
+    /// row that has a tier; absent for every other, so its JSON reads as it did. What the seam reads back.
+    /// </summary>
+    /// <remarks>
+    /// The requested state, never the one the vendor grants (the fast-mode code round): <c>on</c> is held off by a claude
+    /// account whose usage credits are off, and a codex model that does not advertise the tier drops it with a warning
+    /// (research/RESULTS_fast_mode_measured_2026-10-07.md). Only a run says what a launch actually got.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Fast { get; init; }
 }
 
 /// <summary>An api row through its module's eyes (the operator's per-model settings, 2026-09-27).</summary>
