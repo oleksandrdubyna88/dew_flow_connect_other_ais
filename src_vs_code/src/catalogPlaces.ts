@@ -50,8 +50,9 @@ export const CATALOG_TABS: readonly CatalogTab[] = [
 ];
 
 /**
- * Every id the old Settings page answered to, and the place that holds it now (D11). A test reads the old page's own
- * sections, so an old tab added without a place here is a red test, not a deep link that opens the first tab.
+ * Every id the old Settings page answered to, and the place that holds it now (D11). `catalogPlaces.test.ts` holds the
+ * ids literally — the old page's sections, which it once read them from, go in E5.1 — so an id dropped from here is a
+ * red test, not a deep link that opens the first tab.
  */
 export const OLD_TAB_PLACES: Readonly<Record<string, string>> = {
   reviewers: 'models',

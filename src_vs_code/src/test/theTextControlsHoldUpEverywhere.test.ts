@@ -3,11 +3,11 @@ import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { presetEdit } from '../chatPresetsPage';
+import { presetEdit } from '../chatPresetsMessages';
 import { notificationsPageHtml, waitingPageHtml } from '../notificationsPage';
 import { panelHtml } from '../panelView';
 import { phraseEdit } from '../phrasesPage';
-import { roleEdit } from '../rolesPage';
+import { roleEdit } from '../rolesMessages';
 import { scalePx } from '../zoomControl';
 import { blanked } from './blankedSource';
 import { stylesheet } from './cssRules';

@@ -1037,7 +1037,7 @@ test('the Settings tab bundles without the host, and the shipped page switches a
   // The state the page is drawn from, from the compiled modules: the bundle is under test, not the fixture.
   const { DEFAULTS } = await import('../settingsShape');
   const { DEFAULT_VENDORS } = await import('../vendors');
-  const { Node, runPageHtml } = await import('./rolesPageHarness');
+  const { Node, runPageHtml } = await import('./pageScriptHarness');
   const html = shipped.settingsHtml!({
     settings: DEFAULTS, vendors: DEFAULT_VENDORS, codexModels: [], agyModels: [], localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { rolesFieldOf } from '../rolesPage';
+import { rolesFieldOf } from '../rolesMessages';
 
 /**
  * Which roles commands are typing — debounced by `settledWrites` — and which are a pick, applied at once

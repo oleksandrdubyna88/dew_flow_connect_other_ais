@@ -122,12 +122,12 @@ import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
-import { roleEdit } from './rolesPage';
+import { roleEdit } from './rolesMessages';
 import { roleSwitchFollows } from './rolesSwitch';
 import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
-import { commandEdit } from './commandsPage';
+import { commandEdit } from './commandsMessages';
 import { flushChatPresetEdits, onChatPresetsRedraw, queueChatPresetEdit } from './chatPresetsHost';
-import { presetEdit } from './chatPresetsPage';
+import { presetEdit } from './chatPresetsMessages';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
 import {

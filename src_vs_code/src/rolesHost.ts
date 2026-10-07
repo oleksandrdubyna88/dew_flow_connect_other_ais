@@ -7,7 +7,7 @@ import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';
 import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './roles';
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
-import { rolesFieldOf, type RolesCommand } from './rolesPage';
+import { rolesFieldOf, type RolesCommand } from './rolesMessages';
 import { promptFile } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
@@ -22,7 +22,7 @@ import type { RolesEmbedState } from './rolesEmbed';
  * `rolesPanel.ts`, never copied: two copies of "which layer is written, in what order, with which refusals" is the
  * defect the reuse rule exists for.
  *
- * <p>Everything DECIDED is in `rolesEdit.ts`, `rolesPage.ts` or `roles.ts`. What is here is what only a host can do:
+ * <p>Everything DECIDED is in `rolesEdit.ts`, `rolesMessages.ts` or `roles.ts`. What is here is what only a host can do:
  * read a setting, write one, write a file — and the two things a host must never get wrong, WHICH settings layer it
  * writes to and what order concurrent writes land in. Whoever draws the roles listens with {@link onRolesRedraw}; a
  * change that alters the shape of the roles redraws every page that shows them.</p>

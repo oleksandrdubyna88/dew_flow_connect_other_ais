@@ -1,10 +1,11 @@
 import type { CatalogUse } from './catalogFields';
-import { OLD_TAB_PLACES } from './catalogPlaces';
 import { escapeHtml } from './escapeHtml';
 import { USE_LABELS } from './modelCardFields';
-import { BLANK_REGIONS } from './panelSurface';
 import { consultantPicksHtml } from './consultantPicks';
-import { cliButtons, consultantSection, PANEL_SECTIONS, promptsBody, questionConsultantSection, securityLaneSection, type PanelState } from './panelView';
+import {
+  cliButtons, consultantSection, gateBody, keysBody, limitsSection, promptsBody, questionConsultantSection, securityLaneSection,
+  serverBody, sideBody, teamServersSection, type PanelState,
+} from './panelView';
 import { rowsFor } from './catalogPicks';
 import { securityTryHtml } from './securityTry';
 import { rolesEmbedded } from './rolesEmbed';
@@ -17,6 +18,10 @@ import type { Vendor } from './vendors';
  * What each place of the new Settings page draws besides Models (todo/PLAN_one_model_catalog.md E4.1): the old page's
  * own section for that place, by its own builder — never a copy — so a control behaves the same on both pages until
  * E5 retires the old one. Pure: the page calls it, tests read it.
+ *
+ * <p>Every builder is NAMED here, in {@link SPLIT} or {@link MOVED_SECTIONS}. Until E5's prerequisite (b) the moved
+ * sections were found by searching the old page's section list (`PANEL_SECTIONS`) through `OLD_TAB_PLACES`, so deleting
+ * an old section in E5.1 would have emptied its place on this page without a word from the compiler.</p>
  */
 
 /**
@@ -53,12 +58,25 @@ const UNTICKED: Readonly<Partial<Record<CatalogUse, string>>> = {
 };
 
 /**
- * The state a section is drawn with. The keys are counted across EVERY row (E4.5): a row that exists for a feature
- * alone still needs its key, and the panel's `vendors` holds the current page's reviewers only.
+ * The state the keys are drawn with: counted across EVERY row (E4.5), because a row that exists for a feature alone still
+ * needs its key, and the panel's `vendors` holds the current page's reviewers only.
  */
-function stateFor(sectionId: string, state: PanelState): PanelState {
-  return sectionId === 'keys' ? { ...state, vendors: state.catalogRows ?? state.vendors } : state;
+function everyRow(state: PanelState): PanelState {
+  return { ...state, vendors: state.catalogRows ?? state.vendors };
 }
+
+/**
+ * The old sections drawn here as they are, by place, each by the builder the old page draws it with. The old page's
+ * Reviewers tab is Models, which the page builds itself; every other old tab is in {@link SPLIT}.
+ */
+const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = {
+  'reviews/gate': gateBody,
+  'reviews/limits': limitsSection,
+  'setup/keys': (state) => keysBody(everyRow(state)),
+  'setup/team': teamServersSection,
+  'setup/side': sideBody,
+  'setup/mcp': serverBody,
+};
 
 /**
  * What a Setup place adds after its moved section (E4.5): the CLIs the models run on under the keys; the data folder's
@@ -73,14 +91,14 @@ const AFTER: Readonly<Record<string, (state: PanelState) => string>> = {
 function sectionAt(place: string, state: PanelState): string {
   const split = SPLIT[place];
 
-  return split === undefined ? `${oldSectionAt(place, state)}${afterAt(place, state)}` : split(state);
+  return split === undefined ? `${movedSectionAt(place, state)}${afterAt(place, state)}` : split(state);
 }
 
 /** The current page's section for this place, by its own builder — '' where it has none. */
-function oldSectionAt(place: string, state: PanelState): string {
-  const spec = PANEL_SECTIONS.find((one) => one.surface === 'settings' && OLD_TAB_PLACES[one.id] === place);
+function movedSectionAt(place: string, state: PanelState): string {
+  const moved = MOVED_SECTIONS[place];
 
-  return spec === undefined ? '' : spec.body(stateFor(spec.id, state), BLANK_REGIONS);
+  return moved === undefined ? '' : moved(state);
 }
 
 function afterAt(place: string, state: PanelState): string {

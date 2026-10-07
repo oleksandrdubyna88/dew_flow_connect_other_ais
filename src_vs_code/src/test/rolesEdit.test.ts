@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_STAGE, composed, isActive, type RoleRow } from '../roles';
 import { promptBelongsTo, rowsAfter, type RowsOutcome } from '../rolesEdit';
-import type { RolesCommand } from '../rolesPage';
+import type { RolesCommand } from '../rolesMessages';
 
 /**
  * What one command does to the rows — the decisions the HOST used to make inline.

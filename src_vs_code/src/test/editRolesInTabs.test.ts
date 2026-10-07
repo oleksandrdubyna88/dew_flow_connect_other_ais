@@ -6,9 +6,12 @@ import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { type PanelState } from '../panelView';
 import { everyPageHtml } from './panelPages';
-import { CUSTOM_ROLES_SINCE, DEFAULT_ROLE_TAB, ROLE_TABS, nextTab, roleEdit, rolesHtml, type RolesPageState } from '../rolesPage';
+import { DEFAULT_ROLE_TAB, nextTab, rolesHtml, type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
+import { ROLE_TABS, roleEdit } from '../rolesMessages';
 import { PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
-import { Node, runRolesPage } from './rolesPageHarness';
+import { runRolesPage } from './rolesPageHarness';
+import { Node } from './pageScriptHarness';
 
 /**
  * The Edit-roles page, divided — and coloured the way the sidebar already colours these roles.

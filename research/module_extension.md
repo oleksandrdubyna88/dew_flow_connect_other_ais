@@ -10889,7 +10889,8 @@ flowchart LR
 ## The new Settings page — every tab in its place (2026-10-05, PLAN_one_model_catalog.md E4.1)
 
 Every place of the new page but Models draws the CURRENT page's section for it, by that section's own builder —
-`catalogSections.placeBody(place, state)` looks the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`, so no
+`catalogSections.placeBody(place, state)` names the builder of each place (`SPLIT`, and since E5 prerequisite (b)
+`MOVED_SECTIONS` — it used to look the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`), so no
 builder is copied and a control behaves the same on both pages until E5 retires the old one. The page wraps it in a
 `.moved` column (760 px, the width the sections were written for); the MCP server keeps its 1.5× zoom on its new pane.
 
@@ -11237,3 +11238,38 @@ TEMP of `C:\temp&calc&` would have run a command (PR #693's review) — and one 
 quotes (`"`, `%`, `!`, a control character) refuses the launch with a sentence naming it. That test is
 `cliVersions.expandedByTheShell`, the same rule the CLI version probe's shim line has always followed. Without the
 shell the arguments go as they are.
+
+## What the new Settings page took from the old pages, moved out first (2026-10-07, PLAN_one_model_catalog.md E5 prerequisite (b))
+
+E5.1 deletes `rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and the old page's settings sections. The new page,
+the editing cores and the panel provider took builders, contracts and handlers from them, so those moved first, into
+modules of their own, as a pure move: no behaviour and no markup changed. The old pages still work; they import from
+the new modules, never the other way.
+
+| Module | Holds | Used by |
+|---|---|---|
+| `rolesMessages.ts` | `RolesCommand`, `roleEdit`, `rolesFieldOf`, `ROLE_TABS`, `isShippedPrompt` | `rolesHost`, `rolesEdit`, `panelProvider`, `rolesPanel`, `rolesPage` |
+| `rolesBlocks.ts` | `roleBlock` (+ `RoleBlockOptions`), `canActivate`, `canDeactivate`, `tooOldFor`, `unknownServerNote`, `CUSTOM_ROLES_SINCE`, `stageIsFull`, `strandedHtml` | `rolesEmbed`, `rolesPage`, `panelView` |
+| `commandsMessages.ts` | `PageCommand`, `commandEdit`, `STAGE_NAMES` | `commandsHost`, `panelProvider`, `commandsPanel`, `commandsBlocks` |
+| `commandsBlocks.ts` | `customBlock`, `shippedBlock`, `CommandAttrs`, `commandsSkewNote` | `commandsEmbed`, `commandsPage` |
+| `chatPresetsMessages.ts` | `PresetCommand`, `presetEdit`, `editedRows`, `editRepaints`, `presetSettlesAs` | `chatPresetsHost`, `chatModelEdits`, `panelProvider`, `chatPresetsPanel` |
+| `chatPresetBlocks.ts` | `promptBlock`, `PresetAttrs` | `chatTabEmbed`, `chatPresetsPage` |
+| `test/pageScriptHarness.ts` | the DOM shim every page test runs on: `Node`, `runPageHtml`, `presses`, `Page` | every page test; `rolesPageHarness.ts` keeps `runRolesPage` alone |
+
+- **The old sections by name.** `panelView` exports `gateBody`, `keysBody`, `sideBody`, `serverBody`, and two wrappers
+  that both pages draw through — `limitsSection` (the round-limit note counts the reviewers on for code) and
+  `teamServersSection`. `catalogSections.MOVED_SECTIONS` maps each place to its builder; nothing searches
+  `PANEL_SECTIONS` any more, so deleting an old section cannot empty a place without a compiler error.
+- **Inventories that cannot shrink.** `catalogTabsInPlace.test.ts` lists the five sections that move whole (gate, limits,
+  team servers, this side, MCP server) with place and builder, and counts them; `catalogPlaces.test.ts` holds the twelve
+  old tab ids literally. Both used to be read off `PANEL_SECTIONS` / `settingsSections()` and would have passed on
+  nothing once those were deleted. Each assertion was seen red with a planted change.
+- **Complexity.** `roleEdit` and `presetEdit` are tables of message readers now, and `roleBlock`, a role prompt's block
+  and the version comparison behind `tooOldFor` are split into named parts: the new modules are held to
+  `complexity: 4`, where the old functions were suppressed exceptions (`eslint-suppressions.json` only shrank). The move
+  was checked against the previous build: the three parsers over 104 006 messages each, the html of the old pages, the
+  embeds and both Settings pages over 997 renders, and `tooOldFor` over 25 920 versions — all identical.
+- **The cycle rules.** The new modules import no page and never `panelView.ts`: `panelView` imports `rolesBlocks`, and
+  `chatTabEmbed` and `catalogSections` import `panelView`, so an edge back closes a ring. `chatPresetsMessages` imports
+  neither `chatPresetsHost` nor `chatModelEdits` (the host imports both). `importCycles.test.mjs`'s `KNOWN` list did not
+  change.

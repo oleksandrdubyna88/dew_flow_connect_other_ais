@@ -67,7 +67,7 @@ import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
 import { type WatchedDir } from './escalationDirs';
 import { roleOnServers } from './serverRoles';
-import { CUSTOM_ROLES_SINCE } from './rolesPage';
+import { CUSTOM_ROLES_SINCE } from './rolesBlocks';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -500,9 +500,9 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneSection(state, state.vendors) },
   { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
   { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
-  { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
+  { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsSection(state) },
   { id: 'keys', title: 'Vendor keys', surface: 'settings', body: (state) => keysBody(state) },
-  { id: 'teamServers', title: 'Team servers', surface: 'settings', body: (state) => teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '') },
+  { id: 'teamServers', title: 'Team servers', surface: 'settings', body: (state) => teamServersSection(state) },
   { id: 'side', title: 'This side', surface: 'settings', body: (state) => sideBody(state) },
   { id: 'server', title: 'MCP server', surface: 'settings', body: (state) => serverBody(state) },
 ];
@@ -1639,6 +1639,13 @@ export function featureBox(vendor: Vendor, id: string, stageOn: boolean, note: s
   return note.length === 0 ? box : `${box} <span class="hint feature-off">${escapeHtml(note)}</span>`;
 }
 
+/**
+ * The Team servers tab: the servers this side knows (`teamServerView.ts`), against the newest one published. Both
+ * Settings pages draw it through this — the new one at Setup › Team servers.
+ */
+export function teamServersSection(state: PanelState): string {
+  return teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '');
+}
 
 /**
  * One switch, and the words for the side it applies to.
@@ -1646,8 +1653,12 @@ export function featureBox(vendor: Vendor, id: string, stageOn: boolean, note: s
  * <p>The side is NAMED rather than implied. Somebody with a Windows window and two WSL distros is
  * about to keep three sets of settings, and the only way to be sure which one is being edited is to
  * read it off the panel that is editing it.</p>
+ *
+ * <p>Exported, as the gate, limits, keys and MCP server tabs below are, because the new Settings page draws each in
+ * its own place by its own builder (Setup › This side here) — `catalogSections.MOVED_SECTIONS`,
+ * todo/PLAN_one_model_catalog.md E4.1 and E5 prerequisite (b).</p>
  */
-function sideBody(state: PanelState): string {
+export function sideBody(state: PanelState): string {
   const here = state.side.length === 0 ? 'this machine' : state.side;
 
   return `<div class="field">
@@ -1661,7 +1672,8 @@ function sideBody(state: PanelState): string {
 </div>`;
 }
 
-function gateBody(state: PanelState): string {
+/** The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate. */
+export function gateBody(state: PanelState): string {
   const s = state.settings;
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
   // sections describing one thing. What is left here is the one decision that belongs to neither
@@ -1826,13 +1838,23 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
 }
 
 /**
+ * The Limits tab, as both Settings pages draw it: the round limit's note counts the reviewers switched on for code.
+ * One function rather than the expression written into each page's table, which would be the second copy that drifts.
+ */
+export function limitsSection(state: PanelState): string {
+  return limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length);
+}
+
+/**
  * The keys, and — first — whether they are needed at all.
  *
  * <p>Somebody reading "CredsForDevs config key" with codex and gemini configured has no way to
  * know the answer is "not yet". A field that cannot say whether it applies to you is a field that
  * gets filled in wrongly, so this one says it.</p>
+ *
+ * <p>The new Settings page draws it at Setup › Vendor keys, handed every catalog row as `vendors` (E4.5).</p>
  */
-function keysBody(state: PanelState): string {
+export function keysBody(state: PanelState): string {
   // Every row whose models belong to an endpoint, by the same decision the model list and its label use. Counting only
   // ENABLED rows said "none of them needs an API key" about a switched-off OpenRouter row that cannot run without one
   // (research/PLAN_model_search_and_busy_marks.md, symptom 4).
@@ -1921,8 +1943,10 @@ export function serverSentence(server: ServerStatus, side: string): string {
  * check never ran" look identical when only a mismatch is displayed — and this check silently
  * never ran at all for weeks, asking GitHub for the newest release of any kind and being handed
  * an extension tag.</p>
+ *
+ * <p>The new Settings page draws it at Setup › MCP server.</p>
  */
-function serverBody(state: PanelState): string {
+export function serverBody(state: PanelState): string {
   const installed = `<div class="status">${escapeHtml(serverSentence(state.server, state.side))}</div>`;
   const present = state.server.kind !== 'absent';
 

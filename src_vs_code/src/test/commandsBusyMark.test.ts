@@ -6,7 +6,7 @@ import { type BusySnapshot } from '../busySnapshot';
 import type { CommandRow } from '../commands';
 import { commandsHtml, type CommandsPageState } from '../commandsPage';
 import { PageClock } from './panelPageHarness';
-import { Node, type Page, runPageHtml } from './rolesPageHarness';
+import { Node, type Page, runPageHtml } from './pageScriptHarness';
 
 /**
  * The gate commands tab shows that a structural change is working (research/PLAN_busy_marks_on_every_webview.md, E3).
