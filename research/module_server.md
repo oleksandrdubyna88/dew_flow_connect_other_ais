@@ -884,7 +884,8 @@ flowchart LR
   FO -->|none · disk| SC[SecretCheck → QuestionPrompt / ApiQuestionPrompt]
   FO -->|api none only| OUT[QuestionOutlineCache — repo + HEAD, last 4<br/>FeatureOutlineBuilder.BuildAtHeadAsync on a miss]
   FO -->|disk roots| INV[FilesystemInvariant — one snapshot pair per fan-out]
-  FO --> RL[QuestionRowLaunch × N in parallel<br/>ReviewerExecutor.LaunchAsync · api follow-ups · ledger kind question]
+  FO --> RL[QuestionRowLaunch × N in parallel<br/>ConsultantTurn: a launch, or one follow-up · api follow-ups · one ledger line per turn, kind question]
+  RL -->|before a follow-up: ChangesSoFar| INV
   RL -->|each row as it settles| ST
   FO -->|heartbeat every 30 s| ST
   ST --> DB[(question_consults · question_consult_rows — step 17)]
@@ -948,8 +949,9 @@ ceiling already. Nothing reads them yet; the Logs tab (S4) will, through `--log`
 **The quota and the ledger.** Ten questions per caller session (`COAI_QCONSULT_QUESTIONS_PER_SESSION`),
 counted through the consultant's `ConsultCallCounter` under its own key (`q:` + caller) — the stuck
 consultant's cap and this one never spend each other — taken once per QUESTION, after the argument checks and
-the "no row on" check and before the launches, so a refused argument spends nothing. Every launch is a ledger
-line of kind `question`, role `question`, stage `Question`: a fourth `UsageKinds` entry, local-only like
+the "no row on" check and before the launches, so a refused argument spends nothing. Every TURN of a row is one
+ledger line — a turn is one launch, or since 2026-10-07 a launch and its follow-up, billed once (*A silent question
+row is continued once* below) — of kind `question`, role `question`, stage `Question`: a fourth `UsageKinds` entry, local-only like
 `consult`, so the Team server's vocabulary test still reads *known == wire ∪ local-only*.
 
 **The settings** are one record, `QuestionConsultSettings`, one property on `PanelSettings` (D12 — paid for
@@ -1259,6 +1261,33 @@ against the code without its fix. What changed on this side, by item:
 
 Item 6 (the panel's 15-minute default), 10 and 12 (the extension's watchers) are the extension's; see
 [module_extension.md](module_extension.md).
+
+## A silent question row is continued once, as a consultation is (2026-10-07, `research/PLAN_a_question_row_on_agy_is_continued_once.md`)
+
+**The symptom.** The first day the operator's question consultant had rows, an antigravity `question-disk` row
+(`gemini-3.8-flash-low`, root `/home/jinx/git`) ended `failed` in 18.6 s, "the consultant exited cleanly but answered
+nothing", beside a codex row that answered. The model's first act on a disk question is `run_command` (`ls -la <root>`);
+headless agy auto-denies it and ends the turn empty — measured 3 of 3 on Windows
+([RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md)). The stuck consultant had been cured of
+exactly this by E1.3 (`ConsultantTurn`); `QuestionRowLaunch` launched a CLI row once and never reached the cure.
+
+**What it does now.** A row whose runtime is an `IConsultantRuntime` — every CLI adapter, and the api row — takes each
+turn through `ConsultantTurn.RunAsync`, the stuck consultant's own one-or-two: a launch that exited cleanly and said
+NOTHING is continued once in the same conversation with what the adapter offers (agy: `AntigravityFollowUps.NoCommands`
+on `--conversation <id>`), never a third launch, inside the time the row has left. An adapter that offers no follow-up
+(codex, claude, local, api) still makes one launch per turn; the api row's own `IAnsweringFollowUps` loop runs around it
+unchanged.
+
+| Concern | Rule | Where |
+|---|---|---|
+| A row after which a watched root changed must not get a second chance | `ConsultantTurn` asks `RowLaunchInput.ChangesSoFar` before the follow-up; the fan-out hands its OWN comparison (`ChangesAsync`, which `BreachAsync` now calls too) over the snapshots it took before any launch; an unwatched root is no change, as the invariant already says (`NotWatched`) | `QuestionFanOut.RunOneAsync`, `QuestionFanOut.ChangesAsync` |
+| agy's usage is CUMULATIVE across a conversation | ONE ledger line per turn at `ConsultantTurn.UsageOf` (the larger of the two reports, never their sum), written in `finally` over the launches `landed` has handed back — so a turn that throws cannot drop the first launch's usage; a turn that threw is written `interrupted`, never the clean first launch's `ok` (code round) | `QuestionRowLaunch.TurnAsync` |
+| The reason says only what happened | a follow-up RAN: the adapter's classification (`IConsultantRuntime.SilentFailure` → agy "reached for a shell command … did not answer even when told the command would not come"); NONE ran: the CLI's own last word (`ConsultFailures.EmptyOf`, which names the denial from agy's stderr), plus the changed roots when they stopped it. The `Cure` sentences are never used — they point at the stuck consultant's tab | `QuestionRowLaunch.Silent` |
+
+**What it does not fix.** The answer a continued agy row gives is weak: plan mode has only `view_file` (no directory
+listing), so on a question over a whole folder the model names a command for the caller to run instead of searching —
+an answer the caller can act on, where there was none. The `Toolbox` sentence the stuck consultant's prompt carries is
+not in the question prompts.
 
 ## The round engine is its own unit (2026-09-25)
 
@@ -6408,3 +6437,13 @@ streamed)`). A gateway that answered one JSON, and an older coai-mcp reached thr
 `--stream on`, both write none. A ✓ Check of an api row with its switch on reads that field from the launches' stdout
 (`ConsultantCheck.StreamVerdict`) and records `streamed` or `not-streamed` in `ConsultCheckRecord.Streamed` — empty for
 every other check — so the card can say that the setting did nothing.
+
+## A row's `fast` (2026-10-07, research/PLAN_fast_mode.md)
+
+`VendorDto.Fast` (`off` | `on` | `cli`, any case; absent or unknown is Off — the owner's default) is parsed by
+`ProviderSettings.FastOf` into `ProviderSettings.Fast` and carried into every launch of the row (module_runners.md, *A
+row's fast mode*). `--features` lists `fastMode`, so the extension sends the field only to a binary that reads it.
+`--providers` reports `fast` (`ProviderStatus.Fast`, `PanelService.FastReportOf`) only for a row with a tier
+(`FeatureAvailability.RowHasFastTier`), and it is the REQUESTED state, never the one the vendor grants: `on` is held off
+by a claude account whose usage credits are off, and a codex model that does not advertise the tier drops it with a
+warning (research/RESULTS_fast_mode_measured_2026-10-07.md).

@@ -63,7 +63,9 @@ internal sealed record VendorDto(
     /// <summary>A CLI row's own reviewer timeout, in whole minutes (PLAN_one_model_catalog.md E2.2). Absent is the round's.</summary>
     int? TimeoutMinutes = null,
     /// <summary>For an `api` row: ask for the answer as a stream (research/PLAN_api_streaming.md). Absent or false is today's call.</summary>
-    bool? Stream = null);
+    bool? Stream = null,
+    /// <summary>The row's fast mode (research/PLAN_fast_mode.md): `off`, `on` or `cli`. Absent is Off — the owner's default.</summary>
+    string? Fast = null);
 
 /// <summary>
 /// One vendor row's price on the wire — dollars per million tokens (PLAN_feature_review.md S3.7).

@@ -155,9 +155,9 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
         return request;
     }
 
-    /// <summary>The model, then the row's effort in the reviewer's own spelling (todo/PLAN_one_model_catalog.md, C2).</summary>
+    /// <summary>The model, then the row's effort and its fast mode, in the reviewer's own spellings (C2; research/PLAN_fast_mode.md).</summary>
     private static IEnumerable<string> Model(ReviewerSettings settings) =>
-        [.. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [], .. ClaudeRuntime.EffortArguments(settings)];
+        [.. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [], .. ClaudeRuntime.EffortArguments(settings), .. ClaudeFastMode.Args(settings)];
 
     /// <summary>
     /// <c>--restricted</c> for a CLI that declared it, nothing for one whose help came back without it — and a

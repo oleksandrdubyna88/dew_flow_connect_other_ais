@@ -122,7 +122,16 @@ export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf:
     ...timeoutOnTheWire(v, features),
     ...cliEffortOnTheWire(v, features),
     ...streamOnTheWire(v, features),
+    ...fastOnTheWire(v, features),
   };
+}
+
+/**
+ * A row's fast mode, to a binary that lists `fastMode` (research/PLAN_fast_mode.md) — and to no other, which would skip the
+ * member while the card said it was set. Off crosses as nothing: the binary's own default is Off.
+ */
+function fastOnTheWire(v: Vendor, features: readonly string[]): { fast?: 'on' | 'cli' } {
+  return v.fast !== undefined && features.includes(FEATURES.fastMode) ? { fast: v.fast } : {};
 }
 
 /**

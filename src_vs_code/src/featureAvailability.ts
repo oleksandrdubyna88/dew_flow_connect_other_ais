@@ -32,3 +32,4 @@ const JUDGE: Readonly<Record<EffortRow['source'], Judge>> = {
 function notIn(effort: string, legal: readonly string[], runtime: string): string {
   return legal.includes(effort) ? '' : `'${effort}' is not an effort ${runtime} accepts — use one of: ${legal.join(', ')}.`;
 }
+

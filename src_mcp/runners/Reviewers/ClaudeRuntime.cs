@@ -95,6 +95,8 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 "--add-dir", worktreePath,
                 .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
                 .. EffortArguments(settings),
+                // The row's fast mode, as a one-key settings file (research/PLAN_fast_mode.md).
+                .. ClaudeFastMode.Args(settings),
             ],
             worktreePath)
         {

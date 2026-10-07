@@ -381,8 +381,9 @@ sealed class Steering
 /// </summary>
 /// <remarks>
 /// Read ONLY when the environment carries no mode and the argv is a vendor's shape (codex's `exec` or
-/// `--search`, claude's `-p`, the api shim's `--ask-api`): a verb-mode launch is never redirected, and
-/// a vendor-mode launch steered by its environment never reads the file. The test that writes it deletes it.
+/// `--search`, claude's `-p`, the api shim's `--ask-api`, agy's stream launch `--print=`): a verb-mode launch
+/// is never redirected, and a vendor-mode launch steered by its environment never reads the file. The test that
+/// writes it deletes it.
 /// </remarks>
 static class MinimalSteering
 {
@@ -406,8 +407,11 @@ static class MinimalSteering
         return parsed is null ? null : new Dictionary<string, string>(parsed, StringComparer.Ordinal);
     }
 
+    /// <summary>The first arguments a vendor launch starts with: codex's `exec`/`--search`, claude's `-p`, agy's `--print=`.</summary>
+    private static readonly HashSet<string> VendorFirstArguments = new(["exec", "--search", "-p", "--print="], StringComparer.Ordinal);
+
     private static bool IsVendorShape(string[] args) =>
-        args[0] is "exec" or "--search" or "-p" || args.Contains("--ask-api", StringComparer.Ordinal);
+        VendorFirstArguments.Contains(args[0]) || args.Contains("--ask-api", StringComparer.Ordinal);
 }
 
 [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>), TypeInfoPropertyName = "DictionaryStringString")]

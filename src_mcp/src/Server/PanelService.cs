@@ -276,8 +276,15 @@ public sealed class PanelService
             provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, health.Note)
         {
             Api = ApiReportOf(provider),
+            Fast = FastReportOf(provider),
         };
     }
+
+    /// <summary>The fast mode a row with a tier REQUESTS, in the wire's own words — null for a row without one.</summary>
+    private static string? FastReportOf(ProviderSettings provider) =>
+        Core.Catalog.FeatureAvailability.Builtin.RowHasFastTier(RuntimeResolution.NameOf(provider.Identity()), provider.Model, provider.BaseUrl)
+            ? provider.Fast.ToString().ToLowerInvariant()
+            : null;
 
     /// <summary>
     /// The module's view of an <c>api</c> row for the panel — its capabilities, its calibrated defaults, what

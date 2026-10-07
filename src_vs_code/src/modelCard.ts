@@ -1,7 +1,8 @@
 import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
-import { effortField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { rowHasFastTier } from './fastTier';
 import {
   type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
 } from './modelCardWorld';
@@ -122,6 +123,8 @@ const IGNORED: readonly { readonly feature: string; readonly what: string; reado
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
   // A consultation reads the row's settings only from a binary that takes the whole row (C2; the epics 4–5 consultation).
   { feature: 'consultantRow', what: 'its own settings when it consults', set: (vendor) => consults(vendor) && hasOwnSettings(vendor) },
+  // Off is the default for every binary that reads it; only a state the person CHOSE is said ignored.
+  { feature: 'fastMode', what: 'its fast mode', set: (vendor) => vendor.fast !== undefined },
 ];
 
 /** Whether the row is ticked for a consultant or a question consultant. */
@@ -199,7 +202,13 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 
   return vendor.runtime === 'api'
     ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now))
-    : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id);
+    : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id)
+      + fastOf(vendor, id, facts);
+}
+
+/** The fast-mode select, for a row that has a tier (research/PLAN_fast_mode.md). */
+function fastOf(vendor: Vendor, id: string, facts: ModelCardFacts): string {
+  return rowHasFastTier(vendor) ? fastField(vendor, id, newTag('model.fast', facts.firstSeen, facts.now)) : '';
 }
 
 function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {

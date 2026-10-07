@@ -24,7 +24,11 @@ public static class QuestionResolution
     /// </remarks>
     public static IReadOnlyList<string> Answering { get; } = [.. ConsultantResolution.Consulting.Union(["api"], StringComparer.Ordinal)];
 
-    public static IAnsweringRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
+    /// <summary>
+    /// The runtime a question row's vendor answers on — a consultant runtime in every arm, and typed so: a question row's
+    /// turn is a <see cref="ConsultantTurn"/>, which takes nothing narrower (research/PLAN_a_question_row_on_agy_is_continued_once.md).
+    /// </summary>
+    public static IConsultantRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
     {
         // Whatever RuntimeResolution says the row IS, not a `new ApiRuntime` regardless: a downcast that
         // fell back would discard any wrapper resolution ever returns, along with its configuration.

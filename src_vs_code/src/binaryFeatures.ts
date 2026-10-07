@@ -34,6 +34,8 @@ export const FEATURES = {
   apiStream: 'apiStream',
   /** C2 (the epics 1–3 consultation): a consultant entry's and a question row's `row` — the whole catalog row. */
   consultantRow: 'consultantRow',
+  /** A row's `fast`: its fast mode for codex and claude launches, Off by default (research/PLAN_fast_mode.md). */
+  fastMode: 'fastMode',
 } as const;
 
 export interface BinaryFeatures {

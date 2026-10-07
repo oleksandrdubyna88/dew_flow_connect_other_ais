@@ -205,6 +205,8 @@ public static class ConsultantResolver
         SystemPrompt = options.SystemPrompt,
         TimeoutMinutes = options.TimeoutMinutes,
         CliEffort = options.CliEffort,
+        // The row's fast mode too (research/PLAN_fast_mode.md): a consultant runs on the tier its row says.
+        Fast = options.Fast,
     };
 
     private static ResolvedConsultant Legacy(ConsultantChoice choice, string callerKind, IReadOnlyList<ProviderSettings> rows)

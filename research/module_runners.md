@@ -1231,6 +1231,16 @@ carries.
   (`Breached` is that list being non-empty — the service reports a breach from THESE changes and takes no
   second snapshot; any other turn gets the final comparison), `SurvivingHandle` (the last launch that named
   one — a killed follow-up does not lose the conversation) and `TurnUsage`.
+- **Three callers since 2026-10-07**: the stuck consultation, the consultant card's ✓ Check, and a question row
+  (`QuestionRowLaunch.TurnAsync`, `research/PLAN_a_question_row_on_agy_is_continued_once.md`) — whose `changesSoFar` is the
+  question fan-out's comparison over its watched disk roots, and which writes ONE ledger line per turn (not per launch;
+  kind `question`, role `question`, stage `Question`) at `UsageOf` over the launches `landed` handed back, its whole
+  `Usage` (cached count and markers included), `interrupted` when the turn threw. `QuestionResolution.For` and
+  `RowAdmission.Admitted.Runtime` are typed `IConsultantRuntime`, which every arm already returned, so a row has no other
+  road. Before that a question row launched once, so an antigravity `question-disk` row whose
+  `run_command` was denied ended "answered nothing" (empty 7 of 7 measured, and 6 of 6 answered on Windows when continued —
+  [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md)). `ConsultFailures.EmptyOf` is the
+  silent launch's sentence WITHOUT the adapter's refusal reading, for a turn that was never continued.
 - **Billing.** `ConsultationUsage.OfTwoLaunches(cumulative, first, second)`: antigravity reports usage per
   CONVERSATION, so a two-launch turn is the field-wise MAXIMUM of the two reports (a timed-out follow-up
   reports `Usage.None` and must not erase the first launch's tokens); any other vendor, the sum. The
@@ -2273,3 +2283,28 @@ ceiling, thinking switch and stream into launch settings. The roster (`RosterBui
 card's ✓ Check (`ConsultantTurnInputs`) and the question consultant (`QuestionFanOut`) all call it; a test keeps any
 of them from carrying the fields by hand again. `ApiRuntime.Build` adds `--stream on` only when the row's switch is
 on, so every launch before the switch is spelled as it was.
+
+## A row's fast mode reaches every codex and claude launch (2026-10-07, research/PLAN_fast_mode.md, Story A)
+
+`ReviewerSettings.Fast` (`Core.Catalog.FastMode`: `Off` — the default —, `On`, `Cli`) is set from the row at all three
+places a row becomes a launch (`RosterBuilder.SettingsFor`, `ConsultantTurnInputs.Plain`, `QuestionFanOut.SettingsFor`)
+and read by the runtime that has a tier:
+
+- **codex** — `CodexRuntime.TierArgs`: `-c service_tier=default` for Off, `=fast` for On, nothing for Cli; nothing at all
+  on somebody else's endpoint (a provider override — `CustomCodexRuntime`, `DeepseekRuntime` — has no codex tier). The
+  reviewer argv and all three consultant branches (stuck, resumed, question row) take it from the one method. Unquoted,
+  as `sandbox_mode=read-only`. Measured (`research/RESULTS_fast_mode_measured_2026-10-07.md`): codex reads and checks the
+  key per model and DROPS an unadvertised value with a warning — never a refusal.
+- **claude** — `ClaudeFastMode.Args`: `--settings <file>`, the file holding exactly one key, `fastMode` (documented
+  headless spelling), as a path because an inline JSON argument's quotes are re-tokenised by an npm `.cmd` shim. The
+  files (`fast-mode/fast-on.json`, `fast-off.json` under the data folder) are written only when missing or different,
+  through a temp file of the write's OWN (a GUID name) moved into place, one writer at a time in the process — 32
+  parallel launches on one shared temp name made one fail (`ManyLaunchesAtOnce_AllGetTheFile_NoneFails`, the code
+  round). A launch with no data folder sends no flag rather than read a file from a shared temp folder another local
+  user could plant first. `fast-mode/` is in `shared/data-inventory.json` as written again by itself (not moved). Only a model `shared/feature-availability.json` lists has the tier (the Opus family, alias and
+  `[1m]` suffix included); any other, and an empty model, is sent nothing in either state.
+
+Which runtime and model has a tier is data: the `fastMode` block of `shared/feature-availability.json`
+(`FeatureAvailability.FastMode` / `HasFastTier`, one row per runtime, refused whole when a runtime has none or two, or
+when a row's `models` does not match its source — a `models` source lists its models and every other lists none —
+the extension's generator checks the same, `FAST_RULES`).
