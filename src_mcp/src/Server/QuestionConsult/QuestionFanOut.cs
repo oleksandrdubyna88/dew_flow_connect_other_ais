@@ -94,7 +94,7 @@ public sealed class QuestionFanOut(
         // Started now and awaited by the api none rows alone (S4b item 11): every other row launches without it.
         var outline = launches.Any(i => i is RowInput.AfterOutline) ? OutlineAsync(input, ct) : Task.FromResult(string.Empty);
         var invariant = await SnapshotsAsync(launches, ct);
-        await LaunchAllAsync(current, launches, outline, ct);
+        await LaunchAllAsync(current, launches, outline, invariant.Watched, ct);
         var breach = await BreachAsync(invariant.Watched, ct);
 
         var settled = Settled(current.Record, launches, breach, invariant.Unwatched);
@@ -235,7 +235,7 @@ public sealed class QuestionFanOut(
 
     // ---------- the launches, in parallel ----------
 
-    private async Task LaunchAllAsync(Current current, IReadOnlyList<RowInput> launches, Task<string> outline, CancellationToken ct)
+    private async Task LaunchAllAsync(Current current, IReadOnlyList<RowInput> launches, Task<string> outline, IReadOnlyList<Watched> watched, CancellationToken ct)
     {
         if (launches.Count == 0)
         {
@@ -248,7 +248,7 @@ public sealed class QuestionFanOut(
         {
             // Every admitted row at once (D6): no BoundedScheduler, no RepositoryLock — the rows read, and a
             // cap would turn six rows into two waves and break the five-minute promise.
-            await Task.WhenAll(launches.Select(launch => RunOneAsync(current, launch, outline, ct)));
+            await Task.WhenAll(launches.Select(launch => RunOneAsync(current, launch, outline, watched, ct)));
         }
         finally
         {
@@ -257,12 +257,16 @@ public sealed class QuestionFanOut(
         }
     }
 
-    private async Task RunOneAsync(Current current, RowInput planned, Task<string> outline, CancellationToken ct)
+    private async Task RunOneAsync(Current current, RowInput planned, Task<string> outline, IReadOnlyList<Watched> watched, CancellationToken ct)
     {
         // An api none row waits here, for its outline alone — the row's budget starts at its launch, as before.
         var launch = planned is RowInput.AfterOutline after ? after.Compose(await outline) : (RowInput.Launch)planned;
         var start = current.Record.Rows.First(r => r.RowId == launch.Row.Row.Id);
-        var input = new RowLaunchInput(launch.Row, launch.Prompt, SettingsFor(launch.Row), current.Record.RepoPath, store.AnswersDir, schemaFile, panel.QuestionConsult.RowBudget);
+        var input = new RowLaunchInput(launch.Row, launch.Prompt, SettingsFor(launch.Row), current.Record.RepoPath, store.AnswersDir, schemaFile, panel.QuestionConsult.RowBudget)
+        {
+            // The same comparison the breach is decided by, asked before a silent row is continued (ConsultantTurn).
+            ChangesSoFar = t => ChangesAsync(watched, t),
+        };
         var settled = await _launch.RunAsync(input, start, ct);
         // Persisted as it settles, so the sidebar sees per-model progress (S2 acceptance 2).
         await current.UpdateAsync(record => record.WithRow(settled) with { UpdatedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
@@ -353,6 +357,18 @@ public sealed class QuestionFanOut(
     /// <summary>The second snapshot of every watched root, compared — the sentence when any changed, else empty.</summary>
     private async Task<string> BreachAsync(IReadOnlyList<Watched> watched, CancellationToken ct)
     {
+        var changes = await ChangesAsync(watched, ct);
+
+        return changes.Count == 0 ? string.Empty : FilesystemSnapshot.Sentence(changes);
+    }
+
+    /// <summary>
+    /// What changed in every watched root since its first snapshot — the breach's comparison, and what a row asks before
+    /// a silent launch is continued (<see cref="RowLaunchInput.ChangesSoFar"/>); a root that cannot be snapshotted again
+    /// counts as changed, as it does for the breach.
+    /// </summary>
+    private async Task<IReadOnlyList<TreeChange>> ChangesAsync(IReadOnlyList<Watched> watched, CancellationToken ct)
+    {
         var changes = new List<TreeChange>();
         foreach (var one in watched)
         {
@@ -367,7 +383,7 @@ public sealed class QuestionFanOut(
             }
         }
 
-        return changes.Count == 0 ? string.Empty : FilesystemSnapshot.Sentence(changes);
+        return changes;
     }
 
     // ---------- the settled record ----------

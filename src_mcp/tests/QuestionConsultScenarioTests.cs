@@ -135,6 +135,27 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ARowsCachedTokens_ReachTheLedger_NotOnlyItsInAndOut()
+    {
+        // The row's turn hands the ledger its whole Usage: a scalar call kept in, out and cost and dropped the cached
+        // count (and the not-captured / no-price markers) codex reports (PR #692, CodeRabbit).
+        Steer(
+            ("FAKECLI_STDOUT", "{\"type\":\"thread.started\",\"thread_id\":\"0198f2c1-first\"}\n"
+                + "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1200,\"cached_input_tokens\":800,\"output_tokens\":40}}\n"),
+            ("FAKECLI_OUTFILE_TEXT", Advice),
+            ("FAKECLI_RECORD_DIR", _record));
+
+        var reply = JsonDocument.Parse(await Service(CodexRow("question-opinion")).AskConsultantsAsync(
+            _repo, "Which retry shape fits a flaky vendor?", "I tried a fixed wait; the options are a ladder or a breaker.",
+            ct: TestContext.Current.CancellationToken)).RootElement;
+
+        reply.GetProperty("status").GetString().Should().Be("complete", reply.ToString());
+        var billed = JsonDocument.Parse(File.ReadAllLines(Path.Combine(_data, "usage.jsonl")).Should().ContainSingle().Subject).RootElement;
+        billed.GetProperty("tokensIn").GetInt64().Should().Be(1200);
+        billed.GetProperty("tokensCached").GetInt64().Should().Be(800, "the cached count codex reported is part of the row's usage");
+    }
+
+    [Fact]
     public async Task AWebQuestionCarryingAPath_IsRefusedByClass_AndNoChildIsStarted()
     {
         var service = Service(CodexRow("question-web"));

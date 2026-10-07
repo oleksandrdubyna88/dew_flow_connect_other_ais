@@ -7,6 +7,11 @@
 // Arm "tools": one turn asking for grep_search, find_by_name and list_dir — which ran, which were denied.
 // Arm "follow-up" (x repeats): turn 1 forces run_command (denied headless); turn 2 resumes the conversation
 // with the follow-up text. Raw streams are kept beside the JSON so a fixture can be cut from them.
+//
+// QUESTION-ROW mode — two more arguments, '<root>' '<question>': the shape a question consultant's `question-disk`
+// row launches (`--add-dir <root>`, run FROM the root), turn 1 being the QUESTION itself rather than a forced command,
+// so what is measured is whether the model reaches for the shell on its own. No temp repository, no "tools" arm.
+// Results: research/RESULTS_agy_question_row_follow_up.md.
 import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,21 +20,27 @@ import { resolved } from '../.github/scripts/lib/resolved.mjs';
 // git is resolved once rather than named to the spawner (S4036): the probe uses the operator's own git, visibly.
 const GIT = resolved('git');
 
-const [exe, scratchRoot, model = 'gemini-3.1-pro-high', out, repeatsArg = '3', followUp] = process.argv.slice(2);
-if (!exe || !scratchRoot || !out || !followUp) {
-  console.error('usage: probe-agy-consult-follow-up.mjs <agy> <scratch dir> <model> <out.json> <repeats> <follow-up text>');
+const [exe, scratchRoot, model = 'gemini-3.1-pro-high', out, repeatsArg = '3', followUp, questionRoot, question] = process.argv.slice(2);
+if (!exe || !scratchRoot || !out || !followUp || Boolean(questionRoot) !== Boolean(question)) {
+  console.error('usage: probe-agy-consult-follow-up.mjs <agy> <scratch dir> <model> <out.json> <repeats> <follow-up text> [<root> <question>]');
   process.exit(65);
 }
 const repeats = Number.parseInt(repeatsArg, 10);
 
-const repo = mkdtempSync(join(scratchRoot, 'coai-agyfollow-'));
-const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
-  '-c', 'commit.gpgsign=false', ...args], { cwd: repo });
-git('init', '-q');
-writeFileSync(join(repo, 'notes.txt'), 'nothing here\n');
-writeFileSync(join(repo, 'deep.txt'), 'the marker is QUOKKA-7731\n');
-git('add', '.');
-git('commit', '-qm', 'probe');
+function plantedRepository() {
+  const planted = mkdtempSync(join(scratchRoot, 'coai-agyfollow-'));
+  const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
+    '-c', 'commit.gpgsign=false', ...args], { cwd: planted });
+  git('init', '-q');
+  writeFileSync(join(planted, 'notes.txt'), 'nothing here\n');
+  writeFileSync(join(planted, 'deep.txt'), 'the marker is QUOKKA-7731\n');
+  git('add', '.');
+  git('commit', '-qm', 'probe');
+  return planted;
+}
+
+// A question row reads the person's own folder, read-only: it is never planted into or committed to.
+const repo = questionRoot ?? plantedRepository();
 
 const message = (text) => JSON.stringify({ event: 'user', message: { role: 'user', content: text } }) + '\n';
 
@@ -58,15 +69,18 @@ function turn(text, conversation) {
     stdout: r.stdout ?? '', stderr: (r.stderr ?? '').slice(0, 800) };
 }
 
-const results = { at: new Date().toISOString(), platform: os.platform(), exe, model, followUp, tools: null, followUps: [] };
+const results = { at: new Date().toISOString(), platform: os.platform(), exe, model, followUp, question: question ?? null,
+  tools: null, followUps: [] };
 
-results.tools = turn('Use ONLY these tools, in this order: grep_search for the text QUOKKA in this directory, '
-  + 'find_by_name for deep.txt, list_dir on this directory. Then reply with the name of the file that contains '
-  + 'QUOKKA. Do not use run_command or view_file.');
+if (!question) {
+  results.tools = turn('Use ONLY these tools, in this order: grep_search for the text QUOKKA in this directory, '
+    + 'find_by_name for deep.txt, list_dir on this directory. Then reply with the name of the file that contains '
+    + 'QUOKKA. Do not use run_command or view_file.');
+}
 
 for (let i = 0; i < repeats; i++) {
-  const first = turn('Run exactly this shell command with run_command: git grep -n QUOKKA . '
-    + 'Then tell me which file contains the marker and what the marker is.');
+  const first = turn(question ?? ('Run exactly this shell command with run_command: git grep -n QUOKKA . '
+    + 'Then tell me which file contains the marker and what the marker is.'));
   const second = first.conversation ? turn(followUp, first.conversation) : null;
   results.followUps.push({ first, second });
 }
@@ -74,5 +88,5 @@ for (let i = 0; i < repeats; i++) {
 writeFileSync(out, JSON.stringify(results, null, 2));
 const brief = (t) => t && { exit: t.exit, seconds: t.seconds, response: t.response, denied: t.denied,
   tools: t.tools.map((x) => `${x.tool}:${x.state}`).join(','), usage: t.usage };
-console.log(JSON.stringify({ platform: results.platform, tools: brief(results.tools),
+console.log(JSON.stringify({ platform: results.platform, tools: results.tools && brief(results.tools),
   followUps: results.followUps.map((f) => ({ first: brief(f.first), second: brief(f.second) })) }, null, 2));
