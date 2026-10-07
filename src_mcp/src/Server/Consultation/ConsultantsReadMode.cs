@@ -237,14 +237,36 @@ internal static class ConsultantsReadMode
     /// fire-and-forget, never awaited by startup, never on the protocol path, every fault caught and logged.
     /// </summary>
     /// <remarks>
-    /// Nothing is printed: stdout carries the protocol here. The probes run through the server's own launcher, so a
-    /// probe still running when serving ends is killed by <paramref name="stop"/> like any child of this server.
+    /// <para>Nothing is printed: stdout carries the protocol here. The probes run through the server's own launcher, so a
+    /// probe still running when serving ends is killed by <paramref name="stop"/> like any child of this server.</para>
+    /// <para><b>Once per window for every server on this data directory</b> (<see cref="ConsultantsSurveyClaim"/>,
+    /// 2026-10-06): a start whose build, side and settings were surveyed by another start within
+    /// <see cref="ServerPace.ConsultantsReuse"/> says so and probes nothing. A survey that fails or is cut short gives
+    /// its claim back, so the next start surveys.</para>
     /// </remarks>
     internal static Task WriteInBackground(PanelSettings settings, IProcessLauncher launcher, Serilog.ILogger log, Noticing noticing, CancellationToken stop) =>
+        WriteInBackground(settings, launcher, log, noticing, ConsultantsSurveyClaim.ProcessEnvironment, stop);
+
+    /// <param name="environment">The client environment the claim's identity is taken from — the process's own in production.</param>
+    internal static Task WriteInBackground(
+        PanelSettings settings, IProcessLauncher launcher, Serilog.ILogger log, Noticing noticing,
+        Func<IEnumerable<KeyValuePair<string, string>>> environment, CancellationToken stop) =>
         Task.Run(async () =>
         {
+            var claim = ConsultantsSurveyClaim.Undecided;
             try
             {
+                // Inside the try: a settings file replaced between its stat and its read is a fault this catch-all logs.
+                var identity = ConsultantsSurveyClaim.IdentityOf(
+                    Program.VersionText, HostKinds.Word(HostKinds.Current), SettingsFile.PathFor(settings.DataDir), environment);
+                claim = ConsultantsSurveyClaim.Take(
+                    ConsultHealthPaths.HealthDirectory(settings.DataDir), identity, DateTime.UtcNow, settings.Pace.ConsultantsReuse);
+                if (!claim.Taken)
+                {
+                    log.Information("consultants: not surveyed again — {Why}", claim.Why);
+                    return;
+                }
+
                 void Warn(string problem) => log.Warning("consultants: {Problem}", problem);
                 var answer = await new ConsultantsSurvey(new ConsultantParts(settings, launcher, Warn, noticing)).AnswerAsync(HostKinds.Current, DateTime.UtcNow, stop);
                 // A survey that finished while serving was ending is still not written: its probes may have been cut short
@@ -255,12 +277,14 @@ internal static class ConsultantsReadMode
             }
             catch (OperationCanceledException) when (stop.IsCancellationRequested)
             {
-                // Serving ended first, which is how a short session goes.
+                // Serving ended first, which is how a short session goes — and the next start surveys.
+                claim.Release();
             }
             catch (Exception failure)
             {
                 // The detached task's catch-all (reliability.md): a survey that failed is a line in the log, never a
                 // fault nobody observes, and never a server that stops serving over a file for the panel.
+                claim.Release();
                 log.Warning(failure, "consultants: the background survey failed, so consultants.json was not refreshed");
             }
         }, CancellationToken.None);
