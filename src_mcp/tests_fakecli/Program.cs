@@ -483,11 +483,13 @@ static class VersionAnswer
 /// <summary>One launch's record under <c>FAKECLI_RECORD_DIR</c>: its argv, NUL-joined, stdin last.</summary>
 /// <remarks>
 /// <para><b>Whole or absent.</b> Written under a name no <c>*.argv</c> listing matches, closed, and only then renamed into
-/// place — so a test that lists and reads the records while this child runs never opens a file the child still holds.
+/// place — so a test that lists the records while this child runs never sees one still being written. (The rename's
+/// own handle can outlive the rename for a moment; reading past it is the tests' <c>LaunchRecords</c>, the other half.)
 /// It used to be one <c>File.WriteAllText</c> straight to the <c>.argv</c> name: write access, other READERS allowed.
 /// A test's <c>File.ReadAllText</c> allows other readers only, and on Windows a share mode is enforced, so a poll that
-/// landed in that window threw. Tag <c>mcp-v0.44.1</c> lost its <c>coai-mcp (win-x64)</c> job to it twice
-/// (2026-10-07, <c>ALaunchRecordIsWholeOrAbsentTests</c>). On Linux and macOS the same poll read HALF a record.</para>
+/// landed in that window threw. Tag <c>mcp-v0.44.1</c> lost its <c>coai-mcp (win-x64)</c> job to it twice on
+/// <c>QuestionRowOnAgyScenarioTests</c>' cut-short test (2026-10-07; see <c>ALaunchRecordIsWholeOrAbsentTests</c>). On
+/// Linux and macOS, where share modes are advisory, the same poll could read half a record.</para>
 /// <para>The name carries this process's id, so a test can ask whether the launch it recorded is still running.</para>
 /// </remarks>
 static class LaunchRecord
