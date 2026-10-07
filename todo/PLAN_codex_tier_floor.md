@@ -85,3 +85,60 @@ keep `default` unchanged — the per-site tests are what prove the probe is wire
 - [ ] The range is data with the measurement linked; both halves read it.
 - [ ] RED first for every step; all suites green; module docs updated; the coai plan and code gates passed; PR merged.
 - [ ] Released only when the owner says so (mcp 0.44.0 is out with the defect — the owner is told).
+
+## Progress
+
+Built on branch `fix/codex-tier-floor`, 2026-10-07, one commit per build step; every step started RED. Not yet merged,
+so the status line above stays as it is.
+
+1. **The diagnosis row** (`89bd13bd`). `VendorDiagnosis` gains ``unknown variant `default`, expected `fast` or `flex` ``
+   → "the installed codex (0.110–0.130) cannot be told the standard tier — update codex, or set this row's fast mode to
+   'As the CLI is set'.", kind `UnknownOption`, before the general `unknown option` rows. RED
+   (`ConsultFailureTests.ACodexThatRefusesTheStandardTier_IsNamedWithItsCure`): *Expected diagnosis not to be &lt;null&gt;
+   because the refusal is a sentence this product causes and can cure.*
+2. **The data and both readers** (`58299c1e`). `"refusesStandard": { "from": "0.110.0", "through": "0.130.0" }` on the
+   codex `fastMode` row (the file's `why` explains it and links the measurement) → `FastModeRow.RefusesStandard`, a
+   `ReleaseRange` compared as numbers. A range not `X.Y.Z` at both ends, ending before it starts, or on any row but codex
+   refuses the seed, in `FeatureAvailability.RangeOf` and the generator's `FAST_RULES` alike. RED, C#: 8 of 27 — the
+   three in-range releases *"…RefusesStandard.Contains(…) to be True, but found False"*, the five malformed seeds
+   *"Expected a &lt;System.InvalidOperationException&gt; to be thrown, but no exception was thrown."* RED, TS: the shipped
+   seed refused with *"fastMode row 'codex' has a field this generator does not know: 'refusesStandard'"*, and every
+   malformed case refused for that same wrong reason (the reason regexes did not match).
+3. **`CodexTierSupport`** (`c08feecc`). `codex --version` through the shared launcher, 10 s ceiling (the launcher kills
+   the whole tree at it — `ProcessLauncher.EndItAsync`, `process.Kill(entireProcessTree: true)`), `codex-cli X.Y.Z`
+   parsed and compared numerically → `Accepts` / `RefusesStandard` / `Unknown`. RED: 14 of 14 against a stub
+   (*"found StandardTier.Unprobed"*, *"the collection is empty"*). Teeth of the kill check: with the launcher's kill
+   removed the hung-child test went red — *"Expected clock.Elapsed to be less than 30s … but found 1m, 182ms"* — and
+   green again restored.
+4. **`TierArgs` and every site** (`364c4eb9`). RED, the table: *"Expected Tiers(Reviewer(fast, answer)) to be equal to
+   {empty} because Off on a codex that RefusesStandard, but found {"service_tier=default"}."* RED per site, each on a fake
+   codex answering 0.120.0, each launch's real argv still carrying `service_tier=default`: the plan round, the code round
+   with its security lane, the document round, the feature round, a consultation's first and resumed turn, the consultant
+   check, a codex question row. Teeth for the lane: building it with `Security()` (no tiers) turned the code-round test red
+   again on 0.120.0.
+5. **`--providers`** (`dcac73b8`). RED: *"Expected …Contains("cannot be told the standard tier") to be True because codex
+   on `codex-cli 0.120.0`: the CLI's own sign-in is used, but found False."*
+6. **Docs** — `research/module_runners.md` (*The codex floor*), `research/module_server.md` (the `--providers` note),
+   `todo/PLAN_fast_mode_api_tier.md` (its codex floor item points here). The RESULTS record is unchanged: nothing new was
+   measured.
+
+### What was built differently, and why
+
+- **The feature round is a site too.** `FeatureStage` calls `BuildWork` as the three `PanelService` stages do; it asks
+  the same way, with its own RED test.
+- **Asked only where the answer can change the argv** — `CodexRuntime.TierDependsOnRelease`: an Off row on codex's own
+  service. On, Cli and endpoint rows are not asked; they send the same thing on every release. One rule, read by the
+  round, the consultant and the question row.
+- **A round asks every runnable codex executable, not only the stage's** — the security lane names its own vendors.
+- **No second ask on Unknown** (claude's probe asks twice): Unknown sends what was always sent, so a retry buys nothing.
+- **The range is codex-only** in both readers: a range on another row would be read by nothing, and the file's rule is
+  that a field nobody reads is refused, not dropped. The extension generator checks the field but neither emits nor uses
+  it, so the generated files are unchanged.
+- **The `--providers` sentence is in `note`, not a new field**: the panel renders one note per row.
+- **A question row's probe reuses `CodexConsultant.PrepareAsync`** (`QuestionRowLaunch.TierProbedAsync`), so
+  `QuestionRowLaunch` now takes the fan-out's launcher.
+- **Test harness changes the probe made necessary**: the fake CLI answers a bare `--version` on its own (never recorded,
+  never reading stdin, waiting only `FAKECLI_VERSION_SLEEP_MS`, counting asks, writing its pid) — a launch's
+  `FAKECLI_SLEEP_MS` would otherwise make every probe hang to its ceiling; `VendorProbeTests`' hang arm steers the new
+  wait; `ConsultScenarioBase.TurnLauncher` and `ScriptedLauncher.Vendors` let the `--version` probe through rather than
+  count it as a launch (four `QuestionFanOutTests` failed on that before the helper changed).
