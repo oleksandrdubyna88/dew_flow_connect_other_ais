@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.44.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.43.0...mcp-v0.44.0) (2026-10-07)
+
+
+### Features
+
+* **api:** api rows can stream their answer, switched per row on the new model card ([#689](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/689)) ([0f4efc7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0f4efc754eab1e334601ac17cff5775b62c3f8c8))
+* **extension:** the reviewer list grows into the model catalog (epic 1 of 5) ([#681](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/681)) ([cb465a0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb465a0ef4d1b2a39e499c0d41139e39ed6b6548))
+* model catalog epic 2, part 1 — runtime-true resolution, --features, Bugz by runtime ([#686](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/686)) ([ef2a391](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ef2a39199c558cdcf67e8bd2031d8436c04b8eec))
+* model catalog epic 3 — the new Settings page (preview): shell and Models ([#687](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/687)) ([a3ac5b0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a3ac5b01bb150a9605d84dcc6c2fc3b4b6ef2b37))
+* model catalog epic 4 — the feature tabs and the chat use the catalog ([#688](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/688)) ([c3c0d52](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c3c0d52236f1c716aaeee442cae887ffc1217cc0))
+* per-model fast mode — Off by default, On, or as the CLI is set (new Settings page) ([#693](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/693)) ([bfcc1ba](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bfcc1ba05bd1daa3c7715b9e65ded5bd8541a805))
+
+
+### Bug Fixes
+
+* **mcp:** a silent antigravity question row is continued once, as a consultation is ([#692](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/692)) ([b243b3d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b243b3d7ea6da6ebf023e5302245f326c47ddbca))
+* the Question consultant section resolved its rows against the current ([c3c0d52](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c3c0d52236f1c716aaeee442cae887ffc1217cc0))
+
 ## [0.43.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.42.1...mcp-v0.43.0) (2026-10-04)
 
 

@@ -1,5 +1,39 @@
 # Changelog
 
+## Server 0.44.0 — 2026-10-07
+
+**A silent antigravity question row is continued once, as a consultation is.** An antigravity `question-disk` row reaches
+for a shell command first; headless agy denies it and the turn ends empty, so the row failed with "the consultant exited
+cleanly but answered nothing". The row now gets one more turn in the same conversation, told that the shell will not
+come.
+- On Windows it then answered 6 times of 6. The answers are weak: agy cannot list a folder in this mode, so it names a
+  command for you to run.
+- In WSL it did not: in 3 runs of 3 the model then tried to read files outside the row's folders (the shell history),
+  agy refused, and the row still failed. Its reason now names the refused read instead of "answered nothing".
+- No second turn runs after a watched folder changed.
+- Each turn is one line in the usage log, with the full usage (cached tokens included). A turn cut short is written
+  `interrupted`.
+
+**Fast mode is a setting of each model row, and Off is the default.** Unless a row says `on` or `cli`, a codex reviewer
+or consultant is launched with `-c service_tier=default`, and a claude Opus row with `--settings {"fastMode":false}`.
+This includes rows written before the setting existed, so a CLI config that asks for the fast tier is overridden.
+Extension 0.64.0 cannot set the field; the control comes with the next extension release (new Settings page).
+
+**The server half of the model catalog (epics 1–4).**
+- A row runs by its runtime, never by its id: a `claude-2` row on the claude runtime probes `claude`. A row with a
+  runtime this build does not know is refused by name; it used to be run as codex on your own account.
+- `coai-mcp --features` lists what this build accepts: `bugzRuntime`, `apiStream`, `consultantRow`, `fastMode`. The
+  extension sends a new field only to a build that lists it, so an older extension keeps working unchanged.
+- A reviewer is told it has the checkout only when it can read one. API, local and Team server reviewers get the change
+  in their prompt and nothing else.
+- Bugz ranks by the row's runtime (`--collect-bugs --runtime`).
+- A consultant and a question row can carry their whole catalog row (key, price, api settings, timeout, CLI effort,
+  system prompt). A question row's system prompt is added to its prompt and removed from what the model says back.
+
+**API rows can stream their answer** (`--ask-api --stream on`), switched per row on the new Settings page. A stream is
+read event by event within the same limits; a cut stream exits 69, an error inside a 200 exits 70, and the usage line is
+printed first however the stream ended. Rows that do not ask for it are read as before.
+
 ## Extension 0.64.0 — 2026-10-04
 
 **Settings → Security lane reads at a glance.** With Server 0.43.0:
