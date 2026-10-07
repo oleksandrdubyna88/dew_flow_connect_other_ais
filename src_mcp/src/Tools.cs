@@ -14,12 +14,14 @@ internal static class Tools
     /// <param name="host">
     /// Resolved per CALL, never captured once: the panel rewrites its settings file while this
     /// server runs, and a tool bound to one service instance would keep serving the vendors,
-    /// models and thresholds that were on disk at startup.
+    /// models and thresholds that were on disk at startup. AWAITED, because the first service is
+    /// still being built while the server already answers <c>initialize</c> (<see cref="Server.StartingHost"/>):
+    /// a call that arrives during the start waits for it without holding a thread.
     /// </param>
-    internal static IEnumerable<McpServerTool> All(PanelServiceHost host)
+    internal static IEnumerable<McpServerTool> All(IPanelServiceSource host)
     {
         yield return McpServerTool.Create(
-            async () => await host.Current.ProvidersAsync(),
+            async () => await (await host.CurrentAsync()).ProvidersAsync(),
             new McpServerToolCreateOptions
             {
                 Name = "providers",
@@ -43,7 +45,7 @@ internal static class Tools
             // rather than being fixed at initialize). `callerModel` is nullable and defaulted, so
             // every client that predates it keeps calling `open` with two arguments.
             async (McpServer server, string repoPath, string branch, string? callerModel = null) =>
-                await host.Current.OpenAsync(
+                await (await host.CurrentAsync()).OpenAsync(
                     repoPath,
                     branch,
                     callerModel ?? string.Empty,
@@ -78,7 +80,7 @@ internal static class Tools
             // one the SDK publishes an argument as REQUIRED (research/PLAN_consult_on_a_cadence.md).
             async (string repoPath, string branch, string planText,
                    string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
-                await host.Current.ReviewPlanAsync(repoPath, branch, planText, Cadence(plan, epic, riskItems, riskNote)),
+                await (await host.CurrentAsync()).ReviewPlanAsync(repoPath, branch, planText, Cadence(plan, epic, riskItems, riskNote)),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
@@ -111,7 +113,7 @@ internal static class Tools
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string baseRef, string planText, bool again = false,
                    string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
-                await host.Current.ReviewCodeAsync(repoPath, branch, baseRef, planText, again, Cadence(plan, epic, riskItems, riskNote)),
+                await (await host.CurrentAsync()).ReviewCodeAsync(repoPath, branch, baseRef, planText, again, Cadence(plan, epic, riskItems, riskNote)),
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
@@ -165,7 +167,7 @@ internal static class Tools
             async (string repoPath, string branch, string purposeText,
                    string? documentPath = null, string? documentText = null, string? documentName = null,
                    bool newReview = false) =>
-                await host.Current.ReviewDocumentAsync(
+                await (await host.CurrentAsync()).ReviewDocumentAsync(
                     repoPath, branch, purposeText, documentPath, documentText, documentName, newReview),
             new McpServerToolCreateOptions
             {
@@ -224,7 +226,7 @@ internal static class Tools
             // commit got a clean review of whatever this checkout held (§9.30 of the feature-review plan).
             async (McpServer server, string repoPath, string planPath, string baseRef, string epics, string lessons,
                    bool again = false, string? callerModel = null, string? head = null) =>
-                await host.Current.ReviewFeatureAsync(
+                await (await host.CurrentAsync()).ReviewFeatureAsync(
                     repoPath, planPath, baseRef, epics, lessons, again,
                     callerModel ?? string.Empty,
                     server.ClientInfo?.Name ?? string.Empty,
@@ -310,7 +312,7 @@ internal static class Tools
             // does not need to work.
             async (string repoPath, string branch, string decisions, string? humanDecision = null,
                    string? document = null, string? feature = null) =>
-                await host.Current.ResolveAsync(repoPath, branch, decisions,
+                await (await host.CurrentAsync()).ResolveAsync(repoPath, branch, decisions,
                     string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase),
                     document ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
@@ -341,7 +343,7 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string? document = null, string? plan = null, string? feature = null) =>
-                await host.Current.StatusAsync(repoPath, branch, document ?? string.Empty, plan ?? string.Empty, feature ?? string.Empty),
+                await (await host.CurrentAsync()).StatusAsync(repoPath, branch, document ?? string.Empty, plan ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "status",
@@ -373,7 +375,7 @@ internal static class Tools
             // receives (research/PLAN_ask_human_is_for_the_gate.md, the own review of 2026-10-03).
             async (string repoPath, string branch, string question, string? document = null, string? feature = null,
                    string? consultId = null, bool productionRisk = false, string? riskReason = null, CancellationToken cancellationToken = default) =>
-                await host.Current.AskHumanAsync(
+                await (await host.CurrentAsync()).AskHumanAsync(
                     repoPath, branch, question, document ?? string.Empty, feature ?? string.Empty,
                     consultId ?? string.Empty, productionRisk, riskReason ?? string.Empty, cancellationToken),
             new McpServerToolCreateOptions
@@ -435,7 +437,7 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             async (string repoPath, string consultationId, string outcome, string? note = null) =>
-                await host.Current.CloseConsultAsync(repoPath, consultationId, outcome, note ?? string.Empty),
+                await (await host.CurrentAsync()).CloseConsultAsync(repoPath, consultationId, outcome, note ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "close_consult",
@@ -478,7 +480,7 @@ internal static class Tools
             // consultation, exactly what every call before them was.
             async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null,
                    string? kind = null, string? plan = null, string? epics = null) =>
-                await host.Current.ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty,
+                await (await host.CurrentAsync()).ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty,
                     kind ?? string.Empty, plan ?? string.Empty, epics ?? string.Empty),
             new McpServerToolCreateOptions
             {
@@ -531,7 +533,7 @@ internal static class Tools
             // `document` and `feature` carry C# defaults — the `resolve` lesson: without one the SDK publishes
             // an argument as REQUIRED, and the ordinary question, asked from a branch session, has neither.
             async (string repoPath, string question, string context, string? document = null, string? feature = null) =>
-                await host.Current.AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty),
+                await (await host.CurrentAsync()).AskConsultantsAsync(repoPath, question, context, document ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "ask_consultants",

@@ -20,8 +20,11 @@
 > `required`; the fake CLI's vendor-shape check reads a set (CodeRabbit); `scripts/**` — the paid live probes — joined
 > Sonar's coverage list, analysis on, because no CI job can run them.
 >
-> **Open tail:** the follow-up in WSL is unmeasured (agy there asked to sign in again mid-session — the person's to
-> do); agy's `Toolbox` sentence is not in the question prompts.
+> **Open tail:** in WSL the follow-up does NOT make the row answer — 0 of 3 by the probe once the person had signed agy
+> in again (2026-10-07; a WSL run through the product with 0.44.0 is still owed): turn 2 reads outside the root (`~/.bash_history`, its own transcript), agy refuses `read_file`, and
+> the row ends `failed` on the read-denied reason (RESULTS §2); why Windows answers and WSL does not is unexplained.
+> agy's `Toolbox` sentence is not in the question prompts — whether one that also says "you cannot list folders" helps
+> is to be measured first, if the operator wants it. Shipped in coai-mcp 0.44.0.
 >
 > Related docs: [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md) (this plan's
 > measurement), [RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md) (the follow-up text, measured 6 of
@@ -98,8 +101,8 @@ The answers are weak — plan mode has no directory listing, so the model names 
 searching — but they are answers the caller can use, not an empty failure. Recorded in
 [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md) — 6 of 6 by the time the repository's
 probe had run its own three. WSL could not be measured
-past turn 1: agy there asked to sign in again ("Waiting for authentication") partway through the session, which is the
-person's to do.
+past turn 1 before the build: agy there asked to sign in again ("Waiting for authentication") partway through the
+session. Measured after the release, once the person had signed in: **0 of 3** — see the open tail above.
 
 ## 5. Build order
 

@@ -20,6 +20,89 @@
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 | `ask_consultants` | `QuestionConsultService` → `QuestionFanOut` — every active model × prompt row answers in PARALLEL before the person is asked (2026-10-01, `todo/PLAN_question_consultant.md` S2) | the switch off, nobody to ask and the quota are ANSWERS (`status`: `off` · `none_available` · `quota_spent`), not refusals; refused: an empty `context` by name, a question over 4 KB, a context over 8 KB, rows that cannot be read, `document` and `feature` together, a path that is no repository — see *The question consultant* below |
 
+## A start answers `initialize` at once, and an idle server does nothing (2026-10-06)
+
+Measured on 2026-10-06 ([RESULTS_idle_cpu_and_slow_start.md](RESULTS_idle_cpu_and_slow_start.md)): every idle
+`coai-mcp` burned 20–54 % of a core, and a start took long enough that Claude Code (a 30 s connect budget) killed it
+and started another — a restart storm of 34 starts in ten minutes across seven sessions. Two causes, two fixes
+(`todo/PLAN_an_idle_server_is_idle_and_starts_at_once.md`).
+
+**The start.** `ServeAsync` keeps only the cheap steps in front of the transport — the logger, the settings layer, the
+startup notes — and hands the slow half to `StartingHost.Start` on the thread pool: the vault read (`creds config`,
+its own 30 s timeout, now given the stop token), the `starting:` line, and `new PanelServiceHost`, whose
+`PanelService` constructor runs every startup sweep (orphaned rounds, consultations and their re-projection into
+`coai.db`, question consults, escalations, process tracking). `initialize`, `tools/list` and `prompts/list` need none
+of it — `Tools.All` takes an `IPanelServiceSource` and every tool `await`s `CurrentAsync()`, so the first CALL waits
+for the start without holding a thread; background jobs wait on `IPanelServiceSource.Ready`, the start alone. A start that FAILS closes the transport, and `ThrowIfFailed` hands the
+failure to the crash path as a `ServerStartFailed` carrying the cause, exactly as when it ran before serving (exit 70,
+the crash recorded) — its own type, so the serving road's "the client closed the connection" filter cannot take a start
+that failed with an `IOException` for an ending. The start has its own stop (`startStop`), linked to the signal and
+cancelled when serving ends however it ends, so a client closing stdin also ends a `creds` read still running — and
+the start stops right after the read (the launcher reports a child killed for the stop as TIMED OUT, so the vault
+would otherwise log a false `starting: … timed out` and build a service in a process that is ending). Whether the start
+failed is settled inside it when it ends: a cancellation its stop did not ask for becomes a `TimeoutException`, a
+failure; one its stop asked for is an ending. The finally waits ONCE, at most `StartingHost.EndBudget` (1 s), for the
+sweeper, the start and the survey together — inside `ServeStop.Grace`, so a signal's drain of the notices still
+happens.
+
+```mermaid
+sequenceDiagram
+    participant C as MCP client
+    participant S as ServeAsync
+    participant B as StartingHost (thread pool)
+    participant W as ConsultationSweeper
+    S->>B: Start(vault read → starting: → PanelServiceHost + startup sweeps)
+    S->>S: transport + McpServer (tools over IPanelServiceSource)
+    C->>S: initialize
+    S-->>C: result (does not wait for B)
+    C->>S: tools/call
+    S->>B: await CurrentAsync()
+    B-->>S: PanelService once built
+    S-->>C: tool answer
+    W->>B: ConsultationSweeper.RunAsync(source): await source.Ready — no beat before a successful start
+    loop every COAI_SWEEP_SECONDS (60, clamped 10–3600)
+        W->>W: consultations, question consults, escalations
+    end
+```
+
+**The idle beat.** `EscalationRetention` asked "does a session hold this id" once per card, before it judged the
+card, and the answer (`SessionStore.HoldsQuestion`) deserialised every session file — (cards × sessions) parses a
+minute, about 750 MB of JSON per minute per server on the measured data. Now a card is judged FIRST; only a card that
+is due asks, the held set is read once per sweep (`Lazy`), and `SessionStore.HeldQuestions()` caches it PER FILE
+(`SessionHolds`: each session under its own write time and length — a stat per file, no read), so one active session
+costs one parse, not all of them. An entry is trusted for `SessionHolds.Recheck` (10 minutes) at most: past it the file is
+parsed again whatever its stamp says, so a same-length save inside one timestamp tick, or a read that failed for a
+moment, delays a new hold by minutes and never for good. Absence is CONFIRMED, never inferred: the listing and each
+file's stat use the operations that surface a failure (`DirectoryInfo.EnumerateFiles`, `File.GetAttributes`), because
+`Directory.Exists` and `FileInfo.Exists` answer false for a path that is there and cannot be read — a sessions
+directory that cannot be listed keeps the set incomplete rather than reading as no sessions at all. A session that could not be read makes the set `Complete = false` and every due card
+is kept (fail closed); it is cached as unreadable under its stamp, so a torn file that stays torn is not parsed again
+every beat. The beat's
+interval is `ServerPace.SweepEvery`, `COAI_SWEEP_SECONDS` — read once per start, so unlike the settings a tool call
+reads, a changed interval applies from the next start.
+
+**The survey, once per window.** `ConsultantsReadMode.WriteInBackground` first takes a `ConsultantsSurveyClaim`:
+`FileMode.CreateNew` of `consultations/health/consultants.survey.<window seconds>.<hash>.claim`, the claim's id
+written through that same stream (a file never exists without it), the hash over the window slot
+(`COAI_CONSULTANTS_REUSE_SECONDS`, default 300, clamped 30–86 400) and the identity — build version, side, the settings
+file's stamp, the client's `COAI_*` environment without anything secret (`*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`)
+or per run (`COAI_CALLER_*`). Only the create decides. A start that finds the name taken logs
+`consultants: not surveyed again — …` and probes nothing; a survey that fails or is cut short releases its claim
+(fenced by the claim's own id); each take prunes every claim older than two of ITS OWN windows (read from its name), so
+a short window never deletes the live claim of a long one. Residual: two starts straddling a slot
+boundary both survey. The extension reads `consultants.json` only and never sees a `.claim`.
+
+| What | Where |
+|---|---|
+| The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
+| The sweeper waits for the start through the source (`Ready`), then asks for the current service per beat | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
+| A settings reload publishes the new stamp only with a service that built | `PanelServiceHost.Current` |
+| The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
+| Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
+| The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |
+| The survey claim | `Server/Consultation/ConsultantsSurveyClaim.cs` |
+| Tests | `TheServerAnswersInitializeAtOnceTests` (real binary: a 20 s `creds` and probe, `initialize` inside 10 s), `StartingHostTests`, `AnIdleServerReadsNothingTests`, `EscalationRetentionTests`, `ServerPaceTests`, `ConsultantsSurveyClaimTests` |
+
 ## A consultation ends with an outcome — the tenth tool (2026-09-17)
 
 Issue #309, two symptoms with one cause between them: **nothing on this surface ended a
@@ -323,7 +406,7 @@ answer, or read outside the repository, short of a real consultation.
 flowchart LR
     P["panel / a person"] -->|"spawn"| C["--consultants"]
     P -->|"spawn, paid"| K["--check-consultant --caller k"]
-    S["stdio server start"] -->|"fire-and-forget"| B["WriteInBackground"]
+    S["stdio server start"] -->|"background"| B["WriteInBackground<br/>once per window: ConsultantsSurveyClaim"]
     C --> V["ConsultantsSurvey<br/>Preflight + Resolve per kind<br/>VendorProbe (no vault key) + the adapter's<br/>CapabilityExecutable, deduped, parallel"]
     B --> V
     V --> R["ConsultantsReport.Row (pure)<br/>SurveyedConsultant + ConsultantOutcomes"]
@@ -366,10 +449,12 @@ last check, settled by its lock). The answer carries `utc`, `side` and on WSL `d
 the data directory cannot be read (the health directory cannot be made or listed); never 64. **The same answer is
 written** to `<dataDir>/consultations/health/consultants.json` through `AtomicFile` (`ConsultantsFile.Written`, which
 re-reads every row's health files immediately before the move, so a survey whose probes ran while a turn failed does not
-erase that failure; the residual is the milliseconds between that read and the move) — by the mode, and ONCE in the
+erase that failure; the residual is the milliseconds between that read and the move) — by the mode, and in the
 background after the stdio server starts (`ConsultantsReadMode.WriteInBackground`, launched in `ServeAsync` right after
-the consultation sweeper: `Task.Run`, its own catch-all that logs, never awaited, cancelled with serving — and a survey
-cut short by that cancellation is NOT written, so a shutdown never replaces the file with probes that read "not found" —
+the consultation sweeper: `Task.Run`, its own catch-all that logs, awaited only by the ending under a 1 s bound,
+cancelled with serving; since 2026-10-06 ONCE PER WINDOW for every server on the data directory with the same build,
+side and settings — `ConsultantsSurveyClaim`, see *A start answers `initialize` at once* above — and a survey
+cut short by that cancellation is NOT written and gives its claim back, so a shutdown never replaces the file with probes that read "not found" —
 nothing on
 stdout) — so the OTHER side (a plain Windows window reading a WSL store through `coai.alsoWatchDataDirectories`) sees
 the resolved vendor, the CLI facts and the limitations, labelled with when they were taken.
@@ -1169,9 +1254,13 @@ consultation sweeps: an answered pair goes seven days after the ANSWER's stamp (
 question seven days after its expiry, an open question nobody holds seven days after it was asked, an orphan
 answer and a stray `.tmp` seven days after their write time, a torn file likewise; every file of an id a live
 session holds — on a hold (`HoldQuestions`) or as a feature session's request (`RequestQuestions`), asked through
-`SessionStore.HoldsQuestion` — is kept whatever its age or status, because a hold is bound to its question by
-identity: since S4b (item 7) the hold is asked BEFORE the file is judged, so an answered pair, an orphan answer
-and a torn question of a held id are kept too (the answered pair used to go: the hold reads that very answer).
+`SessionStore.HeldQuestions` — is kept whatever its age or status, because a hold is bound to its question by
+identity: since S4b (item 7) every file of a held id is kept, so an answered pair, an orphan answer and a torn
+question of a held id are kept too (the answered pair used to go: the hold reads that very answer). Since 2026-10-06
+the file is judged FIRST and the held set is asked only for a due file, once per sweep, cached PER SESSION FILE under
+its own write time and length (only a changed session is parsed again), and fail-closed when a session cannot be read
+or stat'ed — asking it per file, before judging, read every
+session file per card on every beat (*A start answers `initialize` at once* above).
 Judged through `Escalations`' own readers, under the same turn.
 
 **D13 on the server, revised by the operator on 2026-10-03.** `QuestionAdmission` ADMITS a pair the planner
@@ -1286,8 +1375,10 @@ unchanged.
 
 **What it does not fix.** The answer a continued agy row gives is weak: plan mode has only `view_file` (no directory
 listing), so on a question over a whole folder the model names a command for the caller to run instead of searching —
-an answer the caller can act on, where there was none. The `Toolbox` sentence the stuck consultant's prompt carries is
-not in the question prompts.
+an answer the caller can act on, where there was none. **In WSL it does not answer at all** (0 of 3 by the probe, 2026-10-07; no WSL product run with 0.44.0 yet): told
+the shell will not come, the model reads outside the root looking for paths (`~/.bash_history`), agy refuses the
+`read_file`, and the row ends `failed` on the read-denied reason — no third launch, by `ConsultantTurn`'s rule. The
+`Toolbox` sentence the stuck consultant's prompt carries is not in the question prompts.
 
 ## The round engine is its own unit (2026-09-25)
 
@@ -1429,8 +1520,8 @@ front of `ask_human` has let it through — *The door to the person*, above.
 Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI_EXE_*`,
 `COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED`, `COAI_MAX_CONCURRENCY`,
 `COAI_MAX_PER_PROVIDER`, `COAI_REVIEWER_TIMEOUT_MINUTES`, `COAI_DATA_DIR`, `COAI_LOG_LEVEL`, and
-`COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config <key>` once at
-startup; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
+`COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config <key>` once per
+start — since 2026-10-06 in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
 **The key is read from the LAYERED configuration, like every other setting (2026-10-01).** The panel
@@ -4799,8 +4890,8 @@ sequenceDiagram
     participant H as PanelServiceHost.Current
     participant P as PanelService
     participant C as ConsultationStore
-    S->>L: RunAsync(() => host.Current, 1 minute, serving token)
-    loop every minute until serving ends
+    S->>L: RunAsync(source = the starting host, COAI_SWEEP_SECONDS, serving token) — waits for the start, then beats
+    loop every beat (a minute unless set) until serving ends
         L->>H: current service (a settings reload builds a new one)
         H-->>L: PanelService
         L->>P: SweepConsultations()
@@ -4812,7 +4903,7 @@ sequenceDiagram
 
 | What | Where |
 |---|---|
-| **The sweep runs every minute while serving**, on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
+| **The sweep runs while serving, every minute by default** (`COAI_SWEEP_SECONDS`, 10–3 600, since 2026-10-06; it begins once the background start has built the service), on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
 | **Each record is decided under the repository's lock, on a fresh read.** A cheap look first, then the lock. A follow-up takes the same lock and re-reads the record before it marks it `asking`, so the sweep and a follow-up can no longer interleave into a stale close written over a running turn. (Found at the code round; pinned by `ASweepHoldingAStaleCopy_DoesNotCloseAConsultationThatHasSinceStartedATurn`, which is red when the decision uses the enumerated copy.) | `ConsultationStore.SweepOne`, `Swept` |
 | **What each limit applies to, now each pinned by a test broken by compiling code.** Turns per consultation: every kind, frozen into the record at open. Calls per session: stuck only; a follow-up is counted by the kind its record holds. Idle close: every kind, both the follow-up refusal and the record's close. | `ConsultLimitsScenarioTests` (the idle refusal; cadence and risk past the turn cap; cadence and risk follow-ups that spend no stuck budget; the running-server lapse), `ConsultationSweeperTests` (the real host, with a settings reload between two lapses; a throwing beat) |
 | **The kind on the server's own surfaces.** `status` lists each open consultation with `kind`, never empty, because a record from before the kinds reads `stuck`. Every consultation log line starts with it: `risk consultation … turn 1/5`, `… answered turn 1`, and the filesystem alert. | `ServerJsonContext.OpenConsultation.Kind`, `ConsultationService.OpenIn`, `ConsultationService` log lines |

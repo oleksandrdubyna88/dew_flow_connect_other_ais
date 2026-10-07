@@ -95,6 +95,28 @@ public sealed class PanelServiceHostTests : IDisposable
     /// is deliberately not a content hash — it runs on every call). A test that wrote twice in the
     /// same millisecond would be measuring the clock, not the reload.
     /// </remarks>
+    /// <summary>
+    /// The cadence consultation (codex, 2026-10-07): the host recorded the new settings stamp BEFORE the rebuild, so a
+    /// rebuild that threw left the old service serving under the new stamp, and every later call kept the old settings
+    /// without trying again. The stamp and the service are published together, after a successful build.
+    /// </summary>
+    [Fact]
+    public void AReloadThatFails_IsTriedAgainOnTheNextCall_RatherThanHiddenBehindTheNewStamp()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var host = NewHost();
+        var sessions = Directory.CreateDirectory(Path.Combine(_dataDir, "sessions")).FullName;
+        var bad = Path.Combine(sessions, "session-bad.json");
+        File.WriteAllText(bad, """{"state":null,"rounds":[]}"""); // a session the startup sweep cannot survive
+
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+        host.Invoking(h => h.Current).Should().Throw<Exception>("the rebuild met the bad session");
+
+        File.Delete(bad);
+        host.Current.Settings.Providers.Single(p => p.Provider == "codex").Model.Should().Be("gpt-5.6-mini",
+            "the failed reload is tried again, so the panel's change still arrives");
+    }
+
     private void Touch(Action write)
     {
         write();
