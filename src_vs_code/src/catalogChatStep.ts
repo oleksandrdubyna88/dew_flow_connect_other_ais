@@ -102,7 +102,9 @@ function sameMove(one: MovedPreset, other: MovedPreset): boolean {
 function recordedEntryOf(layer: ChatLayer, rows: readonly RawRow[]): MovedPreset | undefined {
   const saved = typeof layer.chatModel === 'string' ? layer.chatModel : '';
 
-  return rows.some((row) => row['id'] === saved) ? undefined : movedRecordFrom(layer.chatPresetsMoved).find((one) => one.presetId === saved);
+  // The NEWEST entry of that id: two exist only when an older build edited the preset after the move, and the chat model
+  // then names the revision that older build last wrote — the one the uninterrupted run points at (epic 4's code round).
+  return rows.some((row) => row['id'] === saved) ? undefined : [...movedRecordFrom(layer.chatPresetsMoved)].reverse().find((one) => one.presetId === saved);
 }
 
 /**

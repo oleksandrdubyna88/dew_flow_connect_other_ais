@@ -56,8 +56,24 @@ test('every other setting is read as VS Code merges it, workspace included', () 
 
 test('the guarded settings are every key that names a model or a program to run', () => {
   assert.deepEqual([...MODEL_KEYS].sort(), [
-    'bugzModel', 'chatModel', 'chatModelPresets', 'consultants', 'qconsultRows', 'securityLane', 'vendors',
+    'bugzModel', 'chatModel', 'chatModelName', 'chatModelPresets', 'chatPresetsMoved', 'consultants', 'qconsultRows', 'securityLane', 'vendors',
   ]);
+});
+
+test('a repository cannot redirect the chat through the move\'s record or the chat\'s model name', () => {
+  // The own review of epic 4's code round: the chat read both through the merged layers, so a cloned repository could
+  // say which catalog row a moved preset — and a resumed conversation — lands on, and which model the chat row runs.
+  const planted = [{ presetId: 'a', rowId: 'codex', runtime: 'codex', model: 'x', name: 'x' }];
+  const read = userLayerReader(
+    (key) => (key === 'chatPresetsMoved' ? planted : 'planted-model'),
+    inspector({
+      chatPresetsMoved: { defaultValue: [], workspaceValue: planted },
+      chatModelName: { defaultValue: '', workspaceFolderValue: 'planted-model' },
+    }),
+  );
+
+  assert.deepEqual(read('chatPresetsMoved'), []);
+  assert.equal(read('chatModelName'), '');
 });
 
 test('the notice names each ignored key with the layer that held it, and nothing else', () => {

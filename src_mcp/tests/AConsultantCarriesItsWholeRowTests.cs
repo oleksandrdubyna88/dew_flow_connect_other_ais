@@ -79,6 +79,27 @@ public sealed class AConsultantCarriesItsWholeRowTests
         resolved.Should().BeOfType<ResolvedConsultant.Unavailable>().Which.Why.Should().Contain("codex");
     }
 
+    [Theory]
+    [InlineData("5")]
+    [InlineData("\"a string\"")]
+    [InlineData("[]")]
+    [InlineData("{}")]
+    public void ARowThatIsNotARow_RefusesTheConsultantByName_NeverThrows(string row)
+    {
+        // The own review of epic 4's code round: only a JsonException was caught, so a row of another JSON KIND could
+        // have failed the whole turn instead of refusing this consultant.
+        var resolved = Resolve("""{"claude":{"vendor":"codex","runtime":"codex","model":"gpt-6","row":""" + row + "}}");
+
+        resolved.Should().BeOfType<ResolvedConsultant.Unavailable>().Which.Why.Should().Contain("could not be read");
+    }
+
+    [Fact]
+    public void ANullRow_IsNoRow()
+    {
+        Resolve("""{"claude":{"vendor":"codex","runtime":"codex","model":"gpt-6","row":null}}""")
+            .Should().BeOfType<ResolvedConsultant.Definition>();
+    }
+
     [Fact]
     public void AnEntryWithoutARow_IsTheFiveFieldsAsAlways()
     {

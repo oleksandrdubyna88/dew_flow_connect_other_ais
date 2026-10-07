@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import { modelsTabHtml } from '../modelsTab';
-import type { PanelState } from '../panelView';
+import { skewSaid } from '../modelCard';
+import { cardContextFor, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { click, lastWrite, panelState, runPanel, withoutSeq } from './panelPageHarness';
 import { Node, runPageHtml } from './rolesPageHarness';
@@ -137,4 +138,15 @@ test('a switched-off model is hidden until "show switched-off" is ticked', () =>
   assert.deepEqual(cards.filter((card) => !card.hidden).map((card) => card.dataset['modelCard']), ['codex']);
   page.fire('change', showOff);
   assert.deepEqual(cards.filter((card) => !card.hidden).map((card) => card.dataset['modelCard']), ['codex', 'claude']);
+});
+
+test('an api row on a server too old for api rows says why its card is switched off, as the current page does', () => {
+  // The epics 4–5 cadence consultation, §7 parity: the card turned its stage boxes off for the note but never said it.
+  const api = codex({ id: 'grok', runtime: 'api', model: 'grok-4', baseUrl: 'https://api.x.example/v1', enabled: true });
+  const state = stateWith([api], { server: { kind: 'known', version: '0.36.0', remembered: false, updateOffered: false } });
+  const context = cardContextFor(state)(api);
+
+  assert.ok(context.apiNote.length > 0, 'the fixture: the current page has a note for this row');
+  assert.ok(skewSaid(api, { installed: true, features: [] }, context.apiNote).includes(context.apiNote), 'the card does not say why');
+  assert.deepEqual(skewSaid(api, { installed: true, features: [] }, ''), [], 'a server that takes api rows draws no note');
 });

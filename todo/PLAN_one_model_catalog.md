@@ -888,7 +888,16 @@ row); the new page reads it. Done, RED first.
   - *R7 — the answer to the open question above:* a preset edited in an older build after the move is a conflicting
     revision of the SAME preset, not a new model. Planned, not built: keep the edited revision and show the conflict on
     Chat (the person chooses); widening the fingerprint alone would duplicate rows.
-  - The cadence consultation for epics 4–5, before epic 5 is built.
+  - *The cadence consultation for epics 4–5* — **ran 2026-10-07** (consultation `7fec916c`, codex `gpt-6-astra`); its
+    findings and what each came to are in the consultations record. Fixed on this branch, RED first: a row that consults
+    now says on its card when this side's binary would drop its settings for a consultation (`consultantRow`), and an api
+    row on a server too old for api rows says why its card is off, as the current page did. Moved to epic 5's
+    prerequisites below: R7, extraction before deletion, and the rollout order.
+  - *Own review beside the epic 4 code round (2026-10-07):* `chatPresetsMoved` and `chatModelName` are model keys now
+    (a repository could redirect the chat through them); an interrupted resume after an older build's edit takes the
+    NEWEST record entry, as the uninterrupted run does. Known, not changed: a restore leaves a conversation saved since
+    the move refused by name until the person picks again (no data is lost); which entry a LEGACY conversation id means
+    when the record holds two is R7's conflict to show, not a guess.
   - *Not measured on a real call yet,* as for reviewers (the plan's open measurement): whether an older claude CLI
     refuses `--effort` in chat mode (the server names that refusal for a reviewer; the chat shows the CLI's own
     error), and how strongly a model follows an instruction placed in the first user turn rather than a system role.
@@ -914,6 +923,19 @@ the page (`todo/PLAN_the_page_tests_run_the_page.md`); all suites, lint, the sea
 docs updated.
 
 ### Epic 5 — The switch-over, docs and release
+
+**Prerequisites, from the epics 4–5 cadence consultation (2026-10-07):** (a) **R7 first** — a preset edited in an older
+build after the move is otherwise unreachable (a changed CLI path or starting text leaves the move `unchanged` and Chat
+keeps the old values; a changed name makes a second row); its tests cover both kinds of edit, a resolution that survives
+a reload, and records written before any launch-field snapshot existed. (b) **Extract before deleting** —
+`catalogSections` calls `PANEL_SECTIONS`, and `rolesEmbed`, `commandsEmbed` and `chatTabEmbed` import builders from the
+three pages E5.1 deletes; move the shared builders and handlers out first, and keep the parity tests' inventory explicit
+so deleting the old sections cannot shrink the test with them. (c) **The rollout order is its own milestone** (no release
+now, by the owner's decision): an OLD coai-mcp still running re-reads the settings file a newer extension rewrites —
+`mcp-v0.43.0`'s security lane refuses `signals`/`words` — so the old readers are restarted (or the file kept compatible)
+before the new fields are enabled; then the installed binary's `--features` are checked, the extension activated, and
+the written file read back. Full consultant behaviour needs a binary that lists `consultantRow`.
+
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).

@@ -28,6 +28,16 @@
 
 The consultant also checked a plain backup/restore round trip of the chat keys and found it sound.
 
+## Cadence, epics 4–5 (consultation `7fec916c`, 2026-10-07, before epic 4's code round)
+
+| # | Finding (consultant) | Verified | Status |
+|---|---|---|---|
+| K1 | R7 is a real compatibility failure, not a nicety: a second `chatMove` with only the CLI path and starting text changed returns `changed:false` and Chat keeps the old values; a changed name makes two rows. R7 should precede the switch-over. | by code reading (`chatPresetMove.wasMoved`, `chatCatalogModels` filtering recorded presets) — the consultant reports running it in memory | moved to epic 5's prerequisites |
+| K2 | A binary with every E2 field but no `consultantRow` drops a consultant row's settings while the Models card warns of nothing. | RED test in `aConsultantCarriesItsWholeRow.test.ts` | fixed — the card says "its own settings when it consults" |
+| K3 | Rollout: an old coai-mcp still running re-reads the settings file a newer extension rewrites (`mcp-v0.43.0` refuses `signals`/`words`). | by reading `PanelServiceHost` and the 0.43.0 security lane parser | epic 5 prerequisite (c) |
+| K4 | §7 parity: an api row on a server under `API_RUNTIME_SINCE` — the old page says why it is withheld, the new card turns its boxes off silently (`modelCard.ts`, `apiNote` unused). | RED test in `modelsTab.test.ts` | fixed — the note is drawn |
+| K5 | E5.1 cannot delete the old builders first: `catalogSections`, `rolesEmbed`, `commandsEmbed`, `chatTabEmbed` import them. | by reading the imports | epic 5 prerequisite (b) |
+
 ## Seen on the way
 
 `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap_IsOneTerminalTimeout_WithEveryTurnsUsageKept`
@@ -35,4 +45,4 @@ is flaky on its own: 1 of 4 runs failed on a `main`-based build, 1 of 3 on this 
 
 ## Still owed
 
-The cadence consultation for epics 4–5 (before epic 5 is built).
+Nothing — the three consultations the cadence owed have run.

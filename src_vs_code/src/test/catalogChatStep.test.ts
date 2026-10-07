@@ -71,6 +71,26 @@ test('a run interrupted after its record was written still points the chat model
   assert.equal(written(resumed, 'chatModel'), 'chat-a');
 });
 
+test('a preset an older build edited after the move, its run interrupted, ends on the EDITED row as an uninterrupted run does', () => {
+  // The own review of epic 4's code round: the record then holds two entries of id `a`, and the resume took the FIRST —
+  // the revision the person had edited away — while the uninterrupted run points the chat at the newest.
+  const first = writes({ chatPresets: [preset('a')], chatModel: 'a' });
+  const edited = [preset('a', { model: 'sonnet' })];
+  const second = writes({
+    chatPresets: edited, vendors: written(first, 'vendors'), chatPresetsMoved: written(first, 'chatPresetsMoved'),
+    chatModel: 'a', marker: MIGRATED, backup: written(first, 'migratedFrom'),
+  });
+  const uninterrupted = written(second, 'chatModel');
+  const resumed = migrateLayer({
+    chatPresets: edited, vendors: written(second, 'vendors'), chatPresetsMoved: written(second, 'chatPresetsMoved'),
+    chatModel: 'a', marker: MIGRATED, backup: written(second, 'migratedFrom') ?? written(first, 'migratedFrom'),
+  });
+  const resumedWrites = resumed.kind === 'migrate' ? resumed.writes : [];
+
+  assert.equal(uninterrupted, 'chat-a-2', 'the fixture: the edited revision did not get its own row');
+  assert.equal(written(resumedWrites, 'chatModel'), uninterrupted, `the resume did not end where the uninterrupted run ends: ${JSON.stringify(resumed)}`);
+});
+
 test('a run interrupted before the chat keys of a MAIN move ends where an uninterrupted run ends — row AND model', () => {
   // The uninterrupted run writes chatModel = the main row AND chatModelName = its model; a resume that repaired only the
   // chat model left a stale model name, which opens another model on the right row (the risk consultation, R4).

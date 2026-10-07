@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { FEATURES } from '../binaryFeatures';
+import { ignoredSaid } from '../modelCard';
 import { envBlock, settingsFrom } from '../settingsShape';
 import { vendorsFrom } from '../vendors';
 
@@ -81,4 +82,16 @@ test('a binary that does not list consultantRow gets the question rows byte for 
 
   assert.equal(without.some((one) => 'row' in one), false);
   assert.deepEqual(Object.keys(without[0] ?? {}), ['id', 'vendor', 'runtime', 'model', 'baseUrl', 'executablePath', 'key', 'prompt', 'enabled']);
+});
+
+test('a row that consults says, on its card, when this side\'s binary would drop its settings for a consultation', () => {
+  // The epics 4–5 cadence consultation: a binary with every E2 field but no consultantRow takes the row's effort, prompt
+  // and timeout for a REVIEW and drops them for a consultation — the card said nothing.
+  const consulting = vendorsFrom([{ ...ROWS[1], enabled: true }])[0]!;
+  const reviewing = vendorsFrom([{ id: 'codex', runtime: 'codex', model: 'gpt-x', enabled: true, effort: 'high' }])[0]!;
+  const e2Only = { installed: true, features: ALL.filter((one) => one !== FEATURES.consultantRow) };
+
+  assert.match(ignoredSaid(consulting, e2Only).join(' '), /when it consults/u);
+  assert.equal(ignoredSaid(consulting, { installed: true, features: ALL }).length, 0, 'a binary that takes the row is told nothing');
+  assert.ok(!ignoredSaid(reviewing, e2Only).join(' ').includes('consults'), 'a row that only reviews is not told about consultations');
 });

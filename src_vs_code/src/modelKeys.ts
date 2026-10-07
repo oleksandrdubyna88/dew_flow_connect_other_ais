@@ -18,6 +18,9 @@ import { ConfigReader } from './settingsShape';
  */
 export const MODEL_KEYS: readonly string[] = [
   'vendors', 'consultants', 'qconsultRows', 'chatModel', 'chatModelPresets', 'bugzModel', 'securityLane',
+  // The chat move's record and the chat row's model name (epic 4's code round): which row a preset and a resumed
+  // conversation land on, and which model it runs — a repository's to choose otherwise.
+  'chatPresetsMoved', 'chatModelName',
 ];
 
 /** What `WorkspaceConfiguration.inspect` answers, narrowed to the layers this rule talks about. */
