@@ -273,12 +273,33 @@ public sealed class PanelService
                 _remote.RunAsync(vendor, enabled, _settings.DataDir, token));
 
         return new ProviderStatus(
-            provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, health.Note)
+            provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, NoteOf(provider, health))
         {
             Api = ApiReportOf(provider),
             Fast = FastReportOf(provider),
         };
     }
+
+    /// <summary>
+    /// The health's sentence — and, for an Off codex row whose installed release refuses the standard tier, what its
+    /// launches are sent instead (todo/PLAN_codex_tier_floor.md), so the card does not claim a state the launch did not send.
+    /// </summary>
+    /// <remarks>
+    /// Read off the version the health probe ALREADY asked for — one <c>--version</c> per row, as before — and in the note
+    /// rather than a field of its own: the panel renders one note per row (<see cref="VendorHealth"/> says why ONE), and a
+    /// field it does not read would say nothing to the person. <c>fast</c> itself stays the REQUESTED state.
+    /// </remarks>
+    private static string NoteOf(ProviderSettings provider, VendorHealth health) =>
+        RefusesStandard(provider, health.Version) is { Length: > 0 } floor
+            ? string.Join(" — ", ((string[])[health.Note, floor]).Where(part => part.Length > 0))
+            : health.Note;
+
+    /// <summary>What an Off codex row's launches carry on a release that refuses the standard tier — or empty when that is not this row.</summary>
+    private static string RefusesStandard(ProviderSettings provider, string version) =>
+        RuntimeFor(provider) is CodexRuntime codex && codex.TierDependsOnRelease(provider.Fast)
+            && CodexTierSupport.OfVersion(version) is { RefusesStandard: true } tier
+            ? $"fast mode Off: {tier.Reason}, so this release cannot be told the standard tier and its launches carry no tier at all — update codex to have Off enforced"
+            : string.Empty;
 
     /// <summary>The fast mode a row with a tier REQUESTS, in the wire's own words — null for a row without one.</summary>
     private static string? FastReportOf(ProviderSettings provider) =>

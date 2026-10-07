@@ -2,6 +2,7 @@ using CoaiMcp.Core.Catalog;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -66,5 +67,35 @@ public sealed class ACodexThatRefusesTheStandardTierTests
     {
         new ReviewerSettings("codex").CodexTier.Should().Be(CodexTierSupport.Unprobed,
             "a launch no site probed is told what it was told before the probe existed");
+    }
+
+    // ---------- providers: the card does not claim a state the launch did not send ----------
+
+    /// <summary>
+    /// <c>providers</c> reports the fast mode a row REQUESTS — and for an Off codex row on a release that refuses the
+    /// standard tier, says beside it that the release cannot be told it, so its launches carry no tier (plan change 4).
+    /// Read off the version the health probe already asked for: one <c>--version</c>, not two.
+    /// </summary>
+    [Theory]
+    [InlineData("codex-cli 0.120.0\n", "codex", "off", true)]
+    [InlineData("codex-cli 0.160.0\n", "codex", "off", false)]
+    [InlineData("codex-cli 0.120.0\n", "fastcodex", "on", false)]
+    [InlineData("codex-cli 0.160.0\n", "fastcodex", "on", false)]
+    public async Task Providers_SaysWhenAnOffRowsReleaseCannotBeToldTheStandardTier(string printed, string row, string fast, bool said)
+    {
+        var service = new PanelService(
+            new PanelSettings
+            {
+                DataDir = Path.Combine(Path.GetTempPath(), $"coai-tierreport-{Guid.NewGuid():N}"),
+                Providers = PanelSettings.ParseVendors("""[{"id":"codex","runtime":"codex"},{"id":"fastcodex","runtime":"codex","fast":"on"}]"""),
+            },
+            VaultKeys.None("no vault"), default, new RecordingLauncher(stdOut: printed), Serilog.Core.Logger.None, Noticing.None);
+
+        var answer = System.Text.Json.JsonDocument.Parse(await service.ProvidersAsync(TestContext.Current.CancellationToken)).RootElement;
+        var status = answer.GetProperty("providers").EnumerateArray().Single(one => one.GetProperty("provider").GetString() == row);
+
+        status.GetProperty("fast").GetString().Should().Be(fast, "the requested state, as before");
+        status.GetProperty("note").GetString()!.Contains("cannot be told the standard tier", StringComparison.Ordinal)
+            .Should().Be(said, $"{row} on `{printed.Trim()}`: {status.GetProperty("note").GetString()}");
     }
 }
