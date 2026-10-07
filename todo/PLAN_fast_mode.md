@@ -155,9 +155,9 @@ promote).
   back. The current page draws nothing.
 - **Story D (the flow), 2026-10-07** — `AFastModeRowIsCheckedTests` drives the real `--check-model` launch; the flow and
   its limits in `research/module_tests.md`.
-- **Story C (the chat) waits for the catalog's epic 4** (merged 2026-10-07, PR #688): the chat reads its models from
-  catalog rows and already passes a row's effort there (E4.6c), so the fast mode joins that code after a rebase rather
-  than being written twice.
+- **Story C (the chat), 2026-10-07** — built after main (with the catalog's epic 4, PR #688) was merged in: codex chats
+  get `-c service_tier`, claude chats the chat's own one-key `--settings` file, judged by the conversation's model; the
+  merge also carried `Fast` through `ConsultantResolver.WithOptions`, so a consultant's catalog row keeps its fast mode.
 
 ## Definition of Done
 

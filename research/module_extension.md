@@ -11213,3 +11213,12 @@ the fast tier, As the CLI is set; help `fastMode`, the "new" tag `model.fast`) i
 (`IGNORED`) only for a state the person chose. The current Settings page draws no fast-mode control (a test holds it).
 The seam writes a codex row set to On and reads `--providers`' `fast` back: `on` from a binary that lists `fastMode`,
 `off` from one handed nothing.
+
+## A chat runs on its row's fast mode (2026-10-07, todo/PLAN_fast_mode.md, Story C)
+
+`cliChatLaunch.chatLaunchFor` adds the tier a chat forces, by the review launch's rule (`forcedTier`): the row's state
+where `rowHasFastTier` holds for the CONVERSATION's model (what the CLI is told, not the row's default) — On, else Off;
+nothing As the CLI is set or without a tier. `ChatLaunch.fast` (`on` | `off`) reaches codex as `-c service_tier=fast|default`
+(`codexAdapter.tierArgs`, before the stdin positional); a claude chat also gets `ChatLaunch.fastSettings`, the chat's OWN
+one-key `--settings` file under the chat's folder (`chatFastSettings.chatFastSettingsFile`, written only when it differs,
+through a renamed temp file) — never coai-mcp's, so a chat never depends on the server having run.

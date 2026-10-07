@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import { needsShell } from './cliVersions';
 import { Platform } from './hostSide';
 import { ChatAccess, ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
-import { effortRefusal } from './featureAvailability';
+import { effortRefusal, rowHasFastTier } from './featureAvailability';
 import { agyAdapter } from './agyAdapter';
 import { claudeAdapter } from './claudeAdapter';
 import { codexAdapter } from './codexAdapter';
@@ -302,10 +302,34 @@ export function launchSpecFor(
  * reviewer (`RosterBuilder.EffortFor`), and only one the CLI accepts (`effortRefusal`, the TS mirror of the server's
  * check), so a refused level is never on its command line. codex and agy are handed none, as the server hands none.
  */
-export function chatLaunchFor(vendor: Vendor, resume: string, model: string, access: ChatAccess): ChatLaunch {
+export function chatLaunchFor(
+  vendor: Vendor, resume: string, model: string, access: ChatAccess,
+  /** The chat's own claude settings file for a state (`chatFastSettings`); none in a test that does not ask for one. */
+  fastFile: (on: boolean) => string = () => '',
+): ChatLaunch {
   const effort = claudeEffortOf(vendor);
 
-  return effort.length > 0 ? { resume, model, access, effort } : { resume, model, access };
+  return { resume, model, access, ...(effort.length > 0 ? { effort } : {}), ...fastOf(vendor, model, fastFile) };
+}
+
+/**
+ * The tier a chat forces (todo/PLAN_fast_mode.md, Story C) — by the review launch's rule: the row's state where the row
+ * has a tier, judged by the CONVERSATION's model; nothing As the CLI is set. A claude chat also gets its settings file.
+ */
+function fastOf(vendor: Vendor, model: string, fastFile: (on: boolean) => string): Pick<ChatLaunch, 'fast' | 'fastSettings'> {
+  const fast = forcedTier(vendor, model);
+  if (fast === undefined) {
+    return {};
+  }
+
+  return vendor.runtime === 'claude' ? { fast, fastSettings: fastFile(fast === 'on') } : { fast };
+}
+
+/** The tier to force: the row's state where it has a tier for this model — On, else Off; nothing As the CLI is set. */
+function forcedTier(vendor: Vendor, model: string): 'on' | 'off' | undefined {
+  const tiered = vendor.fast !== 'cli' && rowHasFastTier({ runtime: vendor.runtime, model, baseUrl: vendor.baseUrl });
+
+  return tiered ? (vendor.fast ?? 'off') : undefined;
 }
 
 /** A claude row's effort when the CLI accepts it; '' for any other runtime, no effort, or a refused level. */
