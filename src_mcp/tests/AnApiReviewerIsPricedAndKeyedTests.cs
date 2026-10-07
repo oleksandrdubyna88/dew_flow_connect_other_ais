@@ -253,7 +253,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         var scratch = Directory.CreateTempSubdirectory("coai-api-roster-").FullName;
 
         var work = service.Roster.BuildWork(
-            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers;
 
         var reviewer = work.Should().ContainSingle().Subject.Invocation;
         reviewer.Request.Environment[ApiRuntime.KeyVariable].Should().Be(Key, "the row 'qwen-2' reads the key filed under 'qwen'");
@@ -275,9 +275,9 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         var scratch = Directory.CreateTempSubdirectory("coai-api-conv-").FullName;
 
         var reviewer = service.Roster.BuildWork(
-            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers.Single();
+            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers.Single();
         var other = service.Roster.BuildWork(
-            [RoleCatalog.ArchitectureRole], scratch, "another ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers.Single();
+            [RoleCatalog.ArchitectureRole], scratch, "another ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers.Single();
 
         var key = KeyOf(reviewer.Invocation.Request.Arguments);
         key.Should().MatchRegex("^[0-9a-f]{32}$");
@@ -305,9 +305,9 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         var scratch = Directory.CreateTempSubdirectory("coai-api-cap-").FullName;
 
         var feature = service.Roster.BuildWork(
-            [RoleCatalog.FeatureRole], scratch, "ctx", round: 1, stage: Stage.FeatureReview, readsCheckout: false).Reviewers.Single();
+            [RoleCatalog.FeatureRole], scratch, "ctx", round: 1, stage: Stage.FeatureReview, readsCheckout: false, codexTiers: CodexTiers.None).Reviewers.Single();
         var code = service.Roster.BuildWork(
-            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers.Single();
+            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, codexTiers: CodexTiers.None).Reviewers.Single();
 
         feature.ConversationCap.Should().Be(TimeSpan.FromMinutes(20), "the whole-review limit for an api reviewer on the feature stage, at the panel's default");
         code.ConversationCap.Should().BeNull("a code round's reviewer keeps the derived cap");

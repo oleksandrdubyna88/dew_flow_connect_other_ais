@@ -99,10 +99,20 @@ public sealed partial record CodexTierSupport(StandardTier Answer, string Reason
         OfVersion(printed, FeatureAvailability.Builtin.FastModeOf("codex").RefusesStandard);
 
     /// <summary><see cref="OfVersion(string)"/> against a range of the caller's — pure, so every edge is a unit test.</summary>
-    internal static CodexTierSupport OfVersion(string printed, ReleaseRange refuses) =>
-        ReleaseIn(printed) is { Success: true } named && Version.TryParse(named.Groups["release"].Value, out var release)
-            ? Judged(release, refuses)
-            : Unknown($"codex --version did not name a release ('{FirstLineOf(printed)}')");
+    internal static CodexTierSupport OfVersion(string printed, ReleaseRange refuses) => ReleasesIn(printed) switch
+    {
+        [var release] => Judged(release, refuses),
+        [] => Unknown($"codex --version did not name a release ('{FirstLineOf(printed)}')"),
+        // The code round: a wrapper that prints its own banner before the CLI answers would otherwise be read as the
+        // banner. Two releases in one answer cannot be told apart, so neither is believed.
+        var many => Unknown($"codex --version named more than one release ({string.Join(", ", many)}), so which one launches is not known"),
+    };
+
+    /// <summary>Every distinct release the answer names — one when it is a plain <c>--version</c> line.</summary>
+    private static IReadOnlyList<Version> ReleasesIn(string printed) =>
+        [.. CodexCliRelease().Matches(printed)
+            .SelectMany(named => Version.TryParse(named.Groups["release"].Value, out var release) ? [release] : Array.Empty<Version>())
+            .Distinct()];
 
     private static CodexTierSupport Judged(Version release, ReleaseRange refuses) =>
         refuses.Contains(release)
@@ -118,8 +128,6 @@ public sealed partial record CodexTierSupport(StandardTier Answer, string Reason
     };
 
     private static string FirstLineOf(string printed) => printed.Trim().Split('\n')[0].Trim();
-
-    private static Match ReleaseIn(string printed) => CodexCliRelease().Match(printed);
 
     /// <summary><c>codex-cli X.Y.Z</c>, as every release measured prints it; a pre-release suffix is read as its release.</summary>
     [GeneratedRegex(@"\bcodex-cli\s+(?<release>[0-9]+\.[0-9]+\.[0-9]+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]

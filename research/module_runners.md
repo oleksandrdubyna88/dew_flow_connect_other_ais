@@ -2340,9 +2340,15 @@ coai-mcp 0.44.0 every Off codex launch on those releases failed. Three parts mak
 **Why `Unknown` still sends `default`** (the plan round's finding 4): omitting the tier on a version nobody could read
 would let a person's own `service_tier = "priority"` make every review fast at 2–2.5× the cost, unasked — the reason
 Off exists. `Unknown` arises when `--version` cannot run (then the launch cannot either) or prints a shape no release has
-printed (only a future one could, and those accept `default`). If the refusal is met anyway, `VendorDiagnosis` names it
-— ``unknown variant `default`, expected `fast` or `flex` `` → "update codex, or set this row's fast mode to 'As the CLI
-is set'", kind `UnknownOption`.
+printed (only a future one could, and those accept `default`) — or names TWO releases, as a wrapper's banner before the
+CLI's own line would (the code round: neither is believed). If the refusal is met anyway, `VendorDiagnosis` names it —
+``unknown variant `default`, expected `fast` or `flex` `` → "update codex to 0.131 or newer. Or set this row's fast mode
+to 'As the CLI is set', which then runs on whatever tier your codex config asks for", kind `UnknownOption`. Updating
+comes first because the other way out follows the person's config, which may ask for the dearer tier.
+
+`RosterBuilder.BuildWork` takes `codexTiers` as a REQUIRED argument, beside `stage` and for the same reason: a stage that
+forgot to ask would otherwise have compiled and failed every launch on 0.110–0.130. A caller that does not ask —
+every test that builds a roster by hand — passes `CodexTiers.None` and says so.
 
 ```mermaid
 sequenceDiagram

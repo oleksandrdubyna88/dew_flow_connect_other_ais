@@ -143,7 +143,7 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
                 var roles = service.Settings.Rounds.RolesForRound(Stage.FeatureReview, round);
 
                 return Task.FromResult(service.Roster.BuildWork(
-                    roles, workingDir, "## The feature\n\nan outline", round, Stage.FeatureReview, readsCheckout: false));
+                    roles, workingDir, "## The feature\n\nan outline", round, Stage.FeatureReview, readsCheckout: false, codexTiers: CodexTiers.None));
             })
         {
             Feature = Plan,

@@ -83,7 +83,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             {"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}
             """, [new("codex")]);
         return Service(laneSetting: lane).Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path,
-            "fixture", 1, Stage.CodeReview, false, securityFiles: files);
+            "fixture", 1, Stage.CodeReview, false, securityFiles: files, codexTiers: CodexTiers.None);
     }
 
     [Theory]
@@ -122,7 +122,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     {
         var stage = new StageRun(RoundMachine.BeginCodeRound, false, Stage.CodeReview, false,
             (session, path, _, _) => Task.FromResult(service.Roster.BuildWork(laneOnly ? [] : [RoleCatalog.ArchitectureRole], path,
-                "A committed fixture change", laneOnly ? 2 : 1, Stage.CodeReview, false, securityFiles: files ?? Files)))
+                "A committed fixture change", laneOnly ? 2 : 1, Stage.CodeReview, false, securityFiles: files ?? Files, codexTiers: CodexTiers.None)))
         {
             Session = new SessionRule.CreateIfAbsent(() => new PersistedSession(
                 new SessionState("security", _repo.Path, "main", service.Settings.Rounds)
@@ -196,10 +196,10 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     [Fact]
     public void Pairs_keep_their_own_identity_and_rerun_when_ordinary_budgets_are_spent()
     {
-        var work = Service().Roster.BuildWork([], _repo.Path, "fixture", 2, Stage.CodeReview, false, securityFiles: Files);
+        var work = Service().Roster.BuildWork([], _repo.Path, "fixture", 2, Stage.CodeReview, false, securityFiles: Files, codexTiers: CodexTiers.None);
         work.Reviewers.Should().ContainSingle().Which.Invocation.Role.Should().Be("redteam-general");
         work.Reviewers[0].IsSecurity.Should().BeTrue();
-        var spent = Service().Roster.BuildWork([], _repo.Path, "fixture", 3, Stage.CodeReview, false, securityFiles: Files);
+        var spent = Service().Roster.BuildWork([], _repo.Path, "fixture", 3, Stage.CodeReview, false, securityFiles: Files, codexTiers: CodexTiers.None);
         spent.Reviewers.Should().BeEmpty();
         spent.NotAsked.Should().Contain(s => s.Reason.Contains("budget spent"));
     }
@@ -240,7 +240,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
             {
                 var round = session.State.RoundsRunThisStage + 1;
                 return Task.FromResult(service.Roster.BuildWork(service.Settings.Rounds.RolesForRound(Stage.FeatureReview, round),
-                    path, "A committed fixture feature", round, Stage.FeatureReview, false, securityFiles: files ?? Files));
+                    path, "A committed fixture feature", round, Stage.FeatureReview, false, securityFiles: files ?? Files, codexTiers: CodexTiers.None));
             })
         {
             Feature = "plan.md",
@@ -313,7 +313,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
         await File.WriteAllTextAsync(Path.Combine(_data, "prompts", "redteam-custom.md"), "   ");
         var lane = Lane("""{"enabled":true,"prompts":[{"id":"redteam-custom","triggers":[]}],"runs":[{"vendor":"codex","prompt":"redteam-custom"}]}""");
         var work = Service(laneSetting: lane).Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path, "fixture", 1,
-            Stage.CodeReview, false, securityFiles: Files);
+            Stage.CodeReview, false, securityFiles: Files, codexTiers: CodexTiers.None);
         work.Excluded.Should().Contain(e => e.Role == "redteam-custom" && e.Reason.Contains("prompt unavailable"));
     }
 
@@ -323,7 +323,7 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     public void A_misconfigured_pairing_is_reported_as_unable_to_run_rather_than_not_due(string json, string reason)
     {
         var work = Service(laneSetting: Lane(json)).Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path, "fixture", 1,
-            Stage.CodeReview, false, securityFiles: Files);
+            Stage.CodeReview, false, securityFiles: Files, codexTiers: CodexTiers.None);
         work.Excluded.Should().Contain(e => e.Role == "redteam-sql" && e.Reason.Contains(reason));
         work.NotAsked.Should().NotContain(s => s.Role.Contains("redteam-sql"));
         SecurityRound.Clause([], work).Should().StartWith("Security lane incomplete: configured pairings could not run");
@@ -378,5 +378,5 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     }
 
     private RoundWork SqlWorkFor(PanelService service) => service.Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path,
-        "fixture", 1, Stage.CodeReview, false, securityFiles: Files);
+        "fixture", 1, Stage.CodeReview, false, securityFiles: Files, codexTiers: CodexTiers.None);
 }

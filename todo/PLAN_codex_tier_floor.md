@@ -1,7 +1,8 @@
 # PLAN — codex 0.110–0.130 are never told a tier they refuse
 
-> Status: **plan only, nothing implemented yet (2026-10-07).** A regression fix for coai-mcp 0.44.0 (fast mode, PR
-> #693). Scope: `CodexRuntime.TierArgs` and what it reads, `VendorDiagnosis`, the codex row of the `fastMode` block in
+> Status: **built, not merged (2026-10-07)** — every step on branch `fix/codex-tier-floor`, through the coai plan
+> round and the code round (session `bd66f669`, both `proceed`); see *Progress*. A regression fix for coai-mcp 0.44.0
+> and 0.44.1 (fast mode, PR #693). Scope: `CodexRuntime.TierArgs` and what it reads, `VendorDiagnosis`, the codex row of the `fastMode` block in
 > `shared/feature-availability.json` (and the extension's generator, which checks that block), the docs.
 >
 > Related docs: [RESULTS_codex_service_tier_versions_2026-10-07.md](../research/RESULTS_codex_service_tier_versions_2026-10-07.md)
@@ -142,3 +143,28 @@ so the status line above stays as it is.
   `FAKECLI_SLEEP_MS` would otherwise make every probe hang to its ceiling; `VendorProbeTests`' hang arm steers the new
   wait; `ConsultScenarioBase.TurnLauncher` and `ScriptedLauncher.Vendors` let the `--version` probe through rather than
   count it as a launch (four `QuestionFanOutTests` failed on that before the helper changed).
+
+### The code round (2026-10-07, session `bd66f669`, 8 reviewers on codex and gemini, `proceed`, 8 findings)
+
+Accepted and fixed:
+- **0 — `BuildWork`'s `codexTiers` is REQUIRED now**, beside `stage`, for the same reason: an optional one defaulted a
+  future stage into "nobody asked" with no compile error. The 63 test calls say `codexTiers: CodexTiers.None` — they build
+  rosters without asking any codex, and now say so. The proof is the compiler: none of them built until they did.
+- **6 — two releases in one `--version` answer are Unknown**, never the first one found (a wrapper's banner before the
+  CLI's own line). RED: *"Expected tier.Answer to be StandardTier.Unknown … but found StandardTier.Accepts"* (banner
+  first) and *"… but found StandardTier.RefusesStandard"* (banner last); the same release twice is still that release.
+- **7 — the cure names updating first, to 0.131 or newer, and says what "As the CLI is set" does**: it runs on whatever
+  tier the person's codex config asks for. RED: *"Expected diagnosis.Cure … to contain "0.131""*.
+- **4 — no cast in the extension's test fixture**: `Seed` declares `fastMode`; the one remaining cast, `JSON.parse(...)
+  as Seed` at the file boundary, is noted on the interface. Typing only — no behaviour, so no RED test.
+- **2, 3, 5 — docs**: the flows in `research/module_tests.md`, the cross-module wiring in `research/architecture.md`, and
+  this status line.
+
+Rejected with its reason recorded: **1 — the question row should call `PrepareAsync` polymorphically.** That would also
+run `ClaudeConsultant.PrepareAsync` for claude question rows and change their `--restricted` behaviour, which is a
+separate open plan (`PLAN_a_question_row_on_an_old_claude.md`) waiting on a measurement and the operator. This fix must
+not change claude rows.
+
+**A flake met on the way, not caused here:** `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap…`
+failed once in a full run on this branch; on `main`'s own C# (no part of this fix) it failed 2 of 5 runs alone. It builds
+its settings directly and depends on 300–900 ms timeouts.

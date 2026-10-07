@@ -147,6 +147,11 @@ internal sealed class RosterBuilder(
         // two questions stopped being honest the moment there were three stages.
         Stage stage,
         bool readsCheckout,
+        // What this round's codex executables said about the standard tier (CodexTiersAsync), asked by the stage before
+        // it builds. REQUIRED, for the reason `stage` is (the code round of PLAN_codex_tier_floor.md): an optional one
+        // defaulted a future stage into "nobody asked", which on codex 0.110–0.130 fails every launch at config load,
+        // with no compile error. A caller that has not asked says so — `CodexTiers.None` — in so many words.
+        CodexTiers codexTiers,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
         bool deal = false,
@@ -154,13 +159,10 @@ internal sealed class RosterBuilder(
         // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
         Runners.Feature.SourceTurns? source = null,
         IReadOnlyList<Core.Context.FileDiff>? securityFiles = null,
-        IReadOnlyDictionary<string, string>? securitySources = null,
-        // What this round's codex executables said about the standard tier (CodexTiersAsync), asked by the stage before
-        // it builds — absent is nobody asked, and every codex row is told what it was always told.
-        CodexTiers? codexTiers = null)
+        IReadOnlyDictionary<string, string>? securitySources = null)
     {
         var turns = source ?? Runners.Feature.SourceTurns.None;
-        var tiers = codexTiers ?? CodexTiers.None;
+        var tiers = codexTiers;
         // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
         // with catalog ids, so this changes nothing today — it is the boundary the Team server has
         // at its endpoint and the local path did not: a caller that schedules `architecture` would

@@ -90,9 +90,11 @@ public static class VendorDiagnosis
         // 0.44.0 fails the whole launch at config load, before any request — naming config.toml, a file the person never
         // edited. Those releases have no way to say "standard", so the cure is a newer codex, or a row that sends no tier.
         // Before the general "unknown option" row by the table's specific-first order, though the two markers never meet.
+        // The cure names updating FIRST (the code round): "As the CLI is set" sends no tier, so the run then takes whatever
+        // tier your codex config asks for — a `service_tier = "priority"` there makes it fast at 2–2.5× the cost.
         ("unknown variant `default`, expected `fast` or `flex`",
-            "the installed codex (0.110–0.130) cannot be told the standard tier — update codex, " +
-            "or set this row's fast mode to 'As the CLI is set'.",
+            "the installed codex (0.110–0.130) cannot be told the standard tier — update codex to 0.131 or newer. " +
+            "Or set this row's fast mode to 'As the CLI is set', which then runs on whatever tier your codex config asks for.",
             DiagnosisKind.UnknownOption),
         // Measured 2026-10-02 (research/RESULTS_claude_consultant_confinement.md): claude 2.1.197, handed the
         // confined consultant argv, answered `error: unknown option '--restricted'` and exit 1 — a CLI older

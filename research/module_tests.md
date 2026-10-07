@@ -2887,3 +2887,28 @@ Two halves, joined by the settings file:
 
 **What it does NOT prove.** That the vendor actually serves the fast tier: codex reports no tier in its output, and
 claude needs usage credits on this account (research/RESULTS_fast_mode_measured_2026-10-07.md).
+
+### The codex floor, through every launch path (2026-10-07, `todo/PLAN_codex_tier_floor.md`)
+
+The flow: a row left at Off (the default) on a codex 0.110–0.130 — which refuse `service_tier=default` at config load
+(research/RESULTS_codex_service_tier_versions_2026-10-07.md) — is launched with no tier on every path, and a release
+outside that range is told `default` exactly as before. Each path is driven against the fake CLI answering
+`codex-cli 0.120.0` and `0.160.0` to `--version`, the real argv it was started with recorded:
+
+| Path | Scenario test | Covered |
+|---|---|---|
+| Review rounds — plan, code (with its security lane), document, feature | `EveryReviewRoundAsksTheInstalledCodexTests` | yes |
+| A consultation's first and resumed turn | `ACodexConsultationAsksTheInstalledCodexTests` | yes |
+| The consultant check (`--check-consultant` / `--check-model`) | `ConsultantCheckTests.ACheckOfACodexConsultant_TellsItOnlyWhatItsReleaseTakes` | yes |
+| **A codex question row** (`QuestionRowLaunch.TierProbedAsync`) | `QuestionConsultScenarioTests.ACodexQuestionRow_IsToldOnlyWhatItsReleaseTakes` | yes |
+| `--providers`' note for a row whose release cannot be told the standard tier | `ACodexThatRefusesTheStandardTierTests` | yes |
+| The probe itself — the range, two releases in one answer, a CLI that does not start, exits non-zero or hangs (killed) | `CodexTierSupportTests` | yes |
+| The refusal met anyway, named with its cure | `ConsultFailureTests.ACodexThatRefusesTheStandardTier_IsNamedWithItsCure` | yes |
+
+```bash
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*EveryReviewRoundAsksTheInstalledCodexTests" --filter-class "*ACodexConsultationAsksTheInstalledCodexTests" --filter-class "*ACodexThatRefusesTheStandardTierTests" --filter-class "*CodexTierSupportTests"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-method "*ACheckOfACodexConsultant_TellsItOnlyWhatItsReleaseTakes*" --filter-method "*ACodexQuestionRow_IsToldOnlyWhatItsReleaseTakes*"
+```
+
+**What it does NOT prove.** A real codex 0.110–0.130 completing a review: none can use this account's model with a
+ChatGPT login (the measurement's every run ended in a 400 after config load), so the fake CLI stands in for the release.

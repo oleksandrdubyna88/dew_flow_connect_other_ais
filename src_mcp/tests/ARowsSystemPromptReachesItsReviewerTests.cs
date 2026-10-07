@@ -34,7 +34,7 @@ public sealed class ARowsSystemPromptReachesItsReviewerTests
         new(id) { Enabled = true, Runtime = runtime, Model = "m", BaseUrl = runtime == "local" ? "http://127.0.0.1:11434" : string.Empty, SystemPrompt = systemPrompt };
 
     private static IReadOnlyList<ReviewerWork> Work(PanelService service) =>
-        service.Roster.BuildWork([RoleCatalog.ArchitectureRole], string.Empty, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false).Reviewers;
+        service.Roster.BuildWork([RoleCatalog.ArchitectureRole], string.Empty, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false, codexTiers: CodexTiers.None).Reviewers;
 
     /// <summary>What a launch hands its child: stdin, a prompt file's text, and the arguments.</summary>
     private static (string Body, string Argv) Sent(ReviewerInvocation invocation)

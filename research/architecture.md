@@ -128,6 +128,14 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   reviewer, consultant, question row — as codex's `-c service_tier=default|fast` or claude's one-key `--settings`
   file; the chat applies the same rule with its own file. `--providers` reports the REQUESTED state; what the
   vendor grants is the vendor's (a claude account without usage credits holds On off).
+  *Since [PLAN_codex_tier_floor.md](../todo/PLAN_codex_tier_floor.md) (2026-10-07):* what codex is told also depends on
+  the INSTALLED release — codex 0.110–0.130 refuse `service_tier=default` at config load
+  ([measured](RESULTS_codex_service_tier_versions_2026-10-07.md)), so an Off row there is sent no tier. The refusing
+  range is data (the codex `fastMode` row's `refusesStandard`, checked by both halves). Every launch path asks the
+  installed codex first (`CodexTierSupport.ProbeAsync`, `codex --version`, never cached): a review round once per
+  codex executable before `RosterBuilder.BuildWork`, whose `codexTiers` is a REQUIRED argument so no stage can skip it;
+  a consultation and the consultant check through `CodexConsultant.PrepareAsync`; a codex question row in its own
+  turn. `--providers` says beside the row when its release cannot be told the standard tier.
 - **The settings file now depends on the installed server's version.** An older coai-mcp turns a
   runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
   against xAI's endpoint under its own name. So the extension threads the installed server version

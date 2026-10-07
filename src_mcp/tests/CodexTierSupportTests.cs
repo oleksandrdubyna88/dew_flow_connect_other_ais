@@ -89,6 +89,25 @@ public sealed class CodexTierSupportTests : IDisposable
     }
 
     [Theory]
+    [InlineData("codex-cli 0.160.0\ncodex-cli 0.120.0\n")]
+    [InlineData("codex-cli 0.120.0\ncodex-cli 0.160.0\n")]
+    public void AnAnswerNamingTwoReleases_IsUnknown_NotTheFirstOneFound(string printed)
+    {
+        // The code round: a wrapper or shim that prints its own `codex-cli 0.160.0` banner before the installed 0.120.0
+        // answers was read as the banner — Accepts — and the launch then failed at config load on `default`.
+        var tier = CodexTierSupport.OfVersion(printed);
+
+        tier.Answer.Should().Be(StandardTier.Unknown, $"`{printed.Replace('\n', ' ').Trim()}` names two releases; which one launches is not known");
+        tier.Reason.Should().Contain("more than one release");
+    }
+
+    [Fact]
+    public void TheSameReleaseNamedTwice_IsStillThatRelease()
+    {
+        CodexTierSupport.OfVersion("codex-cli 0.120.0\ncodex-cli 0.120.0\n").Answer.Should().Be(StandardTier.RefusesStandard);
+    }
+
+    [Theory]
     [InlineData("codex version: who knows\n", "0", "did not name a release")]
     [InlineData("", "0", "did not name a release")]
     [InlineData("codex-cli 0.120.0\n", "2", "exited 2")]

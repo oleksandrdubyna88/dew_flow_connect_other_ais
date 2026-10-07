@@ -190,6 +190,12 @@ public sealed class ConsultFailureTests
         diagnosis.Should().NotBeNull("the refusal is a sentence this product causes and can cure");
         diagnosis!.Kind.Should().Be(DiagnosisKind.UnknownOption);
         diagnosis.Cure.Should().Contain("update codex").And.Contain("As the CLI is set");
+        // The code round: updating is THE cure, named first with the release that takes it; the other way out follows
+        // the person's own codex config, which may ask for a faster, dearer tier — said, not left to be found on a bill.
+        diagnosis.Cure.Should().Contain("0.131", "the cure names the first release that accepts the standard tier");
+        diagnosis.Cure.IndexOf("update codex", StringComparison.Ordinal)
+            .Should().BeLessThan(diagnosis.Cure.IndexOf("As the CLI is set", StringComparison.Ordinal), "updating is recommended first");
+        diagnosis.Cure.Should().Contain("your codex config", "'As the CLI is set' inherits whatever tier the config asks for");
         ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NonZeroExit(1, measured)), "codex", OwnTimeout)
             .Should().BeOfType<ConsultFailure.VendorRefused>().Which.Cure.Should().Be(diagnosis.Cure);
     }

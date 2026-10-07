@@ -256,7 +256,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             // flag it replaced meant, so a vendor ticked for plans and not documents would have
             // produced reviewer work here while the round it stands for produced none.
             // (CodeRabbit, plan 5's pull request.)
-            round: 1, stage: Stage.DocumentReview, readsCheckout: false);
+            round: 1, stage: Stage.DocumentReview, readsCheckout: false, codexTiers: CodexTiers.None);
 
         work.Reviewers.Should().ContainSingle();
         var prompt = work.Reviewers[0].Invocation.Request.StdIn;

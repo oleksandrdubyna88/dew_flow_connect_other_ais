@@ -139,7 +139,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
 
         var work = service.Roster.BuildWork(
             [RoleCatalog.DocumentRole], scratch, "ctx", round: 1,
-            stage: Stage.DocumentReview, readsCheckout: false);
+            stage: Stage.DocumentReview, readsCheckout: false, codexTiers: CodexTiers.None);
 
         work.Reviewers.Should().BeEmpty();
     }
@@ -159,7 +159,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
 
         var work = service.Roster.BuildWork(
             [RoleCatalog.DocumentRole], scratch, "ctx", round: 1,
-            stage: Stage.DocumentReview, readsCheckout: false);
+            stage: Stage.DocumentReview, readsCheckout: false, codexTiers: CodexTiers.None);
 
         work.Reviewers.Should().NotBeEmpty();
     }
