@@ -67,6 +67,29 @@ public sealed class AConsultationCarriesItsRowsInstructionTests : ConsultScenari
     }
 
     [Fact]
+    public async Task AnInstructionWithSpacesAroundIt_IsRedactedAsItWasSent()
+    {
+        // The epic 4 code round: the composer TRIMS the instruction before sending it, so a CLI echoes the trimmed text —
+        // and a redaction of the stored, untrimmed text never matched it.
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
+        Environment.SetEnvironmentVariable("FAKECLI_STDERR", "error: the prompt was: " + Instruction);
+
+        var service = Service(providers: [new("codex") { ExecutablePath = FakeCliExe, SystemPrompt = "  " + Instruction + "\n\n" }], launcher: new TurnLauncher(_launcher));
+        var reply = await Consult(service, "The parser returns 3 where 4 is expected.");
+
+        reply.ToString().Should().NotContain(Instruction);
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("\n\t")]
+    public void AWhitespaceInstruction_RedactsNothing(string instruction)
+    {
+        // Redacting whitespace would rewrite every gap in the child's output.
+        ConsultantTurnInputs.Redacted(instruction).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task AConsultantThatEchoesTheInstruction_NeverCarriesItIntoTheReply()
     {
         Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");

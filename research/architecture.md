@@ -1093,6 +1093,29 @@ a reader for them.
 | Which runtime serves the consultant / chat | two TS lists, one C# list, nothing comparing them | `shared/feature-availability.json` — a sixth file neither container owns; generated for the extension, compared with the C# list by `FeatureAvailabilityTests` until coai-mcp reads it (E2.1) |
 | Export/import | version 1 | version 2; a v1 file is migrated on import; the setup it replaces is saved first |
 
+**The consultant's whole row crosses — by capability (2026-10-06, finding C2 of the epics 1–3 consultation).** A
+resolved definition carried only the five launch fields, so a catalog row's effort, system prompt, timeout, key name,
+price and api settings reached reviews but never a consultation. Now, to a binary whose `--features` lists
+`consultantRow`, the extension writes the referenced catalog row beside the entry as `row` — the SAME per-row mapper
+`COAI_VENDORS` uses (`vendorsWire.rowOnTheWire`) — in `COAI_CONSULTANTS` and in `COAI_QCONSULT_ROWS`. coai-mcp reads it
+with the reviewer row's own parser (`ConsultantResolver.OptionsOf`), lays the options over a launch whose identity stays
+the entry's, and refuses the consultant by name when the row does not parse. A binary that does not list the capability
+is written the bytes it always was; an older one would have skipped the member silently, which is why the gate is a
+capability and not a version. The Models card says so when this side's binary would drop a consulting row's settings.
+
+```mermaid
+sequenceDiagram
+    participant Ext as Extension (settingsShape.envBlock)
+    participant File as settings.json (COAI_CONSULTANTS / COAI_QCONSULT_ROWS)
+    participant Mcp as coai-mcp
+    Ext->>Mcp: --features
+    Mcp-->>Ext: [..., consultantRow]
+    Ext->>File: {vendor, model, runtime, baseUrl, executablePath, row: rowOnTheWire(catalog row)}
+    Mcp->>File: read on start and on change
+    Mcp->>Mcp: OptionsOf(row) via ParseVendors; WithOptions over the entry's identity
+    Mcp->>Mcp: launch: row timeout, CLI effort, api module; system prompt frozen in the record, redacted from output
+```
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

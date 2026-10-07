@@ -38,7 +38,9 @@ internal static class ConsultantTurnInputs
     /// The texts a consultation or question launch must not hand back into a record — the row's system prompt, when it has
     /// one (todo/PLAN_one_model_catalog.md, C2), as a reviewer's (<c>ReviewerInvocation.Redact</c>).
     /// </summary>
-    public static IReadOnlyList<string> Redacted(string systemPrompt) => systemPrompt.Length == 0 ? [] : [systemPrompt];
+    /// <remarks>Trimmed as the composers trim it before sending (epic 4's code round): a CLI echoes what it was SENT, and
+    /// whitespace alone is no text — redacting it would rewrite every gap in the child's output.</remarks>
+    public static IReadOnlyList<string> Redacted(string systemPrompt) => systemPrompt.Trim() is { Length: > 0 } sent ? [sent] : [];
 
     /// <summary>An api row's effort, ceiling and thinking switch: the row's over the environment over the module's calibrated defaults.</summary>
     private static ReviewerSettings WithModule(ReviewerSettings settings, ProviderSettings row, Core.Api.ApiOverrides overrides)

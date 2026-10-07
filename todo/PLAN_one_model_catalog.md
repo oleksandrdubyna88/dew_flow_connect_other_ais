@@ -893,6 +893,16 @@ row); the new page reads it. Done, RED first.
     now says on its card when this side's binary would drop its settings for a consultation (`consultantRow`), and an api
     row on a server too old for api rows says why its card is off, as the current page did. Moved to epic 5's
     prerequisites below: R7, extraction before deletion, and the rollout order.
+  - *The epic 4 code round (2026-10-07, session `21ec1de8`, 8 reviewers on codex and gemini):* `proceed`, 12 findings.
+    Accepted and fixed, RED first: the system prompt is redacted as it was SENT (trimmed; whitespace alone redacts
+    nothing — found by two reviewers); `architecture.md` describes the `consultantRow` flow; the chat host's dependency on
+    `chatPresetsPage.ts` joins epic 5's extraction step. Rejected with the code that refutes each: "the move resets a
+    saved non-main chat model" (three reviewers) — today's chat already opens on the ticked MAIN preset over
+    `coai.chatModel` (`chatCommand.readyForChat` on main), and the move keeps that; "a side with inherited rows keeps an
+    orphaned preset id" — the read follows it through the record (`chatConfig.resumedPickFor`); "question rows drop the
+    api module" — `QuestionFanOut.SettingsFor` applies it; a side's own row shadowing an inherited reference (by design,
+    per-side launch facts); quadratic move work (capped at 64 presets); the non-main resume's model name (matches the
+    uninterrupted run).
   - *Own review beside the epic 4 code round (2026-10-07):* `chatPresetsMoved` and `chatModelName` are model keys now
     (a repository could redirect the chat through them); an interrupted resume after an older build's edit takes the
     NEWEST record entry, as the uninterrupted run does. Known, not changed: a restore leaves a conversation saved since
@@ -929,7 +939,8 @@ build after the move is otherwise unreachable (a changed CLI path or starting te
 keeps the old values; a changed name makes a second row); its tests cover both kinds of edit, a resolution that survives
 a reload, and records written before any launch-field snapshot existed. (b) **Extract before deleting** —
 `catalogSections` calls `PANEL_SECTIONS`, and `rolesEmbed`, `commandsEmbed` and `chatTabEmbed` import builders from the
-three pages E5.1 deletes; move the shared builders and handlers out first, and keep the parity tests' inventory explicit
+three pages E5.1 deletes — and `chatPresetsHost` takes its command type and edit decisions from `chatPresetsPage.ts`
+(epic 4's code round); move the shared builders, contracts and handlers out first, and keep the parity tests' inventory explicit
 so deleting the old sections cannot shrink the test with them. (c) **The rollout order is its own milestone** (no release
 now, by the owner's decision): an OLD coai-mcp still running re-reads the settings file a newer extension rewrites —
 `mcp-v0.43.0`'s security lane refuses `signals`/`words` — so the old readers are restarted (or the file kept compatible)
