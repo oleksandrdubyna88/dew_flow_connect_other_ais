@@ -147,7 +147,7 @@ public sealed class ConsultantCheckTests : IDisposable
         var (code, said, _) = await Check(Settings(), "--caller", "claude");
 
         code.Should().Be(0, said.ToString());
-        var argv = File.ReadAllText(Directory.EnumerateFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
+        var argv = LaunchRecords.Read(Directory.EnumerateFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
         argv.Zip(argv.Skip(1)).Where(pair => pair.First == "-c" && pair.Second.StartsWith("service_tier=", StringComparison.Ordinal))
             .Select(pair => pair.Second).Should().Equal(sent, $"codex {release} with fast Off");
     }

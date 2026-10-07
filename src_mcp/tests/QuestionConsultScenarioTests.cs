@@ -127,7 +127,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
             _repo, "Which retry shape fits a flaky vendor?", "I tried a fixed wait.", ct: TestContext.Current.CancellationToken)).RootElement;
 
         reply.GetProperty("status").GetString().Should().Be("complete", reply.ToString());
-        var argv = File.ReadAllText(Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
+        var argv = LaunchRecords.Read(Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
         argv.Zip(argv.Skip(1)).Where(pair => pair.First == "-c" && pair.Second.StartsWith("service_tier=", StringComparison.Ordinal))
             .Select(pair => pair.Second).Should().Equal(sent, $"codex {release} with fast Off");
     }
