@@ -20,8 +20,9 @@ namespace CoaiMcp.Server;
 /// in progress, so a survey still running when its slot ends can be joined by one more. A survey that fails or is
 /// cancelled releases its claim (fenced by the claim's own id) so the next start in the slot surveys; one whose
 /// process was killed first leaves it until the slot ends.</para>
-/// <para><b>Growth.</b> Each take deletes claims older than two windows, so at rest the directory holds about one per
-/// identity in use.</para>
+/// <para><b>Growth.</b> The name carries the window it was taken under (<c>consultants.survey.&lt;seconds&gt;.&lt;hash&gt;.claim</c>),
+/// and each take deletes every claim older than two of ITS OWN windows — so at rest there are about two per identity in
+/// use, and a short window never prunes the live claim of a long one (own review of the branch, 2026-10-07).</para>
 /// </remarks>
 internal sealed class ConsultantsSurveyClaim
 {
@@ -55,16 +56,16 @@ internal sealed class ConsultantsSurveyClaim
     /// </remarks>
     public static ConsultantsSurveyClaim Take(string healthDirectory, string identity, DateTime nowUtc, TimeSpan window)
     {
-        var path = Path.Combine(healthDirectory, Prefix + Hash($"{identity}|{nowUtc.Ticks / window.Ticks}") + Suffix);
+        var path = Path.Combine(healthDirectory, $"{Prefix}{(long)window.TotalSeconds}.{Hash($"{identity}|{nowUtc.Ticks / window.Ticks}")}{Suffix}");
         var id = Guid.NewGuid().ToString("N");
-        if (!TryCreate(healthDirectory, path, out var refused))
+        if (!TryCreate(healthDirectory, path, $"{id} pid {Environment.ProcessId} at {nowUtc:O}", out var refused))
         {
             return refused;
         }
 
-        // Ours from here on: what follows may fail, and none of it may turn this claim into somebody else's.
-        Stamped(path, $"{id} pid {Environment.ProcessId} at {nowUtc:O}");
-        Pruned(healthDirectory, path, nowUtc - (window * 2));
+        // Ours from here on: pruning may fail, and nothing it does may turn this claim into somebody else's. Each claim is
+        // pruned by ITS OWN window, carried in its name, so a short window never deletes the live claim of a long one.
+        Pruned(healthDirectory, path, nowUtc);
 
         return new(true, path, id, string.Empty);
     }
@@ -109,16 +110,19 @@ internal sealed class ConsultantsSurveyClaim
         && !SecretEndings.Any(ending => name.EndsWith(ending, StringComparison.Ordinal));
 
     /// <summary>
-    /// The create that decides: true when it made the file (ours); otherwise <paramref name="refused"/> is the answer —
-    /// taken by another, or (the directory cannot be written) taken with nothing to release.
+    /// The create that decides, with the claim's id written through the SAME stream, so the file never exists without
+    /// it (the code round, codex and gemini, 2026-10-07: an empty file could not be released). True when it made the
+    /// file (ours); otherwise <paramref name="refused"/> is the answer — taken by another, or (the directory cannot be
+    /// written) taken with nothing to release. A write that fails after the create removes the file again.
     /// </summary>
-    private static bool TryCreate(string directory, string path, out ConsultantsSurveyClaim refused)
+    private static bool TryCreate(string directory, string path, string stamp, out ConsultantsSurveyClaim refused)
     {
         refused = Undecided;
         try
         {
             Directory.CreateDirectory(directory);
-            new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read).Dispose();
+            using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+            Written(file, path, stamp);
 
             return true;
         }
@@ -137,14 +141,39 @@ internal sealed class ConsultantsSurveyClaim
     private bool IsOurs() =>
         Taken && _path.Length > 0 && Quietly(() => File.Exists(_path) && File.ReadAllText(_path).StartsWith(_id, StringComparison.Ordinal));
 
-    private static void Stamped(string path, string text) => Quietly(() => File.WriteAllText(path, text));
+    private static readonly TimeSpan LongestWindow = TimeSpan.FromSeconds(ServerPace.LongestConsultantsReuseSeconds);
+
+    /// <summary>The window a claim's NAME says it was taken under — the longest window when the name says nothing usable.</summary>
+    private static TimeSpan WindowOf(string claim)
+    {
+        var parts = Path.GetFileName(claim).Split('.');
+
+        return parts.Length == 5 && long.TryParse(parts[2], out var seconds) && seconds > 0
+            ? TimeSpan.FromSeconds(seconds)
+            : LongestWindow;
+    }
+
+    private static void Written(FileStream file, string path, string stamp)
+    {
+        try
+        {
+            file.Write(Encoding.UTF8.GetBytes(stamp));
+            file.Flush();
+        }
+        catch (IOException)
+        {
+            file.Dispose();
+            Quietly(() => File.Delete(path));
+            throw;
+        }
+    }
 
     private static string Hash(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..20];
 
-    private static void Pruned(string directory, string ours, DateTime olderThanUtc)
+    private static void Pruned(string directory, string ours, DateTime nowUtc)
     {
         var stale = Quietly(() => Directory.EnumerateFiles(directory, Prefix + "*" + Suffix)
-            .Where(claim => claim != ours && File.GetLastWriteTimeUtc(claim) < olderThanUtc).ToList(), []);
+            .Where(claim => claim != ours && File.GetLastWriteTimeUtc(claim) < nowUtc - (WindowOf(claim) * 2)).ToList(), []);
         foreach (var claim in stale)
         {
             // Another start pruned it first, or a reader holds it: the next take tries again.

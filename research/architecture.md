@@ -296,8 +296,8 @@ Every editor session starts its own stdio `coai-mcp`, so a machine runs several 
 file per question card (20–54 % of a core per idle server), and the start read the vault and ran every startup sweep
 before answering `initialize` (19–32 s in the logs, 30–62 s reproduced on a copy of the data, against Claude Code's 30 s connect budget — a restart storm). Since then the
 transport starts first and the slow half runs in the background (`StartingHost`), the beat reads nothing when nothing
-is due, and the consultants survey that every start wrote for the other side is taken once per window for every server
-on the data directory (`ConsultantsSurveyClaim`). No wire or file a client reads changed; a `.claim` file is new in
+is due, and the consultants survey that every start wrote for the other side is taken once per window per identity —
+build, side, settings and client environment — for every server on the data directory (`ConsultantsSurveyClaim`). No wire or file a client reads changed; a `.claim` file is new in
 `consultations/health/` and the extension does not read it. Details: [module_server.md](module_server.md), *A start
 answers `initialize` at once*.
 

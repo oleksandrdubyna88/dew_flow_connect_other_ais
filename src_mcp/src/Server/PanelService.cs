@@ -216,7 +216,7 @@ public sealed class PanelService
 
     /// <summary>
     /// The session store this service reads — internal so a test can count what an idle beat reads
-    /// (<see cref="SessionStore.HeldQuestionReads"/>).
+    /// (<see cref="SessionStore.HeldQuestionParses"/>).
     /// </summary>
     internal SessionStore Store => _store;
 

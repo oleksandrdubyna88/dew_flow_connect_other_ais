@@ -111,6 +111,30 @@ public sealed class StartingHostTests : IDisposable
         starting.Invoking(s => s.ThrowIfFailed()).Should().Throw<ServerStartFailed>().WithInnerException<TimeoutException>();
     }
 
+    /// <summary>
+    /// Own review of the branch (2026-10-07): Program's ending ALWAYS cancels the start's stop before it asks whether the
+    /// start failed, so a failure decided by reading the stop afterwards turned a timed-out start into "not failed" and the
+    /// process exited 0 with nothing recorded. The outcome is fixed inside the start, when it ends.
+    /// </summary>
+    [Fact]
+    public async Task AStartCancelledWithoutItsStop_StaysAFailure_AfterTheStopIsCancelledToo()
+    {
+        using var stop = new CancellationTokenSource();
+        using var inner = new CancellationTokenSource();
+        await inner.CancelAsync();
+        var starting = StartingHost.Start(async () =>
+        {
+            await Task.Delay(Timeout.Infinite, inner.Token);
+            throw new InvalidOperationException("unreachable");
+        }, stop.Token);
+        await StartingHost.Ended(starting.Started, TimeSpan.FromSeconds(5));
+
+        await stop.CancelAsync(); // what the ending does before it reads the outcome
+
+        starting.Failed.Should().BeTrue("the start timed out before anything asked the server to stop");
+        starting.Invoking(s => s.ThrowIfFailed()).Should().Throw<ServerStartFailed>();
+    }
+
     [Fact]
     public async Task TheSweeper_KeepsBeatingAfterAGoodStart_UntilServingEnds()
     {
@@ -118,7 +142,7 @@ public sealed class StartingHostTests : IDisposable
         var starting = StartingHost.Start(() => Task.FromResult(host), CancellationToken.None);
         using var stop = new CancellationTokenSource();
 
-        var sweeping = starting.SweepAsync(TimeSpan.FromMilliseconds(20), Serilog.Core.Logger.None, stop.Token);
+        var sweeping = ConsultationSweeper.RunAsync(starting, TimeSpan.FromMilliseconds(20), Serilog.Core.Logger.None, stop.Token);
 
         (await StartingHost.Ended(sweeping, TimeSpan.FromMilliseconds(300))).Should().BeFalse("a good start leaves the sweeper beating");
         await stop.CancelAsync();
@@ -131,7 +155,7 @@ public sealed class StartingHostTests : IDisposable
         var starting = StartingHost.Start(() => throw new Boom(), CancellationToken.None);
         using var stop = new CancellationTokenSource();
 
-        var sweeping = starting.SweepAsync(TimeSpan.FromMilliseconds(10), Serilog.Core.Logger.None, stop.Token);
+        var sweeping = ConsultationSweeper.RunAsync(starting, TimeSpan.FromMilliseconds(10), Serilog.Core.Logger.None, stop.Token);
 
         (await StartingHost.Ended(sweeping, TimeSpan.FromSeconds(5))).Should().BeTrue("a failed start ends the sweeper at once, before any beat");
     }

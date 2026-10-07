@@ -1,10 +1,11 @@
 # RESULTS — an idle coai-mcp burned a core, and a slow start became a restart storm (2026-10-06)
 
 > Measured 2026-10-06 on the owner's machine (Windows 11, 24 logical cores; WSL Ubuntu on the same host). Subject:
-> `mcp-v0.43.0` (e193822a) against the fix on branch `fix/mcp-idle-cpu-slow-start`, based on a3ac5b01 and not yet
-> committed when measured. Its source is pinned by content instead: git tree `0e8ed071` for `src_mcp` (from
-> `git write-tree` over a temporary index, 2026-10-07); the builds measured were published from that source before one
-> comment in `Program.cs` was re-wrapped — no code differs. The commit sha is added here when the branch is committed.
+> `mcp-v0.43.0` (e193822a) against the fix on branch `fix/mcp-idle-cpu-slow-start`, measured BEFORE it was committed:
+> its source is pinned by content as git tree `0e8ed071` for `src_mcp` (from `git write-tree` over a temporary index,
+> 2026-10-07), on base a3ac5b01. It was then committed as 57fcb8bc on 0f4efc75 (#689, API streaming) and changed by
+> the code round (bounded shutdown waits, the claim written in one step, a per-file held-set cache, the start ended by
+> a stop during the vault read) — the measured numbers are about tree `0e8ed071`, not re-taken after those changes.
 > Harness of every after-fix number:
 > [`scripts/measure-idle-server.mjs`](../scripts/measure-idle-server.mjs). The diagnosis also used read-only `/proc`
 > sampling and `dotnet-stack`, and exploratory runs with a Python twin of the harness kept in the session's scratch

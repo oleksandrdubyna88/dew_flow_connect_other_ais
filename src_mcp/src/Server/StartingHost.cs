@@ -37,49 +37,39 @@ public sealed class StartingHost : IPanelServiceSource
     /// </summary>
     public static readonly TimeSpan EndBudget = TimeSpan.FromSeconds(1);
 
-    private readonly CancellationToken _stop;
-
-    private StartingHost(Task<PanelServiceHost> started, CancellationToken stop)
-    {
-        Started = started;
-        _stop = stop;
-    }
+    private StartingHost(Task<PanelServiceHost> started) => Started = started;
 
     /// <summary>The start itself: the host once it is built, or the start's own exception.</summary>
     public Task<PanelServiceHost> Started { get; }
 
     /// <summary>
-    /// Whether the start FAILED: it threw, or it was cancelled although its stop was not asked for (a timeout inside it
-    /// surfaces as a cancellation, and is a failure all the same).
+    /// Whether the start FAILED: it threw, or it was cancelled although its stop was not asked for — a timeout inside it
+    /// surfaces as a cancellation, and is a failure all the same. Decided INSIDE the start, when it ends (see
+    /// <see cref="Start"/>): Program's ending always cancels the start's stop before it asks, so a failure read off the
+    /// stop afterwards would turn a timed-out start into an ending (own review of the branch, 2026-10-07).
     /// </summary>
-    public bool Failed => Started.IsFaulted || (Started.IsCanceled && !_stop.IsCancellationRequested);
+    public bool Failed => Started.IsFaulted;
 
     /// <summary>Begins the start on the thread pool and returns at once.</summary>
     /// <param name="stop">What ends the start on purpose: a start cancelled by it is an ending, never a failure.</param>
-    public static StartingHost Start(Func<Task<PanelServiceHost>> start, CancellationToken stop) => new(Task.Run(start, CancellationToken.None), stop);
+    public static StartingHost Start(Func<Task<PanelServiceHost>> start, CancellationToken stop) =>
+        new(Task.Run(() => Settled(start, stop), CancellationToken.None));
+
+    /// <summary>The start, with a cancellation its stop did not ask for turned into the failure it is.</summary>
+    private static async Task<PanelServiceHost> Settled(Func<Task<PanelServiceHost>> start, CancellationToken stop)
+    {
+        try
+        {
+            return await start().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException cancelled) when (!stop.IsCancellationRequested)
+        {
+            throw new TimeoutException("the server's start was cancelled although nothing asked it to stop", cancelled);
+        }
+    }
 
     public async ValueTask<PanelService> CurrentAsync(CancellationToken ct = default) =>
         (await Started.WaitAsync(ct).ConfigureAwait(false)).Current;
-
-    /// <summary>
-    /// Runs the sweeper's beat once the start has succeeded — never before, so no beat waits on a half-built service,
-    /// and never after a failed start, which ends the process instead.
-    /// </summary>
-    public async Task SweepAsync(TimeSpan every, Serilog.ILogger log, CancellationToken stop)
-    {
-        PanelServiceHost host;
-        try
-        {
-            host = await Started.WaitAsync(stop).ConfigureAwait(false);
-        }
-        catch (Exception) when (stop.IsCancellationRequested || Started.IsFaulted || Started.IsCanceled)
-        {
-            // Serving ended first, or the start did not succeed — which Program records as the crash it is.
-            return;
-        }
-
-        await ConsultationSweeper.RunAsync(() => host.Current, every, log, stop).ConfigureAwait(false);
-    }
 
     /// <summary>
     /// Throws <see cref="ServerStartFailed"/>, carrying the start's own exception, when the start FAILED — so
@@ -87,15 +77,11 @@ public sealed class StartingHost : IPanelServiceSource
     /// </summary>
     public void ThrowIfFailed()
     {
-        if (Failed)
+        if (Started is { IsFaulted: true, Exception.InnerException: { } cause })
         {
-            throw new ServerStartFailed(Cause());
+            throw new ServerStartFailed(cause);
         }
     }
-
-    private Exception Cause() =>
-        Started.Exception?.InnerException
-        ?? new TimeoutException("the server's start was cancelled although nothing asked it to stop");
 
     /// <summary>
     /// Waits for <paramref name="task"/> to end, but no longer than <paramref name="budget"/>; whether it ended. A fault

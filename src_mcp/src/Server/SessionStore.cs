@@ -591,8 +591,8 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// </summary>
     public HeldQuestions HeldQuestions() => Holds.Read();
 
-    /// <summary>How many times <see cref="HeldQuestions"/> actually read the session files — for the idle-budget tests.</summary>
-    internal int HeldQuestionReads => Holds.Reads;
+    /// <summary>How many session files <see cref="HeldQuestions"/> has parsed — for the idle-budget tests.</summary>
+    internal int HeldQuestionParses => Holds.Parses;
 
     /// <summary>
     /// Built on first use: it needs <see cref="TryRead"/>, which a field initializer cannot name. Two threads racing the

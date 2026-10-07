@@ -92,14 +92,39 @@ public sealed class ConsultantsSurveyClaimTests : IDisposable
     public void OldClaims_ArePrunedByTheNextTake()
     {
         Directory.CreateDirectory(Health);
-        var old = Path.Combine(Health, "consultants.survey.0123456789abcdef0123.claim");
+        var old = Path.Combine(Health, "consultants.survey.300.0123456789abcdef0123.claim");
         File.WriteAllText(old, "x");
-        File.SetLastWriteTimeUtc(old, DateTime.UtcNow - (Window * 3));
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow - TimeSpan.FromMinutes(11)); // past two of its own five-minute windows
 
         ConsultantsSurveyClaim.Take(Health, "v1|wsl|s", DateTime.UtcNow, Window).Taken.Should().BeTrue();
 
         File.Exists(old).Should().BeFalse();
         Directory.EnumerateFiles(Health, "*.claim").Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Own review of the branch (2026-10-07): a start pruned by ITS OWN window, so a 30-second window deleted the live claim
+    /// of an identity whose window is a day, and that identity surveyed again. Claims are pruned by the longest window.
+    /// </summary>
+    [Fact]
+    public void AShortWindow_DoesNotPruneTheLiveClaimOfALongerOne()
+    {
+        Directory.CreateDirectory(Health);
+        var other = Path.Combine(Health, "consultants.survey.86400.0123456789abcdef0123.claim"); // a day-long window
+        File.WriteAllText(other, "x");
+        File.SetLastWriteTimeUtc(other, DateTime.UtcNow - TimeSpan.FromHours(1));
+
+        ConsultantsSurveyClaim.Take(Health, "v1|wsl|s", DateTime.UtcNow, TimeSpan.FromSeconds(30)).Taken.Should().BeTrue();
+
+        File.Exists(other).Should().BeTrue("another identity's window may be a day long, so its claim of an hour ago may be live");
+    }
+
+    [Fact]
+    public void AClaim_CarriesItsOwnIdFromTheMomentItExists()
+    {
+        ConsultantsSurveyClaim.Take(Health, "v1|wsl|s", Now, Window).Taken.Should().BeTrue();
+
+        File.ReadAllText(Directory.EnumerateFiles(Health, "*.claim").Single()).Should().MatchRegex("^[0-9a-f]{32} pid ");
     }
 
     [Fact]

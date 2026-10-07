@@ -1,6 +1,6 @@
 # PLAN — an idle coai-mcp uses no CPU, and answers `initialize` at once
 
-> Status: **built on branch `fix/mcp-idle-cpu-slow-start`, not committed or merged yet, 2026-10-06** (plan gate `proceed`, 1 of 1 reviewer; tests and measurements in [RESULTS_idle_cpu_and_slow_start.md](../research/RESULTS_idle_cpu_and_slow_start.md)). Scope: `src_mcp` — the one-minute sweep's
+> Status: **built and committed on branch `fix/mcp-idle-cpu-slow-start` (57fcb8bc and its code-round fixes), not merged yet, 2026-10-07** (plan gate `proceed`, 1 of 1 reviewer; tests and measurements in [RESULTS_idle_cpu_and_slow_start.md](../research/RESULTS_idle_cpu_and_slow_start.md)). Scope: `src_mcp` — the one-minute sweep's
 > escalation retention, the stdio server's start (`Program.ServeAsync`), the background consultants survey; two new
 > settings. No wire or file-format change for the extension.
 >
@@ -133,7 +133,11 @@ which ran beside the gate:
 | tools reach the service synchronously | `IPanelServiceSource.CurrentAsync()`, awaited by every tool | a call during the start must not hold a pool thread that the start itself needs (own plan review) |
 | claim identity = version + settings stamp | version, side, settings stamp and the client's `COAI_*` environment, minus `*_KEY`/`*_TOKEN`/`*_SECRET`/`*_PASSWORD` and `COAI_CALLER_*` | two clients with different environments get different surveys; no secret in a hash on disk; a per-run caller variable would make every start its own survey (own code review) |
 | claims of other slots deleted at each claim | claims older than two windows deleted at each take | deleting a SAME-slot claim of another identity let a third start of that identity survey again |
-| — | `Take` decides by the create alone; writing the claim's id and pruning happen after and can no longer turn our claim into "another server's" | own code review: an `IOException` there matched the "already exists" filter, and nobody would have surveyed for the slot |
+| — | `Take` decides by the create alone, and the claim's id is written through the create's own stream (a failed write removes the file) | own code review: an `IOException` after the create matched the "already exists" filter; the code round (codex, gemini): an empty claim could not be released |
+| claims pruned at each take | each claim pruned by two of ITS OWN windows, carried in its name (`consultants.survey.<seconds>.<hash>.claim`) | own review of the branch: a 30 s window pruned the live claim of a day-long one |
+| held set cached behind a stamp of the whole directory | cached PER FILE; an unreadable file is cached as unreadable under its stamp | the code round (gemini): one active session re-parsed every session each beat; own review: a torn file was parsed every beat |
+| `StartingHost.SweepAsync` | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)`; the ending's one bounded wait covers the sweeper too | the code round (gemini; codex): the start should not supervise background jobs, and `await sweeping` was unbounded |
+| a start cancelled without its stop "is a failure" read off the stop afterwards | settled inside the start: such a cancellation is rethrown as a `TimeoutException`; and the start throws right after the vault read when its stop came during it | own review of the branch: the ending always cancels the stop first, so the outcome flipped; and the launcher reports a killed child as timed out, so a false `starting: … timed out` was logged |
 | a real-binary stdio test "with the codex probe sleeping too" | the fake CLI copied in as `creds` on the server's PATH and named as the codex executable, both sleeping 20 s | the vault read is what blocked `initialize`; the probe never did, so it alone could not be RED |
 
 Not built, with what was checked: an end-to-end test of a FAILING start through the real binary. Checked: making

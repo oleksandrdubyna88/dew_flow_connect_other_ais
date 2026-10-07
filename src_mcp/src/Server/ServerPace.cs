@@ -20,6 +20,9 @@ public sealed record ServerPace(TimeSpan SweepEvery, TimeSpan ConsultantsReuse)
 
     public static ServerPace Default { get; } = new(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(300));
 
+    /// <summary>The longest consultants window any identity may use — what a claim is pruned by.</summary>
+    public const int LongestConsultantsReuseSeconds = 86_400;
+
     /// <remarks>
     /// Read through <see cref="PanelSettings.IntVar"/> like every other count — zero, a negative or junk is the default —
     /// and then clamped. Read once per start: unlike the settings a tool call reads, a changed interval applies from the
@@ -27,7 +30,7 @@ public sealed record ServerPace(TimeSpan SweepEvery, TimeSpan ConsultantsReuse)
     /// </remarks>
     public static ServerPace From(Func<string, string?> env) => new(
         Seconds(env, SweepKey, Default.SweepEvery, 10, 3_600),
-        Seconds(env, ConsultantsReuseKey, Default.ConsultantsReuse, 30, 86_400));
+        Seconds(env, ConsultantsReuseKey, Default.ConsultantsReuse, 30, LongestConsultantsReuseSeconds));
 
     private static TimeSpan Seconds(Func<string, string?> env, string key, TimeSpan fallback, int least, int most) =>
         TimeSpan.FromSeconds(Math.Clamp(PanelSettings.IntVar(env, key, (int)fallback.TotalSeconds), least, most));

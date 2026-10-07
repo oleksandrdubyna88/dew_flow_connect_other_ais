@@ -18,7 +18,7 @@ public sealed record HeldQuestions(IReadOnlySet<string> Ids, bool Complete)
 }
 
 /// <summary>
-/// Reads <see cref="HeldQuestions"/> from the sessions directory, and reads it AGAIN only when that directory changed.
+/// Reads <see cref="HeldQuestions"/> from the sessions directory, parsing again only the session files that changed.
 /// </summary>
 /// <remarks>
 /// <para><b>Why it exists</b> (<c>todo/PLAN_an_idle_server_is_idle_and_starts_at_once.md</c>, D1, 2026-10-06). The
@@ -26,20 +26,26 @@ public sealed record HeldQuestions(IReadOnlySet<string> Ids, bool Complete)
 /// each answer deserialised every session file: 54 × 435 files (14 MB) a minute, per server, about 40 % of a core for
 /// as long as an editor session lived. One read per sweep fixes the multiplication; this cache fixes the rest, because
 /// a question held past its seven days is due on EVERY beat for as long as the hold stands.</para>
-/// <para><b>The stamp</b> is the directory listing's names, sizes and write times — a stat per file, no read. A session
-/// written, added or removed moves it. Two writes inside one timestamp tick that keep the exact size are not seen; the
-/// same trade <see cref="PanelServiceHost"/> makes for the settings file, and here the cost of missing one is a hold
-/// recognised one change late, never a deletion: a NEW hold can only bind an id whose file is not yet due.</para>
-/// <para><b>Fails closed.</b> A set read with an unreadable session is not cached and says <c>Complete = false</c>.</para>
+/// <para><b>Per file</b> (the code round, gemini, 2026-10-07): each session is cached under its own write time and
+/// length — a stat per file, no read — so one active session, written on every round, costs one parse rather than all
+/// of them. Two writes inside one timestamp tick that keep the exact size are not seen; the same trade
+/// <see cref="PanelServiceHost"/> makes for the settings file, and here the cost of missing one is a hold recognised one
+/// change late, never a deletion: a NEW hold can only bind an id whose file is not yet due.</para>
+/// <para><b>Fails closed, without paying for it every beat.</b> A session that cannot be read makes the set
+/// <c>Complete = false</c>; it is cached as unreadable under its stamp, so a torn file that STAYS torn is not parsed
+/// again until it changes (own review of the branch, 2026-10-07). A file gone between the listing and its stat holds
+/// nothing.</para>
 /// </remarks>
 internal sealed class SessionHolds(string sessionsDirectory, Func<string, PersistedSession?> read)
 {
     private readonly Lock _gate = new();
-    private (int Count, long Bytes, long Newest, long Mix) _stamp = (-1, 0, 0, 0);
-    private HeldQuestions _held = HeldQuestions.None;
+    private Dictionary<string, Holds> _files = new(StringComparer.Ordinal);
 
-    /// <summary>How many times the session files were actually read — what the idle-budget tests count.</summary>
-    internal int Reads { get; private set; }
+    /// <summary>One session file as last parsed: its stamp, what it holds, and whether it could be read at all.</summary>
+    private sealed record Holds(DateTime Written, long Length, IReadOnlyList<string> Ids, bool Readable);
+
+    /// <summary>How many session files were parsed — what the idle-budget tests count.</summary>
+    internal int Parses { get; private set; }
 
     public HeldQuestions Read()
     {
@@ -50,52 +56,56 @@ internal sealed class SessionHolds(string sessionsDirectory, Func<string, Persis
                 return HeldQuestions.None;
             }
 
-            var files = new DirectoryInfo(sessionsDirectory).EnumerateFiles("session-*.json").ToList();
-            var stamp = Stamp(files);
-            if (stamp == _stamp)
+            var next = new Dictionary<string, Holds>(StringComparer.Ordinal);
+            foreach (var file in new DirectoryInfo(sessionsDirectory).EnumerateFiles("session-*.json"))
             {
-                return _held;
+                Kept(file, next);
             }
 
-            var held = ReadAll(files);
-            _stamp = held.Complete ? stamp : (-1, 0, 0, 0);
-            _held = held;
+            _files = next;
 
-            return held;
+            return new HeldQuestions(
+                next.Values.SelectMany(holds => holds.Ids).ToHashSet(StringComparer.Ordinal),
+                next.Values.All(holds => holds.Readable));
         }
     }
 
-    private HeldQuestions ReadAll(IReadOnlyList<FileInfo> files)
+    /// <summary>The file's holds into <paramref name="next"/> — the cached ones when its stamp did not move.</summary>
+    private void Kept(FileInfo file, Dictionary<string, Holds> next)
     {
-        Reads++;
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-        var complete = true;
-        foreach (var file in files)
+        if (!TryStamp(file, out var written, out var length))
         {
-            if (read(file.FullName) is not { } session)
-            {
-                complete = false;
-                continue;
-            }
-
-            ids.UnionWith(session.State.HoldQuestions);
-            ids.UnionWith(session.State.RequestQuestions);
+            return; // gone since the listing: it holds nothing any more
         }
 
-        return new HeldQuestions(ids, complete);
+        next[file.FullName] = _files.TryGetValue(file.FullName, out var cached) && cached.Written == written && cached.Length == length
+            ? cached
+            : Parsed(file.FullName, written, length);
     }
 
-    private static (int, long, long, long) Stamp(IReadOnlyList<FileInfo> files)
+    private Holds Parsed(string path, DateTime written, long length)
     {
-        long bytes = 0, newest = 0, mix = 0;
-        foreach (var file in files)
-        {
-            var ticks = file.LastWriteTimeUtc.Ticks;
-            bytes += file.Length;
-            newest = Math.Max(newest, ticks);
-            mix = unchecked(mix + (StringComparer.Ordinal.GetHashCode(file.Name) ^ ticks ^ file.Length));
-        }
+        Parses++;
 
-        return (files.Count, bytes, newest, mix);
+        return read(path) is { } session
+            ? new(written, length, [.. session.State.HoldQuestions, .. session.State.RequestQuestions], Readable: true)
+            : new(written, length, [], Readable: false);
+    }
+
+    private static bool TryStamp(FileInfo file, out DateTime written, out long length)
+    {
+        try
+        {
+            file.Refresh();
+            (written, length) = (file.LastWriteTimeUtc, file.Length);
+
+            return file.Exists;
+        }
+        catch (IOException)
+        {
+            (written, length) = (default, 0);
+
+            return false;
+        }
     }
 }

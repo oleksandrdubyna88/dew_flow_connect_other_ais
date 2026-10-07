@@ -36,13 +36,13 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         }
 
         var service = Service();
-        var before = service.Store.HeldQuestionReads; // the constructor's startup sweep, whatever it read
+        var before = service.Store.HeldQuestionParses; // the constructor's startup sweep, whatever it read
         for (var beat = 0; beat < 10; beat++)
         {
             service.SweepEscalations();
         }
 
-        service.Store.HeldQuestionReads.Should().Be(before, "no card is due, so no beat needs to know what the sessions hold");
+        service.Store.HeldQuestionParses.Should().Be(before, "no card is due, so no beat needs to know what the sessions hold");
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         var service = Service(); // its constructor sweeps once: "gone" goes there, "kept" stays
         var escalations = new Escalations(_data);
         File.Exists(escalations.QuestionPath("gone")).Should().BeFalse("nobody holds it and it is past its seven days");
-        var before = service.Store.HeldQuestionReads;
+        var before = service.Store.HeldQuestionParses;
 
         for (var beat = 0; beat < 10; beat++)
         {
@@ -67,7 +67,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         }
 
         File.Exists(escalations.QuestionPath("kept")).Should().BeTrue("a live session's hold is bound to this id");
-        service.Store.HeldQuestionReads.Should().Be(before, "the sessions did not change, so what they hold is known already");
+        service.Store.HeldQuestionParses.Should().Be(before, "the sessions did not change, so what they hold is known already");
     }
 
     [Fact]
@@ -101,19 +101,50 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         held.MayHold("other").Should().BeFalse();
     }
 
+    /// <summary>
+    /// The code round's finding (gemini, 2026-10-07): one active session — written on every round — moved the whole
+    /// directory's stamp, and every beat with a due card then parsed EVERY session again. Each file is now cached under
+    /// its own write time and length, and only a file that changed is parsed.
+    /// </summary>
     [Fact]
-    public void AnUnreadableSession_MakesTheSetIncomplete_AndItIsNotCached()
+    public void OneSessionThatChanges_IsTheOnlyOneParsedAgain()
+    {
+        var store = new SessionStore(_data);
+        Sessions(30, holding: "kept");
+        var active = Saved(store, "b-active", holding: string.Empty);
+        Asked("kept", Past);
+        var service = Service();
+        var before = service.Store.HeldQuestionParses;
+
+        store.Save(active with { State = active.State with { Branch = "b-active", SessionId = "s-active-2" } });
+        service.SweepEscalations();
+
+        service.Store.HeldQuestionParses.Should().Be(before + 1, "one session changed, so one is parsed — not all thirty-one");
+        File.Exists(new Escalations(_data).QuestionPath("kept")).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A session that cannot be read may hold any id, so the set stays incomplete (fail closed) — but a torn file that
+    /// STAYS torn is not parsed again on every beat (own review of the branch, 2026-10-07); it is read again when it changes.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableSession_KeepsTheSetIncomplete_UntilItChanges_WithoutBeingParsedEveryBeat()
     {
         var store = new SessionStore(_data);
         Saved(store, "b1", holding: "h1");
-        File.WriteAllText(Path.Combine(_data, "sessions", "session-torn.json"), "{ half");
+        var torn = Path.Combine(_data, "sessions", "session-torn.json");
+        File.WriteAllText(torn, "{ half");
 
-        var held = store.HeldQuestions();
-        store.HeldQuestions();
+        var first = store.HeldQuestions();
+        var second = store.HeldQuestions();
 
-        held.Complete.Should().BeFalse("a session that cannot be read may hold anything");
-        held.MayHold("anything").Should().BeTrue();
-        store.HeldQuestionReads.Should().Be(2, "an incomplete answer is not kept: the next beat tries again");
+        first.Complete.Should().BeFalse("a session that cannot be read may hold anything");
+        second.Complete.Should().BeFalse();
+        second.MayHold("anything").Should().BeTrue();
+        store.HeldQuestionParses.Should().Be(2, "both files were parsed once; nothing changed, so nothing is parsed again");
+
+        File.Delete(torn);
+        store.HeldQuestions().Complete.Should().BeTrue("the unreadable session is gone, so what is held is known again");
     }
 
     private PanelService Service()

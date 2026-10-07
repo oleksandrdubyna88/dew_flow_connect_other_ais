@@ -1974,7 +1974,7 @@ internal static class Program
                 // cancelled when serving ends however it ends — a client closing stdin sends no signal. It begins
                 // once the start has built the service, and beats as often as COAI_SWEEP_SECONDS says.
                 using var serving = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
-                var sweeping = starting.SweepAsync(settings.Pace.SweepEvery, log, serving.Token);
+                var sweeping = ConsultationSweeper.RunAsync(starting, settings.Pace.SweepEvery, log, serving.Token);
                 // What `--consultants` would answer, written for the other side to read (epic 4, E4.1): on the thread pool,
                 // its own catch-all inside — startup does not wait on four CLIs' versions, and nothing it does touches stdout.
                 // Once per window for every server on this data directory (ConsultantsSurveyClaim). Cancelled with serving,
@@ -1988,10 +1988,10 @@ internal static class Program
                 {
                     await serving.CancelAsync();
                     await startStop.CancelAsync();
-                    await sweeping;
                     // ONE bounded wait, well inside the signal's grace so the notices still drain: the stop cuts a survey's
-                    // probes and the vault read short, and an ending process does not wait on a start still sweeping.
-                    await StartingHost.Ended(Task.WhenAll(surveying, starting.Started), StartingHost.EndBudget);
+                    // probes, the vault read and the sweeper's wait short, and an ending process does not wait on a start
+                    // still sweeping or a beat still running (the code round, codex and gemini, 2026-10-07).
+                    await StartingHost.Ended(Task.WhenAll(sweeping, surveying, starting.Started), StartingHost.EndBudget);
                 }
             }
             catch (Exception) when (starting.Failed)
@@ -2066,6 +2066,9 @@ internal static class Program
         // which no spawn of the extension's puts it in (2026-10-01). The stop reaches the child: a server
         // asked to end while `creds` is still answering does not wait the vault's thirty seconds.
         var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration, stop);
+        // The launcher answers a child it killed for the stop as TIMED OUT, so the vault says "timed out" — false — and the
+        // start would go on building a service in a process that is ending. A stop that came during the read ends it here.
+        stop.ThrowIfCancellationRequested();
         var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
         log.Information("starting: {Providers} enabled, vault: {Vault}",
             string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),

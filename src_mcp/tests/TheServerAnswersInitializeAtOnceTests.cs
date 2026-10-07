@@ -74,6 +74,42 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
     }
 
     /// <summary>
+    /// Own review of the branch (2026-10-07): a client that leaves while the vault is still being read cancels the start —
+    /// but the launcher answers a cancelled child as a TIMED-OUT one, so the start went on, logged
+    /// <c>starting: … creds config timed out</c> (false) and ran every startup sweep in a process that was ending. A start
+    /// whose stop came during the vault read now ends there.
+    /// </summary>
+    [Fact]
+    public async Task AClientThatLeavesDuringTheVaultRead_EndsTheStart_WithoutAFalseVaultLine()
+    {
+        var fake = SlowCredsOnPath();
+        using var server = StdioServer.Start(_data, "debug", 1800,
+            ("PATH", _bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")),
+            ("COAI_CREDS_KEY", "test-config-key"),
+            ("COAI_EXE_CODEX", fake),
+            ("FAKECLI_MODE", "vendor"),
+            ("FAKECLI_SLEEP_MS", SlowMs.ToString()));
+        try
+        {
+            await StdioServer.InitializeAsync(server);
+
+            server.StandardInput.Close(); // the client goes away while `creds` still sleeps
+            await server.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+
+            var logged = string.Concat(Directory.EnumerateFiles(Path.Combine(_data, "logs"), "*.log", SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+            logged.Should().NotContain("starting:", "the vault read was cut short by the ending, not timed out, and nothing was started");
+        }
+        finally
+        {
+            if (!server.HasExited)
+            {
+                await StdioServer.StopAsync(server);
+            }
+        }
+    }
+
+    /// <summary>
     /// The fake CLI copied in as <c>creds</c>, next to its own assembly, in a directory of the test's that goes FIRST on the
     /// server's PATH — the vault reads <c>creds config &lt;key&gt;</c> off PATH. Returns the fake's own path for the probe.
     /// </summary>

@@ -37,9 +37,13 @@ for the start without holding a thread. A start that FAILS closes the transport,
 failure to the crash path as a `ServerStartFailed` carrying the cause, exactly as when it ran before serving (exit 70,
 the crash recorded) — its own type, so the serving road's "the client closed the connection" filter cannot take a start
 that failed with an `IOException` for an ending. The start has its own stop (`startStop`), linked to the signal and
-cancelled when serving ends however it ends, so a client closing stdin also ends a `creds` read still running; a start
-cancelled by it is an ending. The finally waits ONCE, at most `StartingHost.EndBudget` (1 s), for the start and the
-survey together — inside `ServeStop.Grace`, so a signal's drain of the notices still happens.
+cancelled when serving ends however it ends, so a client closing stdin also ends a `creds` read still running — and
+the start stops right after the read (the launcher reports a child killed for the stop as TIMED OUT, so the vault
+would otherwise log a false `starting: … timed out` and build a service in a process that is ending). Whether the start
+failed is settled inside it when it ends: a cancellation its stop did not ask for becomes a `TimeoutException`, a
+failure; one its stop asked for is an ending. The finally waits ONCE, at most `StartingHost.EndBudget` (1 s), for the
+sweeper, the start and the survey together — inside `ServeStop.Grace`, so a signal's drain of the notices still
+happens.
 
 ```mermaid
 sequenceDiagram
@@ -55,7 +59,7 @@ sequenceDiagram
     S->>B: await CurrentAsync()
     B-->>S: PanelService once built
     S-->>C: tool answer
-    B-->>W: SweepAsync begins only after a successful start
+    W->>B: ConsultationSweeper.RunAsync(source): await CurrentAsync() — no beat before a successful start
     loop every COAI_SWEEP_SECONDS (60, clamped 10–3600)
         W->>W: consultations, question consults, escalations
     end
@@ -64,24 +68,29 @@ sequenceDiagram
 **The idle beat.** `EscalationRetention` asked "does a session hold this id" once per card, before it judged the
 card, and the answer (`SessionStore.HoldsQuestion`) deserialised every session file — (cards × sessions) parses a
 minute, about 750 MB of JSON per minute per server on the measured data. Now a card is judged FIRST; only a card that
-is due asks, the held set is read once per sweep (`Lazy`), and `SessionStore.HeldQuestions()` caches it behind a stamp
-of the sessions directory listing (`SessionHolds`: names, sizes, write times — a stat per file, no read). A set read
-with a session that could not be read is `Complete = false`: every due card is kept that beat (fail closed). The beat's
+is due asks, the held set is read once per sweep (`Lazy`), and `SessionStore.HeldQuestions()` caches it PER FILE
+(`SessionHolds`: each session under its own write time and length — a stat per file, no read), so one active session
+costs one parse, not all of them. A session that could not be read makes the set `Complete = false` and every due card
+is kept (fail closed); it is cached as unreadable under its stamp, so a torn file that stays torn is not parsed again
+every beat. The beat's
 interval is `ServerPace.SweepEvery`, `COAI_SWEEP_SECONDS` — read once per start, so unlike the settings a tool call
 reads, a changed interval applies from the next start.
 
 **The survey, once per window.** `ConsultantsReadMode.WriteInBackground` first takes a `ConsultantsSurveyClaim`:
-`FileMode.CreateNew` of `consultations/health/consultants.survey.<hash>.claim`, the hash over the window slot
+`FileMode.CreateNew` of `consultations/health/consultants.survey.<window seconds>.<hash>.claim`, the claim's id
+written through that same stream (a file never exists without it), the hash over the window slot
 (`COAI_CONSULTANTS_REUSE_SECONDS`, default 300, clamped 30–86 400) and the identity — build version, side, the settings
 file's stamp, the client's `COAI_*` environment without anything secret (`*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`)
-or per run (`COAI_CALLER_*`). Only the create decides; the claim's id is written after it. A start that finds the name taken logs
+or per run (`COAI_CALLER_*`). Only the create decides. A start that finds the name taken logs
 `consultants: not surveyed again — …` and probes nothing; a survey that fails or is cut short releases its claim
-(fenced by the claim's own id); each take prunes claims older than two windows. Residual: two starts straddling a slot
+(fenced by the claim's own id); each take prunes every claim older than two of ITS OWN windows (read from its name), so
+a short window never deletes the live claim of a long one. Residual: two starts straddling a slot
 boundary both survey. The extension reads `consultants.json` only and never sees a `.claim`.
 
 | What | Where |
 |---|---|
 | The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
+| The sweeper waits for the start through the source | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
 | The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
 | Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
 | The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |
@@ -4872,7 +4881,7 @@ sequenceDiagram
     participant H as PanelServiceHost.Current
     participant P as PanelService
     participant C as ConsultationStore
-    S->>L: SweepAsync → RunAsync(() => host.Current, COAI_SWEEP_SECONDS, serving token), once the start built the service
+    S->>L: RunAsync(source = the starting host, COAI_SWEEP_SECONDS, serving token) — waits for the start, then beats
     loop every beat (a minute unless set) until serving ends
         L->>H: current service (a settings reload builds a new one)
         H-->>L: PanelService
