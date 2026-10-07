@@ -192,9 +192,19 @@ public sealed class FeatureAvailability
         var source = row.Source ?? string.Empty;
 
         return runtimes.Contains(runtime, StringComparer.Ordinal) && FastSources.Contains(source, StringComparer.Ordinal)
-            ? new FastModeRow(runtime, source, row.Models ?? [], row.Note ?? string.Empty)
+            ? Listed(new FastModeRow(runtime, source, row.Models ?? [], row.Note ?? string.Empty))
             : throw Broken($"fast-mode row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", FastSources)}");
     }
+
+    /// <summary>
+    /// The generator's rule (<c>FAST_RULES</c>, PR #693's review): a <c>models</c> source lists its models, and every
+    /// other source lists none — an empty list would read as "no model has the tier", a list beside another source as
+    /// nothing at all.
+    /// </summary>
+    private static FastModeRow Listed(FastModeRow row) =>
+        (row.Source == "models") == (row.Models.Count > 0)
+            ? row
+            : throw Broken($"fast-mode row '{row.Runtime}' has source '{row.Source}' and {row.Models.Count} models: a 'models' source lists its models, and every other source lists none");
 
     private static InvalidOperationException Broken(string what) =>
         new($"the feature availability file ('{SeedResource}') is not usable: {what}. It ships with this build; a broken one is a build defect.");

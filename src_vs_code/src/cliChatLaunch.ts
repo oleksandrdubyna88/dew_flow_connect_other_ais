@@ -1,6 +1,6 @@
 import { CHAT } from './featureAvailability.generated';
 import * as fs from 'node:fs';
-import { needsShell } from './cliVersions';
+import { expandedByTheShell, needsShell } from './cliVersions';
 import { Platform } from './hostSide';
 import { ChatAccess, ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
 import { effortRefusal } from './featureAvailability';
@@ -280,13 +280,17 @@ export function launchSpecFor(
   }
   const executable = [resolved, vendor.executablePath, known.executable].find((name) => name.length > 0) ?? '';
   const shell = needsShell(executable, platform);
+  // From the adapter, because the command line and the wire protocol are one decision: a vendor
+  // launched with another's flags answers in a shape nobody here can read.
+  const line = commandLineFor(known.adapter.argv(launch), shell);
+  if (line.refusal.length > 0) {
+    return { executable: '', args: [], cwd: '', shell: false, env: {}, refusal: line.refusal };
+  }
 
   return {
     executable,
     shell,
-    // From the adapter, because the command line and the wire protocol are one decision: a vendor
-    // launched with another's flags answers in a shape nobody here can read.
-    args: shell ? quotedForTheShell(known.adapter.argv(launch)) : known.adapter.argv(launch),
+    args: line.args,
     // In text mode an empty temp directory, never the workspace. The task is to explain a paragraph:
     // handing a third-party agent the source tree buys nothing but startup time, and on Windows a
     // working directory is also something `cmd.exe` searches before the PATH. In AGENT mode the
@@ -299,13 +303,21 @@ export function launchSpecFor(
 }
 
 /**
- * The arguments as the platform shell must see them: `shell: true` joins them with spaces and quotes nothing, so an
- * argument with whitespace in it — a settings file under a profile folder with a space (the fast-mode code round) — is
- * wrapped in double quotes to reach the CLI whole. Only a launch through the shell is given these; any other passes
- * its arguments as they are.
+ * The arguments as the launch must pass them. Without the shell, as they are. Through `cmd.exe` (an npm `.cmd` shim),
+ * which joins them with spaces and quotes nothing: an argument with whitespace or a command operator in it is wrapped
+ * in double quotes — a settings file under a profile folder with a space (the fast-mode code round), or a TEMP of
+ * `C:\temp&calc&` (PR #693's review), would otherwise be split, or run. An argument cmd.exe would expand even inside
+ * quotes (`expandedByTheShell`, the rule the version probe's shim line follows) refuses the launch instead.
  */
-function quotedForTheShell(args: readonly string[]): readonly string[] {
-  return args.map((one) => (/\s/u.test(one) ? `"${one}"` : one));
+function commandLineFor(argv: readonly string[], shell: boolean): { readonly args: readonly string[]; readonly refusal: string } {
+  if (!shell) {
+    return { args: argv, refusal: '' };
+  }
+  const expanded = argv.find(expandedByTheShell);
+
+  return expanded === undefined
+    ? { args: argv.map((one) => (/[\s&|<>^()]/u.test(one) ? `"${one}"` : one)), refusal: '' }
+    : { args: [], refusal: `This chat starts its CLI through cmd.exe, which would expand an argument even inside quotes: ${expanded}. Move the folder it names (often TEMP) to a path without %, ! or ".` };
 }
 
 /**

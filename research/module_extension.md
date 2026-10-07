@@ -11230,6 +11230,10 @@ file of the write's own) — never coai-mcp's, so a chat never depends on the se
 Where that file lives (the code round): not in the chat's text-mode folder, which `launchSpecFor` promises is "a
 directory with nothing in it", and not at a fixed shared temp path another local user could plant first — in a private
 folder made once per extension process with a random name (`mkdtemp` of `coai-chat-fast-*`). And because an npm
-`claude.cmd` is started with `shell: true`, which joins arguments with spaces and quotes nothing, `launchSpecFor` wraps
-an argument holding whitespace in double quotes for the shell only (`quotedForTheShell`) — a profile folder with a space would
-otherwise have split the settings path in two. Without the shell the arguments go as they are.
+`claude.cmd` is started with `shell: true`, which joins arguments with spaces and quotes nothing, `launchSpecFor` hands
+the arguments to `commandLineFor`: through the shell, an argument holding whitespace or a command operator
+(`& | < > ^ ( )`) is wrapped in double quotes — a profile folder with a space would have split the settings path, and a
+TEMP of `C:\temp&calc&` would have run a command (PR #693's review) — and one holding what `cmd.exe` expands even inside
+quotes (`"`, `%`, `!`, a control character) refuses the launch with a sentence naming it. That test is
+`cliVersions.expandedByTheShell`, the same rule the CLI version probe's shim line has always followed. Without the
+shell the arguments go as they are.

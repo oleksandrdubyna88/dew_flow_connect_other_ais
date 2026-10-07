@@ -86,3 +86,20 @@ test('through cmd.exe a settings path with a space reaches claude whole; elsewhe
   const direct = launchSpecFor(vendor, '/tmp/t', launch, '/usr/bin/claude', 'linux');
   assert.equal(direct.args[direct.args.indexOf('--settings') + 1], spaced);
 });
+
+test('through cmd.exe a path with a command operator in it is quoted, and one cmd.exe would still expand is refused', () => {
+  // CodeRabbit on #693: a TEMP of `C:\temp&calc&` has no space, so quoting on whitespace alone left `&` to cmd.exe.
+  const vendor = row({ runtime: 'claude', model: 'opus', fast: 'on' });
+  const via = (path: string) =>
+    launchSpecFor(vendor, 'C:/t', chatLaunchFor(vendor, '', 'claude-opus-5-5', 'text', () => path), 'C:/npm/claude.cmd', 'win32');
+
+  const operator = 'C:/temp&calc&/coai-chat-fast-x/fast-on.json';
+  const quoted = via(operator);
+  assert.equal(quoted.args[quoted.args.indexOf('--settings') + 1], `"${operator}"`);
+
+  for (const expanded of ['C:/temp%PATH%/fast-on.json', 'C:/temp!x!/fast-on.json', 'C:/te"mp/fast-on.json']) {
+    const spec = via(expanded);
+    assert.deepEqual(spec.args, [], `${expanded}: nothing is handed to the shell`);
+    assert.match(spec.refusal, /cmd\.exe/u, `${expanded}: refused, and the refusal names why`);
+  }
+});

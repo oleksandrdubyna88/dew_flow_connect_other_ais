@@ -48,4 +48,23 @@ public sealed class FastModeIsDataTests
 
         read.Should().Throw<InvalidOperationException>().WithMessage("*'claude' has 0 fast-mode rows*");
     }
+
+    [Theory]
+    [InlineData("models", new string[0])]
+    [InlineData("every-model", new[] { "opus" })]
+    [InlineData("none", new[] { "opus" })]
+    public void ARowWhoseModelsDoNotMatchItsSource_IsRefused_AsTheGeneratorRefusesIt(string source, string[] models)
+    {
+        // CodeRabbit on #693: `models` with no models would read as "no model has the tier", and a list beside any other
+        // source would say nothing — the extension's generator refuses both, so the server must too.
+        var seed = new FeatureAvailabilitySeed(
+            ["codex"], new FeatureListsSeed(["codex"], ["codex"]),
+            [new("codex", "none", [], "", "x")],
+            [new("codex", "none", "x")],
+            [new("codex", source, models, "", "x")]);
+
+        var read = () => FeatureAvailability.FromSeed(seed);
+
+        read.Should().Throw<InvalidOperationException>().WithMessage("*'models' source lists its models*");
+    }
 }

@@ -2295,5 +2295,6 @@ and read by the runtime that has a tier:
   `[1m]` suffix included); any other, and an empty model, is sent nothing in either state.
 
 Which runtime and model has a tier is data: the `fastMode` block of `shared/feature-availability.json`
-(`FeatureAvailability.FastMode` / `HasFastTier`, one row per runtime, refused whole when a runtime has none or two —
-the extension's generator checks the same).
+(`FeatureAvailability.FastMode` / `HasFastTier`, one row per runtime, refused whole when a runtime has none or two, or
+when a row's `models` does not match its source — a `models` source lists its models and every other lists none —
+the extension's generator checks the same, `FAST_RULES`).
