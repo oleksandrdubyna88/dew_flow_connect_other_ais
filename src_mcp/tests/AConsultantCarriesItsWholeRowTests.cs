@@ -59,7 +59,7 @@ public sealed class AConsultantCarriesItsWholeRowTests
     [Fact]
     public void ARowsFastMode_ReachesTheConsultant()
     {
-        // todo/PLAN_fast_mode.md: the consultant runs on the row it carries, fast mode included.
+        // research/PLAN_fast_mode.md: the consultant runs on the row it carries, fast mode included.
         var resolved = Resolve(
             """{"claude":{"vendor":"codex","runtime":"codex","model":"gpt-6","row":{"id":"codex","runtime":"codex","model":"gpt-6","fast":"on"}}}""");
 

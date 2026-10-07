@@ -6410,7 +6410,7 @@ the consultant check's ONE paid turn (scratch repository, marker, canary) under 
 both entries — keyed `model-<id>`, so two rows check apart and neither touches a caller kind's record. A request without
 a row is 65. `--features` lists `checkModel`. The refusal now calls only a codex row's base URL a custom endpoint.
 
-## `--ask-api --stream on` (2026-10-06, todo/PLAN_api_streaming.md)
+## `--ask-api --stream on` (2026-10-06, research/PLAN_api_streaming.md)
 
 `AskApiMode` reads `--stream on` (a key WITH a value — `Program.Flags` drops a bare flag) into the request's
 `ApiTurn.Stream`. The response branch is chosen by what was ANSWERED: a successful `text/event-stream` is read as a stream;
@@ -6438,7 +6438,7 @@ streamed)`). A gateway that answered one JSON, and an older coai-mcp reached thr
 (`ConsultantCheck.StreamVerdict`) and records `streamed` or `not-streamed` in `ConsultCheckRecord.Streamed` — empty for
 every other check — so the card can say that the setting did nothing.
 
-## A row's `fast` (2026-10-07, todo/PLAN_fast_mode.md)
+## A row's `fast` (2026-10-07, research/PLAN_fast_mode.md)
 
 `VendorDto.Fast` (`off` | `on` | `cli`, any case; absent or unknown is Off — the owner's default) is parsed by
 `ProviderSettings.FastOf` into `ProviderSettings.Fast` and carried into every launch of the row (module_runners.md, *A

@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The person's flow of todo/PLAN_fast_mode.md, Story D, below the page: a row with its fast mode set is handed to
+/// The person's flow of research/PLAN_fast_mode.md, Story D, below the page: a row with its fast mode set is handed to
 /// <c>--check-model</c> exactly as the card's ✓ Check hands it, and the CLI the check really launches is told the tier —
 /// the fake CLI records the argv it was started with. The page half (the select drawn, saved, sent only to a binary that
 /// lists <c>fastMode</c>) is <c>aRowHasAFastModeSwitch.test.ts</c>; the seam leg reads <c>--providers</c>' <c>fast</c>.

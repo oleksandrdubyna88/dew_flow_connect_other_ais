@@ -20,7 +20,7 @@ public enum ThinkingSetting
 /// <param name="Effort">The effort to send, in the vendor's spelling; empty is unset.</param>
 /// <param name="Thinking">The thinking switch; <see cref="ThinkingSetting.Default"/> is unset.</param>
 /// <param name="ReviewMinutes">The whole-review limit in minutes; zero is unset.</param>
-/// <param name="Stream">Whether the answer is asked for as a stream (todo/PLAN_api_streaming.md); off is today's call.</param>
+/// <param name="Stream">Whether the answer is asked for as a stream (research/PLAN_api_streaming.md); off is today's call.</param>
 public sealed record ApiRowSettings(string Effort = "", ThinkingSetting Thinking = ThinkingSetting.Default, int ReviewMinutes = 0, bool Stream = false)
 {
     public static readonly ApiRowSettings None = new();

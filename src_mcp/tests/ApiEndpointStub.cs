@@ -27,7 +27,7 @@ internal sealed class ApiEndpointStub : IDisposable
 
     /// <param name="ContentType">The answer's media type — <c>text/event-stream</c> for a streamed one.</param>
     /// <param name="Chunks">When set, the body is sent as these pieces, each flushed on its own, with no length declared —
-    /// a stream (todo/PLAN_api_streaming.md); <see cref="Body"/> is then unused.</param>
+    /// a stream (research/PLAN_api_streaming.md); <see cref="Body"/> is then unused.</param>
     /// <param name="Drop">After the chunks, abort the connection instead of closing it: a stream cut mid-answer.</param>
     internal sealed record Answer(
         int Status,

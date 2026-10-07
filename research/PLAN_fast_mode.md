@@ -1,14 +1,15 @@
 # PLAN — a per-model "fast mode" switch, three states, Off by default
 
-> Status: **in progress (2026-10-07) on `feat/fast-mode` — Stories 0, A, B, C, D built and through the coai code round;
-> the api tier waits on a measured `xai` value. Revised after the coai plan round (session `33d6d6a3`, `proceed`, 8
-> findings: 6 accepted, 2 rejected with evidence) and an own critic — see *What the review changed*.** Scope: one catalog row field, drawn only on the NEW Settings
-> page's model card; coai-mcp's codex and claude launches (reviewer, consultant, question row) and the api request for
-> the dialects that have a fast tier; the chat's own launches in the extension.
+> Status: **IMPLEMENTED, 2026-10-07** — Stories 0, A, B, C, D merged as PR #693, through the coai plan round
+> (session `33d6d6a3`, `proceed`, 8 findings: 6 accepted, 2 rejected with evidence), the coai code round, an own
+> critic and CodeRabbit. Deviations: see *What shipped differently*. Open tail, extracted:
+> [PLAN_fast_mode_api_tier.md](../todo/PLAN_fast_mode_api_tier.md) — the api tier (waits on a measured `xai` value)
+> and a codex version floor. Scope: one catalog row field, drawn only on the NEW Settings page's model card;
+> coai-mcp's codex and claude launches (reviewer, consultant, question row); the chat's own launches in the extension.
 >
-> Related docs: [RESULTS_fast_mode_vendors.md](../research/RESULTS_fast_mode_vendors.md) (what each vendor offers, the
+> Related docs: [RESULTS_fast_mode_vendors.md](RESULTS_fast_mode_vendors.md) (what each vendor offers, the
 > owner's decision), [PLAN_api_streaming.md](PLAN_api_streaming.md) (the row field this follows, end to end),
-> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (the catalog and its new page).
+> [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) (the catalog and its new page).
 
 ## Goal
 
@@ -141,7 +142,7 @@ promote).
 
 ## Progress
 
-- **Story 0, 2026-10-07** — measured ([RESULTS_fast_mode_measured_2026-10-07.md](../research/RESULTS_fast_mode_measured_2026-10-07.md)):
+- **Story 0, 2026-10-07** — measured ([RESULTS_fast_mode_measured_2026-10-07.md](RESULTS_fast_mode_measured_2026-10-07.md)):
   codex reads and checks `-c service_tier`, dropping an unadvertised value with a warning; claude accepts the documented
   `--settings` fastMode, Off reports `off`, On is held off on this account by its own preference (`fast_mode_disabled_reason:
   preference`). Open: the `xai` tier (no key export yet).
@@ -166,11 +167,33 @@ promote).
   `cmd.exe`; the help says a codex model without the tier runs standard (from 4, help only). Rejected with code
   evidence: 4 (a per-model codex list), 5, 6, 7, 8, 10 — reasons in the gate session.
 
+- **CodeRabbit and SonarCloud on PR #693, 2026-10-07** — the server refuses a fast-mode row whose `models` does not
+  match its source, as the generator does; through `cmd.exe` an argument with a command operator is quoted and one
+  `cmd.exe` would expand even inside quotes refuses the launch (`cliVersions.expandedByTheShell`, shared with the version
+  probe); a crypto-random staging name; no boolean selector for the quoting. Each finding's test went red first.
+- **Merged 2026-10-07 as PR #693** (all 14 checks green; no release).
+
+## What shipped differently
+
+- **The api tier was not built.** It waits on a measured `xai` value (no vault entry exports a key yet). Extracted to
+  [PLAN_fast_mode_api_tier.md](../todo/PLAN_fast_mode_api_tier.md); no `fastTier` value was written into
+  `shared/api-dialects.json`, and an api row draws no control.
+- **No codex version floor, no `VendorDiagnosis` pattern.** Story 0 measured that codex DROPS a value its model does not
+  advertise, with a warning, and never refuses — so there is no refusal for a diagnosis to name. How an OLDER codex
+  treats `-c service_tier` was not measured; the floor moved to the extracted plan.
+- **The chat's settings files** live in a private folder made once per extension process (`mkdtemp`), not in the
+  extension's global storage — the code round's finding that a fixed path can be planted first.
+- **The restricted claude consultant's "As the CLI is set"** is said in the help text (`fastMode`), not as a separate
+  card note for a row ticked Consultant.
+- **The rule and its rows moved into modules of their own** (`fastTier.ts`, `fastMode.generated.ts`) — an import cycle
+  the whole-suite run caught.
+
 ## Definition of Done
 
-- [ ] Every launch of a row with a fast tier carries its state's flag, tested per runtime, per state, per launch kind.
-- [ ] The field crosses only to a binary listing `fastMode`; the card says when it would be ignored.
-- [ ] The control exists only on the new page, three states, Off by default; help and "new" tag.
-- [ ] The chat applies it.
-- [ ] One measured run per runtime recorded in `research/`; module docs and `architecture.md` updated.
-- [ ] Full suites green; the coai plan and code gates passed; PR merged; no release unless the owner says so.
+- [x] Every launch of a row with a fast tier carries its state's flag, tested per runtime, per state, per launch kind.
+- [x] The field crosses only to a binary listing `fastMode`; the card says when it would be ignored.
+- [x] The control exists only on the new page, three states, Off by default; help and "new" tag.
+- [x] The chat applies it.
+- [x] One measured run per CLI runtime recorded in `research/` (codex, claude); module docs and `architecture.md`
+      updated. The api runtime's run is the extracted plan's.
+- [x] Full suites green; the coai plan and code gates passed; PR merged; no release.

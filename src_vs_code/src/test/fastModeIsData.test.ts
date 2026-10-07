@@ -7,7 +7,7 @@ import { FAST_MODE } from '../fastMode.generated';
 import type { Runtime } from '../models';
 
 /**
- * Which runtime and model has a fast tier is DATA (todo/PLAN_fast_mode.md, decision 2): `shared/feature-availability.json`
+ * Which runtime and model has a fast tier is DATA (research/PLAN_fast_mode.md, decision 2): `shared/feature-availability.json`
  * generated into the extension, read by coai-mcp from the same file — so the card offers a state exactly where the launch
  * sends one. The C# twin is `FastModeIsDataTests`; the cases are the same.
  */

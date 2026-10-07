@@ -1,7 +1,7 @@
 # RESULTS — api streaming: what was measured while it was built (2026-10-06)
 
 > Status: **record, 2026-10-06, branch `feat/api-streaming` (PR #689).** Every experiment and measurement taken while
-> [PLAN_api_streaming.md](../todo/PLAN_api_streaming.md) was built. Vendor documentation (what each API says it does)
+> [PLAN_api_streaming.md](PLAN_api_streaming.md) was built. Vendor documentation (what each API says it does)
 > is in [RESULTS_api_streaming_vendors.md](RESULTS_api_streaming_vendors.md); this file holds only what was observed
 > on this machine and in CI. No live vendor call has run yet; see *Not measured*.
 
@@ -77,6 +77,30 @@ repair for the qwen row.
   full run with `IOException: The process cannot access the file '…\.argv'` at `ConsultantModesCliScenarioTests.cs:133`.
   The test reads the fake CLI's argv file while the child still writes it. It passed 3 of 3 times when run alone.
   It ran in parallel with another worktree's test run, so the extra load is the likely trigger.
+
+## 5. The two owed tests, 2026-10-07
+
+Branch `test/api-streaming-tail`, local Windows 11, .NET 10, Node 24.
+
+| What | Result |
+|---|---|
+| `AStreamedGoldenIsReadLikeItsRecordingTests` (9 cases) + `AStreamsUsageIsNeverZeroTests` (4) + the two touched classes | 46 of 46 passed |
+| C# suite, `CoaiMcp.Tests.exe` | 8098 total, 0 failed, 8 skipped, 13 m 11 s |
+| Extension: compile, `npx eslint src`, `npm test` | 11 groups, 0 failed |
+| Family checks (plan-lifecycle, pin-check, gate-snippet-check, build-flags-check, adapter-check) | all clean |
+
+**Teeth.** Both classes hold code that had already shipped, so neither could start red. Each was broken on purpose
+with a change that compiled, run, and restored:
+
+| Mutation | What went red |
+|---|---|
+| `AskApiMode.StreamedAsync` prints the usage line only for a stream that ENDED | `A_stream_over_the_answer_cap_is_unknown` — exit 70 with no line reads as `Usage.None` (1 of 13) |
+| `StreamAssembler` ignores a `usage` object on a chunk with no choice | the parity cases: "the same usage, said to have streamed, but they differ at index 12" |
+
+What the parity cases cover: each recorded golden through each module that answers in its shape — xai (`grok-4.7`)
+with the two xAI goldens; qwen (`qwen3.8-max`) and deepseek (`deepseek-v4-pro`) with the DashScope turn and cut; glm
+(`glm-5.3`) with the DashScope turn and the reasoning-only answer; openai (`gpt-5`) with its turn. The streams are
+synthetic, built from the recording; the live stream is still the open item below.
 
 ## Not measured
 

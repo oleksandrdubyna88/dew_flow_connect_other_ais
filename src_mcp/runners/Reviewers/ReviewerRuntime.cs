@@ -70,13 +70,13 @@ public sealed record ReviewerSettings(string Provider)
     public bool ThinkingOn { get; init; } = true;
 
     /// <summary>
-    /// For an <c>api</c> vendor only: whether the answer is asked for as a stream (todo/PLAN_api_streaming.md). Off by
+    /// For an <c>api</c> vendor only: whether the answer is asked for as a stream (research/PLAN_api_streaming.md). Off by
     /// default — today's call — and on only when a row said so.
     /// </summary>
     public bool Stream { get; init; }
 
     /// <summary>
-    /// The row's fast mode (todo/PLAN_fast_mode.md): <see cref="Core.Catalog.FastMode.Off"/> by default — the owner's
+    /// The row's fast mode (research/PLAN_fast_mode.md): <see cref="Core.Catalog.FastMode.Off"/> by default — the owner's
     /// choice, so a fast tier switched on in the CLI's own configuration is not used for coai unasked. Every runtime that
     /// has a tier reads it; the others ignore it.
     /// </summary>
@@ -413,7 +413,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     private protected virtual IEnumerable<string> ProviderOverrides => [];
 
     /// <summary>
-    /// The row's fast mode as codex spells it (todo/PLAN_fast_mode.md): <c>-c service_tier=default</c> for Off,
+    /// The row's fast mode as codex spells it (research/PLAN_fast_mode.md): <c>-c service_tier=default</c> for Off,
     /// <c>=fast</c> for On, nothing for "As the CLI is set" — and nothing at all on somebody else's endpoint (a provider
     /// override), which has no codex service tier. Unquoted, as <c>sandbox_mode=read-only</c> is (CodexConsultant).
     /// Measured 2026-10-07 on codex-cli 0.160.0: the key is read and checked per model; a value the model does not

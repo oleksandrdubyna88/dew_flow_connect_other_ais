@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * A chat's claude fast-mode settings file (todo/PLAN_fast_mode.md, Story C) — the extension's OWN pair, so a chat never
+ * A chat's claude fast-mode settings file (research/PLAN_fast_mode.md, Story C) — the extension's OWN pair, so a chat never
  * depends on coai-mcp having run (the plan round's finding). One key, `fastMode`: `--settings` loads ADDITIONAL settings
  * merged over the person's, so nothing else changes. Written only when missing or saying something else, through a
  * temporary file renamed into place, so no launch reads half of it.

@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Which runtime and model has a fast tier is DATA in <c>shared/feature-availability.json</c> (todo/PLAN_fast_mode.md,
+/// Which runtime and model has a fast tier is DATA in <c>shared/feature-availability.json</c> (research/PLAN_fast_mode.md,
 /// decision 2) — one row per runtime, read by this server and by the extension's generator alike, so the card never
 /// offers a state the launch does not send.
 /// </summary>

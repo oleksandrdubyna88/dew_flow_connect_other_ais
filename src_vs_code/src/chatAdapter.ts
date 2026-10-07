@@ -121,7 +121,7 @@ export interface ChatLaunch {
    */
   readonly effort?: string;
   /**
-   * The tier to force, when the row has one (todo/PLAN_fast_mode.md): `off` — the default — or `on`; absent sends nothing
+   * The tier to force, when the row has one (research/PLAN_fast_mode.md): `off` — the default — or `on`; absent sends nothing
    * ("As the CLI is set", or a runtime and model with no tier). codex reads it as `-c service_tier`.
    */
   readonly fast?: 'on' | 'off';

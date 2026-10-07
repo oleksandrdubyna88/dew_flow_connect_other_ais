@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A row's <c>fast</c> crosses from the settings file to every launch of the row (todo/PLAN_fast_mode.md, Story A):
+/// A row's <c>fast</c> crosses from the settings file to every launch of the row (research/PLAN_fast_mode.md, Story A):
 /// parsed by the reviewer row's parser, absent or unknown read as Off (the owner's default), carried by the reviewer
 /// roster, the consultation and the question row alike — and listed in <c>--features</c> as <c>fastMode</c>, so the
 /// extension sends it only to a binary that reads it.
@@ -58,7 +58,7 @@ public sealed class ARowsFastModeReachesItsLaunchesTests
     [Fact]
     public async Task ProvidersReportsWhatEachRowWithATierRunsWith_AndNothingForOneWithout()
     {
-        // What the seam reads back (todo/PLAN_fast_mode.md, Story B): the binary's own word for the state it applies.
+        // What the seam reads back (research/PLAN_fast_mode.md, Story B): the binary's own word for the state it applies.
         var service = new PanelService(
             new PanelSettings
             {

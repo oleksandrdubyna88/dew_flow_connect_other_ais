@@ -41,7 +41,7 @@ import { ChatAdapter, NOTHING, answerOrEmpty, parsed, text, count, inside } from
  */
 const THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 
-/** A row's tier as codex is told it, or nothing (todo/PLAN_fast_mode.md). */
+/** A row's tier as codex is told it, or nothing (research/PLAN_fast_mode.md). */
 function tierArgs(fast: 'on' | 'off' | undefined): readonly string[] {
   return fast === undefined ? [] : ['-c', `service_tier=${fast === 'on' ? 'fast' : 'default'}`];
 }
@@ -71,7 +71,7 @@ export const codexAdapter: ChatAdapter = {
   // the positional that makes codex read its instructions from stdin: an option after a positional
   // is still parsed as an option here, but writing it that way asks a reader to know that, and the
   // one place this product cannot afford a reader's benefit of the doubt is a command line.
-  // The row's tier (todo/PLAN_fast_mode.md), as coai-mcp spells it for a reviewer (`CodexRuntime.TierArgs`): unquoted, and
+  // The row's tier (research/PLAN_fast_mode.md), as coai-mcp spells it for a reviewer (`CodexRuntime.TierArgs`): unquoted, and
   // before `CODEX_ARGS`, whose bare `-` is the stdin positional.
   argv: ({ resume, model, access, fast }) => [
     'exec',
