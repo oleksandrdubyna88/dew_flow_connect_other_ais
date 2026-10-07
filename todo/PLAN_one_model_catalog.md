@@ -947,6 +947,20 @@ now, by the owner's decision): an OLD coai-mcp still running re-reads the settin
 before the new fields are enabled; then the installed binary's `--features` are checked, the extension activated, and
 the written file read back. Full consultant behaviour needs a binary that lists `consultantRow`.
 
+**Progress, 2026-10-07: prerequisite (b) is done** on branch `refactor/catalog-e5-extract`, as a pure move (no behaviour
+or markup change). The builders, contracts and handlers are in `rolesMessages.ts`, `rolesBlocks.ts`, `commandsMessages.ts`,
+`commandsBlocks.ts`, `chatPresetsMessages.ts` and `chatPresetBlocks.ts`; the page-test shim is `test/pageScriptHarness.ts`
+(`rolesPageHarness.ts` keeps `runRolesPage`); `panelView` exports the moved sections' builders and
+`catalogSections.MOVED_SECTIONS` names them by place; `catalogTabsInPlace.test.ts` and `catalogPlaces.test.ts` list their
+inventories literally (research/module_extension.md, "What the new Settings page took from the old pages"). Deviations
+from the extraction map: `rolesFieldOf` and `ROLE_TABS` moved too (the editing core and the parser need them); the
+limits and team-servers sections are exported as `limitsSection` / `teamServersSection`, which take the state, not as
+their raw bodies, so the argument expression is not written twice; every test that used the generic shim was repointed,
+not only the six new-page tests (`pageTree.ts`, which those tests read the page through, took `Node` from the roles
+harness); and `roleEdit`, `presetEdit`, `roleBlock`, a role prompt's block and the version comparison were split into
+smaller functions, because the new modules are held to `complexity: 4` and the CI ratchet refuses a suppression in a new
+file — output compared with the previous build and identical.
+
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).

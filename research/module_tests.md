@@ -1367,6 +1367,10 @@ nodes `querySelectorAll` should answer with, keyed by selector — a test that p
 the page to FIND the other tabs and the sections, and a shim answering every selector with nothing
 would let a broken switch look exactly like a working one.
 
+Since 2026-10-07 the shim itself (`Node`, `runPageHtml`, `presses`, `Page`) is `pageScriptHarness.ts`, and every page
+test imports it from there; `rolesPageHarness.ts` keeps `runRolesPage` alone, so E5.1 can delete it with the roles
+page (todo/PLAN_one_model_catalog.md, E5 prerequisite (b)).
+
 `editRolesInTabs.test.ts` covers issue #293 and executes what it can: the page's own click handler
 for the tab switch, and `nextTab` for the transition the host applies. The two assertions that are
 not executions are deliberate and say so — there is no CSS engine here, so `.prompt.mine` being
