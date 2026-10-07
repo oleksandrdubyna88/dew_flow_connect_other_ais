@@ -71,7 +71,7 @@ public sealed class EscalationRetention(Escalations escalations, Func<HeldQuesti
         var name = Path.GetFileName(path);
 
         return name.EndsWith(".tmp", StringComparison.Ordinal)
-            ? new(string.Empty, Older(File.GetLastWriteTimeUtc(path), nowUtc) ? [path] : [])
+            ? new(string.Empty, DueIf(File.GetLastWriteTimeUtc(path), nowUtc, path))
             : Judged(name, path, nowUtc);
     }
 
@@ -99,27 +99,22 @@ public sealed class EscalationRetention(Escalations escalations, Func<HeldQuesti
             return [];
         }
 
-        var ended = Parsed(escalations.ReadAnswer(id)?.AnsweredUtc) ?? File.GetLastWriteTimeUtc(path);
-
-        return Older(ended, nowUtc) ? [path] : [];
+        return DueIf(Parsed(escalations.ReadAnswer(id)?.AnsweredUtc) ?? File.GetLastWriteTimeUtc(path), nowUtc, path);
     }
 
-    private IReadOnlyList<string> Question(string path, string id, DateTime nowUtc)
-    {
-        if (escalations.Read(id) is not { } question)
-        {
-            return Older(File.GetLastWriteTimeUtc(path), nowUtc) ? [path] : [];
-        }
+    /// <summary>A question: torn (by its write time), answered (the pair, by the answer's stamp), or open/expired.</summary>
+    private IReadOnlyList<string> Question(string path, string id, DateTime nowUtc) =>
+        escalations.Read(id) is not { } question ? DueIf(File.GetLastWriteTimeUtc(path), nowUtc, path)
+        : escalations.ReadAnswer(id) is { } answer ? AnsweredPair(answer.AnsweredUtc, path, id, nowUtc)
+        : DueIf(Ended(question, path), nowUtc, path);
 
-        if (escalations.ReadAnswer(id) is { } answer)
-        {
-            var answered = Parsed(answer.AnsweredUtc) ?? File.GetLastWriteTimeUtc(escalations.AnswerPath(id));
+    /// <summary>An answered pair goes together, seven days after the ANSWER's stamp (its file's write time when it has none).</summary>
+    private IReadOnlyList<string> AnsweredPair(string? answeredUtc, string path, string id, DateTime nowUtc) =>
+        DueIf(Parsed(answeredUtc) ?? File.GetLastWriteTimeUtc(escalations.AnswerPath(id)), nowUtc, path, escalations.AnswerPath(id));
 
-            return Older(answered, nowUtc) ? [path, escalations.AnswerPath(id)] : [];
-        }
-
-        return Older(Ended(question, path), nowUtc) ? [path] : [];
-    }
+    /// <summary>These paths when what they belong to ended more than seven days ago — none otherwise.</summary>
+    private static IReadOnlyList<string> DueIf(DateTime ended, DateTime nowUtc, params string[] paths) =>
+        Older(ended, nowUtc) ? paths : [];
 
     /// <summary>When an unanswered question ended: its expiry, or — never expired — when it was asked.</summary>
     private static DateTime Ended(EscalationQuestion question, string path) =>

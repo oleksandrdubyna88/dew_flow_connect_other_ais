@@ -6,9 +6,9 @@
 //
 // The snapshot is COPIED to a fresh temp directory per run, so the measured server never touches it and two arms
 // start from the same bytes. `--env` is a file of NAME=value lines (a live instance's COAI_* environment) put into the
-// child's environment; every other COAI_* variable of this shell is removed. The copy is deleted when the run ends. The child's CPU is its own user+kernel
-// time over the idle window: /proc/<pid>/stat on Linux, Get-Process on Windows. Only the child this script started is
-// read or killed. Prints one JSON line.
+// child's environment; every other COAI_* variable of this shell is removed. The copy is deleted when the run ends,
+// however it ends. The child's CPU is its own user+kernel time over the idle window: /proc/<pid>/stat on Linux,
+// Get-Process on Windows. Only the child this script started is read or killed. Prints one JSON line.
 //
 // Run it on a machine you are not also loading, or say what else ran: on a CPU-saturated WSL the process start alone
 // took 5–9 s (with `nice -n 19`), whatever the data.
@@ -41,51 +41,76 @@ if (envFile) {
 }
 env.COAI_DATA_DIR = data;
 
+// Both helpers by ABSOLUTE path, never by a PATH lookup a writable directory could shadow (Sonar S4036 on #690).
+const POWERSHELL = join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+const GETCONF = '/usr/bin/getconf';
 const cpuSeconds = (pid) => {
   if (process.platform === 'win32') {
-    const said = execFileSync('powershell', ['-NoProfile', '-Command', `(Get-Process -Id ${pid}).TotalProcessorTime.TotalSeconds`]);
+    const said = execFileSync(POWERSHELL, ['-NoProfile', '-Command', `(Get-Process -Id ${pid}).TotalProcessorTime.TotalSeconds`]);
     return Number(String(said).trim().replace(',', '.'));
   }
   const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
   const fields = stat.slice(stat.lastIndexOf(') ') + 2).split(' '); // the name field may itself hold ') '
-  const ticks = Number(execFileSync('getconf', ['CLK_TCK']));
+  const ticks = Number(execFileSync(GETCONF, ['CLK_TCK']));
   return (Number(fields[11]) + Number(fields[12])) / ticks;
 };
 const sleep = (seconds) => new Promise((done) => setTimeout(done, seconds * 1000));
 
-const child = spawn(binary, [], { env, stdio: ['pipe', 'pipe', 'ignore'] });
-let exited = false;
-child.on('exit', () => { exited = true; });
 let answered = 0;
+let exited = false;
+const child = spawn(binary, [], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+const ended = new Promise((done) => child.on('exit', () => { exited = true; done(); }));
+child.on('error', () => { exited = true; });
 child.stdout.on('data', () => { answered ||= Date.now(); });
-const started = Date.now();
-child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'measure-idle-server', version: '0' } } }) + '\n');
-while (!answered && Date.now() - started < 60_000) await sleep(0.01);
-child.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
-await sleep(settle);
-if (exited) {
-  console.log(JSON.stringify({ binary, exitedBeforeTheIdleWindow: true, initializeSeconds: answered ? (answered - started) / 1000 : null }));
-  rmSync(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-  process.exit(1);
-}
-const before = cpuSeconds(child.pid);
-const from = Date.now();
-await sleep(idle);
-const after = cpuSeconds(child.pid);
-const window = (Date.now() - from) / 1000;
-child.kill();
 
-console.log(JSON.stringify({
-  binary,
-  sessions: existsSync(join(snapshot, 'sessions'))
-    ? readdirSync(join(snapshot, 'sessions')).filter((name) => /^session-.*\.json$/.test(name)).length
-    : 0,
-  initializeSeconds: answered ? (answered - started) / 1000 : null,
-  initializeAnsweredWithin60s: Boolean(answered) && answered - started <= 60_000,
-  idleCpuPercentOfOneCore: Math.round(((after - before) / window) * 10000) / 100,
-  idleCpuSeconds: Math.round((after - before) * 100) / 100,
-  idleWindowSeconds: Math.round(window * 10) / 10,
-}));
-// The copy holds a person's sessions and settings: it does not outlive the run.
-rmSync(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-process.exit(0);
+// The answer is an event on stdout, so the wait for it is a short poll with a deadline.
+const untilAnswered = (deadline) => new Promise((done) => {
+  const tick = setInterval(() => {
+    if (answered || exited || Date.now() >= deadline) {
+      clearInterval(tick);
+      done();
+    }
+  }, 10);
+});
+
+const measure = async () => {
+  const started = Date.now();
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'measure-idle-server', version: '0' } } }) + '\n');
+  await untilAnswered(started + 60_000);
+  const initializeSeconds = answered ? (answered - started) / 1000 : null;
+  child.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
+  await sleep(settle);
+  if (exited) {
+    return { binary, exitedBeforeTheIdleWindow: true, initializeSeconds };
+  }
+  const before = cpuSeconds(child.pid);
+  const from = Date.now();
+  await sleep(idle);
+  const after = cpuSeconds(child.pid);
+  const window = (Date.now() - from) / 1000;
+  return {
+    binary,
+    sessions: existsSync(join(snapshot, 'sessions'))
+      ? readdirSync(join(snapshot, 'sessions')).filter((name) => /^session-.*\.json$/.test(name)).length
+      : 0,
+    initializeSeconds,
+    initializeAnsweredWithin60s: Boolean(answered) && answered - started <= 60_000,
+    idleCpuPercentOfOneCore: Math.round(((after - before) / window) * 10000) / 100,
+    idleCpuSeconds: Math.round((after - before) * 100) / 100,
+    idleWindowSeconds: Math.round(window * 10) / 10,
+  };
+};
+
+let outcome = 1;
+try {
+  const result = await measure();
+  console.log(JSON.stringify(result));
+  outcome = result.exitedBeforeTheIdleWindow ? 1 : 0;
+} finally {
+  // The copy holds a person's sessions and settings: it does not outlive the run, however the run ends — and it is
+  // removed only once the child that had it open has exited (CodeRabbit on #690).
+  if (!exited) child.kill();
+  await Promise.race([ended, sleep(10)]);
+  rmSync(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+}
+process.exit(outcome);

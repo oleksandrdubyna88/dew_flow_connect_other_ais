@@ -1251,8 +1251,9 @@ session holds — on a hold (`HoldQuestions`) or as a feature session's request 
 `SessionStore.HeldQuestions` — is kept whatever its age or status, because a hold is bound to its question by
 identity: since S4b (item 7) every file of a held id is kept, so an answered pair, an orphan answer and a torn
 question of a held id are kept too (the answered pair used to go: the hold reads that very answer). Since 2026-10-06
-the file is judged FIRST and the held set is asked only for a due file, once per sweep, cached by the sessions
-directory's stamp, and fail-closed when a session cannot be read — asking it per file, before judging, read every
+the file is judged FIRST and the held set is asked only for a due file, once per sweep, cached PER SESSION FILE under
+its own write time and length (only a changed session is parsed again), and fail-closed when a session cannot be read
+or stat'ed — asking it per file, before judging, read every
 session file per card on every beat (*A start answers `initialize` at once* above).
 Judged through `Escalations`' own readers, under the same turn.
 
@@ -4894,7 +4895,7 @@ sequenceDiagram
 
 | What | Where |
 |---|---|
-| **The sweep runs every minute while serving** (`COAI_SWEEP_SECONDS`, 10–3 600, since 2026-10-06; it begins once the background start has built the service), on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
+| **The sweep runs while serving, every minute by default** (`COAI_SWEEP_SECONDS`, 10–3 600, since 2026-10-06; it begins once the background start has built the service), on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
 | **Each record is decided under the repository's lock, on a fresh read.** A cheap look first, then the lock. A follow-up takes the same lock and re-reads the record before it marks it `asking`, so the sweep and a follow-up can no longer interleave into a stale close written over a running turn. (Found at the code round; pinned by `ASweepHoldingAStaleCopy_DoesNotCloseAConsultationThatHasSinceStartedATurn`, which is red when the decision uses the enumerated copy.) | `ConsultationStore.SweepOne`, `Swept` |
 | **What each limit applies to, now each pinned by a test broken by compiling code.** Turns per consultation: every kind, frozen into the record at open. Calls per session: stuck only; a follow-up is counted by the kind its record holds. Idle close: every kind, both the follow-up refusal and the record's close. | `ConsultLimitsScenarioTests` (the idle refusal; cadence and risk past the turn cap; cadence and risk follow-ups that spend no stuck budget; the running-server lapse), `ConsultationSweeperTests` (the real host, with a settings reload between two lapses; a throwing beat) |
 | **The kind on the server's own surfaces.** `status` lists each open consultation with `kind`, never empty, because a record from before the kinds reads `stuck`. Every consultation log line starts with it: `risk consultation … turn 1/5`, `… answered turn 1`, and the filesystem alert. | `ServerJsonContext.OpenConsultation.Kind`, `ConsultationService.OpenIn`, `ConsultationService` log lines |

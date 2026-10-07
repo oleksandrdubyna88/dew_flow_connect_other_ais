@@ -33,8 +33,8 @@ public sealed record HeldQuestions(IReadOnlySet<string> Ids, bool Complete)
 /// change late, never a deletion: a NEW hold can only bind an id whose file is not yet due.</para>
 /// <para><b>Fails closed, without paying for it every beat.</b> A session that cannot be read makes the set
 /// <c>Complete = false</c>; it is cached as unreadable under its stamp, so a torn file that STAYS torn is not parsed
-/// again until it changes (own review of the branch, 2026-10-07). A file gone between the listing and its stat holds
-/// nothing.</para>
+/// again until it changes (own review of the branch, 2026-10-07). A file CONFIRMED gone between the listing and its stat
+/// holds nothing; a stat that fails for any other reason keeps the set incomplete.</para>
 /// </remarks>
 internal sealed class SessionHolds(string sessionsDirectory, Func<string, PersistedSession?> read)
 {
@@ -42,7 +42,18 @@ internal sealed class SessionHolds(string sessionsDirectory, Func<string, Persis
     private Dictionary<string, Holds> _files = new(StringComparer.Ordinal);
 
     /// <summary>One session file as last parsed: its stamp, what it holds, and whether it could be read at all.</summary>
-    private sealed record Holds(DateTime Written, long Length, IReadOnlyList<string> Ids, bool Readable);
+    private sealed record Holds(Stamp Stamp, IReadOnlyList<string> Ids, bool Readable);
+
+    /// <summary>What a stat of one session file said: when it was written and how long it is, gone, or unknown.</summary>
+    private abstract record Stamp
+    {
+        public sealed record Seen(DateTime Written, long Length) : Stamp;
+
+        public sealed record Gone : Stamp;
+
+        /// <summary>The stat failed for a reason other than absence — the file may hold anything (fail closed).</summary>
+        public sealed record Unknown : Stamp;
+    }
 
     /// <summary>How many session files were parsed — what the idle-budget tests count.</summary>
     internal int Parses { get; private set; }
@@ -73,39 +84,53 @@ internal sealed class SessionHolds(string sessionsDirectory, Func<string, Persis
     /// <summary>The file's holds into <paramref name="next"/> — the cached ones when its stamp did not move.</summary>
     private void Kept(FileInfo file, Dictionary<string, Holds> next)
     {
-        if (!TryStamp(file, out var written, out var length))
+        var stamp = StampOf(file);
+        if (stamp is Stamp.Gone)
         {
-            return; // gone since the listing: it holds nothing any more
+            return; // confirmed gone since the listing: it holds nothing any more
         }
 
-        next[file.FullName] = _files.TryGetValue(file.FullName, out var cached) && cached.Written == written && cached.Length == length
-            ? cached
-            : Parsed(file.FullName, written, length);
+        next[file.FullName] = Reusable(file.FullName, stamp) ?? Parsed(file.FullName, stamp);
     }
 
-    private Holds Parsed(string path, DateTime written, long length)
+    /// <summary>The cached holds when the file's stamp is the one they were parsed under — or null, parse it.</summary>
+    private Holds? Reusable(string path, Stamp stamp) =>
+        stamp is Stamp.Seen seen && _files.TryGetValue(path, out var cached) && cached.Stamp == seen ? cached : null;
+
+    private Holds Parsed(string path, Stamp stamp)
     {
+        if (stamp is Stamp.Unknown)
+        {
+            return new(stamp, [], Readable: false); // its holds cannot be known, so the set is incomplete
+        }
+
         Parses++;
 
         return read(path) is { } session
-            ? new(written, length, [.. session.State.HoldQuestions, .. session.State.RequestQuestions], Readable: true)
-            : new(written, length, [], Readable: false);
+            ? new(stamp, [.. session.State.HoldQuestions, .. session.State.RequestQuestions], Readable: true)
+            : new(stamp, [], Readable: false);
     }
 
-    private static bool TryStamp(FileInfo file, out DateTime written, out long length)
+    /// <summary>
+    /// A stat of one file. Only a CONFIRMED absence is <see cref="Stamp.Gone"/>; any other failure is
+    /// <see cref="Stamp.Unknown"/>, which keeps the set incomplete rather than reading as "holds nothing" (CodeRabbit on
+    /// #690: a held card in a session that could not be stat'ed must not be deleted).
+    /// </summary>
+    private static Stamp StampOf(FileInfo file)
     {
         try
         {
             file.Refresh();
-            (written, length) = (file.LastWriteTimeUtc, file.Length);
 
-            return file.Exists;
+            return file.Exists ? new Stamp.Seen(file.LastWriteTimeUtc, file.Length) : new Stamp.Gone();
         }
-        catch (IOException)
+        catch (FileNotFoundException)
         {
-            (written, length) = (default, 0);
-
-            return false;
+            return new Stamp.Gone();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new Stamp.Unknown();
         }
     }
 }
