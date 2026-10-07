@@ -41,7 +41,7 @@ public sealed class AStreamsUsageIsNeverZeroTests : IDisposable
     }
 
     private static string Chunk(string content, string finish = "null") =>
-        "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":" + System.Text.Json.JsonSerializer.Serialize(content, ChunkJson.Default.String)
+        "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":" + System.Text.Json.Nodes.JsonValue.Create(content).ToJsonString()
         + "},\"finish_reason\":" + finish + "}]}\n\n";
 
     private const string ErrorChunk =
