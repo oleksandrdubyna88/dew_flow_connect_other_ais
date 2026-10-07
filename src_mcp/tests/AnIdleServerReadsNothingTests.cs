@@ -172,6 +172,32 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         holds.Read().Ids.Should().BeEquivalentTo(["q2"], "past the recheck every session is parsed again, so a missed hold is seen");
     }
 
+    /// <summary>
+    /// The checkpoint round (codex, 2026-10-07): <c>Directory.Exists</c> answers false for a directory that exists but
+    /// cannot be listed (a permission change, a dropped share), and the held set then read as COMPLETE and empty — so a
+    /// due card a session still holds could go. Only a confirmed absence is "no sessions"; a path that is there and
+    /// cannot be listed keeps the set incomplete. The deterministic stand-in: a FILE where the directory belongs.
+    /// </summary>
+    [Fact]
+    public void ASessionsPathThatCannotBeListed_KeepsTheSetIncomplete_NotEmptyAndComplete()
+    {
+        File.WriteAllText(Path.Combine(_data, "sessions"), "not a directory");
+
+        var held = new SessionStore(_data).HeldQuestions();
+
+        held.Complete.Should().BeFalse("a sessions path that is there and cannot be listed may hold anything");
+        held.MayHold("anything").Should().BeTrue();
+    }
+
+    [Fact]
+    public void NoSessionsDirectoryYet_IsAConfirmedAbsence_AndHoldsNothing()
+    {
+        var held = new SessionStore(_data).HeldQuestions();
+
+        held.Complete.Should().BeTrue("a data directory that never had a session holds nothing, and that is known");
+        held.Ids.Should().BeEmpty();
+    }
+
     private PanelService Service()
     {
         var settings = new PanelSettings

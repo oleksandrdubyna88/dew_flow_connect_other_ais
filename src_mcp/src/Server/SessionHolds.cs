@@ -68,23 +68,64 @@ internal sealed class SessionHolds(string sessionsDirectory, Func<string, Persis
     {
         lock (_gate)
         {
-            if (!Directory.Exists(sessionsDirectory))
+            return ListOf(sessionsDirectory) switch
             {
-                return HeldQuestions.None;
-            }
-
-            var next = new Dictionary<string, Holds>(StringComparer.Ordinal);
-            foreach (var file in new DirectoryInfo(sessionsDirectory).EnumerateFiles("session-*.json"))
-            {
-                Kept(file, next);
-            }
-
-            _files = next;
-
-            return new HeldQuestions(
-                next.Values.SelectMany(holds => holds.Ids).ToHashSet(StringComparer.Ordinal),
-                next.Values.All(holds => holds.Readable));
+                Listing.Found found => ReadAll(found.Files),
+                Listing.Absent => HeldQuestions.None,
+                _ => Unknowable,
+            };
         }
+    }
+
+    /// <summary>What a sessions directory that cannot be listed holds: anything — the set is incomplete.</summary>
+    private static readonly HeldQuestions Unknowable = new(new HashSet<string>(StringComparer.Ordinal), Complete: false);
+
+    /// <summary>The sessions directory's listing: its files, confirmed absent, or there and not listable.</summary>
+    private abstract record Listing
+    {
+        public sealed record Found(IReadOnlyList<FileInfo> Files) : Listing;
+
+        public sealed record Absent : Listing;
+
+        public sealed record Unreadable : Listing;
+    }
+
+    /// <summary>
+    /// The listing, by the operation that SURFACES its failure: <see cref="Directory.Exists"/> answers false for a
+    /// directory that is there and cannot be read (a permission change, a dropped share), and the set then read as
+    /// complete and empty (the checkpoint round, codex, 2026-10-07). Absent only when nothing is at the path at all —
+    /// Linux reports a file listed as a directory as "not found" too.
+    /// </summary>
+    private static Listing ListOf(string directory)
+    {
+        try
+        {
+            return new Listing.Found([.. new DirectoryInfo(directory).EnumerateFiles("session-*.json")]);
+        }
+        catch (DirectoryNotFoundException) when (!Path.Exists(directory))
+        {
+            return new Listing.Absent();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new Listing.Unreadable();
+        }
+    }
+
+    /// <summary>Every listed session's holds — each parsed again only when its stamp moved or its entry grew old.</summary>
+    private HeldQuestions ReadAll(IReadOnlyList<FileInfo> files)
+    {
+        var next = new Dictionary<string, Holds>(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            Kept(file, next);
+        }
+
+        _files = next;
+
+        return new HeldQuestions(
+            next.Values.SelectMany(holds => holds.Ids).ToHashSet(StringComparer.Ordinal),
+            next.Values.All(holds => holds.Readable));
     }
 
     /// <summary>The file's holds into <paramref name="next"/> — the cached ones when its stamp did not move.</summary>
@@ -133,11 +174,13 @@ internal sealed class SessionHolds(string sessionsDirectory, Func<string, Persis
     {
         try
         {
+            // GetAttributes THROWS on a denied stat, where FileInfo.Exists would answer false and read as "gone".
+            _ = File.GetAttributes(file.FullName);
             file.Refresh();
 
-            return file.Exists ? new Stamp.Seen(file.LastWriteTimeUtc, file.Length) : new Stamp.Gone();
+            return new Stamp.Seen(file.LastWriteTimeUtc, file.Length);
         }
-        catch (FileNotFoundException)
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
             return new Stamp.Gone();
         }

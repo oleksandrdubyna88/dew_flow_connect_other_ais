@@ -72,7 +72,10 @@ is due asks, the held set is read once per sweep (`Lazy`), and `SessionStore.Hel
 (`SessionHolds`: each session under its own write time and length — a stat per file, no read), so one active session
 costs one parse, not all of them. An entry is trusted for `SessionHolds.Recheck` (10 minutes) at most: past it the file is
 parsed again whatever its stamp says, so a same-length save inside one timestamp tick, or a read that failed for a
-moment, delays a new hold by minutes and never for good. A session that could not be read makes the set `Complete = false` and every due card
+moment, delays a new hold by minutes and never for good. Absence is CONFIRMED, never inferred: the listing and each
+file's stat use the operations that surface a failure (`DirectoryInfo.EnumerateFiles`, `File.GetAttributes`), because
+`Directory.Exists` and `FileInfo.Exists` answer false for a path that is there and cannot be read — a sessions
+directory that cannot be listed keeps the set incomplete rather than reading as no sessions at all. A session that could not be read makes the set `Complete = false` and every due card
 is kept (fail closed); it is cached as unreadable under its stamp, so a torn file that stays torn is not parsed again
 every beat. The beat's
 interval is `ServerPace.SweepEvery`, `COAI_SWEEP_SECONDS` — read once per start, so unlike the settings a tool call
