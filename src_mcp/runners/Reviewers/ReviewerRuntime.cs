@@ -70,7 +70,7 @@ public sealed record ReviewerSettings(string Provider)
     public bool ThinkingOn { get; init; } = true;
 
     /// <summary>
-    /// For an <c>api</c> vendor only: whether the answer is asked for as a stream (todo/PLAN_api_streaming.md). Off by
+    /// For an <c>api</c> vendor only: whether the answer is asked for as a stream (research/PLAN_api_streaming.md). Off by
     /// default — today's call — and on only when a row said so.
     /// </summary>
     public bool Stream { get; init; }

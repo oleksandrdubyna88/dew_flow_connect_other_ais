@@ -109,7 +109,7 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   from that report alone, and the row carries `effort` / `thinking` / `reviewMinutes` on the wire only when
   they differ from the default — held back for a server known to be older than 0.40.0, which ignores them
   ([module_extension.md](module_extension.md), *An api reviewer's own settings on its card*).
-  *Since [PLAN_api_streaming.md](../todo/PLAN_api_streaming.md) (2026-10-06):* an `api` row may ask for its answer
+  *Since [PLAN_api_streaming.md](PLAN_api_streaming.md) (2026-10-06):* an `api` row may ask for its answer
   as a STREAM. The switch is drawn only on the NEW Settings page's model card; the row's `stream` crosses
   `COAI_VENDORS` only to a binary whose `--features` lists `apiStream`, reaches all three launch places (review,
   consult, question consult) through `ReviewerSettings.WithApi`, and becomes the child's `--stream on`. The child

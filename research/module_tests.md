@@ -2824,7 +2824,7 @@ live session shows it being followed. The two-in-flight race is not forced — t
 store's own tests. Cancellation is driven at the service; that the MCP SDK hands the lambda a live token is the SDK's
 contract, not observed here.
 
-## An api row's stream, through the person's flow (2026-10-06, Story D of `todo/PLAN_api_streaming.md`)
+## An api row's stream, through the person's flow (2026-10-06, Story D of `research/PLAN_api_streaming.md`)
 
 The flow: switch "Stream" on for an api row on the new Settings page's model card → save → press ✓ Check → the badge
 says "checked: it answered · streamed". Two halves, joined by the check's durable record:
@@ -2841,6 +2841,13 @@ says "checked: it answered · streamed". Two halves, joined by the check's durab
 - **The shim alone** — `AStreamedAskTests`: the stream's outcomes (usage first; an error inside a 200; a cut stream;
   the JSON fallback) and `ConsultantCheck.StreamVerdict` as a value. The seam leg `apiStreamSeam` (`npm run test:seam`)
   holds the wire between the two halves.
+- **One reader for both** (2026-10-07) — `AStreamedGoldenIsReadLikeItsRecordingTests`: every recorded golden in
+  `fixtures/api-goldens` read through each module that answers in its shape (xai, qwen, deepseek, glm, openai), once
+  whole and once re-told as a SYNTHETIC stream; same exit, same usage line plus `"streamed":true`, same answer file.
+- **Never 0** (2026-10-07) — `AStreamsUsageIsNeverZeroTests`: a cut stream, an error inside the stream (with and
+  without a usage), the answer cap and a mid-stream deadline (served by a `StubHandler` over the shared `Trickle` body),
+  each read by `ApiRuntime.ReadUsage` on a PRICED row: counted or unknown, never `Usage.None`. Both classes cover code
+  that had shipped, so their teeth were proven by breaking it (research/RESULTS_api_streaming_measurements_2026-10-06.md §5).
 
 ```bash
 ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AStreamedRowIsCheckedTests"   # build src + tests first

@@ -55,7 +55,7 @@ function promptField(field: 'systemPrompt' | 'chatStartingPrompt', raw: unknown)
   return typeof raw === 'string' && raw.trim().length > 0 ? { [field]: raw } : {};
 }
 
-/** An api row's stream switch (todo/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */
+/** An api row's stream switch (research/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */
 function streamField(runtime: unknown, raw: unknown): CatalogFields {
   return runtime === 'api' && raw === true ? { stream: true } : {};
 }

@@ -126,7 +126,7 @@ export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf:
 }
 
 /**
- * An api row's stream switch, to a binary that lists `apiStream` (todo/PLAN_api_streaming.md) — and to no other: an older
+ * An api row's stream switch, to a binary that lists `apiStream` (research/PLAN_api_streaming.md) — and to no other: an older
  * binary skips the member, so the card would say "streamed" over a call that is not. Only when on.
  */
 function streamOnTheWire(v: Vendor, features: readonly string[]): { stream?: true } {

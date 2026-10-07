@@ -29,7 +29,7 @@ public sealed record StreamOutcome(StreamEnd End, string Completion, string Erro
 
 /// <summary>
 /// The chunks of a streamed completion assembled into the ONE answer shape the non-streaming path reads
-/// (todo/PLAN_api_streaming.md, S4): a streamed and an unstreamed answer are judged by the same
+/// (research/PLAN_api_streaming.md, S4): a streamed and an unstreamed answer are judged by the same
 /// <see cref="CompletionReader"/>, so they cannot be judged differently.
 /// </summary>
 /// <remarks>

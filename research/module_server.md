@@ -6381,7 +6381,7 @@ the consultant check's ONE paid turn (scratch repository, marker, canary) under 
 both entries — keyed `model-<id>`, so two rows check apart and neither touches a caller kind's record. A request without
 a row is 65. `--features` lists `checkModel`. The refusal now calls only a codex row's base URL a custom endpoint.
 
-## `--ask-api --stream on` (2026-10-06, todo/PLAN_api_streaming.md)
+## `--ask-api --stream on` (2026-10-06, research/PLAN_api_streaming.md)
 
 `AskApiMode` reads `--stream on` (a key WITH a value — `Program.Flags` drops a bare flag) into the request's
 `ApiTurn.Stream`. The response branch is chosen by what was ANSWERED: a successful `text/event-stream` is read as a stream;

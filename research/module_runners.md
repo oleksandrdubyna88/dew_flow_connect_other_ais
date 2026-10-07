@@ -2266,7 +2266,7 @@ sequenceDiagram
   its cleanup in `BoundedScheduler` (a retry launches the same invocation again). One `LaunchFiles.Forget` for both.
 - `ConsultantCheckMode.IsModelCheck` holds the mode predicate; a real-binary test pins the `--check-model` dispatch.
 
-## An api row's stream switch reaches every api launch (2026-10-06, todo/PLAN_api_streaming.md)
+## An api row's stream switch reaches every api launch (2026-10-06, research/PLAN_api_streaming.md)
 
 `ReviewerSettings.Stream`, and ONE helper, `ReviewerSettings.WithApi(ApiEffective)`, that carries an api row's effort,
 ceiling, thinking switch and stream into launch settings. The roster (`RosterBuilder`), the consultant and the model

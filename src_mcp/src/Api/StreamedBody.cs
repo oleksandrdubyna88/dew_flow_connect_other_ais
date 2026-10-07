@@ -30,7 +30,7 @@ internal enum StreamStop
 internal sealed record StreamRead(StreamOutcome Outcome, StreamStop Stop);
 
 /// <summary>
-/// Reads a streamed answer off an HTTP body (todo/PLAN_api_streaming.md) — the streaming counterpart of
+/// Reads a streamed answer off an HTTP body (research/PLAN_api_streaming.md) — the streaming counterpart of
 /// <see cref="BoundedBody"/>, and like it never buffering past a ceiling.
 /// </summary>
 /// <remarks>

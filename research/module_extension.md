@@ -11187,7 +11187,7 @@ flowchart LR
   P --> S[the text sent, not the transcript]
 ```
 
-## An api row's "stream the answer" switch (2026-10-06, todo/PLAN_api_streaming.md)
+## An api row's "stream the answer" switch (2026-10-06, research/PLAN_api_streaming.md)
 
 New Settings page only (the owner's rule: new controls go on the new page). `catalogFields` keeps `stream` on an api
 row only when it is `true` (a saved `false` reads as a row that never had it); `vendorsWire.streamOnTheWire` sends it

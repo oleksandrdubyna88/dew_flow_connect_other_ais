@@ -51,7 +51,7 @@ internal static class AskApiMode
 
     /// <summary>
     /// The longest one line of a stream may be. A chunk is a few hundred bytes; a line past this is a body with no line
-    /// ends, refused rather than held (todo/PLAN_api_streaming.md).
+    /// ends, refused rather than held (research/PLAN_api_streaming.md).
     /// </summary>
     internal const int MaxStreamLineChars = 1024 * 1024;
 
@@ -98,7 +98,7 @@ internal static class AskApiMode
             flags.GetValueOrDefault("--conversation", string.Empty).Trim(),
             // Absent is on: the switch is spelled only when a row turned thinking OFF on a module that has one.
             ThinkingOn: !string.Equals(flags.GetValueOrDefault("--thinking", "on").Trim(), "off", StringComparison.OrdinalIgnoreCase),
-            // Absent is off: a row asks for a stream only when a person switched it on (todo/PLAN_api_streaming.md).
+            // Absent is off: a row asks for a stream only when a person switched it on (research/PLAN_api_streaming.md).
             Stream: string.Equals(flags.GetValueOrDefault("--stream", "off").Trim(), "on", StringComparison.OrdinalIgnoreCase));
 
         try
@@ -313,7 +313,7 @@ internal static class AskApiMode
         && string.Equals(response.Content.Headers.ContentType?.MediaType, "text/event-stream", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// A streamed answer (todo/PLAN_api_streaming.md, S4 and S5): read, assembled into the one answer shape, and its usage
+    /// A streamed answer (research/PLAN_api_streaming.md, S4 and S5): read, assembled into the one answer shape, and its usage
     /// line printed FIRST however it ended — the last usage the stream carried, or "not captured", never a zero for a
     /// generation the vendor billed. Then the exit: the answer judged as any other; a failure the stream reported inside
     /// its 200, quoted so the retry rule reads the vendor's words; a stream that stopped before its answer finished.
@@ -371,7 +371,7 @@ internal static class AskApiMode
     /// reasoning share for the record.
     /// </remarks>
     /// <param name="usage">What the vendor reported the call consumed.</param>
-    /// <param name="streamed">The answer was READ as a stream (todo/PLAN_api_streaming.md, Story C); absent otherwise —
+    /// <param name="streamed">The answer was READ as a stream (research/PLAN_api_streaming.md, Story C); absent otherwise —
     /// a gateway that answered one JSON, and an older coai-mcp that ignored <c>--stream on</c>, both write none.</param>
     internal static string UsageLine(Usage usage, bool streamed = false) =>
         "{" + $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached},\"tokensReasoning\":{usage.TokensReasoning}"
@@ -420,7 +420,7 @@ internal static class AskApiMode
     /// <param name="Vendor">The module that spells the request, reads the answer and classifies a refusal.</param>
     /// <param name="Conversation">The reviewer's conversation key for the module's cache-routing header; empty sends none.</param>
     /// <param name="ThinkingOn">Whether the model thinks; off only on a module with a switch, and only when a row said so.</param>
-    /// <param name="Stream">Whether the answer is asked for as a stream (todo/PLAN_api_streaming.md).</param>
+    /// <param name="Stream">Whether the answer is asked for as a stream (research/PLAN_api_streaming.md).</param>
     private sealed record Ask(
         string Row,
         string Endpoint,

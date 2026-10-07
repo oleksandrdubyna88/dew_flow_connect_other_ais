@@ -33,7 +33,7 @@ const JUDGED: Readonly<Record<string, (reason: string) => CheckFacts>> = {
 };
 
 /**
- * An answer from a row that asked to stream says whether it came as one (todo/PLAN_api_streaming.md, Story C): a gateway
+ * An answer from a row that asked to stream says whether it came as one (research/PLAN_api_streaming.md, Story C): a gateway
  * that ignored the request, or a coai-mcp too old to read the switch, answers all the same — so "answered" alone would
  * hide that the setting did nothing.
  */

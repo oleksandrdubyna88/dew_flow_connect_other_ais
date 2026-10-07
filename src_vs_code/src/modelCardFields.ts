@@ -124,7 +124,7 @@ export function systemPromptField(vendor: Vendor, id: string, mark = ''): string
     + `<div class="hint"><span data-bytes-for="sp-${id}">${ENCODER.encode(text).length}</span> of ${MAX_PROMPT_BYTES} bytes</div></div>`;
 }
 
-/** An api row's stream switch (todo/PLAN_api_streaming.md) — drawn by the new Settings page's card only. */
+/** An api row's stream switch (research/PLAN_api_streaming.md) — drawn by the new Settings page's card only. */
 export function streamField(vendor: Vendor, id: string, mark = ''): string {
   return `<div class="check-row"><label class="check"><input type="checkbox" data-setting="stream" data-vendor="${id}"${vendor.stream === true ? ' checked' : ''}>`
     + ` stream the answer${mark}</label>${help('apiStream')}</div>`;

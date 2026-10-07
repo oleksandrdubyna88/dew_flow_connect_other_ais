@@ -260,7 +260,7 @@ public sealed class ApiVendorGoldensTests : IDisposable
     }
 
     /// <summary><c>src_mcp/tests/fixtures/api-goldens/&lt;name&gt;</c> in the SOURCE tree, so a recording lands where it is committed.</summary>
-    private static string Fixture(string name)
+    internal static string Fixture(string name)
     {
         var here = new DirectoryInfo(AppContext.BaseDirectory);
         while (here is not null && !Directory.Exists(Path.Combine(here.FullName, "src_mcp", "tests", "fixtures")))

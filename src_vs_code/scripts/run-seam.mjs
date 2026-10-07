@@ -396,7 +396,7 @@ async function apiSettingsSeam() {
 await apiSettingsSeam();
 console.log('  ok  an api row\'s effort, thinking switch and review limit reach the server and come back as what it runs with');
 
-// The stream switch (todo/PLAN_api_streaming.md): written by the extension's own settings writer to a binary that lists
+// The stream switch (research/PLAN_api_streaming.md): written by the extension's own settings writer to a binary that lists
 // `apiStream`, the server must run the row streamed — and held back from one that does not, it must run it as always.
 // Read off the server's effective settings for the row, which it can only report if the field reached it.
 async function apiStreamSeam() {
