@@ -36,7 +36,7 @@ C4Container
   System_Ext(creds, "CredsForDevs", "config entry holding vendor keys")
   System_Ext(api, "OpenAI-compatible API", "a hosted model with no CLI — xAI, Qwen, any /v1 endpoint")
   Rel(main, mcp, "MCP tools over stdio")
-  Rel(mcp, api, "--ask-api child: POST /chat/completions, Bearer key from the vault via ENV")
+  Rel(mcp, api, "--ask-api child: POST /chat/completions (one JSON, or SSE when the row streams), Bearer key from the vault via ENV")
   Rel(mcp, codex, "spawn, read-only sandbox")
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn, approval-mode plan")
@@ -109,6 +109,16 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   from that report alone, and the row carries `effort` / `thinking` / `reviewMinutes` on the wire only when
   they differ from the default — held back for a server known to be older than 0.40.0, which ignores them
   ([module_extension.md](module_extension.md), *An api reviewer's own settings on its card*).
+  *Since [PLAN_api_streaming.md](../todo/PLAN_api_streaming.md) (2026-10-06):* an `api` row may ask for its answer
+  as a STREAM. The switch is drawn only on the NEW Settings page's model card; the row's `stream` crosses
+  `COAI_VENDORS` only to a binary whose `--features` lists `apiStream`, reaches all three launch places (review,
+  consult, question consult) through `ReviewerSettings.WithApi`, and becomes the child's `--stream on`. The child
+  then asks for `stream_options.include_usage`, reads a `text/event-stream` answer event by event (a gateway that
+  answers one JSON is read whole, as before), keeps every ceiling (the assembled answer, one line, one event), and
+  prints the usage line FIRST however the stream ended — the last usage seen, or `notCaptured`. The line carries
+  `"streamed":true` only when a stream was read, so a ✓ Check of the row records `streamed` / `not-streamed` and the
+  card says when the switch did nothing (a gateway that ignored it, or an older coai-mcp reached through
+  `executablePath`).
 - **The settings file now depends on the installed server's version.** An older coai-mcp turns a
   runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
   against xAI's endpoint under its own name. So the extension threads the installed server version

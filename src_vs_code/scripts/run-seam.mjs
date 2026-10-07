@@ -396,6 +396,41 @@ async function apiSettingsSeam() {
 await apiSettingsSeam();
 console.log('  ok  an api row\'s effort, thinking switch and review limit reach the server and come back as what it runs with');
 
+// The stream switch (todo/PLAN_api_streaming.md): written by the extension's own settings writer to a binary that lists
+// `apiStream`, the server must run the row streamed — and held back from one that does not, it must run it as always.
+// Read off the server's effective settings for the row, which it can only report if the field reached it.
+async function apiStreamSeam() {
+  const { serverSettingsJsonWith } = await import('../out/serverSettingsFile.js');
+  const row = {
+    id: 'qwen', runtime: 'api', model: 'qwen3.8-max', enabled: true, plan: true, code: true,
+    baseUrl: 'https://dashscope.example.invalid/compatible-mode/v1', executablePath: '',
+    pricePerMillionIn: 0, pricePerMillionOut: 0, dialect: 'dashscope', stream: true,
+  };
+  const streamedWith = async (features) => {
+    const dir = mkdtempSync(join(tmpdir(), 'coai-seam-stream-'));
+    try {
+      const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
+      writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(DEFAULTS, vendorsFrom([row]), write), 'utf8');
+      const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '' });
+
+      return (answer.providers ?? []).find((one) => one.provider === 'qwen')?.api?.effective?.stream;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const on = await streamedWith(['apiStream']);
+  if (on !== true) {
+    fail(`a row switched to stream did not reach the server streamed — it reports stream ${JSON.stringify(on)}`);
+  }
+  const held = await streamedWith([]);
+  if (held !== false) {
+    fail(`a binary without apiStream was handed the stream anyway — it reports stream ${JSON.stringify(held)}`);
+  }
+}
+
+await apiStreamSeam();
+console.log('  ok  an api row\'s stream switch reaches a server that lists apiStream, and never one that does not');
+
 // The TENTH leg: the model catalog's migration (PLAN_one_model_catalog.md E1.4) — the settings file is the same,
 // byte for byte, before and after, and the binary lists the same reviewers from a multi-instance catalog.
 const catalog = await catalogSeam({ providersIn, fail });

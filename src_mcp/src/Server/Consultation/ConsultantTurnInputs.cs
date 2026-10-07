@@ -47,7 +47,7 @@ internal static class ConsultantTurnInputs
     {
         var api = ApiRowView.Of(row, overrides).Effective;
 
-        return settings with { ReasoningEffort = api.Effort, MaxTokens = api.MaxTokens, ThinkingOn = api.ThinkingOn };
+        return settings.WithApi(api);
     }
 
     private static ReviewerSettings Plain(ProviderSettings row, string model, TimeSpan timeout, string dataDir, VaultKeys keys) => new(row.Provider)

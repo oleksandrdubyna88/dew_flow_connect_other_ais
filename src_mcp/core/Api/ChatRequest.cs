@@ -37,6 +37,8 @@ public static class ChatRequest
     /// <param name="seed">Per-prompt, sent only when the dialect says so.</param>
     /// <param name="reasoningEffort">What the panel configured; the dialect decides what is sent.</param>
     /// <param name="maxTokens">The answer ceiling; zero or less sends none.</param>
+    /// <param name="streamed">Ask for the answer as a stream, and for its usage in it (todo/PLAN_api_streaming.md); off writes
+    /// exactly the body every golden holds.</param>
     /// <exception cref="JsonException">The schema does not parse — refused before any request is
     /// sent, because an unconstrained request buys a full generation and an unusable answer.</exception>
     public static string Body(
@@ -46,7 +48,8 @@ public static class ChatRequest
         string schemaJson,
         int seed,
         string reasoningEffort = "",
-        int maxTokens = 8192)
+        int maxTokens = 8192,
+        bool streamed = false)
     {
         using var validate = JsonDocument.Parse(schemaJson);
 
@@ -55,7 +58,15 @@ public static class ChatRequest
         {
             json.WriteStartObject();
             json.WriteString("model", model);
-            json.WriteBoolean("stream", false);
+            json.WriteBoolean("stream", streamed);
+            if (streamed)
+            {
+                // Without it Alibaba, OpenAI and Ollama send no usage in a stream (research/RESULTS_api_streaming_vendors.md).
+                json.WriteStartObject("stream_options");
+                json.WriteBoolean("include_usage", true);
+                json.WriteEndObject();
+            }
+
             WriteSampling(json, dialect, seed);
             if (maxTokens > 0 && dialect.MaxTokensField.Length > 0)
             {

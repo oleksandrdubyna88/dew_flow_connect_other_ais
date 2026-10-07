@@ -69,6 +69,20 @@ public sealed record ReviewerSettings(string Provider)
     /// </summary>
     public bool ThinkingOn { get; init; } = true;
 
+    /// <summary>
+    /// For an <c>api</c> vendor only: whether the answer is asked for as a stream (todo/PLAN_api_streaming.md). Off by
+    /// default — today's call — and on only when a row said so.
+    /// </summary>
+    public bool Stream { get; init; }
+
+    /// <summary>
+    /// These settings with an api row's effective ones — its effort, ceiling, thinking switch and stream. The ONE way an
+    /// api row's settings reach a launch: the roster, the consultant (and the model card's Check) and the question
+    /// consultant all call it, so a field cannot reach one of them and not the others.
+    /// </summary>
+    public ReviewerSettings WithApi(Core.Api.ApiEffective api) =>
+        this with { ReasoningEffort = api.Effort, MaxTokens = api.MaxTokens, ThinkingOn = api.ThinkingOn, Stream = api.Stream };
+
     /// <summary>Where this machine keeps its own state — sessions, tokens, the rounds log.</summary>
     /// <remarks>
     /// Only <see cref="RemoteRuntime"/> uses it, to find the Team server token file. It is a

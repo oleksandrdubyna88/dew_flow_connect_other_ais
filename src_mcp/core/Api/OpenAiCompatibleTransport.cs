@@ -20,7 +20,7 @@ public sealed class OpenAiCompatibleTransport(ApiDialect dialect)
 
     /// <summary>The body for a turn from a variant of the row — how a module spells a switch the row has no field for.</summary>
     public static string Body(ApiTurn turn, ApiDialect spelledAs) =>
-        ChatRequest.Body(spelledAs, turn.Model, turn.Prompt, turn.SchemaJson, turn.Seed, turn.Effort, turn.MaxTokens);
+        ChatRequest.Body(spelledAs, turn.Model, turn.Prompt, turn.SchemaJson, turn.Seed, turn.Effort, turn.MaxTokens, turn.Stream);
 
     /// <summary>
     /// The conversation key in the header the row names — what routes every turn of one reviewer's

@@ -34,6 +34,8 @@ internal static class FeaturesMode
         "checkSecurity",
         // E2.4: `--check-model` — the consultant's check of any catalog row, read on stdin (D10).
         "checkModel",
+        // A row's `stream`: an api row asks for its answer as a stream (todo/PLAN_api_streaming.md).
+        "apiStream",
         // C2 (the epics 1–3 consultation): a consultant entry's and a question row's `row` — the whole catalog row, read
         // by the reviewer row's parser, its options applied to the consultation.
         "consultantRow",

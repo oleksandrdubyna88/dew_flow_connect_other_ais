@@ -149,6 +149,8 @@ export interface Vendor {
   readonly timeoutMinutes?: number | undefined;
   /** What the chat composer opens with for this instance, ≤ 8 KiB. */
   readonly chatStartingPrompt?: string | undefined;
+  /** An api row asks for its answer as a stream (todo/PLAN_api_streaming.md). Absent = off, today's call. */
+  readonly stream?: boolean | undefined;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */

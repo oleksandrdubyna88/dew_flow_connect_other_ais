@@ -115,6 +115,11 @@ export interface CheckRecord {
   readonly confinement: string;
   readonly answered: boolean;
   readonly markerRead: boolean;
+  /**
+   * For an api row that asked for a stream: `streamed` or `not-streamed` (todo/PLAN_api_streaming.md, Story C). Empty for
+   * every other check — and from a coai-mcp before the field existed.
+   */
+  readonly streamed: string;
   /** A word of {@link CANARY_READINGS}, or empty when the consultant answered nothing. */
   readonly canary: string;
   readonly deniedActions: readonly string[];
@@ -567,6 +572,7 @@ function checkOf(fields: Fields | undefined): CheckRecord | undefined {
     confinement: text(fields['confinement']),
     answered: flag(fields['answered']),
     markerRead: flag(fields['markerRead']),
+    streamed: text(fields['streamed']),
     canary: text(fields['canary']),
     deniedActions: denied.filter((one: unknown): one is string => typeof one === 'string'),
     seconds: count(fields['seconds']),

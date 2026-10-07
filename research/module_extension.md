@@ -11186,3 +11186,18 @@ flowchart LR
   H[hearsRowInstruction] --> P
   P --> S[the text sent, not the transcript]
 ```
+
+## An api row's "stream the answer" switch (2026-10-06, todo/PLAN_api_streaming.md)
+
+New Settings page only (the owner's rule: new controls go on the new page). `catalogFields` keeps `stream` on an api
+row only when it is `true` (a saved `false` reads as a row that never had it); `vendorsWire.streamOnTheWire` sends it
+in `COAI_VENDORS` only to a binary whose `--features` lists `apiStream` (`FEATURES.apiStream`). The model card draws
+the switch for api rows (`modelCardFields.streamField`, help `apiStream`, the "new" tag `model.stream`) and the card's
+skew note when the installed coai-mcp's settled list lacks `apiStream`. The current Settings page draws no stream control
+(a test holds it). The seam (`run-seam.mjs`) carries a row's stream to a binary that lists `apiStream` and checks the
+server reports it effective — and that a binary without it is never handed it.
+
+The check record's `streamed` field (`consultantHealth.CheckRecord`) turns the card's badge into "checked: it answered ·
+streamed" (ok), or "…but NOT streamed — the endpoint or this coai-mcp ignored the switch" (warn)
+(`modelCardWorld.STREAMED`); the landed-check notice says the same (`consultantHealthHost.streamClause`). A row that did
+not ask hears nothing about streams.

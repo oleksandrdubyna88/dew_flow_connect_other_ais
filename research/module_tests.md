@@ -2823,3 +2823,31 @@ unlabelled — with a companion asserting the scan still finds `person_asked`.
 live session shows it being followed. The two-in-flight race is not forced — the atomic spend is the guard, pinned by the
 store's own tests. Cancellation is driven at the service; that the MCP SDK hands the lambda a live token is the SDK's
 contract, not observed here.
+
+## An api row's stream, through the person's flow (2026-10-06, Story D of `todo/PLAN_api_streaming.md`)
+
+The flow: switch "Stream" on for an api row on the new Settings page's model card → save → press ✓ Check → the badge
+says "checked: it answered · streamed". Two halves, joined by the check's durable record:
+
+- **The page half** — `anApiRowCanStream.test.ts` (extension): the switch is drawn only on an api row's card and only on
+  the new page, writes the row's `stream`, crosses `COAI_VENDORS` only to a binary whose `--features` lists `apiStream`;
+  and the card's badge and the landed-check notice read the record's `streamed` (`streamed` → ok, `not-streamed` →
+  warn, absent → nothing about streams).
+- **The real child** — `AStreamedRowIsCheckedTests` (C#): the row as the card hands it, on stdin to `--check-model`,
+  launches the REAL `coai-mcp --ask-api --stream on` (`ServerBinary.Path`) against `ApiEndpointStub` serving SSE, with
+  the key from a `VaultKeys` of the test's own. Three cases: streamed → `"streamed":"streamed"` and the vendor's request
+  carried `"stream":true`; switched on but answered with one JSON → `not-streamed`; switched off → no verdict and
+  `"stream":false`. Teeth: with the shim's `streamed` flag removed, the first case goes red on the missing verdict.
+- **The shim alone** — `AStreamedAskTests`: the stream's outcomes (usage first; an error inside a 200; a cut stream;
+  the JSON fallback) and `ConsultantCheck.StreamVerdict` as a value. The seam leg `apiStreamSeam` (`npm run test:seam`)
+  holds the wire between the two halves.
+
+```bash
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AStreamedRowIsCheckedTests"   # build src + tests first
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AStreamedAskTests"
+cd src_vs_code && npm run compile && node --test out/test/anApiRowCanStream.test.js
+```
+
+**What it does NOT prove.** That a real vendor streams as the stub does — that is the plan's live call (build step 5),
+kept as a fixture when it has run. That a webview click reaches the check: the page and the child meet at the durable
+record, and each half is tested against it, not driven through one editor.

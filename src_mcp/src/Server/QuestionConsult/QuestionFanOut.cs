@@ -314,7 +314,7 @@ public sealed class QuestionFanOut(
 
         var api = ApiRowView.Of(provider, panel.ApiOverrides).Effective;
 
-        return settings with { ReasoningEffort = api.Effort, MaxTokens = api.MaxTokens, ThinkingOn = api.ThinkingOn };
+        return settings.WithApi(api);
     }
 
     // ---------- the invariant, around the disk rows ----------

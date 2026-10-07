@@ -121,7 +121,16 @@ export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf:
     ...promptOnTheWire(v, features),
     ...timeoutOnTheWire(v, features),
     ...cliEffortOnTheWire(v, features),
+    ...streamOnTheWire(v, features),
   };
+}
+
+/**
+ * An api row's stream switch, to a binary that lists `apiStream` (todo/PLAN_api_streaming.md) — and to no other: an older
+ * binary skips the member, so the card would say "streamed" over a call that is not. Only when on.
+ */
+function streamOnTheWire(v: Vendor, features: readonly string[]): { stream?: true } {
+  return v.stream === true && features.includes(FEATURES.apiStream) ? { stream: true } : {};
 }
 
 /**

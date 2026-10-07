@@ -6380,3 +6380,31 @@ the consultant check's ONE paid turn (scratch repository, marker, canary) under 
 (exclusive lock, durable record, `already-checking`, heartbeat, deadlines, scratch removed in `finally`) now serves
 both entries — keyed `model-<id>`, so two rows check apart and neither touches a caller kind's record. A request without
 a row is 65. `--features` lists `checkModel`. The refusal now calls only a codex row's base URL a custom endpoint.
+
+## `--ask-api --stream on` (2026-10-06, todo/PLAN_api_streaming.md)
+
+`AskApiMode` reads `--stream on` (a key WITH a value — `Program.Flags` drops a bare flag) into the request's
+`ApiTurn.Stream`. The response branch is chosen by what was ANSWERED: a successful `text/event-stream` is read as a stream;
+a `200 application/json` (a gateway that ignored `stream`) and every refusal are read whole, as before.
+
+`StreamedBody` reads the stream line by line with the deadline's token on every read, decodes UTF-8 as a stream, refuses
+one line past `MaxStreamLineChars` (1 Mi) — and one EVENT whose `data:` lines together pass it (`SseEvents.PendingChars`;
+the code round: short lines that no blank line ever closes would otherwise fill memory below every per-line limit) —
+and caps the ASSEMBLED answer at `MaxAnswerBytes` — not the raw stream, which is several times the answer. It stops at
+`[DONE]` without waiting for the body to end, so a proxy that holds the connection open or keeps sending keep-alives
+does not turn a whole answer into a timeout. It tells a dropped connection (`IOException` after the headers) and a
+passed deadline apart, each keeping what had arrived.
+
+**Usage first, then the exit, however the stream ended:** the usage line is printed before anything else is decided — the
+last usage the stream carried, or `notCaptured`, never a zero for a generation the vendor billed. Then: the answer
+judged as any other (content, cut, out file); a failure inside the 200 quoted (exit 70 — the retry ladder reads the
+vendor's words through `RateLimit.Hit`); a cut stream or a passed deadline exit 69 (`EndedBeforeAnAnswerExit`) saying
+how many characters of answer and of reasoning had arrived.
+
+`FeaturesMode` lists `apiStream`; the extension sends a row's `stream` only to a binary that does.
+
+**Did it stream? (Story C.)** The usage line carries `"streamed":true` only when a stream was READ (`UsageLine(usage,
+streamed)`). A gateway that answered one JSON, and an older coai-mcp reached through a row's `executablePath` that ignores
+`--stream on`, both write none. A ✓ Check of an api row with its switch on reads that field from the launches' stdout
+(`ConsultantCheck.StreamVerdict`) and records `streamed` or `not-streamed` in `ConsultCheckRecord.Streamed` — empty for
+every other check — so the card can say that the setting did nothing.
