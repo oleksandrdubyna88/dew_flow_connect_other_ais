@@ -2891,3 +2891,33 @@ Two halves, joined by the settings file:
 
 **What it does NOT prove.** That the vendor actually serves the fast tier: codex reports no tier in its output, and
 claude needs usage credits on this account (research/RESULTS_fast_mode_measured_2026-10-07.md).
+
+## An older build's edit after the move is a revision (2026-10-07, R7 of `todo/PLAN_one_model_catalog.md` epic 5)
+
+The flow: a chat preset moves into the catalog → an older build edits the preset → this build reads it → Chat (the
+new Settings page) shows the row as it is and the edited values → the person presses *Use the edited values* or *Keep
+the row* → the choice is in the record and holds across a reload. Two files, pure parts and the page RUN:
+
+- **The move and the conflict** — `anOlderBuildsEditIsARevision.test.ts`: the field list DERIVED — every row field a
+  preset's own fields reach, observed by moving variants — equals `COPIED_FIELDS`; a new entry carries the snapshot; an
+  edit of EACH copied field (vaultKeyName aside: it is the preset id, the match key) makes no second row, leaves the row
+  untouched and raises a conflict naming that field; each choice (the row written before the record for *use*), the
+  conflict gone after the file is read back as JSON, and a later different edit raised again; a 5-field entry
+  snapshotted from its row (an on-disk edit raised, an unedited preset not, the run writing it with no new row, and an
+  owed remap written in the same run); a deleted row or preset raising nothing and throwing nothing; epic 4's two-entry
+  record read NEWEST by the move, the conflict and `movedTo`; the chat never listing the edited preset beside its row;
+  a revision `unchanged` in the migration and the restore still clearing the record.
+- **The page and the host** — `aRevisionShowsOnChat.test.ts`: the message read like its neighbours (junk → `ignore`);
+  the assembled Settings page drawn from a settings file through `chatSettingsFrom`, run against the DOM shim, the
+  block drawn with both values and both buttons; each button posting exactly its own numbered `chatPresets` message and
+  nothing else; that message carried through `presetEdit` → `revisionWrites` → the file → a reload, the block gone.
+- Changed with it: `chatPresetMove.test.ts` (a same-id edit is no longer a second row — the old "positional id that
+  shifted" test), `catalogChatStep.test.ts` (epic 4's two-entry record written by hand, since no build writes one now).
+- **Teeth** (each mutation compiled, went red, was restored): a field added to `COPIED_FIELDS` that the move does not
+  copy; a choice that writes without a conflict; the record dropped from `RESTORE_ORDER`; a snapshot reported as
+  changed on every run; every preset reported as edited.
+
+**What it does NOT prove.** The host's VS Code binding — `applyRevision` reading through `chatRead`/`userLayer` and
+writing through `saveSetting` inside `inCatalogTurn` — is pinned by reading its source, not run (no unit test loads
+`vscode`); a refused write's notice is not exercised; and no test drives a real older build against a real settings
+file.

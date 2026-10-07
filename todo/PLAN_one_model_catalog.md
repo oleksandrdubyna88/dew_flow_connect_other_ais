@@ -998,6 +998,28 @@ harness); and `roleEdit`, `presetEdit`, `roleBlock`, a role prompt's block and t
 smaller functions, because the new modules are held to `complexity: 4` and the CI ratchet refuses a suppression in a new
 file — output compared with the previous build and identical.
 
+**Progress, 2026-10-07: prerequisite (a), R7, is built on branch `feat/catalog-e5-r7`** (not pushed, no PR yet). The
+snapshot is `MovedPreset.copied` over `chatPresetMove.COPIED_FIELDS`, which `rowOf` is now built from (`copiedOf`);
+the match is the id, the newest entry (`entryOf`); an entry without a snapshot takes one from its row (`snapshotted`,
+written by the migration); the conflict and both choices are `chatPresetRevision.ts` (pure), the page block
+`chatTabEmbed.conflictBlock`, the message `presetEdit`'s `revision`, the host `chatPresetsHost.applyRevision`; `movedTo`
+takes the newest entry (research/module_extension.md, "An older build's edit after the move is a revision"). Red first,
+each with the real symptom: a name edit made `chat-p-1-2` ("the edit made a second row"); a CLI-path edit raised no
+conflict (`[]`); a new entry had no `copied` (`undefined`); both choices wrote nothing (`[]` against
+`['vendors','chatPresetsMoved']` / `['chatPresetsMoved']`); a 5-field entry raised nothing for an on-disk edit; a deleted
+row came back as a second row; `movedTo('p-1')` gave `chat-p-1`, not the newest `chat-p-1-2`; the chat listed the
+edited preset `p-1` beside `chat-p-1`; a 5-field record owing a remap got no snapshot; on the page `presetEdit` read the
+message as `ignore`, no conflict block was drawn, and the source pin found no `revision` in the host. Deviations and
+consequences: `wasMoved` is the id alone (was a fingerprint), so a positional `preset-N` that shifted onto another preset
+is now raised as a conflict instead of moved into a row of its own (`chatPresetMove.test.ts` changed accordingly), and
+the chat never lists an edited preset beside its row; a choice also updates the entry's `runtime/model/name`, so an older
+build reading the record does not move the preset again; *Use the edited values* changes only the fields the edit
+changed (a person's own later edit of another field on Models is kept); a run that only writes snapshots still writes
+the remap an interrupted run owed (`opensOn` falls back to `remapOf`); `vaultKeyName` is in the snapshot (the move
+copies it) but no preset edit can change it — it is the id the entry is matched by. Not done: the host's VS Code binding
+is pinned by source reading, not run; `catalogChatStep.sameMove` (a side's inherited chat model) still compares
+fingerprints.
+
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).

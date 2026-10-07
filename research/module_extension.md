@@ -11082,10 +11082,11 @@ Each chat model preset becomes its own catalog row ticked Chat, and the chat rea
   a row: id `chat-<normalised id>` (or `chat-model`), `uses: ['chat']`, its name, launch fields and starting text
   (`chatStartingPrompt`), `vaultKeyName` = the old id when that id is already clean, and an explicit `remoteVendor` for
   a Team-server preset. It is never joined to an existing row.
-- **The record** `coai.chatPresetsMoved` (`{ presetId, runtime, model, name, rowId }`, declared, overlaid per side) is
-  the identity: a run skips a preset the record holds with the same fingerprint (`wasMoved`), so a deleted row stays
-  deleted and a positional `preset-N` that shifted is moved as the new preset it is. `chatModelPresets` itself is
-  never written by the move (an older build still reads it until E5).
+- **The record** `coai.chatPresetsMoved` (`{ presetId, runtime, model, name, rowId, copied? }`, declared, overlaid per
+  side) is the identity: a run skips a preset the record holds by its id (`wasMoved`, since R7 — it was a fingerprint of
+  id, runtime, model and name), so a deleted row stays deleted. An edit of the preset after the move is a revision,
+  raised on Chat (next section). `chatModelPresets` itself is never written by the move (an older build still reads it
+  until E5).
 - **The model the chat opens on:** the run that moves the MAIN preset writes `coai.chatModel` = its row and
   `coai.chatModelName` = its model; otherwise a saved `chatModel` naming a moved preset is remapped to its row. Both
   are per side (`OVERLAID_SETTINGS`) and backed up with the record. A side that keeps no `vendors` of its own is left
@@ -11117,6 +11118,55 @@ flowchart LR
   M -->|movedTo| Q[resumedPick]
   K[ConversationRecord.providerId] --> Q
   Q --> T[a restored conversation]
+```
+
+## An older build's edit after the move is a revision, raised on Chat (2026-10-07, PLAN_one_model_catalog.md E5 prerequisite (a), R7)
+
+An older build still reads and writes `coai.chatModelPresets`. Before R7 its edit of a moved preset's name, model or
+runtime made a second row (`chat-<id>-2`) with a second record entry, and an edit of anything else (CLI path, endpoint,
+starting text, Team server, remote vendor) was silently `unchanged` — Chat kept the old values.
+
+- **The snapshot.** A record entry gains an optional `copied`: every field the move copies, under the row's names —
+  `chatPresetMove.COPIED_FIELDS` (`name, runtime, model, baseUrl, executablePath, chatStartingPrompt, vaultKeyName,
+  teamServerId, remoteVendor`). `rowOf` is built from `copiedOf(preset)`, so the row and the snapshot cannot list
+  different fields. `movedRecordFrom` keeps a 5-field entry; a `copied` that is not an object is dropped (never the
+  entry), and only its known string fields are read.
+- **Matched by id, the NEWEST entry** (`chatPresetMove.entryOf`). `wasMoved` is the id alone, so a preset the record
+  holds is never moved again, edited or not, and the chat never lists the edited preset beside its row (`chatModelsOf`).
+  A positional `preset-N` that shifted onto another preset is raised the same way (it used to be moved as a new
+  preset). `chatCatalogModels.movedTo` (a legacy conversation id) takes the newest too, matching
+  `catalogChatStep.recordedEntryOf` — the two disagreed on a pair epic 4's build wrote.
+- **An entry with no snapshot** (written before R7) takes one from its ROW on disk (`snapshotted`, in `chatMove`, so the
+  migration writes it once — a `chatPresetsMoved` write, which also carries any remap an interrupted run still owed). A
+  missing row or a missing preset leaves the entry as it is and raises nothing. Known cost: a row edited on Models can be
+  raised once; *Keep the row* ends it.
+- **The conflict** (`chatPresetRevision.presetConflicts`, pure): the preset compared with its in-force entry's snapshot,
+  never with the live row; raised only while the row exists. It lists each changed field with the row's value and the
+  edited value. A revision changes nothing in the migration (outcome `unchanged`); the row keeps working.
+- **On Chat** (`chatTabEmbed.conflictBlock`, beside the stranded pick): the row's name, a table of the changed fields
+  (on Models now / the edited values) and two buttons, `data-chp-revision="use" | "keep"` in a block named by
+  `data-chp-conflict="<presetId>"`. Each posts `{ type: 'chatPresets', edit: { type: 'revision', id, choice } }`,
+  numbered; `chatPresetsMessages.presetEdit` reads it as `{ kind: 'revision', presetId, choice }` (anything else is
+  `ignore`). `ChatSettings.conflicts` is read by `chatSettingsFrom` through `chatConflictsReading`, with the models.
+- **The choice** (`chatPresetRevision.revisionWrites`; host `chatPresetsHost.applyRevision`, in one `inCatalogTurn`,
+  through `saveSetting` on this side): *Use the edited values* writes the row first (each changed field takes the
+  preset's value; a cleared one is removed), then the record; *Keep the row* writes the record only. Either way the
+  in-force entry takes the preset's whole state — `copied` and the `runtime/model/name` fingerprint, so an older build
+  reading the record does not move it again. Durable: it lives in the record, so a reload or restart shows no conflict,
+  and a later, DIFFERENT edit raises it again. A choice for a preset with no conflict writes nothing. The presets are
+  never written (`noSecondPresetStore.test.ts`). The restore (`restoreLayer`) still clears the record.
+
+```mermaid
+flowchart LR
+  OB[older build edits coai.chatModelPresets] --> P[preset]
+  R[coai.chatPresetsMoved: newest entry, copied] --> C{preset = snapshot?}
+  P --> C
+  C -->|yes| N[nothing]
+  C -->|no, row exists| X[conflict on Chat]
+  X -->|Use the edited values| W1[row takes edited fields, then record takes preset]
+  X -->|Keep the row| W2[record takes preset]
+  W1 --> R
+  W2 --> R
 ```
 
 ## The new Settings page — Chat (2026-10-06, PLAN_one_model_catalog.md E4.6b)
