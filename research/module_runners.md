@@ -1238,7 +1238,7 @@ carries.
   `Usage` (cached count and markers included), `interrupted` when the turn threw. `QuestionResolution.For` and
   `RowAdmission.Admitted.Runtime` are typed `IConsultantRuntime`, which every arm already returned, so a row has no other
   road. Before that a question row launched once, so an antigravity `question-disk` row whose
-  `run_command` was denied ended "answered nothing" (empty 7 of 7 measured, and 6 of 6 answered on Windows when continued —
+  `run_command` was denied ended "answered nothing" (empty 11 of 11 measured; continued, 6 of 6 answered on Windows and 0 of 3 in WSL, by the probe —
   [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md)). `ConsultFailures.EmptyOf` is the
   silent launch's sentence WITHOUT the adapter's refusal reading, for a turn that was never continued.
 - **Billing.** `ConsultationUsage.OfTwoLaunches(cumulative, first, second)`: antigravity reports usage per
