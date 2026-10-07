@@ -1083,6 +1083,16 @@ Three seams carry S4, and only one of them gained anything on the wire.
 Nothing else crossed: the decisions the tab makes (a refused pair disabled, a flagged pair waiting for its tick, a
 disk root refused) are the server's own refusals said first, from the same capability table and the same rules.
 
+### A question row's turn is the consultation's turn (2026-10-07, `research/PLAN_a_question_row_on_agy_is_continued_once.md`)
+
+Inside `coai-mcp`, not across a container: the server's `QuestionRowLaunch` now takes each CLI turn through the
+runners' `ConsultantTurn.RunAsync` — the stuck consultant's one-or-two — instead of a single `LaunchOnceAsync`, so a
+silent antigravity row (its `run_command` auto-denied headless) is continued once in the same conversation. The fan-out
+hands the row its own snapshot comparison as the tree check `ConsultantTurn` asks before a follow-up. Three callers of
+`ConsultantTurn` now exist — the consultation, the consultant card's ✓ Check, and a question row — and a change to its
+conditions changes all three ([module_runners.md](module_runners.md), [module_server.md](module_server.md)). Nothing
+reaches the extension: the record, the reply and the ledger keep their shapes; a turn cut short is written `interrupted`.
+
 ### The reviewer list becomes the model catalog, and the wire does not move (2026-10-04, E1 of `todo/PLAN_one_model_catalog.md`)
 
 `coai.vendors` is now the one list of model INSTANCES: a row gains `name`, `uses` (the non-review features it may

@@ -7,12 +7,14 @@ namespace CoaiMcp.Server;
 /// <summary>What one row came to before any launch: admitted with everything its launch reads, or refused with a word and a sentence.</summary>
 public abstract record RowAdmission
 {
+    /// <param name="Runtime">A consultant runtime — every row resolves to one (<see cref="QuestionResolution.For"/>), which is
+    /// what lets its turn go through <see cref="ConsultantTurn"/> with no other road to keep.</param>
     /// <param name="Plan">The planner's fragments for runtime × grant — D13's flag rides on it.</param>
     public sealed record Admitted(
         QuestionRow Row,
         QuestionPromptDefinition Prompt,
         ProviderSettings Provider,
-        IAnsweringRuntime Runtime,
+        IConsultantRuntime Runtime,
         Confinement.Planned Plan) : RowAdmission;
 
     /// <param name="Status"><see cref="RowOutcomes.Blocked"/> for a pair that cannot run (A3), <see cref="RowOutcomes.Disabled"/> for a row that is off.</param>
@@ -83,7 +85,7 @@ public static class QuestionAdmission
     /// read this machine whatever it is told — is admitted with its flag. There is nothing to acknowledge: codex has no
     /// setting that limits what it reads, so a tick would confine nothing. The flag travels with every answer.
     /// </summary>
-    private static RowAdmission.Admitted Planned(QuestionRow row, QuestionPromptDefinition prompt, ProviderSettings provider, IAnsweringRuntime runtime, Confinement.Planned plan) =>
+    private static RowAdmission.Admitted Planned(QuestionRow row, QuestionPromptDefinition prompt, ProviderSettings provider, IConsultantRuntime runtime, Confinement.Planned plan) =>
         new(row, prompt, provider, runtime, plan);
 
     /// <summary>The grant a prompt's capability is: the roots travel with <c>disk</c> alone (<see cref="CapabilityGrant"/>).</summary>

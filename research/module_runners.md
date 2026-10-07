@@ -1231,6 +1231,16 @@ carries.
   (`Breached` is that list being non-empty — the service reports a breach from THESE changes and takes no
   second snapshot; any other turn gets the final comparison), `SurvivingHandle` (the last launch that named
   one — a killed follow-up does not lose the conversation) and `TurnUsage`.
+- **Three callers since 2026-10-07**: the stuck consultation, the consultant card's ✓ Check, and a question row
+  (`QuestionRowLaunch.TurnAsync`, `research/PLAN_a_question_row_on_agy_is_continued_once.md`) — whose `changesSoFar` is the
+  question fan-out's comparison over its watched disk roots, and which writes ONE ledger line per turn (not per launch;
+  kind `question`, role `question`, stage `Question`) at `UsageOf` over the launches `landed` handed back, its whole
+  `Usage` (cached count and markers included), `interrupted` when the turn threw. `QuestionResolution.For` and
+  `RowAdmission.Admitted.Runtime` are typed `IConsultantRuntime`, which every arm already returned, so a row has no other
+  road. Before that a question row launched once, so an antigravity `question-disk` row whose
+  `run_command` was denied ended "answered nothing" (empty 7 of 7 measured, and 6 of 6 answered on Windows when continued —
+  [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md)). `ConsultFailures.EmptyOf` is the
+  silent launch's sentence WITHOUT the adapter's refusal reading, for a turn that was never continued.
 - **Billing.** `ConsultationUsage.OfTwoLaunches(cumulative, first, second)`: antigravity reports usage per
   CONVERSATION, so a two-launch turn is the field-wise MAXIMUM of the two reports (a timed-out follow-up
   reports `Usage.None` and must not erase the first launch's tokens); any other vendor, the sum. The

@@ -65,7 +65,15 @@ public static class ConsultFailures
     /// nothing, while its stderr said why (epic 2's review, the gate's finding 8).</para>
     /// </remarks>
     private static ConsultFailure Silent(IConsultantRuntime consultant, ReviewerLaunch final) =>
-        consultant.SilentFailure(final, new ConsultFailure.Empty(Safe(ReviewerExecutor.Complaint(EvidenceOf(final)))));
+        consultant.SilentFailure(final, EmptyOf(final));
+
+    /// <summary>
+    /// A clean exit with nothing in it, said with the CLI's own last word and NOT read for a refusal — what a launch that
+    /// was never continued is, because an adapter's refusal sentence (agy's "did not answer even when told") claims a
+    /// follow-up that did not happen (research/PLAN_a_question_row_on_agy_is_continued_once.md, plan round).
+    /// </summary>
+    public static ConsultFailure.Empty EmptyOf(ReviewerLaunch final) =>
+        new(Safe(ReviewerExecutor.Complaint(EvidenceOf(final))));
 
     /// <summary>A launch that ended on a failure of its own — the outcome the executor already named.</summary>
     private static ConsultFailure Ended(ReviewerOutcome terminal, ConsultFailure killedAs, string runtime, bool? linux) => terminal switch
