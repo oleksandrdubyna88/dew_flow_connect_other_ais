@@ -118,10 +118,25 @@ public static class QuestionRowResolver
 {
     public static ResolvedQuestionRow Resolve(QuestionRow row, IReadOnlyList<ProviderSettings> reviewers)
     {
-        var choice = new ConsultantChoice(row.Vendor, row.Model, row.Runtime, row.BaseUrl, row.ExecutablePath);
+        var choice = new ConsultantChoice(row.Vendor, row.Model, row.Runtime, row.BaseUrl, row.ExecutablePath, row.Row);
+
+        // The catalog row the extension wrote beside it (C2): read by the reviewer row's parser, refused by name when it
+        // does not read — never a quiet launch without the options the person set.
+        return ConsultantResolver.OptionsOf(choice) is { } options
+            ? Resolved(row, choice, options, reviewers)
+            : new ResolvedQuestionRow.Unavailable(
+                $"the row '{row.Id}' carries model settings that could not be read — open its model on the Models tab and save "
+                + $"it again, or switch the row off, in {QuestionAdmission.Section}");
+    }
+
+    private static ResolvedQuestionRow Resolved(QuestionRow row, ConsultantChoice choice, ProviderSettings options, IReadOnlyList<ProviderSettings> reviewers)
+    {
         if (choice.IsDefinition)
         {
-            return new ResolvedQuestionRow.Vendor(ConsultantResolver.AsProvider(choice) with { VaultKey = row.Key });
+            return new ResolvedQuestionRow.Vendor(ConsultantResolver.WithOptions(ConsultantResolver.AsProvider(choice), options) with
+            {
+                VaultKey = row.Key.Length > 0 ? row.Key : options.VaultKey,
+            });
         }
 
         if (reviewers.FirstOrDefault(r => ConsultantResolver.SameId(r.Provider, row.Vendor)) is { } reviewer)

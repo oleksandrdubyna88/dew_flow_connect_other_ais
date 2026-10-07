@@ -114,6 +114,12 @@ export interface ChatLaunch {
    * that day, and each adapter says which it uses.</p>
    */
   readonly access: ChatAccess;
+  /**
+   * The row's effort, when the server would send this runtime one (PLAN_one_model_catalog.md E4.6c) — see
+   * `cliChatLaunch.chatLaunchFor`. Optional because only claude's adapter uses it; codex and agy are handed none, by
+   * the server's own rule (`RosterBuilder.EffortFor`), and absent or empty sends no flag.
+   */
+  readonly effort?: string;
 }
 
 /** What a chat's model may do: answer from text, or act on the computer. See `ChatLaunch.access`. */

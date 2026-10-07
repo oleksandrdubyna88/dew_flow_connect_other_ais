@@ -354,7 +354,8 @@ test('the first question after a restore carries the whole transcript', () => {
   // And again in story A4, when a restored thread started sharing one transcript array with its
   // "already saved" mark so that a reload writes nothing.
   // And again in story C3, when a restored conversation could be bound to the tab it belongs to.
-  assert.match(restore.slice(0, 6_400), /carry: carriedFrom\(saved\.messages,/,
+  // And in E4.6 of PLAN_one_model_catalog.md, when a restored thread started marking the row it opens on as saved.
+  assert.match(restore.slice(0, 6_800), /carry: carriedFrom\(saved\.messages,/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
 
@@ -368,7 +369,7 @@ test('a push that changed nothing writes nothing', () => {
 
   assert.match(
     command,
-    /if \(thread\.savedMessages === thread\.messages\s*\n\s*&& thread\.savedModelId === thread\.modelId\s*\n\s*&& thread\.savedCarryFrom === thread\.carryFrom\s*\n\s*&& thread\.savedAccess === thread\.access\) \{\s*\n\s*return;/,
+    /if \(thread\.savedMessages === thread\.messages\s*\n\s*&& thread\.savedModelId === thread\.modelId\s*\n\s*&& thread\.savedCarryFrom === thread\.carryFrom\s*\n\s*&& thread\.savedAccess === thread\.access\s*\n\s*&& thread\.savedProviderId === thread\.providerId\) \{\s*\n\s*return;/,
     'every state push writes the whole store again, transcripts and all',
   );
   assert.match(command, /thread\.savedMessages = thread\.messages;/, 'nothing records what was written');
@@ -381,6 +382,11 @@ test('a push that changed nothing writes nothing', () => {
   // nor the model, and a guard blind to it would lose the choice at the next reload.
   assert.match(command, /thread\.savedAccess = thread\.access;/,
     'ticking agent mode alone is not written down');
+  // AND THE ROW (PLAN_one_model_catalog.md E4.6a): the record keeps the row a conversation is spoken to, and switching
+  // between two rows that offer one model name moves neither the transcript nor `modelId` — a guard blind to it resumed
+  // the conversation on the old row after a reload. (our own reviewer, E4.6.)
+  assert.match(command, /&& thread\.savedProviderId === thread\.providerId/u, 'a switch of row alone is not compared');
+  assert.match(command, /thread\.savedProviderId = thread\.providerId;/u, 'a switch of row alone is not written down');
 });
 
 test('a question refused by a dead conversation comes back to the composer', () => {

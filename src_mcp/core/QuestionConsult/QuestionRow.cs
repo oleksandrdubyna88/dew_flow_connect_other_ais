@@ -16,6 +16,9 @@ namespace CoaiMcp.Core.QuestionConsult;
 /// <param name="Key">The vault entry an <c>api</c> row's key is filed under, when not its vendor id (S3.6). A name, never a value.</param>
 /// <param name="Prompt">The id of the ONE base prompt this row runs — the same prompt may sit on several rows.</param>
 /// <param name="Enabled">Whether the row runs. At most <see cref="QuestionRows.MaxActive"/> rows may be on.</param>
+/// <param name="Row">The catalog row this row refers to, as the extension wrote it — its options (effort, system prompt,
+/// timeout, price) for the launch (todo/PLAN_one_model_catalog.md, C2). Raw JSON, read where <c>ProviderSettings</c> is
+/// known; empty when the row carries none.</param>
 public sealed record QuestionRow(
     string Id,
     string Vendor,
@@ -25,7 +28,8 @@ public sealed record QuestionRow(
     string ExecutablePath,
     string Key,
     string Prompt,
-    bool Enabled);
+    bool Enabled,
+    string Row = "");
 
 /// <summary>What <c>COAI_QCONSULT_ROWS</c> turned out to be: the rows, the complaints, and whether it could be read at all.</summary>
 /// <param name="Unreadable">The whole value could not be parsed — the tool refuses by name rather than running nobody.</param>
@@ -48,7 +52,8 @@ internal sealed record QuestionRowDto(
     string? ExecutablePath = null,
     string? Key = null,
     string? Prompt = null,
-    bool? Enabled = null);
+    bool? Enabled = null,
+    JsonElement? Row = null);
 
 /// <summary>
 /// The parser of <c>COAI_QCONSULT_ROWS</c>: a JSON array of rows, at most <see cref="MaxActive"/> of them on.
@@ -145,8 +150,13 @@ public static partial class QuestionRows
             dto.ExecutablePath?.Trim() ?? string.Empty,
             dto.Key?.Trim().ToLowerInvariant() ?? string.Empty,
             prompt,
-            Enabled: dto.Enabled != false), string.Empty);
+            Enabled: dto.Enabled != false,
+            Row: RowText(dto.Row)), string.Empty);
     }
+
+    /// <summary>The catalog row as it was written, for the resolver to read — empty when the row carries none.</summary>
+    private static string RowText(JsonElement? row) =>
+        row is { ValueKind: not (JsonValueKind.Undefined or JsonValueKind.Null) } written ? written.GetRawText() : string.Empty;
 
     /// <summary>The seventh active row and after are switched off, and the complaint names them.</summary>
     private static List<QuestionRow> Capped(List<QuestionRow> rows, List<string> complaints)

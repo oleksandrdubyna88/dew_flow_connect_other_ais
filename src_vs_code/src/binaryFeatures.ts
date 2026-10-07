@@ -32,6 +32,8 @@ export const FEATURES = {
   checkSecurity: 'checkSecurity',
   /** An api row's `stream`: its answer asked for as a stream (todo/PLAN_api_streaming.md). */
   apiStream: 'apiStream',
+  /** C2 (the epics 1–3 consultation): a consultant entry's and a question row's `row` — the whole catalog row. */
+  consultantRow: 'consultantRow',
 } as const;
 
 export interface BinaryFeatures {

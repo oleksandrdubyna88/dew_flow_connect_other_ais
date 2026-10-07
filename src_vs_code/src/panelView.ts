@@ -30,6 +30,11 @@ import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
 import { NEW_PROMPT_SENTINEL, securityLaneBody } from './securityLaneView';
+import type { SecurityTryResult } from './securityTry';
+import type { ClientRegistration } from './setupTab';
+import type { MoveRecord } from './dataMove';
+import type { RolesEmbedState } from './rolesEmbed';
+import type { CommandsEmbedState } from './commandsEmbed';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
@@ -42,7 +47,7 @@ import {
   SLOT_LABELS,
   commandModelsSkewNote,
 } from './commandModels';
-import { chatProvidersFromPresets } from './chatModels';
+import { chatProvidersFromPresets, type ChatProviderList } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
@@ -259,6 +264,21 @@ export interface PanelState {
    * page tells apart from an empty list so a cold start never reads as an older binary (PLAN_one_model_catalog.md E3.1).
    */
   readonly serverFeatures?: readonly string[] | undefined;
+  /**
+   * EVERY catalog row, the ones that review nothing included — `vendors` is the current page's reviewers only
+   * (`shownOnTheOldPage`). The new page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
+   */
+  readonly catalogRows?: readonly Vendor[];
+  /** What the installed binary last said about a sample on the new page's Security lane tab (`securityTry.ts`, E4.2). */
+  readonly securityTry?: SecurityTryResult | undefined;
+  /** Whether each MCP client registers coai, read from its own config file (`setupTab.ts`, E4.5). */
+  readonly mcpClients?: readonly ClientRegistration[] | undefined;
+  /** The data folder's last move, as this profile remembers it across a reload (`coai.lastDataMove`, E4.5). */
+  readonly lastDataMove?: MoveRecord | undefined;
+  /** The review roles as the new page's Roles & prompts draws them (`rolesEmbed.ts`, E4.3) — read only while it can be shown. */
+  readonly roles?: RolesEmbedState | undefined;
+  /** The gate's commands as the new page's Commands draws them (`commandsEmbed.ts`, E4.4) — read only while it can be shown. */
+  readonly commands?: CommandsEmbedState | undefined;
   /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
@@ -477,7 +497,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // After the stuck consultant, because the two are the same idea for two moments: there an AI that is STUCK asks
   // one vendor, here an AI with a QUESTION asks every row before it asks you (todo/PLAN_question_consultant.md, S4).
   { id: 'questionconsultant', title: 'Question consultant', surface: 'settings', body: (state) => questionConsultantSection(state) },
-  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneBody(state.settings.securityLane, state.vendors, state.server.kind === 'absent' ? '' : state.server.version, { text: state.securityPromptText ?? {}, promptsDir: state.securityPromptDir ?? '' }) },
+  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneSection(state, state.vendors) },
   { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
   { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
   { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
@@ -487,8 +507,13 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   { id: 'server', title: 'MCP server', surface: 'settings', body: (state) => serverBody(state) },
 ];
 
-/** The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in the sidebar, under Active consultations. */
-function consultantSection(state: PanelState): string {
+/**
+ * The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in the sidebar, under
+ * Active consultations.
+ *
+ * @param callerRows the new page's picks from the catalog (E4.2), drawn where each caller's definition is; '' for the current page
+ */
+export function consultantSection(state: PanelState, callerRows = ''): string {
   return consultantSkew(state)
     + vaultKeySplit(state)
     // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
@@ -513,16 +538,37 @@ function consultantSection(state: PanelState): string {
       palette: vendorPalette(state.vendors.map((v) => v.id)),
       // Each row's health block: the server's facts, this side's Check, other sides read-only (epic 5).
       health: state.consultantHealth,
-    })
+    }, callerRows)
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);
 }
 
+/**
+ * The Security lane tab.
+ *
+ * @param offered the rows a pair may name — the current page's reviewers, or the new page's rows ticked Security lane (E4.2)
+ * @param allRows every catalog row, which the new page names a stranded pair from; the current page reads `offered`
+ */
+export function securityLaneSection(state: PanelState, offered: readonly Vendor[], allRows: readonly Vendor[] = offered): string {
+  return securityLaneBody(state.settings.securityLane, offered, serverVersionOf(state), securityFilesOf(state), allRows);
+}
+
+function serverVersionOf(state: PanelState): string {
+  return state.server.kind === 'absent' ? '' : state.server.version;
+}
+
+function securityFilesOf(state: PanelState): { text: Readonly<Record<string, SecurityTextState>>; promptsDir: string } {
+  return { text: state.securityPromptText ?? {}, promptsDir: state.securityPromptDir ?? '' };
+}
+
 /** The Question consultant tab: the rows, the prompts, the folders, the mode and the limits. Its live questions are in the sidebar. */
-function questionConsultantSection(state: PanelState): string {
+export function questionConsultantSection(state: PanelState, pickFrom?: readonly Vendor[]): string {
   return qconsultBody(state.settings.qconsult, {
-    vendors: state.vendors,
+    // EVERY catalog row, not the current page's reviewers: since epic 1 a question row refers to an `ask-<id>` row that
+    // reviews nothing, and resolved against the reviewers it read as having no runtime and could not be switched on.
+    vendors: state.catalogRows ?? state.vendors,
+    pickFrom,
     codexModels: state.codexModels,
     agyModels: state.agyModels,
     claudeProbe: state.claudeProbe,
@@ -869,7 +915,7 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT, NEW_PROMPT_SENTINEL])}
 }
 
 /** What the section shows when nothing has been configured — the reader's own fallbacks. */
-const DEFAULT_CHAT: ChatSettings = chatSettingsFrom(() => undefined);
+export const DEFAULT_CHAT: ChatSettings = chatSettingsFrom(() => undefined);
 
 /**
  * The option for a model the settings NAME and the chat cannot use.
@@ -905,18 +951,7 @@ function strandedOption(chosen: string, offered: readonly { readonly id: string 
  * conversation itself picks from — one source, so the picker and the tab cannot disagree.</p>
  */
 function chatBody(chat: ChatSettings, state: PanelState): string {
-  // The panel's OWN catalog, which is the half `PLAN_provider_then_model.md` left open: three of the
-  // four model sources are FETCHED rather than read — the codex and agy CLIs' own lists and a Team
-  // server's allowlist — and all three are already in hand HERE. The chat command builds the same
-  // list with them empty, so a row whose models must be discovered offers only what it is set to.
-  // A `local` row cannot chat at all (`canChat`), so the engine that would name its models is never
-  // consulted: passing one would be passing a value nothing on this path can read.
-  const list = chatProvidersFromPresets(chat.models, {
-    discoveredCodex: state.codexModels,
-    discoveredAgy: state.agyModels,
-    localEngine: undefined,
-    teamServers: state.teamServers ?? [],
-  });
+  const list = chatProviderListFor(chat, state);
   // The provider that ANSWERS: the saved row, or — only when nothing is saved — the first that can.
   // A saved row that no longer resolves must NOT fall through to `providers[0]`: the select above
   // strands it while this one fills with an unrelated provider's models, and the two controls then
@@ -927,33 +962,7 @@ function chatBody(chat: ChatSettings, state: PanelState): string {
   const ownModel = chat.models.find((one) => one.id === chosen?.id)?.model ?? '';
   const refusals = list.refused.map((row) => row.reason);
 
-  return `<div class="field">
-  ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
-  <select id="chatPromptChoice" data-setting="chatPromptChoice">
-${chatOption('', `The main one — ${mainPrompt(chat.prompts)?.name ?? chat.prompt}`, chat.promptChoice)}
-${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptChoice)).join('\n')}
-${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
-  </select>
-  <div class="hint">${escapeHtml(chat.prompt)}</div>
-  <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>
-</div>
-<div class="field">
-  ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
-  <select id="chatLanguage" data-setting="chatLanguage">
-${LANGUAGES.map((language) =>
-    `    <option value="${language.code}"${language.code === chat.language ? ' selected' : ''}>`
-    + `${escapeHtml(language.label)}</option>`).join('\n')}
-  </select>
-</div>
-<div class="field">
-  ${labelled('chatAutoSend', 'Who presses send', 'chatAutoSend')}
-  <select id="chatAutoSend" data-setting="chatAutoSend">
-    <option value="keyboard"${chat.autoSend === 'keyboard' ? ' selected' : ''}>The keybinding sends; the menu waits</option>
-    <option value="always"${chat.autoSend === 'always' ? ' selected' : ''}>Always send at once</option>
-    <option value="never"${chat.autoSend === 'never' ? ' selected' : ''}>Never — always let me press Enter</option>
-  </select>
-</div>
-<div class="field">
+  return `${chatSendingFields(chat, '  <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>\n')}<div class="field">
   ${labelled('chatModel', 'Which model answers', 'chatModel')}
   <select id="chatModel" data-setting="chatModel">
 ${chatOption('', 'The first one that can answer', chat.model)}
@@ -967,6 +976,68 @@ ${strandedOption(chat.modelName, chosen?.models ?? [], 'this provider does not o
   </select>
 ${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).join('\n')}
 </div>`;
+}
+
+/**
+ * The chat's models as providers — which can answer, and which cannot and why — with the panel's OWN catalog in it.
+ * Both Settings pages draw from it (todo/PLAN_one_model_catalog.md E4.6b).
+ *
+ * <p>The half `PLAN_provider_then_model.md` left open: three of the four model sources are FETCHED rather than read —
+ * the codex and agy CLIs' own lists and a Team server's allowlist — and all three are already in hand HERE. The chat
+ * command builds the same list with them empty, so a row whose models must be discovered offers only what it is set
+ * to. A `local` row cannot chat at all (`canChat`), so the engine that would name its models is never consulted:
+ * passing one would be passing a value nothing on this path can read.</p>
+ */
+export function chatProviderListFor(chat: ChatSettings, state: PanelState): ChatProviderList {
+  return chatProvidersFromPresets(chat.models, {
+    discoveredCodex: state.codexModels,
+    discoveredAgy: state.agyModels,
+    localEngine: undefined,
+    teamServers: state.teamServers ?? [],
+  });
+}
+
+/**
+ * What to ask about the selection, the language the answer comes in, and who presses send — the fields both Settings
+ * pages draw, from this one builder (E4.6b).
+ *
+ * @param afterPrompt what follows the prompt's hint inside its field — the current page's *Edit presets…*; '' for none
+ */
+export function chatSendingFields(chat: ChatSettings, afterPrompt: string): string {
+  return `<div class="field">
+  ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
+  <select id="chatPromptChoice" data-setting="chatPromptChoice">
+${chatOption('', `The main one — ${mainPromptName(chat)}`, chat.promptChoice)}
+${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptChoice)).join('\n')}
+${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
+  </select>
+  <div class="hint">${escapeHtml(chat.prompt)}</div>
+${afterPrompt}</div>
+<div class="field">
+  ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
+  <select id="chatLanguage" data-setting="chatLanguage">
+${LANGUAGES.map((language) => chatOption(language.code, language.label, chat.language)).join('\n')}
+  </select>
+</div>
+<div class="field">
+  ${labelled('chatAutoSend', 'Who presses send', 'chatAutoSend')}
+  <select id="chatAutoSend" data-setting="chatAutoSend">
+${AUTO_SEND_CHOICES.map(([value, label]) => chatOption(value, label, chat.autoSend)).join('\n')}
+  </select>
+</div>
+`;
+}
+
+/** Who presses send, as the select offers it. */
+const AUTO_SEND_CHOICES: readonly (readonly [string, string])[] = [
+  ['keyboard', 'The keybinding sends; the menu waits'],
+  ['always', 'Always send at once'],
+  ['never', 'Never — always let me press Enter'],
+];
+
+/** The main prompt's name — or, with none ticked, the words that are sent. */
+function mainPromptName(chat: ChatSettings): string {
+  return mainPrompt(chat.prompts)?.name ?? chat.prompt;
 }
 
 /**
@@ -1502,7 +1573,7 @@ function localButtons(id: string, localEngine: LocalEngine | undefined): string 
 }
 
 /** A CLI vendor's buttons: run it, install it, update it — the last one green when there is an update. */
-function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
+export function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
   return `<button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
             aria-label="Open ${id} in a terminal">▶</button>
     <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
@@ -2282,7 +2353,30 @@ function serverNotes(state: PanelState, role: RoleRow): string {
   return lines.map((line) => `  <div class="hint">${escapeHtml(line)}</div>`).join('\n');
 }
 
-function promptsBody(state: PanelState): string {
+/**
+ * Which half of the prompts section a page draws: the old page draws both in one box per role; the new page splits
+ * them across Stages (the switch, the rounds, the threshold) and Prompts per round (the round pickers) —
+ * todo/PLAN_one_model_catalog.md E4.1. Each control is drawn once on a page either way.
+ */
+export type PromptsHalf = 'both' | 'stages' | 'prompts';
+
+/** One role's round pickers alone, for the new page's Prompts per round — or why it has none. */
+function pickersOnly(role: RoleRow, on: boolean, off: string, pickers: string): string {
+  return `<div class="role role-${roleTone(role.id, stageOf(role))}${off}">
+  <div class="head"><span class="name">${escapeHtml(role.name ?? role.id)}</span></div>
+${on ? pickers : '  <div class="hint">Switched off on Stages — no round asks it.</div>'}
+</div>`;
+}
+
+/** The new page's Prompts per round: the stages' heads and each role's pickers, nothing else. */
+function pickersBody(groups: readonly (readonly [string, string])[]): string {
+  return groups.map(([head, rows]) => `<div class="role-group">
+  <div class="group-head">${head}</div>
+${rows}
+</div>`).join('\n');
+}
+
+export function promptsBody(state: PanelState, half: PromptsHalf = 'both'): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
   // them, under the name they gave it, with its own rounds, threshold and pickers. `composed` is the
@@ -2332,17 +2426,23 @@ function promptsBody(state: PanelState): string {
     const frozen = last || dormant;
     const inactive = !isActive(role) ? ' off' : '';
     const off = switched && !on ? ' off' : '';
+    if (half === 'prompts') {
+      return pickersOnly(role, on, off, pickers);
+    }
 
     // The gate and the prompts were two sections describing one thing: how many times this role
     // asks, how much it may still find, and what it asks each time. One box now.
+    // The new page's Stages draws no tick of its own: a role has ONE switch there, on Roles & prompts (E4.3).
+    const ticked = switched && half === 'both';
     return `<div class="role role-${roleTone(role.id, stage)}${off}${inactive}">
-  <div class="head">${switched
+  <div class="head">${ticked
       ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${frozen ? ' disabled' : ''}
            title="${escapeHtml(tickHelp(dormant, last))}">
     <label class="name" for="role-${role.id}">${escapeHtml(label)}</label>`
       : `<span class="name">${escapeHtml(label)}</span>`}</div>
-${dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
-${last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
+${switched && !ticked && !on ? '  <div class="hint">Off — its switch is under Roles &amp; prompts.</div>' : ''}
+${ticked && dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
+${ticked && last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
 ${serverNotes(state, role)}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
@@ -2354,7 +2454,7 @@ ${serverNotes(state, role)}
     <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-role="${role.id}"
            value="${s.thresholds[role.id] ?? 3}"${on ? '' : ' disabled'}>
   </div>
-${on ? pickers : ''}
+${on && half === 'both' ? pickers : ''}
 </div>`;
   };
 
@@ -2368,6 +2468,29 @@ ${on ? pickers : ''}
   // and a switch of its own, and drawing it among the code roles would count it into a fan-out it
   // takes no part in. The stage's vendor tick and its tool are epic 3's; this is what the seed forces.
   const features = all.filter((r) => bucketOf(r) === FEATURE_CODE).map(roleRow).join('\n');
+
+  return PROMPTS_HALVES[half](state, { plan, code, documents, features });
+}
+
+/** Each stage's role boxes, drawn. */
+interface RoleGroups {
+  readonly plan: string;
+  readonly code: string;
+  readonly documents: string;
+  readonly features: string;
+}
+
+/** How each half is drawn around the role boxes: the stages with their own switches, or the round pickers alone. */
+const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: RoleGroups) => string>> = {
+  both: (state, groups) => stagesBody(state, groups),
+  stages: (state, groups) => stagesBody(state, groups),
+  prompts: (_state, { plan, code, documents, features }) =>
+    pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
+};
+
+/** The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles page. */
+function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
+  const s = state.settings;
 
   return `<div class="role-group">
   <div class="group-head">Plan stage</div>
@@ -3327,6 +3450,8 @@ export const PANEL_COMMANDS = [
   'removeModel',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
+  // Try it on the new page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
+  'trySecurity',
   // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
   // no view, so the only way to reach the CRUD the chat section points at was the command palette.
   'editChatPresets',
@@ -3344,6 +3469,8 @@ export const PANEL_COMMANDS = [
   // And moving what the old folder already holds, which is a different job with the opposite
   // refusal: a move wants an EMPTY destination where the change above wants a full one.
   'moveDataDirectory',
+  // And deleting what a VERIFIED move left behind, offered on the new page's MCP server tab after a reload (E4.5).
+  'deleteOldDataFolder',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;
   // Review opens what it collected; and the server address is asked for in a dialog rather than
   // typed into the section, because a free-text control here would be rebuilt under the caret on
@@ -3383,6 +3510,7 @@ export const VSCODE_COMMAND_FOR = {
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
   moveDataDirectory: 'coai.moveDataDirectory',
+  deleteOldDataFolder: 'coai.deleteOldDataFolder',
   showNotifications: 'coai.showNotifications',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 

@@ -74,7 +74,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   'sideConfig.ts forwarding reader': { count: 2, why: 'readerFor / userLayer and the storage choice — the door' },
   'sideConfig.ts global write': { count: 1, why: 'saveSetting, when this side keeps no settings of its own' },
   'panelProvider.ts global write': { count: 2, why: 'coai.teamServers — one list every side shares, by design' },
-  'chatPresetsPanel.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
+  'chatPresetsHost.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
   'configTransferCommands.ts global write': { count: 1, why: 'an import writes the base layer; per-side overrides are never touched' },
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },
   'textToneHost.ts global write': { count: 1, why: 'coai.textTone — about the reader, not the work' },
@@ -84,7 +84,8 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   // and written Global on purpose — a workspace value is not the person's to have migrated, and the merged reader
   // would hand it one — and a side's overlay reads the user layer's rows its keys fall back to (`sharedVendors`).
   // (The chat's three shared-layer readers left with E1.1: the chat reads its model keys through `userLayer`.)
-  'catalogMigrationHost.ts by-name': { count: 1, why: 'sharedVendors — the user rows an overlay falls back to' },
+  'catalogMigrationHost.ts by-name': { count: 5, why: 'what a side inherits from the user layer: sharedVendors — the rows an overlay falls back to; sharedConsultants and sharedQconsultRows — so the rows they refer to join its own list (C1); userChatRecord — whose row ids a side keeps (E4.6a); userChatModel — replaced when the side moved that preset elsewhere (R2)' },
+  'catalogMigrationHost.ts forwarding reader': { count: 1, why: 'the chat presets as the chat reads them — the user layer, the shipped ones included — for every layer (E4.6a)' },
   'catalogMigrationHost.ts global write': { count: 1, why: 'the migration writes the user layer it read, and no other' },
   // Not configuration at all: the shape matches a Map lookup too, and these two are exactly that.
   'chatPresets.ts forwarding reader': { count: 1, why: 'a Map lookup (byId), not a configuration read' },

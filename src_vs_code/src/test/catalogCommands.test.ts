@@ -53,6 +53,16 @@ test('a duplicate is the same row with its own id, right after the source, named
   assert.equal(change.rows[1]!.name, 'Qwen (copy)');
 });
 
+test('a duplicate of a row that names no key keeps using the source\'s key, never one named after the copy', () => {
+  // The source's key is found under its id; the copy's id is new, so without the name written down the copy looked for a
+  // key called "grok-2" — no credentials, or another account's. (The cadence consultation for epics 1–3, finding 4.)
+  const rows = [row('grok', 'api')];
+  const copy = duplicated(rows, 'grok').rows[1]!;
+
+  assert.equal(copy.id, 'grok-2');
+  assert.equal(copy.vaultKeyName ?? copy.id, 'grok', 'the copy looks for its key under its own new id');
+});
+
 test('a duplicate of a duplicate takes the next free id from the same base', () => {
   const rows = [row('qwen', 'api'), row('qwen-2', 'api')];
 

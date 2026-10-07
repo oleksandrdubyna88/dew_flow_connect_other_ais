@@ -60,6 +60,12 @@ export interface QconsultSettings {
   readonly rowMinutes: number;
   readonly questionsPerSession: number;
   readonly freeBatches: number;
+  /**
+   * Each question row that refers to a catalog row → that row's id (todo/PLAN_one_model_catalog.md, C2). A resolved row
+   * keeps only the KEY name, which two catalog rows can share — a GLM on low effort and the same GLM on high — so the
+   * id is kept here, beside the rows rather than in them: the rows are the wire, byte for byte.
+   */
+  readonly catalogRows: Readonly<Record<string, string>>;
 }
 
 /** The operator's accepted defaults — the server's `QuestionConsultSettings` initialisers, read from the C# by a test. */
@@ -72,6 +78,7 @@ export const DEFAULT_QCONSULT: QconsultSettings = {
   rowMinutes: 5,
   questionsPerSession: 10,
   freeBatches: 2,
+  catalogRows: {},
 };
 
 /** The most rows on at once — the C# `QuestionRows.MaxActive`, checked by a test. */
@@ -102,10 +109,14 @@ type Read = (section: string) => unknown;
  * seventh active row and after switched off (`QuestionRows.Capped`).
  */
 export function qconsultSettingsFrom(read: Read): QconsultSettings {
+  const stored = listOf(read('qconsultRows')).flatMap(questionRowFrom);
+  const catalog = vendorsFrom(read('vendors'));
+
   return {
     enabled: read('qconsultEnabled') !== false,
     mode: modeOf(read('qconsultMode')),
-    rows: capped(listOf(read('qconsultRows')).flatMap(questionRowFrom).map(resolvedAgainst(vendorsFrom(read('vendors'))))),
+    rows: capped(stored.map(resolvedAgainst(catalog))),
+    catalogRows: catalogRowsOf(stored, catalog),
     prompts: listOf(read('qconsultPrompts')).flatMap(promptFrom),
     roots: listOf(read('qconsultRoots')).filter((one): one is string => typeof one === 'string' && one.trim().length > 0).map((one) => one.trim()),
     rowMinutes: positive(read('qconsultRowMinutes'), DEFAULT_QCONSULT.rowMinutes),
@@ -146,6 +157,15 @@ function resolvedAgainst(rows: readonly Vendor[]): (row: QuestionRowSetting) => 
 
     return target === undefined ? row : throughRow(row, target);
   };
+}
+
+/** Each stored row that refers to a catalog row, by its own id → the catalog row's id. */
+function catalogRowsOf(stored: readonly QuestionRowSetting[], rows: readonly Vendor[]): Readonly<Record<string, string>> {
+  return Object.fromEntries(stored.flatMap((row) => {
+    const target = catalogTarget(row, rows);
+
+    return target === undefined ? [] : [[row.id, target.id] as const];
+  }));
 }
 
 /** The catalog row a reference names, or nothing — a definition, or a reference to a plain reviewer row. */
@@ -225,23 +245,45 @@ export function qconsultSkewNote(installedServerVersion: string): string {
  * The keys this feature adds to the server's environment — each only when it differs from the default, and
  * none at all for a server known to be too old to read them.
  */
-export function qconsultEnv(settings: QconsultSettings, installedServerVersion = ''): Record<string, string> {
+export function qconsultEnv(
+  settings: QconsultSettings,
+  installedServerVersion = '',
+  /** A catalog row by its id, as the wire writes it — or nothing, for a binary that does not take a row (C2). */
+  rowOf: CatalogRowOnTheWire = () => undefined,
+): Record<string, string> {
   if (!qconsultOnServer(installedServerVersion)) {
     return {};
   }
 
   return Object.fromEntries(QCONSULT_KEYS
-    .filter(([, of]) => of(settings) !== of(DEFAULT_QCONSULT))
-    .map(([key, of]) => [key, of(settings)]));
+    .filter(([, of]) => of(settings, rowOf) !== of(DEFAULT_QCONSULT, rowOf))
+    .map(([key, of]) => [key, of(settings, rowOf)]));
+}
+
+/** A catalog row by its id, as `COAI_VENDORS` writes it, or nothing. */
+export type CatalogRowOnTheWire = (catalogId: string) => Readonly<Record<string, unknown>> | undefined;
+
+/**
+ * The rows as they are stored — and, for a row that refers to a catalog row, that row beside it as `row` (C2): its
+ * effort, system prompt, timeout and price, which the five launch fields cannot carry. Nothing is added otherwise, so a
+ * binary that does not take a row reads the bytes it always did.
+ */
+function rowsOnTheWire(s: QconsultSettings, rowOf: CatalogRowOnTheWire): string {
+  return JSON.stringify(s.rows.map((row) => {
+    const catalog = rowOf(s.catalogRows[row.id] ?? '');
+
+    return catalog === undefined ? row : { ...row, row: catalog };
+  }));
 }
 
 /** Each env key and the value it carries — one row per setting, so a ninth cannot be half-wired. */
-const QCONSULT_KEYS: readonly (readonly [string, (settings: QconsultSettings) => string])[] = [
+const QCONSULT_KEYS: readonly (readonly [string, (settings: QconsultSettings, rowOf: CatalogRowOnTheWire) => string])[] = [
   ['COAI_QCONSULT_ENABLED', (s) => String(s.enabled)],
   ['COAI_QCONSULT_MODE', (s) => s.mode],
   // The rows, the prompts and the roots go out as they are stored: these settings ARE the wire format, as
-  // `COAI_ROLES` is — so there is no shape to translate and no second schema to keep level.
-  ['COAI_QCONSULT_ROWS', (s) => JSON.stringify(s.rows)],
+  // `COAI_ROLES` is — so there is no shape to translate and no second schema to keep level. A row may carry its
+  // catalog row beside it (C2).
+  ['COAI_QCONSULT_ROWS', rowsOnTheWire],
   ['COAI_QCONSULT_PROMPTS', (s) => JSON.stringify(s.prompts)],
   ['COAI_QCONSULT_ROOTS', (s) => JSON.stringify(s.roots)],
   ['COAI_QCONSULT_ROW_MINUTES', (s) => String(s.rowMinutes)],

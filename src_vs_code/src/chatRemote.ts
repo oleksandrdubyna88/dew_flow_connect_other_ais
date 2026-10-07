@@ -1,4 +1,4 @@
-import { RemoteChatSession, RemoteTransport } from './remoteChatSession';
+import { RemoteChatSession, RemoteTransport, type RemoteVendor } from './remoteChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import { REAL_TIMERS } from './cliChatSession';
 import { TeamServer, serverVendorOf } from './teamServers';
@@ -65,8 +65,13 @@ export function remoteChatFor(
 
   return new RemoteChatSession(
     transportFor(server.url, token, asked),
-    { vendor: serverVendorOf(vendor, server.id), model: vendor.model },
+    remoteVendorOf(vendor, server.id),
     DEFAULT_BUDGETS,
     REAL_TIMERS,
   );
+}
+
+/** What the session tells the server about the row: the vendor name it knows, the model, and the row's effort (E4.6c). */
+function remoteVendorOf(vendor: Vendor, serverId: string): RemoteVendor {
+  return { vendor: serverVendorOf(vendor, serverId), model: vendor.model, effort: vendor.effort ?? '' };
 }

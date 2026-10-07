@@ -2,6 +2,7 @@ import { IDLE } from './busySnapshot';
 import { CATALOG_CSS } from './catalogCss';
 import { catalogScript } from './catalogPageScript';
 import { CATALOG_TABS, type CatalogTab } from './catalogPlaces';
+import { placeBody } from './catalogSections';
 import { CONFIRM_DIALOG, newTag, stillOnTheOldPage } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
 import { modelsTabHtml } from './modelsTab';
@@ -30,18 +31,25 @@ function subStrip(tab: CatalogTab): string {
   return tabStrip(tab.subs.map((sub) => ({ key: `${tab.id}/${sub.id}`, slug: sub.id, label: sub.label })), '', names);
 }
 
-function subPanes(tab: CatalogTab): string {
-  return tab.subs.map((sub) => `<div id="cpane-${tab.id}-${sub.id}" class="subpane" role="tabpanel" aria-labelledby="ctab-${tab.id}-${sub.id}"`
-    + ` tabindex="0" data-pane="${tab.id}/${sub.id}" hidden>${stillOnTheOldPage(sub.label)}</div>`).join('\n');
+/** A place's content: its old section in a readable column (E4.1), or where it still is until E4.3 and E4.4 fold it in. */
+function placeContent(place: string, label: string, state: PanelState): string {
+  const body = placeBody(place, state);
+
+  return body.length === 0 ? stillOnTheOldPage(label) : `<div class="moved">\n${body}\n</div>`;
 }
 
-/** What a tab holds: Models is built here; the others are E4's, and say where they still are until then. */
+function subPanes(tab: CatalogTab, state: PanelState): string {
+  return tab.subs.map((sub) => `<div id="cpane-${tab.id}-${sub.id}" class="subpane" role="tabpanel" aria-labelledby="ctab-${tab.id}-${sub.id}"`
+    + ` tabindex="0" data-pane="${tab.id}/${sub.id}" hidden>${placeContent(`${tab.id}/${sub.id}`, sub.label, state)}</div>`).join('\n');
+}
+
+/** What a tab holds: Models is built here; every other place draws the old page's section for it. */
 function paneBody(tab: CatalogTab, state: PanelState): string {
   if (tab.id === 'models') {
     return modelsTabHtml(state);
   }
 
-  return tab.subs.length === 0 ? stillOnTheOldPage(tab.label) : `${subStrip(tab)}\n${subPanes(tab)}`;
+  return tab.subs.length === 0 ? placeContent(tab.id, tab.label, state) : `${subStrip(tab)}\n${subPanes(tab, state)}`;
 }
 
 function pane(tab: CatalogTab, state: PanelState): string {

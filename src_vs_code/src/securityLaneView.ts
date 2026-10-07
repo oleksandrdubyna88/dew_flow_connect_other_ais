@@ -1,3 +1,4 @@
+import { rowPicks } from './catalogPicks';
 import { escapeHtml as esc } from './escapeHtml';
 import { SECURITY_SEED } from './securityLane.generated';
 import {
@@ -19,7 +20,6 @@ export interface SecurityLaneFiles {
   readonly text: Readonly<Record<string, SecurityTextState>>;
   readonly promptsDir: string;
 }
-const NO_FILES: SecurityLaneFiles = { text: {}, promptsDir: '' };
 
 /** The pair's Prompt select ends in this: not a prompt, a request to make one (`securityLaneScript.ts`). */
 export const NEW_PROMPT_SENTINEL = '__newSecurityPrompt__';
@@ -36,11 +36,16 @@ const select = (field: string, value: string, choices: readonly string[], extra 
 const legend = (): string => '<ul class="seclane-tags">' + SECURITY_SEED.signals.map(s =>
   `<li><code>${esc(s.id)}</code> ${esc(s.label)}${s.trigger ? '' : ' (focus only)'}</li>`).join('') + '</ul>';
 
-export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string, files: SecurityLaneFiles = NO_FILES): string {
+/**
+ * @param vendors the rows a pair may name — every row on the current page; the rows ticked Security lane on the new page
+ * @param allRows every catalog row: the ordinary gate is judged on them, and a pair's row that is not in `vendors` is
+ *   named from them (todo/PLAN_one_model_catalog.md E4.2); the current page passes `vendors` again
+ */
+export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string, files: SecurityLaneFiles, allRows: readonly Vendor[]): string {
   if ('invalidConfiguration' in lane) return malformedNote(lane.invalidConfiguration);
   const old = !securitySupported(version);
   return versionNote(version)
-    + (!vendors.some(v => v.enabled && (v.code || v.feature)) ? '<p class="stale">Enable an ordinary code or feature reviewer too: the security lane cannot replace the ordinary gate.</p>' : '')
+    + (!allRows.some(v => v.enabled && (v.code || v.feature)) ? '<p class="stale">Enable an ordinary code or feature reviewer too: the security lane cannot replace the ordinary gate.</p>' : '')
     + `<p>Additional security reviews beside the ordinary gate. Prompt text stays in your prompt files.</p>
       <p>${check('enabled', lane.enabled, 'Enable security lane', old)}</p>
       <label>Allowed major/blocking findings ${count('threshold', lane.threshold, 0, 100)}</label>
@@ -56,7 +61,7 @@ export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[],
     })).join('')
     + promptsFooter(lane)
     + '<h3>Reviewer / prompt pairs</h3>'
-    + lane.runs.map((r, i) => runBody(r, i, lane, vendors)).join('')
+    + lane.runs.map((r, i) => runBody(r, i, lane, vendors, strandedNote(r.vendor, vendors, allRows))).join('')
     + runsFooter(lane, vendors);
 }
 
@@ -103,7 +108,7 @@ function versionNote(version: string): string {
  * One pair. Its Remove button and its Prompt select's "+ New custom prompt…" carry the pair's IDENTITY — row, reviewer,
  * prompt — so a pair that moved between the paint and the press is refused rather than the wrong one written (D5).
  */
-function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonly Vendor[]): string {
+function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonly Vendor[], stranded: string): string {
   const v = vendors.find(v => v.id === r.vendor);
   const context = r.context ?? defaultContext(v);
   const field = (key: string): string => 'run:' + i + ':' + key;
@@ -113,7 +118,7 @@ function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonl
   const promptSelect = select(field('prompt'), r.prompt, prompts, ` data-seclane-run="${esc(identity)}"`)
     .replace('</select>', `<option value="${NEW_PROMPT_SENTINEL}">+ New custom prompt…</option></select>`);
   return `<fieldset><legend>Pair ${i + 1}${securityOnly(v) ? ' — security only' : ''}</legend>
-        ${runWarnings(r, lane, v)}
+        ${runWarnings(r, lane, v, stranded)}
         <label>Reviewer ${select(field('vendor'), r.vendor, vendors.map(v => v.id))}</label>
         <label>Prompt ${promptSelect}</label>
         <label>Source ${select(field('context'), context, ['slice', 'diff'])}</label>
@@ -125,9 +130,23 @@ function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonl
 const defaultContext = (v: Vendor | undefined): string => v?.runtime === 'local' ? 'slice' : 'diff';
 const securityOnly = (v: Vendor | undefined): boolean => v !== undefined && ![v.code, v.plan, v.document, v.feature].some(Boolean);
 
-function runWarnings(run: SecurityRun, lane: SecurityLane, vendor: Vendor | undefined): string {
-  const warnings: string[] = [];
-  if (!vendor?.enabled) warnings.push(`Reviewer ${run.vendor} is unavailable; select an enabled reviewer.`);
+/**
+ * A pair's row the page does not offer, named (todo/PLAN_one_model_catalog.md E4.2, D3): on the new page a row that is
+ * gone or not ticked Security lane — '' wherever the page offers every row, as the current page does.
+ */
+function strandedNote(vendor: string, offered: readonly Vendor[], allRows: readonly Vendor[]): string {
+  return offered === allRows || offered.some(v => v.id === vendor) ? '' : rowPicks('security', vendor, allRows, 'This pair').note;
+}
+
+/** What to say about a pair's reviewer: stranded on the new page, switched off or gone — or ''. */
+function reviewerWarning(run: SecurityRun, vendor: Vendor | undefined, stranded: string): string {
+  if (stranded.length > 0) return stranded;
+  return vendor?.enabled ? '' : `Reviewer ${run.vendor} is unavailable; select an enabled reviewer.`;
+}
+
+function runWarnings(run: SecurityRun, lane: SecurityLane, vendor: Vendor | undefined, stranded: string): string {
+  const reviewer = reviewerWarning(run, vendor, stranded);
+  const warnings: string[] = reviewer.length > 0 ? [reviewer] : [];
   if (!lane.prompts.some(p => p.id === run.prompt)) warnings.push(`Prompt ${run.prompt} is missing; select a registered prompt.`);
   return warnings.map(message => `<p class="stale">${esc(message)}</p>`).join('');
 }

@@ -154,9 +154,11 @@ public sealed class QuestionFanOut(
     {
         var instruction = prompts.Written(row.Prompt.Id) is { Length: > 0 } written ? written : row.Prompt.Text;
 
+        // A web row is given strictly the question (A2): the person's instruction is not the sanitiser's to vet, so it
+        // reaches every OTHER row only — after the base prompt, before what the row is shown (C2).
         return row.Prompt.Capability == Capability.Web
             ? WebInput(row, input, instruction)
-            : CheckedInput(row, input, instruction);
+            : CheckedInput(row, input, instruction.TrimEnd() + "\n\n" + Core.Catalog.PersonInstruction.ConsultantSection(row.Provider.SystemPrompt.Trim()));
     }
 
     /// <summary>A web row: the sanitised question and NOTHING else (A2).</summary>
@@ -296,7 +298,11 @@ public sealed class QuestionFanOut(
             ApiKey = keys.Keys.GetValueOrDefault(provider.KeyName, string.Empty),
             Dialect = provider.Dialect,
             Price = provider.Price,
+            // The question consultant's own per-row budget, not the catalog row's timeout: the store's sweep and the fan-out's
+            // deadline are both derived from it, so a row that outlived it would be swept as stale while it still ran.
             Timeout = panel.QuestionConsult.RowBudget,
+            // The row's CLI effort by the reviewers' own rule (todo/PLAN_one_model_catalog.md, C2); an api row's is its module's.
+            ReasoningEffort = RosterBuilder.EffortFor(provider, string.Empty),
             DataDir = panel.DataDir,
             // A question row starts no MCP server either (issue #514).
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(env),

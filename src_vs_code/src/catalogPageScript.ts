@@ -1,3 +1,7 @@
+import { rolesEmbeddedScript } from './rolesEmbed';
+import { commandsEmbeddedScript } from './commandsEmbed';
+import { chatTabEmbeddedScript } from './chatTabEmbed';
+import { securityLaneScript } from './securityLaneScript';
 import { tabKeysScript } from './tabKeys';
 import { textControlsScript } from './textControls';
 import { jsonForScript } from './webviewHtml';
@@ -26,6 +30,10 @@ ${confirmScript()}
 ${modelsScript()}
 ${tabKeysScript()}
 ${textControlsScript()}
+${securityLaneScript()}
+${rolesEmbeddedScript()}
+${commandsEmbeddedScript()}
+${chatTabEmbeddedScript()}
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'uiScale') { document.documentElement.style.fontSize = event.data.px + 'px'; }
   });`;
@@ -174,6 +182,18 @@ function modelEventsScript(): string {
       Object.assign(modelFilters, { q: '', access: '', uses: '', effort: '', runtime: '' });
       saveModelFilters();
       applyModelFilters();
+    }
+    // A feature tab's "Change on Models" (E4.1): Models, narrowed to the rows that can be ticked for that feature.
+    const narrow = pressed.closest('[data-models-uses]');
+    if (narrow) {
+      setModelFilter('uses', narrow.dataset.modelsUses || '');
+      showPlace('models', true);
+    }
+    // Security lane's Try it (E4.2): the sample is the command's id — the host puts it to coai-mcp on stdin.
+    const tryIt = pressed.closest('[data-security-try]');
+    if (tryIt) {
+      const sample = document.getElementById('security-sample');
+      send({ type: 'command', command: 'trySecurity', id: sample ? String(sample.value || '') : '' }, tryIt);
     }
   });
   document.addEventListener('input', (event) => {

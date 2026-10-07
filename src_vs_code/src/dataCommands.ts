@@ -388,7 +388,7 @@ async function exists(path: vscode.Uri): Promise<boolean> {
 // ---------------------------------------------------------------------------------------------
 
 /** Where the last move is remembered, so the delete can be offered — or refused — after a reload. */
-const MOVE_RECORD = 'coai.lastDataMove';
+export const MOVE_RECORD = 'coai.lastDataMove';
 
 /**
  * Copy this directory's history into another folder, check it arrived, and point this window there.

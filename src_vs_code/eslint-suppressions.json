@@ -241,11 +241,6 @@
       "count": 2
     }
   },
-  "src/chatPresetsPanel.ts": {
-    "complexity": {
-      "count": 2
-    }
-  },
   "src/chatPrompt.ts": {
     "complexity": {
       "count": 2
@@ -692,7 +687,7 @@
       "count": 16
     },
     "max-lines-per-function": {
-      "count": 6
+      "count": 5
     }
   },
   "src/phrasesEdit.ts": {
@@ -820,11 +815,6 @@
     },
     "max-lines-per-function": {
       "count": 4
-    }
-  },
-  "src/rolesPanel.ts": {
-    "complexity": {
-      "count": 3
     }
   },
   "src/rounds.ts": {

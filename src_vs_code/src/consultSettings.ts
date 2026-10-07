@@ -599,7 +599,7 @@ export interface ConsultantPreset {
  * settings</i>. A consultant that borrowed a reviewer row died when that row was removed, refused
  * when it was switched off, and was labelled in internal ids two sections below a picker offering
  * `Codex (OpenAI)` and `DeepSeek`. This is the same filter-and-map the chat's step 1 performs over
- * the same constant (`askWhichVendor` in `chatPresetsPanel.ts`) — one source, so a vendor added to
+ * the same constant (`askWhichVendor` in `chatModelWizard.ts`) — one source, so a vendor added to
  * the product appears in both pickers without anybody remembering to.</p>
  *
  * <p><b>A Team server cannot appear, by construction</b>: `remote` rows are not in `VENDOR_PRESETS`

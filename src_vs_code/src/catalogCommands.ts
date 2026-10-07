@@ -2,6 +2,7 @@ import { CATALOG_USES, type CatalogUse } from './catalogFields';
 import { addRefusal, lastStageMessage, lastStagesOf } from './catalogWriteRules';
 import { useRefusal } from './modelCardFields';
 import { freeVendorId, type Vendor } from './vendors';
+import { vaultKeyOf } from './vaultKey';
 
 /**
  * The Models tab's own edits (todo/PLAN_one_model_catalog.md E3.2) — what the catalog becomes when a use is ticked or a
@@ -107,8 +108,9 @@ function lockRefusal(rows: readonly Vendor[], row: Vendor): string {
 }
 
 /**
- * A copy of a row with its own id — every setting copied, `vaultKeyName` included (two rows may share one key), named
- * "<name> (copy)", right after the source. Refused past the catalog's cap.
+ * A copy of a row with its own id — every setting copied, and the key the SOURCE uses written down (two rows may share
+ * one key: a source that names none is found under its id, so the copy must name that id or look under its own new one),
+ * named "<name> (copy)", right after the source. Refused past the catalog's cap.
  */
 export function duplicated(rows: readonly Vendor[], id: string): RowsChange {
   const at = rows.findIndex((one) => one.id === id);
@@ -121,6 +123,7 @@ export function duplicated(rows: readonly Vendor[], id: string): RowsChange {
     ...structuredClone(source),
     id: freeVendorId(source.id.replace(/-\d+$/u, ''), new Set(rows.map((one) => one.id))),
     name: `${source.name ?? source.id} (copy)`,
+    vaultKeyName: vaultKeyOf(source),
   };
 
   return { rows: [...rows.slice(0, at + 1), copy, ...rows.slice(at + 1)], refused: '', said: '' };

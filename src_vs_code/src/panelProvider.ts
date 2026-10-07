@@ -11,7 +11,8 @@ import { chatSettingsFrom, clearedByWriting } from './chatSettings';
 import { phrasesFrom, type Phrase } from './phrases';
 import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
-import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
+import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPresets';
+import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { chooseSettingsTab, heldSettingsTab, setSettingsPreview, settingsPreviewOn, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
@@ -69,6 +70,7 @@ import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qc
 import { isQconsultCommand } from './qconsultWrite';
 import type { QuestionConsult } from './questionConsults';
 import { securityLaneFrom, securityLaneSave } from './securityLane';
+import { securityTryAnswer, securityTryFailed, securityTryRefusal, securityTryRequest, type SecurityTryResult } from './securityTry';
 import { editSecurityPrompt } from './securityPromptEditor';
 import { SECURITY_PROMPT_WATCH, SecurityPromptTextCache } from './securityPromptFiles';
 import { securityFlowHost } from './securityCommands';
@@ -80,6 +82,13 @@ import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
+import { asRecord } from './catalogLaunch';
+import { consultantPickWrites } from './consultantPicks';
+import { securityRowsOffered } from './catalogPicks';
+import { clientFilesFor, ClientReader } from './mcpClientsRead';
+import { MOVE_RECORD } from './dataCommands';
+import type { MoveRecord } from './dataMove';
+import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
@@ -112,6 +121,13 @@ import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
+import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
+import { roleEdit } from './rolesPage';
+import { roleSwitchFollows } from './rolesSwitch';
+import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
+import { commandEdit } from './commandsPage';
+import { flushChatPresetEdits, onChatPresetsRedraw, queueChatPresetEdit } from './chatPresetsHost';
+import { presetEdit } from './chatPresetsPage';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
 import {
@@ -270,6 +286,8 @@ interface PanelMessage {
   readonly editing?: boolean;
   readonly start?: number;
   readonly end?: number;
+  /** A `roles` message's edit — the Review roles tab's own message, read by `roleEdit` (PLAN_one_model_catalog.md E4.3). */
+  readonly edit?: unknown;
   /** The page's own number for a setting, prompt or command, which the host settles it under (`inFlight.ts`). */
   readonly seq?: number;
   /** The document that numbered it — echoed in `settled`, so a predecessor's number cannot clear this one's mark. */
@@ -1023,8 +1041,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.settleQueued(from, m);
     } else if (m.type === 'focus') {
       if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
-        void this.render();
+        // A roles prompt still settling is written first: the repaint reads the prompt files, and one that overtook the
+        // write would draw the box from the text being replaced (E4.3).
+        void Promise.all([flushRoleEdits(), flushCommandEdits(), flushChatPresetEdits()]).then(() => this.render());
       }
+    } else if (m.type === 'roles') {
+      this.track(from, m, () => this.roleEdited(m.edit));
+    } else if (m.type === 'commands' || m.type === 'chatPresets') {
+      // An edit from the new page's Commands (E4.4) or Chat (E4.6b), into the one queue its own tab uses too.
+      this.track(from, m, () => (m.type === 'commands' ? queueCommandEdit(commandEdit(m.edit)) : queueChatPresetEdit(presetEdit(m.edit))));
     } else if (m.type === 'command') {
       this.track(from, m, () => this.run(m.command, m.id, from));
     } else if (m.type === 'ready') {
@@ -1107,6 +1132,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Stop first, then cancel: both are synchronous, so no file event can re-arm the debounce in between.
     this.securityPromptWatch.stop();
     this.securityPromptWatch.changed.cancel();
+    this.rolesRedraw.dispose();
+    this.commandsRedraw.dispose();
+    this.chatPresetsRedraw.dispose();
   }
 
   /**
@@ -1169,16 +1197,23 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const shown = vendors.filter(shownOnTheOldPage);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
+    const server = this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published));
     const state = {
       settings,
       vendors: shown,
+      // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
+      catalogRows: vendors,
+      securityTry: this.securityTry,
+      ...(await this.newPageReads(server)),
+      // The data folder's last move (E4.5), which survives a reload so the delete can be offered — a read of memory.
+      lastDataMove: this.context.globalState.get<MoveRecord>(MOVE_RECORD),
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
       // would be a panel that hangs for half a minute the first time it is opened on a new machine.
       claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
       askingClaude: this.claudeProbes.looking,
-      server: this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published)),
+      server,
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
       questions: this.watcher.openQuestions,
@@ -1240,7 +1275,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // would only invite somebody to add them to it one day and split the one reader in two. The
       // door, not `config.get`: `chatModel` and `chatModelPresets` are model keys, which a
       // workspace may not set (`modelKeys.ts`).
-      chat: chatSettingsFrom(userLayer(config)),
+      // This side's: the chat model and its name are per side (E4.6a, D8).
+      chat: chatSettingsFrom(this.read(config)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section, so the markup the paint key is built from changes with it.
       phrases: this.phrases(),
@@ -1413,7 +1449,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // chat card read "no rate set for this model" for a model the published table prices perfectly
     // well. The two lists are asked the same question and answered from the same table.
     // (CodeRabbit, PR #209.)
-    const presets = chatModelPresetsFrom(userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'));
+    const presets = chatModelsAndPresets();
     const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
     // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
     // guess and answers nothing for it.
@@ -1540,9 +1576,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private async chatLedgers(): Promise<ChatLedgers> {
     const marks = this.chatForgottenBefore();
-    const vendorOf = vendorOfPreset(chatModelPresetsFrom(
-      userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'),
-    ));
+    // An old line names a PRESET id, a line written since the move names a ROW id (E4.6a): both resolve to their vendor.
+    const vendorOf = vendorOfPreset(chatModelsAndPresets());
 
     return {
       turns: rememberedChat(await this.chatLines(), marks, vendorOf),
@@ -1855,7 +1890,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       const read = this.read(config);
       // Nothing is saved against a malformed setting: writing the panel's stand-in would replace
       // what the person wrote in settings JSON, which is the one place they are told to correct it.
-      const next = securityLaneSave(read('securityLane'), message.securityField, message.value, vendorsFrom(read('vendors')));
+      // Named against the rows the page that wrote OFFERED: the new page's are the rows ticked Security lane (E4.2).
+      const offered = securityRowsOffered(vendorsFrom(read('vendors')), settingsPreviewOn());
+      const next = securityLaneSave(read('securityLane'), message.securityField, message.value, offered);
       if (next !== undefined) {
         await this.save(config, 'securityLane', next);
       }
@@ -1917,6 +1954,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         return;
       }
       case 'caller': {
+        if (write.key === 'consultantRow') {
+          await saveOrSnapBack(() => this.savePick(write.caller, String(write.value ?? '')), afterTheWrite(() => this.snapBack(from)), write.value, write.control);
+          return;
+        }
         // Merged the same way a role record is, and into `consultants` rather than the control's own
         // key: the four rows are one map, so the key a control carries says which HALF of a row
         // changed — the vendor or its model — and is never a setting of its own. The caps beside
@@ -2207,6 +2248,55 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
   }
 
+  /**
+   * An edit of the review roles from the new page's Roles & prompts (PLAN_one_model_catalog.md E4.3), into the one queue
+   * the Review roles tab uses too. A role's switch is ONE switch here: once the catalog's `active` has landed — through
+   * every refusal the roles have — the panel's `roleEnabled` follows it (`rolesSwitch.ts`), so a server of any version
+   * reads the same answer.
+   */
+  private async roleEdited(edit: unknown): Promise<void> {
+    const command = roleEdit(edit);
+    await queueRoleEdit(command);
+    if (command.kind === 'edit' && command.field === 'active') {
+      const config = vscode.workspace.getConfiguration('coai');
+      const next = roleSwitchFollows(roleRows(), command.id, command.value === true, settingsFrom(this.read(config)).roleEnabled);
+      if (next !== undefined) {
+        await this.save(config, 'roleEnabled', next);
+      }
+    }
+  }
+
+  /**
+   * A caller's consultant picked on the new page (PLAN_one_model_catalog.md E4.2): a reference to a catalog row, read and
+   * written in ONE catalog turn, and never through the fold — a pick moves which row a caller asks, and the fold would
+   * read a caller re-pointed away from a row only it used as that row's removal. A refusal is said; the picker snaps back.
+   */
+  private async savePick(caller: string, rowId: string): Promise<boolean> {
+    try {
+      const refusal = await inCatalogTurn(() => this.writePick(caller, rowId));
+      if (refusal.length > 0) {
+        reportRefusal(this.context, 'consultants', new Error(refusal));
+      }
+
+      return refusal.length === 0;
+    } catch (error: unknown) {
+      reportRefusal(this.context, 'consultants', error);
+      return false;
+    }
+  }
+
+  /** The pick's writes, from what is stored NOW — a migration may have run since the message was posted. */
+  private async writePick(caller: string, rowId: string): Promise<string> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const read = this.read(config);
+    const pick = consultantPickWrites(asRecord(read('consultants')), caller, rowId, vendorsFrom(read('vendors')));
+    for (const one of pick.writes) {
+      await saveSetting(this.context, config, one.key, one.value);
+    }
+
+    return pick.refusal;
+  }
+
   /** The fold and its writes — the rows first, then the entry. */
   private async foldAndWrite(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
     const fold = foldedWrite(key, value, this.read(config));
@@ -2371,6 +2461,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'moveDataDirectory':
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.moveDataDirectory);
         break;
+      case 'deleteOldDataFolder':
+        // The command keeps every check of its own (the record verified, nothing written to the old folder since).
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.deleteOldDataFolder);
+        await this.render();
+        break;
       case 'copyPhrase':
         await this.copyPhrase(id, from);
         break;
@@ -2421,6 +2516,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.consultantHealth.checkModel(id);
         }
+        break;
+      case 'trySecurity':
+        await this.trySecurity(id ?? '');
         break;
       case 'settingsPreview':
         // The configuration change repaints the open tab on the other page; nothing else to do here.
@@ -3069,6 +3167,69 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   private binaryFeatures(): Promise<BinaryFeatures> {
     return this.features.of(serverPath(this.context.globalStorageUri)?.fsPath, serverRun);
+  }
+
+  /** How long Try it waits: one classification of at most 64 K characters, never a vendor turn. */
+  private static readonly TRY_SECURITY_CAP_MS = 15_000;
+
+  /** What the installed binary last said about a sample — this window's, drawn on the new page's Security lane tab. */
+  private securityTry: SecurityTryResult | undefined;
+
+  /** The MCP clients' config files, each read again only when it changed (E4.5). */
+  private readonly clients = new ClientReader();
+
+  /** Whether the new Settings page is what the Settings slot would paint — the tab open, the preview on. */
+  private newPageCanShow(): boolean {
+    return this.settingsTab.view !== undefined && settingsPreviewOn();
+  }
+
+  /**
+   * What only the new Settings page draws — the roles' prompt files (E4.3), the command texts (E4.4) and the MCP
+   * clients' config files (E4.5) — read only while that page can be shown, so a sidebar repaint reads no file.
+   */
+  private async newPageReads(server: ServerStatus): Promise<Pick<PanelState, 'roles' | 'commands' | 'mcpClients'>> {
+    if (!this.newPageCanShow()) {
+      return {};
+    }
+    const version = server.kind === 'absent' ? '' : server.version;
+    const folder = workspaceFolderPaths()[0] ?? '';
+
+    return {
+      roles: await rolesEmbedState(version),
+      commands: await commandsEmbedState(version),
+      mcpClients: await this.clients.read(clientFilesFor(os.homedir(), folder), folder),
+    };
+  }
+
+  /** A change to the roles' shape, from either page that edits them, redraws the new page's Roles & prompts (E4.3). */
+  private readonly rolesRedraw = onRolesRedraw(() => this.render());
+
+  /** The same for the gate's commands, edited from the new page's Commands or the Gate commands tab (E4.4). */
+  private readonly commandsRedraw = onCommandsRedraw(() => this.render());
+
+  /** The same for the chat presets, edited from the new page's Chat or the Chat presets tab (E4.6b). */
+  private readonly chatPresetsRedraw = onChatPresetsRedraw(() => this.render());
+
+  /**
+   * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to
+   * `coai-mcp --check-security` on STDIN — a sample can hold a token, and an argument is in process listings. Refused
+   * before a spawn when the binary cannot answer it or the sample is too long; the answer, or why there is none, is drawn.
+   */
+  private async trySecurity(sample: string): Promise<void> {
+    const features = (await this.binaryFeatures()).features;
+    const server = serverPath(this.context.globalStorageUri);
+    const refusal = server === undefined ? 'coai-mcp is not installed on this side.' : securityTryRefusal(sample, features);
+    this.securityTry = refusal.length > 0 || server === undefined
+      ? securityTryFailed(sample, refusal)
+      : await this.askCheckSecurity(server.fsPath, sample, features);
+    await this.render();
+  }
+
+  private async askCheckSecurity(executable: string, sample: string, features: readonly string[]): Promise<SecurityTryResult> {
+    const lane = securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane'));
+    const { code, output } = await serverRun(executable, undefined, securityTryRequest(sample, lane, features))(['--check-security'], PanelProvider.TRY_SECURITY_CAP_MS);
+
+    return securityTryAnswer(sample, code, output);
   }
 
   /** How long a close may take. It is one small write behind a repository lock, not a vendor turn. */
@@ -4404,6 +4565,16 @@ async function openInsideWorkspace(file: string, line: number): Promise<void> {
   if (inside.ok) {
     await showCurrentFile(inside.path, line);
   }
+}
+
+/**
+ * The chat's models AND every preset, moved or not (E4.6a): what the price book and the spend ledgers resolve against —
+ * a line written before the move names a preset id, one written since names a row id, and both must find their vendor.
+ */
+function chatModelsAndPresets(): readonly ModelPreset[] {
+  const config = vscode.workspace.getConfiguration('coai');
+
+  return [...savedModels(config), ...chatModelPresetsFrom(userLayer(config)('chatModelPresets'))];
 }
 
 /**

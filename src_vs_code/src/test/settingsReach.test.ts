@@ -81,6 +81,8 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
     rowMinutes: 3,
     questionsPerSession: 4,
     freeBatches: 1,
+    // Not a setting a person changes: which catalog row a row refers to, read from the rows (C2).
+    catalogRows: {},
   },
 };
 

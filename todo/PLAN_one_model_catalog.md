@@ -1,7 +1,7 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-05 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
-> the measured live calls wait on the operator); E3 in progress on `feat/catalog-e3`; E4–E5 open.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-06 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
+> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.6 built; the owed consultations and the epic's code gate open); E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -614,7 +614,339 @@ page is unchanged with the preview off; all suites, lint, the seam and the layou
    Change and Move flows on today's `dataCommands.ts` logic, the "moved from" record surviving a reload; This side with
    the export note.
 
+#### E4 as designed (before building; from the mockup, the plan and the code that is there)
+
+**Approach — the old builders first, in place; then the catalog.** Every old Settings section already draws its
+settings through the panel's write path; the new page is painted in the same slot. So E4 first draws each section's
+builder in the sub-tab that owns it (exported from `panelView.ts`, never copied), then moves each tab onto the catalog
+and folds in the three separate pages. One branch; a PR per story or two; one code gate at the end of the epic.
+
+**Fixed first (epic 3's missed row):** the panel's `vendors` is the current page's reviewers (`shownOnTheOldPage`), so the
+new Models tab never drew a row that reviews nothing — a migrated consultant. The state carries `catalogRows` (every
+row); the new page reads it. Done, RED first.
+
+- **E4.1 Every tab in its place.** reviews/stages and reviews/prompts ← `promptsBody` split into its two halves (the role
+  switches, rounds, thresholds, lenses and workspace; the round pickers) — the same controls, each drawn once on the
+  page; reviews/gate ← `gateBody` (its commands link opens reviews/commands); reviews/limits ← `limitsBody`;
+  consultants/consultant ← `consultantSection`; consultants/qconsult ← `questionConsultantSection`; security ←
+  `securityLaneBody` (and `securityLaneScript` joins the page's script); chat ← `chatBody`; setup/keys ← `keysBody` over
+  every row; setup/team ← `teamServersBody`; setup/mcp ← `serverBody` (its zoom rule matched to the new pane); setup/side
+  ← `sideBody`. Each feature tab shows the "used by" strip of the rows ticked for it, with "change on Models", which
+  opens Models filtered by that use (the page's own filter state). After E4.1 only Roles & prompts and Commands still
+  say where they are. **Built 2026-10-05** (`catalogSections.ts`; the split is one parameter, `promptsBody(state,
+  half)`; every setting control of the current page writes the same on both pages — 515 swept).
+- **E4.2 Consultants and Security from the catalog.** A caller's picker lists the rows ticked Consultant (absent = the
+  shipped pair, D2; the same vendor as the caller shown, never refused; a stranded pick shown and named, never cleared —
+  D3); the question consultant's rows pick from rows ticked it; the security pairs from rows ticked Security lane. "Try
+  it" sends the sample to `coai-mcp --check-security` on stdin (E2.4) — never a JavaScript copy of the matcher. **Built
+  2026-10-05** (`consultantPicks.ts`, `catalogPicks.ts`, `securityTry.ts`). Deviation: a consultant pick is written WITHOUT
+  the current page's fold, which would drop the caller's old row (E1.4); found on the way, the Question consultant
+  section resolved its rows against the reviewers only, so a migrated row could not be switched on — fixed, RED first.
+- **E4.3 Roles & prompts in the page** (replacing `rolesPage.ts`): its content drawn by the panel, its edits as
+  namespaced commands into a host module both the old roles panel and the panel call (`rolesHost.ts`, extracted from
+  `rolesPanel.ts`) until E5 deletes the page. ONE switch per role — `roleEnabled` and the catalog's `active` merged,
+  `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion confirmed, ids reserved (the existing
+  `roleDeletions`); a role stays off until it has a question; a name is asked by the host's input box (a webview has no
+  `prompt()`). The prompt editors do not carry `data-prompt` (the shared script reads that as a round pick). **The
+  command shape** (plan round 1): one exported command type per host module — `roles.<verb>` / `commands.<verb>`, each
+  verb declared once with its arguments, so a new command is one declaration both callers see; the panel dispatches by
+  the prefix; the host answers with a refusal sentence (empty = done), which the panel shows through its existing
+  refusal path, so an edit that did not land is said, never silently read back; catalog keys are written inside
+  `inCatalogTurn`. **Built 2026-10-05** (`rolesHost.ts`, `rolesEmbed.ts`, `rolesSwitch.ts`). Deviations: the command
+  shape is the Review roles tab's OWN message carried as `{ type: 'roles', edit }` and parsed by its own `roleEdit` — one
+  type for both pages, not a second set of verbs; a refusal is the roles' existing notification; the stages are headed
+  groups, not a second tab strip; `roleEnabled` follows `active` only after the catalog write landed; a role's name is
+  typed in place, as on the tab, so no input box was needed.
+- **E4.4 Commands in the page** (replacing `commandsPage.ts`), the same way (`commandsHost.ts`). **Built 2026-10-05**
+  (`commandsHost.ts`, `commandsEmbed.ts`); deviation: the blocks carry `data-cmd-*` attributes on the new page, because
+  the page also draws the roles, whose wiring reads `data-field`, `data-remove` and `data-restore`.
+- **E4.5 Setup.** Keys counted across every row; the CLI table; Team servers with their contract (E2.5); the MCP
+  server's clients — whether each registers coai-mcp, READ from its config file and never written, no other entry or
+  secret shown (a pure file read: no client program is launched, so there is no process to time out); the data
+  folder's Change and Move on `dataCommands.ts`, and the "moved from" record (`coai.lastDataMove`) shown after a reload
+  with "Delete the old folder". **Built 2026-10-05** (`setupTab.ts`, `mcpClientsRead.ts`; the Team servers' contract
+  note moved with its section in E4.1).
+- **E4.6 Chat** (the risky piece): rows ticked Chat, per side; a row's `chatStartingPrompt` and its effort and system
+  prompt applied (D8); prompt presets inline, through the panel's save (ending the presets page's direct writes). **The
+  move**: each model preset becomes a row `chat-<id>` with `uses: [chat]` and its starting text, through the epic 1
+  migration (`placeAll`/`newRow`, backup once, rows, references, the marker last, restore). Corrected in plan round 1 —
+  what holds a PRESET id today: `coai.chatModel`; a conversation record's `providerId` and `chosenId` (its `modelId` is
+  the model NAME, which the move does not change — except a legacy record whose `modelId` equals a preset id); legacy
+  `SavedTab.modelId`; the spend ledger's turn and door lines' `provider`; and its forget marks, keyed by provider +
+  model. Only `coai.chatModel` is a setting and is rewritten with the rows. Every FILE reference is mapped on READ
+  through the preset → row table the migration stores in settings (`chatPresetRows`, in the same backup) — a record
+  or ledger line is never rewritten, so an interrupted move has nothing half-written outside the settings, and a rerun
+  finds its rows by their fields. `coai.chatModelPresets` itself is kept as it was until E5, so an older extension
+  still reads its presets; coai-mcp never sees a chat-only row (a row that reviews nothing is left out of
+  `COAI_VENDORS`, E1.4) and does not serve chat.
+
+  **E4.6 as designed, from a trace of the chat code (2026-10-05) — it corrects the bullet above.**
+  - *What really holds a preset id on disk:* `coai.chatModel`; the `provider` field of `chat-usage.jsonl` and
+    `chat-doors.jsonl` (and, for an old line with no `vendor`, the forget mark keyed through it); and
+    `coai.chatModelPresets` itself. A conversation record holds only the MODEL id (`chatStore.ts:94-126`); its
+    `providerId`/`chosenId` are in memory only, and a restored conversation finds its provider again by that model id
+    (`legacyPick`) — so the move changes nothing a record holds, and the record row of the remap goes.
+  - *Three stories, the move first:* **E4.6a the move** — **E4.6b the Chat tab** (rows ticked Chat per side, the prompt
+    presets inline) — **E4.6c effort and system prompt applied to a chat launch** (D8; today a chat launch reads
+    neither).
+  - *E4.6a, the move.* A step of the epic 1 migration, run in every layer and again whenever `chatModelPresets` or
+    `chatModel` changes (a config import can bring old presets back): each preset the reader sees (`savedModels`, so a
+    positional `preset-N` id is the one the chat used) that the stored table `chatPresetRows` (preset id → row id) does
+    not hold yet becomes its OWN row — never joined to an existing one, because `sameLaunch` ignores the Team server and
+    two presets' starting texts would collapse — with id `chat-<normalised id>` (`freeVendorId`), `uses: [chat]`,
+    `name`, `chatStartingPrompt`, the launch fields, `vaultKeyName` = the old preset id (the vault key keeps its name),
+    and an explicit `remoteVendor` for a Team-server preset (its server vendor came from an id prefix `chat-` would
+    break). Written in epic 1's order — backup (`chatModelPresets` and `chatModel` join `BACKED_UP`), rows, the table,
+    `coai.chatModel` remapped (to the MAIN preset's row when one is marked main — the catalog has no "main"), the marker.
+    Idempotent: a preset already in the table is skipped. The 64-row cap refuses the step, said, as it refuses a layer.
+    A layer that keeps its own `vendors` (a side overlay) gets the chat rows too, read from the user layer's presets.
+  - *Then chat reads the rows.* `savedModels` answers from the rows ticked Chat (row → the preset shape the chat code
+    already takes; `chatRunSpec` carries the row's `vaultKeyName`), so every chat path keeps working with row ids. The
+    ledgers are mapped on READ: an old line's `provider` through `chatPresetRows`, so old and new lines of one model
+    are one spend row. The presets page stays reachable until E5 but writes rows through the panel's save.
+  - *Test plan, E4.6a:* the step as a pure function — a preset becomes its row with every field and the vault key
+    name; a positional id; a mixed-case id; a remote preset keeps its server vendor; MAIN moves `chatModel`; a second
+    run changes nothing; an imported preset moves alone; the cap refuses; backup and restore round-trip — and the
+    reads: a ledger line under an old id lands in the row's spend row; a conversation restored by model id opens on
+    the moved row.
+
+  **E4.6a revised by an independent design review (2026-10-06)** — the consultant is still switched off, so a reviewer
+  agent checked the design against the code (the risk consultation stays owed and runs before the merge). It changes:
+  - *The identity is a stored RECORD, never the row's key name.* `vaultKeyName` cannot be it: a deleted row would come
+    back on the next run, `vendorsFrom` lower-cases it (`vendors.ts:451-455`) so a mixed-case preset id would be moved
+    again on every run up to the cap, a positional `preset-N` shifts when an earlier preset is removed, Duplicate
+    copies it (`catalogCommands.ts:110`), and the current page's save rewrites it (`catalogLaunch.ts:43-53`). The
+    record `chatPresetsMoved` — `{ presetId, runtime, model, name, rowId }` per moved preset, a DECLARED setting,
+    overlaid per side like `vendors` — is what a run skips by; the fingerprint catches a positional shift (a preset
+    whose id is recorded but whose fingerprint differs is a different preset and is moved as such). A deleted row
+    stays deleted. `vaultKeyName` is still set to the old id when it is `normaliseId`-clean (the vault key keeps its
+    name) and left off otherwise; an id that normalises to nothing gets `chat-model`.
+  - *No dual store, ever:* E4.6a ships TOGETHER with the presets page reading and writing rows (its model half), and a
+    scan test refuses any write to `chatModelPresets` outside the move's restore. The chat reads the rows ticked Chat,
+    plus — only before a layer's first move, after a cap refusal, or in a restored layer — the presets the record
+    lacks. `chatModelPresets` joins `MIGRATION_TRIGGERS` (an import, a hand edit); `chatModel` does not.
+  - *Per side:* `chatModel` and `chatModelName` join `OVERLAID_SETTINGS` (D8: chat models are per side), so a row id
+    that differs between a side's `vendors` and the user layer's never leaves the chat opening on the first provider.
+    The step writes an overlay's chat rows only when that overlay keeps its own `vendors`.
+  - *MAIN:* the run that moves the main preset writes `chatModel` = its row AND `chatModelName` = its model (both backed
+    up) — a stale `chatModelName` would otherwise open a different model (`chatModels.ts:488-494`).
+  - *A downgrade:* an older build drops `uses` and keeps `vaultKeyName`; `repairUses` gives `chat` back to a row the
+    record names (it already repairs what a reference names).
+  - *A resumed conversation:* the record gains an optional `providerId` (absent = today; no format bump, as `access`
+    was added) and is resolved through the record, so two rows that offer one model name cannot swap a conversation's
+    model, system prompt or effort. A legacy record whose `modelId` is a preset id is mapped through the record too.
+  - *The ledger needs no row map:* spend rows and forget marks key on the vendor (runtime) and the model
+    (`chatSpendRows.ts:220-227`); old lines resolve their vendor through presets ∪ rows, and after E5 through the backup.
+
+  **E4.6a built 2026-10-06** (`chatPresetMove.ts`, `catalogChatStep.ts`, `chatCatalogModels.ts`, `chatModelEdits.ts`;
+  wired in `catalogMigration.ts`, `catalogMigrationHost.ts`, `chatConfig.ts`, `chatPresetsPanel.ts`, `chatStore.ts`,
+  `chatPersist.ts`, `chatConversationRestore.ts`). As revised above, with these differences:
+  - *The record is the only thing the move writes outside the rows.* `chatModelPresets` is never written by the move,
+    so the restore has no presets to put back; `BACKED_UP` gains `chatPresetsMoved`, `chatModel` and `chatModelName`.
+  - *The "no dual store" scan* (`noSecondPresetStore.test.ts`) pins which modules name the presets setting and the
+    presets page's two writes: the edit of a preset the move has not taken (`chatModelEdits.onPreset`) and the prune
+    of dead rows no surface can show — the latter was not in the plan and is kept, because a dead row is never moved.
+  - *The settings' chat picker reads the rows too* (`chatModelsReading`, shared with `savedModels`): it listed the raw
+    presets at first, so after the move it showed the chat's own row as one that "cannot answer a chat" — found while
+    designing E4.6b, fixed with a RED test (`thePanelListsTheMovedRows.test.ts`).
+  - *The chat reads this side.* `chatRead(config)` (`readerFor(side)`, bound at activation by `bindChatSide`) is what
+    every chat path reads its settings through; `theChatReadsThisSide.test.ts` refuses `chatSettingsFrom(userLayer(`.
+  - *A resume* goes through `resumedPickFor` → `resumedPick`: the recorded row while it is offered, else `legacyPick`
+    of the saved model value after `movedTo` maps an old preset id. `savedPick` (`coai.chatModel`) maps through the
+    record the same way. `recordFrom` drops a malformed `providerId` and keeps the conversation.
+  - *An import cycle avoided:* `catalogChatStep` declares the part of a layer it reads (`ChatLayer`) and the writes it
+    makes (`ChatWrite`) instead of importing them from `catalogMigration`, which calls it.
+
+  **E4.6b as designed (2026-10-06), from the mockup's Chat page (`new_design/lanes.js` `chatPage`) and the way E4.3/E4.4
+  folded their pages in.** The Chat place stops drawing the current page's section and draws its own (`SPLIT['chat']`):
+  - *Which model a chat opens on* — one radio per model the chat can answer with (`chatProvidersFromPresets` over
+    `state.chat.models`, the panel's discoveries in it, as `chatBody` builds it today — extracted, not copied), its
+    name and an *Opens with* box (the row's `chatStartingPrompt`). The checked radio is `coai.chatModel`, or the preset
+    ticked main while nothing is saved. A saved choice that no longer resolves is drawn checked and disabled with
+    the reason (the stranded rule the current page keeps), and every switched-on row the chat cannot speak to is
+    named with its reason (`list.refused`). Per side: the note "saved for this side" when `perSideSettings` is on.
+    Picking a radio is the presets page's `main` edit, so `coai.chatModel` is set and a stale `chatModelName` cleared.
+    No *Add a model* here: models are added on Models (tick Chat).
+  - *Sending* — the three fields the current section has (what to ask, answer in, who presses send), from ONE
+    builder both pages call (`chatSendingFields`, extracted from `chatBody`), written through `data-setting`.
+  - *Prompt presets* — inline: the presets page's own prompt block (`chatPresetsPage.promptRow`, its attribute names
+    passed in, as `commandsPage.customBlock` takes them, because the roles' wiring reads `data-field`/`data-remove`),
+    with *Add a prompt*.
+  - *One editing core* — the presets page's writes move, unchanged in effect, from `chatPresetsPanel.ts` into
+    `chatPresetsHost.ts` (`queueChatPresetEdit`, `flushChatPresetEdits`, `onChatPresetsRedraw`, bound at activation),
+    behind ONE settled-write queue, as `rolesHost`/`commandsHost`. The new page posts `{ type: 'chatPresets', edit }`
+    — the presets page's own message, read by its own `presetEdit` — numbered for a pick, a tick, Add and Remove
+    (`chatPresets` joins `PANEL_TRACKED`), plainly for typing, and reports focus as `chatPresets|<id>|<field>`; a
+    focus release flushes this queue with the roles' and the commands'. The presets page keeps its wizard (*Add a
+    model*) and its prune.
+  - *Not built:* the mockup's Shortcuts panel (the key list lives in `package.json`, and VS Code's own editor is
+    where a key is changed) — named here so its absence is a decision.
+  - *Test plan, E4.6b:* the tab's html read as a tree (`pageTree`): one radio per model that can answer, the checked
+    one, a stranded choice disabled with its reason, a refused row named; firing a radio, a prompt's box, its main
+    tick, Add and Remove through the page's real script (`runPanel`) posts the presets page's own edit, and the roles'
+    and commands' wiring post nothing for them (and the reverse); the host's queue: a typed field settles, a click
+    goes straight through, a model edit lands in the row (`chatModelEdit`), a prompt edit in `chatPromptPresets`;
+    the old page's chat section still draws its fields (the extraction is behaviour-neutral).
+
+  **E4.6b built 2026-10-06** (`chatTabEmbed.ts`, `chatPresetsHost.ts`, `chatModelWizard.ts`; wired in
+  `catalogSections.ts`, `catalogPageScript.ts`, `panelProvider.ts`, `busyMark.ts`, `catalogCss.ts`). As designed, with
+  these differences:
+  - *The add-model dialogs became their own module* (`chatModelWizard.ts`), so the editing core does not import the
+    page that draws them; the presets panel's two complexity suppressions went with the move (written within the
+    limit, not carried).
+  - *Which edits settle* is decided in the pure page module (`chatPresetsPage.presetSettlesAs`, tested) rather than
+    in the host: typed fields (name, text, starting text) settle per list/row/field; a tick, a pick or a press goes
+    straight through. A presets write that fails is now reported, where the tab used to only log it.
+  - *The host's queue is not unit-tested* (it imports `vscode`); its decisions are — `presetSettlesAs`,
+    `chatModelEdit`, `editedRows`, `rowsAfterMain` — and its wiring is pinned by `noSecondPresetStore.test.ts` and
+    `settingRefusedWiring.test.ts`.
+  - *The two route branches share one* in `PanelProvider.receive` (`commands` or `chatPresets`), which keeps that
+    method at its 50-line limit.
+
+  **E4.6c as designed (2026-10-06), from a trace of how coai-mcp applies both (E2.2) and of the chat's launch.** The
+  chat follows the server's rules exactly, so a row behaves the same when it reviews and when it chats:
+  - *Carried.* `ModelPreset` gains optional `effort` and `systemPrompt`; `chatCatalogModels.OPTIONAL` copies them
+    from the row and `chatRunSpec` hands them on. Today both are dropped at `asChatModel` and again at `chatRunSpec`.
+  - *Effort, where the server sends one.* claude: `--effort <level>` on the launch (`ClaudeRuntime.cs:89-91`), and
+    only a level `featureAvailability.effortRefusal` accepts — the TS mirror of the server's check — so a value the CLI
+    would refuse never reaches it. A Team-server row: the request's `effort` field (`RemoteAsk.cs:98-103`), which the
+    server applies to a vendor with measured levels and drops otherwise. codex and agy: none (`RosterBuilder.EffortFor`
+    gives them none; agy's level is in its model id). `ChatLaunch` gains an OPTIONAL `effort` — every adapter's
+    `argv` decides, and only claude's uses it. No thinking switch: no chat runtime has one.
+  - *System prompt, inside the text, never in argv.* As the server does for every runtime but a Team server
+    (`ReviewerPrompt.ComposePrompt`, `PersonInstruction`): a section before the person's words —
+    "## What the person asked of this model" — on the FIRST turn a session hears (a new conversation, a model switch,
+    a reload: the session object changed), and on EVERY turn of a forgetful (Team-server) session, which forgets each
+    turn. Not a request field for a Team server: the server drops a system prompt from a prompt without a finding
+    contract, which a chat never has (`ClientOptions.cs:98-102`). What is SHOWN and stored stays what the person
+    typed; the section is in what is sent only, as the carried transcript already is.
+  - *Test plan, E4.6c:* a row's effort and system prompt reach the chat model (`chatModelsOf`) and the run spec; the
+    claude argv carries `--effort high` and no flag for an empty or refused level, and codex/agy argv never one (the
+    pinned text-mode argv tests unchanged); the Team-server body carries `effort` only when set; the section is
+    prepended on a session's first turn and not its second, on every turn of a forgetful session, never when the row
+    has none, and the transcript keeps the typed text.
+
+  **E4.6c built 2026-10-06** (`cliChatLaunch.chatLaunchFor`, `claudeAdapter`, `chatPrompt.rowInstructed`,
+  `chatThread.hearsRowInstruction`; carried in `chatPresets.ts`, `chatCatalogModels.ts`; sent in `chatTurn.ts`,
+  `remoteAsk.ts`, `remoteChatSession.ts`, `chatRemote.ts`). As designed, with these notes:
+  - *"The session that heard it"* is the session OBJECT (`Thread.instructed`), so every way a session is replaced — a
+    switch, a reload, a reset (`chatArchive`'s partition classifies the field with `session`) — sends it again
+    without each path having to remember to. It is set by the turn's RESULT (`chatThread.instructedAfter`): one
+    session object outlives its process, so a stopped or failed turn, or one answered by a new process
+    (`contextLost`), leaves it unset and the next turn carries the instruction again.
+
+  **Own review of E4.6 (2026-10-06)** — two reviewer agents (correctness; conventions) while the coai consultant is
+  off; the owed consultations still run before the merge. Fixed, each with a RED test first:
+  - the instruction marker was set BEFORE the send, so after a stop or a crash the row's system prompt was gone for
+    the rest of the conversation (above);
+  - unticking Chat on Models on a moved chat-only row bounced back: the downgrade repair read the person's explicit
+    `uses: []` as an older build's missing key — only a MISSING key is repaired now (`catalogMigration.lostRows`);
+  - a switch between two rows that offer one model saved nothing (the save guard compared the model only), so a
+    reload resumed on the old row — `savedProviderId` joins the guard and `UNSAVED`;
+  - a chat row's id rule was written twice (a moved preset, a model added on the tab) — one `freeChatRowId` now.
+
+  **CodeRabbit on PR #688 (2026-10-06)** — no actionable comments; its architecture summary raised two medium notes:
+  - *An interrupted move* (rows, record and chat model are separate settings writes). Fixed, RED first: a rerun ADOPTS
+    the row an interrupted run wrote (its own id, ticked Chat, the preset's runtime/model/name, named by no record —
+    `chatPresetMove.adoptedRow`) instead of writing `chat-<id>-2`; a run with nothing to move still remaps a chat
+    model left naming a recorded preset (`catalogChatStep.remapped`). Neither ever overrides a chat model that names a
+    row that exists — `coai.chatModel` has always held a row id — and `resumedPick` keeps the same rule.
+  - *The fingerprint ignores launch fields* (executable, endpoint, Team server). **Not changed — for the owed risk
+    consultation:** the frozen preset is not a second source after the move (the row is what is edited), and adding the
+    launch fields would turn every such edit made in an older build into a duplicate row. Open question for the
+    consultation: is a preset edited in an older build after the move a new model, or the same one to leave alone?
+
+  **The owed consultations, 2026-10-06** — the consultant is back (codex `gpt-6-astra`). The cadence consultation for
+  epics 1–3 and the risk consultation for epic 4 ran; every finding, and which test reproduced it, is in
+  [RESULTS_catalog_consultations_2026-10-06.md](../research/RESULTS_catalog_consultations_2026-10-06.md). Fixed on
+  this branch, each RED first: C1, C3, C4 (epics 1–3) and R1–R6 (epic 4). Still open:
+  - *C2 — a row's options never reach a consultation* (effort, system prompt, timeout, key name): `COAI_CONSULTANTS`
+    carries the launch fields only and `ConsultantResolver` rebuilds only those. **Built 2026-10-06 (C2a–C2c), each
+    step RED first; the deviations from the design below:** a consultation FREEZES the system prompt in its record
+    (`ConsultationRecord.RowInstruction`), because a turn's prompt is composed from the record alone; a question row keeps
+    the question consultant's `RowBudget`, not the catalog row's timeout (the sweep and the fan-out deadline derive from
+    it); a question row's catalog id is kept beside the rows (`QconsultSettings.catalogRows`). **Design (2026-10-06,
+    from a read of every path):**
+    - *The wire carries the WHOLE row.* A consultant entry of `COAI_CONSULTANTS` and a row of `COAI_QCONSULT_ROWS` gain
+      `row`: exactly what `vendorsEnv` writes for that one row (the precedent is `modelCheckInput.ts`, which hands
+      `--check-model` one row the same way), through one mapper factored out of `vendorsEnv` — never a second field
+      list. It is written only to a binary whose `--features` lists `consultantRow` (an older one skips an unknown
+      member silently, so a version check would not do). `vendor` does not change: an open consultation resumes by it.
+    - *The server parses it with the reviewer row's own parser* (`PanelSettings.ParseVendors` over one row, as
+      `ConsultantCheckMode.RowsOf` does) and takes the row's price, api settings, key name, dialect, system prompt,
+      timeout and CLI effort; identity (id, runtime, the remote allowlist) stays the choice's. A `row` that does not
+      parse refuses the consultant BY NAME — never a silent fall back to the five fields. `Frozen` (a resumed turn)
+      takes today's row fields too.
+    - *The fields reach the launch.* The row's own timeout bounds its turn when set; CLI effort reaches the claude and
+      local consultants through the reviewers' own rule (`RosterBuilder.EffortFor`, shared, not copied); api effort and
+      thinking already apply once the row's `Api` is filled. The system prompt is a person's instruction in the
+      consultant prompt and the question prompt, redacted in the record as a reviewer's is. A `web` question row still
+      gets the question and nothing else — the policy that row exists for.
+    - *Build order:* C2a the wire and the parse (a consultant's `ProviderSettings` carries every field — tested at the
+      resolver); C2b timeout and effort at the launch (tested at the adapters' requests); C2c the prompt slot (tested
+      at the composed prompt). `panelServerDefaultsAgreement` learns the `row` member; every step RED first.
+  - *R7 — the answer to the open question above:* a preset edited in an older build after the move is a conflicting
+    revision of the SAME preset, not a new model. Planned, not built: keep the edited revision and show the conflict on
+    Chat (the person chooses); widening the fingerprint alone would duplicate rows.
+  - *The cadence consultation for epics 4–5* — **ran 2026-10-07** (consultation `7fec916c`, codex `gpt-6-astra`); its
+    findings and what each came to are in the consultations record. Fixed on this branch, RED first: a row that consults
+    now says on its card when this side's binary would drop its settings for a consultation (`consultantRow`), and an api
+    row on a server too old for api rows says why its card is off, as the current page did. Moved to epic 5's
+    prerequisites below: R7, extraction before deletion, and the rollout order.
+  - *The epic 4 code round (2026-10-07, session `21ec1de8`, 8 reviewers on codex and gemini):* `proceed`, 12 findings.
+    Accepted and fixed, RED first: the system prompt is redacted as it was SENT (trimmed; whitespace alone redacts
+    nothing — found by two reviewers); `architecture.md` describes the `consultantRow` flow; the chat host's dependency on
+    `chatPresetsPage.ts` joins epic 5's extraction step. Rejected with the code that refutes each: "the move resets a
+    saved non-main chat model" (three reviewers) — today's chat already opens on the ticked MAIN preset over
+    `coai.chatModel` (`chatCommand.readyForChat` on main), and the move keeps that; "a side with inherited rows keeps an
+    orphaned preset id" — the read follows it through the record (`chatConfig.resumedPickFor`); "question rows drop the
+    api module" — `QuestionFanOut.SettingsFor` applies it; a side's own row shadowing an inherited reference (by design,
+    per-side launch facts); quadratic move work (capped at 64 presets); the non-main resume's model name (matches the
+    uninterrupted run).
+  - *Own review beside the epic 4 code round (2026-10-07):* `chatPresetsMoved` and `chatModelName` are model keys now
+    (a repository could redirect the chat through them); an interrupted resume after an older build's edit takes the
+    NEWEST record entry, as the uninterrupted run does. Known, not changed: a restore leaves a conversation saved since
+    the move refused by name until the person picks again (no data is lost); which entry a LEGACY conversation id means
+    when the record holds two is R7's conflict to show, not a guess.
+  - *Not measured on a real call yet,* as for reviewers (the plan's open measurement): whether an older claude CLI
+    refuses `--effort` in chat mode (the server names that refusal for a reviewer; the chat shows the CLI's own
+    error), and how strongly a model follows an instruction placed in the first user turn rather than a system role.
+  - *The wiring in `chatTurn.ts`* (it imports `vscode`) is pinned by reading the source; the two decisions it calls
+    are tested as values (`aChatHonoursItsRow.test.ts`).
+
+**Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
+host-module seam, so it lands while E4.3's command shape settles.
+
+**Test plan:** each tab run through the page's own script (`runPanel` with the catalog page), every control writing
+its setting; the pickers limited to ticked rows, a stranded pick shown; "Try it" posts the sample and draws what the
+binary answered; the folded pages' edits reach the same host functions their pages used (their existing tests move with
+them); the MCP clients reader over fixture files, refusing to read past its own entry, with a companion assertion that
+it still reads a known entry; `COAI_ROLES` at `ROLE_SWITCH_SINCE`'s boundary — a server under it gets it written, one at
+or above it does not; the chat migration as a pure function (preset → row, `coai.chatModel` remapped, backup,
+restore, idempotent, stopped at each write boundary and rerun), and a conversation stored under each old preset
+(`providerId`, `chosenId`, a legacy `modelId`) resuming on its mapped row; the spend rows and forget marks read through
+the table.
+
+**Definition of done:** every tab of the new page works; the three separate pages are still reachable from the old page
+until E5; each folded page's tests run the NEW page too, and any assertion over page source text is converted to run
+the page (`todo/PLAN_the_page_tests_run_the_page.md`); all suites, lint, the seam and the layout render green; module
+docs updated.
+
 ### Epic 5 — The switch-over, docs and release
+
+**Prerequisites, from the epics 4–5 cadence consultation (2026-10-07):** (a) **R7 first** — a preset edited in an older
+build after the move is otherwise unreachable (a changed CLI path or starting text leaves the move `unchanged` and Chat
+keeps the old values; a changed name makes a second row); its tests cover both kinds of edit, a resolution that survives
+a reload, and records written before any launch-field snapshot existed. (b) **Extract before deleting** —
+`catalogSections` calls `PANEL_SECTIONS`, and `rolesEmbed`, `commandsEmbed` and `chatTabEmbed` import builders from the
+three pages E5.1 deletes — and `chatPresetsHost` takes its command type and edit decisions from `chatPresetsPage.ts`
+(epic 4's code round); move the shared builders, contracts and handlers out first, and keep the parity tests' inventory explicit
+so deleting the old sections cannot shrink the test with them. (c) **The rollout order is its own milestone** (no release
+now, by the owner's decision): an OLD coai-mcp still running re-reads the settings file a newer extension rewrites —
+`mcp-v0.43.0`'s security lane refuses `signals`/`words` — so the old readers are restarted (or the file kept compatible)
+before the new fields are enabled; then the installed binary's `--features` are checked, the extension activated, and
+the written file read back. Full consultant behaviour needs a binary that lists `consultantRow`.
+
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).
@@ -742,3 +1074,23 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | The 64-row cap after migration (6) | Checked before writing; the layer is left untouched. |
 | An older build strips the new fields on its first write (12) | Verified in `vendorsFrom`; what is lost and what is regained is written down; no second store. |
 | `feature-availability.json` ahead of coai-mcp's own lists (13) | Frozen to today's lists in E1; the mirror tests stay. |
+
+### The plan round of epic 4 (session `21ec1de8`, 2026-10-05, good_enough, 8 findings accepted, 2 rejected)
+
+| Finding | What changed |
+|---|---|
+| The record's model name is not remapped (0) | Corrected: a record's preset references are `providerId` and `chosenId`; its `modelId` is a model name the move does not change (except a legacy one equal to a preset id). Each is mapped, with a resume test per old preset. |
+| No failure path for the multi-store rewrite (1) | Settings keep epic 1's order (backup once, rows, references, marker last); FILES — records and spend lines — are never rewritten, only mapped on read through the stored `chatPresetRows` table. |
+| An older binary meets a chat row (2) | coai-mcp never sees one (E1.4) and does not serve chat; for an older EXTENSION, `coai.chatModelPresets` is kept until E5. |
+| The host modules' command shape is unspecified (3) | One exported command type per host, dispatched by prefix; a refusal sentence shown through the panel's refusal path. |
+| Which source-text tests move or go (4) | DoD: each folded page's tests run the new page; source-text assertions converted; the reader carries a companion assertion. |
+| `COAI_ROLES` at `ROLE_SWITCH_SINCE` untested (5) | A boundary test added to the test plan. |
+| The MCP clients reader's timeout (7) | A pure file read; no process is launched. |
+| Why E4.5 precedes E4.3 (9) | One sentence in the build order. |
+| REJECTED — `catalogRows` and `feature-availability.json` unbudgeted (6) | Both exist: `catalogRows` on this branch (6903e000), row writes since E3, the file since E2. |
+| REJECTED — nothing creates the use ticks (8) | The ticks exist on every Models card since E3; the E1 migration created the consultant rows. |
+
+The gate's commands applied: one gate for the epic (the code round over the whole diff), autonomous work with
+red-green tests. Not possible: the owed consultations (cadence for epics 4–5, risk for epic 4, and the ones owed from
+epics 1–3) — the consultant is switched off in this installation (`COAI_CONSULT_ENABLED`), so the code round of this
+epic waits on the person. The split stays on Opus — Fable is at its monthly spend limit.

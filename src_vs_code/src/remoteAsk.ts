@@ -98,6 +98,8 @@ const REVIEW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 /**
  * The body a submit carries. Shaped by `RemoteRequest` on the server's side.
  *
+ * @param effort the row's effort (PLAN_one_model_catalog.md E4.6c) — the server applies it to a vendor with measured
+ *   levels and drops it, said, otherwise; empty sends no field
  * @param idempotencyKey this TURN's own name, so a retry after a lost answer finds the job the first
  *   attempt made instead of starting a second one on a shared account. Empty accepts a duplicate,
  *   which is what every client did before the server understood the field.
@@ -108,6 +110,7 @@ export function requestBody(
   prompt: string,
   timeoutSeconds: number,
   idempotencyKey = '',
+  effort = '',
 ): Record<string, unknown> {
   return {
     vendor,
@@ -116,8 +119,13 @@ export function requestBody(
     role: CHAT_ROLE,
     kind: CHAT_KIND,
     timeoutSeconds,
-    ...(idempotencyKey.length > 0 ? { idempotencyKey } : {}),
+    ...saidOnly({ idempotencyKey, effort }),
   };
+}
+
+/** The fields that say something — an empty one is not sent, so a server that predates it reads the body as before. */
+function saidOnly(fields: Readonly<Record<string, string>>): Record<string, string> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value.length > 0));
 }
 
 /**

@@ -776,6 +776,30 @@ the legacy path only**:
   carrying a base URL is recorded as `codex` and refused by `CannotConsult` exactly as before; the
   `codex`-with-base-URL refusal in `ConsultantResolution` is unchanged and deliberate.
 
+**A consultant carries its whole catalog row** (2026-10-06, finding C2 of the epics 1–3 consultation,
+[RESULTS_catalog_consultations_2026-10-06.md](RESULTS_catalog_consultations_2026-10-06.md)). An entry of
+`COAI_CONSULTANTS` and a row of `COAI_QCONSULT_ROWS` may carry `row`: the catalog row exactly as `COAI_VENDORS` writes
+it, written by the extension only to a binary whose `--features` lists `consultantRow`. `ConsultantDto.Row` /
+`QuestionRowDto.Row` keep it as raw JSON (`ConsultantChoice.Row`, `QuestionRow.Row`); `ConsultantResolver.OptionsOf`
+reads it with the reviewer row's own parser (`PanelSettings.ParseVendors` over one row) and `WithOptions` lays its key
+name, dialect, price, api settings, system prompt, timeout and CLI effort over a launch whose identity — id, runtime,
+endpoint, CLI path, the remote allowlist — stays the entry's. A row that does not parse refuses the consultant (and a
+question row) BY NAME; it never falls back to the five fields. The legacy rule (a) takes the same options from the
+reviewer row it borrows. At the launch:
+- **Timeout:** `ConsultantTurnInputs.TurnTimeout` — the row's own minutes where its runtime takes one (not `api`), else
+  the caller's — bounds the launch AND the turn's backstop (`ConsultationDeadline`). A question row keeps the question
+  consultant's `RowBudget`: the store's sweep and the fan-out's deadline are derived from it.
+- **CLI effort:** `RosterBuilder.EffortFor`, the reviewers' rule, for a consultation and a question row alike; the
+  claude consultant spells it through `ClaudeRuntime.EffortArguments` (one spelling for a reviewer and a consultant),
+  a local one through `LocalRuntime`; a codex row's is kept and not sent.
+- **System prompt:** a consultation FREEZES it in `ConsultationRecord.RowInstruction` when it opens — the prompt is
+  composed from the record alone, so an edit made later never reaches an open conversation — and
+  `ConsultantPrompt.Compose` places it (`PersonInstruction.ConsultantSection`) after the product's instruction and
+  before the turn's rules. A question row gets the same section after its base prompt, except a `web` row, which is
+  still given strictly the question (A2). The text is redacted from the child's output
+  (`ConsultantTurnInputs.Redacted` → `ReviewerInvocation.Redact`) for a consultation and a question row, as for a
+  reviewer.
+
 **The wire carries the definition — measured against the released server first** (2026-09-15, story
 B4). `.agents/PROJECT.md` requires a wire field added on one side to be measured against the OLD other
 side before it ships, so before `envBlock` stopped projecting every entry back to `{vendor, model}` the

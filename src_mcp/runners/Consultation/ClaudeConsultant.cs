@@ -155,8 +155,9 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
         return request;
     }
 
+    /// <summary>The model, then the row's effort in the reviewer's own spelling (todo/PLAN_one_model_catalog.md, C2).</summary>
     private static IEnumerable<string> Model(ReviewerSettings settings) =>
-        settings.Model.Length > 0 ? ["--model", settings.Model] : [];
+        [.. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [], .. ClaudeRuntime.EffortArguments(settings)];
 
     /// <summary>
     /// <c>--restricted</c> for a CLI that declared it, nothing for one whose help came back without it — and a
