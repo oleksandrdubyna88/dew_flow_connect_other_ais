@@ -138,7 +138,16 @@ const READERS: Readonly<Record<string, (said: Record<string, unknown>) => Preset
   add: (said) => inList(said, (list) => ({ kind: 'add', list })),
   remove: (said) => inList(said, (list) => removalOf(list, idOf(said['id']))),
   edit: (said) => inList(said, (list) => editOf(list, said)),
+  revision: (said) => revisionOf(idOf(said['id']), said['choice']),
 };
+
+/**
+ * A choice on a preset an older build edited after the move (R7) — its preset id and one of the two answers, each
+ * compared by value as a field name is, so nothing else the page could send — `__proto__` included — is taken for one.
+ */
+function revisionOf(presetId: string, choice: unknown): PresetCommand {
+  return presetId.length > 0 && (choice === 'use' || choice === 'keep') ? { kind: 'revision', presetId, choice } : IGNORE;
+}
 
 /** The command a message about one of the two lists makes — or `ignore` when it names neither. */
 function inList(said: Record<string, unknown>, make: (list: 'prompt' | 'model') => PresetCommand): PresetCommand {

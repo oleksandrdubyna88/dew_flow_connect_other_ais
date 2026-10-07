@@ -1,6 +1,8 @@
 import type { ChatProviderList } from './chatModels';
 import type { ModelPreset } from './chatPresets';
 import { promptBlock, type PresetAttrs } from './chatPresetBlocks';
+import type { CopiedField } from './chatPresetMove';
+import type { ConflictField, PresetConflict } from './chatPresetRevision';
 import type { ChatSettings } from './chatSettings';
 import { escapeHtml } from './escapeHtml';
 import { DEFAULT_CHAT, chatProviderListFor, chatSendingFields, type PanelState } from './panelView';
@@ -36,13 +38,17 @@ ${chat.prompts.map((one) => promptBlock(one, EMBEDDED)).join('\n')}
 </div>`;
 }
 
-/** The models that can answer, a stranded choice, what answers when nothing is chosen, and the ones that cannot. */
+/**
+ * The models that can answer, a stranded choice, a preset an older build edited after the move, what answers when nothing
+ * is chosen, and the ones that cannot.
+ */
 function opensOnHtml(chat: ChatSettings, list: ChatProviderList): string {
   const pool = chat.models.filter((one) => list.providers.some((provider) => provider.id === one.id));
   const chosen = chosenOf(chat);
 
   return [
     strandedHtml(chat, chosen, pool),
+    ...chat.conflicts.map(conflictBlock),
     ...pool.map((one) => modelBlock(one, chosen)),
     unchosenHint(chosen, pool),
     refusalsHtml(list),
@@ -85,6 +91,38 @@ function strandedBlock(chosen: string, known: ModelPreset | undefined): string {
   <label class="inline"><input type="radio" name="chat-opens-on" value="${escapeHtml(chosen)}" data-chp-main checked disabled> <b>${name}</b> <span class="hint">— ${why}</span></label>
   <p class="callout warn">A chat is set to open on ${name}, which ${why}. Until you pick another model here a chat is refused by that name — it is never quietly sent to a different one.</p>
 </div>`;
+}
+
+/** What each field the move copies is called here — the labels Models uses for the same row fields. */
+const FIELD_LABELS: Readonly<Record<CopiedField, string>> = {
+  name: 'Name', runtime: 'Runtime', model: 'Model', baseUrl: 'Endpoint', executablePath: 'CLI path', chatStartingPrompt: 'Opens with',
+  vaultKeyName: 'Vault key name', teamServerId: 'Team server', remoteVendor: 'Vendor on the Team server',
+};
+
+/**
+ * A chat preset an older build edited after it moved (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7): the
+ * row as it is, the edited values beside it, and the two choices. Beside the stranded pick because it is the same kind of
+ * thing — what is configured differs from what the chat runs, and only the person can say which is right. Nothing is
+ * changed until they choose; the row keeps working meanwhile. Each choice is the presets' own message (`revision`), into
+ * the one editing core (`chatPresetsHost.ts`), which writes the answer to the record — so it holds across a reload.
+ */
+function conflictBlock(conflict: PresetConflict): string {
+  const name = escapeHtml(conflict.rowName);
+
+  return `<div class="block conflict" data-chp-conflict="${escapeHtml(conflict.presetId)}">
+  <p class="callout warn">The chat preset that became <b>${name}</b> was edited in an older version of ConnectOtherAIs after it moved to Models. A chat still runs ${name} as it is on Models until you choose.</p>
+  <table class="map"><thead><tr><th scope="col">Field</th><th scope="col">On Models now</th><th scope="col">The edited values</th></tr></thead>
+  <tbody>${conflict.fields.map(conflictRow).join('')}</tbody></table>
+  <button type="button" data-chp-revision="use">Use the edited values</button> <button type="button" data-chp-revision="keep">Keep the row</button>
+</div>`;
+}
+
+function conflictRow(one: ConflictField): string {
+  return `<tr><td>${FIELD_LABELS[one.field]}</td><td>${conflictValue(one.row)}</td><td>${conflictValue(one.edited)}</td></tr>`;
+}
+
+function conflictValue(value: string): string {
+  return value.length > 0 ? `<code>${escapeHtml(value)}</code>` : '<i>none</i>';
 }
 
 function unchosenHint(chosen: string, pool: readonly ModelPreset[]): string {
@@ -144,12 +182,22 @@ function chatFieldsScript(): string {
     });`;
 }
 
-/** The buttons: Add a prompt and Remove, each posted numbered, so it carries the busy mark. */
+/**
+ * The buttons: Add a prompt, Remove, and the two answers to an edited preset (R7) — each posted numbered, so it carries
+ * the busy mark. An answer names its preset from the conflict's block, never from a model's row, so it cannot be read as
+ * that row's own action.
+ */
 function chatPressesScript(): string {
   return `
     document.addEventListener('click', (event) => {
       const t = event.target;
       if (!t || typeof t.closest !== 'function') { return; }
+      const revision = t.closest('[data-chp-revision]');
+      if (revision) {
+        const conflict = revision.closest('[data-chp-conflict]');
+        chpPost({ type: 'revision', id: conflict ? conflict.dataset.chpConflict : '', choice: revision.dataset.chpRevision }, revision, true);
+        return;
+      }
       const add = t.closest('[data-chp-add]');
       if (add) { chpPost({ type: 'add', list: add.dataset.chpAdd }, add, true); return; }
       const remove = t.closest('[data-chp-remove]');

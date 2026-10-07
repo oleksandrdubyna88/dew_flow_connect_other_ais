@@ -14,8 +14,9 @@ import { chatRead, savedModels } from './chatConfig';
 import { chatModelAdd, chatModelEdit, type ChatModelStores, type ChatModelWrite } from './chatModelEdits';
 import { askForAModel } from './chatModelWizard';
 import { inCatalogTurn } from './catalogMigrationHost';
-import { reportRefusal, saveSetting } from './sideConfig';
+import { reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { PresetCommand, editRepaints, editedRows, presetSettlesAs } from './chatPresetsMessages';
+import { revisionStoresReading, revisionWrites } from './chatPresetRevision';
 import { settledWrites } from './settledWrites';
 import { teamServersFrom } from './teamServers';
 
@@ -204,7 +205,35 @@ type ListCommand = Extract<PresetCommand, { readonly list: 'prompt' | 'model' }>
 
 /** Store one command. Answers whether the pages must be redrawn. */
 function apply(command: PresetCommand): Promise<boolean> {
+  if (command.kind === 'revision') {
+    return applyRevision(command);
+  }
+
   return 'list' in command ? applyToList(command) : Promise.resolve(false);
+}
+
+/**
+ * An answer to a preset an older build edited after the move (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a),
+ * R7) — decided by `chatPresetRevision.revisionWrites`, read and written in ONE catalog turn, so no migration reads the
+ * row changed and the record not yet. Through this side, where the record and the rows it names live; never the presets,
+ * which stay as the older build left them. A refusal stops the writes: the row goes first, so a choice stopped before
+ * the record is still on Chat to answer again. It redraws, because the conflict's block goes away.
+ */
+async function applyRevision(command: Extract<PresetCommand, { kind: 'revision' }>): Promise<boolean> {
+  const side = boundSide();
+
+  return inCatalogTurn(async () => {
+    const writes = revisionWrites(command.choice, command.presetId, revisionStoresReading(userLayer(config())(MODELS_KEY), chatRead(config())));
+    try {
+      for (const one of writes) {
+        await saveSetting(side, config(), one.key, one.value);
+      }
+    } catch (error: unknown) {
+      reportRefusal(side, 'chatPresetsMoved', error, { ordinary: 'ConnectOtherAIs could not save your choice about the edited chat model.' });
+    }
+
+    return writes.length > 0;
+  });
 }
 
 function applyToList(command: ListCommand): Promise<boolean> {
