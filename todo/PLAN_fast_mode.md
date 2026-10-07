@@ -1,6 +1,7 @@
 # PLAN — a per-model "fast mode" switch, three states, Off by default
 
-> Status: **plan only, nothing implemented yet (2026-10-07).** Scope: one catalog row field, drawn only on the NEW Settings
+> Status: **plan only, nothing implemented yet (2026-10-07); revised after the coai plan round (session `33d6d6a3`,
+> `proceed`, 8 findings: 6 accepted, 2 rejected with evidence) and an own critic — see *What the review changed*.** Scope: one catalog row field, drawn only on the NEW Settings
 > page's model card; coai-mcp's codex and claude launches (reviewer, consultant, question row) and the api request for
 > the dialects that have a fast tier; the chat's own launches in the extension.
 >
@@ -29,14 +30,24 @@ that lists `fastMode` is installed.
 |---|---|---|---|
 | codex (reviewer, consultant — all three argv branches — question row) | `-c service_tier=default` | `-c service_tier=fast` | nothing |
 | claude (reviewer, consultant, question row) | `--settings <file>` holding `{"fastMode":false}` | the same with `true` — Opus 5.5 / 5 / 4.8 only | nothing |
-| api, dialects with a measured fast tier (openai, xai) | nothing (the API's default is standard) | `service_tier` = the dialect's measured value | nothing |
-| antigravity, local, remote, api dialects without a tier (DeepSeek, GLM, Qwen) | — the control is not drawn — | | |
+| api, a dialect with a MEASURED tier — `xai` only to start | the dialect's measured standard value | the dialect's measured fast value | nothing |
+| antigravity, local, remote; codex on somebody else's endpoint (`CustomCodexRuntime`, `DeepseekRuntime`); api on `openai` (the generic dialect every unnamed endpoint uses), `dashscope` | — the control is not drawn — | | |
 
 Spellings, from the code that already passes overrides: a codex `-c` value goes **unquoted, as its own argument**
 (`CodexConsultant.cs:83` `"-c", "sandbox_mode=read-only"` and the comment at `:78-82` — TOML falls back to the raw string,
 and a quote is unsafe through the npm `.cmd` shim). Claude's setting goes as a **file path**, not inline JSON: a JSON
 argument carries double quotes through the same Windows shim (`ClaudeConsultant.cs:153` already guards line breaks for
-that reason). coai writes two fixed files under its data folder (`fast-on.json`, `fast-off.json`) and passes the path.
+that reason). coai-mcp writes two fixed files under its data folder (`fast-on.json`, `fast-off.json`), each holding exactly ONE key —
+`--settings` loads *additional* settings, merged over the user's (claude help 2.1.258, :213-214), so nothing else changes —
+written atomically and only when the content differs (several processes start). The extension keeps its OWN pair in its
+global storage for the chat; neither depends on the other having run. An api row's tier reaches the `--ask-api` shim
+on its command line (`--service-tier <value>`, as `--stream on` does, `ApiRuntime.cs:45`, `:112`) and is written into
+the body by `ChatRequest.Body`.
+
+**Which claude models:** Opus by FAMILY — `opus`, `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, with or
+without a `[1m]` suffix; an empty model (the CLI's own default) sends nothing in either state. **The restricted claude
+consultant:** `--restricted` ignores the user's settings files (help :184-186), so there "As the CLI is set" is the
+standard tier, not the person's `/fast` — the card says so for a row ticked Consultant.
 
 ## Decisions
 
@@ -58,22 +69,32 @@ that reason). coai writes two fixed files under its data folder (`fast-on.json`,
 
 ## Stories
 
+- **0 — measured FIRST** (the plan round: build nothing on an unverified spelling). On the installed CLIs, through the
+  product path: codex with `service_tier = "priority"` in its config and `-c service_tier=default` / `=fast` on the
+  command line — accepted, and the tier the run reports; the codex version floor that accepts it; claude `--settings
+  <file>` with `fastMode` true/false — `fast_mode_state` in the result events. Recorded in
+  `research/RESULTS_fast_mode_measured_<date>.md`. A spelling that fails changes this plan before any code.
 - **A — the server.** `VendorDto.Fast` (`SettingsJsonContext.cs:66` neighbourhood) → `ProviderSettings.Fast` (parsed in
   `ParseVendors`, `PanelSettings.cs:1210-1265`) → `ReviewerSettings.Fast`; `FeaturesMode.Listed` gains `fastMode`; codex
   reviewer argv after `NoMcpServers.CodexArgs` and before `"-"` (`ReviewerRuntime.cs:438`); codex consultant in all three
   branches (`CodexConsultant.cs:75`, `:77`, `:83`); claude reviewer (`ClaudeRuntime.cs:78-93`) and consultant
   (`ClaudeConsultant.cs:99-138`, through its `Model` helper); the two settings files written once; api body
-  `service_tier` per dialect (`OpenAiCompatibleVendor.cs:37` gated by dialect, `XaiVendor.cs:54`).
+  tier per dialect through the shim (`ApiRuntime` argv, `AskApiMode` parse, `ChatRequest.Body` member — `xai` only);
+  the question row (`QuestionFanOut.SettingsFor`, the plan round's finding); codex sent the flag only at or above the
+  measured version floor, and a `VendorDiagnosis` pattern naming a codex config/value refusal.
 - **B — the card.** `vendors.ts` field, `catalogFields.ts` (kept only where the runtime/model has a tier),
   `vendorsWire` gate, `binaryFeatures.FEATURES.fastMode`, a three-state select on the model card (new page only),
   `newTags` `model.fast`, help in the help file, the `skewSaid` note; the current page draws nothing.
-- **C — the chat.** The chat's claude and codex argv apply the row's state.
-- **D — measured.** One run per runtime through the product path proving the override and the default; the result in a
-  `research/RESULTS_fast_mode_measured_<date>.md`; module docs; promotion.
+- **C — the chat.** The chat's claude and codex argv apply the row's state, judged by the CONVERSATION's model
+  (`cliChatLaunch.ts:263-264`), with the extension's own settings files; `ChatAdapter.argv` gains the state.
+- **D — the person's flow and the docs.** A scenario: the state changed on the card, saved, and a launch of that row
+  carrying it (the plan round's finding), with its entry in `research/module_tests.md`; module docs and
+  `architecture.md`; promotion.
 
 ## Build order
 
-A (data and server, the test of each argv) → B (the card and the wire) → C (the chat) → D (measure, docs, promote).
+0 (measure) → A (data and server, the test of each argv) → B (the card and the wire) → C (the chat) → D (the flow, docs,
+promote).
 
 ## Test plan
 
@@ -81,6 +102,12 @@ A (data and server, the test of each argv) → B (the card and the wire) → C (
   branch (reviewer, fresh consultant, resumed consultant, question row); On → `fast`; cli → no `service_tier`; claude Off
   / On → `--settings <path>` whose file holds the value; a non-Opus claude model On → nothing sent and the card says it
   has no fast tier; an api dialect without `fastTier` → no member; antigravity / local → nothing.
+- Named by the own critic: `CustomCodexRuntime` and `DeepseekRuntime` argv carry no `service_tier`; the generic `openai`
+  dialect sends no tier and the local body stays byte-identical (`LocalRequestBodyIsPinnedTests`); the shim's argv for
+  the tier; `checkInputOf` carries `fast` (`--check-model`); one test each for the security lane and the feature
+  roster (both through `RosterBuilder.SettingsFor`); a remote row sends nothing; a claude consultant under
+  `--restricted` in the cli state and the card's sentence; claude with an empty model or an alias, state On; chat argv
+  for codex fresh and resumed and claude agent and plain, by the conversation's model.
 - The wire: a binary without `fastMode` is never handed the field; with it, every state crosses (unit + a seam leg).
 - The card (run the page): the select is drawn only for a runtime/model with a tier, writes the row, defaults to Off;
   the current page draws nothing; the skew note for a binary without the capability.
@@ -95,6 +122,21 @@ A (data and server, the test of each argv) → B (the card and the wire) → C (
 - A CLI too old for the flag refuses it: `-c service_tier` on an old codex, `--settings` on an old claude — the
   reviewer failure path names the refusal (`VendorDiagnosis`), and Story D records the versions measured.
 - Claude's fast mode costs about 2× and is paid from usage credits — On is a person's explicit choice per row.
+
+## What the review changed (2026-10-07)
+
+- **Accepted (coai plan round):** an api Off sends the dialect's measured standard value, not nothing; a scenario for
+  the person's flow; the chat keeps its own settings files; measurement first (Story 0); the question row named in
+  Story A; a model without a tier is sent nothing in BOTH states.
+- **Rejected, with evidence:** "`--settings` replaces `.claude/settings.json` and drops its hooks" — the CLI's help says
+  it loads ADDITIONAL settings (2.1.258, :213-214); "absent should mean As the CLI is set" — Off for every row is the
+  owner's decision, made to stop the hidden priority tier; the risk of an older CLI is met by Story 0, the codex
+  version floor and a named refusal instead.
+- **The own critic's facts, verified:** the generic `openai` dialect serves every unnamed endpoint, so it gets no tier;
+  codex rows on another endpoint inherit `CodexRuntime.Build` and must be excluded; `--settings` predates fast mode
+  (2.1.197), so an old claude ignores the key rather than refusing; `--restricted` ignores the user's settings; the
+  chat's model is the conversation's; `skewSaid` lands with the catalog branch (PR #688) — until then the note uses
+  `catalogShell.skew`; a Team server row is not forwarded the field (its server's contract does not carry it).
 
 ## Definition of Done
 
