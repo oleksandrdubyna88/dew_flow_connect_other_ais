@@ -69,16 +69,16 @@ public sealed class FeatureAvailability
         ?? new FastModeRow(runtime, "none", [], $"'{runtime}' is not a runtime the feature-availability file names");
 
     /// <summary>
-    /// Whether <paramref name="model"/> on <paramref name="runtime"/> has a fast tier — a listed model matched with its
-    /// case and any <c>[1m]</c>-style suffix set aside; an empty model only on a runtime whose every model has one.
-    /// </summary>
-    /// <summary>
     /// Whether a ROW has a fast tier: its runtime and model by the file — and a codex row only on codex's own service, as
     /// <c>CodexRuntime.TierArgs</c> decides. The extension's <c>rowHasFastTier</c> asks the same.
     /// </summary>
     public bool RowHasFastTier(string runtime, string model, string baseUrl) =>
         HasFastTier(runtime, model) && !(string.Equals(runtime, "codex", StringComparison.OrdinalIgnoreCase) && baseUrl.Length > 0);
 
+    /// <summary>
+    /// Whether <paramref name="model"/> on <paramref name="runtime"/> has a fast tier — a listed model matched with its
+    /// case and any <c>[1m]</c>-style suffix set aside; an empty model only on a runtime whose every model has one.
+    /// </summary>
     public bool HasFastTier(string runtime, string model) => FastModeOf(runtime) switch
     {
         { Source: "every-model" } => true,

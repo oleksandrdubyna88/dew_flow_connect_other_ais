@@ -461,6 +461,51 @@ async function fastModeSeam() {
 await fastModeSeam();
 console.log('  ok  a row\'s fast mode reaches a server that lists fastMode, and one that does not runs Off');
 
+/**
+ * The fast-tier leg (the fast-mode code round, findings 0 and 1): which rows HAVE a fast tier is decided twice — by the
+ * extension's `rowHasFastTier` (the card shows the switch) and by the server's `RowHasFastTier` (it reports `fast` and
+ * sends the flag). Both read shared/feature-availability.json, but each spells the model rule itself, so the two are
+ * asked the same rows here and must answer alike: the alias, a `[1m]` suffix, a case difference, a model without the
+ * tier, an empty model, a codex row on another endpoint, and runtimes with no tier at all.
+ */
+async function fastTierSeam() {
+  const { serverSettingsJsonWith } = await import('../out/serverSettingsFile.js');
+  const { rowHasFastTier } = await import('../out/fastTier.js');
+  const base = { enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, fast: 'on' };
+  const rows = [
+    { id: 'claude-alias', runtime: 'claude', model: 'opus' },
+    { id: 'claude-full', runtime: 'claude', model: 'claude-opus-5-5' },
+    { id: 'claude-1m', runtime: 'claude', model: 'claude-opus-5-5[1m]' },
+    { id: 'claude-case', runtime: 'claude', model: 'Claude-Opus-5' },
+    { id: 'claude-sonnet', runtime: 'claude', model: 'claude-sonnet-5' },
+    { id: 'claude-empty', runtime: 'claude', model: '' },
+    { id: 'codex', runtime: 'codex', model: '' },
+    { id: 'codex-model', runtime: 'codex', model: 'gpt-6.1-sol' },
+    { id: 'codex-elsewhere', runtime: 'codex', model: 'gpt-6', baseUrl: 'https://or.example/v1' },
+    { id: 'antigravity', runtime: 'antigravity', model: 'gemini-3-pro' },
+    { id: 'gemini', runtime: 'gemini', model: 'gemini-3-pro' },
+  ].map((row) => ({ ...base, ...row }));
+  const dir = mkdtempSync(join(tmpdir(), 'coai-seam-tier-'));
+  try {
+    const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: ['fastMode'] };
+    writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(DEFAULTS, vendorsFrom(rows), write), 'utf8');
+    const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '' });
+    const served = new Map((answer.providers ?? []).map((one) => [one.provider, one.fast !== undefined]));
+    const apart = rows.filter((row) => served.get(row.id) !== rowHasFastTier(row));
+    if (apart.length > 0) {
+      fail(`the extension and the server disagree on which rows have a fast tier: ${apart
+        .map((row) => `${row.id} (extension ${rowHasFastTier(row)}, server ${served.get(row.id)})`).join('; ')}`);
+    }
+
+    return { compared: rows.length, withTier: rows.filter((row) => rowHasFastTier(row)).length };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const tier = await fastTierSeam();
+console.log(`  ok  ${tier.compared} rows asked of the extension and the server alike: the same ${tier.withTier} have a fast tier`);
+
 // The TENTH leg: the model catalog's migration (PLAN_one_model_catalog.md E1.4) — the settings file is the same,
 // byte for byte, before and after, and the binary lists the same reviewers from a multi-instance catalog.
 const catalog = await catalogSeam({ providersIn, fail });

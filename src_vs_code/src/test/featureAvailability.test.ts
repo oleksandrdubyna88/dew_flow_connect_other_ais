@@ -95,7 +95,9 @@ function generate(doctored: unknown): { status: number | null; stderr: string } 
   try {
     const seedPath = join(dir, 'seed.json');
     writeFileSync(seedPath, JSON.stringify(doctored), 'utf8');
-    const run = spawnSync(process.execPath, [GENERATOR, `--seed=${seedPath}`, `--out=${join(dir, 'out.ts')}`], { encoding: 'utf8' });
+    // Both outputs into the scratch folder: a doctored seed the generator accepts must never write the real files.
+    const outputs = [`--out=${join(dir, 'out.ts')}`, `--fast-out=${join(dir, 'fast.ts')}`];
+    const run = spawnSync(process.execPath, [GENERATOR, `--seed=${seedPath}`, ...outputs], { encoding: 'utf8' });
 
     return { status: run.status, stderr: run.stderr };
   } finally {

@@ -2865,6 +2865,13 @@ Two halves, joined by the settings file:
   the fake CLI recording the argv it was really started with: On → `-c service_tier=fast`, never set → `default`, As the
   CLI is set → no tier. Teeth: with the consultant's tier dropped, two of the three go red.
 - **The wire** — the seam leg reads `--providers`' `fast` back from the real binary (`on`, or `off` when held back).
+- **Two implementations, one answer** — which rows have a tier is decided twice, by the extension's `rowHasFastTier` and
+  the server's `RowHasFastTier`. A second seam leg (`fastTierSeam`) asks both the same eleven rows (alias, `[1m]`, a
+  case difference, Sonnet, an empty model, codex with and without another endpoint, runtimes with no tier) and fails on
+  any row where they differ. Teeth: with the extension's lower-casing removed, it names `claude-case`.
+- **The chat** — `aChatRunsOnItsRowsFastMode.test.ts`: the tier per runtime and state, the file in a private folder of
+  its own, and a settings path with a space reaching claude whole through `cmd.exe`. Teeth: both new tests went red
+  with the real symptom (a shared path; a path split in two) under a mutation that compiled.
 - **Per launch** — `AFastModeReachesEveryCodexLaunchTests`, `AFastModeReachesEveryClaudeLaunchTests`,
   `ARowsFastModeReachesItsLaunchesTests`, `FastModeIsDataTests`.
 

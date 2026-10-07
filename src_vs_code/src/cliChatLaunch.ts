@@ -3,7 +3,8 @@ import * as fs from 'node:fs';
 import { needsShell } from './cliVersions';
 import { Platform } from './hostSide';
 import { ChatAccess, ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
-import { effortRefusal, rowHasFastTier } from './featureAvailability';
+import { effortRefusal } from './featureAvailability';
+import { rowHasFastTier } from './fastTier';
 import { agyAdapter } from './agyAdapter';
 import { claudeAdapter } from './claudeAdapter';
 import { codexAdapter } from './codexAdapter';
@@ -278,13 +279,14 @@ export function launchSpecFor(
     return { executable: '', args: [], cwd: '', shell: false, env: {}, refusal };
   }
   const executable = [resolved, vendor.executablePath, known.executable].find((name) => name.length > 0) ?? '';
+  const shell = needsShell(executable, platform);
 
   return {
     executable,
-    shell: needsShell(executable, platform),
+    shell,
     // From the adapter, because the command line and the wire protocol are one decision: a vendor
     // launched with another's flags answers in a shape nobody here can read.
-    args: known.adapter.argv(launch),
+    args: forTheShell(known.adapter.argv(launch), shell),
     // In text mode an empty temp directory, never the workspace. The task is to explain a paragraph:
     // handing a third-party agent the source tree buys nothing but startup time, and on Windows a
     // working directory is also something `cmd.exe` searches before the PATH. In AGENT mode the
@@ -294,6 +296,15 @@ export function launchSpecFor(
     env: launch.access === 'agent' ? NO_CWD_SEARCH : {},
     refusal: '',
   };
+}
+
+/**
+ * The arguments as the platform shell must see them: `shell: true` joins them with spaces and quotes nothing, so an
+ * argument with whitespace in it — a settings file under a profile folder with a space (the fast-mode code round) — is
+ * wrapped in double quotes to reach the CLI whole. Without the shell they are passed as they are.
+ */
+function forTheShell(args: readonly string[], shell: boolean): readonly string[] {
+  return shell ? args.map((one) => (/\s/u.test(one) ? `"${one}"` : one)) : args;
 }
 
 /**

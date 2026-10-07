@@ -2,7 +2,7 @@ import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
 import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
-import { rowHasFastTier } from './featureAvailability';
+import { rowHasFastTier } from './fastTier';
 import {
   type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
 } from './modelCardWorld';

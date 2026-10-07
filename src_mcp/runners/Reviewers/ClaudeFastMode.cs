@@ -18,30 +18,80 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </remarks>
 public static class ClaudeFastMode
 {
-    /// <summary>The arguments for <paramref name="settings"/>' fast mode — none for "As the CLI is set" or a model without the tier.</summary>
+    /// <summary>
+    /// The arguments for <paramref name="settings"/>' fast mode — none for "As the CLI is set", for a model without the
+    /// tier, and for a launch with no data folder of its own: a shared temp folder is a path another local user can plant
+    /// first (the code round), so such a launch sends no flag rather than read a file somebody else controls.
+    /// </summary>
     public static IReadOnlyList<string> Args(ReviewerSettings settings) =>
-        settings.Fast == FastMode.Cli || !HasTheTier(settings.Model) ? [] : ["--settings", FileFor(settings.DataDir, settings.Fast == FastMode.On)];
+        settings.Fast == FastMode.Cli || settings.DataDir.Length == 0 || !HasTheTier(settings.Model)
+            ? []
+            : ["--settings", FileFor(settings.DataDir, settings.Fast == FastMode.On)];
 
     /// <summary>Whether <paramref name="model"/> has a fast tier — read from shared/feature-availability.json, the list the card reads too.</summary>
     public static bool HasTheTier(string model) => FeatureAvailability.Builtin.HasFastTier("claude", model);
 
-    /// <summary>
-    /// The one-key file for the state, under the data folder — written only when it is missing or says something else
-    /// (several processes start launches), through a temporary file moved into place, so no launch reads half of it.
-    /// </summary>
+    /// <summary>The one-key file for the state, under the data folder — written only when it is missing or says something else.</summary>
     private static string FileFor(string dataDir, bool on)
     {
-        var dir = Path.Combine(dataDir.Length > 0 ? dataDir : Path.GetTempPath(), "fast-mode");
-        var path = Path.Combine(dir, on ? "fast-on.json" : "fast-off.json");
-        var text = on ? "{\"fastMode\":true}" : "{\"fastMode\":false}";
-        if (!File.Exists(path) || File.ReadAllText(path) != text)
-        {
-            Directory.CreateDirectory(dir);
-            var temporary = $"{path}.{Environment.ProcessId}.tmp";
-            File.WriteAllText(temporary, text);
-            File.Move(temporary, path, overwrite: true);
-        }
+        var path = Path.Combine(dataDir, "fast-mode", on ? "fast-on.json" : "fast-off.json");
+        WriteIfDifferent(path, on ? "{\"fastMode\":true}" : "{\"fastMode\":false}");
 
         return path;
+    }
+
+    /// <summary>
+    /// Through a temporary file of this write's OWN — a name shared by every thread of the process made one parallel launch
+    /// fail on another's move (the code round) — moved into place; a move refused because a sibling is replacing the file
+    /// with the same text is no failure.
+    /// </summary>
+    private static void WriteIfDifferent(string path, string text)
+    {
+        if (Says(path, text))
+        {
+            return;
+        }
+
+        // One writer at a time in this process: on Windows a file another thread is replacing this instant refuses both
+        // the move and the read (ManyLaunchesAtOnce_AllGetTheFile_NoneFails). Writes are rare — only when the file
+        // differs — so the lock costs nothing; another PROCESS is met by the tolerant move in Replace.
+        lock (WriteLock)
+        {
+            Replace(path, text);
+        }
+    }
+
+    private static readonly Lock WriteLock = new();
+
+    private static void Replace(string path, string text)
+    {
+        if (Says(path, text))
+        {
+            return;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+        File.WriteAllText(temporary, text);
+        try
+        {
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException && Says(path, text))
+        {
+            File.Delete(temporary);
+        }
+    }
+
+    /// <summary>Whether the file is there and says exactly this — a file being replaced this instant reads as not yet.</summary>
+    private static bool Says(string path, string text)
+    {
+        try
+        {
+            return File.Exists(path) && File.ReadAllText(path) == text;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }

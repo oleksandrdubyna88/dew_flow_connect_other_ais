@@ -1,7 +1,8 @@
 # PLAN — a per-model "fast mode" switch, three states, Off by default
 
-> Status: **plan only, nothing implemented yet (2026-10-07); revised after the coai plan round (session `33d6d6a3`,
-> `proceed`, 8 findings: 6 accepted, 2 rejected with evidence) and an own critic — see *What the review changed*.** Scope: one catalog row field, drawn only on the NEW Settings
+> Status: **in progress (2026-10-07) on `feat/fast-mode` — Stories 0, A, B, C, D built and through the coai code round;
+> the api tier waits on a measured `xai` value. Revised after the coai plan round (session `33d6d6a3`, `proceed`, 8
+> findings: 6 accepted, 2 rejected with evidence) and an own critic — see *What the review changed*.** Scope: one catalog row field, drawn only on the NEW Settings
 > page's model card; coai-mcp's codex and claude launches (reviewer, consultant, question row) and the api request for
 > the dialects that have a fast tier; the chat's own launches in the extension.
 >
@@ -158,6 +159,12 @@ promote).
 - **Story C (the chat), 2026-10-07** — built after main (with the catalog's epic 4, PR #688) was merged in: codex chats
   get `-c service_tier`, claude chats the chat's own one-key `--settings` file, judged by the conversation's model; the
   merge also carried `Fast` through `ConsultantResolver.WithOptions`, so a consultant's catalog row keeps its fast mode.
+- **Code round, 2026-10-07** — accepted and fixed: a seam leg asks the extension and the server the same eleven rows
+  (findings 0, 1); `--providers`' `fast` is documented as the REQUESTED state (3); the claude file no longer races
+  under parallel launches (2) and is never read from a shared temp folder (9). Own reviewers added: the chat's file
+  moved to a private `mkdtemp` folder, out of the chat's empty folder; an argument with whitespace is quoted for
+  `cmd.exe`; the help says a codex model without the tier runs standard (from 4, help only). Rejected with code
+  evidence: 4 (a per-model codex list), 5, 6, 7, 8, 10 — reasons in the gate session.
 
 ## Definition of Done
 

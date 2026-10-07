@@ -33,11 +33,6 @@ public sealed class ClaudeConsultantArgvTests
     private const string Handle = "67289235-65f7-40b5-9532-e63515d90f30";
     private const string Model = "claude-opus-5";
 
-    /// <summary>
-    /// What an Opus consultant is told of its fast mode, Off by default (todo/PLAN_fast_mode.md): the one-key settings file —
-    /// under the temp folder, since these launches name no data folder.
-    /// </summary>
-    private static readonly string[] FastOff = ["--settings", Path.Combine(Path.GetTempPath(), "fast-mode", "fast-off.json")];
 
     private static IReadOnlyList<string> Argv(ClaudeCapability cli, string handle = "", string model = "") =>
         new ClaudeConsultant(new ClaudeRuntime())
@@ -60,11 +55,11 @@ public sealed class ClaudeConsultantArgvTests
 
     [Fact]
     public void Supported_WithAModel() =>
-        Argv(ClaudeCapability.WithRestricted, model: Model).Should().Equal([.. Supported, "--model", Model, .. FastOff]);
+        Argv(ClaudeCapability.WithRestricted, model: Model).Should().Equal([.. Supported, "--model", Model]);
 
     [Fact]
     public void Supported_ResumedWithAModel() =>
-        Argv(ClaudeCapability.WithRestricted, handle: Handle, model: Model).Should().Equal([.. Supported, "--resume", Handle, "--model", Model, .. FastOff]);
+        Argv(ClaudeCapability.WithRestricted, handle: Handle, model: Model).Should().Equal([.. Supported, "--resume", Handle, "--model", Model]);
 
     [Fact]
     public void Unsupported_Fresh() =>
@@ -76,11 +71,11 @@ public sealed class ClaudeConsultantArgvTests
 
     [Fact]
     public void Unsupported_WithAModel() =>
-        Argv(ClaudeCapability.NoRestricted, model: Model).Should().Equal([.. Unsupported, "--model", Model, .. FastOff]);
+        Argv(ClaudeCapability.NoRestricted, model: Model).Should().Equal([.. Unsupported, "--model", Model]);
 
     [Fact]
     public void Unsupported_ResumedWithAModel() =>
-        Argv(ClaudeCapability.NoRestricted, handle: Handle, model: Model).Should().Equal([.. Unsupported, "--resume", Handle, "--model", Model, .. FastOff]);
+        Argv(ClaudeCapability.NoRestricted, handle: Handle, model: Model).Should().Equal([.. Unsupported, "--resume", Handle, "--model", Model]);
 
     [Fact]
     public void ALaunchNobodyPrepared_IsRefused_NeverBuiltUnconfined()

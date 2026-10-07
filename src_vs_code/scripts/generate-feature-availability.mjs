@@ -1,4 +1,4 @@
-// Regenerates src/featureAvailability.generated.ts from shared/feature-availability.json.
+// Regenerates src/featureAvailability.generated.ts and src/fastMode.generated.ts from shared/feature-availability.json.
 //
 // The file belongs to neither half (PLAN_one_model_catalog.md, D4). The panel cannot read it at run time —
 // the settings tab is drawn before any server has started — so it gets a generated copy, and
@@ -23,8 +23,10 @@ const flag = (name, fallback) => {
 
 const defaultSeed = join(here, '..', '..', 'shared', 'feature-availability.json');
 const defaultOut = join(here, '..', 'src', 'featureAvailability.generated.ts');
+const defaultFastOut = join(here, '..', 'src', 'fastMode.generated.ts');
 const seedPath = flag('seed', defaultSeed);
 const out = flag('out', defaultOut);
+const fastOut = flag('fast-out', defaultFastOut);
 
 function refuse(message) {
   console.error(`${seedPath}: ${message}`);
@@ -34,8 +36,10 @@ function refuse(message) {
 if (!existsSync(seedPath)) {
   refuse('is not there — this script generates the panel\'s feature availability from it');
 }
-if (resolve(out) === resolve(seedPath)) {
-  refuse(`--out resolves to the seed itself (${resolve(out)})`);
+for (const [name, target] of [['--out', out], ['--fast-out', fastOut]]) {
+  if (resolve(target) === resolve(seedPath)) {
+    refuse(`${name} resolves to the seed itself (${resolve(target)})`);
+  }
 }
 
 let seed;
@@ -262,13 +266,24 @@ export interface ThinkingRow {
 export const THINKING: readonly ThinkingRow[] = [
 ${thinking.map(thinkingRow).join('\n')}
 ];
+`;
+
+// The fast-mode rows in a file of their OWN, importing nothing: the stored field (\`catalogFields\`) asks the tier rule,
+// and \`vendors\` imports \`catalogFields\` — so a rule reached through the main file, which imports \`models\`, closed a
+// new import cycle (the fast-mode code round, \`importCycles.test.mjs\`). \`runtime\` is a plain string here for the same
+// reason; \`fastModeIsData.test.ts\` holds every row to a runtime the seed names.
+const fastFile = `// GENERATED FILE — do not edit by hand.
+//
+// Written by \`node scripts/generate-feature-availability.mjs\` from the \`fastMode\` block of
+// \`shared/feature-availability.json\` (todo/PLAN_fast_mode.md). Edit the seed and run the script;
+// \`generatedFilesAreCurrent.test.ts\` fails if this file and the generator disagree. It imports nothing, on purpose.
 
 /** Where a runtime's fast tier is (todo/PLAN_fast_mode.md): on every model, on the listed models, or none. */
 export type FastSource = ${FAST_SOURCES.map(lit).join(' | ')};
 
 /** One runtime's fast tier — and, always, why. */
 export interface FastModeRow {
-  readonly runtime: Runtime;
+  readonly runtime: string;
   readonly source: FastSource;
   readonly models: readonly string[];
   readonly measuredWith: string;
@@ -286,24 +301,41 @@ const rerun = [
   'node src_vs_code/scripts/generate-feature-availability.mjs',
   ...(seedPath === defaultSeed ? [] : [`--seed=${seedPath}`]),
   ...(out === defaultOut ? [] : [`--out=${out}`]),
+  ...(fastOut === defaultFastOut ? [] : [`--fast-out=${fastOut}`]),
 ].join(' ');
 
+/** Whether one target holds exactly what this script produces — line endings set aside, as CRLF is not drift. */
+function current(target, text) {
+  if (!existsSync(target)) {
+    console.error(`${target} does not exist — run: ${rerun}`);
+
+    return false;
+  }
+  if (readFileSync(target, 'utf8').replace(/\r\n/gu, '\n') !== text) {
+    console.error(`${target} is not what this script produces — run: ${rerun}`);
+
+    return false;
+  }
+
+  return true;
+}
+
+/** Written beside the target and renamed over it, so a killed process never leaves a truncated file. */
+function write(target, text) {
+  mkdirSync(dirname(target), { recursive: true });
+  const staging = `${target}.tmp`;
+  writeFileSync(staging, text, 'utf8');
+  renameSync(staging, target);
+}
+
 if (process.argv.includes('--check')) {
-  if (!existsSync(out)) {
-    console.error(`${out} does not exist — run: ${rerun}`);
+  const both = [current(out, file), current(fastOut, fastFile)];
+  if (both.includes(false)) {
     process.exit(1);
   }
-  // Line endings normalised on both sides: a Windows checkout may hold CRLF, which is not drift.
-  if (readFileSync(out, 'utf8').replace(/\r\n/gu, '\n') !== file) {
-    console.error(`${out} is not what this script produces — run: ${rerun}`);
-    process.exit(1);
-  }
-  console.log(`up to date: ${out} (${counts})`);
+  console.log(`up to date: ${out}, ${fastOut} (${counts})`);
 } else {
-  // Written beside the target and renamed over it, so a killed process never leaves a truncated file.
-  mkdirSync(dirname(out), { recursive: true });
-  const staging = `${out}.tmp`;
-  writeFileSync(staging, file, 'utf8');
-  renameSync(staging, out);
-  console.log(`wrote ${out}: ${counts}`);
+  write(out, file);
+  write(fastOut, fastFile);
+  console.log(`wrote ${out}, ${fastOut}: ${counts}`);
 }

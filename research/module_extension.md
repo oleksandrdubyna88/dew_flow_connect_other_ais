@@ -10556,7 +10556,8 @@ flowchart LR
   (codex — no command short of a model turn names the legal values, so none is written until E2 observes one — and
   the Team server until contract v2) and `none` (antigravity by the operator's ruling; the retired gemini runtime).
 - `scripts/generate-feature-availability.mjs` writes `featureAvailability.generated.ts` (`CONSULTING`, `CHAT`,
-  `EFFORT`), refusing an unknown field, a feature runtime outside the runtimes, a runtime with no effort row or two,
+  `EFFORT`, `THINKING`) and, since fast mode, `fastMode.generated.ts` (`FAST_MODE`, importing nothing; `--fast-out`
+  moves it as `--out` moves the first), refusing an unknown field, a feature runtime outside the runtimes, a runtime with no effort row or two,
   levels on a non-`list` source, and any effort on antigravity; `--check` is in `generatedFilesAreCurrent.test.ts`.
 - `CONSULTING_RUNTIMES` (`consultSettings.ts`) and `CHAT_RUNTIMES` (`cliChatLaunch.ts`) ARE the generated lists
   now; the chat adapter map stays the proof — a test holds that every listed chat runtime has an adapter and none is
@@ -11205,8 +11206,11 @@ not ask hears nothing about streams.
 ## A row's fast mode on the new model card (2026-10-07, todo/PLAN_fast_mode.md, Story B)
 
 New Settings page only. `catalogFields.fastField` keeps a row's `fast` — `on` or `cli` — only where
-`featureAvailability.rowHasFastTier` says the row has a tier (its runtime and model by the generated `FAST_MODE` rows of
+`fastTier.rowHasFastTier` says the row has a tier (its runtime and model by the generated `FAST_MODE` rows of
 `shared/feature-availability.json`, and a codex row only on codex's own service); Off, the default, is stored as nothing.
+The rule and its rows live in modules of their own — `fastTier.ts` imports only `fastMode.generated.ts`, which imports
+nothing — because `vendors` imports `catalogFields`: reached through `featureAvailability`, which imports `models`, the
+rule closed a new import cycle that `importCycles.test.mjs` caught (the code round).
 `vendorsWire.fastOnTheWire` sends it in `COAI_VENDORS` only to a binary whose `--features` lists `fastMode`
 (`FEATURES.fastMode`). The card draws a three-state select (`modelCardFields.fastField`: Off — the standard tier, On —
 the fast tier, As the CLI is set; help `fastMode`, the "new" tag `model.fast`) in the CLI rows' tuning, and the skew note
@@ -11220,5 +11224,12 @@ The seam writes a codex row set to On and reads `--providers`' `fast` back: `on`
 where `rowHasFastTier` holds for the CONVERSATION's model (what the CLI is told, not the row's default) — On, else Off;
 nothing As the CLI is set or without a tier. `ChatLaunch.fast` (`on` | `off`) reaches codex as `-c service_tier=fast|default`
 (`codexAdapter.tierArgs`, before the stdin positional); a claude chat also gets `ChatLaunch.fastSettings`, the chat's OWN
-one-key `--settings` file under the chat's folder (`chatFastSettings.chatFastSettingsFile`, written only when it differs,
-through a renamed temp file) — never coai-mcp's, so a chat never depends on the server having run.
+one-key `--settings` file (`chatFastSettings.chatFastSettingsFile`, written only when it differs, through a renamed temp
+file of the write's own) — never coai-mcp's, so a chat never depends on the server having run.
+
+Where that file lives (the code round): not in the chat's text-mode folder, which `launchSpecFor` promises is "a
+directory with nothing in it", and not at a fixed shared temp path another local user could plant first — in a private
+folder made once per extension process with a random name (`mkdtemp` of `coai-chat-fast-*`). And because an npm
+`claude.cmd` is started with `shell: true`, which joins arguments with spaces and quotes nothing, `launchSpecFor` wraps
+an argument holding whitespace in double quotes for the shell only (`forTheShell`) — a profile folder with a space would
+otherwise have split the settings path in two. Without the shell the arguments go as they are.

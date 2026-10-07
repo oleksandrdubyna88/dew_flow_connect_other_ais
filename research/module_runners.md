@@ -2288,8 +2288,11 @@ and read by the runtime that has a tier:
 - **claude** — `ClaudeFastMode.Args`: `--settings <file>`, the file holding exactly one key, `fastMode` (documented
   headless spelling), as a path because an inline JSON argument's quotes are re-tokenised by an npm `.cmd` shim. The
   files (`fast-mode/fast-on.json`, `fast-off.json` under the data folder) are written only when missing or different,
-  through a temp file moved into place. Only a model `shared/feature-availability.json` lists has the tier (the Opus
-  family, alias and `[1m]` suffix included); any other, and an empty model, is sent nothing in either state.
+  through a temp file of the write's OWN (a GUID name) moved into place, one writer at a time in the process — 32
+  parallel launches on one shared temp name made one fail (`ManyLaunchesAtOnce_AllGetTheFile_NoneFails`, the code
+  round). A launch with no data folder sends no flag rather than read a file from a shared temp folder another local
+  user could plant first. `fast-mode/` is in `shared/data-inventory.json` as written again by itself (not moved). Only a model `shared/feature-availability.json` lists has the tier (the Opus family, alias and
+  `[1m]` suffix included); any other, and an empty model, is sent nothing in either state.
 
 Which runtime and model has a tier is data: the `fastMode` block of `shared/feature-availability.json`
 (`FeatureAvailability.FastMode` / `HasFastTier`, one row per runtime, refused whole when a runtime has none or two —

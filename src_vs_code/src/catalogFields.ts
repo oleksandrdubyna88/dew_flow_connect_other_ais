@@ -1,6 +1,6 @@
 import { isMinutes } from './apiSettings';
 import { saidText } from './saidText';
-import { rowHasFastTier } from './featureAvailability';
+import { rowHasFastTier } from './fastTier';
 
 /**
  * The fields a reviewer row gains as it becomes a catalog row (PLAN_one_model_catalog.md D1, E1.1).

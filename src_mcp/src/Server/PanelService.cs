@@ -280,7 +280,7 @@ public sealed class PanelService
         };
     }
 
-    /// <summary>The fast mode a row with a tier runs with, in the wire's own words — null for a row without one.</summary>
+    /// <summary>The fast mode a row with a tier REQUESTS, in the wire's own words — null for a row without one.</summary>
     private static string? FastReportOf(ProviderSettings provider) =>
         Core.Catalog.FeatureAvailability.Builtin.RowHasFastTier(RuntimeResolution.NameOf(provider.Identity()), provider.Model, provider.BaseUrl)
             ? provider.Fast.ToString().ToLowerInvariant()

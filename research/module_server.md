@@ -6414,3 +6414,7 @@ every other check — so the card can say that the setting did nothing.
 `VendorDto.Fast` (`off` | `on` | `cli`, any case; absent or unknown is Off — the owner's default) is parsed by
 `ProviderSettings.FastOf` into `ProviderSettings.Fast` and carried into every launch of the row (module_runners.md, *A
 row's fast mode*). `--features` lists `fastMode`, so the extension sends the field only to a binary that reads it.
+`--providers` reports `fast` (`ProviderStatus.Fast`, `PanelService.FastReportOf`) only for a row with a tier
+(`FeatureAvailability.RowHasFastTier`), and it is the REQUESTED state, never the one the vendor grants: `on` is held off
+by a claude account whose usage credits are off, and a codex model that does not advertise the tier drops it with a
+warning (research/RESULTS_fast_mode_measured_2026-10-07.md).

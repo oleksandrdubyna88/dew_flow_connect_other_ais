@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { chatFastSettingsFile } from '../chatFastSettings';
 import { CLAUDE_ARGS, claudeAdapter } from '../claudeAdapter';
-import { chatLaunchFor } from '../cliChatLaunch';
+import { chatLaunchFor, launchSpecFor } from '../cliChatLaunch';
 import { codexAdapter } from '../codexAdapter';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 
@@ -35,7 +35,7 @@ test('a codex chat is told its row\'s tier — Off by default, On, or nothing As
 test('a claude chat on an Opus model is told its state through the chat\'s own one-key file; another model, nothing', () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-chat-fast-'));
   try {
-    const file = (on: boolean) => chatFastSettingsFile(home, on);
+    const file = (on: boolean) => chatFastSettingsFile(on, home);
     const argv = (model: string, extra: Record<string, unknown>) =>
       claudeAdapter.argv(chatLaunchFor(row({ runtime: 'claude', model: 'opus', ...extra }), '', model, 'text', file));
     const settingsOf = (args: readonly string[]) => readFileSync(args[args.indexOf('--settings') + 1]!, 'utf8');
@@ -52,12 +52,37 @@ test('a claude chat on an Opus model is told its state through the chat\'s own o
 test('the chat\'s file is written once, and only rewritten when it says something else', () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-chat-fast-'));
   try {
-    const path = chatFastSettingsFile(home, true);
+    const path = chatFastSettingsFile(true, home);
     const written = statSync(path).mtimeMs;
-    assert.equal(chatFastSettingsFile(home, true), path);
+    assert.equal(chatFastSettingsFile(true, home), path);
     assert.equal(statSync(path).mtimeMs, written, 'an unchanged file is left alone');
-    assert.notEqual(chatFastSettingsFile(home, false), path, 'Off and On are two files');
+    assert.notEqual(chatFastSettingsFile(false, home), path, 'Off and On are two files');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("the chat's own file is never in the chat's empty folder — a private folder of its own, made fresh", () => {
+  // The code round: the chat's text-mode folder is "a directory with nothing in it", and a fixed shared temp path is one
+  // another local user could plant first.
+  const path = chatFastSettingsFile(true);
+
+  assert.match(path, /coai-chat-fast-[^/\\]+[/\\]fast-on\.json$/u);
+  assert.equal(readFileSync(path, 'utf8'), '{"fastMode":true}');
+  assert.equal(chatFastSettingsFile(true), path, 'one folder for the life of the extension');
+});
+
+test('through cmd.exe a settings path with a space reaches claude whole; elsewhere it is passed as it is', () => {
+  // The code round: an npm claude.cmd is started with shell: true, which does not quote, so a profile folder with a
+  // space would have split the path in two.
+  const spaced = 'C:/Users/John Smith/AppData/Local/Temp/coai-chat-fast-x/fast-on.json';
+  const vendor = row({ runtime: 'claude', model: 'opus', fast: 'on' });
+  const launch = chatLaunchFor(vendor, '', 'claude-opus-5-5', 'text', () => spaced);
+
+  const viaCmd = launchSpecFor(vendor, 'C:/t', launch, 'C:/npm/claude.cmd', 'win32');
+  assert.equal(viaCmd.shell, true, 'the fixture: a .cmd shim goes through the shell');
+  assert.equal(viaCmd.args[viaCmd.args.indexOf('--settings') + 1], `"${spaced}"`);
+
+  const direct = launchSpecFor(vendor, '/tmp/t', launch, '/usr/bin/claude', 'linux');
+  assert.equal(direct.args[direct.args.indexOf('--settings') + 1], spaced);
 });

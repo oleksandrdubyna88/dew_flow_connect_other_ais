@@ -89,6 +89,39 @@ public sealed class AFastModeReachesEveryClaudeLaunchTests : IDisposable
     }
 
     [Fact]
+    public async Task ManyLaunchesAtOnce_AllGetTheFile_NoneFails()
+    {
+        // The code round (two reviewers): question rows build their launches in parallel, and a temp name shared by every
+        // thread of the process made one launch fail on the other's move.
+        var data = Directory.CreateTempSubdirectory("coai-fast-parallel-").FullName;
+        try
+        {
+            var launches = Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
+                new ClaudeRuntime().Build(RoleCatalog.ArchitectureRole, "review", Repo, "D:/s.json", "D:/out",
+                    new ReviewerSettings("claude") { Fast = FastMode.On, Model = "opus", DataDir = data }).Request.Arguments));
+
+            var all = await Task.WhenAll(launches);
+
+            all.Should().OnlyContain(args => SettingsSent(args) == "{\"fastMode\":true}");
+        }
+        finally
+        {
+            Directory.Delete(data, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ALaunchWithNoDataFolder_IsToldNothing_NeverASharedTempFile()
+    {
+        // The code round: a shared temp folder is a path another local user can plant first. A launch with nowhere of its
+        // own to keep the file sends no flag rather than read one somebody else controls.
+        var args = new ClaudeRuntime().Build(RoleCatalog.ArchitectureRole, "review", Repo, "D:/s.json", "D:/out",
+            new ReviewerSettings("claude") { Fast = FastMode.On, Model = "opus" }).Request.Arguments;
+
+        args.Should().NotContain("--settings");
+    }
+
+    [Fact]
     public void TheFile_IsWrittenOnce_AndOnlyRewrittenWhenItDiffers()
     {
         var first = Reviewer(FastMode.On, "opus");

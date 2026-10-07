@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { hasFastTier } from '../featureAvailability';
-import { FAST_MODE } from '../featureAvailability.generated';
+import { hasFastTier } from '../fastTier';
+import { FAST_MODE } from '../fastMode.generated';
 import type { Runtime } from '../models';
 
 /**
