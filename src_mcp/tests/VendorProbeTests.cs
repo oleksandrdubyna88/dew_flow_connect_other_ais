@@ -28,7 +28,7 @@ public sealed class VendorProbeTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_SLEEP_MS"])
+        foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_SLEEP_MS", "FAKECLI_VERSION_SLEEP_MS"])
         {
             Environment.SetEnvironmentVariable(name, null);
         }
@@ -76,7 +76,8 @@ public sealed class VendorProbeTests : IDisposable
     [Fact]
     public async Task ACliThatHangs_IsReportedAsSilent_NotAsAnExitCode()
     {
-        Environment.SetEnvironmentVariable("FAKECLI_SLEEP_MS", "5000");
+        // The `--version` wait of its own: a launch's FAKECLI_SLEEP_MS no longer slows a probe (the fake's VersionAnswer).
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_SLEEP_MS", "5000");
 
         var health = await Probe(
             Vendor("codex"),
