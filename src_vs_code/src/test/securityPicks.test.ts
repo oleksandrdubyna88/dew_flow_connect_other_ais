@@ -10,7 +10,7 @@ import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { type PanelState } from '../panelView';
 import { panelState } from './panelPageHarness';
 import { bubbled, pageTree, type PageNode } from './pageTree';
-import { runPageHtml } from './rolesPageHarness';
+import { runPageHtml } from './pageScriptHarness';
 
 /**
  * E4.2 of todo/PLAN_one_model_catalog.md, the security half: on the new page the lane's pairs are made from the rows

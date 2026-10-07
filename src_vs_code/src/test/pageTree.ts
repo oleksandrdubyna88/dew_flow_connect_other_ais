@@ -1,4 +1,4 @@
-import { Node } from './rolesPageHarness';
+import { Node } from './pageScriptHarness';
 
 /**
  * A page AS DRAWN, as the harness's nodes: every element of the rendered html, with its real parent, its `data-*` as a

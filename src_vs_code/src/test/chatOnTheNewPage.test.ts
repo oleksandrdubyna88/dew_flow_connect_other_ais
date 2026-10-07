@@ -7,7 +7,7 @@ import type { ChatSettings } from '../chatSettings';
 import { chatProviderListFor, type PanelState } from '../panelView';
 import { panelState } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
-import { runPageHtml } from './rolesPageHarness';
+import { runPageHtml } from './pageScriptHarness';
 
 /**
  * E4.6b of todo/PLAN_one_model_catalog.md: Chat on the new page — which model a chat opens on (the rows ticked Chat that

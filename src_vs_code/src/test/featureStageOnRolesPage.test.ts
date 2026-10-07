@@ -6,7 +6,8 @@ import { rowsAfter } from '../rolesEdit';
 import { rolesHtml, type RolesPageState } from '../rolesPage';
 import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { roleEdit } from '../rolesMessages';
-import { Node, runRolesPage, presses } from './rolesPageHarness';
+import { runRolesPage } from './rolesPageHarness';
+import { Node, presses } from './pageScriptHarness';
 
 /**
  * A role of one's own can be put in the FEATURE stage from the roles page (story S3.3 of

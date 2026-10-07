@@ -4,7 +4,7 @@ import { catalogBody, catalogHtml } from '../catalogPage';
 import { CATALOG_TABS } from '../catalogPlaces';
 import { settingsHtml } from '../panelView';
 import { click, panelState, runPanel, withoutSeq } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { Node, runPageHtml } from './pageScriptHarness';
 
 /**
  * The new Settings page, RUN (todo/PLAN_one_model_catalog.md, E3.1): six tabs and their sub-tabs, one place held by

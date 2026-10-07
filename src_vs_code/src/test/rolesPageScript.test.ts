@@ -6,7 +6,8 @@ import { type RolesPageState } from '../rolesPage';
 import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { RESULT_STAGE, type RoleRow } from '../roles';
 import { STOOD_DOWN } from '../roleDeletion';
-import { Node, type Page, runRolesPage, presses } from './rolesPageHarness';
+import { runRolesPage } from './rolesPageHarness';
+import { Node, type Page, presses } from './pageScriptHarness';
 
 /**
  * The roles page's own script, RUN.

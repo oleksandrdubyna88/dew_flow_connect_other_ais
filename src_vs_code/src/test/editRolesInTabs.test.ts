@@ -10,7 +10,8 @@ import { DEFAULT_ROLE_TAB, nextTab, rolesHtml, type RolesPageState } from '../ro
 import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
 import { ROLE_TABS, roleEdit } from '../rolesMessages';
 import { PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
-import { Node, runRolesPage } from './rolesPageHarness';
+import { runRolesPage } from './rolesPageHarness';
+import { Node } from './pageScriptHarness';
 
 /**
  * The Edit-roles page, divided — and coloured the way the sidebar already colours these roles.

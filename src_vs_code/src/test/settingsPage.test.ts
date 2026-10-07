@@ -5,7 +5,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { nextSettingsTab } from '../settingsPage';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { Node, runPageHtml } from './pageScriptHarness';
 
 /**
  * The Settings tab, RUN: its strip, its panes, its keys (`research/PLAN_settings_page.md`, S3).
@@ -181,7 +181,7 @@ test('a repaint under a control someone is typing in puts the caret back, in the
   // The panel's shared script restores the caret; on this page every pane is drawn hidden until the
   // page's own script opens the held tab — so the order of the two is the whole defect. Restored first,
   // the control is in a pane that is not rendered, a browser refuses the focus, and the next keystrokes
-  // go nowhere. The shim refuses it the same way (rolesPageHarness `Node.focus`).
+  // go nowhere. The shim refuses it the same way (pageScriptHarness `Node.focus`).
   const html = settingsHtml({ ...state(), focus: { id: 'model|codex||', start: 1, end: 1 } }, 'n', 'reviewers');
   const { tabs, panes } = nodesOf(html);
   assert.ok(panes.every((pane) => pane.hidden), 'the page is drawn with every pane hidden, which is the case this is about');

@@ -13,7 +13,7 @@ import { roundsLogHtml } from '../roundsLog';
 import { settingsHtml } from '../panelView';
 import { catalogHtml } from '../catalogPage';
 import { panelState } from './panelPageHarness';
-import { Node, runPageHtml, type Page } from './rolesPageHarness';
+import { Node, runPageHtml, type Page } from './pageScriptHarness';
 
 /**
  * Every ConnectOtherAIs page carries BOTH text controls — the size and the tone — and RUNS them: a press

@@ -4,7 +4,7 @@ import type { CommandRow } from '../commands';
 import { commandsHtml, type CommandsPageState } from '../commandsPage';
 import { commandsSkewNote } from '../commandsBlocks';
 import { commandEdit } from '../commandsMessages';
-import { Node, presses, runPageHtml } from './rolesPageHarness';
+import { Node, presses, runPageHtml } from './pageScriptHarness';
 
 /**
  * The Edit commands page, RUN — issue #467, Epic B. Its script is executed against the roles page's DOM

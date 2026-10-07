@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { savedInOrder } from '../catalogCommands';
 import { catalogHtml } from '../catalogPage';
 import { panelState } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { Node, runPageHtml } from './pageScriptHarness';
 
 /**
  * PR #687's review (CodeRabbit): keyboard focus survives a confirmed removal, and a removal's two writes — the rows and

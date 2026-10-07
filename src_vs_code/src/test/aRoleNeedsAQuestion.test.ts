@@ -6,7 +6,8 @@ import { RESULT_STAGE, isActive, whyNotAskable, type RoleRow } from '../roles';
 import { rowsAfter, type RowsOutcome } from '../rolesEdit';
 import { rolesHtml, type RolesPageState } from '../rolesPage';
 import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
-import { Node, runRolesPage } from './rolesPageHarness';
+import { runRolesPage } from './rolesPageHarness';
+import { Node } from './pageScriptHarness';
 
 /**
  * Issue #338: a role could be switched on, counted, and never asked. Every new role was created with a
