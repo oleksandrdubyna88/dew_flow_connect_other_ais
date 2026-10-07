@@ -103,7 +103,7 @@ public sealed class ConsultAntigravityDenialScenarioTests : ConsultScenarioBase
 
         /// <summary>Every launch's argv, its stdin as the last field (the fake CLI's recorder format).</summary>
         public IReadOnlyList<string[]> Launches() =>
-            [.. Directory.EnumerateFiles(Recorded, "*.argv").Select(path => File.ReadAllText(path).Split('\0'))];
+            [.. Directory.EnumerateFiles(Recorded, "*.argv").Select(path => LaunchRecords.Read(path).Split('\0'))];
 
         /// <summary>
         /// The follow-up — told apart by what rode stdin, never by file times: it is the launch that was

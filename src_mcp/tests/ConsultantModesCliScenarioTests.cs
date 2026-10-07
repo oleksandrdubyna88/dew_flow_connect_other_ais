@@ -130,7 +130,7 @@ public sealed class ConsultantModesCliScenarioTests : IDisposable
             .Single(row => row.GetProperty("callerKind").GetString() == kind).Clone();
 
     /// <summary>The consultant TURNS the fake CLI recorded — a codex turn starts `exec`; a `--version` probe is not one.</summary>
-    private int TurnsLaunched => Directory.EnumerateFiles(_record, "*.argv").Count(file => File.ReadAllText(file).StartsWith("exec\0", StringComparison.Ordinal));
+    private int TurnsLaunched => Directory.EnumerateFiles(_record, "*.argv").Count(file => LaunchRecords.Read(file).StartsWith("exec\0", StringComparison.Ordinal));
 
     private string StatePath => Path.Combine(_data, "consultations", "health", "claude.check.json");
 

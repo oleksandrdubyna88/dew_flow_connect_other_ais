@@ -142,7 +142,7 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
 
     /// <summary>Every launch's argv, its stdin as the last field (the fake CLI's recorder format).</summary>
     private IReadOnlyList<string[]> Launches() =>
-        [.. Directory.EnumerateFiles(_record, "*.argv").Select(path => File.ReadAllText(path).Split('\0'))];
+        [.. Directory.EnumerateFiles(_record, "*.argv").Select(path => LaunchRecords.Read(path).Split('\0'))];
 
     private IReadOnlyList<JsonElement> LedgerRows() =>
         [.. File.ReadAllLines(Path.Combine(_data, "usage.jsonl")).Select(line => JsonDocument.Parse(line).RootElement)];
@@ -194,6 +194,9 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var asking = AskRawAsync(caller.Token);
         await WaitUntilAsync(() => Launches().Count == 2, TimeSpan.FromSeconds(20));
+        // The positive half of the check below: the first launch has exited and the follow-up is asleep, so exactly one
+        // recorded launch is alive — which is what proves the check can see one at all.
+        LaunchesStillRunning().Should().ContainSingle("the follow-up is still asleep when the caller gives up");
         await caller.CancelAsync();
 
         try
@@ -205,9 +208,35 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
             // The caller gave up; what this test reads is what was written down on the way out.
         }
 
+        LaunchesStillRunning().Should().BeEmpty("a follow-up the caller cut short is killed and reaped before the call returns");
         var billed = LedgerRows().Should().ContainSingle("the turn is billed once, cut short or not").Subject;
         billed.GetProperty("tokensIn").GetInt64().Should().Be(DeniedIn, "the first launch's usage survives a follow-up that never reported");
         billed.GetProperty("outcome").GetString().Should().NotBe("ok", "a turn that did not answer must not read as one that went well");
+    }
+
+    /// <summary>The process ids of recorded launches still alive — the fake CLI names each record after its own pid.</summary>
+    /// <remarks>Distinct, because Windows hands a freed id straight out again: the follow-up can carry the first launch's.</remarks>
+    private IReadOnlyList<int> LaunchesStillRunning() =>
+        [.. Directory.EnumerateFiles(_record, "*.argv")
+            .Select(path => int.Parse(Path.GetFileName(path).Split('-')[0], System.Globalization.CultureInfo.InvariantCulture))
+            .Distinct()
+            .Where(IsFakeCliRunning)];
+
+    private static bool IsFakeCliRunning(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+
+            // The name first, because an id freed by our child may already belong to somebody else's process — one this
+            // account may not open, which HasExited would need a handle for.
+            return process.ProcessName == "FakeCli" && !process.HasExited;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // No process has that id any more, it exited while we looked, or it is not ours to open.
+            return false;
+        }
     }
 
     [Fact]
