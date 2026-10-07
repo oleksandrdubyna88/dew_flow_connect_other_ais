@@ -1,5 +1,22 @@
 # Changelog
 
+## Server 0.44.1 — 2026-10-07
+
+**An idle server reads nothing, and `initialize` is answered at once.** Every minute each `coai-mcp` swept its
+escalation cards and, for every card, read every session file before it asked whether the card was even due — about
+750 MB of JSON per minute on a data folder of 435 sessions and 54 cards. An "idle" server kept a core 20–40 % busy, and
+the same sweeps ran before the server answered `initialize`, so a start took 10–60 s and a client with a 30 s budget
+killed it and started another one. The defect is older than 0.43.0; Windows 0.41.1 had it too.
+- The sweep now asks which cards are due first, and reads what the sessions hold once per sweep, only when a card is
+  due. A session file that cannot be read keeps every due card for that sweep.
+- The server answers `initialize` before it reads the vault or builds its services; tools wait for the start without
+  holding a thread. A failed start still ends as a recorded crash.
+- The consultants check runs once per window for all servers on one data folder, not once per server.
+- Two new settings: `COAI_SWEEP_SECONDS` (60; 10–3600) and `COAI_CONSULTANTS_REUSE_SECONDS` (300; 30–86400).
+- Measured on the same copy of a real data folder (`research/RESULTS_idle_cpu_and_slow_start.md`): Windows `initialize`
+  24–28 s → 0.09–0.51 s, idle CPU 23–25 % → 0.07–0.10 % of a core; WSL `initialize` 9–16 s → 1.6–2.0 s, idle CPU
+  18–36 % → about 0.5 %.
+
 ## Server 0.44.0 — 2026-10-07
 
 **A silent antigravity question row is continued once, as a consultation is.** An antigravity `question-disk` row reaches

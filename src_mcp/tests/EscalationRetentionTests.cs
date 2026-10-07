@@ -31,7 +31,7 @@ public sealed class EscalationRetentionTests : IDisposable
         catch (IOException) { }
     }
 
-    private EscalationRetention Retention() => new(_escalations, id => _held.Contains(id));
+    private EscalationRetention Retention() => new(_escalations, () => new HeldQuestions(_held, Complete: true));
 
     private EscalationQuestion Asked(string id, TimeSpan ago) => new(
         id, "s-1", "D:/repo", "main", "Ship?", "Ship?", "en", string.Empty, [], (Now - ago).ToString("O"));
@@ -188,7 +188,71 @@ public sealed class EscalationRetentionTests : IDisposable
         Exists(torn).Should().BeTrue();
     }
 
+    /// <summary>
+    /// The idle-CPU defect of 2026-10-06 (<c>todo/PLAN_an_idle_server_is_idle_and_starts_at_once.md</c>, D1): what a session
+    /// holds is answered by reading EVERY session file, and the sweep asked it once per escalation file on every
+    /// one-minute beat, before judging whether the file was even due — 54 files × 435 sessions of JSON a minute, per
+    /// server. Nothing young is ever deleted, so a beat with nothing due must not ask at all.
+    /// </summary>
+    [Fact]
+    public void AnIdleBeat_WithNothingDue_NeverAsksWhatTheSessionsHold()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            Question($"young{i}", Recent);
+            Answer($"young{i}", Recent - TimeSpan.FromHours(1));
+        }
+
+        var asked = 0;
+        var retention = new EscalationRetention(_escalations, () => { asked++; return HeldQuestions.None; });
+        for (var beat = 0; beat < 10; beat++)
+        {
+            retention.Sweep(Now).Should().Be(0);
+        }
+
+        asked.Should().Be(0, "nothing is due, so what the sessions hold cannot change what this beat deletes");
+    }
+
+    /// <summary>The other half of D1: when files ARE due, the sessions are read once for the sweep, never once per file.</summary>
+    [Fact]
+    public void ABeatWithSeveralDueFiles_AsksWhatTheSessionsHold_OncePerSweep()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            Question($"old{i}", Past + TimeSpan.FromHours(1));
+            Answer($"old{i}", Past);
+        }
+
+        Question("held", Past);
+        _held.Add("held");
+        var asked = 0;
+        var retention = new EscalationRetention(_escalations, () => { asked++; return new HeldQuestions(_held, Complete: true); });
+
+        retention.Sweep(Now).Should().Be(10, "five answered pairs went; the held question stayed");
+        asked.Should().Be(1);
+        Exists(_escalations.QuestionPath("held")).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A session that could not be read (torn, or busy under another writer's turn) may hold any id, so a set read
+    /// without it deletes nothing that is due — it waits for a beat that can read every session (own review, 2026-10-06:
+    /// the per-id read it replaces treated an unreadable session as holding nothing, and could take a held card).
+    /// </summary>
+    [Fact]
+    public void ASetReadWithoutEverySession_KeepsEveryDueFile()
+    {
+        Question("old", Past + TimeSpan.FromHours(1));
+        Answer("old", Past);
+        Question("forgotten", Past);
+
+        new EscalationRetention(_escalations, () => new HeldQuestions(new HashSet<string>(), Complete: false))
+            .Sweep(Now).Should().Be(0);
+
+        Exists(_escalations.QuestionPath("old")).Should().BeTrue();
+        Exists(_escalations.QuestionPath("forgotten")).Should().BeTrue();
+    }
+
     [Fact]
     public void NoDirectoryYet_IsNothingToSweep() =>
-        new EscalationRetention(new Escalations(Path.Combine(_data, "never")), _ => false).Sweep(Now).Should().Be(0);
+        new EscalationRetention(new Escalations(Path.Combine(_data, "never")), () => HeldQuestions.None).Sweep(Now).Should().Be(0);
 }
