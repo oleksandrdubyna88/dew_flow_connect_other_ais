@@ -10892,3 +10892,15 @@ The check record's `streamed` field (`consultantHealth.CheckRecord`) turns the c
 streamed" (ok), or "…but NOT streamed — the endpoint or this coai-mcp ignored the switch" (warn)
 (`modelCardWorld.STREAMED`); the landed-check notice says the same (`consultantHealthHost.streamClause`). A row that did
 not ask hears nothing about streams.
+
+## A row's fast mode on the new model card (2026-10-07, todo/PLAN_fast_mode.md, Story B)
+
+New Settings page only. `catalogFields.fastField` keeps a row's `fast` — `on` or `cli` — only where
+`featureAvailability.rowHasFastTier` says the row has a tier (its runtime and model by the generated `FAST_MODE` rows of
+`shared/feature-availability.json`, and a codex row only on codex's own service); Off, the default, is stored as nothing.
+`vendorsWire.fastOnTheWire` sends it in `COAI_VENDORS` only to a binary whose `--features` lists `fastMode`
+(`FEATURES.fastMode`). The card draws a three-state select (`modelCardFields.fastField`: Off — the standard tier, On —
+the fast tier, As the CLI is set; help `fastMode`, the "new" tag `model.fast`) in the CLI rows' tuning, and the skew note
+(`IGNORED`) only for a state the person chose. The current Settings page draws no fast-mode control (a test holds it).
+The seam writes a codex row set to On and reads `--providers`' `fast` back: `on` from a binary that lists `fastMode`,
+`off` from one handed nothing.

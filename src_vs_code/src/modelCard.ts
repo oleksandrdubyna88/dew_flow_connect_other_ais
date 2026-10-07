@@ -1,7 +1,8 @@
 import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
-import { effortField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { rowHasFastTier } from './featureAvailability';
 import {
   type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
 } from './modelCardWorld';
@@ -120,6 +121,8 @@ const IGNORED: readonly { readonly feature: string; readonly what: string; reado
   { feature: 'timeoutMinutes', what: 'its own time limit', set: (vendor) => vendor.runtime !== 'api' && vendor.timeoutMinutes !== undefined },
   { feature: 'cliEffort', what: 'its effort', set: (vendor) => vendor.runtime !== 'api' && (vendor.effort ?? '').length > 0 },
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
+  // Off is the default for every binary that reads it; only a state the person CHOSE is said ignored.
+  { feature: 'fastMode', what: 'its fast mode', set: (vendor) => vendor.fast !== undefined },
 ];
 
 /** The sentences a row's card says about what this side's coai-mcp ignores on it — a decision, tested as a value. */
@@ -179,7 +182,13 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 
   return vendor.runtime === 'api'
     ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now))
-    : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id);
+    : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id)
+      + fastOf(vendor, id, facts);
+}
+
+/** The fast-mode select, for a row that has a tier (todo/PLAN_fast_mode.md). */
+function fastOf(vendor: Vendor, id: string, facts: ModelCardFacts): string {
+  return rowHasFastTier(vendor) ? fastField(vendor, id, newTag('model.fast', facts.firstSeen, facts.now)) : '';
 }
 
 function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {

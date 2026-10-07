@@ -57,6 +57,12 @@ account, organization or managed setting, or the per-session opt-in. That is the
 something coai may change. So: Off is confirmed (`off`); On is unconfirmed here, and the card must show the run's
 reported `fast_mode_state` / `fast_mode_disabled_reason` rather than claim fast mode is on.
 
+**The cause, confirmed by the owner (2026-10-07):** the account is on the Claude Max plan, and the interactive `/fast`
+answers *"Fast mode unavailable: Fast mode requires usage credits · /usage-credits to turn them on"*. On a subscription
+plan fast mode is billed from usage credits only, outside the plan's own limits, so with credits off every run reports
+`off` whatever `--settings` says. Turning credits on is the owner's decision (it is a separate spend); coai's spelling
+stands as documented.
+
 ## Not measured yet
 
 - How a headless claude run is put into fast mode, if it can be at all.

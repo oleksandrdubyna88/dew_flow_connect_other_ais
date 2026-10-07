@@ -56,6 +56,30 @@ public sealed class ARowsFastModeReachesItsLaunchesTests
     }
 
     [Fact]
+    public async Task ProvidersReportsWhatEachRowWithATierRunsWith_AndNothingForOneWithout()
+    {
+        // What the seam reads back (todo/PLAN_fast_mode.md, Story B): the binary's own word for the state it applies.
+        var service = new PanelService(
+            new PanelSettings
+            {
+                DataDir = Path.Combine(Path.GetTempPath(), $"coai-fastreport-{Guid.NewGuid():N}"),
+                Providers = PanelSettings.ParseVendors(
+                    """[{"id":"codex","runtime":"codex","fast":"on"},{"id":"claude","runtime":"claude","model":"opus"},{"id":"antigravity","runtime":"antigravity","fast":"on"},{"id":"or","runtime":"codex","baseUrl":"https://or.example/v1","fast":"on"}]"""),
+            },
+            VaultKeys.None("no vault"), default, new RecordingLauncher(stdOut: string.Empty), Serilog.Core.Logger.None, Noticing.None);
+
+        var answer = System.Text.Json.JsonDocument.Parse(await service.ProvidersAsync(TestContext.Current.CancellationToken)).RootElement;
+        string Fast(string id) =>
+            answer.GetProperty("providers").EnumerateArray().Single(one => one.GetProperty("provider").GetString() == id)
+                is var row && row.TryGetProperty("fast", out var fast) ? fast.GetString() ?? "" : "(absent)";
+
+        Fast("codex").Should().Be("on");
+        Fast("claude").Should().Be("off", "an Opus row that never set it runs Off");
+        Fast("antigravity").Should().Be("(absent)", "a runtime with no tier says nothing");
+        Fast("or").Should().Be("(absent)", "a codex row on another endpoint has no codex tier");
+    }
+
+    [Fact]
     public void TheBinaryListsFastMode()
     {
         FeaturesMode.Listed.Should().Contain("fastMode");

@@ -32,6 +32,8 @@ export const FEATURES = {
   checkSecurity: 'checkSecurity',
   /** An api row's `stream`: its answer asked for as a stream (todo/PLAN_api_streaming.md). */
   apiStream: 'apiStream',
+  /** A row's `fast`: its fast mode for codex and claude launches, Off by default (todo/PLAN_fast_mode.md). */
+  fastMode: 'fastMode',
 } as const;
 
 export interface BinaryFeatures {

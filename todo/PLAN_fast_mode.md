@@ -149,6 +149,15 @@ promote).
   (`ClaudeFastMode`, a one-key file), `fastMode` in `--features`, and the data block in `shared/feature-availability.json`
   read by both halves. Seven tests that pinned the full argv now carry the Off flag — the intended change. Not yet: the
   api tier (waits for a measured `xai` value).
+- **Story B (the card), 2026-10-07** — the stored field (`catalogFields`, kept only where `rowHasFastTier`), the wire
+  (`fastOnTheWire`, to a binary listing `fastMode`), the three-state select on the new card with help and a "new" tag,
+  the skew note for a chosen state, and `--providers` reporting `fast` for a row with a tier — what a seam leg reads
+  back. The current page draws nothing.
+- **Story D (the flow), 2026-10-07** — `AFastModeRowIsCheckedTests` drives the real `--check-model` launch; the flow and
+  its limits in `research/module_tests.md`.
+- **Story C (the chat) waits for the catalog's epic 4** (merged 2026-10-07, PR #688): the chat reads its models from
+  catalog rows and already passes a row's effort there (E4.6c), so the fast mode joins that code after a rebase rather
+  than being written twice.
 
 ## Definition of Done
 

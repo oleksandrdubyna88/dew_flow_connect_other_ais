@@ -1,5 +1,6 @@
 import { isMinutes } from './apiSettings';
 import { saidText } from './saidText';
+import { rowHasFastTier } from './featureAvailability';
 
 /**
  * The fields a reviewer row gains as it becomes a catalog row (PLAN_one_model_catalog.md D1, E1.1).
@@ -23,7 +24,11 @@ export interface CatalogFields {
   timeoutMinutes?: number;
   chatStartingPrompt?: string;
   stream?: boolean;
+  fast?: FastSetting;
 }
+
+/** A fast mode that is not the default (todo/PLAN_fast_mode.md): On, or As the CLI is set. Off is stored as nothing. */
+export type FastSetting = 'on' | 'cli';
 
 /** The catalog fields off a stored row, each only when it holds a value somebody could have meant. */
 export function catalogFields(v: Record<string, unknown>): CatalogFields {
@@ -37,6 +42,7 @@ export function catalogFields(v: Record<string, unknown>): CatalogFields {
     ...timeoutField(v['runtime'], v['timeoutMinutes']),
     ...promptField('chatStartingPrompt', v['chatStartingPrompt']),
     ...streamField(v['runtime'], v['stream']),
+    ...fastField(v),
   };
 }
 
@@ -53,6 +59,23 @@ export function usesFrom(raw: unknown): readonly CatalogUse[] {
  */
 function promptField(field: 'systemPrompt' | 'chatStartingPrompt', raw: unknown): CatalogFields {
   return typeof raw === 'string' && raw.trim().length > 0 ? { [field]: raw } : {};
+}
+
+/**
+ * A row's fast mode (todo/PLAN_fast_mode.md) — `on` or `cli` kept only on a row that has a tier; Off, the default, is
+ * kept as nothing, so a row that never set it and one set to Off read alike.
+ */
+function fastField(v: Record<string, unknown>): CatalogFields {
+  const said = FAST_SETTINGS.find((one) => one === v['fast']);
+
+  return said !== undefined && rowHasFastTier(launchOf(v)) ? { fast: said } : {};
+}
+
+const FAST_SETTINGS: readonly FastSetting[] = ['on', 'cli'];
+
+/** What decides a row's tier, off the stored row: its runtime, its model, and whether it is on somebody else's endpoint. */
+function launchOf(v: Record<string, unknown>): { readonly runtime: string; readonly model: string; readonly baseUrl: string } {
+  return { runtime: saidText(v['runtime']) ?? '', model: saidText(v['model']) ?? '', baseUrl: saidText(v['baseUrl']) ?? '' };
 }
 
 /** An api row's stream switch (todo/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */

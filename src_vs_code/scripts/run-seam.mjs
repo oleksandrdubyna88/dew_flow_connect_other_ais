@@ -430,6 +430,36 @@ async function apiStreamSeam() {
 await apiStreamSeam();
 console.log('  ok  an api row\'s stream switch reaches a server that lists apiStream, and never one that does not');
 
+// A row's fast mode (todo/PLAN_fast_mode.md): written by the extension's own writer, read back as the binary's own word
+// for the state it applies — `on` to a binary that lists fastMode; held back from one that does not, which then runs Off.
+async function fastModeSeam() {
+  const { serverSettingsJsonWith } = await import('../out/serverSettingsFile.js');
+  const row = { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, fast: 'on' };
+  const fastWith = async (features) => {
+    const dir = mkdtempSync(join(tmpdir(), 'coai-seam-fast-'));
+    try {
+      const write = { writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features };
+      writeFileSync(join(dir, 'settings.json'), serverSettingsJsonWith(DEFAULTS, vendorsFrom([row]), write), 'utf8');
+      const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '' });
+
+      return (answer.providers ?? []).find((one) => one.provider === 'codex')?.fast;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const on = await fastWith(['fastMode']);
+  if (on !== 'on') {
+    fail(`a row set to fast did not reach the server as fast — it reports ${JSON.stringify(on)}`);
+  }
+  const held = await fastWith([]);
+  if (held !== 'off') {
+    fail(`a binary without fastMode was handed the row's fast mode anyway — it reports ${JSON.stringify(held)}`);
+  }
+}
+
+await fastModeSeam();
+console.log('  ok  a row\'s fast mode reaches a server that lists fastMode, and one that does not runs Off');
+
 // The TENTH leg: the model catalog's migration (PLAN_one_model_catalog.md E1.4) — the settings file is the same,
 // byte for byte, before and after, and the binary lists the same reviewers from a multi-instance catalog.
 const catalog = await catalogSeam({ providersIn, fail });

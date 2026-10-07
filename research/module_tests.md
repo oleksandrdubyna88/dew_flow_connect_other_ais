@@ -2851,3 +2851,22 @@ cd src_vs_code && npm run compile && node --test out/test/anApiRowCanStream.test
 **What it does NOT prove.** That a real vendor streams as the stub does — that is the plan's live call (build step 5),
 kept as a fixture when it has run. That a webview click reaches the check: the page and the child meet at the durable
 record, and each half is tested against it, not driven through one editor.
+
+## A row's fast mode, through the person's flow (2026-10-07, Story D of `todo/PLAN_fast_mode.md`)
+
+The flow: set "Fast mode" on a row's card on the new Settings page → save → every launch of that row carries the tier.
+Two halves, joined by the settings file:
+
+- **The page half** — `aRowHasAFastModeSwitch.test.ts` (extension): the select is drawn only on a card whose row has a
+  tier, Off by default; a change writes the row's `fast`; it crosses `COAI_VENDORS` only to a binary listing `fastMode`;
+  the skew note for a chosen state; the current page draws no control. `fastModeIsData.test.ts`: which runtime and model
+  has a tier, from the generated rows of `shared/feature-availability.json`.
+- **The real child** — `AFastModeRowIsCheckedTests` (C#): a codex row handed to `--check-model` as the card hands it,
+  the fake CLI recording the argv it was really started with: On → `-c service_tier=fast`, never set → `default`, As the
+  CLI is set → no tier. Teeth: with the consultant's tier dropped, two of the three go red.
+- **The wire** — the seam leg reads `--providers`' `fast` back from the real binary (`on`, or `off` when held back).
+- **Per launch** — `AFastModeReachesEveryCodexLaunchTests`, `AFastModeReachesEveryClaudeLaunchTests`,
+  `ARowsFastModeReachesItsLaunchesTests`, `FastModeIsDataTests`.
+
+**What it does NOT prove.** That the vendor actually serves the fast tier: codex reports no tier in its output, and
+claude needs usage credits on this account (research/RESULTS_fast_mode_measured_2026-10-07.md).

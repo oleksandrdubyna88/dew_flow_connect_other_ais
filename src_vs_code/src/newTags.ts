@@ -19,6 +19,7 @@ export const NEW_CONTROLS: readonly string[] = [
   'model.systemPrompt',
   'model.effort',
   'model.stream',
+  'model.fast',
 ];
 
 /**
