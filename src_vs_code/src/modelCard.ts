@@ -206,7 +206,7 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
       + fastOf(vendor, id, facts);
 }
 
-/** The fast-mode select, for a row that has a tier (todo/PLAN_fast_mode.md). */
+/** The fast-mode select, for a row that has a tier (research/PLAN_fast_mode.md). */
 function fastOf(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   return rowHasFastTier(vendor) ? fastField(vendor, id, newTag('model.fast', facts.firstSeen, facts.now)) : '';
 }

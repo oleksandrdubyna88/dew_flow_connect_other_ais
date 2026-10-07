@@ -1,7 +1,7 @@
 import { FAST_MODE, type FastModeRow, type FastSource } from './fastMode.generated';
 
 /**
- * Which rows have a fast tier (todo/PLAN_fast_mode.md) — in a module of its own that imports only the generated rows,
+ * Which rows have a fast tier (research/PLAN_fast_mode.md) — in a module of its own that imports only the generated rows,
  * because the stored field (`catalogFields`) asks it and `vendors` imports `catalogFields`: reached through
  * `featureAvailability`, which imports `models`, the rule closed a new import cycle (the fast-mode code round).
  */

@@ -41,7 +41,7 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// <summary>The shim's spelling of a row's thinking switch turned off.</summary>
     private static readonly string[] ThinkingOff = ["--thinking", "off"];
 
-    /// <summary>A key WITH a value — the shim's flag reader drops a bare flag (todo/PLAN_api_streaming.md).</summary>
+    /// <summary>A key WITH a value — the shim's flag reader drops a bare flag (research/PLAN_api_streaming.md).</summary>
     private static readonly string[] StreamOn = ["--stream", "on"];
 
     public string Provider => id;

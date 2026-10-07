@@ -116,7 +116,7 @@ export interface CheckRecord {
   readonly answered: boolean;
   readonly markerRead: boolean;
   /**
-   * For an api row that asked for a stream: `streamed` or `not-streamed` (todo/PLAN_api_streaming.md, Story C). Empty for
+   * For an api row that asked for a stream: `streamed` or `not-streamed` (research/PLAN_api_streaming.md, Story C). Empty for
    * every other check — and from a coai-mcp before the field existed.
    */
   readonly streamed: string;

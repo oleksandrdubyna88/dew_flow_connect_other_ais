@@ -337,7 +337,7 @@ export function chatLaunchFor(
 }
 
 /**
- * The tier a chat forces (todo/PLAN_fast_mode.md, Story C) — by the review launch's rule: the row's state where the row
+ * The tier a chat forces (research/PLAN_fast_mode.md, Story C) — by the review launch's rule: the row's state where the row
  * has a tier, judged by the CONVERSATION's model; nothing As the CLI is set. A claude chat also gets its settings file.
  */
 function fastOf(vendor: Vendor, model: string, fastFile: (on: boolean) => string): Pick<ChatLaunch, 'fast' | 'fastSettings'> {

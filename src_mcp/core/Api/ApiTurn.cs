@@ -8,7 +8,7 @@ namespace CoaiMcp.Core.Api;
 /// <param name="Effort">What was configured; the module's row decides what is sent.</param>
 /// <param name="MaxTokens">The configured ceiling; the module's row may raise it to its floor.</param>
 /// <param name="ThinkingOn">Whether the model is to think — off only on a module that has a switch, and only when a row said so.</param>
-/// <param name="Stream">Whether the answer is asked for as a stream (todo/PLAN_api_streaming.md) — only when a row said so.</param>
+/// <param name="Stream">Whether the answer is asked for as a stream (research/PLAN_api_streaming.md) — only when a row said so.</param>
 public sealed record ApiTurn(
     string Model,
     string Prompt,

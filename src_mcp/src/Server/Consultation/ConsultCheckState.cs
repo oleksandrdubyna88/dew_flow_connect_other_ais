@@ -111,7 +111,7 @@ public sealed record ConsultCheckRecord
     public bool MarkerRead { get; init; }
 
     /// <summary>
-    /// For an api row that asked for a stream (todo/PLAN_api_streaming.md, Story C): <c>streamed</c> when the answer came as
+    /// For an api row that asked for a stream (research/PLAN_api_streaming.md, Story C): <c>streamed</c> when the answer came as
     /// one, <c>not-streamed</c> when it did not — a gateway that ignored the request, or a coai-mcp too old to read the
     /// switch. Empty for every other check.
     /// </summary>

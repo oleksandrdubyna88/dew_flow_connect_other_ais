@@ -13,7 +13,7 @@ import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
- * An api row can ask for its answer as a stream (todo/PLAN_api_streaming.md): a `stream` field on the row, sent to
+ * An api row can ask for its answer as a stream (research/PLAN_api_streaming.md): a `stream` field on the row, sent to
  * coai-mcp only when the installed binary lists `apiStream`, switched on the NEW Settings page's model card — and nowhere
  * on the current page (the owner's rule of 2026-10-06: new controls go on the new page only).
  */

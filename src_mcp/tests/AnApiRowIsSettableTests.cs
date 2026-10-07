@@ -258,7 +258,7 @@ public sealed class AnApiRowIsSettableTests : IDisposable
         api.GetProperty("effective").GetProperty("thinkingOn").GetBoolean().Should().BeFalse("the wire sends qwen's thinking-off level");
     }
 
-    // ---------- the stream switch (todo/PLAN_api_streaming.md) ----------
+    // ---------- the stream switch (research/PLAN_api_streaming.md) ----------
 
     [Fact]
     public void A_rows_stream_switch_is_read_and_absent_or_false_is_off()
