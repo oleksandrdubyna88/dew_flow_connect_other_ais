@@ -35,7 +35,8 @@ const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
   // Chat, drawn from the rows ticked Chat with the prompt presets inline (E4.6b).
   chat: chatTabHtml,
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),
-  'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors)),
+  // Each pick with its caller's health block under it — the current page's block, by its own rule (E5.1b).
+  'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors, state.consultantHealth)),
   'consultants/qconsult': (state) => questionConsultantSection(state, state.catalogRows ?? state.vendors),
   security: (state) => {
     const rows = state.catalogRows ?? state.vendors;

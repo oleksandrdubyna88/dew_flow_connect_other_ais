@@ -1,5 +1,7 @@
 import { CALLER_KINDS, DEFAULT_CONSULT, type ConsultantChoice, type ConsultSettings, type ResolvedConsultant } from './consultSettings';
 import { optionHtml, pickRefusal, rowPicks, type PickOption } from './catalogPicks';
+import { type ConsultantHealthState, callerHealth } from './consultantHealthState';
+import { healthBlock } from './consultantHealthView';
 import { escapeHtml } from './escapeHtml';
 import type { Vendor } from './vendors';
 
@@ -109,7 +111,7 @@ function modelWords(model: string): string {
   return model.length > 0 ? `model ${model}` : 'its own default model';
 }
 
-function pickHtml(caller: { id: string; label: string }, consult: ConsultSettings, rows: readonly Vendor[]): string {
+function pickHtml(caller: { id: string; label: string }, consult: ConsultSettings, rows: readonly Vendor[], health: ConsultantHealthState | undefined): string {
   const view = consultantPickView(caller.id, consult.stored[caller.id] ?? DEFAULT_CONSULT.stored[caller.id]!, rows);
   const note = view.note.length === 0 ? '' : `\n  <div class="hint stranded">${escapeHtml(view.note)}</div>`;
 
@@ -117,11 +119,28 @@ function pickHtml(caller: { id: string; label: string }, consult: ConsultSetting
   <label for="consult-row-${caller.id}">${escapeHtml(caller.label)} asks</label>
   <select id="consult-row-${caller.id}" data-setting="consultantRow" data-caller="${caller.id}">${view.options.map((one) => optionHtml(one, view.selected)).join('')}</select>
   <div class="hint">${escapeHtml(runsOn(consult.byCaller[caller.id] ?? DEFAULT_CONSULT.byCaller[caller.id]!))}</div>${note}
+${pickHealth(caller.id, consult, health)}
 </div>`;
 }
 
-/** Every caller's picker — what the new page draws where the current page draws each caller's own definition. */
-export function consultantPicksHtml(consult: ConsultSettings, rows: readonly Vendor[]): string {
-  return `${CALLER_KINDS.map((caller) => pickHtml(caller, consult, rows)).join('\n')}
+/**
+ * The caller's health block under its pick — the block the current page draws under each caller's own definition
+ * (each side's facts, this side's paid Check, agy's allow rule and its Copy), decided by the same `callerHealth` and drawn
+ * by the same `healthBlock`, never a copy (todo/PLAN_one_model_catalog.md E5.1b). Without it the new page held no Check
+ * at all, and deleting the current page (E5.1 step 5) would have deleted the feature. Empty while the panel has no
+ * health to give, as on the current page.
+ */
+function pickHealth(kind: string, consult: ConsultSettings, health: ConsultantHealthState | undefined): string {
+  return healthBlock(health === undefined ? undefined : callerHealth(kind, consult, health));
+}
+
+/**
+ * Every caller's picker — what the new page draws where the current page draws each caller's own definition.
+ *
+ * @param health what the server says about each caller's consultant (`PanelState.consultantHealth`), or `undefined`
+ *   before the first probe — the same value the current page's rows are drawn with
+ */
+export function consultantPicksHtml(consult: ConsultSettings, rows: readonly Vendor[], health: ConsultantHealthState | undefined): string {
+  return `${CALLER_KINDS.map((caller) => pickHtml(caller, consult, rows, health)).join('\n')}
 <div class="hint">Each caller asks the model you pick here. Its model, effort and prompt are edited on its card on Models.</div>`;
 }
