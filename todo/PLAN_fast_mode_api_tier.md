@@ -21,8 +21,8 @@ Fast mode shipped for codex and claude rows (PR #693). Two things it planned wer
    with a warning. How an OLDER codex treats the key was never measured. If one refuses it, Off — sent on every codex
    launch by default — would break that launch. **Measured 2026-10-07, and one does:** 0.110.0–0.130.0 refuse
    `default` at config load ([RESULTS_codex_service_tier_versions_2026-10-07.md](../research/RESULTS_codex_service_tier_versions_2026-10-07.md)).
-   The fix is its own plan, [PLAN_codex_tier_floor.md](../research/PLAN_codex_tier_floor.md) — built on branch
-   `fix/codex-tier-floor`, waiting for its merge — and this item is no longer this plan's work.
+   The fix is its own plan, [PLAN_codex_tier_floor.md](../research/PLAN_codex_tier_floor.md) — merged as PR #702 and
+   released in coai-mcp 0.44.2 — and this item is no longer this plan's work.
 
 ## What to do
 

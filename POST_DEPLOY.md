@@ -20,8 +20,9 @@ one of them arriving wrong.
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
 Last verified: 2026-10-07 · mcp **0.44.2** (released) · extension 0.64.0 and server 0.9.0 unchanged, not
-re-released · automated items 1, 2, 6, 9 and 10 PASS; manual items 3, 4, 5, 7, 8, 11 and 12 were not run for this
-release. The check was run locally, not in CI —
+re-released · automated items 1, 2, 7, 9 and 10 PASS; manual items 3, 4, 5, 6, 8, 11 and 12 were not run for this
+release (the table's own numbers — the checker prints the rows by POSITION, and the table below lists item 4 after
+item 8, so its "6" is item 7 here and its "8" is item 4). The check was run locally, not in CI —
 `MCP_VERSION=0.44.2 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.64.0`, the
 newest tags of each — and printed "every automated item passed"; there is no run id. With `--target 0.64.0`, item 2
 checked the Marketplace still serves that extension, so this stamp says nothing new about the extension.

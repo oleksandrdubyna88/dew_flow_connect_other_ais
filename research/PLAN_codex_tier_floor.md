@@ -92,8 +92,8 @@ keep `default` unchanged — the per-site tests are what prove the probe is wire
 
 ## Progress
 
-Built on branch `fix/codex-tier-floor`, 2026-10-07, one commit per build step; every step started RED. Not yet merged,
-so the status line above stays as it is.
+Built on branch `fix/codex-tier-floor`, 2026-10-07, one commit per build step; every step started RED. Merged as PR
+#702 and released in coai-mcp 0.44.2 the same day (the status line above).
 
 1. **The diagnosis row** (`89bd13bd`). `VendorDiagnosis` gains ``unknown variant `default`, expected `fast` or `flex` ``
    → "the installed codex (0.110–0.130) cannot be told the standard tier — update codex, or set this row's fast mode to
