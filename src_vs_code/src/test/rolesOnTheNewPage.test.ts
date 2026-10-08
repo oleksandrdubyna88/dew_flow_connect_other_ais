@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import { type PanelState } from '../panelView';
 import { composed, type RoleRow } from '../roles';
+import { roleBlock as drawRoleBlock, roleBlockOptions } from '../rolesBlocks';
 import { rowsAfter } from '../rolesEdit';
 import { roleSwitchFollows } from '../rolesSwitch';
 import { DEFAULTS, envBlock } from '../settingsShape';
@@ -275,6 +276,37 @@ function movesOf(switches: Switches, id: string): { readonly stages: readonly st
     removed: page.posted.some((one) => one['type'] === 'roles' && isRemoval(one['edit'])),
   };
 }
+
+// ---------------------------------------------------------------- E5.1b's code round, finding 1
+
+/** A role list whose index reads are counted — what "once per page, not once per block" is measured by (as R7's record). */
+function counted(rows: readonly RoleRow[]): { readonly list: readonly RoleRow[]; readonly reads: () => number } {
+  let reads = 0;
+  const list = new Proxy([...rows], {
+    get(target, key, receiver): unknown {
+      if (typeof key === 'string' && /^\d+$/u.test(key)) {
+        reads += 1;
+      }
+
+      return Reflect.get(target, key, receiver);
+    },
+  });
+
+  return { list, reads: () => reads };
+}
+
+test('a page of roles counts its buckets once, not once per block — 1000 roles are not a million reads (finding 1)', () => {
+  // Half ON and half OFF, so both counts a block asks — the last-ON refusal and the five-per-bucket room — are asked.
+  const rows = composed(Array.from({ length: 1000 }, (_, index) => ({ ...mine(`Mine${index}`, 'result'), active: index % 2 === 0 })));
+  const { list, reads } = counted(rows);
+  const options = roleBlockOptions(list, 'data-role-prompt', { Architecture: false });
+
+  for (const role of rows) {
+    drawRoleBlock(role, {}, options);
+  }
+
+  assert.ok(reads() <= 10 * rows.length, `${rows.length} blocks read the role list ${reads()} times — every block rescanned it`);
+});
 
 /** Whether a posted roles edit is a removal — read from the message as it arrives, never asserted into a type. */
 function isRemoval(edit: unknown): boolean {

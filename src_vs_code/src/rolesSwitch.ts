@@ -43,7 +43,30 @@ export function rolesOn(rows: readonly RoleRow[], bucket: RoleBucket, roleEnable
  * unresolved, whichever stage it is.
  */
 export function lastOn(rows: readonly RoleRow[], role: RoleRow, roleEnabled: Readonly<Record<string, boolean>>): boolean {
-  return switchedOn(role, roleEnabled) && rolesOn(rows, bucketOf(role), roleEnabled).length <= 1;
+  return lastOnBy(onCounts(rows, roleEnabled), role, roleEnabled);
+}
+
+/** How many roles are ON in each bucket — a bucket nobody is ON in is absent, and reads as none. */
+export type BucketCounts = ReadonlyMap<RoleBucket, number>;
+
+/**
+ * Every bucket's ON count, in ONE pass over the roles — what a page that draws a block per role counts once and hands to
+ * each block (E5.1b's code round, finding 1). Asking {@link lastOn} per block rescanned the whole list per block: a
+ * thousand roles were three million reads of it. With an empty `roleEnabled` it is the catalog's own count, the
+ * `active` one the five-per-bucket room is judged by.
+ */
+export function onCounts(rows: readonly RoleRow[], roleEnabled: Readonly<Record<string, boolean>>): BucketCounts {
+  const counts = new Map<RoleBucket, number>();
+  for (const role of composed(rows).filter((one) => switchedOn(one, roleEnabled))) {
+    counts.set(bucketOf(role), (counts.get(bucketOf(role)) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+/** {@link lastOn}, over counts already taken — the same rule, asked of a page's one count. */
+export function lastOnBy(counts: BucketCounts, role: RoleRow, roleEnabled: Readonly<Record<string, boolean>>): boolean {
+  return switchedOn(role, roleEnabled) && (counts.get(bucketOf(role)) ?? 0) <= 1;
 }
 
 /**
