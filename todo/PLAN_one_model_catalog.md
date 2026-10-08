@@ -1136,6 +1136,43 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    allow rule and Copy), the new page's last-role refusal counting `roleEnabled` as the current page does, and the
    page-running tests owed for setup/team and setup/mcp — its own design and plan round; **E5.1c** — steps 4 and 5,
    after E5.1b, when the premise holds.
+   **E5.1b, designed 2026-10-08.** Mapped first (paths under `src_vs_code/src`):
+   1. **The consultant health block on the new Consultants tab — the same block, not a copy.** `healthBlock`
+      (`consultantHealthView.ts:27`) is a pure function of one caller's `RowHealth`; the current page reaches it through
+      `consultantView.consultantRowView` → `withHealth` (`rowHealth(kind, {vendor, model}, health)`, `:253`), the new
+      tab never does (`callersOrDefinitions` replaces those rows with `consultantPicks.pickHtml`'s). One exported helper —
+      a caller's health from `consult.byCaller` and the health state, the identity rule `withHealth` uses today (the
+      RESOLVED definition, so a failure of another vendor/model is not shown) — is called by `withHealth` and by
+      `pickHtml`; `consultantPicksHtml` takes the health state (`catalogSections.ts:38` passes
+      `state.consultantHealth`). Nothing else moves: the page posts the same `checkConsultant` /
+      `copyConsultantSnippet` commands (`panelProvider.ts:2475-2483`), the shared page script redraws a Copy's label
+      (`copyCommands`), `CONSULTANT_HEALTH_CSS` is in the shared `CSS`, and `HEALTH_SHOWN_ON` already names
+      `consultants/consultant` (`consultantHealthWatcher.ts:42`). **The identity risk, tested:** a pick that is a
+      catalog row resolves through `consult.byCaller` to a vendor/model; the health the server reports for that caller
+      (`--consultants`) must be matched by the same pair, or the block would filter its own row's failure away — a
+      test feeds a catalog-row pick and a server report and sees the row's own failure shown.
+   2. **The new page's last-role refusal counts what the current page counts.** Today the new page asks only the
+      catalog's `active` (`rolesBlocks.ts:188` `last = on && !canDeactivate(rows, role)`, `roles.ts:463 activeCount`,
+      and the host's twin `rolesEdit.ts:229 lastStanding` / `:261 whyNotOff`), so two active code roles of which one has
+      `roleEnabled = false` let the other be switched off and the code stage runs no role. One predicate — a role is
+      ON when `rolesSwitch.switchedOn(role, roleEnabled)` — and one count per bucket, in `rolesSwitch.ts`, read by the
+      new page's block, the host's guard and `settingsShape.enabledCodeRoles` (the current page). The new page keeps
+      refusing the last ON role of EVERY bucket (plan, code, documents, feature) — broader than the current page,
+      which guards only the result-code bucket — because a stage with no role is the same failure in each.
+   3. **The page-running tests owed for setup/team and setup/mcp.** Each button of each place pressed on the NEW page
+      (`test/pageScriptHarness.ts` / `runPanel` over `catalogHtml`) and the message it posts asserted: Team servers'
+      add, sign in, sign out, remove; the MCP server's install (when an update is offered), check for update, change
+      and move the data folder, delete the old one after a verified move. Buttons without `data-id` are found by their
+      command (the harness's `click` matches an id; a small helper finds by command).
+   4. **The health tests run on both pages.** `consultantHealthPage.test.ts` (one Check per caller, a click posts its
+      kind, disabled while running and after a reload, none on an old server, the other side read-only, another
+      vendor's failure not shown, confinement and the snippet, escaping, Copy, a copied label redrawn alone, side
+      headings) runs against the current page today (`:58-60`); it runs against the new tab too, from one table.
+   **Tests, first** for 1 (RED: the new tab draws no Check), 2 (RED: the last ON code role can be switched off on the
+   new page and by the host), and the identity case of 1; 3 and 4 add page-running coverage of behaviour that already
+   works, so their teeth are proven by breaking the code they hold, not by a red start. Docs: `research/module_extension.md`
+   (the shared health helper; the one ON rule), `research/module_tests.md` (the places and their tests). After E5.1b,
+   E5.1c (steps 4–5) proceeds: its premise then holds.
    **E5.1a's code round** (proceed, 8 of 8 reviewers; 8 findings, all accepted, each fixed red first on the same
    branch): (0, 7) the ranking allowlist is the pick's own rule — `bugzPickOf` takes a `RankingRule`
    (`rankingRuleOf`: the server's list, or `RANKING_VENDORS` from a server too old to say), `bugzView` filters no more;
