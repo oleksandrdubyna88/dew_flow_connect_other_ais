@@ -5,7 +5,7 @@ import { thisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
 import { readOverlay } from './sideSettings';
 import { CatalogTurns } from './catalogTurns';
-import { userLayerReader } from './modelKeys';
+import { userChatPresets } from './modelKeys';
 
 /**
  * The host half of the move into the catalog (PLAN_one_model_catalog.md E1.3): read each settings layer, run
@@ -195,10 +195,12 @@ const LAYER_KEYS: Readonly<Record<LayerWrite['key'], keyof CatalogLayer>> = {
 
 /**
  * The chat model presets AS THE CHAT READS THEM (E4.6a): the user layer's, the shipped ones included when the person
- * never changed them — the same reader `savedModels` uses, so the move moves exactly what the chat offered.
+ * never changed them — `modelKeys.userChatPresets`, the ONE reader `savedModels`, Chat's conflicts and a choice on Chat
+ * take too, so the move moves exactly what the chat offered and Chat raises only what the move recorded (R7's code
+ * round, finding 6).
  */
 function chatPresetsOf(config: vscode.WorkspaceConfiguration): unknown {
-  return userLayerReader((section) => config.get(section), (section) => config.inspect(section))('chatModelPresets');
+  return userChatPresets(config);
 }
 
 /** The user's own `settings.json` — never a workspace value, which is not theirs to have migrated. */

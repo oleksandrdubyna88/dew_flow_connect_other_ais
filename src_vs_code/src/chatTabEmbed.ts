@@ -185,7 +185,9 @@ function chatFieldsScript(): string {
 /**
  * The buttons: Add a prompt, Remove, and the two answers to an edited preset (R7) — each posted numbered, so it carries
  * the busy mark. An answer names its preset from the conflict's block, never from a model's row, so it cannot be read as
- * that row's own action.
+ * that row's own action; and it disables BOTH answers of that block while it is in flight (R7's code round, finding 9) —
+ * a second press could otherwise send the other answer before the first had landed. The redraw every choice ends with
+ * (`applyRevisionChoice`) draws the block again, or not at all.
  */
 function chatPressesScript(): string {
   return `
@@ -196,6 +198,8 @@ function chatPressesScript(): string {
       if (revision) {
         const conflict = revision.closest('[data-chp-conflict]');
         chpPost({ type: 'revision', id: conflict ? conflict.dataset.chpConflict : '', choice: revision.dataset.chpRevision }, revision, true);
+        const answers = conflict ? Array.prototype.slice.call(conflict.children) : [revision];
+        answers.forEach((one) => { if (one.dataset && one.dataset.chpRevision !== undefined) { one.disabled = true; } });
         return;
       }
       const add = t.closest('[data-chp-add]');

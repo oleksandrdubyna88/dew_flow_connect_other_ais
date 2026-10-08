@@ -14,9 +14,10 @@ import { chatRead, savedModels } from './chatConfig';
 import { chatModelAdd, chatModelEdit, type ChatModelStores, type ChatModelWrite } from './chatModelEdits';
 import { askForAModel } from './chatModelWizard';
 import { inCatalogTurn } from './catalogMigrationHost';
-import { reportRefusal, saveSetting, userLayer } from './sideConfig';
+import { reportRefusal, saveSetting } from './sideConfig';
 import { PresetCommand, editRepaints, editedRows, presetSettlesAs } from './chatPresetsMessages';
-import { revisionStoresReading, revisionWrites } from './chatPresetRevision';
+import { applyRevisionChoice, type RevisionPorts } from './chatPresetRevision';
+import { userChatPresets } from './modelKeys';
 import { settledWrites } from './settledWrites';
 import { teamServersFrom } from './teamServers';
 
@@ -214,26 +215,29 @@ function apply(command: PresetCommand): Promise<boolean> {
 
 /**
  * An answer to a preset an older build edited after the move (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a),
- * R7) — decided by `chatPresetRevision.revisionWrites`, read and written in ONE catalog turn, so no migration reads the
- * row changed and the record not yet. Through this side, where the record and the rows it names live; never the presets,
- * which stay as the older build left them. A refusal stops the writes: the row goes first, so a choice stopped before
- * the record is still on Chat to answer again. It redraws, because the conflict's block goes away.
+ * R7) — carried out by `chatPresetRevision.applyRevisionChoice`: read and written in ONE catalog turn, so no migration
+ * reads the row changed and the record not yet. Through this side, where the record and the rows it names live; never
+ * the presets, which stay as the older build left them. A refusal stops the writes: the row goes first, so a choice
+ * stopped before the record is still on Chat to answer again.
  */
-async function applyRevision(command: Extract<PresetCommand, { kind: 'revision' }>): Promise<boolean> {
-  const side = boundSide();
+function applyRevision(command: Extract<PresetCommand, { kind: 'revision' }>): Promise<boolean> {
+  return applyRevisionChoice(command, revisionPorts(boundSide()));
+}
 
-  return inCatalogTurn(async () => {
-    const writes = revisionWrites(command.choice, command.presetId, revisionStoresReading(userLayer(config())(MODELS_KEY), chatRead(config())));
-    try {
-      for (const one of writes) {
-        await saveSetting(side, config(), one.key, one.value);
-      }
-    } catch (error: unknown) {
-      reportRefusal(side, 'chatPresetsMoved', error, { ordinary: 'ConnectOtherAIs could not save your choice about the edited chat model.' });
-    }
-
-    return writes.length > 0;
-  });
+/**
+ * The window's half of a choice: the presets as the move reads them (`userChatPresets`, finding 6 of R7's code round),
+ * this side's reader and its one save, a refusal said with its cure, and the catalog's turn.
+ */
+function revisionPorts(side: vscode.ExtensionContext): RevisionPorts {
+  return {
+    presets: () => userChatPresets(config()),
+    reader: () => chatRead(config()),
+    save: (key, value) => saveSetting(side, config(), key, value),
+    refused: (key, error) => {
+      reportRefusal(side, key, error, { ordinary: 'ConnectOtherAIs could not save your choice about the edited chat model.' });
+    },
+    turn: inCatalogTurn,
+  };
 }
 
 function applyToList(command: ListCommand): Promise<boolean> {

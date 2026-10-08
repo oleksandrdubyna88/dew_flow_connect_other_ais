@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import type { ModelPreset } from '../chatPresets';
 import { chatMove } from '../chatPresetMove';
-import { revisionStoresReading, revisionWrites } from '../chatPresetRevision';
+import { applyRevisionChoice, revisionStoresReading, type RevisionPorts } from '../chatPresetRevision';
 import { presetEdit, type RevisionChoice } from '../chatPresetsMessages';
 import { chatSettingsFrom } from '../chatSettings';
 import type { PanelState } from '../panelView';
@@ -11,6 +11,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 import { panelState } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
+import { afterWrites, readerOf, type SettingsFile } from './settingsFileFixture';
 import { sourceOf } from './sourceReading';
 
 /**
@@ -20,9 +21,6 @@ import { sourceOf } from './sourceReading';
  * RUN against the DOM shim, drawn from a settings file through the same reader the panel uses, and the message it posts
  * is carried back through the host's decision to the file, read back as a reload reads it.
  */
-
-/** The settings file, as far as the Chat tab and a choice read and write it. */
-type SettingsFile = Readonly<Record<string, unknown>>;
 
 const preset = (extra: Partial<ModelPreset> = {}): ModelPreset => ({
   id: 'p-1', name: 'Deep', runtime: 'claude', model: 'opus', main: false, executablePath: 'C:\\coai\\claude.exe', baseUrl: '',
@@ -38,8 +36,6 @@ function fileWith(presets: readonly ModelPreset[]): SettingsFile {
 
   return { vendors: moved.rows, chatPresetsMoved: moved.record, chatModelPresets: presets };
 }
-
-const readerOf = (file: SettingsFile) => (key: string): unknown => file[key];
 
 function stateOf(file: SettingsFile): PanelState {
   return {
@@ -112,33 +108,44 @@ for (const choice of ['use', 'keep'] as const) {
   });
 }
 
-/** The page's own message, through the host's decision, written and read back as a reload reads it. */
-function afterPress(file: SettingsFile, choice: RevisionChoice): SettingsFile {
+/**
+ * The page's own message, carried out by the host's own `applyRevisionChoice` over a window held in memory, and the file
+ * read back as a reload reads it.
+ */
+async function afterPress(file: SettingsFile, choice: RevisionChoice): Promise<SettingsFile> {
   const { page, pane } = chatPage(file);
   bubbled(page, 'click', choiceIn(pane, choice));
   const command = presetEdit(page.posted.find((one) => one['type'] === 'chatPresets')?.['edit']);
   assert.equal(command.kind, 'revision', `the host does not read the page's message: ${JSON.stringify(command)}`);
-  const writes = command.kind === 'revision'
-    ? revisionWrites(command.choice, command.presetId, revisionStoresReading(file['chatModelPresets'], readerOf(file)))
-    : [];
+  const writes: { key: string; value: unknown }[] = [];
+  const ports: RevisionPorts = {
+    presets: () => file['chatModelPresets'],
+    reader: () => readerOf(file),
+    save: (key, value) => Promise.resolve().then(() => { writes.push({ key, value }); }),
+    refused: () => undefined,
+    turn: (work) => work(),
+  };
+  if (command.kind === 'revision') {
+    assert.equal(await applyRevisionChoice(command, ports), true, 'the page is not redrawn after the choice');
+  }
 
-  return JSON.parse(JSON.stringify(writes.reduce<SettingsFile>((acc, one) => ({ ...acc, [one.key]: one.value }), file))) as SettingsFile;
+  return afterWrites(file, writes);
 }
 
 const rowOf = (file: SettingsFile): Readonly<Record<string, unknown>> | undefined =>
   revisionStoresReading([], readerOf(file)).rows.find((row) => row['id'] === 'chat-p-1');
 
-test('Use the edited values: the row takes them, the record takes the preset, and Chat is clear after a reload', () => {
-  const saved = afterPress(fileWith([EDITED]), 'use');
+test('Use the edited values: the row takes them, the record takes the preset, and Chat is clear after a reload', async () => {
+  const saved = await afterPress(fileWith([EDITED]), 'use');
 
   assert.equal(rowOf(saved)?.['executablePath'], 'D:\\tools\\claude.exe');
   assert.equal(revisionStoresReading([], readerOf(saved)).record[0]?.copied?.executablePath, 'D:\\tools\\claude.exe');
   assert.deepEqual(conflictIds(chatPage(saved).pane), []);
 });
 
-test('Keep the row: the row unchanged, the record takes the preset, and Chat is clear after a reload', () => {
+test('Keep the row: the row unchanged, the record takes the preset, and Chat is clear after a reload', async () => {
   const file = fileWith([EDITED]);
-  const saved = afterPress(file, 'keep');
+  const saved = await afterPress(file, 'keep');
 
   assert.deepEqual(rowOf(saved), rowOf(file));
   assert.equal(revisionStoresReading([], readerOf(saved)).record[0]?.copied?.executablePath, 'D:\\tools\\claude.exe');
@@ -147,10 +154,24 @@ test('Keep the row: the row unchanged, the record takes the preset, and Chat is 
   assert.deepEqual(conflictIds(chatPage({ ...saved, chatModelPresets: [preset({ executablePath: 'E:\\claude.exe' })] }).pane), ['p-1']);
 });
 
-test('the host routes the choice to that decision, in the catalog\'s turn, through this side, and never writes the presets', () => {
+test('the host binds the choice to the real window: the move’s presets, this side’s reader and save, the catalog’s turn', () => {
   const host = sourceOf('chatPresetsHost.ts');
 
-  assert.match(host, /command\.kind === 'revision'/u, 'the host never reads a revision');
-  assert.match(host, /inCatalogTurn\(async \(\) => \{\s*const writes = revisionWrites\(command\.choice, command\.presetId, revisionStoresReading\(userLayer\(config\(\)\)\(MODELS_KEY\), chatRead\(config\(\)\)\)\);/u);
-  assert.match(host, /await saveSetting\(side, config\(\), one\.key, one\.value\);/u);
+  assert.match(host, /if \(command\.kind === 'revision'\) \{\s*return applyRevision\(command\);/u, 'the host never reads a revision');
+  assert.match(host, /return applyRevisionChoice\(command, revisionPorts\(boundSide\(\)\)\);/u);
+  assert.match(host, /presets: \(\) => userChatPresets\(config\(\)\),\s*reader: \(\) => chatRead\(config\(\)\),\s*save: \(key, value\) => saveSetting\(side, config\(\), key, value\),/u);
+  assert.match(host, /turn: inCatalogTurn,/u);
+  // And Chat draws from the presets the move reads, as the migration does (finding 6).
+  assert.match(sourceOf('panelProvider.ts'), /chat: chatSettingsFrom\(this\.read\(config\), userChatPresets\(config\)\),/u);
+  assert.match(sourceOf('catalogMigrationHost.ts'), /function chatPresetsOf\(config: vscode\.WorkspaceConfiguration\): unknown \{\s*return userChatPresets\(config\);/u);
+});
+
+test('a press on either choice disables BOTH of that conflict’s buttons while it is in flight (finding 9)', () => {
+  for (const choice of ['use', 'keep'] as const) {
+    const { page, pane } = chatPage(fileWith([EDITED]));
+
+    bubbled(page, 'click', choiceIn(pane, choice));
+
+    assert.deepEqual([choiceIn(pane, 'use').disabled, choiceIn(pane, 'keep').disabled], [true, true], `${choice}: a second answer can still be pressed`);
+  }
 });

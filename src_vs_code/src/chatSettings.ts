@@ -90,8 +90,11 @@ function text(value: unknown, fallback: string): string {
  * Read the four, with every fallback stated.
  *
  * @param read the setting reader — `vscode.workspace.getConfiguration('coai').get` in the host
+ * @param presets `coai.chatModelPresets` as the move into the catalog reads them (`modelKeys.userChatPresets`) — the
+ *   models and the conflicts on Chat are read from them, so Chat never raises a conflict the move did not record and a
+ *   choice could not settle (R7's code round, finding 6). The reader's own value where a caller has no configuration.
  */
-export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
+export function chatSettingsFrom(read: (key: string) => unknown, presets: unknown = read('chatModelPresets')): ChatSettings {
   const language = read('chatLanguage');
   const autoSend = read('chatAutoSend');
   // The list carries its own migration: somebody who has been editing `coai.chatPrompt` since the
@@ -113,8 +116,8 @@ export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
     prompts,
     // The rows ticked Chat, and a preset only while the move has not taken it (PLAN_one_model_catalog.md E4.6a) —
     // the list the chat opens from, so the picker never strands the row `coai.chatModel` names after the move.
-    models: chatModelsReading(read('chatModelPresets'), read),
-    conflicts: chatConflictsReading(read('chatModelPresets'), read),
+    models: chatModelsReading(presets, read),
+    conflicts: chatConflictsReading(presets, read),
     modelName: text(read('chatModelName'), ''),
     // English by default, and NOT `coai.helpLanguage`: that one is set to English on the owner's
     // machine, so borrowing it would have delivered English explanations — exactly what the feature

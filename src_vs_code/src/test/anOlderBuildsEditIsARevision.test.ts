@@ -3,9 +3,15 @@ import { test } from 'node:test';
 import { migrateLayer, MIGRATED, restoreLayer, type CatalogLayer, type LayerWrite } from '../catalogMigration';
 import { chatModelsOf, movedTo } from '../chatCatalogModels';
 import type { ModelPreset } from '../chatPresets';
-import { chatMove, COPIED_FIELDS, movedRecordFrom, type MovedPreset } from '../chatPresetMove';
-import { presetConflicts, revisionStoresReading, revisionWrites, type RevisionStores } from '../chatPresetRevision';
+import { chatMove, COPIED_FIELDS, entryOf, movedRecordFrom, snapshotted, type MovedPreset } from '../chatPresetMove';
+import {
+  applyRevisionChoice, presetConflicts, revisionStoresReading, revisionWrites, type RevisionPorts, type RevisionStores,
+} from '../chatPresetRevision';
+import { chatSettingsFrom } from '../chatSettings';
+import { userChatPresets } from '../modelKeys';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
+import { afterWrites, readerOf, type SettingsFile } from './settingsFileFixture';
+import { sourceOf } from './sourceReading';
 
 /**
  * Epic 5 prerequisite (a) of todo/PLAN_one_model_catalog.md, R7: a chat preset an OLDER build edits after the move is a
@@ -15,9 +21,6 @@ import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
  */
 
 type RawRow = Readonly<Record<string, unknown>>;
-
-/** The settings file, as far as R7 reads and writes it. */
-type SettingsFile = Readonly<Record<string, unknown>>;
 
 const BASE: readonly RawRow[] = DEFAULT_VENDORS.map((row) => ({ ...row }));
 
@@ -46,12 +49,8 @@ function afterMove(...moved: readonly ModelPreset[]): SettingsFile {
 /** What a side reads, given the presets as the chat reads them now. */
 const storesOf = (file: SettingsFile, presets: readonly ModelPreset[]): RevisionStores => revisionStoresReading(presets, (key) => file[key]);
 
-/** Each write landed, then the file read back as a window that reloads reads it — JSON, as `settings.json` is. */
-function applied(file: SettingsFile, writes: readonly { readonly key: string; readonly value: unknown }[]): SettingsFile {
-  const after = writes.reduce<SettingsFile>((acc, one) => ({ ...acc, [one.key]: one.value }), file);
-
-  return JSON.parse(JSON.stringify(after)) as SettingsFile;
-}
+/** Each write landed, then the file read back as a window that reloads reads it. */
+const applied = afterWrites;
 
 const rowIn = (file: SettingsFile, id: string): RawRow | undefined => storesOf(file, []).rows.find((row) => row['id'] === id);
 
@@ -238,4 +237,107 @@ test('a revision changes nothing in the migration, and the restore still clears 
   const record = restore.kind === 'restore' ? restore.writes.find((one) => one.key === 'chatPresetsMoved') : undefined;
   assert.ok(record !== undefined, 'the restore did not touch the record');
   assert.equal(record.value, undefined, 'the record survived the restore');
+});
+
+// ---------------------------------------------------------------- R7's code round (2026-10-07), findings 2–8
+
+/** A record whose index reads are counted — what "copies nothing" and "one pass" are measured by. */
+function counted(entries: readonly MovedPreset[]): { readonly record: readonly MovedPreset[]; readonly reads: () => number } {
+  let reads = 0;
+  const record = new Proxy([...entries], {
+    get(target, key, receiver): unknown {
+      if (typeof key === 'string' && /^\d+$/u.test(key)) {
+        reads += 1;
+      }
+
+      return Reflect.get(target, key, receiver);
+    },
+  });
+
+  return { record, reads: () => reads };
+}
+
+/** `n` presets, each moved into its own row, with the snapshot the move writes — or, `legacy`, without one. */
+function moved(n: number, legacy = false): RevisionStores {
+  const presets = Array.from({ length: n }, (_, index) => preset({ id: `p-${index}`, name: `P ${index}` }));
+  const run = chatMove({ presets, rows: BASE, record: [] });
+
+  return { presets, rows: run.rows, record: legacy ? run.record.map(({ copied: _copied, ...five }) => five) : run.record, chatModel: '' };
+}
+
+test('the newest entry is read from the record\'s end, copying nothing (finding 3)', () => {
+  const { record, reads } = counted(moved(1000).record);
+
+  assert.equal(entryOf('p-999', record)?.rowId, 'chat-p-999');
+  assert.ok(reads() <= 2, `one lookup read ${reads()} entries — the record was copied`);
+});
+
+test('the conflicts and the snapshot pass each read the record once, not once per preset (finding 8)', () => {
+  const settled = moved(300);
+  const conflicts = counted(settled.record);
+  presetConflicts({ ...settled, record: conflicts.record });
+  assert.ok(conflicts.reads() <= 3000, `300 presets read the record ${conflicts.reads()} times`);
+
+  const legacy = moved(300, true);
+  const snapshots = counted(legacy.record);
+  snapshotted(snapshots.record, legacy.presets, legacy.rows);
+  assert.ok(snapshots.reads() <= 3000, `300 entries without a snapshot read the record ${snapshots.reads()} times`);
+});
+
+test('ONE implementation of "the newest entry": every reader calls entryOf, none reverses the record (finding 2)', () => {
+  for (const file of ['catalogChatStep.ts', 'chatCatalogModels.ts', 'chatPresetRevision.ts', 'chatPresetMove.ts']) {
+    assert.doesNotMatch(sourceOf(file), /\.reverse\(\)/u, `${file} reverses the record — a second "newest"`);
+  }
+  assert.match(sourceOf('catalogChatStep.ts'), /entryOf\(saved, /u, 'recordedEntryOf does not read through entryOf');
+});
+
+test('Use the edited values keeps coai.chatModelName right when the chat opens on that row and its model changed (finding 5)', () => {
+  const file: SettingsFile = { ...afterMove(preset()), chatModel: 'chat-p-1', chatModelName: 'gpt-5' };
+  const edited = preset({ model: 'gpt-5-mini' });
+  const writes = revisionWrites('use', 'p-1', storesOf(file, [edited]));
+
+  assert.deepEqual(writes.map((one) => one.key), ['vendors', 'chatModelName', 'chatPresetsMoved']);
+  assert.equal(writes.find((one) => one.key === 'chatModelName')?.value, 'gpt-5-mini');
+  assert.ok(!revisionWrites('keep', 'p-1', storesOf(file, [edited])).some((one) => one.key === 'chatModelName'), 'Keep the row changed the model');
+  assert.ok(!revisionWrites('use', 'p-1', storesOf({ ...file, chatModel: 'codex' }, [edited])).some((one) => one.key === 'chatModelName'),
+    'the model name of a chat that opens on another row was written');
+  assert.ok(!revisionWrites('use', 'p-1', storesOf(file, [preset({ executablePath: 'D:\\x.exe' })])).some((one) => one.key === 'chatModelName'),
+    'the model name was written though the model did not change');
+});
+
+/** The window a choice is made in, held in memory: what it saved, and what it was refused. */
+function windowOver(file: SettingsFile, presets: readonly ModelPreset[], refuse = ''): { ports: RevisionPorts; saved: string[]; refused: string[] } {
+  const saved: string[] = [];
+  const refused: string[] = [];
+  const ports: RevisionPorts = {
+    presets: () => presets,
+    reader: () => (key) => file[key],
+    save: (key) => (key === refuse ? Promise.reject(new Error(`refused ${key}`)) : Promise.resolve().then(() => { saved.push(key); })),
+    refused: (key) => { refused.push(key); },
+    turn: (work) => work(),
+  };
+
+  return { ports, saved, refused };
+}
+
+test('a choice always redraws — one on a conflict already settled ends its busy mark and drops the stale card (finding 7)', async () => {
+  const file = afterMove(preset());
+  const stale = windowOver(file, [preset()]);
+
+  assert.equal(await applyRevisionChoice({ presetId: 'p-1', choice: 'use' }, stale.ports), true, 'a settled conflict\'s card stays on Chat');
+  assert.deepEqual(stale.saved, []);
+
+  const refusing = windowOver(file, [preset({ name: 'Deeper' })], 'vendors');
+  assert.equal(await applyRevisionChoice({ presetId: 'p-1', choice: 'use' }, refusing.ports), true);
+  assert.deepEqual([refusing.saved, refusing.refused], [[], ['vendors']], 'a refused row went on to write the record');
+});
+
+test('Chat reads the presets the MOVE reads — a workspace value raises nothing the choice cannot settle (finding 6)', () => {
+  const file = afterMove(preset());
+  const workspace = { ...file, chatModelPresets: [preset({ name: 'A workspace\'s name' })] };
+
+  assert.deepEqual(chatSettingsFrom(readerOf(workspace), [preset()]).conflicts, [], 'Chat raised the workspace layer\'s preset');
+  assert.deepEqual(chatSettingsFrom(readerOf(workspace), [preset({ model: 'o4' })]).conflicts.map((one) => one.presetId), ['p-1']);
+  const layered = { get: (): unknown => [preset({ name: 'ws' })], inspect: () => ({ globalValue: [preset()], workspaceValue: [preset({ name: 'ws' })] }) };
+  assert.deepEqual(userChatPresets(layered), [preset()], 'the one reader took the workspace layer');
 });
