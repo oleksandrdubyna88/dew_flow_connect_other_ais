@@ -11,6 +11,7 @@ import { threads, type Thread } from '../../chatThread';
 import { backToSource } from '../../chatReturnCommand';
 import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
+import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -876,6 +877,12 @@ const SCENARIOS: readonly Scenario[] = [
     // collect's own decision, which starts nothing. What it does and does not drive is in `bugzCollectScenario.ts`.
     name: 'a Bugz collect with a stranded pick, or none, read from the real settings, is refused and starts nothing',
     run: aBugzCollectIsRefusedInARealEditor,
+  },
+  {
+    // todo/PLAN_default_phrases.md, its plan round's finding 1: the seven defaults read with nothing saved, an emptied
+    // list read back EMPTY, and a person's own list left alone — through the real configuration layers.
+    name: 'the default phrases appear with nothing saved, and an emptied or own list is left alone',
+    run: theDefaultPhrasesInARealEditor,
   },
   {
     // R7 of todo/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration

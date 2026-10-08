@@ -255,7 +255,9 @@ own questions are asked in its chat:
   whether the consultation a group of epics owes was taken, and the risky pieces consulted on.
 - **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
   on the clipboard; paste it where you were about to type it, usually the Claude Code box. Edit
-  them in a tab of their own (**Edit phrases**) that saves as you type. It copies rather than
+  them in a tab of their own (**Edit phrases**) that saves as you type. Until you save a list of
+  your own you get seven example phrases (*Continue*, *Progress?*, *All done?* and four more) — edit
+  or remove them; a list you emptied stays empty, and a list you already had is never touched. It copies rather than
   typing into the box for you on purpose: no Claude Code command accepts arbitrary text, and the
   only alternative was a synthetic keystroke through the Windows API — one `Ctrl+V` is a better
   price than a mechanism that can fail silently on somebody else's machine.
