@@ -1043,6 +1043,116 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).
+
+   **E5.1 in detail (mapped 2026-10-08, on main after prerequisite (b), PR #699).** No old section is drawn ONLY by the
+   old page — every one of the twelve is a catalog tab, a `SPLIT` place or a `MOVED_SECTIONS` place — so the old page
+   can go whole. What stays: the three editing HOSTS (`rolesHost`, `commandsHost`, `chatPresetsHost`), which serve the
+   new page's queues; `OLD_TAB_PLACES`, so `coai.openSettings(<old tab id>)` still opens the right place; the sidebar
+   entries of `PANEL_SECTIONS`; the restore command and `coai.migratedFrom` for one more release (T5). Five steps,
+   each green on its own:
+   1. **The new page stops drawing the old pages' buttons.** `gateBody` carries "Edit commands…"
+      (`panelView.ts:1707`) and `stagesBody` "Edit roles…" (`:2555`); both are drawn on the new page today. Each
+      becomes a jump to its place on the new page (`reviews/commands`, `reviews/roles`). A page test clicks each and
+      sees the place open.
+   2. **The sidebar's Bugz picker lists the rows ticked Bugz** (`bugzView.ts:170-192`, today every model of every local
+      engine): the ticked row's model, written to `bugzModel` as `row/model` exactly as the Models tab's tick already
+      writes it (`catalogCommands.ts:64-76`), so the collect path (`panelProvider.ts:3253-3261`) is unchanged; no ticked
+      row says so and points to Models. **An install that never ticked Bugz** (the plan round, finding 2): a saved
+      `bugzModel` that names a catalog row and one of its models counts as that row's pick — shown selected — so an
+      upgraded install keeps collecting with the model it had. **A pick whose row is unticked or gone** (finding 5) is
+      drawn as a stranded pick (the Chat tab's pattern) and the collect REFUSES it with a sentence naming Models,
+      never passing an empty or stale `--model`; the same for no pick at all. **T7:** `COAI_BUGZ_MODEL` is removed from the settings file's environment block
+      (`settingsShape.ts:594-599`) — nothing in `src_mcp` or `shared` reads it, and the collect takes `--model` — with
+      `settingsReach.test.ts`'s every-field walk told why. `bugzModel` stays a setting (and in the migration's backup,
+      for T5).
+   3. **The test harness opens the new page.** `test/panelPages.ts` and `test/panelPageHarness.ts` reach a section
+      through `OLD_TAB_PLACES` on the catalog page instead of the old page; the old page still exists, so this step
+      changes tests only and every test that read a section through the old page now reads the page a person sees.
+   4. **The three replaced pages go**: `rolesPage.ts`, `rolesPanel.ts`, `commandsPage.ts`, `commandsPanel.ts`,
+      `chatPresetsPage.ts`, `chatPresetsPanel.ts`; the commands `coai.editRoles`, `coai.editCommands`,
+      `coai.editChatPresets` (manifest, `extension.ts`, `PANEL_COMMANDS`, `VSCODE_COMMAND_FOR`, the provider's cases —
+      `PANEL_COMMANDS` is exhaustive, so a half-removed command does not compile) stop opening the old pages and instead
+      open the Settings page at `reviews/roles`, `reviews/commands` and `chat` — kept as those redirects for one more
+      release, as T5 keeps the restore command (finding 0: a person's muscle memory or a keybinding of their own still
+      lands somewhere useful); `rolesKnowTheServer` leaves `told()`;
+      `chatBody`'s "Edit presets…" button; their tests (each behaviour a deleted test held is either held by a new-page
+      test already — say which — or gains one).
+   5. **The preview switch and the old page go**: `coai.settingsPreview` (manifest, `settingsPanel.ts`, `heldAfter`,
+      the provider's four readers, the `settingsPreview` command, the badge, "Use the current page",
+      `stillOnTheOldPage`, the `settings.preview` new-tag); the twelve settings rows of `PANEL_SECTIONS`,
+      `reviewersBody`, `chatBody`, `settingsHtml`/`settingsKey`/`settingsSections`, `settingsBody`, the `'settings'`
+      surface; the help keys that name the old page. Before the fallback that pointed at the old page is removed,
+      every place of the new page is held by a test that RUNS the page against the DOM shim and works one of its
+      controls (finding 3) — not by a check that the place has markup.
+   **Order and docs** (findings 4, 6): the build starts after R7 (PR #707) is merged, on a branch carrying it;
+   `research/module_extension.md` and `research/module_tests.md` describe the navigation, the redirect commands and
+   the scenarios as shipped. Rejected: moving the harness step first (finding 1) — the new page already has its own
+   page harness (`test/pageScriptHarness.ts`, used by `rolesOnTheNewPage` and the other new-page tests), so step 1's
+   test runs the new page directly.
+   Risks named before the build: eslint suppressions for deleted files are pruned (`--prune-suppressions`; the CI
+   ratchet accepts entries that shrink or go); the import-cycle ratchet must not grow; `install.test.ts` and
+   `helpCoverage.test.ts` hold the manifest's commands and the help's names to the code. **Tests, first** where a
+   behaviour changes (steps 1, 2, and every behaviour a deleted page test held); steps 3–5 remove code, and the
+   proof that nothing a person relied on went with it is a new-page test for each such behaviour, named in the
+   progress line.
+
+   **Progress (2026-10-08, branch `feat/catalog-e5-switch`): steps 1–3 built; steps 4–5 STOPPED.** **Step 1**
+   (`3984e38a`, `ca0c3e8f`): `gateBody`/`stagesBody` draw their way to the editor through `editorWay(page, …)` — a
+   `data-goto` jump on the new page (`catalogPageScript` opens it like a tab press), the old `data-command` on the
+   current page, which is still the default while the switch exists. Red: "Commands was not opened", "Roles & prompts
+   was not opened" (`theNewPageJumpsToItsPlaces.test.ts`); then, because the first commit made the current page's
+   buttons jumps too, 'the current page draws no "Edit commands…" that posts a command' (and "Edit roles…"). Deviation:
+   the builders take the page (`SettingsPageKind`), so the current page keeps opening the two pages until step 5.
+   **Step 2** (`ec514339`): `bugzPick.ts` — the rows ticked Bugz as `row/model`; with none ticked, a saved pick naming a
+   row and one of its models (its own or one its engine serves) holds; else stranded, drawn chosen + disabled; the
+   collect refuses a stranded pick or none (`no-ranking-model`, naming Settings › Models). Red: the picker offered
+   `['local/qwen3.5','local/llama4:17b','local-2/gemma4:27b']` for `['local-2/gemma4:27b']` and for `[]`; "a stranded
+   pick cannot be chosen again"; a removed row's pick not selected; the refusal '' (module stubbed); T7
+   `'local/qwen3.5' !== undefined`. `COAI_BUGZ_MODEL` removed (no reader in `src_mcp`/`shared`); `settingsReach`'s walk
+   skips `bugzModel` with why. Deviation: a collect with no pick used to run unranked; it is refused now, as designed.
+   **Step 3** (`9cdeca68`): the harness draws the new page (`pageOf`/`keyOf`/`sectionHtml`/`pageHolding` through
+   `OLD_TAB_PLACES`, `paneIn`), `render-page.mjs` too (its catalog demo also lacked R7's `conflicts` and crashed — fixed).
+   Tests of what only the current page draws read it by name (`currentSettingsHtml`) instead of being deleted, because
+   that page still ships: the old reviewer card's layout and inert api card, the stage box's own role tick, the
+   coloured consultant definitions, the consultant health block, the chat's model selects and "Edit presets…", the
+   question row's vendor picker.
+   **Why 4–5 stopped.** The premise "no old section is drawn ONLY by the old page" is false for the **consultant health
+   block** (`consultantView.definitionRows` → `healthBlock`: each caller's paid ✓ Check, health per side, agy's allow
+   rule and its Copy) — the new Consultant tab draws picks only, though epic 4 item 2 asked for all three. Step 5 would
+   delete a shipped feature; step 4's redirects open the Settings page, which with the preview off is the current page,
+   holding no roles/commands/presets editor — so it needs step 5. Also found: the new page's last-role refusal counts
+   the catalog's `active` only, not `roleEnabled`. **Owed before step 5** (place → a test that RUNS the page and works a
+   control): models `modelsTab.test.ts`; reviews/stages, gate, limits, consultants (non-caller controls), qconsult, chat
+   fields, setup/keys, setup/side `catalogTabsWrite.test.ts` (it sweeps every setting control, but compares against
+   `settingsHtml`, so it must be rewritten with step 5); reviews/roles `rolesOnTheNewPage`; reviews/prompts
+   `catalogTabsInPlace` (round picker); reviews/commands `commandsOnTheNewPage`; reviews/gate's jump
+   `theNewPageJumpsToItsPlaces`; consultants/consultant `consultantPicks` (picker writes); consultants/qconsult
+   `qconsultRowPicks` (pick writes); security `securityLane.test.ts`; chat `chatOnTheNewPage`; **setup/team and
+   setup/mcp have none** (their controls are buttons; to be written).
+   **E5.1 is split in three, decided 2026-10-08 on that finding** (verified in code: `consultantView.consultantSection`
+   draws `healthBlock` inside each `definitionRows` row, and `callersOrDefinitions` replaces those rows with the new
+   tab's picks, so the new page never draws it): **E5.1a** — steps 1–3, shipped as their own PR from this branch;
+   **E5.1b** — the consultant health block on the new Consultants tab (each caller's ✓ Check, health per side, agy's
+   allow rule and Copy), the new page's last-role refusal counting `roleEnabled` as the current page does, and the
+   page-running tests owed for setup/team and setup/mcp — its own design and plan round; **E5.1c** — steps 4 and 5,
+   after E5.1b, when the premise holds.
+   **E5.1a's code round** (proceed, 8 of 8 reviewers; 8 findings, all accepted, each fixed red first on the same
+   branch): (0, 7) the ranking allowlist is the pick's own rule — `bugzPickOf` takes a `RankingRule`
+   (`rankingRuleOf`: the server's list, or `RANKING_VENDORS` from a server too old to say), `bugzView` filters no more;
+   red "a collect started on a row the ranking allowlist refuses" and "what is configured is what is shown". (1) One
+   reader, `bugzPick.bugzInputsOf`, for the sidebar and the collect, the provider building its reads as the render does;
+   red (reader stubbed to the reviewer list) "the collect refused the pick the sidebar shows chosen", and the source pin
+   "the collect reads the pick by a reader of its own". (2) `RankingChoice`, the allowlist and `mayRank` moved into
+   `bugzPick.ts`, `collectArgs` into `bugzCollect.ts`: the domain imports no view. (3) No pick with a model ticked says
+   "Pick a ranking model in the Bugz section before collecting."; red "a model IS ticked — the sentence sends the person
+   to Models anyway". (4) The page harness opens a place named by its own id (`models`, `reviews/commands`) on the
+   Settings page; red "models ran the sidebar, not the Settings page"; no existing test was reading the sidebar by it.
+   (5) A stranded pick with nothing else to offer is said, with no inert picker and no "pick one here" (the refusal
+   too); red "a picker drawn with nothing in it to choose". (6) The collect's decision is `bugzCollect.collectWithPick`
+   over ports — the provider builds them — run by `bugzCollect.test.ts` (stranded, none, holding, refused row; red with
+   it stubbed to start: "a collect started with a pick nobody holds", "a collect started with no model") and by a real-
+   editor scenario reading the real settings (teeth: planted to start first, it failed "a collect started with the pick
+   "gone/qwen3.5" read from the real settings"); the provider's own ports are pinned by source, not run.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"

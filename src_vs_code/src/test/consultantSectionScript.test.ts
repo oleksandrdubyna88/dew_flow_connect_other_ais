@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { CUSTOM_ENDPOINT } from '../consultSettings';
-import { type PanelFocus } from '../panelView';
+import { type PanelFocus, settingsHtml } from '../panelView';
 import { type Control, type Page, lastWrite, panelState, runPanel, work } from './panelPageHarness';
 
 /**
@@ -24,7 +24,12 @@ import { type Control, type Page, lastWrite, panelState, runPanel, work } from '
 
 /** Render the panel with the Consultant section open, and run its own script over it. */
 function run(focus?: PanelFocus): Page {
-  return runPanel(panelState('consultant', {}, focus));
+  // The CURRENT page: its caller rows are each caller's own DEFINITION (vendor, endpoint, CLI path). The new page's
+  // Consultant tab picks a catalog row per caller instead (E4.2), held by `consultantPicks.test.ts` — so this reads the
+  // page that draws the definitions while it is drawn (E5.1 step 3), and goes with it.
+  const state = panelState('consultant', {}, focus);
+
+  return runPanel(state, { html: settingsHtml(state, 'test-nonce', 'consultant') });
 }
 
 /** The one control of that setting in that caller's row — and a failure that names the row. */

@@ -181,7 +181,8 @@ function page(name, size) {
         commands: { rows: [{ id: 'cmd-ab12', title: 'Run the linter', stage: 'code', enabled: true }], texts: {}, serverVersion: '', perSide: false },
         // Two chat models that can answer, one that cannot, two prompts (E4.6b).
         chat: {
-          prompt: 'Explain', promptChoice: '', language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '',
+          // No older build's edit to settle (R7's conflicts) — the field every ChatSettings carries since PR #707.
+          prompt: 'Explain', promptChoice: '', language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '', conflicts: [],
           prompts: [{ id: 'p1', name: 'Explain', text: 'Explain', main: true }, { id: 'p2', name: 'Review', text: 'Review this for bugs.', main: false }],
           models: [
             { id: 'chat-deep', name: 'Deep', runtime: 'claude', model: 'opus', main: false, executablePath: '', baseUrl: '', startingPrompt: 'You review APIs.' },
@@ -191,7 +192,9 @@ function page(name, size) {
         },
       }, NONCE, tab ?? 'models');
     case 'settings':
-      return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');
+      // An old tab id, drawn where the new page holds it now (`OLD_TAB_PLACES`; todo/PLAN_one_model_catalog.md E5.1 step
+      // 3): `settings:gate` is `catalog:reviews/gate`, so a screenshot shows the page a person sees.
+      return page(`catalog:${from('catalogPlaces.js').OLD_TAB_PLACES[tab ?? 'reviewers'] ?? tab}`, size);
     case 'security':
       return securityDemo(text);
     case 'commands':
@@ -220,12 +223,15 @@ function securityDemo(text) {
     prompts: [{ id: 'redteam-sql', triggers: ['sql', 'xss'] }, { id: 'redteam-mine', triggers: [], focus: [] }],
     runs: [{ vendor: 'codex', prompt: 'redteam-general' }, { vendor: 'codex', prompt: 'redteam-authz' }, { vendor: 'antigravity', prompt: 'redteam-mine' }],
   });
-  return from('panelView.js').settingsHtml({
+  // On the new page's Security lane (E5.1 step 3), whose pairs pick from the rows ticked for the lane — so both are.
+  const { DEFAULT_VENDORS } = from('vendors.js');
+  return from('catalogPage.js').catalogHtml({
     ...panelState(''), ...text, settings: { ...DEFAULTS, securityLane: lane },
+    vendors: DEFAULT_VENDORS.map((row) => ({ ...row, uses: ['security'] })),
     server: { kind: 'known', version: '0.43.0', remembered: false, updateOffered: false },
     securityPromptText: { 'redteam-authz': 'written', 'redteam-mine': 'none' },
     securityPromptDir: 'C:/Users/me/AppData/Roaming/coai/prompts',
-  }, NONCE, 'securityLane');
+  }, NONCE, 'security');
 }
 
 const [name, target, width = '1200', height = '900'] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--'));

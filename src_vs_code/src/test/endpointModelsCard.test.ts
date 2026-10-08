@@ -46,7 +46,8 @@ function offered(page: Page, vendor: string): readonly string[] {
  * to read; this narrows it to the card whose checkbox is `v-<id>`.</p>
  */
 function cardOf(page: Page, vendor: string): string {
-  const mine = page.html.split('<div class="vendor"').slice(1).filter((one) => one.includes(`id="v-${vendor}"`));
+  // The new page's Models card (E3.2), whose switch is `on-<id>` — the page a person sees (E5.1 step 3).
+  const mine = page.html.split('<article class="card').slice(1).filter((one) => one.includes(`id="on-${vendor}"`));
   assert.equal(mine.length, 1, `the page has one card for ${vendor}`);
 
   return mine[0] ?? '';

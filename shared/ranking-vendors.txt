@@ -12,7 +12,7 @@
 # ONE list, read by two things that must not disagree:
 #   - `RankingModels` in src_mcp/core/Collecting, which REFUSES anything outside it before a single
 #     finding field is read. That is the enforcement; everything else is display.
-#   - `RANKING_VENDORS` in src_vs_code/src/bugzView.ts, so the picker cannot OFFER a model the
+#   - `RANKING_VENDORS` in src_vs_code/src/bugzPick.ts, so the picker cannot OFFER a model the
 #     collector will refuse.
 #
 # A file rather than one side reading the other's source: a test that parses another program's

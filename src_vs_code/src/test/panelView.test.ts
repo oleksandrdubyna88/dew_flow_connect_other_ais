@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, PANEL_SECTIONS, PanelState } from '../panelView';
-import { everyPageHtml, sectionHtml } from './panelPages';
+import { currentSettingsHtml, everyPageHtml, paneIn, sectionHtml } from './panelPages';
 import { DEFAULTS, settingsFrom } from '../settingsShape';
 import { CONSULTANT_DEFINITION_SINCE } from '../consultSettings';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
@@ -63,8 +63,9 @@ test('the MCP server section is titled for coai-mcp and describes nothing else',
   });
   const html = everyPageHtml(fixture, 'n0nce');
 
-  // A tab of the Settings page since 2026-09-28 (`research/PLAN_settings_page.md`), named as the section was.
-  assert.match(html, /data-tab="server"[^>]*>MCP server<\/button>/, 'the section says what it is about');
+  // A tab of the Settings page since 2026-09-28 (`research/PLAN_settings_page.md`), named as the section was — on the
+  // new page, Setup's sub-tab (E5.1 step 3).
+  assert.match(html, /data-tab="setup\/mcp"[^>]*>MCP server<\/button>/, 'the section says what it is about');
   assert.ok(!html.includes('>Server</button>') && !html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
 
   // The SECTION's own markup, not the whole panel: the address and the account are supposed to be
@@ -150,7 +151,8 @@ test('each reviewer gets a switch, a model field and a way out', () => {
   for (const id of ['codex', 'antigravity']) {
     assert.ok(html.includes(`data-setting="enabled" data-vendor="${id}"`), `${id} can be switched off`);
     assert.ok(html.includes(`data-setting="model" data-vendor="${id}"`), `${id} takes a model`);
-    assert.ok(html.includes(`data-command="removeVendor" data-id="${id}"`), `${id} can be removed`);
+    // Through the page's one confirm on the new page's Models tab (E3.2) — `data-asks`, sent only from the dialog.
+    assert.ok(html.includes(`data-asks="removeModel" data-id="${id}"`), `${id} can be removed`);
   }
   assert.ok(html.includes('data-command="addVendor"'), 'and the list is not meant to stay at two');
 });
@@ -481,8 +483,10 @@ test('the disclosure arrow is a drawn chevron, not a punctuation mark', () => {
 
 test('every vendor has a green run button next to remove', () => {
   // The operator asked for a play triangle between the name and remove: it opens that vendor's
-  // own CLI, which is where an account is checked and a signed-out CLI is signed in.
-  const html = everyPageHtml(state(), 'n');
+  // own CLI, which is where an account is checked and a signed-out CLI is signed in. The CURRENT page's reviewer card —
+  // the new page draws the button in the CLI table under Setup › Vendor keys, apart from any remove — so this reads
+  // that page while it is drawn (E5.1 step 3) and goes with it.
+  const html = currentSettingsHtml(state(), 'n');
   assert.ok(html.includes('data-command="runVendor" data-id="codex"'));
   assert.ok(html.includes('▶'));
   assert.ok(html.includes('var(--vscode-charts-green)'), 'green from the theme, not a hex of ours');
@@ -562,9 +566,10 @@ test('a running round shows its status, its reviewers and what it has cost', () 
 test('a reviewer card wears the colour that vendor has in the rounds list', () => {
   const html = everyPageHtml(state(), 'n0nce');
 
+  // The new page's Models card (E3.2) carries the colour as its `--vc`, which its edge is drawn with.
   for (const vendor of DEFAULT_VENDORS) {
     assert.ok(
-      html.includes(`<div class="vendor" style="border-left-color:${DEFAULT_COLOUR(vendor.id)}">`),
+      html.includes(`<article class="card" style="--vc:${DEFAULT_COLOUR(vendor.id)}"`),
       `${vendor.id}'s card should carry ${DEFAULT_COLOUR(vendor.id)}`,
     );
   }
@@ -621,26 +626,31 @@ test('a spending row shows the vendor and its cost apart, not run together', () 
 // ---------- the prompts section: a frame per BUCKET — plan, code, document ----------
 
 test('each stage stands in its own frame, and no role appears in two', () => {
-  const html = everyPageHtml(state(), 'n0nce');
+  // Reviews › Stages on the new page (E4.1): the stages half of the old Prompts section. A role is found by its rounds
+  // box there — its round pickers are on Prompts per round.
+  const html = paneIn(everyPageHtml(state(), 'n0nce'), 'reviews/stages');
   const groups = html.split('class="role-group"');
+  const of = (role: string): string => `id="rounds-${role}"`;
 
   assert.equal(groups.length, 5, 'four frames: the plan stage, the code stage, the document stage, the feature stage');
   const [, planFrame, codeFrame, documentFrame, featureFrame] = groups;
-  assert.ok(planFrame!.includes('data-prompt="PlanCritique"'), 'the plan role is in the first frame');
-  assert.ok(!planFrame!.includes('data-prompt="Architecture"'), 'and the code roles are not');
+  assert.ok(planFrame!.includes(of('PlanCritique')), 'the plan role is in the first frame');
+  assert.ok(!planFrame!.includes(of('Architecture')), 'and the code roles are not');
   for (const role of ['Architecture', 'SecurityReliability', 'UxDxPerformance']) {
-    assert.ok(codeFrame!.includes(`data-prompt="${role}"`), `${role} shares the code frame`);
-    assert.ok(!documentFrame!.includes(`data-prompt="${role}"`), `${role} is not a document role`);
+    assert.ok(codeFrame!.includes(of(role)), `${role} shares the code frame`);
+    assert.ok(!documentFrame!.includes(of(role)), `${role} is not a document role`);
   }
   for (const role of ['DocumentReview', 'DocumentSummary']) {
-    assert.ok(documentFrame!.includes(`data-prompt="${role}"`), `${role} is in the document frame`);
-    assert.ok(!codeFrame!.includes(`data-prompt="${role}"`), `${role} reviews no diff`);
+    assert.ok(documentFrame!.includes(of(role)), `${role} is in the document frame`);
+    assert.ok(!codeFrame!.includes(of(role)), `${role} reviews no diff`);
   }
   // The feature role reads an outline in a round of its own (S2.1 of the feature-review plan): drawn
-  // in its own frame, with its switch, and never among the code roles it would be counted with.
-  assert.ok(featureFrame!.includes('data-prompt="FeatureReview"'), 'the feature role is in the feature frame');
-  assert.ok(featureFrame!.includes('data-setting="roleEnabled" data-role="FeatureReview"'), 'and it has its switch');
-  assert.ok(!codeFrame!.includes('data-prompt="FeatureReview"'), 'FeatureReview reviews no diff');
+  // in its own frame, and never among the code roles it would be counted with. Its switch is the role's ONE switch on
+  // Roles & prompts there (E4.3); the current page's own tick is held below, on that page.
+  assert.ok(featureFrame!.includes(of('FeatureReview')), 'the feature role is in the feature frame');
+  assert.ok(!codeFrame!.includes(of('FeatureReview')), 'FeatureReview reviews no diff');
+  assert.ok(currentSettingsHtml(state(), 'n0nce').includes('data-setting="roleEnabled" data-role="FeatureReview"'),
+    'and on the current page it has its switch');
 });
 
 test('each code role is wrapped in its own colour, and still says its name', () => {
@@ -789,7 +799,9 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
  * controls from every remote reviewer.</p>
  */
 function card(over: Partial<Vendor>): string {
-  const html = everyPageHtml(state({
+  // The CURRENT page's reviewer card (`reviewersBody`): the new page's Models card draws a row's stages in its own "Use
+  // for" block (`modelsTab.test.ts`), so these four read the page that draws this card while it is drawn (E5.1 step 3).
+  const html = currentSettingsHtml(state({
     vendors: [{ id: 'v1', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, ...over }],
   }), 'n0nce');
   const from = html.indexOf('<div class="vendor"');
@@ -897,11 +909,8 @@ test('the CLI path is a field of its own, and the stage boxes belong to the pric
  */
 test('the round limit\'s note is a line under its row, in every state it can be in', () => {
   const limits = (over: Partial<PanelState['settings']>): string => {
-    const html = everyPageHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
-    const from = html.indexOf('data-section="limits"');
-    const to = html.indexOf('data-section="keys"');
-    assert.ok(from > 0 && to > from, 'the limits section is bounded — a -1 would read to the end of the document');
-    return html.slice(from, to);
+    // Reviews › Limits on the new page; `paneIn` throws where a slice from a -1 would read to the end of the document.
+    return paneIn(everyPageHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce'), 'reviews/limits');
   };
 
   const states: ReadonlyArray<[string, Partial<PanelState['settings']>, string]> = [
@@ -931,8 +940,7 @@ test('every limits row holds exactly a label and an input, so none can crowd its
   // The structural property behind the row above, asserted for all five rather than one. Raised on
   // the plan round: a test that names the round limit would not notice the next row to grow a third
   // item, and the alignment is a property of the SET of rows.
-  const html = everyPageHtml(state({ openSections: ['limits'] }), 'n0nce');
-  const section = html.slice(html.indexOf('data-section="limits"'), html.indexOf('data-section="keys"'));
+  const section = paneIn(everyPageHtml(state({ openSections: ['limits'] }), 'n0nce'), 'reviews/limits');
   const rows = [...section.matchAll(/<div class="field inline">((?:(?!<\/div>)[\s\S])*)<\/div>/g)].map((m) => m[1]!);
 
   assert.equal(rows.length, 5, 'five numeric settings');
@@ -1014,7 +1022,9 @@ test('the round limit says what it works out to, and warns when it cannot be met
  * the last one.</p>
  */
 test('every code role box carries a switch, and the plan role does not', () => {
-  const html = everyPageHtml(state(), 'n0nce');
+  // The CURRENT page's own tick per role box: the new page has ONE switch per role, on Roles & prompts (E4.3), held by
+  // `rolesOnTheNewPage.test.ts` — so this reads the page that draws the tick, while it is drawn (E5.1 step 3).
+  const html = currentSettingsHtml(state(), 'n0nce');
 
   for (const role of ['Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
     assert.ok(
@@ -1049,7 +1059,9 @@ test('the last role standing cannot be unticked', () => {
     ...DEFAULTS,
     roleEnabled: { Conventions: false, Architecture: true, SecurityReliability: false, UxDxPerformance: false },
   };
-  const html = everyPageHtml(state({ settings: onlyOne }), 'n0nce');
+  // The CURRENT page's tick (E5.1 step 3). On the new page the refusal is the roles' own — the only role still active
+  // in its stage (`rolesEdit.test.ts`) — and it counts the catalog's `active` alone, not this `roleEnabled` (reported).
+  const html = currentSettingsHtml(state({ settings: onlyOne }), 'n0nce');
 
   assert.match(
     html,
@@ -1115,11 +1127,7 @@ test('an older server that would run the role anyway is called out', () => {
 
 /** The Consultant section alone, so the assertion cannot be satisfied by text in another section. */
 function consultantSection(html: string): string {
-  const from = html.indexOf('data-section="consultant"');
-  const to = html.indexOf('data-section="prompts"');
-  assert.ok(from > 0 && to > from, 'the Consultant section is bounded by the one after it');
-
-  return html.slice(from, to);
+  return paneIn(html, 'consultants/consultant');
 }
 
 test('an older server that would consult through the reviewer row anyway is called out, in the Consultant section', () => {
@@ -1156,6 +1164,16 @@ test('an older server that would consult through the reviewer row anyway is call
  * that lets somebody create a role and a section that never draws it is two features that disagree.</p>
  */
 function promptsSection(html: string): string {
+  // The old Prompts section is two places on the new page (E4.1): the stages with their role boxes, and the pickers.
+  return `${paneIn(html, 'reviews/stages')}\n${paneIn(html, 'reviews/prompts')}`;
+}
+
+/**
+ * The CURRENT page's Prompts section, whole — for the role box's own tick, which only that page draws (the new page has
+ * ONE switch per role, on Roles & prompts: E4.3). Read while the page is drawn (E5.1 step 3), and goes with it.
+ */
+function currentPromptsSection(state: PanelState): string {
+  const html = currentSettingsHtml(state, 'n0nce');
   const from = html.indexOf('data-section="prompts"');
   const to = html.indexOf('data-section="gate"');
   assert.ok(from > 0 && to > from, 'the Prompts section is bounded by the one after it');
@@ -1205,9 +1223,9 @@ test('a document role is drawn in the DOCUMENT frame, with a budget and a switch
   assert.ok(groups[3]!.includes('id="threshold-Brief"'), 'and its threshold');
 });
 
-test('the Prompts section offers the way into the roles page', () => {
-  assert.ok(promptsSection(everyPageHtml(state(), 'n0nce')).includes('data-command="editRoles"'));
-});
+// "The Prompts section offers the way into the roles page" read the markup for `data-command="editRoles"`; since E5.1
+// step 1 `theNewPageJumpsToItsPlaces.test.ts` presses it on both running pages — the current page's still opens the
+// roles page, the new page's jumps to Reviews › Roles & prompts.
 
 test('a server too old to read a person’s roles says so, where the roles are drawn', () => {
   // The quietest of the three skews: below 0.19.0 the key is never read, so the roles are in the
@@ -1246,10 +1264,14 @@ test('and says nothing at all when the person has added no role of their own', (
  * catalog's, written by the roles page, and becomes a field of `COAI_ROLES`. The server reads both.
  * What it must never do is draw a tick that cannot be ticked: a box whose `on` is computed from BOTH
  * switches, but which only writes ONE of them, springs straight back and tells the person nothing.</p>
+ *
+ * <p>The three tests below read the CURRENT page, the one page that draws the box's own tick: the new page has no
+ * second tick to fight with (E4.3, one switch per role on Roles &amp; prompts), and against it the second and third
+ * would pass vacuously on an `indexOf` of -1. They go with the current page (E5.1 step 3).</p>
  */
 test('a role switched off in the catalog has no tick to fight with', () => {
   const settings = { ...DEFAULTS, roles: [{ id: 'Architecture', active: false }] };
-  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
+  const prompts = currentPromptsSection(state({ settings }));
   const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
   const tag = box.slice(0, box.indexOf('>'));
 
@@ -1258,7 +1280,7 @@ test('a role switched off in the catalog has no tick to fight with', () => {
 });
 
 test('a role active in the catalog keeps a tick that works', () => {
-  const prompts = promptsSection(everyPageHtml(state(), 'n0nce'));
+  const prompts = currentPromptsSection(state());
   const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
 
   assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'));
@@ -1275,7 +1297,7 @@ test('the last role standing counts the roles a person added', () => {
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
-  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
+  const prompts = currentPromptsSection(state({ settings }));
   const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
 
   assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'),
@@ -1629,7 +1651,9 @@ test('the list of what to move is a list, not a sentence sixteen items long', ()
  * THAT go red".)</p>
  */
 test('a consultant row wears the same colour as the reviewer card of the same name', () => {
-  const html = everyPageHtml(state(), 'n0nce');
+  // The CURRENT page: its Consultant rows are per caller and coloured; the new page's Consultant tab picks a catalog
+  // row per caller and draws no caller colour (E4.2). Read while the current page is drawn (E5.1 step 3; reported).
+  const html = currentSettingsHtml(state(), 'n0nce');
 
   // codex is the id that is BOTH a configured reviewer in this fixture and a caller kind, so it is
   // the one where "the same colour in two sections" is a claim about one page rather than about two

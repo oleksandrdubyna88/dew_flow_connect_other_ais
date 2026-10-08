@@ -248,7 +248,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // picker's Team server line says where to add a server when none is signed in (`no-team-server-to-add-from`).
 // 160 → 161 on 2026-10-05, epic 3's code round: the add is refused again AFTER its picker when another window filled
 // the catalog meanwhile (`a-catalog-edit-refused`, a third site of the same refusal).
-const PLACES_THIS_SPEAKS = 161;
+// 161 → 162 on 2026-10-08, PLAN_one_model_catalog.md E5.1 step 2: a Bugz collect with a stranded pick, or none, is
+// refused by a sentence naming Models (`no-ranking-model`) instead of running with an empty or stale `--model`.
+const PLACES_THIS_SPEAKS = 162;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

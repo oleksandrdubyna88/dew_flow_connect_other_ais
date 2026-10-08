@@ -107,7 +107,8 @@ import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from 
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
-import { collectArgs } from './bugzView';
+import { collectWithPick } from './bugzCollect';
+import { bugzInputsOf, type BugzInputs } from './bugzPick';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { currentFileIn, folderHolding } from './openAtRevision';
@@ -3251,23 +3252,39 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    // Through `serverRun`, which is the door that carries THIS window's data directory. A spawn
-    // that skipped it would collect against a different database from the one the section shows.
-    const model = this.settings().bugzModel;
-    const run = serverRun(server.fsPath);
-    // The row's runtime, said only to a binary that ranks by it (PLAN_one_model_catalog.md E2.1) — every row read, a
-    // catalog-only `bugz-local` included, because the page's reviewer list hides those.
-    const row = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'))
-      .find((one) => one.id === model.split('/')[0]?.toLowerCase());
-    const byRuntime = hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime);
-    const collecting = run(collectArgs(model, row?.runtime ?? '', byRuntime), PanelProvider.COLLECT_CAP_MS);
+    // The decision is `collectWithPick`'s (E5.1's code round, finding 6) — the provider builds its ports. Through
+    // `serverRun`, which is the door that carries THIS window's data directory: a spawn that skipped it would collect
+    // against a different database from the one the section shows.
+    await collectWithPick({
+      inputs: () => this.bugzInputsNow(),
+      // A stranded pick, or none, is refused by a sentence naming Models — never collected with an empty or stale model.
+      refuse: (title) => notifyAndAsk({ as: 'warning', class: 'refusal', source: 'bugz', code: 'no-ranking-model', title }).then(() => undefined),
+      // NOT awaited before the repaint, and this is the point. The run writes `running` to the
+      // database before its first candidate, so the section can show it — but only if something
+      // asks. Awaiting the whole process first meant the button stayed enabled and un-progressed
+      // for the length of a multi-minute run, and a second click started a second collection.
+      // (Code round, gemini and codex, four findings between them.)
+      start: (args) => this.watchCollect(serverRun(server.fsPath)(args, PanelProvider.COLLECT_CAP_MS)),
+    });
+  }
 
-    // NOT awaited before the repaint, and this is the point. The run writes `running` to the
-    // database before its first candidate, so the section can show it — but only if something
-    // asks. Awaiting the whole process first meant the button stayed enabled and un-progressed
-    // for the length of a multi-minute run, and a second click started a second collection.
-    // (Code round, gemini and codex, four findings between them.)
-    await this.watchCollect(collecting);
+  /**
+   * What the Bugz pick is read from now — every catalog row (a catalog-only `bugz-local` included, which the reviewer
+   * list hides), the saved pick, the engines last seen, the server's ranking list and whether it ranks by runtime.
+   */
+  private async bugzInputsNow(): Promise<BugzInputs> {
+    // Built as the render builds its state — `vendors` the current page's reviewers, `catalogRows` every row — and read
+    // through the sidebar's own reader, so the collect cannot judge a pick differently from how the picker drew it.
+    const rows = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));
+
+    return bugzInputsOf({
+      vendors: rows.filter(shownOnTheOldPage),
+      catalogRows: rows,
+      settings: this.settings(),
+      localEngines: this.localEngines,
+      bugz: await this.bugz(),
+      rankByRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
+    });
   }
 
   /**

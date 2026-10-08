@@ -4,7 +4,7 @@ import { PANEL_SECTIONS, type PanelState } from '../panelView';
 import { LIVE_REGION_IDS, SURFACE_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { everyPanelPage, sectionHtml } from './panelPages';
+import { everyPanelPage, markOf, sectionHtml } from './panelPages';
 
 /**
  * The section registry — the one declaration both the pages and their paint keys are built from.
@@ -51,7 +51,8 @@ test('every surface draws at least one section', () => {
 
 test('every section is drawn on exactly one page', () => {
   for (const { id } of PANEL_SECTIONS) {
-    const pages = everyPanelPage(state()).filter((page) => page.html.includes(`data-section="${id}"`));
+    // A settings section is found on the new page by the place that holds it (`OLD_TAB_PLACES`, E5.1 step 3).
+    const pages = everyPanelPage(state()).filter((page) => page.html.includes(markOf(id)));
     assert.equal(pages.length, 1, `"${id}" is on ${pages.length} pages — two controls for one setting can disagree`);
   }
 });
@@ -70,6 +71,7 @@ test('reading a section that no page draws is a failure, not an empty string', (
   // And the positive half on both pages, so the helper is known to find what exists wherever it is.
   assert.match(sectionHtml(state(), 'bugz'), /^<details class="section sec-bugz" data-section="bugz"/);
   assert.match(sectionHtml(state(), 'bugz'), /<\/details>$/);
-  assert.match(sectionHtml(state(), 'limits'), /^<section id="pane-limits" class="pane sec-limits" role="tabpanel"/);
-  assert.match(sectionHtml(state(), 'limits'), /<\/section>$/);
+  // A settings section is its place's pane on the new page (E5.1 step 3): Limits is Reviews › Limits.
+  assert.match(sectionHtml(state(), 'limits'), /^<div id="cpane-reviews-limits" class="subpane" role="tabpanel"/);
+  assert.match(sectionHtml(state(), 'limits'), /<\/div>$/);
 });

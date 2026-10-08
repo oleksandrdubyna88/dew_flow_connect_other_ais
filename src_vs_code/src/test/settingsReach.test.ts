@@ -86,8 +86,18 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   },
 };
 
+/**
+ * The settings that are the PANEL's, not the server's, each with why — a list a field joins only with a reason.
+ *
+ * <p>`bugzModel` (todo/PLAN_one_model_catalog.md T7, E5.1): the collector takes the ranking model as `--model`, which
+ * the panel passes when it starts a collect, and nothing in coai-mcp reads an environment key for it. It was written as
+ * `COAI_BUGZ_MODEL` until E5.1 — a key that looked wired and was read by nobody, which is the silent failure this walk
+ * exists to catch, seen from the other side. `bugzPicksFromTheCatalog.test.ts` holds that it is gone.</p>
+ */
+const NOT_FOR_THE_SERVER: ReadonlySet<keyof CoaiSettings> = new Set<keyof CoaiSettings>(['bugzModel']);
+
 test('every setting, changed on its own, reaches the server file', () => {
-  for (const field of Object.keys(DEFAULTS) as (keyof CoaiSettings)[]) {
+  for (const field of (Object.keys(DEFAULTS) as (keyof CoaiSettings)[]).filter((one) => !NOT_FOR_THE_SERVER.has(one))) {
     const settings = { ...DEFAULTS, [field]: CHANGED[field] } as CoaiSettings;
     const env = envBlock(settings, DEFAULT_VENDORS);
     const pristine = envBlock(DEFAULTS, DEFAULT_VENDORS);

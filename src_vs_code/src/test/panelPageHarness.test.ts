@@ -3,6 +3,8 @@ import { test } from 'node:test';
 
 import { DEFAULTS } from '../settingsShape';
 import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, selected, work } from './panelPageHarness';
+import { pageTree, selectorsOf } from './pageTree';
+import { runPageHtml } from './pageScriptHarness';
 
 /** A select carrying these option values, built the way the harness builds one from a page. */
 function selectOf(...values: string[]): ReturnType<typeof controlFrom> {
@@ -143,14 +145,32 @@ test('an option the page drew disabled reads disabled, with its title — and an
   assert.equal(opinion.title, '');
 });
 
+test('a fixture opening a place of the NEW page runs that page, opened on the place — never the sidebar (E5.1 code round, finding 4)', () => {
+  // An old tab id reaches its place through `OLD_TAB_PLACES`; a place's own id (`models`, `reviews/commands`) must reach
+  // it too, as `render-page.mjs` does, or a test of the new page silently reads the sidebar's markup instead.
+  for (const place of ['models', 'reviews/commands', 'setup/team']) {
+    const { html } = runPanel(panelState(place));
+    assert.match(html, /<main class="settings catalog">/u, `${place} ran the sidebar, not the Settings page`);
+
+    // Where it opens is what its own script SHOWS — the page run against the DOM shim over its drawn tree, never the
+    // place read out of its generated source (CodeRabbit on #709).
+    const tree = pageTree(html);
+    runPageHtml(html, selectorsOf(tree, ['[data-setting]', '[data-prompt]', '[data-command]', '[data-tab]', '[data-pane]']), undefined, { value: undefined });
+    const shown = tree.find((node) => node.dataset.pane !== undefined && !node.hidden).map((node) => node.dataset.pane);
+    assert.deepEqual(shown, place.includes('/') ? [place.split('/')[0], place] : [place], `${place} is not the place the page shows`);
+  }
+});
+
 test('a data-command button is bound by the page and a click posts exactly its command and id', () => {
+  // On the new page's Models tab (E5.1 step 3): a card's Duplicate is a plain data-command button there (its remove asks
+  // first, through the page's one confirm).
   const page = runPanel(panelState('reviewers'));
 
-  assert.ok(page.commands.some((one) => one.dataset['command'] === 'removeVendor'), 'no command button was read off the page');
-  click(page, 'removeVendor', 'codex');
+  assert.ok(page.commands.some((one) => one.dataset['command'] === 'duplicateModel'), 'no command button was read off the page');
+  click(page, 'duplicateModel', 'codex');
 
-  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'removeVendor', id: 'codex' });
-  assert.throws(() => click(page, 'removeVendor', 'nobody'), /no removeVendor button for nobody/u);
+  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'duplicateModel', id: 'codex' });
+  assert.throws(() => click(page, 'duplicateModel', 'nobody'), /no duplicateModel button for nobody/u);
 });
 
 test('a box carries the placeholder the page drew, and a data attribute naming it is not one', () => {

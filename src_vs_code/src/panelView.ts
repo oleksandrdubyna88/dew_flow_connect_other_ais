@@ -77,6 +77,7 @@ import { ProbeResult, claudeNote } from './claudeModels';
 import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody } from './bugzView';
+import { bugzInputsOf, bugzPickFrom } from './bugzPick';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
@@ -581,20 +582,15 @@ export function questionConsultantSection(state: PanelState, pickFrom?: readonly
 
 /** The Bugz section: the corpus, the ranking picker and the ingest server. */
 function bugzSection(state: PanelState): string {
+  // The rows ticked Bugz on Models (E5.1 step 2) — every catalog row read, a catalog-only `bugz-local` included, since
+  // the reviewer list hides those — and only those the ranking allowlist accepts: the pass reads findings that are not
+  // anonymised, and the collector refuses anything else anyway.
+  const pick = bugzPickFrom(bugzInputsOf(state));
+
   return bugzBody({
     corpus: state.bugz ?? EMPTY_CORPUS,
-    // Only the engines that run on THIS machine, because the ranking pass reads findings that
-    // are not anonymised. The collector refuses anything else anyway — this is so the picker
-    // cannot offer what it will refuse.
-    models: Object.entries(state.localEngines)
-      // Every key is a row on the `local` runtime (`probeLocalEngines` probes no other), which is what a binary that
-      // ranks by runtime matches; an older one matches the row id, and the view applies that rule when this says so.
-      .flatMap(([id, engine]) => engine.models.map((m) => ({
-        id: `${id}/${m.id}`,
-        label: `${m.id} — ${id}`,
-        runtime: 'local',
-      }))),
-    byRuntime: state.rankByRuntime === true,
+    models: pick.offered,
+    stranded: pick,
     // From CONFIGURATION, which is where the picker writes. They were read from panel fields
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
@@ -1672,8 +1668,28 @@ export function sideBody(state: PanelState): string {
 </div>`;
 }
 
-/** The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate. */
-export function gateBody(state: PanelState): string {
+/** Which Settings page draws a section both pages share — the current page, or the new one. */
+export type SettingsPageKind = 'current' | 'new';
+
+/**
+ * The way from a section to an editor that was a page of its own (todo/PLAN_one_model_catalog.md, E5.1 step 1). The
+ * current page opens that page by its command; the new page HOLDS the editor as a place of its own, so there the same
+ * press jumps to it and asks for no page — a page E5.1 deletes. One label on both, so a person who knew the button
+ * finds it on either page.
+ */
+function editorWay(page: SettingsPageKind, command: string, place: string, label: string): string {
+  return page === 'new'
+    ? `<button type="button" class="run" data-goto="${place}">${label}</button>`
+    : `<button type="button" class="run" data-command="${command}">${label}</button>`;
+}
+
+/**
+ * The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate.
+ *
+ * @param page the page drawing it: its "Edit commands…" opens the commands page on the current page, and jumps to
+ *   Reviews › Commands on the new one (E5.1 step 1)
+ */
+export function gateBody(state: PanelState, page: SettingsPageKind = 'current'): string {
   const s = state.settings;
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
   // sections describing one thing. What is left here is the one decision that belongs to neither
@@ -1704,7 +1720,7 @@ ${gatePerBlock(state)}
 ${commandModelsBlock(state)}
 <div class="field">
   <div class="hint">The words those orders are made of, and commands of your own to hand over with them.</div>
-  <button type="button" class="run" data-command="editCommands">Edit commands…</button>
+  ${editorWay(page, 'editCommands', 'reviews/commands', 'Edit commands…')}
 </div>`;
 }
 
@@ -2506,14 +2522,17 @@ interface RoleGroups {
 
 /** How each half is drawn around the role boxes: the stages with their own switches, or the round pickers alone. */
 const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: RoleGroups) => string>> = {
-  both: (state, groups) => stagesBody(state, groups),
-  stages: (state, groups) => stagesBody(state, groups),
+  both: (state, groups) => stagesBody(state, groups, 'current'),
+  stages: (state, groups) => stagesBody(state, groups, 'new'),
   prompts: (_state, { plan, code, documents, features }) =>
     pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
 };
 
-/** The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles page. */
-function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
+/**
+ * The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles — the roles page
+ * on the current page, a jump to Roles &amp; prompts on the new one, where the roles page's content is (E5.1 step 1).
+ */
+function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups, page: SettingsPageKind): string {
   const s = state.settings;
 
   return `<div class="role-group">
@@ -2552,8 +2571,8 @@ ${documents}
 ${features}
 </div>
 <div class="field">
-  <button type="button" class="run" data-command="editRoles">Edit roles…</button>
-  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does. The five above are on that page too.</div>
+  ${editorWay(page, 'editRoles', 'reviews/roles', 'Edit roles…')}
+  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does. The five above are there too.</div>
 </div>`;
 }
 

@@ -1,6 +1,7 @@
 import { BugCorpus, CollectRun, EMPTY_CORPUS, hasRun, isRunning, sending } from './roundsDb';
 import { sendLabel, waiting } from './bugsSend';
 import { ModelChoice } from './models';
+import { strandedHead, type BugzPick, type RankingChoice } from './bugzPick';
 
 /**
  * The Bugz section: what the corpus holds, and what the last run made of it.
@@ -20,64 +21,23 @@ import { ModelChoice } from './models';
 /** What the section needs to draw itself. */
 export interface BugzViewState {
   readonly corpus: BugCorpus;
+  /** What the picker offers — already only what the ranking allowlist accepts (`bugzPick.bugzPickOf`). */
   readonly models: readonly RankingChoice[];
   readonly model: string;
   readonly server: string;
   /**
-   * Whether the installed coai-mcp ranks by the row's RUNTIME (`--features` lists `bugzRuntime`, E2.1). Absent or
-   * false: it matches the row id, so the picker offers only what that binary will accept.
+   * The saved pick when it no longer holds, and why (`bugzPick.ts`) — absent, or its `stranded` '', when it holds. Drawn
+   * as what it is, chosen and disabled, so what is configured is what is shown (E5.1 step 2, the Chat tab's rule), and
+   * worded by why: a row unticked or gone, or a ticked row the ranking allowlist refuses (CodeRabbit on #709).
    */
-  readonly byRuntime?: boolean;
+  readonly stranded?: StrandedPick;
 }
 
-/** A picker choice, and the runtime of the catalog row it names — what a binary that ranks by runtime matches. */
-export type RankingChoice = ModelChoice & { readonly runtime?: string };
+/** As much of a pick as the view words a stranded one from. */
+export type StrandedPick = Pick<BugzPick, 'stranded' | 'why' | 'rankers'>;
 
-/**
- * The collector's arguments: the row's runtime is said only to a binary that ranks by it — an older one refuses a flag
- * it does not know — and only with a model to rank with.
- */
-export function collectArgs(model: string, runtime: string, byRuntime: boolean): readonly string[] {
-  return model.length === 0 ? ['--collect-bugs'] : ['--collect-bugs', '--model', model, ...runtimeArgs(runtime, byRuntime)];
-}
-
-function runtimeArgs(runtime: string, byRuntime: boolean): readonly string[] {
-  return byRuntime && runtime.length > 0 ? ['--runtime', runtime] : [];
-}
-
-/**
- * The vendors that may be shown a finding's own words.
- *
- * <p><b>It is a copy, and a test is what keeps it honest.</b> The list that DECIDES lives in
- * `CoaiMcp.Core.Collecting.RankingModels` and is enforced there, before a single finding field is
- * read. TypeScript cannot import a C# constant, so this cannot literally be derived from it — the
- * plan said 'derived' and that was not achievable; what is achievable is that the two can never
- * drift silently. `theAllowlistsAgree` reads the C# file and fails if this list differs, so adding
- * a vendor on one side without the other is a red test rather than a feature that half works.
- * (Code round, codex: 'the picker keeps a second independent copy'.)</p>
- *
- * <p>If they ever DO disagree at runtime the collector wins and the person sees its refusal, which
- * is the right way round — but a picker offering a model that always fails is a bug in this file.</p>
- *
- * <p>Why so narrow: a finding's `title`, `why` and `fix` are the reviewers' prose about somebody's
- * code and are <b>not</b> anonymised. The normaliser runs later and only on source, so the ranking
- * pass is the one step here that handles un-anonymised text.</p>
- */
-export const RANKING_VENDORS: readonly string[] = ['local'];
-
-/** Whether this choice may be offered, against a given list — of runtimes, or of row ids for an older binary. */
-const allowedBy = (choice: RankingChoice, vendors: readonly string[], byRuntime: boolean): boolean =>
-  choice.id.length === 0 || vendors.includes(rankedAs(choice, byRuntime));
-
-/** What the binary matches: the row's runtime when it ranks by runtime, else the row id (`local/<model>`). */
-function rankedAs(choice: RankingChoice, byRuntime: boolean): string {
-  return byRuntime && choice.runtime !== undefined ? choice.runtime.toLowerCase() : rowIdOf(choice.id);
-}
-
-const rowIdOf = (model: string): string => model.split('/')[0]?.toLowerCase() ?? '';
-
-/** Whether this model may be offered at all, by the panel's own fallback list and an older binary's rule. */
-export const mayRank = (model: string): boolean => allowedBy({ id: model, label: model }, RANKING_VENDORS, false);
+/** No stranded pick — what a section drawn without one reads. */
+const HOLDS: StrandedPick = { stranded: '', why: 'unticked', rankers: [] };
 
 /**
  * What the Collect button says right now.
@@ -166,6 +126,60 @@ export function lastSendLine(corpus: BugCorpus): string {
     : `Last send: ${went}.`;
 }
 
+/** What the section says while no row is ticked Bugz on Models — and why the pick is a model on this machine. */
+const NONE_TICKED = '<div class="hint">No model is ticked for Bugz. Tick one under Settings › Models — the ranking pass'
+  + ' reads findings that are not anonymised, so it runs on a model on this machine or not at all.</div>';
+
+/**
+ * The ranking picker (todo/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked Bugz on Models (`bugzPick.ts`), a
+ * stranded pick drawn as what it is, and — while nothing is ticked — the sentence that says so and where to tick one.
+ * A picker only when there is a row to offer: a stranded pick with nothing beside it is SAID, never drawn as a select
+ * that holds one disabled option and offers nothing (E5.1's code round, finding 5).
+ */
+function pickerHtml(offered: readonly RankingChoice[], model: string, stranded: StrandedPick): string {
+  const select = offered.length === 0
+    ? ''
+    : `<select id="bugz-model" data-setting="bugzModel">${firstOption(offered, model, stranded)}${
+      offered.map((m) => option(m, model)).join('')}</select>`;
+
+  return `${select}${offered.length === 0 ? NONE_TICKED : ''}${strandedLine(stranded, offered.length > 0)}`;
+}
+
+/** What a stranded pick's own option says after it — why it is not one of the picker's rows. */
+const STRANDED_TAG: Readonly<Record<StrandedPick['why'], string>> = {
+  unticked: 'no longer ticked Bugz',
+  refused: 'not a model the ranking pass runs on',
+};
+
+/**
+ * What the picker shows when the setting is none of its rows: the stranded pick, chosen and disabled — never the first
+ * row, which a browser would show for a select with nothing selected, and which is not what is configured — or, for
+ * no pick at all, a placeholder saying one is wanted.
+ */
+function firstOption(offered: readonly RankingChoice[], model: string, stranded: StrandedPick): string {
+  if (stranded.stranded.length > 0) {
+    const pick = escape(stranded.stranded);
+
+    return `<option value="${pick}" selected disabled>${pick} — ${STRANDED_TAG[stranded.why]}</option>`;
+  }
+
+  return offered.some((m) => m.id === model) ? '' : '<option value="" selected disabled>Pick a model</option>';
+}
+
+/**
+ * Why a stranded pick is shown, and what Collect does with it — refuses it by name, in the head sentence the collect's
+ * own refusal says (`bugzPick.strandedHead`).
+ *
+ * @param pickable whether the picker offers another model — only then does the line say a pick here would do
+ */
+function strandedLine(stranded: StrandedPick, pickable: boolean): string {
+  return stranded.stranded.length === 0
+    ? ''
+    : `<div class="stale">${escape(strandedHead(stranded.stranded, stranded.why, stranded.rankers))} Until you tick a model`
+      + ` for Bugz under Settings › Models${pickable ? ', or pick one here' : ''}, Collect is refused by that name — it`
+      + ' never ranks with a model you did not choose.</div>';
+}
+
 /** The section's body. */
 export function bugzBody(state: BugzViewState = {
   corpus: EMPTY_CORPUS, models: [], model: '', server: '',
@@ -178,19 +192,10 @@ export function bugzBody(state: BugzViewState = {
   // live upload and let a second start. (Plan round, all three reviewers.)
   const send = state.corpus.lastSend;
   const busy = sending(send);
-  // THIS server's list when it said, the panel's own when it is too old to. An installed
-  // extension and an installed server can be of different ages, and only the server can say what
-  // it will actually accept this minute.
-  const vendors = state.corpus.rankingVendors.length > 0
-    ? state.corpus.rankingVendors
-    : RANKING_VENDORS;
-  const offered = state.models.filter((m) => allowedBy(m, vendors, state.byRuntime === true));
-
-  const picker = offered.length === 0
-    ? '<div class="hint">No local engine was found. The ranking pass reads findings that are not'
-      + ' anonymised, so it runs on this machine or not at all.</div>'
-    : `<select id="bugz-model" data-setting="bugzModel">${
-      offered.map((m) => option(m, state.model)).join('')}</select>`;
+  // What the pick offers is already what the ranking allowlist accepts — THIS server's list when it said, the panel's own
+  // when it is too old to (`bugzPick.rankingRuleOf`) — so the view draws it as it is: one rule, in the domain (E5.1's
+  // code round, findings 0 and 7), where this used to filter a second time.
+  const picker = pickerHtml(state.models, state.model, state.stranded ?? HOLDS);
 
   return `<div class="field">
   <div class="hint">${escape(lastRunLine(state.corpus))}</div>

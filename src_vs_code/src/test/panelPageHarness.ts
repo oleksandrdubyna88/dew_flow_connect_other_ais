@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
-import { panelHtml, type PanelFocus, type PanelState, settingsHtml, settingsSections } from '../panelView';
+import { panelHtml, type PanelFocus, type PanelState } from '../panelView';
+import { catalogHtml } from '../catalogPage';
+import { CATALOG_TABS, OLD_TAB_PLACES } from '../catalogPlaces';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { LIVE_REGION_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
@@ -409,15 +411,23 @@ function regionsOf(html: string): Map<string, Region> {
 }
 
 /**
- * The page that holds the section a fixture opens: the Settings tab, opened on that section, when the
- * section moved there (`research/PLAN_settings_page.md`) — the sidebar otherwise.
+ * The page that holds the section a fixture opens: the Settings page, opened on the place that holds that section
+ * now (`OLD_TAB_PLACES`; todo/PLAN_one_model_catalog.md, E5.1 step 3 — the new page, the one a person sees), when the
+ * section moved there (`research/PLAN_settings_page.md`) — the sidebar otherwise. A place of the new page named as
+ * itself (`models`, `reviews/commands`) opens there too, as `render-page.mjs` reads it (E5.1's code round, finding 4):
+ * otherwise a test of the new page would run the sidebar's markup and pass or fail about the wrong page.
  */
 function pageHolding(state: PanelState): string {
-  const opened = state.openSections[0] ?? '';
+  const place = placeNamed(state.openSections[0] ?? '');
 
-  return settingsSections().some((section) => section.id === opened)
-    ? settingsHtml(state, 'test-nonce', opened)
-    : panelHtml(state, 'test-nonce');
+  return place.length === 0 ? panelHtml(state, 'test-nonce') : catalogHtml(state, 'test-nonce', place);
+}
+
+/** The new page's place an id names — an old tab id through `OLD_TAB_PLACES`, or a place of `CATALOG_TABS` itself — or ''. */
+function placeNamed(id: string): string {
+  const places = CATALOG_TABS.flatMap((tab) => [tab.id, ...tab.subs.map((sub) => `${tab.id}/${sub.id}`)]);
+
+  return OLD_TAB_PLACES[id] ?? (places.includes(id) ? id : '');
 }
 
 /** What a run starts from beyond the panel state: the webview's own saved state, as `vscode.getState()` answers it. */

@@ -272,7 +272,9 @@ test('a Bugz model that differs from its row\'s model becomes a bugz- row, and t
   assert.equal(row?.plan === false && row.code === false && row.document === false, true, 'it reviews nothing');
   assert.equal(vendorsFrom(after.vendors).find((one) => one.id === 'local')?.model, 'qwen3.5:35b', 'the reviewer row is not touched');
   assert.equal(env(after)['COAI_VENDORS'], env(layer)['COAI_VENDORS'], 'the reviewers coai-mcp is handed are the same: a Bugz-only row never crosses');
-  assert.equal(env(after)['COAI_BUGZ_MODEL'], 'bugz-local/gemma4:27b', 'and the Bugz entry names the row it moved to (no server half reads it today)');
+  // The Bugz entry in the env block went in E5.1 (T7: nothing in coai-mcp read it, the collect takes `--model`), so
+  // the setting above — which the collect passes — is what names the row it moved to.
+  assert.equal(env(after)['COAI_BUGZ_MODEL'], undefined, 'no environment key for the Bugz model: nothing reads one');
 });
 
 test('the Bugz model moves only when the binary ranks by runtime — an older one refuses bugz-local', () => {

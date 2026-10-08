@@ -282,7 +282,8 @@ test('the round card colours a reviewer as the configured list decided', () => {
     'the round card asks the configured palette',
   );
   assert.ok(
-    html.includes(`<div class="vendor" style="border-left-color:${colour('remsoftdev-codex')}">`),
+    // The new page's Models card carries the colour as its `--vc` (E3.2; E5.1 step 3).
+    html.includes(`<article class="card" style="--vc:${colour('remsoftdev-codex')}"`),
     'and the reviewer card wears the same answer',
   );
 });

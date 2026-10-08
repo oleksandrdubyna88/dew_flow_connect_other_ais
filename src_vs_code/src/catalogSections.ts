@@ -70,7 +70,8 @@ function everyRow(state: PanelState): PanelState {
  * Reviewers tab is Models, which the page builds itself; every other old tab is in {@link SPLIT}.
  */
 const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = {
-  'reviews/gate': gateBody,
+  // Its "Edit commands…" a jump to Reviews › Commands here, never the commands page (E5.1 step 1).
+  'reviews/gate': (state) => gateBody(state, 'new'),
   'reviews/limits': limitsSection,
   'setup/keys': (state) => keysBody(everyRow(state)),
   'setup/team': teamServersSection,

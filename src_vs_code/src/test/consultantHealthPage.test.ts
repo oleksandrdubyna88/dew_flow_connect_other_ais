@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { type CheckRecord, parseCheckDocument, parseConsultantsAnswer } from '../consultantHealth';
 import type { ConsultantHealthState, OtherSideHealth, ProbeShown, ThisSideHealth } from '../consultantHealthState';
 import { type Control, type Page, click, panelState, runPanel, work } from './panelPageHarness';
+import { settingsHtml } from '../panelView';
 
 /**
  * The Consultant tab's health block, RUN — the Settings page's own script over the markup the panel really renders
@@ -51,7 +52,12 @@ function thisSide(over: Partial<ThisSideHealth> = {}): ThisSideHealth {
 function run(over: Partial<ThisSideHealth> = {}, otherSides: readonly OtherSideHealth[] = []): Page {
   const health: ConsultantHealthState = { thisSide: thisSide(over), otherSides, nowMs: Date.parse('2026-10-03T10:01:00.0000000Z') };
 
-  return runPanel(panelState('consultant', { consultantHealth: health }));
+  // The CURRENT page: only its Consultant tab draws the health block (per caller and per side, the paid Check, agy's
+  // allow rule). The new page's Consultant tab (E4.2) picks a catalog row per caller and draws no health block — so
+  // this reads the page that draws it, and E5.1 step 5 (which would delete that page) is held until the new page does.
+  const state = panelState('consultant', { consultantHealth: health });
+
+  return runPanel(state, { html: settingsHtml(state, 'test-nonce', 'consultant') });
 }
 
 function buttons(page: Page, command: string): readonly Control[] {

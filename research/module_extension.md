@@ -10762,8 +10762,9 @@ sequenceDiagram
   moves it, so a restore never removes a Bugz model the migration never touched. A layer epic 1 already migrated has
   `bugzModel` ADDED to its backup (its value before the move) ahead of the rewrite; what was saved is never
   overwritten. Restore order: references first (`consultants`, `qconsultRows`, `bugzModel`), rows last.
-- A Bugz-only row never crosses in `COAI_VENDORS` (`rowsOnTheWire`). `COAI_BUGZ_MODEL` names the new row — and no
-  code in coai-mcp reads that variable today (the collector takes `--model`), which is recorded as tail T7.
+- A Bugz-only row never crosses in `COAI_VENDORS` (`rowsOnTheWire`). The setting `bugzModel` names the new row; the
+  env block's `COAI_BUGZ_MODEL`, which no code in coai-mcp read (the collector takes `--model`), was removed in E5.1
+  (tail T7; see "The switch-over, steps 1–3" below).
 
 ## A row's system prompt crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
 
@@ -11334,3 +11335,83 @@ the new modules, never the other way.
   `chatTabEmbed` and `catalogSections` import `panelView`, so an edge back closes a ring. `chatPresetsMessages` imports
   neither `chatPresetsHost` nor `chatModelEdits` (the host imports both). `importCycles.test.mjs`'s `KNOWN` list did not
   change.
+
+## The switch-over, steps 1–3 — and why steps 4–5 wait (2026-10-08, PLAN_one_model_catalog.md E5.1)
+
+E5.1 makes the new page the Settings page in five steps. Steps 1–3 shipped on `feat/catalog-e5-switch`; steps 4 (delete
+the roles, commands and presets pages) and 5 (remove the preview switch and the current page) were STOPPED, for the
+reason at the end of this section. Until they land, both pages exist and the current page is still the default
+(`coai.settingsPreview` off), so everything below keeps the current page working.
+
+**Step 1 — the jumps.** The gate's "Edit commands…" and the stages' "Edit roles…" are drawn by builders both pages share
+(`gateBody`, `promptsBody`'s `stagesBody`). They take the page drawing them (`SettingsPageKind`, `'current' | 'new'`) and
+draw their way to the editor through `editorWay`: on the current page the old `data-command` (`editCommands`, `editRoles`
+— the pages), on the new page a `data-goto` jump to the place that holds the editor (`reviews/commands`,
+`reviews/roles`). The new page's script (`catalogPageScript.placesScript`) opens a `[data-goto]` like a tab press —
+`showPlace(…, true)`, so the host is told the place — and it is not a `[data-tab]`, so the strip's marking never reaches a
+button inside a pane. `catalogSections` calls `gateBody(state, 'new')`; `PROMPTS_HALVES.stages` passes `'new'`, `both`
+passes `'current'`.
+
+**Step 2 — the sidebar's Bugz picker reads the catalog** (`bugzPick.ts`, pure; drawn by `panelView.bugzSection`, the
+collect decided by `bugzCollect.collectWithPick`). It lists the rows ticked Bugz on Models — every catalog row read, a
+catalog-only `bugz-local` included — that the ranking allowlist accepts, each as `row/model`, which is what the Models
+tick already writes to `coai.bugzModel` (`catalogCommands.bugzMoved`), so the collect's `--model` is unchanged. The
+saved pick has three readings:
+
+```mermaid
+flowchart TD
+  I[bugzInputsOf: rows, saved pick, engines, server's list, by-runtime] --> T{any row ticked Bugz?}
+  T -->|yes| Y{names a ticked row the allowlist accepts<br/>and one of its models?}
+  T -->|no| N{names a catalog row the allowlist accepts<br/>and one of its models?}
+  Y -->|yes| C[chosen: shown selected, collect runs]
+  N -->|yes| C2[chosen: the never-ticked install keeps its model]
+  Y -->|no| X[stranded: said; drawn chosen + disabled only beside another model; collect REFUSED by name]
+  N -->|no| X
+  I -->|empty pick| E{a model offered?}
+  E -->|yes| P['Pick a ranking model in the Bugz section before collecting.']
+  E -->|no| Q['No model is ticked for Bugz' — Settings › Models]
+```
+
+"One of its models" is the row's own model or any model its engine was last seen serving (`modelsOfRows(localEngines)`),
+so a pick made in the old picker (`<engine row>/<any engine model>`) still holds. Unticking a row clears a pick that was
+that row's (`heldElsewhere`), so the never-ticked reading cannot bring back a pick a person took away.
+
+The code round of E5.1a made it ONE rule and ONE reader. **The allowlist** is the pick's own (`RankingRule`,
+`rankingRuleOf`: the server's `rankingVendors`, or `RANKING_VENDORS` from a server too old to say; by the row's runtime
+for a binary that ranks by it, else by row id): a ticked row it refuses is neither offered nor chosen, so its pick is
+stranded and the collect refuses it — `bugzView` no longer filters a second time. **The reader**, `bugzInputsOf`, is
+what `bugzSection` draws from and what the provider's collect reads, the provider building its reads as the render does
+(`vendors` the reviewers, `catalogRows` every row). **The collect** is `collectWithPick(ports)`: the provider hands its
+reads, the `no-ranking-model` notice and the one spawn through `serverRun`; a pick that does not hold is refused by its
+sentence and nothing starts (it used to run unranked with none), else `collectArgs` (moved here from the view) starts it.
+The domain (`bugzPick`, `bugzCollect`) imports no view: `RankingChoice`, `RANKING_VENDORS`, `allowedBy` and `mayRank`
+live in `bugzPick.ts`. A stranded pick with nothing else to offer draws no picker and no "pick one here". A stranded pick
+says why (`BugzPick.why`, CodeRabbit on #709): `unticked` — its row is not ticked, gone, or lacks the model ("… is no
+longer ticked Bugz on Models, or was removed.") — or `refused` — its row IS ticked and the allowlist refuses it ("… is
+ticked Bugz, but the ranking pass does not run on it — it runs only on local, …"); `strandedHead` is that one sentence
+for the sidebar and the collect's refusal alike. **T7:**
+`COAI_BUGZ_MODEL` left the settings file's environment block (`settingsShape.envBlock`) — nothing in `src_mcp` or `shared`
+read it; `bugzModel` stays a setting and stays in the migration's backup (T5).
+
+**Step 3 — the tests read the new page.** `test/panelPages.ts` draws the Settings surface as `catalogHtml(state, …,
+'models')` and keys it by `catalogKey`; `sectionHtml` and `panelPageHarness.pageHolding` reach an old tab id through
+`OLD_TAB_PLACES`; `paneIn(html, place)` reads one place out of html (start tags only — the sheet names places too);
+`scripts/render-page.mjs`'s `settings:<tab>` renders `catalog:<place>`. What ONLY the current page draws is still read
+there, through `currentSettingsHtml` or its own html, each test saying so: the old reviewer card's layout and its inert
+api card, the stage box's own role tick and last-role refusal, the caller-coloured consultant definitions, the
+consultant HEALTH block, the chat's two model selects and "Edit presets…", the question row's own vendor picker.
+
+**Why steps 4 and 5 stop.** The plan's premise was that no old section is drawn only by the old page. One is: the
+**consultant health block** (`consultantView.definitionRows` → `healthBlock`, epic 5 of
+PLAN_the_consultant_works_on_every_vendor) — each caller's ✓ Check of its consultant (a paid turn, confirmed), the
+health per side with other sides read-only, the confinement line and agy's allow-rule snippet with its Copy. The new
+page's Consultant tab draws `consultantPicksHtml` instead, which has none of it (epic 4 item 2 listed "health per side;
+the paid Check confirmed; agy's allow rule" for that tab; E4.2 built the picks only). Removing the current page (step
+5) would remove a shipped feature. Step 4 depends on step 5: its redirect commands open the Settings page at a place,
+and with the preview off that is the current page, which holds no roles, commands or presets editor — so deleting the
+three pages first would leave a default install with none. Both wait for the health block on the new page.
+
+Smaller differences, recorded where the tests read the current page: the new page's last-role refusal counts the
+catalog's `active` only (`rolesEdit`), not `roleEnabled`, so an install whose old page left every code role but one off
+by `roleEnabled` can switch the last one off there (coai-mcp still refuses the all-off round); the Consultant tab draws
+no caller colour; the api card on an older server says why it cannot run but leaves its fields editable.
