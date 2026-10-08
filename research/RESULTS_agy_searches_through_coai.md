@@ -4,7 +4,8 @@
 > BEFORE the PR. Harness: the branch's own `coai-mcp` (Debug) driven over stdio by a ~40-line MCP client, a scratch data
 > directory per side holding the operator's settings with ONLY the antigravity `question-disk` row (or, for `consult`, an
 > antigravity consultant for a claude caller). agy 1.3.1, `gemini-3.8-flash-low` for rows, `gemini-3.8-flash-medium` for
-> the consultant. Nothing was deleted; the scratch trees are named in §3.
+> the consultant. Nothing was deleted; the scratch trees are named in §3. Commit ids below are the commits of the branch
+> `feat/agy-searches-through-coai` as it was opened for review; `main` holds them squashed into one merge.
 
 ## 1. The question, and what it was before
 
@@ -17,7 +18,7 @@ the model could not list a folder, so the answers named commands for the caller 
 `failed` on a denied `read_file` outside the root. The codex row, which can search, found the real file in WSL 3 of 3:
 `alert-center/src/notifications/delivery-retry.ts`.
 
-## 2. ask_consultants through the branch build (commit `017c263b`)
+## 2. ask_consultants through the branch build (commit `15e65b3c`)
 
 | Side | Run | Outcome | Seconds | Lookups served (not served) | Turns | The answer |
 |---|---|---|---|---|---|---|
@@ -57,24 +58,24 @@ to look at; nothing was deleted.
 
 Windows run 2's model wrote `…Let's do a lookup to see what exists.```coai-lookup` — the fence at the END of a sentence.
 The parser read a fence only at the start of a line, so the turn had no block, and the row's answer was the block text.
-Fixed in `7230b5dd`: a fence opens a block anywhere in a line (the text before stays prose), and a closing fence glued to
+Fixed in `e7fb51fd`: a fence opens a block anywhere in a line (the text before stays prose), and a closing fence glued to
 the last request line closes the block and keeps the line — `LookupRequestsTests.AFenceGluedToTheProse_IsStillABlock_AsTheRealModelWroteIt`,
 the live text as its input, red on the old parser (`Expected ask.HadBlock to be True, but found False`) and green after.
 
-## 5. The final build (`7230b5dd`) and `consult`
+## 5. The final build (`e7fb51fd`) and `consult`
 
 At 16:00Z the agy account's quota was spent ("Individual quota reached … Resets in 1h51m"): three runs a side and one
 `consult` failed in 5–26 s, each classified `rate limited` / `quota` by the product with the reset time — no turn ran,
 so they say nothing about the feature, and they show the quota failure is named, not swallowed. The runs were repeated
 after the reset; see §6.
 
-## 6. After the quota reset — the final build (`7230b5dd`), 17:56–18:05Z
+## 6. After the quota reset — the final build (`e7fb51fd`), 17:56–18:05Z
 
 > The binary reports `+fa799287` in its version: it was built from the fixed working tree just before the fix was
-> committed. The tree was what `7230b5dd` holds; the SHAs in this record are the ones after the rebase onto `main`.
+> committed. The tree was what `e7fb51fd` holds; the SHAs in this record are the ones after the rebase onto `main`.
 
 > The binary reports `+fa799287` in its version: it was built from the fixed working tree just before the fix was
-> committed (the tree was the commit `7230b5dd` holds; the SHAs in this record are the ones after the rebase onto `main`).
+> committed (the tree was the commit `e7fb51fd` holds; the SHAs in this record are the ones after the rebase onto `main`).
 
 **ask_consultants, the same question:**
 
@@ -113,6 +114,6 @@ search. They are one model (`gemini-3.8-flash-low` for rows); a stronger model m
 
 **After these runs**, the second code round changed three things that no live run has exercised: a question row now asks
 its watched roots before every lookup continuation, a continuation whose stream names no conversation keeps the one it
-continued, and a search reads at most 20 000 entries of one folder (`b5db1ef7`). Each is covered by a scenario test
+continued, and a search reads at most 20 000 entries of one folder (`a59f9263`). Each is covered by a scenario test
 observed red first (module_tests.md); none changes a path these runs took — the question rows' roots were not git checkouts (the consult loop had its tree check already), every
 stream named its conversation, and no folder came near the bound.
