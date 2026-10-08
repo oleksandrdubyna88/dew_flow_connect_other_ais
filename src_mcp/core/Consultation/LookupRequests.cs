@@ -59,34 +59,45 @@ public static class LookupRequests
     }
 
     /// <summary>One line of the answer: a fence that opens or closes a block, a line of a block, or prose.</summary>
-    private static (bool InBlock, bool HadBlock) Route(string line, bool inBlock, bool hadBlock, List<string> prose, List<string> asked)
-    {
-        var trimmed = line.Trim();
-        if (!inBlock && trimmed.StartsWith(Closing + Fence, StringComparison.OrdinalIgnoreCase))
-        {
-            return (true, true);
-        }
+    private static (bool InBlock, bool HadBlock) Route(string line, bool inBlock, bool hadBlock, List<string> prose, List<string> asked) =>
+        inBlock ? InBlock(line.Trim(), hadBlock, asked) : OutOfBlock(line, hadBlock, prose, asked);
 
-        if (inBlock && trimmed == Closing)
+    /// <summary>
+    /// A line of prose — or one that opens a block ANYWHERE in it: the text before the fence stays prose, anything after
+    /// it on the same line is the block's first line. Live, agy glued the fence to the end of a sentence
+    /// (research/RESULTS_agy_searches_through_coai.md, Windows run 2), and the row's answer became the block itself.
+    /// </summary>
+    private static (bool InBlock, bool HadBlock) OutOfBlock(string line, bool hadBlock, List<string> prose, List<string> asked)
+    {
+        var at = line.IndexOf(Closing + Fence, StringComparison.OrdinalIgnoreCase);
+        if (at < 0)
         {
+            prose.Add(line);
             return (false, hadBlock);
         }
 
-        Keep(line, inBlock, prose, asked);
+        if (line[..at].Trim().Length > 0)
+        {
+            prose.Add(line[..at]);
+        }
 
-        return (inBlock, hadBlock);
+        var after = line[(at + Closing.Length + Fence.Length)..].Trim();
+
+        return after.Length > 0 ? InBlock(after, true, asked) : (true, true);
     }
 
-    private static void Keep(string line, bool inBlock, List<string> prose, List<string> asked)
+    /// <summary>A line inside a block: a request line, a closing fence — or both, when the fence is glued to the line's end.</summary>
+    private static (bool InBlock, bool HadBlock) InBlock(string trimmed, bool hadBlock, List<string> asked)
     {
-        if (inBlock)
+        if (!trimmed.EndsWith(Closing, StringComparison.Ordinal))
         {
-            asked.Add(line.Trim());
+            asked.Add(trimmed);
+            return (true, hadBlock);
         }
-        else
-        {
-            prose.Add(line);
-        }
+
+        asked.Add(trimmed[..^Closing.Length].Trim());
+
+        return (false, hadBlock);
     }
 
     /// <summary>One line of a block, read: a request, or the sentence saying why the line is not one.</summary>

@@ -93,6 +93,23 @@ public sealed class LookupRequestsTests
     }
 
     [Fact]
+    public void AFenceGluedToTheProse_IsStillABlock_AsTheRealModelWroteIt()
+    {
+        // Live, 2026-10-08, Windows run 2 (research/RESULTS_agy_searches_through_coai.md): agy wrote the fence at the end
+        // of a sentence, and the row's ANSWER was the block itself.
+        var ask = LookupRequests.Read(
+            "We have 1 lookup left. Let's do a lookup to see what exists.```" + LookupRequests.Fence + "\n"
+            + "list D:\\rsd\\ClaudeRag\\email-switcher\n"
+            + "search \"smtp\" in D:\\rsd\\dew_flow_connect_other_ais```\nThen I will answer.");
+
+        ask.HadBlock.Should().BeTrue();
+        ask.Requests.Should().HaveCount(2, "a closing fence glued to the last line closes the block and keeps the line");
+        ((LookupRequest.Search)ask.Requests[1]).Path.Should().Be("D:\\rsd\\dew_flow_connect_other_ais");
+        ask.Prose.Should().Be("We have 1 lookup left. Let's do a lookup to see what exists.\nThen I will answer.");
+        ask.Refused.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AnEmptyBlock_IsABlock_WithNothingAsked()
     {
         var ask = LookupRequests.Read("Draft.\n" + Block());
