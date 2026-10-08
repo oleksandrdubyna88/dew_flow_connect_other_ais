@@ -1175,6 +1175,30 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    works, so their teeth are proven by breaking the code they hold, not by a red start. Docs: `research/module_extension.md`
    (the shared health helper; the one ON rule), `research/module_tests.md` (the places and their tests). After E5.1b,
    E5.1c (steps 4–5) proceeds: its premise then holds.
+   **Progress** (branch `feat/catalog-e5-health`, 2026-10-08; not pushed, no code round yet). **Part 1 + 4**
+   (`52acc9e3`): `consultantHealthState.callerHealth(kind, consult, health)` — the identity is `consult.byCaller`'s
+   resolved pair — called by `consultantView.withHealth` and by `consultantPicks.pickHtml` (a `pickHealth` beside it
+   draws `healthBlock`); `consultantPicksHtml` takes the health state; `catalogSections` passes `state.consultantHealth`.
+   Verified unchanged, as designed: the host's `checkConsultant`/`copyConsultantSnippet` cases, `copyCommands`,
+   `CONSULTANT_HEALTH_CSS` in the shared sheet, `HEALTH_SHOWN_ON`. `consultantHealthPage.test.ts` runs every case on both
+   pages from one table (`PAGES`) and gains the identity case. Red: all 16 new-page cases, e.g. "the page has no
+   checkConsultant button for gemini", the identity case "the picked row's own failure was filtered away as another
+   consultant's"; teeth: `callerHealth` matched by the STORED entry turned the identity case red on both pages. Two
+   cases that passed vacuously on a page with no block now first assert the block is there. **Part 2** (`ed863ad3`):
+   `rolesSwitch.rolesOn` (the one count per bucket) and `lastOn`; `RoleBlockOptions` carries `roleEnabled` in place of
+   its `on` predicate; `rolesEdit.rowsAfter` takes `roleEnabled`, `lastStanding` is `lastOn` (switch off, remove,
+   restage); `rolesHost.queueRoleEdit(command, roleEnabled)` carries a READER of the switches, read at apply time;
+   `PanelProvider.roleEdited` passes `roleSwitches()`; `settingsShape.enabledCodeRoles` is `rolesOn` over the code
+   bucket. Red, from one table, page and host: "Architecture could be switched off while every other code role is off,
+   so the code stage would run no role", "the host stored Architecture switched off, leaving the code stage with no role
+   ON", the same for DocumentSummary and FeatureReview; the plan bucket was already guarded (its roles have no second
+   switch), so its row is green from the start. Teeth for the provider's source pin: `queueRoleEdit(command)` alone
+   failed. **Part 3** (`7eeee41e`): `setupOnTheNewPage.test.ts` and `panelPageHarness.pressCommand`; ten presses plus no
+   Install when up to date and no delete after an unverified move; thirteen teeth breaks, each red and restored.
+   **Deviations:** the host receives the switches as a reader through the queue, not a value, so an edit queued behind
+   another is guarded by the switches as they are when it applies (and a removal by them after its modal question); the
+   Review roles tab passes none and keeps counting the catalog alone, as it draws — it is deleted with step 5. Part 4
+   landed in part 1's commit, because its table is the test that went red for part 1.
    **E5.1a's code round** (proceed, 8 of 8 reviewers; 8 findings, all accepted, each fixed red first on the same
    branch): (0, 7) the ranking allowlist is the pick's own rule — `bugzPickOf` takes a `RankingRule`
    (`rankingRuleOf`: the server's list, or `RANKING_VENDORS` from a server too old to say), `bugzView` filters no more;
