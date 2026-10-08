@@ -1251,7 +1251,7 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
      the right place), the sidebar's sections, `SETTINGS_CSS` / `settingsTextCss` / `settingsHead` / `SETTINGS_LOADING`
      (the new page uses them), the restore command and `coai.migratedFrom` (T5).
    **Tests, first** where behaviour changes: a redirect command opens the NEW page at its place even with the preview
-   off (RED: it opens the current page today); after step 5, `coai.openSettings` with an old tab id opens its place (a
+   off, one table row per command naming its OWN place — `coai.editRoles` → `reviews/roles`, `coai.editCommands` → `reviews/commands`, `coai.editChatPresets` → `chat` — so a crossed wire fails (RED: they open the current page today; plan round finding 0); after step 5, `coai.openSettings` with an old tab id opens its place (a
    real-editor scenario). Docs: `research/module_extension.md` (the switch-over as shipped), `research/module_tests.md`,
    `research/architecture.md` if it names the old page.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
