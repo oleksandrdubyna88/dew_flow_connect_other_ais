@@ -18,7 +18,14 @@ public sealed record QuestionPromptInput(
     CheckedContext Context,
     string Outline,
     IReadOnlyList<string> Roots,
-    string Nonce);
+    string Nonce)
+{
+    /// <summary>
+    /// What the row's own runtime adds under "## What you have" — an antigravity disk row's <c>coai-lookup</c> block
+    /// (research/PLAN_agy_searches_through_coai.md); empty for every other row, whose prompt is then unchanged.
+    /// </summary>
+    public string Toolbox { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// Composes the prompt a CLI question row reads — claude, codex, antigravity, local — by capability:
@@ -52,6 +59,11 @@ public static class QuestionPrompt
         text.AppendLine(input.Instruction.TrimEnd()).AppendLine();
         text.AppendLine(WhatYouHaveHeading);
         text.AppendLine(WhatYouHave(input.Capability));
+        if (input.Toolbox.Trim().Length > 0)
+        {
+            text.AppendLine().AppendLine(input.Toolbox.Trim());
+        }
+
         text.AppendLine();
         AppendRoots(text, input.Roots);
         AppendMaterial(text, OutlineHeading, "the outline", input.Nonce, input.Outline);

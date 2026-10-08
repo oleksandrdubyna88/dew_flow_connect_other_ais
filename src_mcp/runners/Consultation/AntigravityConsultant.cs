@@ -22,9 +22,80 @@ namespace CoaiMcp.Runners.Consultation;
 /// class; it is recorded here because a consultation is the first thing in this product to run the
 /// same conversation twice and therefore the first place it is visible.</para>
 /// </remarks>
-public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor = "antigravity") : IConsultantRuntime
+/// <param name="lookup">
+/// coai's own read-only list and search over the row's granted roots — attached by the question fan-out to a
+/// <c>disk</c> row (<see cref="With"/>), as an api row is handed its source resolver; null everywhere else, and then a
+/// turn's answer is the advice as it was (research/PLAN_agy_searches_through_coai.md, S2).
+/// </param>
+public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor = "antigravity", IWorkspaceLookup? lookup = null)
+    : IConsultantRuntime, IAnsweringFollowUps
 {
     public string Vendor => vendor;
+
+    /// <summary>The same consultant, able to ask coai to look inside <paramref name="withLookup"/>'s roots.</summary>
+    public AntigravityConsultant With(IWorkspaceLookup withLookup) => new(inner, vendor, withLookup);
+
+    /// <summary>How many times coai answers a <c>coai-lookup</c> block — none without a lookup.</summary>
+    public int FollowUps => lookup is null ? 0 : Core.Feature.LookupBudget.FollowUps;
+
+    /// <summary>What the prompt tells a row that may look: the block and its roots — empty without a lookup.</summary>
+    public string LookupToolbox => lookup is null ? string.Empty : AntigravityFollowUps.LookupToolbox(lookup.Roots, FollowUps);
+
+    /// <summary>
+    /// After a turn: a <c>coai-lookup</c> block is served by coai and the SAME conversation continues with the results
+    /// (<see cref="AntigravityStream.Continue"/>); an answer with no block is the advice.
+    /// </summary>
+    /// <remarks>
+    /// <para>On the last allowed turn a block is not served: its prose is the answer and the note names what was asked and
+    /// not served (plan round, gemini) — with no prose left, the row's answer is empty and the row fails saying why.</para>
+    /// <para>Off the caller's thread: serving a block walks the disk for up to its time limit, and question rows answer
+    /// side by side (code round, gemini).</para>
+    /// </remarks>
+    public Task<AnsweringTurn> AfterAsync(ConsultantLaunch launch, AnsweringMemory memory, string raw, CancellationToken ct) =>
+        Task.Run(() => After(launch, memory, raw, ct), ct);
+
+    private AnsweringTurn After(ConsultantLaunch launch, AnsweringMemory memory, string raw, CancellationToken ct)
+    {
+        var ask = LookupRequests.Read(raw);
+        if (lookup is null || !ask.HadBlock)
+        {
+            return new AnsweringTurn.Done(raw);
+        }
+
+        return WhyNotContinued(memory) is { Length: > 0 } why
+            ? new AnsweringTurn.Done(ask.Prose, Unserved(why, ask))
+            : Continued(launch, memory, ask, lookup.Serve(ask.Requests, ct));
+    }
+
+    private AnsweringTurn.Next Continued(ConsultantLaunch launch, AnsweringMemory memory, LookupAsk ask, LookupServed served)
+    {
+        var next = memory.Turn + 1;
+        var turns = 1 + FollowUps;
+        var message = AntigravityFollowUps.LookupContinuation(next, turns, served, ask.Refused);
+
+        return new AnsweringTurn.Next(
+            launch,
+            memory with { Turn = next, SaidFinal = next >= turns },
+            $"turn {next}: coai served {served.Served} lookup{(served.Served == 1 ? string.Empty : "s")}, {served.Refused + ask.Refused.Count} not served")
+        {
+            Invocation = AntigravityStream.Continue(memory.Last!, memory.Handle, message),
+        };
+    }
+
+    /// <summary>Why a block will not be served — the cap, or a conversation that cannot be continued — or empty.</summary>
+    private string WhyNotContinued(AnsweringMemory memory) =>
+        Capped(memory, FollowUps) ? $"lookups capped at {FollowUps} turn{(FollowUps == 1 ? string.Empty : "s")}"
+        : CannotContinue(memory) ? "the conversation could not be continued — agy named no conversation id"
+        : string.Empty;
+
+    /// <summary>The last allowed turn has been taken — or the model was already told this was its last.</summary>
+    private static bool Capped(AnsweringMemory memory, int followUps) => memory.SaidFinal || memory.Turn >= 1 + followUps;
+
+    /// <summary>No conversation to continue: agy named none, or no launch has finished yet.</summary>
+    private static bool CannotContinue(AnsweringMemory memory) => memory.Handle.Length == 0 || memory.Last is null;
+
+    private static string Unserved(string why, LookupAsk ask) =>
+        $"{why}; asked for and not served: {string.Join("; ", [.. ask.Requests.Select(r => r.Line), .. ask.Refused])}";
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
 
@@ -40,8 +111,11 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     /// </remarks>
     public bool UsageIsCumulative => true;
 
-    /// <summary>The one read tool observed working headless in <c>--mode plan</c>, and the shell's standing.</summary>
-    public string Toolbox => AntigravityFollowUps.Toolbox;
+    /// <summary>
+    /// The one read tool observed working headless in <c>--mode plan</c>, the shell's standing — and, when coai may look for
+    /// this consultant (<see cref="With"/>), the <c>coai-lookup</c> block (research/PLAN_agy_searches_through_coai.md, S3).
+    /// </summary>
+    public string Toolbox => lookup is null ? AntigravityFollowUps.Toolbox : AntigravityFollowUps.Toolbox + "\n\n" + LookupToolbox;
 
     /// <summary>The permission words this launch was denied — the stream's list, and the stderr sentence's.</summary>
     public IReadOnlyList<string> DeniedActions(ReviewerLaunch launched) =>
@@ -74,7 +148,7 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
         var conversation = ConversationOf(launched);
 
         return said.Length > 0 && conversation.Length > 0
-            ? AntigravityStream.Continue(first, conversation, said)
+            ? AntigravityStream.Continue(first, conversation, lookup is null ? said : said + " " + AntigravityFollowUps.AskCoaiToLook)
             : null;
     }
 

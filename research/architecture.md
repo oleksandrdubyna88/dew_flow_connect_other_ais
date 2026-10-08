@@ -367,6 +367,18 @@ constraint that buys: a vendor must be a reviewer before it can be a consultant.
 The first CONSULT-ONLY vendor is the trigger to split the seam, and it is named in
 [module_runners.md](module_runners.md) rather than built ahead of the vendor that needs it.
 
+### coai looks for a consultant that cannot (2026-10-08)
+
+An antigravity consultant in `--mode plan` can open a file it names and nothing else, so coai lists and searches FOR it
+([PLAN_agy_searches_through_coai.md](PLAN_agy_searches_through_coai.md)). That adds one seam that points from the
+runners to the server: the runners' `IWorkspaceLookup` (asked by `AntigravityConsultant` when its answer ends with a
+`coai-lookup` block) is implemented by the server's `WorkspaceLookup`, which reuses the server's link-resolving
+containment (`DocumentReader`) — the same inversion the api rows' `QuestionMaterial` carries a source resolver through.
+The server attaches it at launch, when the roots are known: a question row's granted roots (`QuestionFanOut`) or a
+consultation's checkout (`ConsultationService`). No process, wire or file changes: the reader runs in `coai-mcp`, and the
+continuation is the same agy conversation (`--conversation <id>`). Live, the seam's model was found able to WRITE in its
+roots despite plan mode — an open defect of every agy launch ([todo](../todo/PLAN_agy_cannot_write_its_roots.md)).
+
 ### And it is SEEN across the seam, twice (2026-09-13)
 
 Story 4 gave the consultation two readers on the other side, and neither is a new channel — both are
