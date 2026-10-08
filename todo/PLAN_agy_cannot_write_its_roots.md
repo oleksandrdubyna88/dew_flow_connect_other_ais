@@ -41,7 +41,20 @@ agent that has `view_file` and nothing that writes, and the write check passes. 
 agent is defined (a file in agy's config, per user), whether its tool list restricts BUILT-IN tools or only adds, and
 whether `--mode plan` and `--agent` combine.
 
-**If `--agent` does not hold**, in order: a `permissions.deny` for the write permission in agy's global settings (the
+**What was read before any run (2026-10-08, no model call).** `agy agent` (the listing subcommand) prints nothing on this
+machine, and agy's own customization guide (`~/.gemini/antigravity-cli/builtin/skills/agy-customizations/`) documents
+rules, skills, plugins, hooks and MCP servers — **no agent definition with a tool list**. So `--agent` may not be a way to
+restrict tools at all; M1 settles it. The same guide documents **lifecycle hooks** (`hooks.md`): a `PreToolUse` handler
+receives the tool call on stdin and may answer `{"decision": "deny", "reason": …}` — "Hard block the execution
+immediately". `hooks.json` is discovered in every `.agents/` folder between the cwd and the project root, or globally in
+`~/.gemini/config/`; the handler runs with the hooks file's folder as its cwd (`cmd /c` on Windows, `sh -c` elsewhere).
+That makes a second candidate, to be measured right after `--agent`: an ALLOWLIST hook (allow `view_file`, deny every
+other tool), placed where coai controls it — a launch cwd coai owns, or a global hook that acts only when coai's own
+environment marker is set (so the operator's interactive agy is untouched). Unmeasured: whether a print-mode (`--print=`)
+launch runs hooks, whether a hook in a scratch cwd outside any repository is discovered, and whether a deny ends the
+turn or lets the model answer in prose.
+
+**If neither holds**, in order: a `permissions.deny` for the write permission in agy's global settings (the
 global file is read — `RESULTS_agy_allow_rule.md` — but it also blocks the operator's own interactive agy); then taking
 agy off disk work (codex/claude rows, whose confinement is measured).
 
