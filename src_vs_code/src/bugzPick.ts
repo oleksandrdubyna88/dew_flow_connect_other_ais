@@ -196,7 +196,15 @@ export function bugzCollectRefusal(pick: BugzPick): string {
       + `Tick a model for Bugz under ${WHERE}, or pick one in the Bugz section — nothing is collected with a model nobody chose.`;
   }
 
-  return pick.chosen.length > 0
-    ? ''
+  return pick.chosen.length > 0 ? '' : noPick(pick);
+}
+
+/**
+ * Why no pick refuses, in the words of where it is fixed (E5.1's code round, finding 3): with a model ticked the picker
+ * offers it and a pick is all that is missing, so the sentence sends the person to the Bugz section, not to Models.
+ */
+function noPick(pick: BugzPick): string {
+  return pick.offered.length > 0
+    ? 'Pick a ranking model in the Bugz section before collecting.'
     : `No model is ticked for Bugz. Tick one under ${WHERE} (the ranking pass runs on a model on this machine), then collect.`;
 }

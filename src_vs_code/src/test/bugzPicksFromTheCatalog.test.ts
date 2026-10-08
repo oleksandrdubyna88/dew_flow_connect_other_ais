@@ -125,10 +125,19 @@ test('a collect is refused with a sentence naming Models — for a stranded pick
   const rule = rankingRuleOf(['local'], true);
 
   assert.match(bugzCollectRefusal(bugzPickOf(ticked, 'local/qwen3.5', modelsOf, rule)), /local\/qwen3\.5[\s\S]*Models/u);
-  assert.match(bugzCollectRefusal(bugzPickOf(ticked, '', modelsOf, rule)), /No model is ticked for Bugz[\s\S]*Models/u);
+  assert.match(bugzCollectRefusal(bugzPickOf(ticked, '', modelsOf, rule)), /Pick a ranking model in the Bugz section/u);
   assert.match(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], '', modelsOf, rule)), /Models/u);
   assert.equal(bugzCollectRefusal(bugzPickOf(ticked, 'local-2/gemma4:27b', modelsOf, rule)), '');
   assert.equal(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], 'local/llama4:17b', modelsOf, rule)), '', 'the never-ticked install collects as before');
+});
+
+test('no pick refuses in two sentences: nothing ticked points to Models; a model ticked but none chosen points to the picker (code round, finding 3)', () => {
+  const modelsOf = (row: Vendor): readonly string[] => [row.model];
+  const rule = rankingRuleOf(['local'], true);
+
+  assert.match(bugzCollectRefusal(bugzPickOf([localRow('local-2', 'gemma4:27b', ['bugz'])], '', modelsOf, rule)),
+    /^Pick a ranking model in the Bugz section before collecting\.$/u, 'a model IS ticked — the sentence sends the person to Models anyway');
+  assert.match(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], '', modelsOf, rule)), /^No model is ticked for Bugz\./u);
 });
 
 test('T7: the Bugz model is not written into the settings file\'s environment block — nothing in coai-mcp reads it', () => {
