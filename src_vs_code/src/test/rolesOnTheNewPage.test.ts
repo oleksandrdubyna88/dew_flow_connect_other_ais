@@ -220,3 +220,74 @@ test('the new page\'s role edits reach the host guard with the panel\'s switches
   assert.match(sourceBetween('rolesHost.ts', 'async function removeConfirmed(', '/** The override files'), /rowsAfter\([^;]*, roleEnabled\(\)\)/u,
     'a removal is guarded without the switches it was queued with');
 });
+
+// ---------------------------------------------------------------- E5.1b's code round, finding 0
+
+/** A document role of the person's own — the documents bucket's second role, as `mine` is the others'. */
+function mineDocument(id: string): RoleRow {
+  return { ...mine(id, 'result'), programmingTask: false };
+}
+
+/**
+ * A role of the person's OWN as the last one ON of its bucket — the only kind a page offers a stage move and a removal
+ * (a shipped role's stage is fixed and it has no Remove). Every shipped role of the bucket is off: by the panel's switch,
+ * or, in the plan stage, in the catalog.
+ */
+const OWN_LAST_ON: readonly LastOn[] = [
+  {
+    bucket: 'plan',
+    last: 'MyPlan',
+    alone: { rows: [mine('MyPlan', 'plan'), { id: 'PlanCritique', active: false }], roleEnabled: {} },
+    another: { rows: [mine('MyPlan', 'plan')], roleEnabled: {} },
+  },
+  {
+    bucket: 'code',
+    last: 'MyCode',
+    alone: { rows: [mine('MyCode', 'result')], roleEnabled: { Conventions: false, Architecture: false, SecurityReliability: false, UxDxPerformance: false } },
+    another: { rows: [mine('MyCode', 'result')], roleEnabled: {} },
+  },
+  {
+    bucket: 'documents',
+    last: 'MyDoc',
+    alone: { rows: [mineDocument('MyDoc')], roleEnabled: { DocumentReview: false, DocumentSummary: false } },
+    another: { rows: [mineDocument('MyDoc')], roleEnabled: {} },
+  },
+  {
+    bucket: 'feature',
+    last: 'MyFeature',
+    alone: { rows: [mine('MyFeature', 'feature')], roleEnabled: { FeatureReview: false } },
+    another: { rows: [mine('MyFeature', 'feature')], roleEnabled: {} },
+  },
+];
+
+/** What the new page lets a person do to a role besides its switch: the stages it offers, and whether Remove posts. */
+function movesOf(switches: Switches, id: string): { readonly stages: readonly string[]; readonly removeDisabled: boolean; readonly removed: boolean } {
+  const { page, pane } = rolesPage(stateWith(switches.rows, switches.roleEnabled));
+  const block = roleBlock(pane, id);
+  const stage = block.one((node) => node.dataset.field === 'stage', `${id}'s stage`);
+  const remove = block.one((node) => node.dataset.remove === id, `${id}'s Remove`);
+
+  bubbled(page, 'click', remove);
+
+  return {
+    stages: stage.find((node) => node.tagName === 'OPTION' && !node.disabled).map((node) => node.value),
+    removeDisabled: remove.disabled,
+    removed: page.posted.some((one) => one['type'] === 'roles' && isRemoval(one['edit'])),
+  };
+}
+
+/** Whether a posted roles edit is a removal — read from the message as it arrives, never asserted into a type. */
+function isRemoval(edit: unknown): boolean {
+  return typeof edit === 'object' && edit !== null && 'type' in edit && edit.type === 'remove';
+}
+
+for (const { bucket, last, alone, another } of OWN_LAST_ON) {
+  test(`the ${bucket} bucket's last role ON is offered no other stage and no removal on the new page — refused there, not late by the host`, () => {
+    const stage = composed(alone.rows).find((role) => role.id === last)?.stage ?? '';
+
+    assert.deepEqual(movesOf(alone, last), { stages: [stage], removeDisabled: true, removed: false },
+      `${last}, the last ${bucket} role ON, could be moved to another stage or removed on the page`);
+    assert.deepEqual(movesOf(another, last), { stages: ['plan', 'result', 'feature'], removeDisabled: false, removed: true },
+      `${last} could not be moved or removed with another ${bucket} role ON`);
+  });
+}

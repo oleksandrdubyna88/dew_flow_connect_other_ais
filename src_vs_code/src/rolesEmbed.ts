@@ -135,7 +135,9 @@ function rolesPressesScript(): string {
       if (!pressed || typeof pressed.closest !== 'function') { return; }
       for (const [selector, editOf] of rolesPresses) {
         const button = pressed.closest(selector);
-        if (button) { rolesPost(editOf(button), button, true); return; }
+        // A button drawn disabled posts nothing — a browser sends it no click, and the page says so itself rather than
+        // leaning on that (the last role ON's Remove, E5.1b's code round).
+        if (button) { if (!button.disabled) { rolesPost(editOf(button), button, true); } return; }
       }
     });`;
 }

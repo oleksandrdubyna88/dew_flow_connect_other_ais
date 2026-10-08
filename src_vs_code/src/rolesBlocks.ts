@@ -166,17 +166,20 @@ function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): 
 export function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions = OWN_PAGE): string {
   const shipped = isBuiltIn(role.id);
   const on = switchedOn(role, options.roleEnabled);
+  // Asked once per block, and answered for all three ways a role leaves its bucket: the switch, the stage picker and
+  // Remove (E5.1b's code round, finding 0) — the host refuses each, and the page offers none of them.
+  const last = lastOn(rows, role, options.roleEnabled);
 
   return `${detailsTag(role, on)}
   <summary>
 ${roleSummary(role, shipped)}
   </summary>
   <div class="fields">
-${roleFields(rows, role, texts, options.roleEnabled)}
+${roleFields(rows, role, texts, options.roleEnabled, last)}
   </div>
 ${promptBlocks(role, texts, options.promptAttr)}
   <button type="button" class="add" data-add-prompt="${escapeHtml(role.id)}">Add a prompt</button>
-  ${removeRoleButton(role.id, shipped)}
+  ${removeRoleButton(role.id, shipped, last)}
 </details>`;
 }
 
@@ -193,15 +196,14 @@ function roleSummary(role: RoleRow, shipped: boolean): string {
 
 /** What a role's fields say and allow: its name, its stage, its kind, its switch, and why any of them is fixed. */
 function roleFields(
-  rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, roleEnabled: Readonly<Record<string, boolean>>,
+  rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, roleEnabled: Readonly<Record<string, boolean>>, last: boolean,
 ): string {
   const shipped = isBuiltIn(role.id);
   const on = switchedOn(role, roleEnabled);
   const may = mayFlip(rows, role, on, roleEnabled);
-  const last = lastOn(rows, role, roleEnabled);
 
   return `${nameField(role, shipped)}
-${stageField(stageOf(role), shipped)}
+${stageField(stageOf(role), shipped, last)}
     ${programmingFlag(role, shipped)}
     ${activeFlag(on, may)}
     ${switchHint(may, last)}
@@ -232,14 +234,26 @@ const STAGE_OPTIONS: readonly (readonly [string, string])[] = [
   [FEATURE_STAGE, 'Feature review'],
 ];
 
-function stageField(stage: string, shipped: boolean): string {
-  const options = STAGE_OPTIONS.map(([value, label]) => `<option value="${value}"${stage === value ? ' selected' : ''}>${label}</option>`);
+/**
+ * The stage picker. For the last role ON in its bucket every OTHER stage is drawn disabled: moving it there would leave
+ * its bucket with no reviewer, which the host refuses (`rolesEdit.whyNotMoved`) — a choice the page offers only to have
+ * it refused after the fact is a choice the page should not have offered. Its own stage stays chosen.
+ */
+function stageField(stage: string, shipped: boolean, last: boolean): string {
+  const options = STAGE_OPTIONS.map(([value, label]) => stageOption(value, label, stage, last));
 
   return `    <label>Stage
       <select data-field="stage"${shipped ? ' disabled' : ''}>
         ${options.join('\n        ')}
       </select>
     </label>`;
+}
+
+/** One stage of the picker: chosen when it is the role's, and closed to the last role ON when it is not. */
+function stageOption(value: string, label: string, stage: string, last: boolean): string {
+  const own = stage === value;
+
+  return `<option value="${value}"${own ? ' selected' : ''}${last && !own ? ' disabled' : ''}>${label}</option>`;
 }
 
 function programmingFlag(role: RoleRow, shipped: boolean): string {
@@ -257,7 +271,7 @@ function switchHint(may: boolean, last: boolean): string {
   }
 
   return last
-    ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
+    ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, moving it to another stage or removing it, or the stage would have no reviewer in it at all.</p>'
     : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`;
 }
 
@@ -271,8 +285,14 @@ function promptBlocks(role: RoleRow, texts: Readonly<Record<string, string>>, pr
   return (role.prompts ?? []).map((p) => promptBlock(role, p, texts, promptAttr)).join('\n');
 }
 
-function removeRoleButton(roleId: string, shipped: boolean): string {
-  return shipped ? '' : `<button type="button" class="remove role" data-remove="${escapeHtml(roleId)}">Remove this role</button>`;
+/**
+ * Remove, for a role of the person's own — drawn disabled for the last role ON in its bucket, which the host would refuse
+ * to remove (`rolesEdit.removed`); the switch's hint above says why and what to do first.
+ */
+function removeRoleButton(roleId: string, shipped: boolean, last: boolean): string {
+  return shipped
+    ? ''
+    : `<button type="button" class="remove role" data-remove="${escapeHtml(roleId)}"${last ? ' disabled' : ''}>Remove this role</button>`;
 }
 
 /**
