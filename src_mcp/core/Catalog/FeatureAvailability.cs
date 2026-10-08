@@ -50,7 +50,7 @@ public sealed record ReleaseRange(Version From, Version Through)
 public sealed record FastModeRow(string Runtime, string Source, IReadOnlyList<string> Models, string Note)
 {
     /// <summary>
-    /// The releases that refuse to be told the STANDARD tier (todo/PLAN_codex_tier_floor.md): codex 0.110.0–0.130.0
+    /// The releases that refuse to be told the STANDARD tier (research/PLAN_codex_tier_floor.md): codex 0.110.0–0.130.0
     /// take only <c>fast</c> or <c>flex</c> for <c>service_tier</c> and fail the whole launch on <c>default</c>
     /// (research/RESULTS_codex_service_tier_versions_2026-10-07.md). Data beside the measurement that found it, so the
     /// next measured release is a file edit; <see cref="ReleaseRange.None"/> on every row that names none.

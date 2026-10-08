@@ -53,7 +53,7 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
 
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
-            // A codex consultant asks the same executable its `--version` before every turn (todo/PLAN_codex_tier_floor.md):
+            // A codex consultant asks the same executable its `--version` before every turn (research/PLAN_codex_tier_floor.md):
             // that is not the consultant's launch, and a scripted turn must neither answer it nor count it as one.
             if (request.Arguments is ["--version"])
             {

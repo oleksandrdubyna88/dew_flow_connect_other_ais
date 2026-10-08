@@ -5,7 +5,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// What each codex executable of one round said about the standard tier — asked once per distinct executable, before the
-/// round's roster is built (todo/PLAN_codex_tier_floor.md, change 3).
+/// round's roster is built (research/PLAN_codex_tier_floor.md, change 3).
 /// </summary>
 /// <remarks>
 /// <para><b>A value handed to the roster, not a lookup inside it.</b> <see cref="RosterBuilder.BuildWork"/> is synchronous

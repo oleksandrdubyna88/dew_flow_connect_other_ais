@@ -1238,7 +1238,7 @@ carries.
   `Usage` (cached count and markers included), `interrupted` when the turn threw. `QuestionResolution.For` and
   `RowAdmission.Admitted.Runtime` are typed `IConsultantRuntime`, which every arm already returned, so a row has no other
   road. Before that a question row launched once, so an antigravity `question-disk` row whose
-  `run_command` was denied ended "answered nothing" (empty 11 of 11 measured; continued, 6 of 6 answered on Windows and 0 of 3 in WSL, by the probe —
+  `run_command` was denied ended "answered nothing" (empty 11 of 11 measured; continued, it answered on Windows 6 of 6 in the follow-up runs (a scratch harness and the probe) and 3 of 3 through the product, in WSL 0 of 3 by the probe and 1 of 3 through the product —
   [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md)). `ConsultFailures.EmptyOf` is the
   silent launch's sentence WITHOUT the adapter's refusal reading, for a turn that was never continued.
 - **Billing.** `ConsultationUsage.OfTwoLaunches(cumulative, first, second)`: antigravity reports usage per
@@ -2309,7 +2309,7 @@ Which runtime and model has a tier is data: the `fastMode` block of `shared/feat
 when a row's `models` does not match its source — a `models` source lists its models and every other lists none —
 the extension's generator checks the same, `FAST_RULES`).
 
-### The codex floor: a release that refuses Off is not told Off (2026-10-07, todo/PLAN_codex_tier_floor.md)
+### The codex floor: a release that refuses Off is not told Off (2026-10-07, research/PLAN_codex_tier_floor.md)
 
 Measured (`research/RESULTS_codex_service_tier_versions_2026-10-07.md`): codex **0.110.0 through 0.130.0** take only
 `fast` or `flex` for `service_tier`, and refuse `-c service_tier=default` at config load — exit 1, before any request,

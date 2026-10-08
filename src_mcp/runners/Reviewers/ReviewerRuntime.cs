@@ -161,7 +161,7 @@ public sealed record ReviewerSettings(string Provider)
     /// <summary>
     /// For a <c>codex</c> vendor only: whether the INSTALLED CLI can be told the standard tier — read off its own
     /// <c>--version</c> by <see cref="CodexTierSupport.ProbeAsync(IProcessLauncher, string, string, CancellationToken)"/>
-    /// before the launch is built (todo/PLAN_codex_tier_floor.md).
+    /// before the launch is built (research/PLAN_codex_tier_floor.md).
     /// </summary>
     /// <remarks>
     /// <para>Launch data beside <see cref="ClaudeCli"/>, for the same reason: it changes what is SENT, not what the vendor
@@ -433,7 +433,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     /// override), which has no codex service tier. Unquoted, as <c>sandbox_mode=read-only</c> is (CodexConsultant).
     /// Measured 2026-10-07 on codex-cli 0.160.0: the key is read and checked per model; a value the model does not
     /// advertise is dropped with a warning, never a refusal (research/RESULTS_fast_mode_measured_2026-10-07.md).
-    /// <para>Except where the installed release cannot take it (todo/PLAN_codex_tier_floor.md): codex 0.110.0–0.130.0
+    /// <para>Except where the installed release cannot take it (research/PLAN_codex_tier_floor.md): codex 0.110.0–0.130.0
     /// refuse <c>default</c> at config load and fail the whole launch, so an Off row there is sent NOTHING — the release has
     /// no way to say "standard" (<see cref="ReviewerSettings.CodexTier"/>, probed per launch). A release nobody asked, or
     /// that could not say, is sent <c>default</c> as before: omitting it would hand a person's own

@@ -22,6 +22,8 @@ test('an untouched installation asks for an explanation in English, and waits on
     promptChoice: '',
     prompts: [],
     models: [],
+    // Nothing moved, so no older build's edit to raise (R7).
+    conflicts: [],
     language: 'en',
     autoSend: 'keyboard',
     model: '',

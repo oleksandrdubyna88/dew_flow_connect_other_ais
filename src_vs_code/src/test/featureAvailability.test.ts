@@ -153,7 +153,7 @@ test('a listed source needs levels and a measurement; another source holds none'
   assert.equal(generate({ ...s, effort: codexListed }).status, 1);
 });
 
-// The codex releases that refuse `service_tier=default` (todo/PLAN_codex_tier_floor.md, change 2): coai-mcp reads the
+// The codex releases that refuse `service_tier=default` (research/PLAN_codex_tier_floor.md, change 2): coai-mcp reads the
 // range, the extension does not use it yet — but both halves accept and check the same file, so a range one half would
 // refuse can never reach the other. The C# twin is `FastModeIsDataTests.AMalformedRange_RefusesTheSeed_*`.
 /** The seed with one fast-mode row's `refusesStandard` replaced — or removed, when `range` is undefined. */

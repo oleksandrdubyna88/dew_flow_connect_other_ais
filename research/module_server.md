@@ -1375,9 +1375,9 @@ unchanged.
 
 **What it does not fix.** The answer a continued agy row gives is weak: plan mode has only `view_file` (no directory
 listing), so on a question over a whole folder the model names a command for the caller to run instead of searching —
-an answer the caller can act on, where there was none. **In WSL it does not answer at all** (0 of 3 by the probe, 2026-10-07; no WSL product run with 0.44.0 yet): told
-the shell will not come, the model reads outside the root looking for paths (`~/.bash_history`), agy refuses the
-`read_file`, and the row ends `failed` on the read-denied reason — no third launch, by `ConsultantTurn`'s rule. The
+an answer the caller can act on, where there was none. **In WSL it answers only sometimes** (1 of 3 through the released product, 2026-10-08; 0 of 3 by the probe; Windows 3 of 3 through the product): when it fails, agy
+refuses a `read_file` — the probe showed the model, told the shell will not come, reading outside the root looking for
+paths (`~/.bash_history`) — and the row ends `failed` on the read-denied reason; no third launch, by `ConsultantTurn`'s rule. The
 `Toolbox` sentence the stuck consultant's prompt carries is not in the question prompts.
 
 ## The round engine is its own unit (2026-09-25)
@@ -6539,7 +6539,7 @@ row's fast mode*). `--features` lists `fastMode`, so the extension sends the fie
 by a claude account whose usage credits are off, and a codex model that does not advertise the tier drops it with a
 warning (research/RESULTS_fast_mode_measured_2026-10-07.md).
 
-**An Off codex row on a release that refuses the standard tier** (codex 0.110.0–0.130.0, todo/PLAN_codex_tier_floor.md)
+**An Off codex row on a release that refuses the standard tier** (codex 0.110.0–0.130.0, research/PLAN_codex_tier_floor.md)
 still reports `fast: "off"` — the requested state — and its `note` says beside the health sentence that this release
 cannot be told the standard tier, so its launches carry no tier at all (module_runners.md, *The codex floor*). Read off
 the version the health probe ALREADY asked for (`CodexTierSupport.OfVersion(health.Version)`), so `--providers` runs one

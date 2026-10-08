@@ -31,7 +31,7 @@ const MODELS = [
 
 const CHAT: ChatSettings = {
   prompt: 'Explain, the words', promptChoice: '', prompts: [prompt('p1', 'Explain', true), prompt('p2', 'Review')],
-  models: MODELS, language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '',
+  models: MODELS, conflicts: [], language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '',
 };
 
 function stateWith(chat: Partial<ChatSettings> = {}, over: Partial<PanelState> = {}): PanelState {

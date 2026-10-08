@@ -69,7 +69,7 @@ public sealed class FastModeIsDataTests
     }
 
     /// <summary>
-    /// codex 0.110.0–0.130.0 refuse <c>service_tier=default</c> at config load (todo/PLAN_codex_tier_floor.md, change 2) —
+    /// codex 0.110.0–0.130.0 refuse <c>service_tier=default</c> at config load (research/PLAN_codex_tier_floor.md, change 2) —
     /// and the range is the file's, beside the measurement, compared as numbers: <c>0.12.0</c> is NOT in it, which a
     /// string comparison ("0.110" &lt; "0.12" &lt; "0.130") would say it is.
     /// </summary>
