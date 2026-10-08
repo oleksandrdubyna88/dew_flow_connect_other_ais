@@ -5,11 +5,11 @@ import { staticKey, type PanelState } from '../panelView';
 import { everyPageHtml } from './panelPages';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
-import { DEFAULT_VENDORS, LOCAL_PRESET } from '../vendors';
+import { DEFAULT_VENDORS, LOCAL_PRESET, type Vendor } from '../vendors';
 import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun, type SendRun } from '../roundsDb';
 import { bugzBody, collectLabel, lastRunLine } from '../bugzView';
 import { collectArgs } from '../bugzCollect';
-import { RANKING_VENDORS, mayRank } from '../bugzPick';
+import { RANKING_VENDORS, bugzPickOf, mayRank, rankingRuleOf, type RankingRule } from '../bugzPick';
 
 /**
  * The Bugz section — its pure decisions, and its controls RUN rather than read.
@@ -99,6 +99,16 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   latestServerVersion: '',
   ...over,
 });
+
+/** A catalog row ticked Bugz, on a runtime — what the picker's rows are since E5.1 step 2. */
+function ticked(id: string, model: string, runtime: Vendor['runtime']): Vendor {
+  return { ...LOCAL_PRESET, id, model, runtime, uses: ['bugz'] };
+}
+
+/** What the pick offers from these rows under this rule — the ranking allowlist is the pick's own (E5.1's code round). */
+function offeredBy(rows: readonly Vendor[], rule: RankingRule): readonly string[] {
+  return bugzPickOf(rows, '', (row) => [row.model], rule).offered.map((one) => one.id);
+}
 
 /** What the script posted, in order. */
 interface Posted {
@@ -314,16 +324,13 @@ test('an unknown run state is not mistaken for a finished one', () => {
  * on the wire, and the panel's own is only the fallback for a server too old to send one.</p>
  */
 test('the picker follows the server it is actually talking to', () => {
-  const models = [{ id: 'onprem/qwen', label: 'on-prem' }, { id: 'local/qwen', label: 'here' }];
-  const newer = { ...corpus(RUN, 1), rankingVendors: ['local', 'onprem'] };
+  // The allowlist is the PICK's rule since E5.1's code round (findings 0 and 7), so it is asked of `bugzPickOf`.
+  const rows = [ticked('onprem', 'qwen', 'codex'), ticked('local', 'qwen', 'local')];
 
-  assert.match(bugzBody({ corpus: newer, models, model: '', server: '' }), /onprem\/qwen/);
+  assert.deepEqual(offeredBy(rows, rankingRuleOf(['local', 'onprem'], false)), ['onprem/qwen', 'local/qwen']);
 
   // And a server too old to say falls back to what this build knows, rather than to nothing.
-  const older = { ...corpus(RUN, 1), rankingVendors: [] };
-  const html = bugzBody({ corpus: older, models, model: '', server: '' });
-  assert.ok(!html.includes('onprem/qwen'), 'an unknown vendor is not offered on a guess');
-  assert.match(html, /local\/qwen/);
+  assert.deepEqual(offeredBy(rows, rankingRuleOf([], false)), ['local/qwen'], 'an unknown vendor is not offered on a guess');
 });
 
 test('a corpus from a server too old to have runs still reads', () => {
@@ -487,26 +494,18 @@ test('pressing Send posts the command the provider dispatches on', () => {
 // ---------------------------------------------------------------- ranked by runtime (PLAN_one_model_catalog.md E2.1)
 
 test('a binary that ranks by runtime is offered every local instance, whatever the row is called', () => {
-  const models = [
-    { id: 'local-2/qwen3.5', label: 'qwen3.5 — local-2', runtime: 'local' },
-    { id: 'bugz-local/qwen3.5', label: 'qwen3.5 — bugz-local', runtime: 'local' },
-  ];
-  const html = bugzBody({ corpus: corpus(RUN, 1), models, model: '', server: '', byRuntime: true });
+  const rows = [ticked('local-2', 'qwen3.5', 'local'), ticked('bugz-local', 'qwen3.5', 'local')];
 
-  assert.match(html, /local-2\/qwen3\.5/u);
-  assert.match(html, /bugz-local\/qwen3\.5/u, 'the migration\'s own row is offered too');
+  assert.deepEqual(offeredBy(rows, rankingRuleOf(['local'], true)), ['local-2/qwen3.5', 'bugz-local/qwen3.5'],
+    'the migration\'s own row is offered too');
 });
 
 test('an older binary still matches the row id, so the picker offers only what it will accept', () => {
-  const models = [{ id: 'local-2/qwen3.5', label: 'qwen3.5 — local-2', runtime: 'local' }];
-
-  assert.ok(!bugzBody({ corpus: corpus(RUN, 1), models, model: '', server: '' }).includes('local-2/qwen3.5'));
+  assert.deepEqual(offeredBy([ticked('local-2', 'qwen3.5', 'local')], rankingRuleOf(['local'], false)), []);
 });
 
 test('a row merely CALLED local, on a cloud runtime, is not offered by a binary that ranks by runtime', () => {
-  const models = [{ id: 'local/gpt-5', label: 'gpt-5 — local', runtime: 'codex' }];
-
-  assert.ok(!bugzBody({ corpus: corpus(RUN, 1), models, model: '', server: '', byRuntime: true }).includes('local/gpt-5'));
+  assert.deepEqual(offeredBy([ticked('local', 'gpt-5', 'codex')], rankingRuleOf(['local'], true)), []);
 });
 
 test('the collector is told the row\'s runtime only when the binary ranks by it', () => {

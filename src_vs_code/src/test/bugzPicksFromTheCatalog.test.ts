@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bugzCollectRefusal, bugzPickOf } from '../bugzPick';
+import { bugzCollectRefusal, bugzPickOf, rankingRuleOf } from '../bugzPick';
 import type { CatalogUse } from '../catalogFields';
 import type { LocalEngine } from '../localEngines';
 import { panelHtml, type PanelState } from '../panelView';
@@ -101,6 +101,17 @@ test('a pick whose row is no longer ticked Bugz is drawn as that pick, stranded 
   assert.match(section.text(), /no longer ticked Bugz on Models/u);
 });
 
+test('a ticked row the ranking allowlist refuses is neither offered nor chosen — its pick is drawn stranded (code round, findings 0 and 7)', () => {
+  // The allowlist is the pick's own rule now, not a second filter in the view: a pick it refuses is stranded, and the
+  // collect refuses it by the same reading (`bugzCollect.test.ts`).
+  const cloud: Vendor = { ...localRow('cloud', 'gpt-5', ['bugz']), runtime: 'codex' };
+  const section = bugzSection(stateWith([cloud, localRow('local', 'qwen3.5', ['bugz'])], 'cloud/gpt-5'));
+
+  assert.deepEqual(choosable(section), ['local/qwen3.5'], 'a row the server would refuse is offered');
+  assert.deepEqual(selected(section), ['cloud/gpt-5'], 'what is configured is what is shown');
+  assert.match(section.text(), /cloud\/gpt-5 is no longer ticked Bugz on Models/u);
+});
+
 test('a pick whose row was removed is stranded the same way', () => {
   const section = bugzSection(stateWith([localRow('local-2', 'gemma4:27b')], 'gone/qwen3.5'));
 
@@ -111,12 +122,13 @@ test('a pick whose row was removed is stranded the same way', () => {
 test('a collect is refused with a sentence naming Models — for a stranded pick and for none; never for a pick that holds', () => {
   const modelsOf = (row: Vendor): readonly string[] => [row.model, ...(ENGINES[row.id]?.models ?? []).map((one) => one.id)];
   const ticked = [localRow('local', 'qwen3.5'), localRow('local-2', 'gemma4:27b', ['bugz'])];
+  const rule = rankingRuleOf(['local'], true);
 
-  assert.match(bugzCollectRefusal(bugzPickOf(ticked, 'local/qwen3.5', modelsOf)), /local\/qwen3\.5[\s\S]*Models/u);
-  assert.match(bugzCollectRefusal(bugzPickOf(ticked, '', modelsOf)), /No model is ticked for Bugz[\s\S]*Models/u);
-  assert.match(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], '', modelsOf)), /Models/u);
-  assert.equal(bugzCollectRefusal(bugzPickOf(ticked, 'local-2/gemma4:27b', modelsOf)), '');
-  assert.equal(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], 'local/llama4:17b', modelsOf)), '', 'the never-ticked install collects as before');
+  assert.match(bugzCollectRefusal(bugzPickOf(ticked, 'local/qwen3.5', modelsOf, rule)), /local\/qwen3\.5[\s\S]*Models/u);
+  assert.match(bugzCollectRefusal(bugzPickOf(ticked, '', modelsOf, rule)), /No model is ticked for Bugz[\s\S]*Models/u);
+  assert.match(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], '', modelsOf, rule)), /Models/u);
+  assert.equal(bugzCollectRefusal(bugzPickOf(ticked, 'local-2/gemma4:27b', modelsOf, rule)), '');
+  assert.equal(bugzCollectRefusal(bugzPickOf([localRow('local', 'qwen3.5')], 'local/llama4:17b', modelsOf, rule)), '', 'the never-ticked install collects as before');
 });
 
 test('T7: the Bugz model is not written into the settings file\'s environment block — nothing in coai-mcp reads it', () => {

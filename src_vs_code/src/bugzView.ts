@@ -1,7 +1,7 @@
 import { BugCorpus, CollectRun, EMPTY_CORPUS, hasRun, isRunning, sending } from './roundsDb';
 import { sendLabel, waiting } from './bugsSend';
 import { ModelChoice } from './models';
-import { allowedBy, RANKING_VENDORS, type RankingChoice } from './bugzPick';
+import type { RankingChoice } from './bugzPick';
 
 /**
  * The Bugz section: what the corpus holds, and what the last run made of it.
@@ -21,14 +21,10 @@ import { allowedBy, RANKING_VENDORS, type RankingChoice } from './bugzPick';
 /** What the section needs to draw itself. */
 export interface BugzViewState {
   readonly corpus: BugCorpus;
+  /** What the picker offers — already only what the ranking allowlist accepts (`bugzPick.bugzPickOf`). */
   readonly models: readonly RankingChoice[];
   readonly model: string;
   readonly server: string;
-  /**
-   * Whether the installed coai-mcp ranks by the row's RUNTIME (`--features` lists `bugzRuntime`, E2.1). Absent or
-   * false: it matches the row id, so the picker offers only what that binary will accept.
-   */
-  readonly byRuntime?: boolean;
   /**
    * The saved pick when it no longer holds — its row unticked Bugz or gone (`bugzPick.ts`); absent or '' when it holds.
    * Drawn as what it is, chosen and disabled, so what is configured is what is shown (E5.1 step 2, the Chat tab's rule).
@@ -175,15 +171,10 @@ export function bugzBody(state: BugzViewState = {
   // live upload and let a second start. (Plan round, all three reviewers.)
   const send = state.corpus.lastSend;
   const busy = sending(send);
-  // THIS server's list when it said, the panel's own when it is too old to. An installed
-  // extension and an installed server can be of different ages, and only the server can say what
-  // it will actually accept this minute.
-  const vendors = state.corpus.rankingVendors.length > 0
-    ? state.corpus.rankingVendors
-    : RANKING_VENDORS;
-  const offered = state.models.filter((m) => allowedBy(m, vendors, state.byRuntime === true));
-
-  const picker = pickerHtml(offered, state.model, state.stranded ?? '');
+  // What the pick offers is already what the ranking allowlist accepts — THIS server's list when it said, the panel's own
+  // when it is too old to (`bugzPick.rankingRuleOf`) — so the view draws it as it is: one rule, in the domain (E5.1's
+  // code round, findings 0 and 7), where this used to filter a second time.
+  const picker = pickerHtml(state.models, state.model, state.stranded ?? '');
 
   return `<div class="field">
   <div class="hint">${escape(lastRunLine(state.corpus))}</div>

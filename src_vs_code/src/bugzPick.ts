@@ -71,14 +71,31 @@ export interface BugzPick {
 }
 
 /**
+ * Who may rank: the vendors the installed server says, or this build's own list from a server too old to say — matched
+ * by the row's runtime for a binary that ranks by it, else by the row id. Part of the PICK, not a filter of the view
+ * (E5.1's code round, findings 0 and 7): a ticked row this refuses is neither offered nor chosen, so its pick is
+ * stranded and the collect refuses it by the same reading — one rule, where the view used to apply a second.
+ */
+export interface RankingRule {
+  readonly vendors: readonly string[];
+  readonly byRuntime: boolean;
+}
+
+/** The rule from what the server said: its own list, or {@link RANKING_VENDORS} when it is too old to send one. */
+export function rankingRuleOf(serverVendors: readonly string[], byRuntime: boolean): RankingRule {
+  return { vendors: serverVendors.length > 0 ? serverVendors : RANKING_VENDORS, byRuntime };
+}
+
+/**
  * @param rows every catalog row — a catalog-only `bugz-local` included, which the reviewer list hides
  * @param saved what `coai.bugzModel` holds: `<row id>/<model>`
  * @param modelsOf the models a row has: its own, and what its engine was last seen serving
+ * @param rule who may rank — a row it refuses is never offered
  */
-export function bugzPickOf(rows: readonly Vendor[], saved: string, modelsOf: (row: Vendor) => readonly string[]): BugzPick {
+export function bugzPickOf(rows: readonly Vendor[], saved: string, modelsOf: (row: Vendor) => readonly string[], rule: RankingRule): BugzPick {
   const ticked = rows.filter((row) => (row.uses ?? []).includes('bugz'));
   const pool = ticked.length > 0 ? ticked : rows.filter((row) => names(saved, row, modelsOf));
-  const offered = pool.map((row) => choiceOf(row, saved, modelsOf));
+  const offered = pool.map((row) => choiceOf(row, saved, modelsOf)).filter((one) => allowedBy(one, rule.vendors, rule.byRuntime));
   const chosen = offered.some((one) => one.id === saved) ? saved : '';
 
   return { offered, chosen, stranded: chosen.length === 0 ? saved : '' };
@@ -106,7 +123,7 @@ export interface BugzInputs {
 
 /** The pick these inputs make. */
 export function bugzPickFrom(inputs: BugzInputs): BugzPick {
-  return bugzPickOf(inputs.rows, inputs.saved, modelsOfRows(inputs.engines));
+  return bugzPickOf(inputs.rows, inputs.saved, modelsOfRows(inputs.engines), rankingRuleOf(inputs.serverVendors, inputs.byRuntime));
 }
 
 /**

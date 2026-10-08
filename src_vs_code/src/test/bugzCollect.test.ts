@@ -66,6 +66,18 @@ test('a pick that holds starts the collect with that model and the row\'s runtim
   assert.deepEqual(run.started, [['--collect-bugs', '--model', 'local-2/gemma4:27b', '--runtime', 'local']]);
 });
 
+test('a ticked row the ranking allowlist refuses is refused by name, and NO collect starts (code round, findings 0 and 7)', async () => {
+  // Ticked by hand in settings.json — the Models tick refuses Bugz off this machine — on a row the server would refuse
+  // to rank with: the panel refuses it first, by name, rather than running a collect the collector will turn down.
+  const cloud: Vendor = { ...localRow('cloud', 'gpt-5', ['bugz']), runtime: 'codex' };
+  const run = recording(inputs([cloud], 'cloud/gpt-5'));
+
+  await collectWithPick(run.ports);
+
+  assert.deepEqual(run.started, [], 'a collect started on a row the ranking allowlist refuses');
+  assert.match(run.refused[0] ?? '', /cloud\/gpt-5/u);
+});
+
 test('the provider\'s collect goes through collectWithPick: its refusal is the no-ranking-model notice, its start the one spawn', () => {
   // The ports are built in the provider, which only an extension host constructs — so their wiring is pinned by the
   // source: one call into the decision, the refusal routed to `no-ranking-model`, and no spawn of `--collect-bugs`

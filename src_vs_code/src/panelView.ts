@@ -77,7 +77,7 @@ import { ProbeResult, claudeNote } from './claudeModels';
 import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody } from './bugzView';
-import { bugzPickOf, modelsOfRows } from './bugzPick';
+import { bugzPickFrom } from './bugzPick';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
@@ -583,15 +583,20 @@ export function questionConsultantSection(state: PanelState, pickFrom?: readonly
 /** The Bugz section: the corpus, the ranking picker and the ingest server. */
 function bugzSection(state: PanelState): string {
   // The rows ticked Bugz on Models (E5.1 step 2) — every catalog row read, a catalog-only `bugz-local` included, since
-  // the reviewer list hides those. The view still keeps to what the ranking allowlist accepts: the pass reads findings
-  // that are not anonymised, and the collector refuses anything else anyway.
-  const pick = bugzPickOf(state.catalogRows ?? state.vendors, state.settings.bugzModel, modelsOfRows(state.localEngines));
+  // the reviewer list hides those — and only those the ranking allowlist accepts: the pass reads findings that are not
+  // anonymised, and the collector refuses anything else anyway.
+  const pick = bugzPickFrom({
+    rows: state.catalogRows ?? state.vendors,
+    saved: state.settings.bugzModel,
+    engines: state.localEngines,
+    serverVendors: (state.bugz ?? EMPTY_CORPUS).rankingVendors,
+    byRuntime: state.rankByRuntime === true,
+  });
 
   return bugzBody({
     corpus: state.bugz ?? EMPTY_CORPUS,
     models: pick.offered,
     stranded: pick.stranded,
-    byRuntime: state.rankByRuntime === true,
     // From CONFIGURATION, which is where the picker writes. They were read from panel fields
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
