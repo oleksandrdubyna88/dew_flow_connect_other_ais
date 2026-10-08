@@ -1169,7 +1169,9 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
       vendor's failure not shown, confinement and the snippet, escaping, Copy, a copied label redrawn alone, side
       headings) runs against the current page today (`:58-60`); it runs against the new tab too, from one table.
    **Tests, first** for 1 (RED: the new tab draws no Check), 2 (RED: the last ON code role can be switched off on the
-   new page and by the host), and the identity case of 1; 3 and 4 add page-running coverage of behaviour that already
+   new page and by the host — and, per the plan round's finding, the same attempt on the last ON role of EACH bucket,
+   plan, code, documents and feature, on the page and at the host guard, from one table), and the identity case of 1;
+   3 and 4 add page-running coverage of behaviour that already
    works, so their teeth are proven by breaking the code they hold, not by a red start. Docs: `research/module_extension.md`
    (the shared health helper; the one ON rule), `research/module_tests.md` (the places and their tests). After E5.1b,
    E5.1c (steps 4–5) proceeds: its premise then holds.
