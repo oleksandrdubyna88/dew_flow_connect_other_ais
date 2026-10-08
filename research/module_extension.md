@@ -11352,28 +11352,40 @@ draw their way to the editor through `editorWay`: on the current page the old `d
 button inside a pane. `catalogSections` calls `gateBody(state, 'new')`; `PROMPTS_HALVES.stages` passes `'new'`, `both`
 passes `'current'`.
 
-**Step 2 — the sidebar's Bugz picker reads the catalog** (`bugzPick.ts`, pure; drawn by `panelView.bugzSection`, refused
-by `PanelProvider.refusedBugzPick`). It lists the rows ticked Bugz on Models — every catalog row read, a catalog-only
-`bugz-local` included — each as `row/model`, which is what the Models tick already writes to `coai.bugzModel`
-(`catalogCommands.bugzMoved`), so the collect's `--model` is unchanged. The saved pick has three readings:
+**Step 2 — the sidebar's Bugz picker reads the catalog** (`bugzPick.ts`, pure; drawn by `panelView.bugzSection`, the
+collect decided by `bugzCollect.collectWithPick`). It lists the rows ticked Bugz on Models — every catalog row read, a
+catalog-only `bugz-local` included — that the ranking allowlist accepts, each as `row/model`, which is what the Models
+tick already writes to `coai.bugzModel` (`catalogCommands.bugzMoved`), so the collect's `--model` is unchanged. The
+saved pick has three readings:
 
 ```mermaid
 flowchart TD
-  S[coai.bugzModel = row/model] --> T{any row ticked Bugz?}
-  T -->|yes| Y{names a ticked row<br/>and one of its models?}
-  T -->|no| N{names a catalog row<br/>and one of its models?}
+  I[bugzInputsOf: rows, saved pick, engines, server's list, by-runtime] --> T{any row ticked Bugz?}
+  T -->|yes| Y{names a ticked row the allowlist accepts<br/>and one of its models?}
+  T -->|no| N{names a catalog row the allowlist accepts<br/>and one of its models?}
   Y -->|yes| C[chosen: shown selected, collect runs]
   N -->|yes| C2[chosen: the never-ticked install keeps its model]
-  Y -->|no| X[stranded: drawn chosen + disabled, collect REFUSED by name]
+  Y -->|no| X[stranded: said; drawn chosen + disabled only beside another model; collect REFUSED by name]
   N -->|no| X
-  S -->|empty| E[no pick: 'Pick a model' / 'No model is ticked for Bugz', collect REFUSED]
+  I -->|empty pick| E{a model offered?}
+  E -->|yes| P['Pick a ranking model in the Bugz section before collecting.']
+  E -->|no| Q['No model is ticked for Bugz' — Settings › Models]
 ```
 
 "One of its models" is the row's own model or any model its engine was last seen serving (`modelsOfRows(localEngines)`),
 so a pick made in the old picker (`<engine row>/<any engine model>`) still holds. Unticking a row clears a pick that was
-that row's (`heldElsewhere`), so the never-ticked reading cannot bring back a pick a person took away. The refusal
-(`bugzCollectRefusal`) is a notification `no-ranking-model` naming Settings › Models — a collect is never run with an
-empty or stale `--model` (it used to run unranked with none). The view keeps the ranking allowlist filter. **T7:**
+that row's (`heldElsewhere`), so the never-ticked reading cannot bring back a pick a person took away.
+
+The code round of E5.1a made it ONE rule and ONE reader. **The allowlist** is the pick's own (`RankingRule`,
+`rankingRuleOf`: the server's `rankingVendors`, or `RANKING_VENDORS` from a server too old to say; by the row's runtime
+for a binary that ranks by it, else by row id): a ticked row it refuses is neither offered nor chosen, so its pick is
+stranded and the collect refuses it — `bugzView` no longer filters a second time. **The reader**, `bugzInputsOf`, is
+what `bugzSection` draws from and what the provider's collect reads, the provider building its reads as the render does
+(`vendors` the reviewers, `catalogRows` every row). **The collect** is `collectWithPick(ports)`: the provider hands its
+reads, the `no-ranking-model` notice and the one spawn through `serverRun`; a pick that does not hold is refused by its
+sentence and nothing starts (it used to run unranked with none), else `collectArgs` (moved here from the view) starts it.
+The domain (`bugzPick`, `bugzCollect`) imports no view: `RankingChoice`, `RANKING_VENDORS`, `allowedBy` and `mayRank`
+live in `bugzPick.ts`. A stranded pick with nothing else to offer draws no picker and no "pick one here". **T7:**
 `COAI_BUGZ_MODEL` left the settings file's environment block (`settingsShape.envBlock`) — nothing in `src_mcp` or `shared`
 read it; `bugzModel` stays a setting and stays in the migration's backup (T5).
 

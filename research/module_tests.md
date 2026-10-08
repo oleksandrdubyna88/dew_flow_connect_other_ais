@@ -2993,7 +2993,29 @@ The flows and the tests holding them, as shipped (steps 4–5 stopped — `resea
   repointed or pinned (the commit of step 3 lists which read what). `paneIn` and `sectionHtml` throw for a place no page
   draws, and find only start tags.
 
-**Not covered.** The provider's refusal path itself (`refusedBugzPick` → `notifyAndAsk`) runs only in an extension host;
-the pure decision it calls is what the tests hold. The `data-goto` press in a real editor (a host cannot reach a
-webview's DOM). Step 5's prerequisite — every place of the new page held by a test that runs the page and works one of
-its controls — was mapped (the plan's progress line) but not completed, since step 5 is stopped.
+**The code round's findings** (E5.1a, all red first):
+- `bugzCollect.test.ts` — `collectWithPick` RUN with in-memory ports: a stranded pick and no pick are refused by their
+  sentence and start nothing (red with it stubbed to start: "a collect started with a pick nobody holds", "a collect
+  started with no model"); a holding pick starts `--collect-bugs --model … --runtime local`; a ticked row the ranking
+  allowlist refuses is refused (red: "a collect started on a row the ranking allowlist refuses"); ONE state built as the
+  render builds it draws a catalog-only `bugz-local` chosen AND collects it through `bugzInputsOf` (red, reader stubbed to
+  the reviewer list: "the collect refused the pick the sidebar shows chosen"); and source pins on the provider — its
+  `collectBugs` goes through `collectWithPick` with the `no-ranking-model` notice and builds no arguments itself, its
+  reads go through `bugzInputsOf` with every catalog row.
+- `bugzPicksFromTheCatalog.test.ts` — the allowlist-refused row's pick drawn stranded; the two no-pick sentences ("Pick a
+  ranking model in the Bugz section before collecting." when a model is offered; red: "a model IS ticked — the sentence
+  sends the person to Models anyway"); a stranded pick beside nothing drawn with no `<select>` and no "pick one here",
+  nor in the refusal (red: "a picker drawn with nothing in it to choose"). `bugzSection.test.ts`'s allowlist tests ask
+  `bugzPickOf` with rows and a rule now.
+- `panelPageHarness.test.ts` — a fixture opening `models`, `reviews/commands` or `setup/team` runs the Settings page on
+  that place (red: "models ran the sidebar, not the Settings page"); no existing fixture named a place by its own id.
+- **In a real editor** — `test/host/bugzCollectScenario.ts`: `coai.bugzModel` written to the real user settings
+  (stranded, then empty), read back by the provider's readers into `bugzInputsOf`, refused by `collectWithPick` with
+  nothing started. Teeth: planted to start first, it failed 'a collect started with the pick "gone/qwen3.5" read from
+  the real settings'.
+
+**Not covered.** The provider's own ports — the notice actually shown, no process spawned — because the provider is
+built only by the bundled extension's `ExtensionContext`: they are pinned by source, and the decision they feed is run.
+A collect that does start (it spawns coai-mcp against the window's database). The `data-goto` press in a real editor (a
+host cannot reach a webview's DOM). Step 5's prerequisite — every place of the new page held by a test that runs the page
+and works one of its controls — was mapped (the plan's progress line) but not completed; it is E5.1b/E5.1c's.

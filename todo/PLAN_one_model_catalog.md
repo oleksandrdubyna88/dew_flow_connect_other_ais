@@ -1136,6 +1136,23 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    allow rule and Copy), the new page's last-role refusal counting `roleEnabled` as the current page does, and the
    page-running tests owed for setup/team and setup/mcp — its own design and plan round; **E5.1c** — steps 4 and 5,
    after E5.1b, when the premise holds.
+   **E5.1a's code round** (proceed, 8 of 8 reviewers; 8 findings, all accepted, each fixed red first on the same
+   branch): (0, 7) the ranking allowlist is the pick's own rule — `bugzPickOf` takes a `RankingRule`
+   (`rankingRuleOf`: the server's list, or `RANKING_VENDORS` from a server too old to say), `bugzView` filters no more;
+   red "a collect started on a row the ranking allowlist refuses" and "what is configured is what is shown". (1) One
+   reader, `bugzPick.bugzInputsOf`, for the sidebar and the collect, the provider building its reads as the render does;
+   red (reader stubbed to the reviewer list) "the collect refused the pick the sidebar shows chosen", and the source pin
+   "the collect reads the pick by a reader of its own". (2) `RankingChoice`, the allowlist and `mayRank` moved into
+   `bugzPick.ts`, `collectArgs` into `bugzCollect.ts`: the domain imports no view. (3) No pick with a model ticked says
+   "Pick a ranking model in the Bugz section before collecting."; red "a model IS ticked — the sentence sends the person
+   to Models anyway". (4) The page harness opens a place named by its own id (`models`, `reviews/commands`) on the
+   Settings page; red "models ran the sidebar, not the Settings page"; no existing test was reading the sidebar by it.
+   (5) A stranded pick with nothing else to offer is said, with no inert picker and no "pick one here" (the refusal
+   too); red "a picker drawn with nothing in it to choose". (6) The collect's decision is `bugzCollect.collectWithPick`
+   over ports — the provider builds them — run by `bugzCollect.test.ts` (stranded, none, holding, refused row; red with
+   it stubbed to start: "a collect started with a pick nobody holds", "a collect started with no model") and by a real-
+   editor scenario reading the real settings (teeth: planted to start first, it failed "a collect started with the pick
+   "gone/qwen3.5" read from the real settings"); the provider's own ports are pinned by source, not run.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
