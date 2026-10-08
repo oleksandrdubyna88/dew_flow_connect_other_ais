@@ -7606,7 +7606,7 @@ A default, never a write, because the operator's rule was "if people have someth
 The first edit of a default phrase writes the whole list to the person's settings; from then on it is theirs. Seeding
 on activation was rejected: it writes into everyone's settings and, with `[]` as the default, cannot tell "never had
 any" from "removed them all". The setting's description and the Phrases help (five languages) say the examples are there
-until a list of one's own is saved. Plan: `todo/PLAN_default_phrases.md`.
+until a list of one's own is saved. Plan: `research/PLAN_default_phrases.md`.
 
 ### A phrase is a row a person wrote, and the rules for one already existed (2026-09-14)
 

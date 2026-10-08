@@ -5,7 +5,7 @@ import { phrasesFrom } from '../../phrases';
 import { rowsAfter, rowsOf } from '../../phrasesEdit';
 
 /**
- * The default phrases in a REAL editor (todo/PLAN_default_phrases.md; its plan round, finding 1).
+ * The default phrases in a REAL editor (research/PLAN_default_phrases.md; its plan round, finding 1).
  *
  * <p><b>What it drives for real.</b> The shipped extension, activated, and `coai.phrases` in the real user settings, read
  * back through VS Code's configuration layers the way the panel (`panelProvider.ts`) and the phrases tab

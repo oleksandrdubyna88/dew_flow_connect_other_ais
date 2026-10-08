@@ -879,7 +879,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: aBugzCollectIsRefusedInARealEditor,
   },
   {
-    // todo/PLAN_default_phrases.md, its plan round's finding 1: the seven defaults read with nothing saved, an emptied
+    // research/PLAN_default_phrases.md, its plan round's finding 1: the seven defaults read with nothing saved, an emptied
     // list read back EMPTY, and a person's own list left alone — through the real configuration layers.
     name: 'the default phrases appear with nothing saved, and an emptied or own list is left alone',
     run: theDefaultPhrasesInARealEditor,

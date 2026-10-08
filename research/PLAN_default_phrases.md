@@ -1,9 +1,18 @@
 # PLAN — a fresh install starts with seven useful phrases
 
-> Status: **plan only, nothing implemented yet, 2026-10-08.** Scope: the `coai.phrases` default in
-> `src_vs_code/package.json`, one test file, the Phrases help section in five languages, docs.
+> Status: **IMPLEMENTED, 2026-10-08** (branch `feat/default-phrases`; no release yet — a release needs the operator's
+> OK). Scope: the `coai.phrases` default in `src_vs_code/package.json`, one test file, the Phrases help section in five
+> languages, docs.
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Deviations: the plan round's two findings were accepted — the docs say the defaults reach anyone WITHOUT a saved
+> value (existing users who never saved phrases too, which is the operator's rule), and an extension-host scenario
+> (`host/defaultPhrasesScenario.ts`) does the round trip through real configuration layers instead of the planned
+> render test; the README's Phrases bullet was updated too. The code round's English-only finding was rejected: the
+> help is localized by design. Open tail: none. Seen on the way, not caused by this change: the host scenario *a
+> deletion the mirror carries takes the prompt text with it* failed once in four runs (19/19 twice after, 18/18 without
+> the change) — a timing flake in that scenario.
+>
+> Related docs: [module_extension.md](module_extension.md).
 
 ## 1. The symptom
 
@@ -72,7 +81,8 @@ left behind the English.
 
 ## 6. Definition of Done
 
-- [ ] RED → GREEN for the default, with the test seen failing on `[]`.
-- [ ] A person with phrases, or with an emptied list, sees no change (by the test of the removal rule and the design).
-- [ ] Help in five languages; `module_extension.md`, `module_tests.md` updated; this plan promoted.
-- [ ] Whole extension suite and lint green; gate rounds resolved; PR merged.
+- [x] RED → GREEN for the default, with the test seen failing on `[]`.
+- [x] A person with phrases, or with an emptied list, sees no change (by the test of the removal rule and the design).
+- [x] Help in five languages; `module_extension.md`, `module_tests.md` updated; this plan promoted.
+- [x] Whole extension suite (5758 passed, 0 failed) and lint green; host scenarios 19/19; gate rounds resolved.
+- [ ] PR merged — the pull request that carries this record.

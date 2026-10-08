@@ -7,7 +7,7 @@ import { rowsAfter, rowsOf } from '../phrasesEdit';
 import { NAME_LIMIT } from '../savedRows';
 
 /**
- * A fresh install starts with seven phrases (todo/PLAN_default_phrases.md): the operator's own, in English, as the
+ * A fresh install starts with seven phrases (research/PLAN_default_phrases.md): the operator's own, in English, as the
  * DECLARED DEFAULT of `coai.phrases`.
  *
  * <p>A default, never a write: VS Code hands it only to a person whose settings hold no `coai.phrases` at all. A person
