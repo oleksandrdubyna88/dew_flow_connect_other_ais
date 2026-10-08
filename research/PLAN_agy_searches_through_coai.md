@@ -1,15 +1,27 @@
 # PLAN — an antigravity consultant searches through coai: list and search served read-only, agy stays in plan mode
 
-> Status: **in progress, 2026-10-08 — S1–S3 implemented on `feat/agy-searches-through-coai` and through the code round;
-> the live checks (§5) and the promotion remain.** Scope: a new bounded read-only workspace reader
+> Status: **IMPLEMENTED, 2026-10-08** (branch `feat/agy-searches-through-coai`; no release — the operator's decision).
+> Live record: [RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) — 6 of 6 asks answered on
+> the final build (WSL went from 1 of 3 to 3 of 3, naming the real file), both consults answered using lookups.
+>
+> Deviations: (1) **the plan's premise "agy keeps `--mode plan` — it can write nothing" is FALSE** — the live write check
+> found agy writes inside its `--add-dir` root on both sides; this branch does not change what agy may write, and the
+> defect is open as [PLAN_agy_cannot_write_its_roots.md](../todo/PLAN_agy_cannot_write_its_roots.md); (2) a fence agy
+> glued to a sentence was read as no block — found live, fixed before the PR; (3) the code round added a 20 s per-block
+> time limit, a turn that cannot hold a result reads nothing, a path the file system cannot hold is refused by name,
+> lock files are hidden when named directly, and the caps no longer follow `SourceBudget`; (4) the refused-shell
+> follow-up keeps its measured text and adds one sentence naming the block when a reader is attached; (5) one answer in
+> six opened with the model's working notes — agy's prose, passed on as written, not fixed here.
+>
+> Scope: a new bounded read-only workspace reader
 > (`src_mcp/src/Server/WorkspaceLookup.cs` + `src_mcp/core/Feature/LookupBudget.cs`), the agy request format and its parser
 > (`src_mcp/core/Consultation/LookupRequests.cs`), `AntigravityConsultant` as an answering-follow-up runtime for question rows,
 > a bounded request loop inside one `consult` call (`ConsultationService`), the agy prompt text (`AntigravityFollowUps`),
 > tests and docs. The reviewers are not touched.
 >
-> Related docs: [RESULTS_agy_question_row_follow_up.md](../research/RESULTS_agy_question_row_follow_up.md),
-> [RESULTS_agy_consult_follow_up.md](../research/RESULTS_agy_consult_follow_up.md),
-> [module_runners.md](../research/module_runners.md), [module_server.md](../research/module_server.md).
+> Related docs: [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md),
+> [RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md),
+> [module_runners.md](module_runners.md), [module_server.md](module_server.md).
 
 ## 1. The symptom
 
@@ -118,11 +130,12 @@ cannot write there, and such a writer could read the outside file itself.
 
 ## 6. Definition of Done
 
-- [ ] S1–S3 each RED → GREEN, with a teeth check on the containment tests.
-- [ ] agy keeps `--mode plan`; no flag gives it write access; reviewers untouched.
-- [ ] Every lookup is bounded, contained, redacted, and says when a cap cut it.
-- [ ] Question rows and the consultant both serve lookups and continue the same conversation; billed once per turn.
-- [ ] Live checks per side and the write check recorded in `research/` before the PR; `module_runners.md`,
+- [x] S1–S3 each RED → GREEN, with a teeth check on the containment tests.
+- [x] agy keeps `--mode plan`; no flag gives it write access; reviewers untouched. *(But plan mode itself writes — deviation 1; open in todo.)*
+- [x] Every lookup is bounded, contained, redacted, and says when a cap cut it.
+- [x] Question rows and the consultant both serve lookups and continue the same conversation; billed once per turn.
+- [x] Live checks per side and the write check recorded in `research/` before the PR; `module_runners.md`,
       `module_server.md`, `module_tests.md` (both flows, what the scenarios do not prove), `research/README.md` updated;
       plan promoted; `todo/README.md` row removed.
-- [ ] Whole suites green; gate rounds resolved; PR merged.
+- [x] Whole suites green; gate rounds resolved.
+- [ ] PR merged — the pull request that carries this record.

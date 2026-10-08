@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// An antigravity question row asks coai to look — a <c>coai-lookup</c> block — and coai serves it read-only and continues
-/// the SAME conversation with the result (todo/PLAN_agy_searches_through_coai.md, S2).
+/// the SAME conversation with the result (research/PLAN_agy_searches_through_coai.md, S2).
 /// </summary>
 /// <remarks>
 /// The fake CLI runs as a real child on the question row's minimal environment, steered by the temp-directory file; it

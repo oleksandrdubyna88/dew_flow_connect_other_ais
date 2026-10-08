@@ -29,7 +29,7 @@ public sealed record AnsweringMemory(string Base, int Turn, SourceSpend Spent, I
 {
     /// <summary>
     /// The vendor's conversation id after the turn being read — empty for a runtime with none (api). An agy row's
-    /// lookup continues THIS conversation rather than resending the prompt (todo/PLAN_agy_searches_through_coai.md, S2).
+    /// lookup continues THIS conversation rather than resending the prompt (research/PLAN_agy_searches_through_coai.md, S2).
     /// </summary>
     public string Handle { get; init; } = string.Empty;
 

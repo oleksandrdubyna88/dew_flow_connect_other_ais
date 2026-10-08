@@ -637,7 +637,7 @@ public sealed class ConsultationService(
     {
         var nonce = Guid.NewGuid().ToString("N")[..8];
         // An antigravity consultant cannot list or search in plan mode: coai does it for it, read-only, inside this
-        // checkout (todo/PLAN_agy_searches_through_coai.md, S3) — the prompt then teaches the block, the turn serves it.
+        // checkout (research/PLAN_agy_searches_through_coai.md, S3) — the prompt then teaches the block, the turn serves it.
         consultant = consultant.Runtime is AntigravityConsultant agy ? consultant with { Runtime = agy.With(new WorkspaceLookup([repo])) } : consultant;
         var before = await _invariant.SnapshotAsync(repo, ct);
         // Prepared before it is built: the adapter learns what the INSTALLED CLI accepts (claude: --restricted or

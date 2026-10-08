@@ -2,7 +2,7 @@ namespace CoaiMcp.Core.Feature;
 
 /// <summary>
 /// How much coai's own list and search may serve an antigravity consultant in one turn
-/// (todo/PLAN_agy_searches_through_coai.md §3) — modelled on <see cref="SourceBudget"/>, which bounds what a reviewer
+/// (research/PLAN_agy_searches_through_coai.md §3) — modelled on <see cref="SourceBudget"/>, which bounds what a reviewer
 /// is served from git; this bounds what is read from a WORKING TREE, which no git object caps.
 /// </summary>
 public static class LookupBudget

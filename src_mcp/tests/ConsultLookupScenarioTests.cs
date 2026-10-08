@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The stuck consultant on antigravity asks coai to look — a <c>coai-lookup</c> block — and coai serves it read-only over
-/// the checkout and continues the SAME conversation, inside ONE <c>consult</c> call (todo/PLAN_agy_searches_through_coai.md, S3).
+/// the checkout and continues the SAME conversation, inside ONE <c>consult</c> call (research/PLAN_agy_searches_through_coai.md, S3).
 /// </summary>
 [Collection("fakecli-env")]
 public sealed class ConsultLookupScenarioTests : ConsultScenarioBase

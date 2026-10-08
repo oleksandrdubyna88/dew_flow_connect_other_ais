@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The <c>coai-lookup</c> block an antigravity consultant writes to ask coai to list a folder or search for text
-/// (todo/PLAN_agy_searches_through_coai.md §3): read from prose, never a regex, at most
+/// (research/PLAN_agy_searches_through_coai.md §3): read from prose, never a regex, at most
 /// <see cref="LookupBudget.RequestsPerTurn"/> lines, every other line named as refused.
 /// </summary>
 public sealed class LookupRequestsTests

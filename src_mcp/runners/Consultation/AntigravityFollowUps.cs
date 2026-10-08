@@ -48,7 +48,7 @@ public static class AntigravityFollowUps
     public const string LastTurn = "This is your LAST turn";
 
     /// <summary>
-    /// What a consultant that may ask coai to look is told it has (todo/PLAN_agy_searches_through_coai.md §3): the block,
+    /// What a consultant that may ask coai to look is told it has (research/PLAN_agy_searches_through_coai.md §3): the block,
     /// its limits, and where it may look — never the continuation's heading, which only coai's reply carries.
     /// </summary>
     /// <param name="roots">The granted roots, absolute — a path the model writes must be inside one.</param>
@@ -68,7 +68,7 @@ public static class AntigravityFollowUps
 
     /// <summary>
     /// What a refused permission's follow-up adds when coai may look for this consultant — after the measured text, never
-    /// instead of it: a model refused the shell is the one that needs a listing (todo/PLAN_agy_searches_through_coai.md §3).
+    /// instead of it: a model refused the shell is the one that needs a listing (research/PLAN_agy_searches_through_coai.md §3).
     /// Not measured on its own; the live record is RESULTS_agy_searches_through_coai.md.
     /// </summary>
     public const string AskCoaiToLook =

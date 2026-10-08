@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// coai's own read-only list and search, served to an antigravity consultant that cannot list or search in plan mode
-/// (todo/PLAN_agy_searches_through_coai.md §3): contained in the granted roots with links resolved, never showing
+/// (research/PLAN_agy_searches_through_coai.md §3): contained in the granted roots with links resolved, never showing
 /// credentials, <c>.git</c>, dependency folders or binary contents, redacted, and saying out loud when a cap cut it.
 /// </summary>
 public sealed class WorkspaceLookupTests : IAsyncLifetime

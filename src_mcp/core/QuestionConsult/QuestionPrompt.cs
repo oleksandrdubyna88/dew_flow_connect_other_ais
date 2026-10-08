@@ -22,7 +22,7 @@ public sealed record QuestionPromptInput(
 {
     /// <summary>
     /// What the row's own runtime adds under "## What you have" — an antigravity disk row's <c>coai-lookup</c> block
-    /// (todo/PLAN_agy_searches_through_coai.md); empty for every other row, whose prompt is then unchanged.
+    /// (research/PLAN_agy_searches_through_coai.md); empty for every other row, whose prompt is then unchanged.
     /// </summary>
     public string Toolbox { get; init; } = string.Empty;
 }

@@ -25,7 +25,7 @@ namespace CoaiMcp.Runners.Consultation;
 /// <param name="lookup">
 /// coai's own read-only list and search over the row's granted roots — attached by the question fan-out to a
 /// <c>disk</c> row (<see cref="With"/>), as an api row is handed its source resolver; null everywhere else, and then a
-/// turn's answer is the advice as it was (todo/PLAN_agy_searches_through_coai.md, S2).
+/// turn's answer is the advice as it was (research/PLAN_agy_searches_through_coai.md, S2).
 /// </param>
 public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor = "antigravity", IWorkspaceLookup? lookup = null)
     : IConsultantRuntime, IAnsweringFollowUps
@@ -107,7 +107,7 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
 
     /// <summary>
     /// The one read tool observed working headless in <c>--mode plan</c>, the shell's standing — and, when coai may look for
-    /// this consultant (<see cref="With"/>), the <c>coai-lookup</c> block (todo/PLAN_agy_searches_through_coai.md, S3).
+    /// this consultant (<see cref="With"/>), the <c>coai-lookup</c> block (research/PLAN_agy_searches_through_coai.md, S3).
     /// </summary>
     public string Toolbox => lookup is null ? AntigravityFollowUps.Toolbox : AntigravityFollowUps.Toolbox + "\n\n" + LookupToolbox;
 

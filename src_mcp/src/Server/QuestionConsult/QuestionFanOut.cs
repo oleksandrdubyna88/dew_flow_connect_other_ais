@@ -210,7 +210,7 @@ public sealed class QuestionFanOut(
 
     /// <summary>
     /// An antigravity DISK row, able to ask coai to list and search its granted roots — it cannot do either itself in plan
-    /// mode (todo/PLAN_agy_searches_through_coai.md, S2); every other row as it was.
+    /// mode (research/PLAN_agy_searches_through_coai.md, S2); every other row as it was.
     /// </summary>
     private static RowAdmission.Admitted WithLookup(RowAdmission.Admitted row) =>
         row.Runtime is AntigravityConsultant agy && row.Plan.Grant.Capability == Capability.Disk

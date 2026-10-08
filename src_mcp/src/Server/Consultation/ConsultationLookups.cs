@@ -6,7 +6,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// One consultation turn, with the lookups an antigravity consultant asks for served inside it
-/// (todo/PLAN_agy_searches_through_coai.md, S3): the turn runs as it always did (<see cref="ConsultantTurn"/>), and while
+/// (research/PLAN_agy_searches_through_coai.md, S3): the turn runs as it always did (<see cref="ConsultantTurn"/>), and while
 /// its answer carries a <c>coai-lookup</c> block coai serves it and continues the SAME conversation — up to the runtime's
 /// follow-up cap, the tree asked before every continuation.
 /// </summary>

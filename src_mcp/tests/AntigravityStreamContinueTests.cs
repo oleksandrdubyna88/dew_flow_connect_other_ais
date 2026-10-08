@@ -84,7 +84,7 @@ public sealed class AntigravityStreamContinueTests
     [Fact]
     public void ADeniedCommand_WhenCoaiMayLook_IsAlsoToldToAskCoai_AndTheMeasuredTextStaysWordForWord()
     {
-        // todo/PLAN_agy_searches_through_coai.md §3: a model refused the shell is the one that needs a listing.
+        // research/PLAN_agy_searches_through_coai.md §3: a model refused the shell is the one that needs a listing.
         var launched = Launched(Fixture("consult-denied.ndjson"), Fixture("consult-denied.stderr.txt"));
         var plain = new AntigravityConsultant(new AntigravityRuntime());
         var looking = plain.With(new CoaiMcp.Server.WorkspaceLookup([Repo]));

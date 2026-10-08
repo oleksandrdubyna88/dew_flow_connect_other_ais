@@ -10,7 +10,7 @@ using CoaiMcp.Runners.Context;
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// coai's own read-only list and search over a consultant's granted roots (todo/PLAN_agy_searches_through_coai.md §3) —
+/// coai's own read-only list and search over a consultant's granted roots (research/PLAN_agy_searches_through_coai.md §3) —
 /// served to an antigravity consultant, which in <c>--mode plan</c> can only <c>view_file</c> a path it already knows.
 /// </summary>
 /// <remarks>

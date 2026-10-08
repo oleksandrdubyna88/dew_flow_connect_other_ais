@@ -22,7 +22,7 @@ public sealed record LookupAsk(IReadOnlyList<LookupRequest> Requests, IReadOnlyL
 
 /// <summary>
 /// Reads the <c>coai-lookup</c> block an antigravity consultant writes when it needs coai to list a folder or search
-/// for text (todo/PLAN_agy_searches_through_coai.md §3) — agy answers in prose, not a schema, so a fenced block it can
+/// for text (research/PLAN_agy_searches_through_coai.md §3) — agy answers in prose, not a schema, so a fenced block it can
 /// write anywhere in its answer.
 /// </summary>
 /// <remarks>

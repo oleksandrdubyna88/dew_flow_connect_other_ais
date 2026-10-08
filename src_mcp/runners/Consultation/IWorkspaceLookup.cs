@@ -4,7 +4,7 @@ namespace CoaiMcp.Runners.Consultation;
 
 /// <summary>
 /// coai's own read-only list and search over the roots a consultant was granted
-/// (todo/PLAN_agy_searches_through_coai.md §3) — what an antigravity consultant, which cannot list or search in plan
+/// (research/PLAN_agy_searches_through_coai.md §3) — what an antigravity consultant, which cannot list or search in plan
 /// mode, asks for through a <c>coai-lookup</c> block.
 /// </summary>
 /// <remarks>
