@@ -10,7 +10,7 @@ import { keysFileIn, readFileAt, readPairs, readRealMethod, writeDecide } from '
 import { COMMENT_MOST_CHARS } from '../commentContract';
 import { REMOVAL_REASONS, TREE_REASONS, TREE_STATES } from '../reviewTree';
 import { readTrees, readTreeAt, removeTree } from '../reviewTreeRead';
-import { mayRank } from '../bugzView';
+import { mayRank } from '../bugzPick';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
 /**
