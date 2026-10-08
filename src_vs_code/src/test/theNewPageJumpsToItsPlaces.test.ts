@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
-import { type PanelState } from '../panelView';
-import { panelState } from './panelPageHarness';
+import { type PanelState, settingsHtml } from '../panelView';
+import { panelState, runPanel, withoutSeq } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { presses, runPageHtml } from './pageScriptHarness';
 
@@ -52,6 +52,24 @@ test('the gate\'s "Edit commands…" opens Reviews › Commands on this page —
   assert.equal(paneOf('reviews/gate').hidden, true, 'the gate stayed open');
   assert.deepEqual(presses(page), [{ type: 'tab', id: 'reviews/commands' }]);
 });
+
+/**
+ * The CURRENT page has no place to jump to — it holds neither editor — so while it is still drawn (the preview switch
+ * goes in E5.1 step 5) its two buttons keep opening the two pages. Run on the current page's own script, through the
+ * buttons it drew, found by what they say.
+ */
+for (const [tab, label, command] of [['gate', 'Edit commands…', 'editCommands'], ['prompts', 'Edit roles…', 'editRoles']] as const) {
+  test(`the current page's "${label}" still opens its page, which the current page has no place for`, () => {
+    const state = stateWith();
+    const page = runPanel(state, { html: settingsHtml(state, 'test-nonce', tab) });
+    const button = page.commands.find((one) => one.textContent === label);
+    assert.ok(button !== undefined, `the current page draws no "${label}" that posts a command`);
+
+    button.fire('click');
+
+    assert.deepEqual(page.posted.filter((one) => one['type'] === 'command').map(withoutSeq), [{ type: 'command', command, id: undefined }]);
+  });
+}
 
 test('the stages\' "Edit roles…" opens Reviews › Roles & prompts on this page — no page is asked for', () => {
   const { page, paneOf } = pageAt('reviews/stages');

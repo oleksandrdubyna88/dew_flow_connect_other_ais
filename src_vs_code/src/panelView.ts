@@ -1669,8 +1669,28 @@ export function sideBody(state: PanelState): string {
 </div>`;
 }
 
-/** The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate; its "Edit commands…" jumps to Reviews › Commands (E5.1), where the commands page was. */
-export function gateBody(state: PanelState): string {
+/** Which Settings page draws a section both pages share — the current page, or the new one. */
+export type SettingsPageKind = 'current' | 'new';
+
+/**
+ * The way from a section to an editor that was a page of its own (todo/PLAN_one_model_catalog.md, E5.1 step 1). The
+ * current page opens that page by its command; the new page HOLDS the editor as a place of its own, so there the same
+ * press jumps to it and asks for no page — a page E5.1 deletes. One label on both, so a person who knew the button
+ * finds it on either page.
+ */
+function editorWay(page: SettingsPageKind, command: string, place: string, label: string): string {
+  return page === 'new'
+    ? `<button type="button" class="run" data-goto="${place}">${label}</button>`
+    : `<button type="button" class="run" data-command="${command}">${label}</button>`;
+}
+
+/**
+ * The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate.
+ *
+ * @param page the page drawing it: its "Edit commands…" opens the commands page on the current page, and jumps to
+ *   Reviews › Commands on the new one (E5.1 step 1)
+ */
+export function gateBody(state: PanelState, page: SettingsPageKind = 'current'): string {
   const s = state.settings;
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
   // sections describing one thing. What is left here is the one decision that belongs to neither
@@ -1700,8 +1720,8 @@ ${gatePerBlock(state)}
 </div>
 ${commandModelsBlock(state)}
 <div class="field">
-  <div class="hint">The words those orders are made of, and commands of your own to hand over with them, are under Commands.</div>
-  <button type="button" class="run" data-goto="reviews/commands">Edit commands…</button>
+  <div class="hint">The words those orders are made of, and commands of your own to hand over with them.</div>
+  ${editorWay(page, 'editCommands', 'reviews/commands', 'Edit commands…')}
 </div>`;
 }
 
@@ -2503,14 +2523,17 @@ interface RoleGroups {
 
 /** How each half is drawn around the role boxes: the stages with their own switches, or the round pickers alone. */
 const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: RoleGroups) => string>> = {
-  both: (state, groups) => stagesBody(state, groups),
-  stages: (state, groups) => stagesBody(state, groups),
+  both: (state, groups) => stagesBody(state, groups, 'current'),
+  stages: (state, groups) => stagesBody(state, groups, 'new'),
   prompts: (_state, { plan, code, documents, features }) =>
     pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
 };
 
-/** The stages around their role boxes: the lens deals, the workspace, the notes and the jump to Roles & prompts (E5.1: a place of this page, where the roles page was). */
-function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
+/**
+ * The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles — the roles page
+ * on the current page, a jump to Roles &amp; prompts on the new one, where the roles page's content is (E5.1 step 1).
+ */
+function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups, page: SettingsPageKind): string {
   const s = state.settings;
 
   return `<div class="role-group">
@@ -2549,8 +2572,8 @@ ${documents}
 ${features}
 </div>
 <div class="field">
-  <button type="button" class="run" data-goto="reviews/roles">Edit roles…</button>
-  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does, under Roles &amp; prompts. The five above are there too.</div>
+  ${editorWay(page, 'editRoles', 'reviews/roles', 'Edit roles…')}
+  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does. The five above are there too.</div>
 </div>`;
 }
 
