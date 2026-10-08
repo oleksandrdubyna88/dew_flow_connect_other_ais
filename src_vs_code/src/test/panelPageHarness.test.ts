@@ -143,6 +143,17 @@ test('an option the page drew disabled reads disabled, with its title — and an
   assert.equal(opinion.title, '');
 });
 
+test('a fixture opening a place of the NEW page runs that page, opened on the place — never the sidebar (E5.1 code round, finding 4)', () => {
+  // An old tab id reaches its place through `OLD_TAB_PLACES`; a place's own id (`models`, `reviews/commands`) must reach
+  // it too, as `render-page.mjs` does, or a test of the new page silently reads the sidebar's markup instead.
+  for (const place of ['models', 'reviews/commands', 'setup/team']) {
+    const page = runPanel(panelState(place));
+
+    assert.match(page.html, /<main class="settings catalog">/u, `${place} ran the sidebar, not the Settings page`);
+    assert.match(page.html, new RegExp(`const heldPlace = "${place.replace('/', '\\/')}"`, 'u'), `${place} is not where the page opens`);
+  }
+});
+
 test('a data-command button is bound by the page and a click posts exactly its command and id', () => {
   // On the new page's Models tab (E5.1 step 3): a card's Duplicate is a plain data-command button there (its remove asks
   // first, through the page's one confirm).
