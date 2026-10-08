@@ -88,6 +88,28 @@ export function bugzPickOf(rows: readonly Vendor[], saved: string, modelsOf: (ro
 export type ServedModels = Readonly<Record<string, { readonly models: readonly { readonly id: string }[] }>>;
 
 /**
+ * Everything a Bugz pick is read from — the sidebar draws its picker from these and the collect refuses by them, so
+ * the two read ONE set of facts (E5.1's code round, findings 1 and 6).
+ */
+export interface BugzInputs {
+  /** Every catalog row — a catalog-only `bugz-local` included, which the reviewer list hides. */
+  readonly rows: readonly Vendor[];
+  /** What `coai.bugzModel` holds: `<row id>/<model>`. */
+  readonly saved: string;
+  /** The engines last seen serving, per row id. */
+  readonly engines: ServedModels;
+  /** The vendors the installed server says may rank — empty from a server too old to say. */
+  readonly serverVendors: readonly string[];
+  /** Whether the installed coai-mcp ranks by the row's runtime (`--features` lists `bugzRuntime`). */
+  readonly byRuntime: boolean;
+}
+
+/** The pick these inputs make. */
+export function bugzPickFrom(inputs: BugzInputs): BugzPick {
+  return bugzPickOf(inputs.rows, inputs.saved, modelsOfRows(inputs.engines));
+}
+
+/**
  * A row's models: its own, and every model its engine was last seen serving — the old picker offered each of those as
  * `row/model`, so a pick made there is one of the row's models here.
  *

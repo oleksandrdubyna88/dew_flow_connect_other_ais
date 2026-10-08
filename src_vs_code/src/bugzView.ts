@@ -37,18 +37,6 @@ export interface BugzViewState {
 }
 
 /**
- * The collector's arguments: the row's runtime is said only to a binary that ranks by it — an older one refuses a flag
- * it does not know — and only with a model to rank with.
- */
-export function collectArgs(model: string, runtime: string, byRuntime: boolean): readonly string[] {
-  return model.length === 0 ? ['--collect-bugs'] : ['--collect-bugs', '--model', model, ...runtimeArgs(runtime, byRuntime)];
-}
-
-function runtimeArgs(runtime: string, byRuntime: boolean): readonly string[] {
-  return byRuntime && runtime.length > 0 ? ['--runtime', runtime] : [];
-}
-
-/**
  * What the Collect button says right now.
  *
  * <p>Read from the PERSISTED run rather than from a flag in the page: a flag dies on reload, and the

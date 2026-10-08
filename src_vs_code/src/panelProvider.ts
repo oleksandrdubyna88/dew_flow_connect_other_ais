@@ -107,8 +107,8 @@ import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from 
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
-import { collectArgs } from './bugzView';
-import { bugzCollectRefusal, bugzPickOf, modelsOfRows } from './bugzPick';
+import { collectWithPick } from './bugzCollect';
+import type { BugzInputs } from './bugzPick';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { currentFileIn, folderHolding } from './openAtRevision';
@@ -3252,45 +3252,34 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    // Through `serverRun`, which is the door that carries THIS window's data directory. A spawn
-    // that skipped it would collect against a different database from the one the section shows.
-    const model = this.settings().bugzModel;
-    // Every row read, a catalog-only `bugz-local` included, because the page's reviewer list hides those.
-    const rows = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));
-    // The pick the sidebar draws, judged by the same rule (E5.1 step 2): a stranded pick, or none, is refused by a
-    // sentence naming Models — never collected with an empty or stale `--model`.
-    if (await this.refusedBugzPick(rows, model)) {
-      return;
-    }
-    const collecting = serverRun(server.fsPath)(await this.collectArgsFor(rows, model), PanelProvider.COLLECT_CAP_MS);
-
-    // NOT awaited before the repaint, and this is the point. The run writes `running` to the
-    // database before its first candidate, so the section can show it — but only if something
-    // asks. Awaiting the whole process first meant the button stayed enabled and un-progressed
-    // for the length of a multi-minute run, and a second click started a second collection.
-    // (Code round, gemini and codex, four findings between them.)
-    await this.watchCollect(collecting);
-  }
-
-  /** The collector's arguments: the row's runtime, said only to a binary that ranks by it (PLAN_one_model_catalog.md E2.1). */
-  private async collectArgsFor(rows: readonly Vendor[], model: string): Promise<readonly string[]> {
-    const row = rows.find((one) => one.id === model.split('/')[0]?.toLowerCase());
-
-    return collectArgs(model, row?.runtime ?? '', hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime));
+    // The decision is `collectWithPick`'s (E5.1's code round, finding 6) — the provider builds its ports. Through
+    // `serverRun`, which is the door that carries THIS window's data directory: a spawn that skipped it would collect
+    // against a different database from the one the section shows.
+    await collectWithPick({
+      inputs: () => this.bugzInputsNow(),
+      // A stranded pick, or none, is refused by a sentence naming Models — never collected with an empty or stale model.
+      refuse: (title) => notifyAndAsk({ as: 'warning', class: 'refusal', source: 'bugz', code: 'no-ranking-model', title }).then(() => undefined),
+      // NOT awaited before the repaint, and this is the point. The run writes `running` to the
+      // database before its first candidate, so the section can show it — but only if something
+      // asks. Awaiting the whole process first meant the button stayed enabled and un-progressed
+      // for the length of a multi-minute run, and a second click started a second collection.
+      // (Code round, gemini and codex, four findings between them.)
+      start: (args) => this.watchCollect(serverRun(server.fsPath)(args, PanelProvider.COLLECT_CAP_MS)),
+    });
   }
 
   /**
-   * Whether the saved Bugz pick is refused, and the person told why (`bugzPick.ts`): the rows ticked Bugz on Models and
-   * the engines last seen serving, the same reading the sidebar's picker is drawn from, so a pick it shows as stranded
-   * is the pick this refuses.
+   * What the Bugz pick is read from now — every catalog row (a catalog-only `bugz-local` included, which the reviewer
+   * list hides), the saved pick, the engines last seen, the server's ranking list and whether it ranks by runtime.
    */
-  private async refusedBugzPick(rows: readonly Vendor[], model: string): Promise<boolean> {
-    const refused = bugzCollectRefusal(bugzPickOf(rows, model, modelsOfRows(this.localEngines)));
-    if (refused.length > 0) {
-      await notifyAndAsk({ as: 'warning', class: 'refusal', source: 'bugz', code: 'no-ranking-model', title: refused });
-    }
-
-    return refused.length > 0;
+  private async bugzInputsNow(): Promise<BugzInputs> {
+    return {
+      rows: vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors')),
+      saved: this.settings().bugzModel,
+      engines: this.localEngines,
+      serverVendors: (await this.bugz()).rankingVendors,
+      byRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
+    };
   }
 
   /**

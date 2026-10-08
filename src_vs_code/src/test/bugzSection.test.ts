@@ -7,7 +7,8 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, LOCAL_PRESET } from '../vendors';
 import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun, type SendRun } from '../roundsDb';
-import { bugzBody, collectArgs, collectLabel, lastRunLine } from '../bugzView';
+import { bugzBody, collectLabel, lastRunLine } from '../bugzView';
+import { collectArgs } from '../bugzCollect';
 import { RANKING_VENDORS, mayRank } from '../bugzPick';
 
 /**
