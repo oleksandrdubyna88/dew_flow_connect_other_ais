@@ -1041,8 +1041,7 @@ test('a document role is drawn in the DOCUMENT frame, with a budget and a switch
 });
 
 // "The Prompts section offers the way into the roles page" read the markup for `data-command="editRoles"`; since E5.1
-// step 1 `theNewPageJumpsToItsPlaces.test.ts` presses it on both running pages — the current page's still opens the
-// roles page, the new page's jumps to Reviews › Roles & prompts.
+// step 1 `theNewPageJumpsToItsPlaces.test.ts` presses it on the running page, where it jumps to Reviews › Roles & prompts.
 
 test('a server too old to read a person’s roles says so, where the roles are drawn', () => {
   // The quietest of the three skews: below 0.19.0 the key is never read, so the roles are in the

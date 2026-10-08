@@ -125,7 +125,7 @@ import { roleEdit } from './rolesMessages';
 import { roleSwitchFollows } from './rolesSwitch';
 import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
 import { commandEdit } from './commandsMessages';
-import { flushChatPresetEdits, onChatPresetsRedraw, queueChatPresetEdit } from './chatPresetsHost';
+import { flushChatPresetEdits, onChatPresetsRedraw, pruneDeadModelRows, queueChatPresetEdit } from './chatPresetsHost';
 import { presetEdit } from './chatPresetsMessages';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
@@ -1002,13 +1002,23 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The Settings tab was opened: it is painted like the sidebar, and heard like it. */
   attachSettings(panel: vscode.WebviewPanel): void {
     this.settingsTab.attach(panel);
-    // The Consultant tab's watcher pauses with the tab: nobody is reading its stores (epic 5's review).
-    panel.onDidDispose(() => { this.settingsTab.detach(panel); this.consultantHealth.pause(); });
+    // The Consultant tab's watcher pauses with the tab: nobody is reading its stores (epic 5's review). What was still
+    // settling in an editor on it is written now, as each editing tab did on its own close (E5.1c's code round).
+    panel.onDidDispose(() => {
+      this.settingsTab.detach(panel);
+      this.consultantHealth.pause();
+      void Promise.all([flushRoleEdits(), flushCommandEdits(), flushChatPresetEdits()]);
+    });
     // Hidden behind another editor tab: nobody is reading the Consultant tab, so its watcher pauses; shown again, a render
     // decides whether it resumes (the whole-branch review, N2).
     panel.onDidChangeViewState(() => { if (panel.visible) { void this.render(); } else { this.consultantHealth.pause(); } });
     panel.webview.onDidReceiveMessage((m: PanelMessage) => { this.receive(this.settingsTab, m); });
-    void this.render();
+    // The litter rows an older build wrote are cleared when the page that lists the chat's models opens, as the presets
+    // tab cleared them (E5.1c's code round) — awaited before the first paint, so it never draws a row being removed. A
+    // cleanup that cannot run is said, and the tab paints anyway.
+    void pruneDeadModelRows()
+      .catch((error: unknown) => { console.error('ConnectOtherAIs: the unusable model presets could not be cleared', error); })
+      .then(() => this.render());
   }
 
   /** The command asked for a tab of a Settings page already open: the page is told, and nothing repaints. */
@@ -2418,21 +2428,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // registered by the extension, is what the ⋯ menu invokes, and reports its own progress
         // and its own failure. The button's job is only to reach it.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.installServer);
-        break;
-      case 'editChatPresets':
-        // The same shape, and for the same reason: the tab is opened by a registered command that
-        // owns its own panel. Without this the section could name the presets it picks from and
-        // offer no way to reach them — which is the state it shipped in.
-        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editChatPresets);
-        break;
-      case 'editCommands':
-        // The gate's commands page (issue #467), opened the way the roles page is.
-        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editCommands);
-        break;
-      case 'editRoles':
-        // The same shape again: the roles tab owns its own panel and is opened by a registered
-        // command, so the Prompts section can point at the roles it draws.
-        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editRoles);
         break;
       case 'editPhrases':
         // Once more for the phrases tab, which the Phrases section points at. A tab reachable only

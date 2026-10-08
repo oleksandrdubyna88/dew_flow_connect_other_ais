@@ -30,7 +30,7 @@ export function chatTabHtml(state: PanelState): string {
 <h3>Which model a chat opens on</h3>
 ${opensOnHtml(chat, list)}${unreadableHtml(chat.unreadable)}${state.perSide ? '\n<p class="hint">Saved for this side of the machine.</p>' : ''}
 <h3>Sending</h3>
-${chatSendingFields(chat, '')}
+${chatSendingFields(chat)}
 <h3>Prompt presets</h3>
 <p class="note">Everything here is saved as you type. The one marked <b>main</b> is sent when a capture sends by itself.</p>
 ${chat.prompts.map((one) => promptBlock(one, EMBEDDED)).join('\n')}
@@ -41,17 +41,25 @@ ${chat.prompts.map((one) => promptBlock(one, EMBEDDED)).join('\n')}
 /**
  * The saved model presets this build cannot read, by name, with what to do — named rather than passed over, as the Chat
  * presets tab named them until E5.1 deleted it (`chatPresets.unreadableModels`). Empty when there are none.
+ *
+ * <p>Adding one again leaves the old row in place and no page edits it, so the line also says where the row is kept:
+ * taken out of `coai.chatModelPresets`, the line goes (E5.1c's code round).</p>
  */
 function unreadableHtml(names: readonly string[]): string {
   if (names.length === 0) {
     return '';
   }
-  const one = names.length === 1;
+  const { they, them, rows } = names.length === 1 ? ONE_UNREADABLE : MANY_UNREADABLE;
 
   return `
-<p class="refused">Saved before a model preset carried its own vendor, so ${one ? 'it cannot be run' : 'they cannot be run'}`
-    + ` — add ${one ? 'it' : 'them'} again on Models, ticked <b>Chat</b>: ${names.map((name) => `<b>${escapeHtml(name)}</b>`).join(', ')}.</p>`;
+<p class="refused">Saved before a model preset carried its own vendor, so ${they} cannot be run`
+    + ` — add ${them} again on Models, ticked <b>Chat</b>: ${names.map((name) => `<b>${escapeHtml(name)}</b>`).join(', ')}.`
+    + ` The old ${rows} in <code>coai.chatModelPresets</code> in your settings.json until you remove ${them}.</p>`;
 }
+
+/** The words that change with how many presets the line names. */
+const ONE_UNREADABLE = { they: 'it', them: 'it', rows: 'row stays' } as const;
+const MANY_UNREADABLE = { they: 'they', them: 'them', rows: 'rows stay' } as const;
 
 /**
  * The models that can answer, a stranded choice, a preset an older build edited after the move, what answers when nothing

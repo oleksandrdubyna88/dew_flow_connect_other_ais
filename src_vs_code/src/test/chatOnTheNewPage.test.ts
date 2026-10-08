@@ -218,6 +218,16 @@ test('a saved model this build cannot read is named on the place, with what to d
 
   assert.match(pane.text(), /Old codex/u, 'a saved model that cannot be run was left unmentioned');
   assert.match(pane.text(), /add it again/u, 'the place says it is missing without saying what to do');
+  // Adding it again leaves the old row where it is, and no page edits it any more: the line says where it lives, so the
+  // person can take it out and the line goes (E5.1c's code round, finding 3).
+  assert.match(pane.text(), /coai\.chatModelPresets/u, 'the line never goes away, and does not say where the row it names is kept');
+});
+
+test('two unreadable models are spoken of as two', () => {
+  const said = chatPage(stateWith({ unreadable: ['Old codex', 'Old claude'] })).pane.text();
+
+  assert.match(said, /so they cannot be run — add them again/u);
+  assert.match(said, /The old rows stay in coai\.chatModelPresets in your settings\.json until you remove them\./u);
 });
 
 test('a place with nothing unreadable says nothing about it', () => {

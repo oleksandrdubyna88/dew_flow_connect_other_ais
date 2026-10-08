@@ -32,7 +32,7 @@ import { zoomControlHtml, zoomScript } from './zoomControl';
  * story 1.1). Two hundred pairs each showing two skeletons is a page nobody scrolls; what a person
  * needs to see at once is the LIST, and the code when they ask for it. Which rows are open is held
  * by the panel and handed back in {@link ReviewView.expanded}, because a redraw replaces the whole
- * document — `rolesPanel.ts` holds its tab for the same reason and says so at length.</p>
+ * document — `settingsPanel.ts` holds its open place for the same reason.</p>
  *
  * <p><b>A row says where it was and what the reviewers said</b> (story 2.1): the finding's path
  * and line, the short hash of the commit the reviewers read, the cause and the proposed fix as

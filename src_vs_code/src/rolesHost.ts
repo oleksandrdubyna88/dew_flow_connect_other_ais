@@ -165,7 +165,7 @@ export const flushRoleEdits = (): Promise<void> => writes.flush();
  *
  * <p>A text edit does NOT redraw: the person is typing in the box, and replacing the document under them would move the
  * caret to the end of it on every keystroke. Everything that changes the SHAPE of the roles — a role added or removed,
- * a switch, a stage — does. Which tab is open is the old page's own (`rolesPanel.ts`), and changes nothing here.</p>
+ * a switch, a stage — does. Which place is open is the Settings tab's own (`settingsPanel.ts`), and changes nothing here.</p>
  */
 async function apply({ command, roleEnabled }: QueuedEdit): Promise<boolean> {
   if (command.kind === 'tab' || command.kind === 'ignore') {

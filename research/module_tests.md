@@ -3091,8 +3091,9 @@ of the Settings page that draws the same blocks, through the page's own script (
 | `commandsPage.test.ts` | `commandsMessages.test.ts` (the parser, the skew note) + `commandsOnTheNewPage.test.ts` (Remove, a tick and a stage once on change, markers and Restore, escaping, the stale note) | |
 | `formPagesShareOneColumn.test.ts`, `theRolesPageKeepsItsTextSize.test.ts` | — | the tabs' OWN stylesheets, gone with them; the Settings page's column and text size are `theTextControlsHoldUpEverywhere.test.ts` and `everyPageHasBothTextControls.test.ts` (the census is eight pages now) |
 
-New: `editorRedirects.test.ts` — one row per redirected command naming its own place, opened on the NEW page with the
-preview switch off (a crossed wire is red: swapping two places fails both rows); `chatSettings.test.ts` reads
+New: `editorRedirects.test.ts` — one row per redirected command naming its own place (a crossed wire is red: swapping
+two places fails both rows); `theSettingsTabKeepsWhatWasTyped.test.ts` — closing the Settings tab flushes the roles',
+commands' and presets' queues, opening it prunes the dead model presets (red with either line removed); `chatSettings.test.ts` reads
 `unreadable` from the presets the models come from (red when the reader is emptied).
 
 ### E5.1c step 5 — the tests that read the current page

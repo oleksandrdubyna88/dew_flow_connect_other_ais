@@ -11533,14 +11533,18 @@ held asks the same of the place now.
 
   Each redirect opens the one Settings tab at its place. (Until step 5 removed the preview switch, it first made the slot
   paint the new page with `setSettingsPreview(true)` — the current page was the default and held none of the three
-  editors.) The current page's *Edit roles… / Edit commands… / Edit presets…* buttons post these commands, so they lead
-  there too. `editorRedirects.test.ts` runs one row per command and names each one's OWN place, so crossed wires fail.
+  editors.) The Settings page's own *Edit roles…* / *Edit commands…* jump to the place by `data-goto` and post no command;
+  the panel commands `editRoles` / `editCommands` / `editChatPresets` went with the old page. `editorRedirects.test.ts` runs one row per command and names each one's OWN place, so crossed wires fail.
 - **`rolesKnowTheServer` is gone, and `told()` with it.** It handed the server's version to the roles tab, which drew
   its own version-skew banner; the place reads `state.roles.serverVersion` from the panel's own state.
+- **Closing the Settings tab writes what was still settling** in the roles, commands and presets queues, and **opening it
+  clears the dead model presets** an older build wrote (`pruneDeadModelRows`) — what each deleted tab did on its own close
+  and open (the code round's findings 2 and 3).
 - **A saved model this build cannot read is named on Chat.** The presets tab named model presets saved before a preset
   carried its own vendor (`chatPresets.unreadableModels`) and asked for them to be added again; Chat had no such line,
   so the delete would have made them silent. `ChatSettings.unreadable` is read with the models, from the same presets,
-  and `chatTabEmbed` names them with what to do (*add it again on Models, ticked Chat*).
+  and `chatTabEmbed` names them with what to do (*add it again on Models, ticked Chat*) and where the old row is kept
+  (`coai.chatModelPresets`), since no page edits it any more.
 - **Out of the build:** the three panels' `sonar.coverage.exclusions` entries, the two pages' eslint suppressions
   (pruned), and `render-page.mjs`'s `roles` / `commands` / `presets` targets (`catalog:reviews/roles`,
   `catalog:reviews/commands`, `catalog:chat` draw the same).
@@ -11548,8 +11552,7 @@ held asks the same of the place now.
 ```mermaid
 flowchart LR
   K[keybinding / palette / Edit … button] --> C{coai.editRoles<br/>coai.editCommands<br/>coai.editChatPresets}
-  C -->|editorRedirects| N[useTheNewPage]
-  N --> O[openSettings at EDITOR_PLACES place]
+  C -->|editorRedirects| O[openSettings at EDITOR_PLACES place]
   O --> R[Reviews › Roles & prompts]
   O --> M[Reviews › Commands]
   O --> H[Chat]

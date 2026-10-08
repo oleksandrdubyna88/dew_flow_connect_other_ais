@@ -513,7 +513,7 @@ export function consultantSection(state: PanelState, callerRows = ''): string {
       // answer a row that holds no reviewer.
       enginesByEndpoint: state.enginesByEndpoint,
       consultPrompt: state.consultPrompt,
-      // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
+      // The REVIEWERS' palette, built from the same canonical list the Models cards use, so a
       // caller wears the colour its vendor has on its card and in a running round. Passed even
       // when no reviewer is configured: the anchored ids answer regardless, which is what an
       // anchor is for.
@@ -935,12 +935,10 @@ export function chatProviderListFor(chat: ChatSettings, state: PanelState): Chat
 }
 
 /**
- * What to ask about the selection, the language the answer comes in, and who presses send — the fields both Settings
- * pages draw, from this one builder (E4.6b).
- *
- * @param afterPrompt what follows the prompt's hint inside its field — the current page's *Edit presets…*; '' for none
+ * What to ask about the selection, the language the answer comes in, and who presses send — the fields Chat on the
+ * Settings page draws (E4.6b).
  */
-export function chatSendingFields(chat: ChatSettings, afterPrompt: string): string {
+export function chatSendingFields(chat: ChatSettings): string {
   return `<div class="field">
   ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
   <select id="chatPromptChoice" data-setting="chatPromptChoice">
@@ -949,7 +947,7 @@ ${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptCho
 ${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
   </select>
   <div class="hint">${escapeHtml(chat.prompt)}</div>
-${afterPrompt}</div>
+</div>
 <div class="field">
   ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
   <select id="chatLanguage" data-setting="chatLanguage">
@@ -1524,9 +1522,6 @@ function editorWay(place: string, label: string): string {
 
 /**
  * The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate.
- *
- * @param page the page drawing it: its "Edit commands…" opens the commands page on the current page, and jumps to
- *   Reviews › Commands on the new one (E5.1 step 1)
  */
 export function gateBody(state: PanelState): string {
   const s = state.settings;
@@ -3297,12 +3292,6 @@ export const PANEL_COMMANDS = [
   'checkModel',
   // Try it on the new page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
   'trySecurity',
-  // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
-  // no view, so the only way to reach the CRUD the chat section points at was the command palette.
-  'editChatPresets',
-  // And the way into the roles tab, which the Prompts section points at the same way.
-  'editRoles',
-  'editCommands',
   // A phrase, onto the clipboard. Handled in the provider rather than by a registered command,
   // because it needs the id the button carries and nothing outside the panel ever asks for one.
   'copyPhrase',
@@ -3349,9 +3338,6 @@ export type PanelCommand = (typeof PANEL_COMMANDS)[number];
  */
 export const VSCODE_COMMAND_FOR = {
   installServer: 'coai.installServer',
-  editChatPresets: 'coai.editChatPresets',
-  editRoles: 'coai.editRoles',
-  editCommands: 'coai.editCommands',
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
   moveDataDirectory: 'coai.moveDataDirectory',

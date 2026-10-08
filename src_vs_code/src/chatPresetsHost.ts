@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChatCatalog, ChatProvider, chatProvidersFromPresets } from './chatModels';
+import { ChatCatalog } from './chatModels';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import {
   ModelPreset,
@@ -8,7 +8,6 @@ import {
   freshPromptRow,
   rowsAfterMain,
   deadModelRow,
-  unreadableModels,
 } from './chatPresets';
 import { chatRead, savedModels } from './chatConfig';
 import { chatModelAdd, chatModelEdit, type ChatModelStores, type ChatModelWrite } from './chatModelEdits';
@@ -127,16 +126,6 @@ function chatCatalogHere(): ChatCatalog {
     store === undefined ? EMPTY_DISCOVERY : discoveryFrom(store.get(DISCOVERY_KEY)),
     teamServersFrom(config().get('teamServers')),
   );
-}
-
-/** The rows a model preset may point at — the same list the chat's own picker offers. */
-export function presetProviders(): readonly ChatProvider[] {
-  return chatProvidersFromPresets(presetModels(), chatCatalogHere()).providers;
-}
-
-/** Saved models this build cannot read, by name — shown on the presets tab rather than passed over. */
-export function unreadablePresetModels(): readonly string[] {
-  return unreadableModels(config().get(MODELS_KEY));
 }
 
 async function write(key: string, value: unknown): Promise<void> {

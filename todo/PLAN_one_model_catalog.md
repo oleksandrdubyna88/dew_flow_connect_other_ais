@@ -1280,7 +1280,14 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
    and the downgrade path.
-3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5).
+3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5). Also
+   (E5.1c's own review, 2026-10-08) the current-page branches the shared builders still carry, each drawn by nothing
+   since step 5 but held by tests of their own: `consultantView`'s caller definitions (`callerRows = ''`,
+   `definitionRows`, `consultantRowView` and their tests in `consultant.test.ts` / `consultantHelp.test.ts`),
+   `qconsultView`'s per-row definitions ("absent, the current page"), `securityLaneView`'s `offered = vendors` path, and
+   the comments that still name "the current page" (`catalogSections`, `consultantPicks`, `modelCard`, `panelView`,
+   `securityLaneView`, `setupTab`, …). Each goes with its tests, its behaviour named against the Settings-page test
+   that holds it.
 4. **Releases**: mcp 0.44.0 first (E2), the Team server deploy when the operator says, then the extension; post-deploy
    checks against the installed builds.
 
