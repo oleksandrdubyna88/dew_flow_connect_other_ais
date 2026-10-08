@@ -20,9 +20,9 @@ namespace CoaiMcp.Server;
 internal static class ConsultationLookups
 {
     /// <param name="Result">Every launch the turn made, billed once — a cumulative vendor by its latest report.</param>
-    /// <param name="Advice">The advice when the lookups decided it (the prose of a capped last turn); null to read the final answer as always.</param>
+    /// <param name="Advice">The advice when the lookups decided it (the prose of a capped last turn); EMPTY to read the final answer as always.</param>
     /// <param name="Note">Why lookups stopped short, said beside the advice; empty when they did not.</param>
-    public sealed record Looked(ConsultantTurnResult Result, string? Advice, string Note);
+    public sealed record Looked(ConsultantTurnResult Result, string Advice, string Note);
 
     public static async Task<Looked> RunAsync(
         ReviewerExecutor executor,
@@ -36,7 +36,7 @@ internal static class ConsultationLookups
         var result = await ConsultantTurn.RunAsync(executor, runtime, first, changesSoFar, landed, ct);
         if (runtime is not IAnsweringFollowUps { FollowUps: > 0 } followUps)
         {
-            return new Looked(result, null, string.Empty);
+            return new Looked(result, string.Empty, string.Empty);
         }
 
         return await LookedAsync(executor, runtime, followUps, launch, first, result, changesSoFar, landed, ct);
@@ -66,7 +66,7 @@ internal static class ConsultationLookups
             var changes = await changesSoFar(ct);
             if (changes.Count > 0)
             {
-                return new Looked(result with { ChangesBeforeFollowUp = changes }, null, string.Empty);
+                return new Looked(result with { ChangesBeforeFollowUp = changes }, string.Empty, string.Empty);
             }
 
             (invocation, memory) = (next, carry.Memory);
@@ -74,7 +74,7 @@ internal static class ConsultationLookups
         }
 
         // A continuation that failed or said nothing ends the turn on it — the ordinary failure path classifies it.
-        return new Looked(result, null, string.Empty);
+        return new Looked(result, string.Empty, string.Empty);
     }
 
     private static bool Answered(ConsultantTurnResult result) =>
@@ -84,7 +84,7 @@ internal static class ConsultationLookups
     private static Looked Done(ConsultantTurnResult result, AnsweringTurn after) => after switch
     {
         AnsweringTurn.Done done when done.Note.Length > 0 => new Looked(result, done.Advice.Trim().Length > 0 ? done.Advice : done.Note, done.Note),
-        _ => new Looked(result, null, string.Empty),
+        _ => new Looked(result, string.Empty, string.Empty),
     };
 
     /// <summary>Two parts of one turn as one result: every launch, the latest handle, billed once.</summary>

@@ -781,7 +781,7 @@ public sealed class ConsultationService(
         // route. Unwrapping every answer here mangled a CLI's prose that happened to be JSON with an
         // `answer` property, which a consultant asked about a configuration file could return. When the
         // lookups decided the advice (a capped block's prose), that is the answer, with why they stopped.
-        var advised = (looked.Advice ?? consultant.Runtime.ReadAdvice(launched.Answer ?? string.Empty)).Trim()
+        var advised = (looked.Advice.Length > 0 ? looked.Advice : consultant.Runtime.ReadAdvice(launched.Answer ?? string.Empty)).Trim()
             + (looked.Note.Length > 0 && looked.Advice != looked.Note ? $"\n\n({looked.Note})" : string.Empty);
         var spent = consultant.ShareOf(record, turned.TurnUsage);
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd, turned.FollowedUp, record.Confinement);

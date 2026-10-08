@@ -186,6 +186,15 @@ public sealed class WorkspaceLookupTests : IAsyncLifetime
     }
 
     [Fact]
+    public void AFolderWithMoreEntriesThanAWalkReads_StopsTheWalkAndSaysSo_RatherThanReadingItWhole()
+    {
+        // Code round 2, codex: a folder of 100 000 entries was read and sorted whole before any cap applied.
+        var text = Serve(Lookup(LookupLimits.Default with { FolderEntries = 2 }), Search(MarkerOne, "projB"));
+
+        text.Should().Contain("holds more than 2 entries");
+    }
+
+    [Fact]
     public void TheTurnBudget_ServesWhatFits_AndNamesWhatItDidNot()
     {
         var text = Serve(Lookup(LookupLimits.Default with { TurnBytes = 64 }), List("projB"), List("projA"));

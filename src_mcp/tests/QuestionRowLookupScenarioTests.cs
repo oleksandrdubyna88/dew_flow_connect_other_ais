@@ -196,6 +196,52 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
         row.GetProperty("note").GetString().Should().Contain("capped").And.Contain("list .");
     }
 
+    /// <summary>A stream whose events name NO conversation — what a continuation may print (code round 2, gemini).</summary>
+    private static string StreamWithoutId(string response, long tokensIn, long tokensOut) =>
+        JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["event"] = "result",
+            ["result"] = new Dictionary<string, object>
+            {
+                ["status"] = "SUCCESS",
+                ["response"] = response,
+                ["usage"] = new Dictionary<string, long> { ["input_tokens"] = tokensIn, ["output_tokens"] = tokensOut },
+            },
+        }) + "\n";
+
+    [Fact]
+    public async Task AContinuationThatNamesNoConversation_KeepsTheOneItContinued_SoASecondLookupIsServed()
+    {
+        Steer(
+            Stream("Looking.\n" + Block("list ."), 100, 5),
+            StreamWithoutId("Still looking.\n" + Block("search \"Send()\""), 200, 9),
+            Stream("Send() in Mailer.cs sends it.", 300, 12));
+
+        var row = Row(await AskAsync());
+
+        Launches().Should().HaveCount(3, "the conversation turn 1 named is still the one to continue");
+        TurnOf(3).Should().ContainInOrder("--conversation", Conversation);
+        row.GetProperty("advice").GetString().Should().Contain("Send() in Mailer.cs");
+    }
+
+    [Fact]
+    public async Task AWatchedRootChangedByALookupTurn_IsNotContinued_AndTheRowSaysWhy()
+    {
+        // code round 2, gemini: the consult loop asked the tree before every continuation, the row loop did not — and agy
+        // in plan mode CAN write (research/RESULTS_agy_searches_through_coai.md §3).
+        Steer(Stream("Looking.\n" + Block("list ."), 100, 5), Stream("never reached", 200, 9));
+        var written = Path.Combine(_repo, "written-by-the-row.txt");
+        var steering = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(SteeringFile, TestContext.Current.CancellationToken))!;
+        steering["FAKECLI_SIDE_EFFECT"] = written;
+        await File.WriteAllTextAsync(SteeringFile, JsonSerializer.Serialize(steering), TestContext.Current.CancellationToken);
+
+        var row = Row(await AskAsync());
+
+        Launches().Should().ContainSingle("a row after which a watched root changed is not given another turn");
+        row.GetProperty("status").GetString().Should().NotBe(RowOutcomes.Answered);
+        (row.GetProperty("reason").GetString() + " " + row.GetProperty("note").GetString()).Should().Contain("written-by-the-row.txt");
+    }
+
     [Fact]
     public async Task TheLastTurn_WithNothingButABlock_FailsSayingTheLookupsWereCapped()
     {

@@ -133,8 +133,10 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
                 return Answered(start, input.Row.Runtime.ReadAdvice(answer), started.Elapsed, usage, note);
             }
 
-            switch (await followUps.AfterAsync(launch, memory with { Handle = turn.Handle, Last = turn.Invocation }, answer, ct))
+            switch (await followUps.AfterAsync(launch, memory with { Handle = HandleOf(turn, memory), Last = turn.Invocation }, answer, ct))
             {
+                case AnsweringTurn.Next { Invocation: not null } when await StoppedBeforeContinuingAsync(input, ct) is { Length: > 0 } why:
+                    return Ended(start, RowOutcomes.Failed, why, started.Elapsed, usage, note);
                 case AnsweringTurn.Next next:
                     // A runtime that continues its own conversation hands a ready invocation (an agy lookup); an api row's
                     // next turn is its launch built again with the longer prompt.
@@ -145,6 +147,21 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             }
         }
     }
+
+    /// <summary>The conversation to continue: the one this turn named, or — when a continuation's stream named none — the one it continued.</summary>
+    /// <remarks>Code round 2 (gemini): an empty handle from turn 2 ended a row that asked a second time, "agy named no
+    /// conversation id"; <c>ConsultationLookups.Combined</c> already kept the earlier one.</remarks>
+    private static string HandleOf(RowTurn turn, AnsweringMemory memory) => turn.Handle.Length > 0 ? turn.Handle : memory.Handle;
+
+    /// <summary>
+    /// Why a ready continuation (an agy lookup) must not run — a watched root that changed since before the rows launched —
+    /// or empty. The consult loop asks the same before every continuation (<c>ConsultationLookups</c>); a model in plan mode
+    /// CAN write (research/RESULTS_agy_searches_through_coai.md §3), so a row after which a root changed gets no next turn.
+    /// </summary>
+    private static async Task<string> StoppedBeforeContinuingAsync(RowLaunchInput input, CancellationToken ct) =>
+        await input.ChangesSoFar(ct) is { Count: > 0 } changes
+            ? $"it asked coai to look and was not continued, because {FilesystemSnapshot.Sentence(changes)}"
+            : string.Empty;
 
     /// <summary>
     /// One turn through <see cref="ConsultantTurn"/>, on ONE ledger line written in <c>finally</c> over whatever launches

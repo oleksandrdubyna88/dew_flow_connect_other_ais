@@ -291,10 +291,13 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     {
         try
         {
-            return [.. new DirectoryInfo(folder).EnumerateFileSystemInfos()
+            var read = new DirectoryInfo(folder).EnumerateFileSystemInfos()
                 .TakeWhile(_ => !ct.IsCancellationRequested && !walk.Over())
                 .Where(entry => !entry.Attributes.HasFlag(FileAttributes.ReparsePoint) && Shown(root, entry))
-                .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)];
+                .Take(_limits.FolderEntries + 1)
+                .ToList();
+
+            return [.. Bounded(read, folder, walk).OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -302,6 +305,13 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             return [];
         }
     }
+
+    /// <summary>A folder's entries within <see cref="LookupLimits.FolderEntries"/> — past it the walk stops, saying which folder (code round 2, codex).</summary>
+    private IEnumerable<FileSystemInfo> Bounded(List<FileSystemInfo> read, string folder, Walk walk) =>
+        read.Count > _limits.FolderEntries
+        && walk.Stop($"stopped: '{Slashed(folder)}' holds more than {_limits.FolderEntries} entries — search a narrower folder")
+            ? read.Take(_limits.FolderEntries)
+            : read;
 
     private void SearchFiles(IEnumerable<FileInfo> files, string text, Walk walk)
     {

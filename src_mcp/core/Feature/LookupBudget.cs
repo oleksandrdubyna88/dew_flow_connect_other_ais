@@ -27,6 +27,12 @@ public static class LookupBudget
     /// <summary>Files one <c>search</c> walks before it stops — so a question over a whole disk of projects ends.</summary>
     public const int WalkFiles = 20_000;
 
+    /// <summary>
+    /// Entries one folder is read for during a <c>search</c> — past it the walk stops and says so, rather than reading and
+    /// sorting a folder of a hundred thousand entries whole before any cap applies (code round 2, codex).
+    /// </summary>
+    public const int FolderEntries = 20_000;
+
     /// <summary>How long one <c>search</c> may walk before it stops with what it found.</summary>
     public static readonly TimeSpan WalkTime = TimeSpan.FromSeconds(10);
 
@@ -53,9 +59,11 @@ public sealed record LookupLimits(
     int WalkFiles,
     TimeSpan WalkTime,
     int TurnBytes,
-    TimeSpan BlockTime)
+    TimeSpan BlockTime,
+    int FolderEntries)
 {
     public static LookupLimits Default { get; } = new(
         LookupBudget.RequestsPerTurn, LookupBudget.ListEntries, LookupBudget.SearchHits, LookupBudget.LineChars,
-        LookupBudget.FileBytes, LookupBudget.WalkFiles, LookupBudget.WalkTime, LookupBudget.TurnBytes, LookupBudget.BlockTime);
+        LookupBudget.FileBytes, LookupBudget.WalkFiles, LookupBudget.WalkTime, LookupBudget.TurnBytes, LookupBudget.BlockTime,
+        LookupBudget.FolderEntries);
 }

@@ -13,12 +13,21 @@ public abstract record LookupRequest(string Line)
     public sealed record Search(string Line, string Text, string Path) : LookupRequest(Line);
 }
 
-/// <summary>What one answer asked for.</summary>
-/// <param name="Requests">The lookups to serve, at most <see cref="LookupBudget.RequestsPerTurn"/>.</param>
-/// <param name="Refused">Every other line of a block, each with why — said back to the model, never silently dropped.</param>
-/// <param name="Prose">The answer with its blocks taken out — the draft of a request turn, the answer of the last one.</param>
-/// <param name="HadBlock">Whether the answer carried a block at all — the one thing that makes a turn a request turn.</param>
-public sealed record LookupAsk(IReadOnlyList<LookupRequest> Requests, IReadOnlyList<string> Refused, string Prose, bool HadBlock);
+/// <summary>What one answer asked for — an answer that asked for nothing by default.</summary>
+public sealed record LookupAsk
+{
+    /// <summary>The lookups to serve, at most <see cref="LookupBudget.RequestsPerTurn"/>.</summary>
+    public IReadOnlyList<LookupRequest> Requests { get; init; } = [];
+
+    /// <summary>Every other line of a block, each with why — said back to the model, never silently dropped.</summary>
+    public IReadOnlyList<string> Refused { get; init; } = [];
+
+    /// <summary>The answer with its blocks taken out — the draft of a request turn, the answer of the last one.</summary>
+    public string Prose { get; init; } = string.Empty;
+
+    /// <summary>Whether the answer carried a block at all — the one thing that makes a turn a request turn.</summary>
+    public bool HadBlock { get; init; }
+}
 
 /// <summary>
 /// Reads the <c>coai-lookup</c> block an antigravity consultant writes when it needs coai to list a folder or search
@@ -55,7 +64,7 @@ public static class LookupRequests
 
         var (requests, refused) = Parse(asked, cap);
 
-        return new LookupAsk(requests, refused, Tidy(prose), hadBlock);
+        return new LookupAsk { Requests = requests, Refused = refused, Prose = Tidy(prose), HadBlock = hadBlock };
     }
 
     /// <summary>One line of the answer: a fence that opens or closes a block, a line of a block, or prose.</summary>
