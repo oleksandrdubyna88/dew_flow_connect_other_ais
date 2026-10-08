@@ -81,7 +81,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
             await Consult(Service(), "why is the count wrong");
 
             var prompt = Directory.EnumerateFiles(recorded, "*.argv")
-                .Select(File.ReadAllText)
+                .Select(LaunchRecords.Read)
                 .Select(fields => fields.Split('\0')[^1])
                 .Single();
 
@@ -115,7 +115,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
             second.GetProperty("turnIndex").GetInt32().Should().Be(2);
             second.GetProperty("consultationId").GetString().Should().Be(id);
 
-            var argv = File.ReadAllText(Directory.EnumerateFiles(recorded, "*.argv").Single()).Split('\0');
+            var argv = LaunchRecords.Read(Directory.EnumerateFiles(recorded, "*.argv").Single()).Split('\0');
             argv.Should().ContainInOrder("exec", "resume", "0198f2c1-first");
             argv[^1].Should().NotContain("diff --git", "a remembering vendor is not re-sent the tree");
             argv[^1].Should().Contain("has not moved");
@@ -668,7 +668,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
 
             second.TryGetProperty("error", out _).Should().BeFalse(second.ToString());
             second.GetProperty("turnIndex").GetInt32().Should().Be(2);
-            var argv = File.ReadAllText(Directory.EnumerateFiles(recorded, "*.argv").Single()).Split('\0');
+            var argv = LaunchRecords.Read(Directory.EnumerateFiles(recorded, "*.argv").Single()).Split('\0');
             argv.Should().ContainInOrder(["exec", "resume", "0198f2c1-first"], "the codex CLI's resume shape, not claude's --resume");
             var record = new ConsultationStore(_data).All().Single();
             record.Vendor.Should().Be("codex");

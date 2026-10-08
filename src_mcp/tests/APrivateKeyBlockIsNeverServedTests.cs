@@ -351,7 +351,7 @@ public sealed class APrivateKeyBlockIsNeverServedTests : IAsyncLifetime
 
     /// <summary>What the reviewer was handed on each launch: the prompt, the last field of the recorded argv.</summary>
     private IReadOnlyList<string> Prompts() =>
-        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(f => File.ReadAllText(f).Split('\0')[^1])];
+        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(f => LaunchRecords.Read(f).Split('\0')[^1])];
 
     [Fact]
     public async Task AServiceAccountAskedForInTurnTwo_IsServedWithoutItsKey_AndTheTailNeverRepeatsIt()

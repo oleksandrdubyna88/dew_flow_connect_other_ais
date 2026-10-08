@@ -346,8 +346,7 @@ public sealed class ProcessLauncherStdInTests
 
             await _launcher.RunAsync(request, TestContext.Current.CancellationToken);
 
-            var recorded = await File.ReadAllTextAsync(
-                Directory.EnumerateFiles(record, "*.argv").Single(), TestContext.Current.CancellationToken);
+            var recorded = LaunchRecords.Read(Directory.EnumerateFiles(record, "*.argv").Single());
             recorded.Should().Contain("the whole review prompt");
         }
         finally

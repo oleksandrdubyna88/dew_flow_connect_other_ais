@@ -229,7 +229,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
 
             var prompt = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split('\0')[^1]).First();
+                .Select(f => LaunchRecords.Read(f).Split('\0')[^1]).First();
             prompt.Should().Contain("The rules this project has written down");
             prompt.Should().Contain("research tracks the system as it is", "a rule of the document tier");
             prompt.Should().NotContain("Build with the response file",

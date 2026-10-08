@@ -260,11 +260,11 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
     /// <summary>What the reviewer was handed: the prompt, the last field of each recorded launch.</summary>
     private IReadOnlyList<string> Prompts() =>
-        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(f => File.ReadAllText(f).Split('\0')[^1])];
+        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(f => LaunchRecords.Read(f).Split('\0')[^1])];
 
     /// <summary>Every recorded launch, whole — which vendor ran is read off its model argument.</summary>
     private IReadOnlyList<string> Launches() =>
-        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(File.ReadAllText)];
+        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(LaunchRecords.Read)];
 
     /// <summary>A launcher that answers the second vendor's launch with a failure, and runs everything else.</summary>
     private WatchedLauncher SecondVendorFalls() =>
