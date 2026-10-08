@@ -76,6 +76,11 @@ function placesScript(): string {
     if (!pressed || typeof pressed.closest !== 'function') { return; }
     const tab = pressed.closest('[data-tab]');
     if (tab) { showPlace(tab.dataset.tab, true); }
+    // A jump to another place of this page (E5.1): what the old pages' "Edit commands…" and "Edit roles…" opened as a
+    // page of their own is a place here, so the press opens it and tells the host as a tab press does. Not a
+    // [data-tab]: a jump drawn inside a pane is no tab of a strip, and the strip's marking must never reach it.
+    const jump = pressed.closest('[data-goto]');
+    if (jump) { showPlace(jump.dataset.goto, true); }
   });
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'showTab') { showPlace(String(event.data.id || ''), false); }

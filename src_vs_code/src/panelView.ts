@@ -1672,7 +1672,7 @@ export function sideBody(state: PanelState): string {
 </div>`;
 }
 
-/** The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate. */
+/** The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate; its "Edit commands…" jumps to Reviews › Commands (E5.1), where the commands page was. */
 export function gateBody(state: PanelState): string {
   const s = state.settings;
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
@@ -1703,8 +1703,8 @@ ${gatePerBlock(state)}
 </div>
 ${commandModelsBlock(state)}
 <div class="field">
-  <div class="hint">The words those orders are made of, and commands of your own to hand over with them.</div>
-  <button type="button" class="run" data-command="editCommands">Edit commands…</button>
+  <div class="hint">The words those orders are made of, and commands of your own to hand over with them, are under Commands.</div>
+  <button type="button" class="run" data-goto="reviews/commands">Edit commands…</button>
 </div>`;
 }
 
@@ -2512,7 +2512,7 @@ const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: R
     pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
 };
 
-/** The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles page. */
+/** The stages around their role boxes: the lens deals, the workspace, the notes and the jump to Roles & prompts (E5.1: a place of this page, where the roles page was). */
 function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
   const s = state.settings;
 
@@ -2552,8 +2552,8 @@ ${documents}
 ${features}
 </div>
 <div class="field">
-  <button type="button" class="run" data-command="editRoles">Edit roles…</button>
-  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does. The five above are on that page too.</div>
+  <button type="button" class="run" data-goto="reviews/roles">Edit roles…</button>
+  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does, under Roles &amp; prompts. The five above are there too.</div>
 </div>`;
 }
 
