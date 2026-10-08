@@ -28,6 +28,11 @@ export interface BugzViewState {
    * false: it matches the row id, so the picker offers only what that binary will accept.
    */
   readonly byRuntime?: boolean;
+  /**
+   * The saved pick when it no longer holds — its row unticked Bugz or gone (`bugzPick.ts`); absent or '' when it holds.
+   * Drawn as what it is, chosen and disabled, so what is configured is what is shown (E5.1 step 2, the Chat tab's rule).
+   */
+  readonly stranded?: string;
 }
 
 /** A picker choice, and the runtime of the catalog row it names — what a binary that ranks by runtime matches. */
@@ -166,6 +171,46 @@ export function lastSendLine(corpus: BugCorpus): string {
     : `Last send: ${went}.`;
 }
 
+/** What the section says while no row is ticked Bugz on Models — and why the pick is a model on this machine. */
+const NONE_TICKED = '<div class="hint">No model is ticked for Bugz. Tick one under Settings › Models — the ranking pass'
+  + ' reads findings that are not anonymised, so it runs on a model on this machine or not at all.</div>';
+
+/**
+ * The ranking picker (todo/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked Bugz on Models (`bugzPick.ts`), a
+ * stranded pick drawn as what it is, and — while nothing is ticked — the sentence that says so and where to tick one.
+ * No picker at all only when there is neither a row to offer nor a pick to show.
+ */
+function pickerHtml(offered: readonly RankingChoice[], model: string, stranded: string): string {
+  const select = offered.length === 0 && stranded.length === 0
+    ? ''
+    : `<select id="bugz-model" data-setting="bugzModel">${firstOption(offered, model, stranded)}${
+      offered.map((m) => option(m, model)).join('')}</select>`;
+
+  return `${select}${offered.length === 0 ? NONE_TICKED : ''}${strandedLine(stranded)}`;
+}
+
+/**
+ * What the picker shows when the setting is none of its rows: the stranded pick, chosen and disabled — never the first
+ * row, which a browser would show for a select with nothing selected, and which is not what is configured — or, for
+ * no pick at all, a placeholder saying one is wanted.
+ */
+function firstOption(offered: readonly RankingChoice[], model: string, stranded: string): string {
+  if (stranded.length > 0) {
+    return `<option value="${escape(stranded)}" selected disabled>${escape(stranded)} — no longer ticked Bugz</option>`;
+  }
+
+  return offered.some((m) => m.id === model) ? '' : '<option value="" selected disabled>Pick a model</option>';
+}
+
+/** Why a stranded pick is shown, and what Collect does with it — refuses it by name (the collect's own sentence). */
+function strandedLine(stranded: string): string {
+  return stranded.length === 0
+    ? ''
+    : `<div class="stale">${escape(stranded)} is no longer ticked Bugz on Models, or was removed. Until you tick a model`
+      + ' for Bugz under Settings › Models, or pick one here, Collect is refused by that name — it never ranks with a'
+      + ' model you did not choose.</div>';
+}
+
 /** The section's body. */
 export function bugzBody(state: BugzViewState = {
   corpus: EMPTY_CORPUS, models: [], model: '', server: '',
@@ -186,11 +231,7 @@ export function bugzBody(state: BugzViewState = {
     : RANKING_VENDORS;
   const offered = state.models.filter((m) => allowedBy(m, vendors, state.byRuntime === true));
 
-  const picker = offered.length === 0
-    ? '<div class="hint">No local engine was found. The ranking pass reads findings that are not'
-      + ' anonymised, so it runs on this machine or not at all.</div>'
-    : `<select id="bugz-model" data-setting="bugzModel">${
-      offered.map((m) => option(m, state.model)).join('')}</select>`;
+  const picker = pickerHtml(offered, state.model, state.stranded ?? '');
 
   return `<div class="field">
   <div class="hint">${escape(lastRunLine(state.corpus))}</div>

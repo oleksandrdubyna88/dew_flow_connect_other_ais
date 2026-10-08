@@ -108,6 +108,7 @@ import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectArgs } from './bugzView';
+import { bugzCollectRefusal, bugzPickOf, modelsOfRows } from './bugzPick';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { currentFileIn, folderHolding } from './openAtRevision';
@@ -3254,13 +3255,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Through `serverRun`, which is the door that carries THIS window's data directory. A spawn
     // that skipped it would collect against a different database from the one the section shows.
     const model = this.settings().bugzModel;
-    const run = serverRun(server.fsPath);
-    // The row's runtime, said only to a binary that ranks by it (PLAN_one_model_catalog.md E2.1) — every row read, a
-    // catalog-only `bugz-local` included, because the page's reviewer list hides those.
-    const row = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'))
-      .find((one) => one.id === model.split('/')[0]?.toLowerCase());
-    const byRuntime = hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime);
-    const collecting = run(collectArgs(model, row?.runtime ?? '', byRuntime), PanelProvider.COLLECT_CAP_MS);
+    // Every row read, a catalog-only `bugz-local` included, because the page's reviewer list hides those.
+    const rows = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));
+    // The pick the sidebar draws, judged by the same rule (E5.1 step 2): a stranded pick, or none, is refused by a
+    // sentence naming Models — never collected with an empty or stale `--model`.
+    if (await this.refusedBugzPick(rows, model)) {
+      return;
+    }
+    const collecting = serverRun(server.fsPath)(await this.collectArgsFor(rows, model), PanelProvider.COLLECT_CAP_MS);
 
     // NOT awaited before the repaint, and this is the point. The run writes `running` to the
     // database before its first candidate, so the section can show it — but only if something
@@ -3268,6 +3270,27 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // for the length of a multi-minute run, and a second click started a second collection.
     // (Code round, gemini and codex, four findings between them.)
     await this.watchCollect(collecting);
+  }
+
+  /** The collector's arguments: the row's runtime, said only to a binary that ranks by it (PLAN_one_model_catalog.md E2.1). */
+  private async collectArgsFor(rows: readonly Vendor[], model: string): Promise<readonly string[]> {
+    const row = rows.find((one) => one.id === model.split('/')[0]?.toLowerCase());
+
+    return collectArgs(model, row?.runtime ?? '', hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime));
+  }
+
+  /**
+   * Whether the saved Bugz pick is refused, and the person told why (`bugzPick.ts`): the rows ticked Bugz on Models and
+   * the engines last seen serving, the same reading the sidebar's picker is drawn from, so a pick it shows as stranded
+   * is the pick this refuses.
+   */
+  private async refusedBugzPick(rows: readonly Vendor[], model: string): Promise<boolean> {
+    const refused = bugzCollectRefusal(bugzPickOf(rows, model, modelsOfRows(this.localEngines)));
+    if (refused.length > 0) {
+      await notifyAndAsk({ as: 'warning', class: 'refusal', source: 'bugz', code: 'no-ranking-model', title: refused });
+    }
+
+    return refused.length > 0;
   }
 
   /**

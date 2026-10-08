@@ -5,7 +5,7 @@ import { staticKey, type PanelState } from '../panelView';
 import { everyPageHtml } from './panelPages';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
-import { DEFAULT_VENDORS } from '../vendors';
+import { DEFAULT_VENDORS, LOCAL_PRESET } from '../vendors';
 import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun, type SendRun } from '../roundsDb';
 import { RANKING_VENDORS, bugzBody, collectArgs, collectLabel, lastRunLine, mayRank } from '../bugzView';
 
@@ -67,12 +67,12 @@ const corpus = (
  */
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
-  vendors: DEFAULT_VENDORS,
+  // A local row ticked Bugz on Models, because the picker lists the rows ticked Bugz (E5.1 step 2) — the ranking pass
+  // reads findings that are not anonymised, so only a model on this machine may be ticked for it.
+  vendors: [...DEFAULT_VENDORS, { ...LOCAL_PRESET, model: 'qwen3.5', uses: ['bugz'] }],
   agyModels: [],
   codexModels: [],
-  // A real local engine, because the section renders a picker only when there is something local
-  // to offer — the ranking pass reads findings that are not anonymised, so a machine with no local
-  // engine is offered nothing at all rather than a cloud fallback.
+  // A real local engine, as the panel probes one: the models a row's engine serves are that row's models.
   localEngines: {
     local: {
       kind: 'ollama',

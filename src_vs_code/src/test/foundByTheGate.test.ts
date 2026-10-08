@@ -5,7 +5,7 @@ import { discoverEngine, LocalEngine, noEngine } from '../localEngines';
 import { PanelState } from '../panelView';
 import { everyPageHtml, paintKeys } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
-import { DEFAULT_VENDORS } from '../vendors';
+import { DEFAULT_VENDORS, LOCAL_PRESET } from '../vendors';
 
 /**
  * The defects this product's own review gate found in it, one test each.
@@ -48,6 +48,9 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
 
 // ---------------------------------------------------------------- flash, alone
 
+/** The shipped reviewers and a local row, whose card draws the models its engine serves. */
+const WITH_LOCAL = [...DEFAULT_VENDORS, LOCAL_PRESET];
+
 test('a reprobe that finds different models repaints the panel', () => {
   // `staticKey` decides repaint-or-patch, and anything missing from it is a control that can never
   // change. The local model list was missing: pressing ⟳ probed the engine, got a new list, and
@@ -55,15 +58,18 @@ test('a reprobe that finds different models repaints the panel', () => {
   // defect class `liveRepaint.test.ts` was written for, in the one field added after it.
   //
   // RED: Expected the key to change when the model list did, but both were identical.
-  const before = paintKeys(state({ localEngines: {} }));
-  const after = paintKeys(state({ localEngines: { local: engine() } }));
+  //
+  // With a local row on the page: since E5.1 the sidebar's Bugz picker lists the rows ticked Bugz, not every model
+  // every engine serves, so the model list is drawn where a local row is — its card's model picker.
+  const before = paintKeys(state({ vendors: WITH_LOCAL, localEngines: {} }));
+  const after = paintKeys(state({ vendors: WITH_LOCAL, localEngines: { local: engine() } }));
 
   assert.notEqual(before, after, 'a new model list must repaint, or the picker is frozen');
 });
 
 test('an engine that went away also repaints', () => {
-  const up = paintKeys(state({ localEngines: { local: engine() } }));
-  const down = paintKeys(state({ localEngines: { local: noEngine('connection refused') } }));
+  const up = paintKeys(state({ vendors: WITH_LOCAL, localEngines: { local: engine() } }));
+  const down = paintKeys(state({ vendors: WITH_LOCAL, localEngines: { local: noEngine('connection refused') } }));
 
   assert.notEqual(up, down);
 });

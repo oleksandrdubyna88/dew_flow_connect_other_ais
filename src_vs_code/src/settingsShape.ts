@@ -591,13 +591,10 @@ export function envBlock(
   if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
     env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
   }
-  // The Bugz pair. The panel passes the model on the command line when it starts a collect, but a
-  // collect started from a TERMINAL has no panel to pass it — and a setting the server can never
-  // see is a setting that silently does nothing, which the test beside this block exists to catch.
-  // The collector refuses a non-local model wherever the value arrives from.
-  if (settings.bugzModel) {
-    env['COAI_BUGZ_MODEL'] = settings.bugzModel;
-  }
+  // The Bugz server. NOT the Bugz model (todo/PLAN_one_model_catalog.md T7, removed in E5.1): it was written here as
+  // `COAI_BUGZ_MODEL` so a collect started from a terminal could find it, and nothing in coai-mcp ever read that key —
+  // the collector takes the model as `--model`, which the panel passes when it starts a collect. A key nothing reads
+  // is a setting that looks wired and is not; `settingsReach.test.ts` says why its walk skips `bugzModel`.
   if (settings.bugzServer) {
     env['COAI_BUGZ_SERVER'] = settings.bugzServer;
   }

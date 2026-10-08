@@ -77,6 +77,7 @@ import { ProbeResult, claudeNote } from './claudeModels';
 import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody } from './bugzView';
+import { bugzPickOf, modelsOfRows } from './bugzPick';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
@@ -581,19 +582,15 @@ export function questionConsultantSection(state: PanelState, pickFrom?: readonly
 
 /** The Bugz section: the corpus, the ranking picker and the ingest server. */
 function bugzSection(state: PanelState): string {
+  // The rows ticked Bugz on Models (E5.1 step 2) — every catalog row read, a catalog-only `bugz-local` included, since
+  // the reviewer list hides those. The view still keeps to what the ranking allowlist accepts: the pass reads findings
+  // that are not anonymised, and the collector refuses anything else anyway.
+  const pick = bugzPickOf(state.catalogRows ?? state.vendors, state.settings.bugzModel, modelsOfRows(state.localEngines));
+
   return bugzBody({
     corpus: state.bugz ?? EMPTY_CORPUS,
-    // Only the engines that run on THIS machine, because the ranking pass reads findings that
-    // are not anonymised. The collector refuses anything else anyway — this is so the picker
-    // cannot offer what it will refuse.
-    models: Object.entries(state.localEngines)
-      // Every key is a row on the `local` runtime (`probeLocalEngines` probes no other), which is what a binary that
-      // ranks by runtime matches; an older one matches the row id, and the view applies that rule when this says so.
-      .flatMap(([id, engine]) => engine.models.map((m) => ({
-        id: `${id}/${m.id}`,
-        label: `${m.id} — ${id}`,
-        runtime: 'local',
-      }))),
+    models: pick.offered,
+    stranded: pick.stranded,
     byRuntime: state.rankByRuntime === true,
     // From CONFIGURATION, which is where the picker writes. They were read from panel fields
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
