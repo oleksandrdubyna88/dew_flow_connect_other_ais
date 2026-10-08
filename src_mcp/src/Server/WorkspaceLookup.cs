@@ -32,6 +32,9 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     private const string GitFolder = ".git";
     private const int BinarySniffBytes = SourceBudget.BinarySniffChars;
 
+    /// <summary>Below this many bytes left in the turn no result can be sent, so none is read (code round).</summary>
+    private const int SmallestSection = 256;
+
     private readonly LookupLimits _limits = limits ?? LookupLimits.Default;
     private readonly Func<string, string> _follow = followLink ?? DocumentReader.FollowLink;
 
@@ -40,28 +43,53 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     public LookupServed Serve(IReadOnlyList<LookupRequest> requests, CancellationToken ct)
     {
         var text = new StringBuilder();
-        var served = 0;
-        var refused = 0;
+        var (served, refused, used) = (0, 0, 0);
+        var block = Stopwatch.StartNew();
         foreach (var request in requests)
         {
             ct.ThrowIfCancellationRequested();
-            var (section, ok) = One(request, ct);
-            if (Encoding.UTF8.GetByteCount(section) + Encoding.UTF8.GetByteCount(text.ToString()) > _limits.TurnBytes)
-            {
-                (section, ok) = (NotServed(request, $"this turn's budget of {_limits.TurnBytes / 1024.0:0.#} KB is spent — ask for it again next turn"), false);
-            }
-
-            text.Append(section);
-            (served, refused) = ok ? (served + 1, refused) : (served, refused + 1);
+            var answered = Bounded(request, served + refused == 0, block.Elapsed, used, ct);
+            text.Append(answered.Section);
+            used += Encoding.UTF8.GetByteCount(answered.Section);
+            (served, refused) = answered.Served ? (served + 1, refused) : (served, refused + 1);
         }
 
         return new LookupServed(text.ToString().TrimEnd(), served, refused);
     }
 
-    private (string Section, bool Ok) One(LookupRequest request, CancellationToken ct) =>
+    /// <summary>What one request rendered, and whether it was served — a result, or the sentence saying why not.</summary>
+    private sealed record Answered(string Section, bool Served)
+    {
+        public static Answered Not(LookupRequest request, string why) => new(NotServed(request, why), false);
+    }
+
+    /// <summary>
+    /// One request inside the block's limits: past the block's time (the first request always runs) or with no room left
+    /// for any result it is not read at all; a result too large for what is left is not sent. Each says so.
+    /// </summary>
+    private Answered Bounded(LookupRequest request, bool first, TimeSpan elapsed, int used, CancellationToken ct)
+    {
+        if (!first && elapsed >= _limits.BlockTime)
+        {
+            return Answered.Not(request, $"this block's time limit of {_limits.BlockTime.TotalSeconds:0.#} s is spent — ask for it again next turn");
+        }
+
+        if (_limits.TurnBytes - used < SmallestSection)
+        {
+            return Answered.Not(request, $"this turn's budget of {Kb(_limits.TurnBytes)} is spent — ask for it again next turn");
+        }
+
+        var answered = One(request, ct);
+
+        return used + Encoding.UTF8.GetByteCount(answered.Section) <= _limits.TurnBytes
+            ? answered
+            : Answered.Not(request, $"its result does not fit what is left of this turn's budget of {Kb(_limits.TurnBytes)} — narrow it, or ask again next turn");
+    }
+
+    private Answered One(LookupRequest request, CancellationToken ct) =>
         Resolve(request) switch
         {
-            Resolution.Refused no => (NotServed(request, no.Why), false),
+            Resolution.Refused no => Answered.Not(request, no.Why),
             Resolution.Inside at when request is LookupRequest.List => Listed(request, at),
             Resolution.Inside at => Searched((LookupRequest.Search)request, at, ct),
             _ => throw new InvalidOperationException("the union is closed"),
@@ -85,7 +113,16 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             _ => string.Empty,
         };
 
-        return Absolute(said) is { } full ? Contained(said, full) : new Resolution.Refused(SeveralRoots(said));
+        try
+        {
+            return Absolute(said) is { } full ? Contained(said, full) : new Resolution.Refused(SeveralRoots(said));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A model-written path the file system cannot hold (a NUL, a malformed name) is one line refused, never the
+            // turn lost (code round, codex + gemini).
+            return new Resolution.Refused($"'{said.Replace('\0', '?')}' is not a valid path: {e.Message}");
+        }
     }
 
     /// <summary>The path made absolute — against THE root when there is exactly one; null when it would be a guess.</summary>
@@ -136,35 +173,41 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             return $"'{slashed}' is inside .git, which is never shown";
         }
 
-        if (DiffExclusions.WhichExcludes(slashed + "/_") is { Length: > 0 } glob)
+        if (Excluded(slashed) is { Length: > 0 } glob)
         {
-            return $"'{slashed}' is excluded ({glob}) — dependency and build folders are never shown";
+            return $"'{slashed}' is excluded ({glob}) — dependency and build folders and lock files are never shown";
         }
 
         return CredentialFiles.WhichPattern(slashed) is { Length: > 0 } pattern ? $"'{slashed}' looks like a credential ({pattern})" : string.Empty;
     }
 
+    /// <summary>The glob that hides this path as a file (a lock file named directly) or as a folder — empty when none does.</summary>
+    private static string Excluded(string slashed) =>
+        DiffExclusions.WhichExcludes(slashed) is { Length: > 0 } asFile ? asFile : DiffExclusions.WhichExcludes(slashed + "/_");
+
     // ---------- list ----------
 
-    private (string Section, bool Ok) Listed(LookupRequest request, Resolution.Inside at)
+    private Answered Listed(LookupRequest request, Resolution.Inside at)
     {
         if (!Directory.Exists(at.Path))
         {
-            return (NotServed(request, $"there is no folder at '{Slashed(at.Path)}'"), false);
+            return Answered.Not(request, $"there is no folder at '{Slashed(at.Path)}'");
         }
 
         List<string> entries;
         try
         {
+            // Stops at the cap BEFORE sorting: a folder of a million entries is not read whole to show two hundred (code
+            // round, codex) — which two hundred is then the file system's order, and the cut is said.
             entries = [.. new DirectoryInfo(at.Path).EnumerateFileSystemInfos()
                 .Where(entry => Shown(at.Root, entry))
+                .Take(_limits.ListEntries + 1)
                 .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(Named)
-                .Take(_limits.ListEntries + 1)];
+                .Select(Named)];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return (NotServed(request, $"'{Slashed(at.Path)}' could not be read: {e.Message}"), false);
+            return Answered.Not(request, $"'{Slashed(at.Path)}' could not be read: {e.Message}");
         }
 
         var lines = entries.Take(_limits.ListEntries).ToList();
@@ -173,15 +216,10 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             lines.Add($"(stopped at {_limits.ListEntries} entries — list a narrower folder)");
         }
 
-        return (Section(request, $"in {Slashed(at.Path)}", lines.Count == 0 ? ["(empty)"] : lines), true);
+        return new Answered(Section(request, $"in {Slashed(at.Path)}", lines.Count == 0 ? ["(empty)"] : lines), true);
     }
 
-    private static bool Shown(string root, FileSystemInfo entry)
-    {
-        var relative = Relative(root, entry.FullName) ?? entry.Name;
-
-        return Hidden(relative).Length == 0 && (entry is DirectoryInfo || !DiffExclusions.Excludes(relative.Replace('\\', '/')));
-    }
+    private static bool Shown(string root, FileSystemInfo entry) => Hidden(Relative(root, entry.FullName) ?? entry.Name).Length == 0;
 
     private static string Named(FileSystemInfo entry) =>
         entry.Attributes.HasFlag(FileAttributes.ReparsePoint) ? $"{entry.Name}@ (a link — not followed)"
@@ -210,11 +248,11 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
         }
     }
 
-    private (string Section, bool Ok) Searched(LookupRequest.Search request, Resolution.Inside at, CancellationToken ct)
+    private Answered Searched(LookupRequest.Search request, Resolution.Inside at, CancellationToken ct)
     {
         if (!Directory.Exists(at.Path) && !File.Exists(at.Path))
         {
-            return (NotServed(request, $"there is no folder or file at '{Slashed(at.Path)}'"), false);
+            return Answered.Not(request, $"there is no folder or file at '{Slashed(at.Path)}'");
         }
 
         var walk = new Walk(_limits);
@@ -227,7 +265,7 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             SearchFolder(at.Root, at.Path, request.Text, walk, ct);
         }
 
-        return (Section(request, $"in {Slashed(at.Path)}", Footed(walk)), true);
+        return new Answered(Section(request, $"in {Slashed(at.Path)}", Footed(walk)), true);
     }
 
     private void SearchFolder(string root, string folder, string text, Walk walk, CancellationToken ct)
@@ -236,7 +274,7 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
         while (pending.Count > 0 && !walk.Over())
         {
             ct.ThrowIfCancellationRequested();
-            var entries = Entries(pending.Pop(), root, walk);
+            var entries = Entries(pending.Pop(), root, walk, ct);
             foreach (var entry in entries.AsEnumerable().Reverse().OfType<DirectoryInfo>())
             {
                 pending.Push(entry.FullName);
@@ -247,11 +285,14 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     }
 
     /// <summary>A folder's entries a search may walk — never a link — or none, counted as unreadable, when the folder cannot be read.</summary>
-    private static List<FileSystemInfo> Entries(string folder, string root, Walk walk)
+    /// <remarks>Read entry by entry with the walk's limits and the caller's token asked at each one, so one enormous folder
+    /// cannot outlast the time limit or a cancel before a single file is searched (code round, codex).</remarks>
+    private List<FileSystemInfo> Entries(string folder, string root, Walk walk, CancellationToken ct)
     {
         try
         {
             return [.. new DirectoryInfo(folder).EnumerateFileSystemInfos()
+                .TakeWhile(_ => !ct.IsCancellationRequested && !walk.Over())
                 .Where(entry => !entry.Attributes.HasFlag(FileAttributes.ReparsePoint) && Shown(root, entry))
                 .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)];
         }
@@ -297,11 +338,14 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             return;
         }
 
-        if (IsBinary(path))
+        if (!IsBinary(path))
         {
-            return;
+            SearchLines(path, text, walk);
         }
+    }
 
+    private void SearchLines(string path, string text, Walk walk)
+    {
         var number = 0;
         foreach (var line in File.ReadLines(path))
         {
@@ -370,4 +414,6 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     private static string Plural(int count) => count == 1 ? string.Empty : "s";
 
     private static string Size(long bytes) => bytes < 1024 ? $"{bytes} bytes" : $"{bytes / 1024} KB";
+
+    private static string Kb(int bytes) => $"{bytes / 1024.0:0.#} KB";
 }

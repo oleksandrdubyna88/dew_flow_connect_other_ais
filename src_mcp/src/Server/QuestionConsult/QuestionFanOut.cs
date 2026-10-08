@@ -202,7 +202,7 @@ public sealed class QuestionFanOut(
         var looking = WithLookup(row);
         return new RowInput.Launch(looking, QuestionPrompt.Compose(new QuestionPromptInput(
             instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty,
-            row.Prompt.Capability == Capability.Disk ? input.Settings.Roots : [], input.Nonce)
+            row.Prompt.Capability == Capability.Disk ? looking.Plan.Grant.Roots : [], input.Nonce)
         {
             Toolbox = looking.Runtime is AntigravityConsultant agy ? agy.LookupToolbox : string.Empty,
         }));

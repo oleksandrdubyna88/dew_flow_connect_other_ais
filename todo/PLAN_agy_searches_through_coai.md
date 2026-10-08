@@ -1,6 +1,7 @@
 # PLAN — an antigravity consultant searches through coai: list and search served read-only, agy stays in plan mode
 
-> Status: **plan only, nothing implemented yet, 2026-10-08.** Scope: a new bounded read-only workspace reader
+> Status: **in progress, 2026-10-08 — S1–S3 implemented on `feat/agy-searches-through-coai` and through the code round;
+> the live checks (§5) and the promotion remain.** Scope: a new bounded read-only workspace reader
 > (`src_mcp/src/Server/WorkspaceLookup.cs` + `src_mcp/core/Feature/LookupBudget.cs`), the agy request format and its parser
 > (`src_mcp/core/Consultation/LookupRequests.cs`), `AntigravityConsultant` as an answering-follow-up runtime for question rows,
 > a bounded request loop inside one `consult` call (`ConsultationService`), the agy prompt text (`AntigravityFollowUps`),

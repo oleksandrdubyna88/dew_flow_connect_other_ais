@@ -194,6 +194,49 @@ public sealed class WorkspaceLookupTests : IAsyncLifetime
     }
 
     [Fact]
+    public void APathTheFileSystemCannotHold_IsRefusedByName_NeverThrown_AndTheNextRequestIsServed()
+    {
+        // code round, codex + gemini: Path.GetFullPath throws on a NUL, and one bad line must not lose the turn.
+        var text = Serve(Lookup(), List("pro\0jA"), List("projA"));
+
+        text.Should().Contain("not served").And.Contain("not a valid path");
+        text.Should().Contain("README.md", "the next request is still served");
+    }
+
+    [Fact]
+    public void AFileTheDiffExcludes_IsNotSearchedWhenNamedDirectly()
+    {
+        // code round, gemini: a folder walk skipped it, but naming the file went straight to the read.
+        Write("projB/package-lock.json", $"{MarkerOne}\n");
+
+        var text = Serve(Lookup(), Search(MarkerOne, "projB/package-lock.json"));
+
+        text.Should().Contain("not served").And.Contain("excluded").And.NotContain("package-lock.json:1:");
+    }
+
+    [Fact]
+    public void ABlockPastItsTimeLimit_ServesWhatStarted_AndNamesTheRest()
+    {
+        var text = Serve(Lookup(LookupLimits.Default with { BlockTime = TimeSpan.Zero }), List("projA"), List("projB"));
+
+        text.Should().Contain("README.md", "the first request always runs");
+        text.Should().Contain("list projB\nnot served").And.Contain("time limit").And.NotContain("keep.txt");
+    }
+
+    [Fact]
+    public void ATurnBudgetThatCannotHoldAResult_ReadsNothingMore()
+    {
+        // code round, codex + gemini: a request the budget can no longer hold was walked anyway, then thrown away.
+        var resolved = 0;
+        var lookup = new WorkspaceLookup([_root], LookupLimits.Default with { TurnBytes = 64 }, path => { resolved++; return DocumentReader.FollowLink(path); });
+
+        var text = Serve(lookup, List("projB"), Search(MarkerOne));
+
+        text.Should().Contain("list projB\nnot served").And.Contain("turn's budget");
+        resolved.Should().Be(0, "nothing is resolved, listed or walked for a result that could not be sent");
+    }
+
+    [Fact]
     public void AMissingFolder_IsSaidAsMissing()
     {
         Serve(Lookup(), List("nowhere")).Should().Contain("not served").And.Contain("no folder");

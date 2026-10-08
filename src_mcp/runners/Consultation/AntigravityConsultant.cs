@@ -46,11 +46,13 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     /// (<see cref="AntigravityStream.Continue"/>); an answer with no block is the advice.
     /// </summary>
     /// <remarks>
-    /// On the last allowed turn a block is not served: its prose is the answer and the note names what was asked and
-    /// not served (plan round, gemini) — with no prose left, the row's answer is empty and the row fails saying why.
+    /// <para>On the last allowed turn a block is not served: its prose is the answer and the note names what was asked and
+    /// not served (plan round, gemini) — with no prose left, the row's answer is empty and the row fails saying why.</para>
+    /// <para>Off the caller's thread: serving a block walks the disk for up to its time limit, and question rows answer
+    /// side by side (code round, gemini).</para>
     /// </remarks>
     public Task<AnsweringTurn> AfterAsync(ConsultantLaunch launch, AnsweringMemory memory, string raw, CancellationToken ct) =>
-        Task.FromResult(After(launch, memory, raw, ct));
+        Task.Run(() => After(launch, memory, raw, ct), ct);
 
     private AnsweringTurn After(ConsultantLaunch launch, AnsweringMemory memory, string raw, CancellationToken ct)
     {

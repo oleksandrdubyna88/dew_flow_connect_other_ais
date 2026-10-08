@@ -8,7 +8,9 @@ namespace CoaiMcp.Core.Feature;
 public static class LookupBudget
 {
     /// <summary>Lookups one turn may ask for; the ninth and later are refused, naming the line.</summary>
-    public const int RequestsPerTurn = SourceBudget.RequestsPerTurn;
+    /// <remarks>Its own number, not <see cref="SourceBudget.RequestsPerTurn"/>'s: the two budgets bound different reads,
+    /// and a change to what a reviewer is served must not silently widen what a consultant may walk (code round, codex).</remarks>
+    public const int RequestsPerTurn = 8;
 
     /// <summary>Entries one <c>list</c> shows; past it the result says so and asks for a narrower folder.</summary>
     public const int ListEntries = 200;
@@ -28,11 +30,17 @@ public static class LookupBudget
     /// <summary>How long one <c>search</c> may walk before it stops with what it found.</summary>
     public static readonly TimeSpan WalkTime = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// How long one block may take in all: past it the requests not yet started are not served, saying so — eight slow
+    /// searches would otherwise hold the caller for eighty seconds before agy hears anything (code round, codex).
+    /// </summary>
+    public static readonly TimeSpan BlockTime = TimeSpan.FromSeconds(20);
+
     /// <summary>Bytes of results one turn may carry back to the model: 32 KB.</summary>
     public const int TurnBytes = 32 * 1024;
 
-    /// <summary>Lookup turns one answer may take — the api rows' default follow-ups (<see cref="SourceBudget.DefaultFollowUps"/>).</summary>
-    public const int FollowUps = SourceBudget.DefaultFollowUps;
+    /// <summary>Lookup turns one answer may take — the plan's three, its own number (code round, codex).</summary>
+    public const int FollowUps = 3;
 }
 
 /// <summary>The caps one lookup runs under — <see cref="Default"/> in the product; a test narrows one to watch it bite.</summary>
@@ -44,9 +52,10 @@ public sealed record LookupLimits(
     long FileBytes,
     int WalkFiles,
     TimeSpan WalkTime,
-    int TurnBytes)
+    int TurnBytes,
+    TimeSpan BlockTime)
 {
     public static LookupLimits Default { get; } = new(
         LookupBudget.RequestsPerTurn, LookupBudget.ListEntries, LookupBudget.SearchHits, LookupBudget.LineChars,
-        LookupBudget.FileBytes, LookupBudget.WalkFiles, LookupBudget.WalkTime, LookupBudget.TurnBytes);
+        LookupBudget.FileBytes, LookupBudget.WalkFiles, LookupBudget.WalkTime, LookupBudget.TurnBytes, LookupBudget.BlockTime);
 }

@@ -72,9 +72,33 @@ public static class LookupRequests
             return (false, hadBlock);
         }
 
-        (inBlock ? asked : prose).Add(inBlock ? trimmed : line);
+        Keep(line, inBlock, prose, asked);
 
         return (inBlock, hadBlock);
+    }
+
+    private static void Keep(string line, bool inBlock, List<string> prose, List<string> asked)
+    {
+        if (inBlock)
+        {
+            asked.Add(line.Trim());
+        }
+        else
+        {
+            prose.Add(line);
+        }
+    }
+
+    /// <summary>One line of a block, read: a request, or the sentence saying why the line is not one.</summary>
+    private abstract record Parsed
+    {
+        private Parsed()
+        {
+        }
+
+        public sealed record Asked(LookupRequest Request) : Parsed;
+
+        public sealed record NotARequest(string Why) : Parsed;
     }
 
     private static (IReadOnlyList<LookupRequest> Requests, IReadOnlyList<string> Refused) Parse(List<string> lines, int cap)
@@ -85,14 +109,14 @@ public static class LookupRequests
         {
             switch (One(line))
             {
-                case LookupRequest request when requests.Count < cap:
-                    requests.Add(request);
+                case Parsed.Asked asked when requests.Count < cap:
+                    requests.Add(asked.Request);
                     break;
-                case LookupRequest:
+                case Parsed.Asked:
                     refused.Add($"{line} — more than {cap} requests in one turn; ask again next turn");
                     break;
-                case string why:
-                    refused.Add($"{line} — {why}");
+                case Parsed.NotARequest no:
+                    refused.Add($"{line} — {no.Why}");
                     break;
             }
         }
@@ -100,38 +124,35 @@ public static class LookupRequests
         return (requests, refused);
     }
 
-    /// <summary>A request, or the sentence saying why the line is not one.</summary>
-    private static object One(string line)
+    private static Parsed One(string line)
     {
         var (verb, rest) = Split(line);
 
         return verb.ToLowerInvariant() switch
         {
-            "list" => new LookupRequest.List(line, rest.Length == 0 ? "." : Unquoted(rest)),
+            "list" => new Parsed.Asked(new LookupRequest.List(line, rest.Length == 0 ? "." : Unquoted(rest))),
             "search" => SearchOf(line, rest),
-            _ => "not a lookup — a block holds only `list <folder>` and `search \"<text>\" in <folder>` lines",
+            _ => new Parsed.NotARequest("not a lookup — a block holds only `list <folder>` and `search \"<text>\" in <folder>` lines"),
         };
     }
 
-    private static object SearchOf(string line, string rest)
+    private static Parsed SearchOf(string line, string rest)
     {
-        var close = rest.Length > 1 && rest[0] == '"' ? rest.IndexOf('"', 1) : -1;
-        if (close <= 1)
-        {
-            return "quote the text you search for: search \"<text>\" in <folder>";
-        }
+        var close = ClosingQuote(rest);
 
-        var text = rest[1..close];
-        var after = rest[(close + 1)..].Trim();
-        if (after.Length == 0)
-        {
-            return new LookupRequest.Search(line, text, string.Empty);
-        }
-
-        return after.StartsWith("in ", StringComparison.OrdinalIgnoreCase)
-            ? new LookupRequest.Search(line, text, Unquoted(after[3..].Trim()))
-            : "after the quoted text only `in <folder>` may follow";
+        return close <= 1
+            ? new Parsed.NotARequest("quote the text you search for: search \"<text>\" in <folder>")
+            : InFolder(line, rest[1..close], rest[(close + 1)..].Trim());
     }
+
+    /// <summary>Where the quoted text ends — -1 when the rest does not open with a quote.</summary>
+    private static int ClosingQuote(string rest) => rest.Length > 1 && rest[0] == '"' ? rest.IndexOf('"', 1) : -1;
+
+    /// <summary>What may follow the quoted text: nothing (the single root), or <c>in &lt;folder&gt;</c>.</summary>
+    private static Parsed InFolder(string line, string text, string after) =>
+        after.Length == 0 ? new Parsed.Asked(new LookupRequest.Search(line, text, string.Empty))
+        : after.StartsWith("in ", StringComparison.OrdinalIgnoreCase) ? new Parsed.Asked(new LookupRequest.Search(line, text, Unquoted(after[3..].Trim())))
+        : new Parsed.NotARequest("after the quoted text only `in <folder>` may follow");
 
     private static (string Verb, string After) Split(string line)
     {
