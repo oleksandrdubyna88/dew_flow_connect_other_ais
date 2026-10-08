@@ -675,8 +675,44 @@
         },
         "coai.phrases": {
           "type": "array",
-          "default": [],
-          "markdownDescription": "Your saved phrases — the sentences you stopped wanting to retype. Press one in the panel, under **Phrases**, and it goes on the clipboard ready to paste. Edit them in **ConnectOtherAIs: Edit phrases**, which is easier than editing this. A row needs a `text`; a row with no `name` keeps its words and is named from its own first line, and a row with no text is dropped rather than taking the list with it. The text is stored exactly as you wrote it, spaces and newlines included.",
+          "default": [
+            {
+              "id": "phrase-default-pr-coderabbit-deploy",
+              "name": "PR, CodeRabbit, deploy",
+              "text": "Create the PR, read the PR comments and fix them, then deploy and release (if there is something to release), autonomously."
+            },
+            {
+              "id": "phrase-default-what-problem",
+              "name": "What problem are we solving?",
+              "text": "Remind me what problem we are solving, where we are now, and what is left to do."
+            },
+            {
+              "id": "phrase-default-questions-plan",
+              "name": "Questions, suggestions, plan",
+              "text": "Review it again. If you have questions, ask them. If you find something that can be improved or fixed, say so. The result must be a plan of the highest quality."
+            },
+            {
+              "id": "phrase-default-continue",
+              "name": "Continue",
+              "text": "Continue, following all the development rules, the coai gates and best practices, autonomously."
+            },
+            {
+              "id": "phrase-default-all-done",
+              "name": "All done?",
+              "text": "Is everything I asked you to do implemented, are the PRs created and merged, and is the deploy (release) done?"
+            },
+            {
+              "id": "phrase-default-consultant",
+              "name": "Consultant",
+              "text": "Discuss it with the consultant."
+            },
+            {
+              "id": "phrase-default-progress",
+              "name": "Progress?",
+              "text": "Tell me about the progress, measured against what I asked you to do: what is done and what is left, in percent and in approximate hours.\nIf there are open questions, highlight them.\nAfter the answer, continue what you were doing, autonomously."
+            }
+          ],
+          "markdownDescription": "Your saved phrases — the sentences you stopped wanting to retype. Press one in the panel, under **Phrases**, and it goes on the clipboard ready to paste. Edit them in **ConnectOtherAIs: Edit phrases**, which is easier than editing this. **Until you save a list of your own, you get seven example phrases** — edit or remove them; a list you emptied stays empty. A row needs a `text`; a row with no `name` keeps its words and is named from its own first line, and a row with no text is dropped rather than taking the list with it. The text is stored exactly as you wrote it, spaces and newlines included.",
           "items": {
             "type": "object",
             "properties": {
