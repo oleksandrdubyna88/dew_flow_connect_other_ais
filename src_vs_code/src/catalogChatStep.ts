@@ -1,5 +1,5 @@
 import { chatModelPresetsFrom } from './chatPresets';
-import { chatMove, movedRecordFrom, type ChatMove, type MovedPreset } from './chatPresetMove';
+import { chatMove, entryOf, movedRecordFrom, type ChatMove, type MovedPreset } from './chatPresetMove';
 
 /**
  * The chat presets' step of the catalog migration (todo/PLAN_one_model_catalog.md E4.6a): which rows a layer gains, and
@@ -87,24 +87,26 @@ function inheritedEntry(layer: ChatLayer): MovedPreset | undefined {
   return layer.side === true ? movedRecordFrom(layer.userChatRecord).find((one) => one.rowId === layer.userChatModel) : undefined;
 }
 
+/**
+ * This side's row for the preset the inherited chat model names — the SAME preset matched by its id, the newest entry
+ * (`chatPresetMove.entryOf`), as every reader of the record matches it since R7. It compared the id-runtime-model-name
+ * fingerprint, so a preset an older build edited on one layer and settled on the other was "another preset", and the
+ * side kept opening on the unrelated row its inherited id names (R7's code round, finding 4).
+ */
 function ownRowFor(theirs: MovedPreset, record: readonly MovedPreset[]): readonly ChatWrite[] {
-  const mine = record.find((one) => sameMove(one, theirs));
+  const mine = entryOf(theirs.presetId, record);
 
   return mine === undefined || mine.rowId === theirs.rowId ? [] : [{ key: 'chatModel', value: mine.rowId }];
-}
-
-/** The same preset moved in two layers: the same id and the same fingerprint. */
-function sameMove(one: MovedPreset, other: MovedPreset): boolean {
-  return one.presetId === other.presetId && one.runtime === other.runtime && one.model === other.model && one.name === other.name;
 }
 
 /** The record's entry for the preset the chat model still names — none when it names a row that exists, or nothing. */
 function recordedEntryOf(layer: ChatLayer, rows: readonly RawRow[]): MovedPreset | undefined {
   const saved = typeof layer.chatModel === 'string' ? layer.chatModel : '';
 
-  // The NEWEST entry of that id: two exist only when an older build edited the preset after the move, and the chat model
-  // then names the revision that older build last wrote — the one the uninterrupted run points at (epic 4's code round).
-  return rows.some((row) => row['id'] === saved) ? undefined : [...movedRecordFrom(layer.chatPresetsMoved)].reverse().find((one) => one.presetId === saved);
+  // The NEWEST entry of that id (`entryOf`, the one implementation of the rule — R7's code round, finding 2): two exist
+  // only where epic 4's build moved an older build's edit into a second row, and the chat model then names the revision
+  // that older build last wrote — the one the uninterrupted run points at (epic 4's code round).
+  return rows.some((row) => row['id'] === saved) ? undefined : entryOf(saved, movedRecordFrom(layer.chatPresetsMoved));
 }
 
 /**

@@ -123,10 +123,33 @@ export function wasMoved(preset: ModelPreset, record: readonly MovedPreset[]): b
 /**
  * The entry a preset answers to: the NEWEST of its id. Two exist only where epic 4's build moved an older build's edit
  * into a second row, and the newest is the row that edit went to — the one `catalogChatStep.recordedEntryOf` and
- * `chatCatalogModels.movedTo` read too.
+ * `chatCatalogModels.movedTo` read too, through this one function (R7's code round, finding 2).
+ *
+ * <p>Read backwards from the end and copying nothing (finding 3): it used to copy and reverse the whole record on every
+ * call, once per preset in a pass.</p>
  */
 export function entryOf(presetId: string, record: readonly MovedPreset[]): MovedPreset | undefined {
-  return [...record].reverse().find((one) => one.presetId === presetId);
+  for (let index = record.length - 1; index >= 0; index -= 1) {
+    const one = record[index];
+    if (one.presetId === presetId) {
+      return one;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * {@link entryOf} for every id at once — one pass, for a reader that asks about every preset (finding 8). A later entry of
+ * an id replaces an earlier one as the map is filled, which is `entryOf`'s rule: the newest.
+ */
+export function newestEntries(record: readonly MovedPreset[]): ReadonlyMap<string, MovedPreset> {
+  return new Map(record.map((one) => [one.presetId, one]));
+}
+
+/** The rows by id — read once per pass, never searched once per entry. */
+export function rowsById(rows: readonly RawRow[]): ReadonlyMap<unknown, RawRow> {
+  return new Map(rows.map((row) => [row['id'], row]));
 }
 
 /**
@@ -134,20 +157,28 @@ export function entryOf(presetId: string, record: readonly MovedPreset[]): Moved
  * disk, so an edit an older build already made to the preset differs from it and is raised rather than silently lost (the
  * plan round, finding 4). Where the row is gone (a deleted row stays deleted) or the preset is (finding 3), the entry is
  * left as it is: nothing is read from a value that is not there. The SAME array when nothing was taken, so a caller can
- * tell a run that has something to write.
+ * tell a run that has something to write. One pass over the record, the presets and the rows (finding 8).
  */
 export function snapshotted(record: readonly MovedPreset[], presets: readonly ModelPreset[], rows: readonly RawRow[]): readonly MovedPreset[] {
-  const taken = record.map((one) => (owesSnapshot(one, record, presets) ? withRowSnapshot(one, rows) : one));
+  const owing = owingSnapshots(record, presets);
+  if (owing.size === 0) {
+    return record;
+  }
+  const byId = rowsById(rows);
+  const taken = record.map((one) => (owing.has(one) ? withRowSnapshot(one, byId) : one));
 
   return taken.some((one, index) => one !== record[index]) ? taken : record;
 }
 
-function owesSnapshot(one: MovedPreset, record: readonly MovedPreset[], presets: readonly ModelPreset[]): boolean {
-  return one.copied === undefined && entryOf(one.presetId, record) === one && presets.some((preset) => preset.id === one.presetId);
+/** The entries in force with no snapshot whose preset is still there. */
+function owingSnapshots(record: readonly MovedPreset[], presets: readonly ModelPreset[]): ReadonlySet<MovedPreset> {
+  const ids = new Set(presets.map((preset) => preset.id));
+
+  return new Set([...newestEntries(record).values()].filter((one) => one.copied === undefined && ids.has(one.presetId)));
 }
 
-function withRowSnapshot(one: MovedPreset, rows: readonly RawRow[]): MovedPreset {
-  const row = rows.find((candidate) => candidate['id'] === one.rowId);
+function withRowSnapshot(one: MovedPreset, rows: ReadonlyMap<unknown, RawRow>): MovedPreset {
+  const row = rows.get(one.rowId);
 
   return row === undefined ? one : { ...one, copied: copyFrom(row) };
 }
