@@ -1,6 +1,7 @@
 # PLAN — an antigravity consultant searches what it reads: sandboxed access instead of plan mode
 
-> Status: **plan only, nothing implemented yet, 2026-10-08.** Scope: `src_mcp/core/QuestionConsult/ConfinementPlanner.cs`
+> Status: **plan only, nothing implemented yet, 2026-10-08 — STOPPED at Phase 0 by the vendor's own documentation, before
+> any run; the operator decides the next shape (§8).** Scope: `src_mcp/core/QuestionConsult/ConfinementPlanner.cs`
 > (a question row's agy flags), `src_mcp/runners/Consultation/AntigravityConsultant.cs` (the stuck consultant's agy
 > flags), `src_mcp/runners/Consultation/AntigravityFollowUps.cs` (what the prompt says agy has),
 > `shared/runtime-capabilities.json` + `shared/capability-matrix-vectors.json` + `shared/consultant-limitations.json`
@@ -55,8 +56,8 @@ file holding marker 1; read it; read `outside/secret.txt` by absolute path; crea
 `denied_actions`, the answer).
 
 **Arms**, agy 1.3.1, `gemini-3.8-flash-low`, 3 runs each, Windows AND WSL (WSL through a script file by absolute path,
-never `$vars` after `wsl.exe`, nothing deleted outside the probe's own temp tree, which the probe removes by its exact
-path):
+never `$vars` after `wsl.exe`; the probe deletes NOTHING — its trees stay under the temp directory and are named for the
+person to remove by hand, the owner's rule after the 2026-10-07 incident):
 
 | arm | flags | what it answers |
 |---|---|---|
@@ -114,3 +115,28 @@ Phase 0 (probe, measurement, RESULTS) → stop or go → RED tests → Phase 1 �
       all say what Phase 0 measured, and nothing more.
 - [ ] Live check per side recorded; `module_runners.md`, `module_server.md`, `research/README.md` updated; plan promoted.
 - [ ] Whole suites green.
+
+## 8. Phase 0 outcome — stopped by the documentation, no run made (2026-10-08)
+
+The plan round (session `0b81ee77`, codex + gemini) proceeded with one Blocking finding: under
+`--dangerously-skip-permissions`, a sampled "3 of 3 blocked" is no guarantee for roots coai cannot watch. A consultation
+(`f706070d`, codex) pointed at the vendor's sandbox documentation, verified here on
+<https://antigravity.google/docs/sandbox?tab=cli>:
+
+- "Workspace folders and paths allowed under `write_file` are mounted read-write." The `--add-dir` roots ARE the
+  workspace, so inside the sandbox the person's repositories stay writable — the operator's condition fails by design.
+- The page describes the sandbox for agent COMMANDS only; nothing about agy's file tools.
+- "On Windows, Antigravity continues to use the previous behavior" — there is no sandbox on Windows; Linux uses kernel
+  namespaces, macOS Seatbelt.
+- Requests to run a command outside the sandbox "always require your approval" — which `--dangerously-skip-permissions`
+  auto-approves.
+
+So arms B and C cannot meet the stop rule's (b) on any side, and running them would put an agent with full access on the
+operator's machine (on Windows with no sandbox at all) for nothing. They were not run. Gate decisions: findings 0, 1, 3,
+5, 6 accepted; 2 rejected (no other repository reads the capability files; the loader allows empty cells with a note);
+4 rejected (an automated deletion sweep breaks the owner's no-deletion rule — the probe now deletes nothing).
+
+**Shapes put to the operator:** (A) coai does the searching — agy stays in plan mode and asks coai to list or search,
+coai runs it read-only inside the roots and continues the conversation (the api rows' source turns are the precedent);
+(B) Linux/WSL only — agy inside an outer isolation (bubblewrap) with the roots mounted read-only, Windows unchanged;
+(C) full access accepted as a risk; (D) nothing — disk questions to codex.
