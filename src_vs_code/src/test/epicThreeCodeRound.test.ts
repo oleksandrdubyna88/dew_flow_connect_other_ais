@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { removedRow } from '../catalogCommands';
 import { type CheckRunPorts, runConsultantCheck } from '../consultantCheckRun';
-import { heldAfter } from '../catalogPlaces';
 import { NEW_CONTROLS } from '../newTags';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 
@@ -48,14 +47,4 @@ test('every control marked "new" is in the first-seen list, and every listed con
 
   assert.deepEqual([...drawn].filter((id) => !NEW_CONTROLS.includes(id)), [], 'a control is marked but never stamped — its mark never shows');
   assert.deepEqual(NEW_CONTROLS.filter((id) => !drawn.has(id)), [], 'a listed control is never drawn — a stale entry');
-});
-
-test('each page keeps its own place: switching back to the current page opens the tab it last had there', () => {
-  const ids = ['reviewers', 'gate', 'limits'];
-  let held = heldAfter({ place: '', oldTab: '' }, 'limits', false, ids);
-  held = heldAfter(held, 'reviews/roles', true, ids);
-
-  assert.equal(held.place, 'reviews/roles');
-  assert.equal(held.oldTab, 'limits', 'a place the current page never had does not move its tab');
-  assert.equal(heldAfter(held, 'reviews/gate', true, ids).oldTab, 'gate', 'a place the current page has moves it there');
 });

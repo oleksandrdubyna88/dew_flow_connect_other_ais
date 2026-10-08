@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import { type CheckRecord, parseCheckDocument, parseConsultantsAnswer } from '../consultantHealth';
 import type { ConsultantHealthState, OtherSideHealth, ProbeShown, ThisSideHealth } from '../consultantHealthState';
-import { type PanelState, settingsHtml } from '../panelView';
+import { type PanelState } from '../panelView';
 import { settingsFrom } from '../settingsShape';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { type Control, type Page, click, panelState, runPanel, work } from './panelPageHarness';
@@ -33,10 +33,12 @@ interface ConsultantPage {
   readonly draw: (state: PanelState) => string;
 }
 
-/** The two pages a person meets the consultant health block on — every case below runs on each. */
+/**
+ * The pages a person meets the consultant health block on — every case below runs on each. One since E5.1 step 5 removed
+ * the current page; kept a table, so a second surface that draws the block is one row, not a copy of every case.
+ */
 const PAGES: readonly ConsultantPage[] = [
-  { name: 'the current page', draw: (state) => settingsHtml(state, 'test-nonce', 'consultant') },
-  { name: 'the new page', draw: (state) => catalogHtml(state, 'test-nonce', 'consultants/consultant') },
+  { name: 'the Settings page', draw: (state) => catalogHtml(state, 'test-nonce', 'consultants/consultant') },
 ];
 
 /** One case, registered once per page — so a page that stops drawing the block fails by its own name. */

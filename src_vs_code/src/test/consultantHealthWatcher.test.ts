@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { placeOf } from '../catalogPlaces';
 import type { FileRead } from '../consultantHealthRead';
 import { type ConsultantHealthState, rowHealth } from '../consultantHealthState';
-import { CONSULTANT_TAB, ConsultantHealthWatcher, HEALTH_POLL_MS, type HealthWatchPorts, consultantTabShowing } from '../consultantHealthWatcher';
+import { ConsultantHealthWatcher, HEALTH_POLL_MS, type HealthWatchPorts, consultantTabShowing } from '../consultantHealthWatcher';
 import type { HealthSide } from '../consultantSides';
 
 /**
@@ -259,8 +260,10 @@ test('a WSL clock five minutes AHEAD: a heartbeat that stopped moving is abandon
 });
 
 test('the Consultant tab is watched only while it is SHOWING — the Settings tab visible and holding that tab (N2)', () => {
-  assert.equal(consultantTabShowing(true, CONSULTANT_TAB), true);
-  assert.equal(consultantTabShowing(false, CONSULTANT_TAB), false, 'a Settings tab behind another editor still spawned --consultants');
-  assert.equal(consultantTabShowing(true, 'reviewers'), false, 'the Reviewers tab polled every side for a block nobody can see');
-  assert.equal(CONSULTANT_TAB, 'consultant', 'the id must be the section the panel draws the Consultant tab under');
+  assert.equal(consultantTabShowing(true, 'consultants/consultant'), true);
+  assert.equal(consultantTabShowing(true, 'models'), true, 'the Models tab draws each row’s Check');
+  assert.equal(consultantTabShowing(false, 'consultants/consultant'), false, 'a Settings tab behind another editor still spawned --consultants');
+  assert.equal(consultantTabShowing(true, 'reviews/gate'), false, 'a place without the block polled every side for a block nobody can see');
+  // The held tab is a place (E5.1 step 5): the old id reaches the place through placeOf, and is never held itself.
+  assert.equal(placeOf('consultant', ''), 'consultants/consultant');
 });

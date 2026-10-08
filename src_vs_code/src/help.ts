@@ -89,32 +89,12 @@ export const HELP = {
     + 'copy for you (closing the menu takes the selection out of the panel), so it takes whatever you '
     + 'last copied and fills the box for you to send, because it has no way to know how old that is. '
     + 'Always sends on both paths; Never fills the box on both.',
-  chatModel:
-    'Which reviewer answers a chat. Empty means the first one that can, which is what most people '
-    + 'want. Only reviewers on a runtime the chat can speak to appear here; any other configured '
-    + 'reviewer is listed underneath with the reason, rather than quietly missing — a picker with a '
-    + 'gap in it cannot tell you whether it is a bug or a policy.',
-  vendorStages:
-    'Which stages this reviewer is asked. Measured over fourteen judged runs: a local model was '
-    + '19 % useful on a plan and 3 % on code, while writing more findings than both hosted vendors '
-    + 'together - so "on for the plan, off for the code" is a real setting rather than a knob. Both '
-    + 'boxes are ticked unless you untick one; the row checkbox above still turns the vendor off '
-    + 'everywhere.',
-  vendorDocuments:
-    'Whether this reviewer is asked to read DOCUMENTS - the roles you marked as not programming '
-    + 'work. On a Team server this is the box that decides whether the document leaves this machine: '
-    + 'it is sent to your company server and reviewed there on the shared subscription, so it is off '
-    + 'until you turn it on, whatever the other two boxes say. On a reviewer that runs here it '
-    + 'follows the plan box until you change either of those two, at which point it keeps what it '
-    + 'had.',
   vendorFeatures:
     'Whether this reviewer is asked to review a whole FEATURE — once, at the end of a plan of three or '
     + 'more epics, before the release, when every epic is built. Off unless you tick it: the gate reads '
     + 'silence as no, so a configuration from before the feature gate sends nothing anywhere. It runs '
     + 'from coai-mcp 0.39.0, and never on a Team server yet. A vendor that took no part in writing or '
     + 'reviewing the work is the one worth ticking — different eyes notice different things.',
-  vendorEnabled:
-    'Whether this reviewer takes part. Switching one off keeps its settings — the next round simply runs without it.',
   vendorModel:
     "Which model this vendor reviews with. Empty means the CLI's own default, which is usually its newest. A stronger model finds more and costs more; the panel exists so you can mix. A list of 15 or more choices has a search box above it: type part of a name to narrow and rank the list, Enter takes the first match, Escape puts the whole list back.",
   endpointModel:
@@ -168,12 +148,6 @@ export const HELP = {
   addVendor:
     'Add another independent reviewer: a preset, or any OpenAI-compatible endpoint by name and URL. More vendors means more independent eyes — and more cost per round.',
 
-  roleEnabled:
-    'Whether this role reviews at all. Unticked, it takes no part in a code round — no reviewer is launched for it, nothing it would have found is counted, and it lends the stage neither its rounds nor its threshold. Its rounds, threshold and prompt picks are kept and come back unchanged when you tick it again, so this is a switch rather than a way of clearing the box. Plan review is not affected: it has one role and no switch.',
-  lastRole:
-    'The only role still ticked. A code round with nobody in it is not an empty round — the server counts a round no reviewer answered as unresolved, so it would sit open and the next review would be refused for the wrong reason. Tick another role first, then this one can go.',
-  dormantRole:
-    'Switched off on the roles page, which is a different switch from this one. Two reach every role: this tick, which is about this side’s settings, and the role’s own Active, which is about the catalog every side shares — and the server reads both, so a role needs both to run. This box would write only the first and the role would stay off, so it is inert until the roles page switches the role back on. Edit roles… is at the foot of this tab.',
   maxRounds:
     'How many times THIS ROLE may be asked before the policy below takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',
   gateThreshold:

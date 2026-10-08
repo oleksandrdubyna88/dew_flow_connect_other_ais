@@ -10826,6 +10826,9 @@ new one answered, and the file was re-written only once per window.
 
 ## The new Settings page — the shell (2026-10-05, PLAN_one_model_catalog.md E3.1)
 
+> **Superseded by E5.1 step 5 (2026-10-08):** the switch, the old page and both buttons are gone; the slot paints this page
+> alone — see *E5.1c* at the end of this file.
+
 **One panel, two pages.** With `coai.settingsPreview` on (user scope, `application`; never a side overlay) the ONE
 Settings slot paints the new page (`catalogPage.ts`) instead of the old one — `PanelProvider.pageFor` branches on
 `settingsPreviewOn()`. So the two never write at once (D5), and the new page inherits the slot's `PanelState`, message
@@ -11528,9 +11531,9 @@ held asks the same of the place now.
   | `coai.editCommands` | `reviews/commands` — Commands |
   | `coai.editChatPresets` | `chat` — Chat |
 
-  Each redirect first makes the Settings slot paint the NEW page (`setSettingsPreview(true)`) — while the preview switch
-  exists the current page is the default and holds none of the three editors — then opens the one Settings tab at its
-  place. The current page's *Edit roles… / Edit commands… / Edit presets…* buttons post these commands, so they lead
+  Each redirect opens the one Settings tab at its place. (Until step 5 removed the preview switch, it first made the slot
+  paint the new page with `setSettingsPreview(true)` — the current page was the default and held none of the three
+  editors.) The current page's *Edit roles… / Edit commands… / Edit presets…* buttons post these commands, so they lead
   there too. `editorRedirects.test.ts` runs one row per command and names each one's OWN place, so crossed wires fail.
 - **`rolesKnowTheServer` is gone, and `told()` with it.** It handed the server's version to the roles tab, which drew
   its own version-skew banner; the place reads `state.roles.serverVersion` from the panel's own state.
@@ -11553,4 +11556,35 @@ flowchart LR
   R --> RH[rolesHost]
   M --> CH[commandsHost]
   H --> PH[chatPresetsHost]
+```
+
+### Step 5 — the preview switch and the old page are gone (2026-10-08)
+
+The Settings slot paints the catalog page alone. Removed: `coai.settingsPreview` (manifest, `settingsPreviewOn` /
+`setSettingsPreview`, the panel command `settingsPreview`), the badge and **Use the current page**, the old page's
+**Try the new Settings page**, `stillOnTheOldPage` (every place has its builder), the `settings.preview` new-tag; the twelve
+settings rows of `PANEL_SECTIONS`, `settingsSections` / `settingsHtml` / `settingsKey`, `panelSurface.settingsBody`,
+`settingsPage.settingsScript` / `settingsHead` / `nextSettingsTab`; `reviewersBody`, the old `chatBody`, `vendorCard`;
+the current-page halves of the shared builders (`editorWay` jumps only, `gateBody(state)`, `PromptsHalf` is `stages` |
+`prompts` — the per-role tick, `tickHelp` and its hints went with `both`); `catalogPlaces.heldAfter` / `HeldTabs` /
+`oldIdOf`; `catalogPicks.securityRowsOffered` (a Security lane write is checked against `rowsFor('security')`, the rows
+the page offered); `CONSULTANT_TAB`; seven tooltips only the old page attached (`chatModel`, `vendorStages`,
+`vendorDocuments`, `vendorEnabled`, `roleEnabled`, `lastRole`, `dormantRole`).
+
+- **One held place.** `settingsPanel` holds a place string: `chooseSettingsTab(requested)` is `placeOf(requested, held)`,
+  so an old tab id (`coai.openSettings('gate')`, a keybinding, a notification link) still opens its place through
+  `OLD_TAB_PLACES`, and anything unknown changes nothing.
+- **Kept on purpose:** `SURFACE_IDS` still lists `settings` — it is the page census the page-wide tests walk, and that
+  surface is the catalog page now (`panelPages.pageOf`); `SETTINGS_CSS` / `settingsTextCss` / `SETTINGS_LOADING` (the
+  catalog page builds on them); the three editing hosts, the sidebar, the restore command and `coai.migratedFrom` (T5).
+- **Help** still tours the old page in five languages; E5.2 rewrites it around this page, and
+  `theSettingsHelpNamesEveryTab.test.ts` waits for it as `todo` over `CATALOG_TABS`.
+
+```mermaid
+flowchart LR
+  G[gear / coai.openSettings arg] --> C[chooseSettingsTab]
+  C -->|placeOf + OLD_TAB_PLACES| H[held place]
+  H --> P[PanelProvider.pageFor settings slot]
+  P --> K[catalogKey = paint key]
+  P --> D[catalogHtml with the held place]
 ```

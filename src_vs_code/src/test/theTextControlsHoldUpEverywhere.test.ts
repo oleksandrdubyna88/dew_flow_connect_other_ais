@@ -83,8 +83,7 @@ test('the Settings tab reads the size and tone when its page is BUILT, not befor
   const source = code('panelProvider.ts');
   const pageFor = source.slice(source.indexOf('private pageFor('), source.indexOf('private pageFor(') + 1600);
 
-  assert.match(pageFor, /settingsHtml\(\{ \.\.\.withCaret\(\), uiScale: currentUiScale\(\), textTone: currentTextTone\(\) \}/);
-  // And the new page in the same slot (PLAN_one_model_catalog.md D5), for the same reason.
+  // The one page in the slot since E5.1 step 5 removed the page it replaced.
   assert.match(pageFor, /catalogHtml\(\{ \.\.\.withCaret\(\), uiScale: currentUiScale\(\), textTone: currentTextTone\(\) \}/);
   // Over the raw source: the page name is a string, which the blanked source has emptied.
   assert.match(fs.readFileSync(path.join(SRC, 'panelProvider.ts'), 'utf8'), /private receive\(from: SurfaceSlot, m: PanelMessage\): void \{\s*[\s\S]{0,400}if \(appliedTextControl\(m, 'settings'\)\) \{\s*return;/,

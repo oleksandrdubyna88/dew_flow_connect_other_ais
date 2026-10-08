@@ -52,7 +52,7 @@ import { QuestionConsultWatcher } from './questionConsultWatcher';
 import { qconsultLogHtml } from './qconsultLog';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
-import { openSettings, setSettingsPreview } from './settingsPanel';
+import { openSettings } from './settingsPanel';
 import { editorRedirects } from './editorRedirects';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
@@ -524,10 +524,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     // The three tabs these opened are gone (PLAN_one_model_catalog.md E5.1 step 4): each command opens the Settings
     // page at the place that holds its editor now, for one more release.
-    ...editorRedirects((command, run) => vscode.commands.registerCommand(command, run), {
-      useTheNewPage: () => setSettingsPreview(true),
-      openSettingsAt: (place) => { openSettings(panel, place); },
-    }),
+    ...editorRedirects((command, run) => vscode.commands.registerCommand(command, run), (place) => { openSettings(panel, place); }),
     vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
     // The page every notification has been going into since S1. One panel for the window, so a
     // second press reveals the one already open rather than stacking another over it.

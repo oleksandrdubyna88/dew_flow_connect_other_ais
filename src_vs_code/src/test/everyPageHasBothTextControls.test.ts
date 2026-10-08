@@ -7,7 +7,6 @@ import { renderHelpHtml } from '../helpPage';
 import { notificationsPageHtml } from '../notificationsPage';
 import { phrasesHtml } from '../phrasesPage';
 import { roundsLogHtml } from '../roundsLog';
-import { settingsHtml } from '../panelView';
 import { catalogHtml } from '../catalogPage';
 import { panelState } from './panelPageHarness';
 import { Node, runPageHtml, type Page } from './pageScriptHarness';
@@ -39,9 +38,8 @@ const PAGES: readonly (readonly [name: string, render: () => string, ids?: reado
   ['Notifications', () => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1 }, 'n'), NOTIFICATION_IDS],
   ['Review rounds', () => roundsLogHtml([], [], 'n'), ROUNDS_IDS],
   ['Who holds a key', () => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n')],
-  ['Settings tab', () => settingsHtml(panelState(''), 'n', 'reviewers')],
-  // The new Settings page, in the same tab while it is a preview (PLAN_one_model_catalog.md E3).
-  ['new Settings page', () => catalogHtml(panelState(''), 'n', 'models')],
+  // The Settings page (PLAN_one_model_catalog.md E3) — the only one in its tab since E5.1 step 5 removed the page it replaced.
+  ['Settings page', () => catalogHtml(panelState(''), 'n', 'models')],
   ['Help', () => renderHelpHtml({ language: 'en' }), HELP_IDS],
   ['Review bugs', () => reviewPageHtml({ pairs: [], nonce: 'n' }), BUGZ_IDS],
 ];
@@ -116,6 +114,6 @@ for (const [name, render, ids] of PAGES) {
   });
 }
 
-test('the census renders the eight pages it names — a table that lost a row would pass for the ones left', () => {
-  assert.equal(PAGES.length, 8);
+test('the census renders the seven pages it names — a table that lost a row would pass for the ones left', () => {
+  assert.equal(PAGES.length, 7);
 });

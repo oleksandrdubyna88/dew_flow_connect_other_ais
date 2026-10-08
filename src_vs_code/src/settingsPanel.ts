@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 
-import { heldAfter, type HeldTabs, placeOf } from './catalogPlaces';
-import { settingsSections } from './panelView';
+import { placeOf } from './catalogPlaces';
 import { SETTINGS_LOADING } from './settingsPage';
-import { openedFrom } from './tabStrip';
 import { pushTextControlsTo } from './textControlsHost';
 
 /**
@@ -22,44 +20,26 @@ export interface SettingsHost {
 let panel: vscode.WebviewPanel | undefined;
 
 /**
- * Which tab is open. Held HERE rather than on the page, because a repaint replaces the whole document;
- * a module variable, not a setting, so closing and reopening the tab in this window keeps it and nothing
- * on disk needs validating — the arrangement `rolesPanel.ts` uses. Empty means the first tab.
+ * Which place is open (`catalogPlaces.ts`). Held HERE rather than on the page, because a repaint replaces the whole
+ * document; a module variable, not a setting, so closing and reopening the tab in this window keeps it and nothing on
+ * disk needs validating. Empty means the first tab.
+ *
+ * <p>One place, since E5.1 step 5 of todo/PLAN_one_model_catalog.md removed the current page and the preview switch that
+ * chose between the two: an old tab id (`coai.openSettings('gate')`, a keybinding, a notification's link) is taken to its
+ * place by `placeOf` through `OLD_TAB_PLACES`.</p>
  */
-let held: HeldTabs = { place: '', oldTab: '' };
+let held = '';
 
-function tabIds(): readonly string[] {
-  return settingsSections().map((section) => section.id);
-}
-
-/**
- * Whether the Settings tab shows the NEW page (`coai.settingsPreview`, PLAN_one_model_catalog.md D5) — user scope, never a
- * side overlay, read here so the page the slot paints and the place it opens on can never disagree.
- */
-export function settingsPreviewOn(): boolean {
-  return vscode.workspace.getConfiguration('coai').get<boolean>('settingsPreview', false) === true;
-}
-
-/** Switches the Settings tab between the two pages; the configuration change repaints the open tab. */
-export async function setSettingsPreview(on: boolean): Promise<void> {
-  await vscode.workspace.getConfiguration('coai').update('settingsPreview', on, vscode.ConfigurationTarget.Global);
-}
-
-/**
- * The tab the page should show — always one that exists. On the new page, a PLACE (`catalogPlaces.ts`): an old id held
- * from the old page opens its new place. On the old page, its tab: a place held from the new page opens the old tab
- * that holds it, where the old page had one, else the strip's own fallback.
- */
+/** The place the page should show — always one that exists. */
 export function heldSettingsTab(): string {
-  return settingsPreviewOn() ? placeOf(held.place, '') : openedFrom(tabIds().map((key) => ({ key, label: key })), held.oldTab);
+  return placeOf(held, '');
 }
 
-/** A tab was chosen, on the page or by the command's argument; anything unknown changes nothing. */
+/** A place was chosen, on the page or by the command's argument; anything unknown changes nothing. */
 export function chooseSettingsTab(requested: unknown): string {
-  // Each page keeps its own position (epic 3's code round): switching back opens the tab last had THERE.
-  held = heldAfter(held, requested, settingsPreviewOn(), tabIds());
+  held = placeOf(requested, held);
 
-  return heldSettingsTab();
+  return held;
 }
 
 /**

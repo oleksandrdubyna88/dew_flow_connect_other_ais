@@ -14,26 +14,13 @@ export const EDITOR_PLACES = {
   'coai.editChatPresets': 'chat',
 } as const satisfies Readonly<Record<string, string>>;
 
-/** What a redirect needs from the host. */
-export interface RedirectPorts {
-  /**
-   * Makes the Settings slot paint the NEW page. While the preview switch exists the current page is the default, and it
-   * holds none of the three editors — so a redirect that opened "the Settings page" would land where nothing is.
-   */
-  readonly useTheNewPage: () => Promise<void>;
-  /** Opens the one Settings tab of this window at a place, or brings it back there. */
-  readonly openSettingsAt: (place: string) => void;
-}
-
 /**
  * Registers the three redirects.
  *
  * @param register the host's `registerCommand`, handed each command and what it runs
+ * @param openSettingsAt opens the one Settings tab of this window at a place, or brings it back there
  * @returns what each registration returned (the host's disposables)
  */
-export function editorRedirects<T>(register: (command: string, run: () => Promise<void>) => T, ports: RedirectPorts): readonly T[] {
-  return Object.entries(EDITOR_PLACES).map(([command, place]) => register(command, async () => {
-    await ports.useTheNewPage();
-    ports.openSettingsAt(place);
-  }));
+export function editorRedirects<T>(register: (command: string, run: () => void) => T, openSettingsAt: (place: string) => void): readonly T[] {
+  return Object.entries(EDITOR_PLACES).map(([command, place]) => register(command, () => { openSettingsAt(place); }));
 }

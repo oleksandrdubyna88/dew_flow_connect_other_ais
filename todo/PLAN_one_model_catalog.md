@@ -1264,6 +1264,18 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    tabs' own stylesheet tests went with the tabs). Teeth: swapping two `EDITOR_PLACES` turns both rows red; emptying the
    `unreadable` reader turns `chatSettings.test.ts` red. `npm test` 5801 / 0 failed; eslint clean; suppressions only
    shrink (two pages pruned).
+   **Progress (2026-10-08): step 5 built.** The slot paints the catalog page alone; the switch, the old page and their
+   buttons, `stillOnTheOldPage`, the twelve settings sections and the old page's entry points, `reviewersBody` / `chatBody`,
+   the current-page halves of the shared builders (`editorWay`, `gateBody`, `PromptsHalf` `both` with its per-role tick),
+   `heldAfter`, `securityRowsOffered`, `CONSULTANT_TAB` and seven tooltips are gone (`research/module_extension.md`,
+   *E5.1c* step 5). Every test that read the current page is moved, reduced or removed with what it drew — the was → now
+   table is `research/module_tests.md`, *E5.1c step 5*; two behaviours had no new-page test and gained one (a key the strip
+   does not own; the caret put back in its hidden pane). **Deviations:** (1) `SURFACE_IDS` keeps `settings` — it is the
+   page census the page-wide tests walk, and that surface IS the catalog page; (2) the real-editor scenario cannot read a
+   webview, so "an old id opens its place" stays the existing gear scenarios (`openSettings('gate')`,
+   `'questionconsultant'`) plus `catalogPlaces.test.ts`; (3) the five-language help still tours the old page — E5.2
+   rewrites it, and `theSettingsHelpNamesEveryTab.test.ts` waits as `todo` over `CATALOG_TABS`; (4) CHANGELOG is E5.2's,
+   with the release. `npm test` 5743 / 0 failed / 5 todo; eslint clean; suppressions only shrink.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"

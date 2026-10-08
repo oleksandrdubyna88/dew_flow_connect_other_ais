@@ -3094,3 +3094,20 @@ of the Settings page that draws the same blocks, through the page's own script (
 New: `editorRedirects.test.ts` — one row per redirected command naming its own place, opened on the NEW page with the
 preview switch off (a crossed wire is red: swapping two places fails both rows); `chatSettings.test.ts` reads
 `unreadable` from the presets the models come from (red when the reader is emptied).
+
+### E5.1c step 5 — the tests that read the current page
+
+| Was | Now |
+|---|---|
+| `settingsPage.test.ts` (the old strip) | `catalogPage.test.ts`: opens on the held place, an unknown place opens the first tab, a press tells the host, arrows in ONE strip — plus, moved: a key the strip does not own is left alone, and a repaint puts the caret back in its hidden pane |
+| `consultantSectionScript.test.ts` (each caller's own definition) | gone with the definitions: a caller picks a catalog row (`consultantPicks.test.ts`) |
+| `catalogTabsWrite.test.ts` (old page vs new, control by control) | every setting control of the Settings page writes ITS OWN key |
+| `bundledPage.test.ts` (`settingsHtml` bundled) | `catalogHtml` bundled: no `vscode`, switches a tab, embeds `rankChoices` whole |
+| `consultantHealthPage.test.ts` (both pages) | the Settings page — still a table, one row |
+| `panelView.test.ts` / `chatSection.test.ts` / `apiRuntimeGate.test.ts` / `selectSearchPage.test.ts` / `qconsultSection.test.ts` cases of the old reviewer card, per-role tick, caller colours, chat model selects, inert api card, per-row vendor picker | removed with what they drew; the Models card, Roles & prompts, Chat and the question rows are `modelsTab`, `rolesOnTheNewPage`, `chatOnTheNewPage`, `qconsultRowPicks` |
+| `textControls`, `theSettingsTabFollowsTheTextSize`, `busyMarkPage`, `everyPageHasBothTextControls` (census 7) | the same claims of `catalogHtml` / `catalogKey` |
+| `epicThreeCodeRound` "each page keeps its own place", `catalogPlaces` `oldIdOf` | gone: one page, one held place |
+
+New: `catalogPage.test.ts` "the Settings page is the only one" (no `settingsPreview` command, no preview badge);
+`consultantHealthWatcher.test.ts` asks the places and `placeOf('consultant')`; `panelSections.test.ts` holds that no
+section is declared for the settings surface.

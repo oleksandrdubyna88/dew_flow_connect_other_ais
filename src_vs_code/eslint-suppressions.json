@@ -679,10 +679,10 @@
   },
   "src/panelView.ts": {
     "complexity": {
-      "count": 16
+      "count": 14
     },
     "max-lines-per-function": {
-      "count": 5
+      "count": 4
     }
   },
   "src/phrasesEdit.ts": {

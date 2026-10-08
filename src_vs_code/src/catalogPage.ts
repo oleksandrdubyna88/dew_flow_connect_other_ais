@@ -3,8 +3,7 @@ import { CATALOG_CSS } from './catalogCss';
 import { catalogScript } from './catalogPageScript';
 import { CATALOG_TABS, type CatalogTab } from './catalogPlaces';
 import { placeBody } from './catalogSections';
-import { CONFIRM_DIALOG, newTag, stillOnTheOldPage } from './catalogShell';
-import { escapeHtml } from './escapeHtml';
+import { CONFIRM_DIALOG } from './catalogShell';
 import { modelsTabHtml } from './modelsTab';
 import { pageDocument, type PanelState } from './panelView';
 import { settingsTextCss } from './settingsPage';
@@ -12,13 +11,14 @@ import { tabStrip } from './tabStrip';
 import { textControlsHtml, textOf } from './textControls';
 
 /**
- * The new Settings page (todo/PLAN_one_model_catalog.md, E3) — painted in the ONE Settings slot when
- * `coai.settingsPreview` is on, so it is the old page's document (`pageDocument`: its policy, its writes, its commands,
- * its busy marks and focus restore) with its own body, sheet and script.
+ * The Settings page (todo/PLAN_one_model_catalog.md, E3) — painted in the ONE Settings slot, the only page there since
+ * E5.1 step 5 removed the page it replaced and the preview switch between them. It is drawn into the panel's document
+ * (`pageDocument`: its policy, its writes, its commands, its busy marks and focus restore) with its own body, sheet and
+ * script.
  *
- * <p>Like the old page, the body is drawn PLACE-NEUTRAL — every pane hidden, no tab chosen — and the place the host
- * holds reaches the page only as a script literal: the body is the paint key, and a place drawn into it would reload
- * the page after every press (the old page's D6).</p>
+ * <p>The body is drawn PLACE-NEUTRAL — every pane hidden, no tab chosen — and the place the host holds reaches the page
+ * only as a script literal: the body is the paint key, and a place drawn into it would reload the page after every
+ * press (D6).</p>
  */
 
 /** The top strip: `ctab-<id>` controls `cpane-<id>`. */
@@ -31,25 +31,23 @@ function subStrip(tab: CatalogTab): string {
   return tabStrip(tab.subs.map((sub) => ({ key: `${tab.id}/${sub.id}`, slug: sub.id, label: sub.label })), '', names);
 }
 
-/** A place's content: its old section in a readable column (E4.1), or where it still is until E4.3 and E4.4 fold it in. */
-function placeContent(place: string, label: string, state: PanelState): string {
-  const body = placeBody(place, state);
-
-  return body.length === 0 ? stillOnTheOldPage(label) : `<div class="moved">\n${body}\n</div>`;
+/** A place's content, in a readable column (E4.1). */
+function placeContent(place: string, state: PanelState): string {
+  return `<div class="moved">\n${placeBody(place, state)}\n</div>`;
 }
 
 function subPanes(tab: CatalogTab, state: PanelState): string {
   return tab.subs.map((sub) => `<div id="cpane-${tab.id}-${sub.id}" class="subpane" role="tabpanel" aria-labelledby="ctab-${tab.id}-${sub.id}"`
-    + ` tabindex="0" data-pane="${tab.id}/${sub.id}" hidden>${placeContent(`${tab.id}/${sub.id}`, sub.label, state)}</div>`).join('\n');
+    + ` tabindex="0" data-pane="${tab.id}/${sub.id}" hidden>${placeContent(`${tab.id}/${sub.id}`, state)}</div>`).join('\n');
 }
 
-/** What a tab holds: Models is built here; every other place draws the old page's section for it. */
+/** What a tab holds: Models is built here; every other place draws its builder (`catalogSections.ts`). */
 function paneBody(tab: CatalogTab, state: PanelState): string {
   if (tab.id === 'models') {
     return modelsTabHtml(state);
   }
 
-  return tab.subs.length === 0 ? placeContent(tab.id, tab.label, state) : `${subStrip(tab)}\n${subPanes(tab, state)}`;
+  return tab.subs.length === 0 ? placeContent(tab.id, state) : `${subStrip(tab)}\n${subPanes(tab, state)}`;
 }
 
 function pane(tab: CatalogTab, state: PanelState): string {
@@ -64,23 +62,20 @@ export function catalogBody(state: PanelState): string {
   return ['<main class="settings catalog">', tabStrip(tabs, '', TOP_STRIP), ...CATALOG_TABS.map((tab) => pane(tab, state)), '</main>'].join('\n');
 }
 
-/** What the slot paints on while the new page is shown. */
+/** What the slot paints on. */
 export function catalogKey(state: PanelState): string {
   return catalogBody(state);
 }
 
-/** The header: the page's name, that it is a preview, the way back, and the text controls — outside the paint key. */
+/** The header: the page's name and the text controls — outside the paint key. */
 function catalogHead(state: PanelState): string {
   const { size, tone } = textOf(state);
-  const isNew = newTag('settings.preview', state.firstSeen ?? {}, state.now ?? Date.now());
 
-  return `<header class="settingsHead"><h1>Settings <span class="preview-badge">preview</span>${isNew}</h1>`
-    + `<button type="button" data-command="settingsPreview" data-id="off" title="${escapeHtml('Back to the current Settings page')}">Use the current page</button>`
-    + `${textControlsHtml(size, tone)}</header>`;
+  return `<header class="settingsHead"><h1>Settings</h1>${textControlsHtml(size, tone)}</header>`;
 }
 
 /**
- * The new page's whole document.
+ * The page's whole document.
  *
  * @param place the place the host holds (`catalogPlaces.ts`); it reaches the script, never the markup
  * @param body the body when the caller has already built it (it is the paint key) — built here otherwise

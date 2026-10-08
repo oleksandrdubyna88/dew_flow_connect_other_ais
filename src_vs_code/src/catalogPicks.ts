@@ -35,15 +35,6 @@ export function rowsFor(use: CatalogUse, rows: readonly Vendor[]): readonly Vend
   return rows.filter((row) => tickedFor(row, use));
 }
 
-/**
- * The rows a Security lane write may name: on the new page the rows ticked Security lane — the ones it offered — and on
- * the current page every row, as it always did. One Settings slot shows one page at a time, so the page that is showing
- * is the page that wrote.
- */
-export function securityRowsOffered(rows: readonly Vendor[], newPage: boolean): readonly Vendor[] {
-  return newPage ? rowsFor('security', rows) : rows;
-}
-
 /** The option for a pick the list does not hold: still offered, so the next change cannot lose it silently. */
 function strandedOption(use: CatalogUse, picked: string, rows: readonly Vendor[]): readonly PickOption[] {
   const listed = picked === '' || rows.some((row) => row.id === picked && tickedFor(row, use));

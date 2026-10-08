@@ -15,7 +15,7 @@ import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPresets';
 import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
-import { chooseSettingsTab, heldSettingsTab, setSettingsPreview, settingsPreviewOn, type SettingsHost } from './settingsPanel';
+import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
 import { FIRST_SEEN_KEY } from './newTags';
 import { appliedTextControl } from './textControlsHost';
@@ -32,8 +32,6 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
-  settingsHtml,
-  settingsKey,
   staticKey,
   VSCODE_COMMAND_FOR,
   type ChatLedgers,
@@ -85,7 +83,7 @@ import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } 
 import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
 import { consultantPickWrites } from './consultantPicks';
-import { securityRowsOffered } from './catalogPicks';
+import { rowsFor } from './catalogPicks';
 import { clientFilesFor, ClientReader } from './mcpClientsRead';
 import { MOVE_RECORD } from './dataCommands';
 import type { MoveRecord } from './dataMove';
@@ -1075,23 +1073,17 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
     // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
     const withCaret = (): PanelState => ({ ...state, focus: slot.focus(), busy: this.inFlight.snapshot() });
-    if (slot === this.settingsTab && settingsPreviewOn()) {
-      // The new page in the SAME slot (D5): one panel, one page at a time, every write through the one path below.
-      // The body IS the key: built once, and handed to the document rather than built a second time (epic 3's code round).
+    if (slot === this.settingsTab) {
+      // The Settings page (PLAN_one_model_catalog.md; the only one since E5.1 step 5): every write through the one path
+      // below. The body IS the key: built once, and handed to the document rather than built a second time (epic 3's
+      // code round). The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen
+      // probes after gathering it, and a press in between would otherwise be drawn over by the old value — with the same
+      // paint key, so nothing would ever repaint it.
       const body = catalogKey(state);
 
       return {
         key: body,
         html: () => catalogHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab(), body),
-      };
-    }
-    if (slot === this.settingsTab) {
-      // The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen probes
-      // after gathering it, and a press in between would otherwise be drawn over by the old value — with
-      // the same paint key, so nothing would ever repaint it.
-      return {
-        key: settingsKey(state),
-        html: () => settingsHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab()),
       };
     }
 
@@ -1892,8 +1884,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       const read = this.read(config);
       // Nothing is saved against a malformed setting: writing the panel's stand-in would replace
       // what the person wrote in settings JSON, which is the one place they are told to correct it.
-      // Named against the rows the page that wrote OFFERED: the new page's are the rows ticked Security lane (E4.2).
-      const offered = securityRowsOffered(vendorsFrom(read('vendors')), settingsPreviewOn());
+      // Named against the rows the page OFFERED: the rows ticked Security lane (E4.2).
+      const offered = rowsFor('security', vendorsFrom(read('vendors')));
       const next = securityLaneSave(read('securityLane'), message.securityField, message.value, offered);
       if (next !== undefined) {
         await this.save(config, 'securityLane', next);
@@ -2516,10 +2508,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       case 'trySecurity':
         await this.trySecurity(id ?? '');
-        break;
-      case 'settingsPreview':
-        // The configuration change repaints the open tab on the other page; nothing else to do here.
-        await setSettingsPreview(id === 'on');
         break;
       case 'teamUsageScope':
         // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
@@ -3175,9 +3163,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The MCP clients' config files, each read again only when it changed (E4.5). */
   private readonly clients = new ClientReader();
 
-  /** Whether the new Settings page is what the Settings slot would paint — the tab open, the preview on. */
+  /** Whether the Settings page can be shown — its tab is open. */
   private newPageCanShow(): boolean {
-    return this.settingsTab.view !== undefined && settingsPreviewOn();
+    return this.settingsTab.view !== undefined;
   }
 
   /**

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { EndpointListing } from '../endpointModels';
-import { type PanelState, settingsHtml } from '../panelView';
+import { type PanelState } from '../panelView';
 import { SEARCH_FROM_OPTIONS } from '../selectSearch';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { type Control, PageEvent, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
@@ -200,27 +200,6 @@ test('Escape empties the box and puts the list back in its own order; ArrowDown 
 
   press(box, 'ArrowDown');
   assert.ok(select.focused);
-});
-
-test('a disabled list gets a disabled box, and Enter there writes nothing', () => {
-  // An api row against a server too old for the api runtime: every control of the card is drawn off.
-  // Drawn inert on the CURRENT page's card only — the new page's Models card leaves its fields editable and says why the
-  // row cannot run — so the box's own handling of a disabled list is run on that page while it is drawn (E5.1 step 3).
-  const grok: Vendor = { ...openrouter(), id: 'grok', runtime: 'api', baseUrl: 'https://api.x.ai/v1', model: '' };
-  const answer = listing(LISTED, { baseUrl: grok.baseUrl, keyName: grok.id });
-  const state = panelState('reviewers', {
-    vendors: [grok], endpointListings: { grok: answer }, server: { kind: 'known', version: '0.35.0', remembered: false, updateOffered: false },
-  });
-  const page = runPanel(state, { html: settingsHtml(state, 'test-nonce', 'reviewers') });
-  const select = modelSelect(page, 'grok');
-  assert.ok(select.disabled, 'the fixture really is a disabled card');
-  const box = boxFor(page, select);
-
-  assert.ok(box.disabled);
-  type(box, 'opus');
-  const before = page.posted.length;
-  press(box, 'Enter');
-  assert.deepEqual(page.posted.filter((one, index) => index >= before && one['type'] === 'setting'), []);
 });
 
 test('typing in the box holds the repaint under its own identity, and tabbing to its select is no release', () => {

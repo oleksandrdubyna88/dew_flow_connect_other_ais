@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogBody, catalogHtml } from '../catalogPage';
-import { rowsFor, securityRowsOffered } from '../catalogPicks';
+import { rowsFor } from '../catalogPicks';
+import { sourceOf } from './sourceReading';
 import { FEATURES } from '../binaryFeatures';
 import { DEFAULT_SECURITY, type SecurityLane } from '../securityLane';
 import { SECURITY_SAMPLE_MAX, securityTryAnswer, securityTryRefusal, securityTryRequest } from '../securityTry';
@@ -59,8 +60,8 @@ test('the note about an ordinary reviewer reads every row, not only the ticked o
 
 test('the host offers the same rows the page does', () => {
   assert.deepEqual(rowsFor('security', ROWS).map((row) => row.id), ['sec-guard']);
-  assert.deepEqual(securityRowsOffered(ROWS, true).map((row) => row.id), ['sec-guard'], 'a write from the new page names a row it never offered');
-  assert.deepEqual(securityRowsOffered(ROWS, false), ROWS, 'the current page offers every row, as it always did');
+  // Since E5.1 step 5 there is one page, so a write is checked against the rows it offered, whichever slot wrote it.
+  assert.ok(sourceOf('panelProvider.ts').includes("rowsFor('security', vendorsFrom(read('vendors')))"), 'a Security lane write is not checked against the rows the page offers');
 });
 
 test('"Try it" sends the sample and the lane a round would send, on stdin', () => {

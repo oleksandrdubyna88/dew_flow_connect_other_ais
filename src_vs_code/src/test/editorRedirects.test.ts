@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { editorRedirects, type RedirectPorts } from '../editorRedirects';
+import { editorRedirects } from '../editorRedirects';
 import { sourceOf } from './sourceReading';
 
 /**
@@ -10,8 +10,7 @@ import { sourceOf } from './sourceReading';
  * round's finding 0).
  *
  * <p>One row per command, naming ITS OWN place: a table that checked only "some Settings place opened" would pass with
- * the wires crossed. The page that shows is part of each row too: while the preview switch exists, the current page is
- * the default, and it holds none of the three editors.</p>
+ * the wires crossed. (Until step 5 removed the preview switch, each redirect also made the slot paint the new page.)</p>
  */
 
 const ROWS: readonly (readonly [command: string, place: string])[] = [
@@ -20,29 +19,24 @@ const ROWS: readonly (readonly [command: string, place: string])[] = [
   ['coai.editChatPresets', 'chat'],
 ];
 
-/** The redirects registered against recording ports, with the preview switch OFF — the default today. */
+/** The redirects registered against a recording opener. */
 function registered() {
-  const handlers = new Map<string, () => Promise<void>>();
-  let preview = false;
-  const opened: { place: string; page: string }[] = [];
-  const ports: RedirectPorts = {
-    useTheNewPage: () => { preview = true; return Promise.resolve(); },
-    openSettingsAt: (place) => { opened.push({ place, page: preview ? 'new' : 'current' }); },
-  };
-  editorRedirects((command, run) => { handlers.set(command, run); return command; }, ports);
+  const handlers = new Map<string, () => void>();
+  const opened: string[] = [];
+  editorRedirects((command, run) => { handlers.set(command, run); return command; }, (place) => { opened.push(place); });
 
   return { handlers, opened };
 }
 
 for (const [command, place] of ROWS) {
-  test(`${command} opens the NEW Settings page at ${place}, even with the preview switch off`, async () => {
+  test(`${command} opens the Settings page at ${place}`, () => {
     const { handlers, opened } = registered();
     const run = handlers.get(command);
     assert.ok(run !== undefined, `${command} is not registered as a redirect`);
 
-    await run();
+    run();
 
-    assert.deepEqual(opened, [{ place, page: 'new' }], `${command} did not open its own place on the new page`);
+    assert.deepEqual(opened, [place], `${command} did not open its own place`);
   });
 }
 

@@ -7,7 +7,7 @@ import { HELP } from '../help';
 import { ignoredSaid } from '../modelCard';
 import { checkFactsOf } from '../modelCardWorld';
 import { NEW_CONTROLS } from '../newTags';
-import { settingsHtml, type PanelState } from '../panelView';
+import { type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
@@ -80,11 +80,9 @@ test('a binary whose settled list lacks apiStream gets the card\'s skew note; an
   assert.equal(said(['systemPrompt'], api()), '', 'a row that does not stream says nothing about streams');
 });
 
-test('the switch is new, has its own help, and the current Settings page draws no stream control', () => {
+test('the switch is new and has its own help', () => {
   assert.ok(NEW_CONTROLS.includes('model.stream'));
   assert.match(HELP.apiStream, /stream/u);
-  const state = stateWith([api({ stream: true })], { serverFeatures: ['apiStream'] });
-  assert.deepEqual(switches(runPanel(state, { html: settingsHtml(state, 'test-nonce', 'reviewers') })), []);
 });
 
 /** The card's check badge for a row whose last ✓ Check landed with `streamed` as given ('' = the field absent). */
