@@ -1175,7 +1175,7 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    works, so their teeth are proven by breaking the code they hold, not by a red start. Docs: `research/module_extension.md`
    (the shared health helper; the one ON rule), `research/module_tests.md` (the places and their tests). After E5.1b,
    E5.1c (steps 4–5) proceeds: its premise then holds.
-   **Progress** (branch `feat/catalog-e5-health`, 2026-10-08; not pushed, no code round yet). **Part 1 + 4**
+   **Progress** (branch `feat/catalog-e5-health`, 2026-10-08; code round passed — see below). **Part 1 + 4**
    (`52acc9e3`): `consultantHealthState.callerHealth(kind, consult, health)` — the identity is `consult.byCaller`'s
    resolved pair — called by `consultantView.withHealth` and by `consultantPicks.pickHtml` (a `pickHealth` beside it
    draws `healthBlock`); `consultantPicksHtml` takes the health state; `catalogSections` passes `state.consultantHealth`.
@@ -1199,6 +1199,18 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    another is guarded by the switches as they are when it applies (and a removal by them after its modal question); the
    Review roles tab passes none and keeps counting the catalog alone, as it draws — it is deleted with step 5. Part 4
    landed in part 1's commit, because its table is the test that went red for part 1.
+   **E5.1b's code round** (proceed; codex's four reviewers, gemini out of quota; 2 findings, both accepted, each fixed red
+   first on the same branch): (0, `ecff7617`) the last role ON was refused only at its switch — its stage picker still
+   offered the other stages and its Remove still posted, refused late by the host; `roleBlock` now draws every other
+   stage and Remove `disabled` for it, under the switch's hint (which names moving and removing too), and the page's
+   script posts nothing for a disabled button. Red, from one table over the four buckets with a role of one's own as the
+   last ON: "MyPlan, the last plan role ON, could be moved to another stage or removed on the page" (and MyCode, MyDoc,
+   MyFeature); teeth: the script's check removed. (1, `8f09d50b`) `lastOn` per block rescanned the role list — n²
+   reads; `rolesSwitch.onCounts` counts every bucket in one pass, `lastOnBy` asks the rule of the counts, and
+   `rolesBlocks.roleBlockOptions` builds a page's options once with the ON and the catalog's active counts, so
+   `roleBlock(role, texts, options)` reads no other role. Red (against a seam with no counts): "1008 blocks read the
+   role list 3052224 times — every block rescanned it". Deviation: `roleBlock` lost its `rows` parameter and the Review
+   roles tab builds its options once too, so the old tab is linear as well.
    **E5.1a's code round** (proceed, 8 of 8 reviewers; 8 findings, all accepted, each fixed red first on the same
    branch): (0, 7) the ranking allowlist is the pick's own rule — `bugzPickOf` takes a `RankingRule`
    (`rankingRuleOf`: the server's list, or `RANKING_VENDORS` from a server too old to say), `bugzView` filters no more;

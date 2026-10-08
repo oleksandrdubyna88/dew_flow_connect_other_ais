@@ -3059,7 +3059,17 @@ and works one of its controls — was mapped (the plan's progress line) but not 
   id, add and install gaining one, Check again unwired, move posting change, the page script posting the command as
   the id (all ten red), setup/team drawn without its servers, Install offered when up to date, delete offered after an
   unverified move.
+- **The code round's two findings** (both red first). Finding 0 — `rolesOnTheNewPage.test.ts`, one table over the four
+  buckets with a role of one's OWN as the last ON (only such a role has a stage picker and a Remove): the page offers
+  only its own stage (`OPTION`s not `disabled`), draws Remove `disabled` and a click on it posts nothing; with another
+  role ON it offers all three stages and Remove posts. Red: "MyPlan, the last plan role ON, could be moved to another
+  stage or removed on the page" (and MyCode, MyDoc, MyFeature); teeth: the script's disabled check removed turned all
+  four red. Finding 1 — the same file: a page of 1000 roles of one's own (half on) drawn block by block from ONE
+  `roleBlockOptions`, the role list read through a counting proxy (R7's pattern), at most 10 reads per role. Red, against
+  a `roleBlockOptions` seam that carried no counts: "1008 blocks read the role list 3052224 times — every block
+  rescanned it".
 
 **Not covered.** The provider's composition of the new page's role edits beyond the source pins (a host runs only in an
-editor); the queue reading the switches at APPLY time rather than queue time is by construction, not by a run; the
-paid Check itself, as before (E5.5).
+editor); the queue reading the switches at APPLY time rather than queue time is by construction, not by a run; a
+browser's refusal to click a disabled option or button (the shim models the page's own refusal); the paid Check
+itself, as before (E5.5).
