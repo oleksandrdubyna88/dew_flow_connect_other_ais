@@ -136,7 +136,7 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
     /// <summary>Every launch's argv in the order they were made, its stdin as the last field (the recorder's format).</summary>
     private IReadOnlyList<string[]> Launches() =>
         [.. Directory.EnumerateFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).ThenBy(p => p, StringComparer.Ordinal)
-            .Select(path => File.ReadAllText(path).Split('\0'))];
+            .Select(path => LaunchRecords.Read(path).Split('\0'))];
 
     /// <summary>What a launch told the model — its stdin line DECODED, as the CLI reads it.</summary>
     private static string Told(string[] argv) =>

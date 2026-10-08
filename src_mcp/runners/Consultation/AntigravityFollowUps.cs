@@ -66,6 +66,15 @@ public static class AntigravityFollowUps
         + $". coai answers in this same conversation, up to {followUps} time{(followUps == 1 ? string.Empty : "s")}; "
         + "then answer in prose, with no block. Open what it finds with view_file.";
 
+    /// <summary>
+    /// What a refused permission's follow-up adds when coai may look for this consultant — after the measured text, never
+    /// instead of it: a model refused the shell is the one that needs a listing (todo/PLAN_agy_searches_through_coai.md §3).
+    /// Not measured on its own; the live record is RESULTS_agy_searches_through_coai.md.
+    /// </summary>
+    public const string AskCoaiToLook =
+        "If you need a folder listed or searched first, end your answer with a " + Core.Consultation.LookupRequests.Fence
+        + " block as described in the first message, and coai will do it for you, read-only.";
+
     /// <summary>The message a lookup continuation sends: what coai served and refused, and what to do next.</summary>
     /// <param name="turn">The turn this message opens, 2 for the first continuation.</param>
     /// <param name="turns">The most turns this answer may take.</param>

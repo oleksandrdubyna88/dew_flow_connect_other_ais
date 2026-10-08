@@ -1377,8 +1377,43 @@ unchanged.
 listing), so on a question over a whole folder the model names a command for the caller to run instead of searching —
 an answer the caller can act on, where there was none. **In WSL it answers only sometimes** (1 of 3 through the released product, 2026-10-08; 0 of 3 by the probe; Windows 3 of 3 through the product): when it fails, agy
 refuses a `read_file` — the probe showed the model, told the shell will not come, reading outside the root looking for
-paths (`~/.bash_history`) — and the row ends `failed` on the read-denied reason; no third launch, by `ConsultantTurn`'s rule. The
-`Toolbox` sentence the stuck consultant's prompt carries is not in the question prompts.
+paths (`~/.bash_history`) — and the row ends `failed` on the read-denied reason; no third launch, by `ConsultantTurn`'s rule.
+The next section is what changed that.
+
+## An antigravity consultant searches through coai (2026-10-08, `research/PLAN_agy_searches_through_coai.md`)
+
+**The symptom.** In `--mode plan` agy can open a FILE by its exact path (`view_file`) and nothing else: no listing, no
+search, the shell auto-denied. So a disk question got "run this command yourself", and in WSL often a failed row. The
+operator rejected agy's own sandbox (its workspace folders stay read-write; there is none on Windows) and chose this:
+**agy keeps `--mode plan`, and coai lists and searches for it.**
+
+**The shape.** The agy prompt (`AntigravityFollowUps.LookupToolbox`, after the `Toolbox` sentence) teaches a fenced
+`coai-lookup` block of at most 8 lines, `list <folder>` and `search "<text>" in <folder>`. An answer that ends with one is a
+REQUEST turn: coai parses it (`LookupRequests.Read`), serves it with its own read-only reader (`WorkspaceLookup`, no shell, no
+vendor tool), and continues the SAME agy conversation (`AntigravityStream.Continue`, `--conversation <id>`) with a message
+headed `## coai looked it up - turn N of 4`. At most 3 such continuations per answer (`LookupBudget.FollowUps`); the last
+is told it is the last, and a block on it is not served: its prose is the answer, with the note "lookups capped at 3 turns;
+asked for and not served: …".
+
+| Concern | Rule | Where |
+|---|---|---|
+| Only inside what was granted | every path canonicalised with links resolved (`DocumentReader.Canonical` + `DocumentId.Of`), must land in a granted root; a relative path only when there is ONE root; refused lines named back to the model | `WorkspaceLookup` |
+| What it never shows | `.git`, the `DiffExclusions` folders, credential-like names (`CredentialFiles`), binaries (a NUL in the first bytes), reparse points while walking | `WorkspaceLookup` |
+| Bounded, and says so | list ≤ 200 entries, search ≤ 50 hits with lines cut at 300 chars, files over 1 MB skipped, ≤ 20 000 files and ≤ 10 s per walk, ≤ 32 KB per turn; every cap and every unreadable file is SAID in the result | `LookupBudget`, `LookupLimits` |
+| It reads the working tree | uncommitted edits included — the root is often not a git checkout | `WorkspaceLookup` |
+| A question row | `QuestionFanOut.WithLookup` attaches a reader over the row's `Plan.Grant.Roots` to an agy disk row; `AntigravityConsultant` then answers `IAnsweringFollowUps.AfterAsync` with a READY continuation (`AnsweringTurn.Next.Invocation`), which `QuestionRowLaunch.TurnAsync` launches instead of rebuilding one | `QuestionFanOut`, `QuestionRowLaunch` |
+| The stuck consultant | `RunTurnAsync` attaches a reader over the checkout to an agy runtime; `ConsultationLookups.RunAsync` takes the turn where `ConsultantTurn.RunAsync` did and loops while an answer carries a block — ONE `consult` call, one `ConsultationTurn` record; `Settle` takes a capped block's prose and note | `ConsultationService.RunTurnAsync`, `ConsultationLookups`, `Settle` |
+| A changed tree ends it | the consultation's tree check runs before EVERY continuation; a change stops the turn on `ChangesBeforeFollowUp`, the ordinary refusal | `ConsultationLookups.LookedAsync` |
+| agy bills cumulatively | a question row's turns are billed by `ConsultationUsage.Less(reported, billed)`; a consult turn combines its launches by `ConsultationUsage.OfTwoLaunches` (the larger report) — one ledger line per turn either way | `QuestionRowLaunch.Share`, `ConsultationLookups.Combined` |
+| A refused shell hears about it too | when a reader is attached, the measured `NoCommands` / read-denied follow-up is kept word for word and followed by one sentence naming the block; without a reader the text is unchanged | `AntigravityConsultant.FollowUp` |
+
+**Threat model of the reader.** A link swapped in by another process between the containment check and the read is out
+of scope (plan round, rejected): it needs a writer inside the root, agy in plan mode cannot write there, and such a writer
+could read the outside file itself.
+
+**What it does not prove.** The scenario tests drive a fake CLI: they prove the block is served, the conversation is
+continued, the tree check runs and the billing; they do not prove the real model writes the block. That is the live
+record, [RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md).
 
 ## The round engine is its own unit (2026-09-25)
 

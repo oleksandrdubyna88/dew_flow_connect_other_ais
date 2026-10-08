@@ -636,6 +636,9 @@ public sealed class ConsultationService(
     private async Task<string> RunTurnAsync(TurnConsultant consultant, ConsultationRecord record, string repo, string problem, IReadOnlyList<string> files, CancellationToken ct)
     {
         var nonce = Guid.NewGuid().ToString("N")[..8];
+        // An antigravity consultant cannot list or search in plan mode: coai does it for it, read-only, inside this
+        // checkout (todo/PLAN_agy_searches_through_coai.md, S3) — the prompt then teaches the block, the turn serves it.
+        consultant = consultant.Runtime is AntigravityConsultant agy ? consultant with { Runtime = agy.With(new WorkspaceLookup([repo])) } : consultant;
         var before = await _invariant.SnapshotAsync(repo, ct);
         // Prepared before it is built: the adapter learns what the INSTALLED CLI accepts (claude: --restricted or
         // not), every turn, so Build stays pure — and may REFUSE when it could not learn it (IConsultantRuntime.PrepareAsync).
@@ -696,12 +699,13 @@ public sealed class ConsultationService(
             // handle and the usage of whatever exists. The tree is asked once more before a follow-up;
             // a turn that stopped there reports THOSE changes, any other takes the final comparison —
             // which is what sees a write by the LAST launch.
-            var result = await ConsultantTurn.RunAsync(executor, consultant.Runtime, launch, t => ChangesSinceAsync(before, repo, t), launched.Add, turn.Token);
+            var looked = await ConsultationLookups.RunAsync(executor, consultant.Runtime, ready.Launch, launch, t => ChangesSinceAsync(before, repo, t), launched.Add, turn.Token);
+            var result = looked.Result;
             var changes = await ChangesOverTheTurnAsync(result, () => ChangesSinceAsync(before, repo, turn.Token));
             decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline));
 
             return decided is null
-                ? Settle(asking, consultant, result, problem, nonce, started.Elapsed)
+                ? Settle(asking, consultant, looked, problem, nonce, started.Elapsed)
                 : FailedTurns.Failing(consultant, started.Elapsed, decided);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -767,15 +771,18 @@ public sealed class ConsultationService(
             RowInstruction: record.RowInstruction));
     }
 
-    private string Settle(ConsultationRecord record, TurnConsultant consultant, ConsultantTurnResult turned, string problem, string nonce, TimeSpan elapsed)
+    private string Settle(ConsultationRecord record, TurnConsultant consultant, ConsultationLookups.Looked looked, string problem, string nonce, TimeSpan elapsed)
     {
+        var turned = looked.Result;
         var handle = HandleOf(turned.SurvivingHandle, record.Handle);
         var launched = turned.Final;
 
         // The ADAPTER reads its own shape: prose for every CLI, an envelope for the one schema-bound
         // route. Unwrapping every answer here mangled a CLI's prose that happened to be JSON with an
-        // `answer` property, which a consultant asked about a configuration file could return.
-        var advised = consultant.Runtime.ReadAdvice(launched.Answer ?? string.Empty).Trim();
+        // `answer` property, which a consultant asked about a configuration file could return. When the
+        // lookups decided the advice (a capped block's prose), that is the answer, with why they stopped.
+        var advised = (looked.Advice ?? consultant.Runtime.ReadAdvice(launched.Answer ?? string.Empty)).Trim()
+            + (looked.Note.Length > 0 && looked.Advice != looked.Note ? $"\n\n({looked.Note})" : string.Empty);
         var spent = consultant.ShareOf(record, turned.TurnUsage);
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd, turned.FollowedUp, record.Confinement);
         _store.Write(ConsultationAnswering.Answered(ConsultationBilling.Billing(record, spent), turn, handle));

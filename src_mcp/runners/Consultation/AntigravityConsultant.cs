@@ -103,8 +103,11 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     /// </remarks>
     public bool UsageIsCumulative => true;
 
-    /// <summary>The one read tool observed working headless in <c>--mode plan</c>, and the shell's standing.</summary>
-    public string Toolbox => AntigravityFollowUps.Toolbox;
+    /// <summary>
+    /// The one read tool observed working headless in <c>--mode plan</c>, the shell's standing — and, when coai may look for
+    /// this consultant (<see cref="With"/>), the <c>coai-lookup</c> block (todo/PLAN_agy_searches_through_coai.md, S3).
+    /// </summary>
+    public string Toolbox => lookup is null ? AntigravityFollowUps.Toolbox : AntigravityFollowUps.Toolbox + "\n\n" + LookupToolbox;
 
     /// <summary>The permission words this launch was denied — the stream's list, and the stderr sentence's.</summary>
     public IReadOnlyList<string> DeniedActions(ReviewerLaunch launched) =>
@@ -137,7 +140,7 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
         var conversation = ConversationOf(launched);
 
         return said.Length > 0 && conversation.Length > 0
-            ? AntigravityStream.Continue(first, conversation, said)
+            ? AntigravityStream.Continue(first, conversation, lookup is null ? said : said + " " + AntigravityFollowUps.AskCoaiToLook)
             : null;
     }
 
