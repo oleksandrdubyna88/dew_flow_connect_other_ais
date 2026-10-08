@@ -7588,6 +7588,26 @@ answers. `BEFORE_THE_CATALOG` in `serverRoles.ts` is the same frozen list, and
 can be deleted, because they run in different processes and the extension cannot ask the gate, so the
 only thing left was to make them fail together.
 
+### A fresh install starts with seven phrases, and nobody's own list is touched (2026-10-08)
+
+An empty **Phrases** section told a new person nothing about what a phrase is for (the operator, 2026-10-08). The
+operator's own seven phrases, in English, are now the DECLARED DEFAULT of `coai.phrases` in `package.json` — *PR,
+CodeRabbit, deploy*, *What problem are we solving?*, *Questions, suggestions, plan*, *Continue*, *All done?*,
+*Consultant*, *Progress?* — each with a stable `phrase-default-…` id so its colour and its button stay put.
+
+A default, never a write, because the operator's rule was "if people have something, do not touch it":
+
+| The person's `settings.json` | What the panel and the tab read |
+|---|---|
+| no `coai.phrases` in any scope — a new install, or someone who never used phrases | the seven defaults |
+| their own phrases | their own, unchanged |
+| `[]` — they removed every phrase | nothing: the tab's last removal saves an empty list (`rowsAfter` → `rows: []`, written by `saveSetting` → `config.update(…, Global)`), and a stored value outranks the default |
+
+The first edit of a default phrase writes the whole list to the person's settings; from then on it is theirs. Seeding
+on activation was rejected: it writes into everyone's settings and, with `[]` as the default, cannot tell "never had
+any" from "removed them all". The setting's description and the Phrases help (five languages) say the examples are there
+until a list of one's own is saved. Plan: `research/PLAN_default_phrases.md`.
+
 ### A phrase is a row a person wrote, and the rules for one already existed (2026-09-14)
 
 `phrases.ts` reads `coai.phrases` — the sentences somebody types into the Claude Code composer often
