@@ -1,11 +1,14 @@
 # PLAN — codex 0.110–0.130 are never told a tier they refuse
 
-> Status: **built, not merged (2026-10-07)** — every step on branch `fix/codex-tier-floor`, through the coai plan
-> round and the code round (session `bd66f669`, both `proceed`); see *Progress*. A regression fix for coai-mcp 0.44.0
-> and 0.44.1 (fast mode, PR #693). Scope: `CodexRuntime.TierArgs` and what it reads, `VendorDiagnosis`, the codex row of the `fastMode` block in
-> `shared/feature-availability.json` (and the extension's generator, which checks that block), the docs.
+> Status: **IMPLEMENTED, 2026-10-07** — merged as PR #702 and released in coai-mcp **0.44.2** (published 2026-10-07
+> 20:35 UTC), through the coai plan and code rounds (session `bd66f669`, both `proceed`). What was built
+> differently, and the code round's decisions, are under *Progress*. Open tail: none — a real codex 0.110–0.130
+> completing a review cannot be shown with this account's model (see *Test plan*). A regression fix for coai-mcp
+> 0.44.0 and 0.44.1 (fast mode, PR #693). Scope: `CodexRuntime.TierArgs` and what it reads, `VendorDiagnosis`, the
+> codex row of the `fastMode` block in `shared/feature-availability.json` (and the extension's generator, which checks
+> that block), the docs.
 >
-> Related docs: [RESULTS_codex_service_tier_versions_2026-10-07.md](../research/RESULTS_codex_service_tier_versions_2026-10-07.md)
+> Related docs: [RESULTS_codex_service_tier_versions_2026-10-07.md](RESULTS_codex_service_tier_versions_2026-10-07.md)
 > (the measurement), `PLAN_fast_mode.md` and its extracted tail `PLAN_fast_mode_api_tier.md` (this replaces that tail's
 > "codex version floor" item).
 

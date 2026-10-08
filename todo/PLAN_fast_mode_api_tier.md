@@ -21,13 +21,13 @@ Fast mode shipped for codex and claude rows (PR #693). Two things it planned wer
    with a warning. How an OLDER codex treats the key was never measured. If one refuses it, Off — sent on every codex
    launch by default — would break that launch. **Measured 2026-10-07, and one does:** 0.110.0–0.130.0 refuse
    `default` at config load ([RESULTS_codex_service_tier_versions_2026-10-07.md](../research/RESULTS_codex_service_tier_versions_2026-10-07.md)).
-   The fix is its own plan, [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md) — built on branch
+   The fix is its own plan, [PLAN_codex_tier_floor.md](../research/PLAN_codex_tier_floor.md) — built on branch
    `fix/codex-tier-floor`, waiting for its merge — and this item is no longer this plan's work.
 
 ## What to do
 
 1. ~~**Measure an older codex**~~ — done (see Goal 2); the floor, the probe and the diagnosis are
-   [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md), where the measured refusal turned "a floor" into a RANGE.
+   [PLAN_codex_tier_floor.md](../research/PLAN_codex_tier_floor.md), where the measured refusal turned "a floor" into a RANGE.
 2. **The owner's go and a key** for the api part: an xAI vault entry that exports its key; one short call per state,
    approved before it is sent.
 3. **The xai value**, measured: the request member and value for each state, and what the answer reports. Recorded.
@@ -44,6 +44,6 @@ Fast mode shipped for codex and claude rows (PR #693). Two things it planned wer
 ## Definition of Done
 
 - [x] The older-codex measurement recorded; a refusal was seen, and the fix moved to
-  [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md).
+  [PLAN_codex_tier_floor.md](../research/PLAN_codex_tier_floor.md).
 - [ ] The owner approved the xAI calls; the measured value recorded in `research/`.
 - [ ] The api tier end to end with tests written first; module docs updated; this plan promoted.

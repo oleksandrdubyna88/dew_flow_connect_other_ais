@@ -31,7 +31,7 @@ public enum StandardTier
 /// before any request. Releases before 0.110.0 ignore the key and 0.131.0 and later accept it — so one fixed argv breaks
 /// every codex review, consultation and question row on twenty-one releases, or gives up Off everywhere else. The range is
 /// DATA (<c>fastMode[codex].refusesStandard</c> in <c>shared/feature-availability.json</c>), beside the measurement.</para>
-/// <para><b>Asked on every launch path, never cached</b> (todo/PLAN_codex_tier_floor.md, the plan round's findings 0, 1, 2
+/// <para><b>Asked on every launch path, never cached</b> (research/PLAN_codex_tier_floor.md, the plan round's findings 0, 1, 2
 /// and 5), for the reason <see cref="ClaudeCapability"/> gives: a long-lived server's remembered answer survives an in-place
 /// upgrade of the CLI, and a symlink or version-manager shim switches releases under the same path. The cost is the same
 /// order as claude's help: <c>codex --version</c> took 442–601 ms on the measuring machine, five runs.</para>

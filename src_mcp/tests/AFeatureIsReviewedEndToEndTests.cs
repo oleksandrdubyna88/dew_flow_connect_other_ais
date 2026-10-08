@@ -338,7 +338,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
     /// <summary>
     /// The feature round asks the installed codex its release before it builds, as every review round does
-    /// (todo/PLAN_codex_tier_floor.md; the other rounds are <see cref="EveryReviewRoundAsksTheInstalledCodexTests"/>): an
+    /// (research/PLAN_codex_tier_floor.md; the other rounds are <see cref="EveryReviewRoundAsksTheInstalledCodexTests"/>): an
     /// Off row on codex 0.120.0 — which refuses <c>service_tier=default</c> at config load — is sent no tier, and one on
     /// 0.160.0 is sent exactly what it was before.
     /// </summary>

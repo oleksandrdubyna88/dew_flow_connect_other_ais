@@ -88,7 +88,7 @@ internal sealed class RosterBuilder(
 
     /// <summary>
     /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
-    /// standard tier (todo/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
+    /// standard tier (research/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
     /// like every other row, so they read the same answers.
     /// </summary>
     internal SecurityRoster Security(CodexTiers tiers) => new(_settings, _prompts, _canRun, _runtimeFor,
@@ -418,7 +418,7 @@ internal sealed class RosterBuilder(
             // Every runtime with a tier reads it — codex and claude here; the others ignore it (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
             // Only CodexRuntime reads it: whether this row's installed codex can be told the standard tier, as the stage
-            // asked it before building (todo/PLAN_codex_tier_floor.md) — Unprobed for every row nobody asked about.
+            // asked it before building (research/PLAN_codex_tier_floor.md) — Unprobed for every row nobody asked about.
             CodexTier = tiers.For(provider, runtime),
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,

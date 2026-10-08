@@ -59,7 +59,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //                          not read for it. Unset: the help prints nothing useful and exits 0
 //   FAKECLI_VERSION_STDOUT / FAKECLI_VERSION_EXIT / FAKECLI_VERSION_SLEEP_MS
 //                        — what a bare `--version` prints, exits with, and waits first (a codex's tier probe,
-//                          todo/PLAN_codex_tier_floor.md, and the health probe). Each falls back to the bare
+//                          research/PLAN_codex_tier_floor.md, and the health probe). Each falls back to the bare
 //                          variable EXCEPT the wait: a launch's FAKECLI_SLEEP_MS is how a test makes the REVIEW
 //                          slow, and a probe that slept on it would spend the probe's whole timeout before every
 //                          launch of every such test. A `--version` is never recorded and never reads stdin.
@@ -427,7 +427,7 @@ static class MinimalSteering
 
     /// <summary>
     /// A vendor launch's shape — or a bare <c>--version</c>, which a codex question row's tier probe asks with the
-    /// SERVER's environment, where a test that steers by this file has set nothing (todo/PLAN_codex_tier_floor.md).
+    /// SERVER's environment, where a test that steers by this file has set nothing (research/PLAN_codex_tier_floor.md).
     /// </summary>
     private static bool IsVendorShape(string[] args) =>
         VendorFirstArguments.Contains(args[0]) || args.Contains("--ask-api", StringComparer.Ordinal) || args is ["--version"];

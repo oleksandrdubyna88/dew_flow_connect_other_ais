@@ -19,7 +19,22 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-04 · extension **0.64.0** / mcp **0.43.0** / server 0.9.0 · all five automated items PASS;
+Last verified: 2026-10-07 · mcp **0.44.2** (released) · extension 0.64.0 and server 0.9.0 unchanged, not
+re-released · automated items 1, 2, 6, 9 and 10 PASS; manual items 3, 4, 5, 7, 8, 11 and 12 were not run for this
+release. The check was run locally, not in CI —
+`MCP_VERSION=0.44.2 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.64.0`, the
+newest tags of each — and printed "every automated item passed"; there is no run id. With `--target 0.64.0`, item 2
+checked the Marketplace still serves that extension, so this stamp says nothing new about the extension.
+MCP only: codex 0.110–0.130 are no longer told the standard tier they refuse (#702), plus 0.44.1's idle-server fix
+(#690). **0.44.1 was never published:** its `mcp-v0.44.1` run (37656182437) failed on `coai-mcp (win-x64)` —
+`QuestionRowOnAgyScenarioTests.AFollowUpCutShortByTheCaller_StillBillsTheFirstLaunch_AndNeverAsOk`, one test — so its
+release stays a draft. Both fixes merged after `mcp-v0.44.0` was cut (`git log mcp-v0.44.0..mcp-v0.44.2` names #690
+and #702), and 0.44.0 is the newest published release before this one, so 0.44.2 is the first published build with
+either fix. The `mcp-v0.44.2` run (37680191727) passed on its first attempt and published six archives with
+`.sha256` files (12 assets). Outside the twelve items, by hand: the `win-x64` zip was downloaded, its `.sha256`
+verified (that platform only), and the binary reports `coai-mcp 0.44.2` and lists `fastMode` in `--features`.
+
+Previously verified: 2026-10-04 · extension **0.64.0** / mcp **0.43.0** / server 0.9.0 · all five automated items PASS;
 the seven manual items were not run for this release.
 Extension and MCP released together, MCP first: the Security lane tab reads at a glance, and `redteam-general` is
 a shipped prompt that runs on every code change (#675). The `mcp-v0.43.0` run (37208100957) published six archives

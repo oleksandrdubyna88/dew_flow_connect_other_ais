@@ -6539,7 +6539,7 @@ row's fast mode*). `--features` lists `fastMode`, so the extension sends the fie
 by a claude account whose usage credits are off, and a codex model that does not advertise the tier drops it with a
 warning (research/RESULTS_fast_mode_measured_2026-10-07.md).
 
-**An Off codex row on a release that refuses the standard tier** (codex 0.110.0–0.130.0, todo/PLAN_codex_tier_floor.md)
+**An Off codex row on a release that refuses the standard tier** (codex 0.110.0–0.130.0, research/PLAN_codex_tier_floor.md)
 still reports `fast: "off"` — the requested state — and its `note` says beside the health sentence that this release
 cannot be told the standard tier, so its launches carry no tier at all (module_runners.md, *The codex floor*). Read off
 the version the health probe ALREADY asked for (`CodexTierSupport.OfVersion(health.Version)`), so `--providers` runs one
