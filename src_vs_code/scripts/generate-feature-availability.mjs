@@ -64,7 +64,7 @@ const THINKING_SOURCES = ['probe', 'unmeasured', 'none'];
 // Fast mode (research/PLAN_fast_mode.md): a tier on every model of the runtime, on the listed models only, or none.
 const FAST_FIELDS = ['runtime', 'source', 'models', 'measuredWith', 'note', 'refusesStandard'];
 const FAST_SOURCES = ['every-model', 'models', 'none'];
-// The codex releases that refuse to be told the standard tier (todo/PLAN_codex_tier_floor.md): `{ from, through }`, both
+// The codex releases that refuse to be told the standard tier (research/PLAN_codex_tier_floor.md): `{ from, through }`, both
 // ends included, each a release as `codex --version` prints it. coai-mcp reads it (`FeatureAvailability.RangeOf`) and
 // checks it exactly as below; this half does not use it yet, and does not generate it — it only refuses a range the
 // server would refuse, so neither half can ship a file the other cannot start with.

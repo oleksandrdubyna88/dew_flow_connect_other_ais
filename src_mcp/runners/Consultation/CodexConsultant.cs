@@ -40,7 +40,7 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
 
     /// <summary>
     /// The launch with <see cref="ReviewerSettings.CodexTier"/> read off the installed CLI's own <c>--version</c> — on every
-    /// turn and the consultant check alike, never cached (todo/PLAN_codex_tier_floor.md).
+    /// turn and the consultant check alike, never cached (research/PLAN_codex_tier_floor.md).
     /// </summary>
     /// <remarks>
     /// <para>codex 0.110.0–0.130.0 refuse <c>-c service_tier=default</c> at config load, and every branch of

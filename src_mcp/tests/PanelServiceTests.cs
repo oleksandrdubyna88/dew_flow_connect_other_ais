@@ -296,7 +296,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
             var argvs = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split('\0'))
+                .Select(f => LaunchRecords.Read(f).Split('\0'))
                 .ToList();
             argvs.Should().HaveCount(6, "two providers x three roles — dealing is opt-in and off here");
             // Both vendors take the prompt on STDIN, which the fake records as the last field.
@@ -330,7 +330,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             created.Should().BeEmpty("the plan stage checks out nothing at all");
 
             var pointedAt = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split('\0'))
+                .Select(f => LaunchRecords.Read(f).Split('\0'))
                 .Select(a => Array.IndexOf(a, "-C") is var i and >= 0 ? a[i + 1] : string.Empty)
                 .Where(d => d.Length > 0)
                 .ToList();
@@ -358,7 +358,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             await service.ReviewPlanAsync(_repo, "feature", "the plan");
 
             var prompts = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split('\0')[^1])
+                .Select(f => LaunchRecords.Read(f).Split('\0')[^1])
                 .ToList();
 
             prompts.Should().NotBeEmpty("the round has to have launched something to have said anything");
@@ -410,7 +410,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
 
             await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
-            var argvs = Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split((char)0)).ToList();
+            var argvs = Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split((char)0)).ToList();
             argvs.Should().HaveCount(3, "three roles dealt across two vendors, one each");
             argvs.Select(a => a[^1]).Distinct().Should().HaveCount(3, "and no prompt asked twice");
         }
@@ -432,7 +432,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             await service.ReviewPlanAsync(_repo, "feature", "the plan");
 
             var prompts = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split((char)0)[^1])
+                .Select(f => LaunchRecords.Read(f).Split((char)0)[^1])
                 .ToList();
             prompts.Should().HaveCount(2, "one per vendor");
             prompts.Distinct().Should().HaveCount(2,
@@ -463,7 +463,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     /// builds the rules into its context, and a test that hands the context in cannot answer it.
     /// </remarks>
     private static string RecordedPrompt(string record) =>
-        Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split('\0')[^1]).First();
+        Directory.GetFiles(record, "*.argv").Select(f => LaunchRecords.Read(f).Split('\0')[^1]).First();
 
     /// <summary>
     /// The plan gate is judged against the rules this project wrote down.
@@ -618,7 +618,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
             var prompts = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split('\0')[^1]);
+                .Select(f => LaunchRecords.Read(f).Split('\0')[^1]);
             prompts.Should().Contain(p => p.Contains("one file per run", StringComparison.Ordinal),
                 "the logging rule is outside the PLAN tier and must still reach a code reviewer");
         }

@@ -107,7 +107,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
         new("astra", "codex", "codex", "gpt-6-astra", string.Empty, FakeCliExe, string.Empty, prompt, Enabled: true);
 
     /// <summary>
-    /// A codex question row asks the installed codex its release before it launches (todo/PLAN_codex_tier_floor.md): an Off
+    /// A codex question row asks the installed codex its release before it launches (research/PLAN_codex_tier_floor.md): an Off
     /// row on 0.120.0 — which refuses <c>service_tier=default</c> at config load, and so failed every question row there —
     /// is sent no tier; one on 0.160.0 is sent exactly what it was before. The probe runs with the server's environment, so
     /// the steering FILE answers its <c>--version</c> too.
@@ -127,7 +127,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
             _repo, "Which retry shape fits a flaky vendor?", "I tried a fixed wait.", ct: TestContext.Current.CancellationToken)).RootElement;
 
         reply.GetProperty("status").GetString().Should().Be("complete", reply.ToString());
-        var argv = File.ReadAllText(Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
+        var argv = LaunchRecords.Read(Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
         argv.Zip(argv.Skip(1)).Where(pair => pair.First == "-c" && pair.Second.StartsWith("service_tier=", StringComparison.Ordinal))
             .Select(pair => pair.Second).Should().Equal(sent, $"codex {release} with fast Off");
     }
@@ -149,7 +149,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
 
         // The argv a real process was started with is the planner's — one shot, read-only, ephemeral, no --search.
         var argv = Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject;
-        var fields = File.ReadAllText(argv).Split('\0');
+        var fields = LaunchRecords.Read(argv).Split('\0');
         fields.Should().ContainInOrder("exec", "-s", "read-only", "--ephemeral").And.NotContain("--search").And.NotContain("-C");
         fields[^1].Should().Contain("Which retry shape fits a flaky vendor?").And.Contain("ladder or a breaker", "the prompt reaches the child on stdin");
 

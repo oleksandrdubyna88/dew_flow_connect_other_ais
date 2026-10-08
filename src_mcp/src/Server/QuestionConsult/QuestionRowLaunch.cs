@@ -91,7 +91,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
     /// <summary>
     /// A CODEX row's launch with its installed release asked first, through the codex adapter's own preparation — the
-    /// stuck consultant's road, so the rule lives once (todo/PLAN_codex_tier_floor.md): an Off row on 0.110–0.130, which
+    /// stuck consultant's road, so the rule lives once (research/PLAN_codex_tier_floor.md): an Off row on 0.110–0.130, which
     /// refuse <c>service_tier=default</c> at config load, is sent no tier. Inside the row's deadline, so a probe that hangs
     /// is bounded like the launch. Every other runtime's launch is unchanged — a claude row's own preparation is a
     /// separate open plan (todo/PLAN_a_question_row_on_an_old_claude.md), and a codex preparation never refuses.

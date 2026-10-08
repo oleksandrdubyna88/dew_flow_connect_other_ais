@@ -53,13 +53,14 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_STDERR / FAKECLI_EXIT — failure steering
 //   FAKECLI_SLEEP_MS     — answer only after this long (the probe's timeout arm)
 //   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
-//   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
+//   FAKECLI_RECORD_DIR   — write each launch's full argv into <pid>-<guid>.argv there, whole or not at all
+//   FAKECLI_RECORD_GATE  — hold that record open until this file exists, saying so in <gate>.held (a test of the recorder)
 //   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT
 //                        — what a bare `--help` prints and exits with (a claude's capability probe); stdin is
 //                          not read for it. Unset: the help prints nothing useful and exits 0
 //   FAKECLI_VERSION_STDOUT / FAKECLI_VERSION_EXIT / FAKECLI_VERSION_SLEEP_MS
 //                        — what a bare `--version` prints, exits with, and waits first (a codex's tier probe,
-//                          todo/PLAN_codex_tier_floor.md, and the health probe). Each falls back to the bare
+//                          research/PLAN_codex_tier_floor.md, and the health probe). Each falls back to the bare
 //                          variable EXCEPT the wait: a launch's FAKECLI_SLEEP_MS is how a test makes the REVIEW
 //                          slow, and a probe that slept on it would spend the probe's whole timeout before every
 //                          launch of every such test. A `--version` is never recorded and never reads stdin.
@@ -126,9 +127,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
         // NUL-joined, because a recorded field may be multiline (the prompt on stdin) — lines
         // cannot reconstruct an argv, a character no argv contains can. The stdin text is
         // recorded as the LAST field, since that is where the prompt lives now.
-        File.WriteAllText(
-            Path.Combine(record, $"{Guid.NewGuid():N}.argv"),
-            string.Join('\0', args.Append(prompt.StdIn)));
+        LaunchRecord.Write(record, string.Join('\0', args.Append(prompt.StdIn)), read("FAKECLI_RECORD_GATE"));
     }
 
     var steering = Steering.For(prompt.Text, read);
@@ -427,7 +426,7 @@ static class MinimalSteering
 
     /// <summary>
     /// A vendor launch's shape — or a bare <c>--version</c>, which a codex question row's tier probe asks with the
-    /// SERVER's environment, where a test that steers by this file has set nothing (todo/PLAN_codex_tier_floor.md).
+    /// SERVER's environment, where a test that steers by this file has set nothing (research/PLAN_codex_tier_floor.md).
     /// </summary>
     private static bool IsVendorShape(string[] args) =>
         VendorFirstArguments.Contains(args[0]) || args.Contains("--ask-api", StringComparer.Ordinal) || args is ["--version"];
@@ -478,6 +477,55 @@ static class VersionAnswer
         using var counter = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
         using var writer = new StreamWriter(counter);
         writer.Write(line);
+    }
+}
+
+/// <summary>One launch's record under <c>FAKECLI_RECORD_DIR</c>: its argv, NUL-joined, stdin last.</summary>
+/// <remarks>
+/// <para><b>Whole or absent.</b> Written under a name no <c>*.argv</c> listing matches, closed, and only then renamed into
+/// place — so a test that lists the records while this child runs never sees one still being written. (The rename's
+/// own handle can outlive the rename for a moment; reading past it is the tests' <c>LaunchRecords</c>, the other half.)
+/// It used to be one <c>File.WriteAllText</c> straight to the <c>.argv</c> name: write access, other READERS allowed.
+/// A test's <c>File.ReadAllText</c> allows other readers only, and on Windows a share mode is enforced, so a poll that
+/// landed in that window threw. Tag <c>mcp-v0.44.1</c> lost its <c>coai-mcp (win-x64)</c> job to it twice on
+/// <c>QuestionRowOnAgyScenarioTests</c>' cut-short test (2026-10-07; see <c>ALaunchRecordIsWholeOrAbsentTests</c>). On
+/// Linux and macOS, where share modes are advisory, the same poll could read half a record.</para>
+/// <para>The name carries this process's id, so a test can ask whether the launch it recorded is still running.</para>
+/// </remarks>
+static class LaunchRecord
+{
+    public static void Write(string dir, string text, string? gate)
+    {
+        var name = $"{Environment.ProcessId}-{Guid.NewGuid():N}";
+        var writing = Path.Combine(dir, name + ".recording");
+        using (var stream = new FileStream(writing, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        using (var writer = new StreamWriter(stream))
+        {
+            writer.Write(text);
+            writer.Flush();
+            HoldOpen(gate);
+        }
+
+        File.Move(writing, Path.Combine(dir, name + ".argv"));
+    }
+
+    /// <summary>
+    /// <c>FAKECLI_RECORD_GATE</c>: with the record still open, say so in <c>&lt;gate&gt;.held</c> and wait for the
+    /// gate file — the window a reader polling the directory can land in, held open on purpose so a test can stand in it.
+    /// </summary>
+    private static void HoldOpen(string? gate)
+    {
+        if (gate is not { Length: > 0 })
+        {
+            return;
+        }
+
+        File.WriteAllText(gate + ".held", string.Empty);
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (!File.Exists(gate) && DateTime.UtcNow < until)
+        {
+            Thread.Sleep(10);
+        }
     }
 }
 

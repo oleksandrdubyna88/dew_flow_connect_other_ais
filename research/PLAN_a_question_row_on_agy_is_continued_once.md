@@ -20,11 +20,12 @@
 > `required`; the fake CLI's vendor-shape check reads a set (CodeRabbit); `scripts/**` — the paid live probes — joined
 > Sonar's coverage list, analysis on, because no CI job can run them.
 >
-> **Open tail:** in WSL the follow-up does NOT make the row answer — 0 of 3 by the probe once the person had signed agy
-> in again (2026-10-07; a WSL run through the product with 0.44.0 is still owed): turn 2 reads outside the root (`~/.bash_history`, its own transcript), agy refuses `read_file`, and
-> the row ends `failed` on the read-denied reason (RESULTS §2); why Windows answers and WSL does not is unexplained.
-> agy's `Toolbox` sentence is not in the question prompts — whether one that also says "you cannot list folders" helps
-> is to be measured first, if the operator wants it. Shipped in coai-mcp 0.44.0.
+> **Open tail:** in WSL the follow-up makes the row answer only sometimes — 1 of 3 through the released product
+> (2026-10-08) and 0 of 3 by the probe (2026-10-07): when it fails, agy refuses `read_file` and the row ends `failed`
+> on the read-denied reason (RESULTS §4); the probe showed the refused reads were outside the root (`~/.bash_history`,
+> its own transcript — RESULTS §2). Windows answers 3 of 3 through the product. Why the sides differ is unexplained.
+> Adding agy's `Toolbox` sentence to the question prompts was dropped by the operator (2026-10-08: "not important — they
+> can read"). Shipped in coai-mcp 0.44.0.
 >
 > Related docs: [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md) (this plan's
 > measurement), [RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md) (the follow-up text, measured 6 of
@@ -102,7 +103,8 @@ searching — but they are answers the caller can use, not an empty failure. Rec
 [RESULTS_agy_question_row_follow_up.md](RESULTS_agy_question_row_follow_up.md) — 6 of 6 by the time the repository's
 probe had run its own three. WSL could not be measured
 past turn 1 before the build: agy there asked to sign in again ("Waiting for authentication") partway through the
-session. Measured after the release, once the person had signed in: **0 of 3** — see the open tail above.
+session. Measured after the release, once the person had signed in: **0 of 3** by the probe and **1 of 3** through the
+product — see the open tail above.
 
 ## 5. Build order
 

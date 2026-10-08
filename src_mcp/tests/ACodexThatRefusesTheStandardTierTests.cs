@@ -9,7 +9,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A codex that refuses the standard tier is never told it (todo/PLAN_codex_tier_floor.md, change 2): codex 0.110.0–0.130.0
+/// A codex that refuses the standard tier is never told it (research/PLAN_codex_tier_floor.md, change 2): codex 0.110.0–0.130.0
 /// fail the whole launch on <c>-c service_tier=default</c> (research/RESULTS_codex_service_tier_versions_2026-10-07.md), so
 /// an Off row on one of them is sent NO tier — it has no way to say "standard". On still sends <c>fast</c>, which every
 /// release measured accepts; "As the CLI is set" still sends nothing; and a codex nobody asked, one that could not tell,

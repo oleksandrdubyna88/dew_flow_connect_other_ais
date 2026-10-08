@@ -5,7 +5,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A codex consultation asks the installed codex its release before every turn, and an Off row on a release that refuses
-/// the standard tier is sent no tier at all (todo/PLAN_codex_tier_floor.md, build step 4): the first turn and the resumed
+/// the standard tier is sent no tier at all (research/PLAN_codex_tier_floor.md, build step 4): the first turn and the resumed
 /// one, through the real <c>consult</c> flow — the shape <c>CodexConsultant.PrepareAsync</c> exists for.
 /// </summary>
 /// <remarks>
@@ -35,7 +35,7 @@ public sealed class ACodexConsultationAsksTheInstalledCodexTests : ConsultScenar
             first.TryGetProperty("error", out _).Should().BeFalse(first.ToString());
             await Consult(service, "I ran your check: with two fields it prints 3", first.GetProperty("consultationId").GetString()!);
 
-            var turns = Directory.EnumerateFiles(recorded, "*.argv").Select(file => File.ReadAllText(file).Split('\0')[..^1]).ToList();
+            var turns = Directory.EnumerateFiles(recorded, "*.argv").Select(file => LaunchRecords.Read(file).Split('\0')[..^1]).ToList();
             turns.Should().HaveCount(2).And.Contain(argv => argv.Contains("resume"), "the second turn resumed the conversation");
             turns.Should().OnlyContain(argv => Tiers(argv).SequenceEqual(sent),
                 $"codex {release} with fast Off is told {(sent.Length == 0 ? "no tier" : sent[0])} on every turn");

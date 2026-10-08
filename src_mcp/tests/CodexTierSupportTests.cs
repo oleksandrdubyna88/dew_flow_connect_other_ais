@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Whether the installed codex can be told the standard tier is read off its own <c>--version</c>, on every ask, against
-/// the range in <c>shared/feature-availability.json</c> (todo/PLAN_codex_tier_floor.md, change 3).
+/// the range in <c>shared/feature-availability.json</c> (research/PLAN_codex_tier_floor.md, change 3).
 /// </summary>
 /// <remarks>
 /// <para>Why it is asked at all (research/RESULTS_codex_service_tier_versions_2026-10-07.md): codex 0.110.0 through 0.130.0

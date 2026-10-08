@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Every review round asks the installed codex its release before it builds the roster, and an Off codex row on a release
-/// that refuses the standard tier is sent no tier at all (todo/PLAN_codex_tier_floor.md, build step 4) — the plan round,
+/// that refuses the standard tier is sent no tier at all (research/PLAN_codex_tier_floor.md, build step 4) — the plan round,
 /// the code round with its security lane, and the document round, each through the real service.
 /// </summary>
 /// <remarks>
@@ -118,7 +118,7 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
 
     /// <summary>Every codex review launch recorded since the last clear — each one's argv, the stdin field dropped.</summary>
     private List<string[]> Launches() =>
-        [.. Directory.GetFiles(_record, "*.argv").Select(file => File.ReadAllText(file).Split('\0')[..^1]).Where(argv => argv.Contains("exec"))];
+        [.. Directory.GetFiles(_record, "*.argv").Select(file => LaunchRecords.Read(file).Split('\0')[..^1]).Where(argv => argv.Contains("exec"))];
 
     private void Forget()
     {
