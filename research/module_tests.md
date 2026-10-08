@@ -2967,3 +2967,33 @@ DOM-shim test's); `chatPresetsHost.revisionPorts` itself — it needs the bundle
 the scenario hands the same reads and a Global `update` (what `saveSetting` does on a window without per-side
 settings) and its catalog turn is the compiled copy's, not the bundle's (it waits for the bundle's migration to go quiet
 instead); a per-side overlay write; the refusal notice's wording; and a real older build writing the file.
+
+## The switch-over, steps 1–3 (2026-10-08, E5.1 of `todo/PLAN_one_model_catalog.md`)
+
+The flows and the tests holding them, as shipped (steps 4–5 stopped — `research/module_extension.md` says why):
+
+- **The jumps** — `theNewPageJumpsToItsPlaces.test.ts`, the page RUN on the DOM shim (`pageScriptHarness`), every node
+  pressed taken from the drawn tree by its label: on the new page the gate's "Edit commands…" opens Reviews › Commands
+  and the stages' "Edit roles…" opens Roles & prompts, the pane shown, the old one hidden, the host told
+  `{ type: 'tab', id }` and nothing else (red: "Commands was not opened" / "Roles & prompts was not opened"); on the
+  current page, through `runPanel` over its own html, each still posts its page command (red, after step 1 had made
+  them jumps on both pages: 'the current page draws no "Edit commands…" that posts a command').
+- **The Bugz picker** — `bugzPicksFromTheCatalog.test.ts`: the sidebar drawn (`panelHtml`) and read as a tree — only the
+  rows ticked Bugz offered, as `row/model` (red: every engine model offered); nothing ticked and no pick says so and
+  names Models (red: three engine models offered); a never-ticked install's pick of a row and one of its engine's
+  models offered and selected; a pick of an unticked row drawn selected + disabled with the stranded sentence (red: "a
+  stranded pick cannot be chosen again"), the same for a removed row (red: nothing selected); `bugzCollectRefusal`
+  over a stranded pick, no pick, a holding pick and the never-ticked pick (red with the module stubbed: '' for all);
+  T7, `envBlock` writes no `COAI_BUGZ_MODEL` (red: `'local/qwen3.5' !== undefined`). Changed with it:
+  `bugzSection.test.ts` (its state ticks a local row Bugz), `settingsReach.test.ts` (the walk skips `bugzModel`, with
+  why), `catalogMigration.test.ts` (no env key for the moved model), `foundByTheGate.test.ts` (the model-list repaint is
+  asserted with a local row on the page, since the sidebar no longer lists every engine model), `notificationSites`
+  (161 → 162, `no-ranking-model`).
+- **The harness** — `panelPages.ts`/`panelPageHarness.ts` draw the new page for the Settings surface; 21 test files were
+  repointed or pinned (the commit of step 3 lists which read what). `paneIn` and `sectionHtml` throw for a place no page
+  draws, and find only start tags.
+
+**Not covered.** The provider's refusal path itself (`refusedBugzPick` → `notifyAndAsk`) runs only in an extension host;
+the pure decision it calls is what the tests hold. The `data-goto` press in a real editor (a host cannot reach a
+webview's DOM). Step 5's prerequisite — every place of the new page held by a test that runs the page and works one of
+its controls — was mapped (the plan's progress line) but not completed, since step 5 is stopped.
