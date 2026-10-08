@@ -1293,16 +1293,24 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
      `Setup › Vendor keys`… (the `CATALOG_TABS` labels, which stay English in every language, as button names do now)
      and its controls (a Models card, **Add a model**, the use ticks). `the-settings-tab` tours `CATALOG_TABS` in order;
      its test drops `todo`.
-   - **A test holds it:** no article body in any language names the removed UI (a list of the removed labels and
-     words, each with why), so a sixth article cannot bring one back unnoticed; RED first against today's bodies.
-   - **Tooltips (`help.ts`, English):** every key the page attaches is read for the same words; one that describes a
-     removed control is rewritten (the tooltip test already holds that each key is attached).
+   - **A test holds it:** no article body in any language, and no tooltip, names the removed UI. The list is PER
+     LANGUAGE (plan round finding 1): button labels stay English in every language (**Add a reviewer**, **Edit
+     presets…**), but the words around them are translated (de `Reviewer-Karte`, ru `карточка ревьюера`, …), so each
+     language's bodies are audited for its own words, each entry with why. A companion canary runs the scanner over a
+     body that names a removed label and asserts it is flagged, so the scan cannot pass vacuously. RED first against
+     today's bodies in all five languages.
+   - **Tooltips (`help.ts`):** English only — the language files hold articles, not tooltips (plan round finding 0) —
+     and scanned by the same test (findings 0 and 4); one that describes a removed control is rewritten (the tooltip
+     test already holds that each key is attached).
    - **Docs:** `research/module_extension.md` (the help as shipped), `research/module_server.md` and
      `research/architecture.md` where they name the old page; `src_vs_code/CHANGELOG.md` gains the extension's
      unreleased section for epic 5 (the page, the redirects, the removed switch, what a migrated install sees);
-     `POST_DEPLOY.md` gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
-     and the downgrade path (the old preset key stays frozen, so an older extension still reads it; an older
-     extension's edits never reach coai-mcp, as the table above says; the restore command puts the old settings back, T5).
+     `POST_DEPLOY.md` gains "a migrated install opens on Models with every old reviewer, consultant and chat model" —
+     a manual check on an installed build, whose automated half is `catalogMigration.test.ts` (each of the three kinds
+     migrated into rows; plan round finding 3) — and the downgrade path, said plainly (finding 2): edits made in an
+     older extension do NOT reach coai-mcp (the table above), so the way back is the newer extension again; the old
+     chat preset key stays frozen, so an older extension still reads it, and the restore command puts the old settings
+     back (T5).
    Built after PR #713 merges, on a branch carrying it.
 3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5). Also
    (E5.1c's own review, 2026-10-08) the current-page branches the shared builders still carry, each drawn by nothing
