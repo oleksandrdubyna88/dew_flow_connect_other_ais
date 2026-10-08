@@ -110,3 +110,9 @@ They are the branch build on this machine, through the product path (`ask_consul
 operator's real roots, three runs a side — the calibration floor, not a rate. They do not prove the answers are right in
 general: the Windows question has no file to find, so "none exists" is the right answer there and a weaker test of the
 search. They are one model (`gemini-3.8-flash-low` for rows); a stronger model may search differently.
+
+**After these runs**, the second code round changed three things that no live run has exercised: a question row now asks
+its watched roots before every lookup continuation, a continuation whose stream names no conversation keeps the one it
+continued, and a search reads at most 20 000 entries of one folder (`b5db1ef7`). Each is covered by a scenario test
+observed red first (module_tests.md); none changes a path these runs took — the question rows' roots were not git checkouts (the consult loop had its tree check already), every
+stream named its conversation, and no folder came near the bound.
