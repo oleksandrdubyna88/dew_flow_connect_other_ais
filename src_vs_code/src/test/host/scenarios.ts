@@ -10,6 +10,7 @@ import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
 import { backToSource } from '../../chatReturnCommand';
 import { aRevisionInARealEditor } from './revisionScenario';
+import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -869,6 +870,12 @@ const SCENARIOS: readonly Scenario[] = [
       assert.ok(shown !== undefined, 'nothing was opened');
       assert.equal(shown.document.uri.fsPath.toLowerCase(), recorded.toLowerCase());
     },
+  },
+  {
+    // E5.1's code round, finding 6: a stranded Bugz pick, and none, written to the real settings and refused by the
+    // collect's own decision, which starts nothing. What it does and does not drive is in `bugzCollectScenario.ts`.
+    name: 'a Bugz collect with a stranded pick, or none, read from the real settings, is refused and starts nothing',
+    run: aBugzCollectIsRefusedInARealEditor,
   },
   {
     // R7 of todo/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration
