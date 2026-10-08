@@ -121,6 +121,32 @@ export interface BugzInputs {
   readonly byRuntime: boolean;
 }
 
+/** As much of the panel's state as a Bugz pick reads — the panel's `PanelState` is one. */
+export interface BugzReads {
+  readonly catalogRows?: readonly Vendor[] | undefined;
+  readonly vendors: readonly Vendor[];
+  readonly settings: { readonly bugzModel: string };
+  readonly localEngines: ServedModels;
+  readonly bugz?: { readonly rankingVendors: readonly string[] } | undefined;
+  readonly rankByRuntime?: boolean | undefined;
+}
+
+/**
+ * The ONE reader of a Bugz pick's facts (E5.1's code round, finding 1): the sidebar draws its picker from it and the
+ * provider's collect refuses or starts by it, each from a state built the same way — so the two can never disagree about
+ * a row the reviewer list hides. Every catalog row (`catalogRows`, the reviewers only where a state has no catalog), the
+ * saved pick, the engines, the server's ranking list (empty until the corpus is read) and whether it ranks by runtime.
+ */
+export function bugzInputsOf(reads: BugzReads): BugzInputs {
+  return {
+    rows: reads.catalogRows ?? reads.vendors,
+    saved: reads.settings.bugzModel,
+    engines: reads.localEngines,
+    serverVendors: reads.bugz?.rankingVendors ?? [],
+    byRuntime: reads.rankByRuntime === true,
+  };
+}
+
 /** The pick these inputs make. */
 export function bugzPickFrom(inputs: BugzInputs): BugzPick {
   return bugzPickOf(inputs.rows, inputs.saved, modelsOfRows(inputs.engines), rankingRuleOf(inputs.serverVendors, inputs.byRuntime));

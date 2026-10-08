@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { collectWithPick, type CollectPorts } from '../bugzCollect';
-import type { BugzInputs } from '../bugzPick';
+import { bugzInputsOf, type BugzInputs } from '../bugzPick';
+import { panelHtml } from '../panelView';
+import { DEFAULTS } from '../settingsShape';
+import { panelState } from './panelPageHarness';
+import { pageTree } from './pageTree';
 import type { CatalogUse } from '../catalogFields';
 import { LOCAL_PRESET, type Vendor } from '../vendors';
 
@@ -78,6 +82,26 @@ test('a ticked row the ranking allowlist refuses is refused by name, and NO coll
   assert.match(run.refused[0] ?? '', /cloud\/gpt-5/u);
 });
 
+test('a catalog-only row ticked Bugz is drawn chosen AND collected — the sidebar and the collect read one set of facts (code round, finding 1)', async () => {
+  // ONE state, built as the provider's render builds it: `vendors` the current page's reviewers (a row that exists for
+  // Bugz alone is hidden there), `catalogRows` every row. The sidebar draws from it and the collect reads it through the
+  // same reader, so the two cannot answer differently about the migration's own `bugz-local`.
+  const own = localRow('bugz-local', 'gemma4:27b', ['bugz']);
+  const reviewers = [localRow('local', 'qwen3.5')];
+  const state = panelState('bugz', {
+    vendors: reviewers, catalogRows: [...reviewers, own],
+    settings: { ...DEFAULTS, bugzModel: 'bugz-local/gemma4:27b' }, rankByRuntime: true,
+  });
+  const drawn = pageTree(panelHtml(state, 'test-nonce')).one((node) => node.dataset.section === 'bugz', 'Bugz section');
+  const run = recording(bugzInputsOf(state));
+
+  await collectWithPick(run.ports);
+
+  assert.deepEqual(drawn.find((node) => node.tagName === 'OPTION' && 'selected' in node.attrs).map((node) => node.value), ['bugz-local/gemma4:27b']);
+  assert.deepEqual(run.refused, [], 'the collect refused the pick the sidebar shows chosen');
+  assert.equal(run.started.length, 1);
+});
+
 test('the provider\'s collect goes through collectWithPick: its refusal is the no-ranking-model notice, its start the one spawn', () => {
   // The ports are built in the provider, which only an extension host constructs — so their wiring is pinned by the
   // source: one call into the decision, the refusal routed to `no-ranking-model`, and no spawn of `--collect-bugs`
@@ -88,4 +112,12 @@ test('the provider\'s collect goes through collectWithPick: its refusal is the n
   assert.match(method, /collectWithPick\(\{/u, 'the provider decides the collect somewhere else');
   assert.match(method, /code: 'no-ranking-model'/u, 'the refusal is not the no-ranking-model notice');
   assert.doesNotMatch(method, /collectArgs\(/u, 'the provider builds the arguments itself, past the decision');
+});
+
+test('the provider reads the pick\'s facts through bugzInputsOf, the reader the sidebar draws from (code round, finding 1)', () => {
+  const source = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
+  const reader = source.slice(source.indexOf('private async bugzInputsNow('), source.indexOf('private async watchCollect('));
+
+  assert.match(reader, /return bugzInputsOf\(\{/u, 'the collect reads the pick by a reader of its own');
+  assert.match(reader, /catalogRows: rows/u, 'the collect does not read every catalog row');
 });

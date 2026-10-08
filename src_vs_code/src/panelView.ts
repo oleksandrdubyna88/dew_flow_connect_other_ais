@@ -77,7 +77,7 @@ import { ProbeResult, claudeNote } from './claudeModels';
 import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody } from './bugzView';
-import { bugzPickFrom } from './bugzPick';
+import { bugzInputsOf, bugzPickFrom } from './bugzPick';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
@@ -585,13 +585,7 @@ function bugzSection(state: PanelState): string {
   // The rows ticked Bugz on Models (E5.1 step 2) — every catalog row read, a catalog-only `bugz-local` included, since
   // the reviewer list hides those — and only those the ranking allowlist accepts: the pass reads findings that are not
   // anonymised, and the collector refuses anything else anyway.
-  const pick = bugzPickFrom({
-    rows: state.catalogRows ?? state.vendors,
-    saved: state.settings.bugzModel,
-    engines: state.localEngines,
-    serverVendors: (state.bugz ?? EMPTY_CORPUS).rankingVendors,
-    byRuntime: state.rankByRuntime === true,
-  });
+  const pick = bugzPickFrom(bugzInputsOf(state));
 
   return bugzBody({
     corpus: state.bugz ?? EMPTY_CORPUS,

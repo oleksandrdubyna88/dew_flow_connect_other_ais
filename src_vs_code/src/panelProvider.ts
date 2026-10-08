@@ -108,7 +108,7 @@ import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectWithPick } from './bugzCollect';
-import type { BugzInputs } from './bugzPick';
+import { bugzInputsOf, type BugzInputs } from './bugzPick';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { currentFileIn, folderHolding } from './openAtRevision';
@@ -3273,13 +3273,18 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * list hides), the saved pick, the engines last seen, the server's ranking list and whether it ranks by runtime.
    */
   private async bugzInputsNow(): Promise<BugzInputs> {
-    return {
-      rows: vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors')),
-      saved: this.settings().bugzModel,
-      engines: this.localEngines,
-      serverVendors: (await this.bugz()).rankingVendors,
-      byRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
-    };
+    // Built as the render builds its state — `vendors` the current page's reviewers, `catalogRows` every row — and read
+    // through the sidebar's own reader, so the collect cannot judge a pick differently from how the picker drew it.
+    const rows = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));
+
+    return bugzInputsOf({
+      vendors: rows.filter(shownOnTheOldPage),
+      catalogRows: rows,
+      settings: this.settings(),
+      localEngines: this.localEngines,
+      bugz: await this.bugz(),
+      rankByRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
+    });
   }
 
   /**
