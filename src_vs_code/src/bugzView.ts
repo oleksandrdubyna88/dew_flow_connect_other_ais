@@ -1,7 +1,7 @@
 import { BugCorpus, CollectRun, EMPTY_CORPUS, hasRun, isRunning, sending } from './roundsDb';
 import { sendLabel, waiting } from './bugsSend';
 import { ModelChoice } from './models';
-import type { RankingChoice } from './bugzPick';
+import { strandedHead, type BugzPick, type RankingChoice } from './bugzPick';
 
 /**
  * The Bugz section: what the corpus holds, and what the last run made of it.
@@ -26,11 +26,18 @@ export interface BugzViewState {
   readonly model: string;
   readonly server: string;
   /**
-   * The saved pick when it no longer holds — its row unticked Bugz or gone (`bugzPick.ts`); absent or '' when it holds.
-   * Drawn as what it is, chosen and disabled, so what is configured is what is shown (E5.1 step 2, the Chat tab's rule).
+   * The saved pick when it no longer holds, and why (`bugzPick.ts`) — absent, or its `stranded` '', when it holds. Drawn
+   * as what it is, chosen and disabled, so what is configured is what is shown (E5.1 step 2, the Chat tab's rule), and
+   * worded by why: a row unticked or gone, or a ticked row the ranking allowlist refuses (CodeRabbit on #709).
    */
-  readonly stranded?: string;
+  readonly stranded?: StrandedPick;
 }
+
+/** As much of a pick as the view words a stranded one from. */
+export type StrandedPick = Pick<BugzPick, 'stranded' | 'why' | 'rankers'>;
+
+/** No stranded pick — what a section drawn without one reads. */
+const HOLDS: StrandedPick = { stranded: '', why: 'unticked', rankers: [] };
 
 /**
  * What the Collect button says right now.
@@ -129,7 +136,7 @@ const NONE_TICKED = '<div class="hint">No model is ticked for Bugz. Tick one und
  * A picker only when there is a row to offer: a stranded pick with nothing beside it is SAID, never drawn as a select
  * that holds one disabled option and offers nothing (E5.1's code round, finding 5).
  */
-function pickerHtml(offered: readonly RankingChoice[], model: string, stranded: string): string {
+function pickerHtml(offered: readonly RankingChoice[], model: string, stranded: StrandedPick): string {
   const select = offered.length === 0
     ? ''
     : `<select id="bugz-model" data-setting="bugzModel">${firstOption(offered, model, stranded)}${
@@ -138,28 +145,37 @@ function pickerHtml(offered: readonly RankingChoice[], model: string, stranded: 
   return `${select}${offered.length === 0 ? NONE_TICKED : ''}${strandedLine(stranded, offered.length > 0)}`;
 }
 
+/** What a stranded pick's own option says after it — why it is not one of the picker's rows. */
+const STRANDED_TAG: Readonly<Record<StrandedPick['why'], string>> = {
+  unticked: 'no longer ticked Bugz',
+  refused: 'not a model the ranking pass runs on',
+};
+
 /**
  * What the picker shows when the setting is none of its rows: the stranded pick, chosen and disabled — never the first
  * row, which a browser would show for a select with nothing selected, and which is not what is configured — or, for
  * no pick at all, a placeholder saying one is wanted.
  */
-function firstOption(offered: readonly RankingChoice[], model: string, stranded: string): string {
-  if (stranded.length > 0) {
-    return `<option value="${escape(stranded)}" selected disabled>${escape(stranded)} — no longer ticked Bugz</option>`;
+function firstOption(offered: readonly RankingChoice[], model: string, stranded: StrandedPick): string {
+  if (stranded.stranded.length > 0) {
+    const pick = escape(stranded.stranded);
+
+    return `<option value="${pick}" selected disabled>${pick} — ${STRANDED_TAG[stranded.why]}</option>`;
   }
 
   return offered.some((m) => m.id === model) ? '' : '<option value="" selected disabled>Pick a model</option>';
 }
 
 /**
- * Why a stranded pick is shown, and what Collect does with it — refuses it by name (the collect's own sentence).
+ * Why a stranded pick is shown, and what Collect does with it — refuses it by name, in the head sentence the collect's
+ * own refusal says (`bugzPick.strandedHead`).
  *
  * @param pickable whether the picker offers another model — only then does the line say a pick here would do
  */
-function strandedLine(stranded: string, pickable: boolean): string {
-  return stranded.length === 0
+function strandedLine(stranded: StrandedPick, pickable: boolean): string {
+  return stranded.stranded.length === 0
     ? ''
-    : `<div class="stale">${escape(stranded)} is no longer ticked Bugz on Models, or was removed. Until you tick a model`
+    : `<div class="stale">${escape(strandedHead(stranded.stranded, stranded.why, stranded.rankers))} Until you tick a model`
       + ` for Bugz under Settings › Models${pickable ? ', or pick one here' : ''}, Collect is refused by that name — it`
       + ' never ranks with a model you did not choose.</div>';
 }
@@ -179,7 +195,7 @@ export function bugzBody(state: BugzViewState = {
   // What the pick offers is already what the ranking allowlist accepts — THIS server's list when it said, the panel's own
   // when it is too old to (`bugzPick.rankingRuleOf`) — so the view draws it as it is: one rule, in the domain (E5.1's
   // code round, findings 0 and 7), where this used to filter a second time.
-  const picker = pickerHtml(state.models, state.model, state.stranded ?? '');
+  const picker = pickerHtml(state.models, state.model, state.stranded ?? HOLDS);
 
   return `<div class="field">
   <div class="hint">${escape(lastRunLine(state.corpus))}</div>

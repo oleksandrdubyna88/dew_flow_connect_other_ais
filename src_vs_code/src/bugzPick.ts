@@ -68,6 +68,28 @@ export interface BugzPick {
   readonly chosen: string;
   /** The saved pick, when it does NOT hold — '' otherwise. */
   readonly stranded: string;
+  /** Why it does not hold — read only when {@link stranded} is set. */
+  readonly why: StrandedWhy;
+  /** Who the ranking pass runs on — the rule's list, named when a ticked row is refused by it. */
+  readonly rankers: readonly string[];
+}
+
+/**
+ * Why a saved pick does not hold (CodeRabbit on #709): its row is not ticked Bugz, or is gone, or no longer has that
+ * model — `unticked`; or its row IS ticked and the ranking allowlist refuses it — `refused`. The two are told apart
+ * because the second is not fixed by Models' tick, and calling a ticked row "no longer ticked" is false.
+ */
+export type StrandedWhy = 'unticked' | 'refused';
+
+/**
+ * What a stranded pick is, in the one sentence both the sidebar and the collect's refusal say — so the two cannot word
+ * the same pick differently.
+ */
+export function strandedHead(stranded: string, why: StrandedWhy, rankers: readonly string[]): string {
+  return why === 'refused'
+    ? `${stranded} is ticked Bugz, but the ranking pass does not run on it — it runs only on ${rankers.join(', ')}, because`
+      + ' the findings it reads are not anonymised.'
+    : `${stranded} is no longer ticked Bugz on Models, or was removed.`;
 }
 
 /**
@@ -95,10 +117,16 @@ export function rankingRuleOf(serverVendors: readonly string[], byRuntime: boole
 export function bugzPickOf(rows: readonly Vendor[], saved: string, modelsOf: (row: Vendor) => readonly string[], rule: RankingRule): BugzPick {
   const ticked = rows.filter((row) => (row.uses ?? []).includes('bugz'));
   const pool = ticked.length > 0 ? ticked : rows.filter((row) => names(saved, row, modelsOf));
-  const offered = pool.map((row) => choiceOf(row, saved, modelsOf)).filter((one) => allowedBy(one, rule.vendors, rule.byRuntime));
+  const named = pool.map((row) => choiceOf(row, saved, modelsOf));
+  const offered = named.filter((one) => allowedBy(one, rule.vendors, rule.byRuntime));
   const chosen = offered.some((one) => one.id === saved) ? saved : '';
 
-  return { offered, chosen, stranded: chosen.length === 0 ? saved : '' };
+  return { offered, chosen, stranded: chosen.length === 0 ? saved : '', why: whyStranded(named, saved), rankers: rule.vendors };
+}
+
+/** `refused` when the pick names one of the rows it may come from — so only the allowlist kept it out — else `unticked`. */
+function whyStranded(named: readonly RankingChoice[], saved: string): StrandedWhy {
+  return named.some((one) => one.id === saved) ? 'refused' : 'unticked';
 }
 
 /** What a local engine was last seen serving, as much of `LocalEngine` as a pick reads. */
@@ -202,7 +230,7 @@ export function bugzCollectRefusal(pick: BugzPick): string {
 function strandedRefusal(pick: BugzPick): string {
   const orHere = pick.offered.length > 0 ? ', or pick one in the Bugz section' : '';
 
-  return `Bugz is set to rank with ${pick.stranded}, which is no longer ticked Bugz on Models, or was removed. `
+  return `Bugz is set to rank with ${strandedHead(pick.stranded, pick.why, pick.rankers)} `
     + `Tick a model for Bugz under ${WHERE}${orHere} — nothing is collected with a model nobody chose.`;
 }
 

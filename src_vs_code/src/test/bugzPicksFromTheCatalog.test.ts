@@ -109,7 +109,15 @@ test('a ticked row the ranking allowlist refuses is neither offered nor chosen �
 
   assert.deepEqual(choosable(section), ['local/qwen3.5'], 'a row the server would refuse is offered');
   assert.deepEqual(selected(section), ['cloud/gpt-5'], 'what is configured is what is shown');
-  assert.match(section.text(), /cloud\/gpt-5 is no longer ticked Bugz on Models/u);
+  // Its row IS ticked: what strands it is the allowlist, and the page says that — and what does rank (CodeRabbit, #709).
+  assert.doesNotMatch(section.text(), /no longer ticked/u, 'a ticked row is called unticked');
+  assert.match(section.text(), /cloud\/gpt-5 is ticked Bugz, but the ranking pass does not run on it — it runs only on local/u);
+  const option = options(section).find((node) => node.value === 'cloud/gpt-5');
+  assert.doesNotMatch(option?.text() ?? '', /no longer ticked/u, 'the picker\'s own line calls it unticked');
+  // And the collect's refusal of it, by the same reading.
+  const pick = bugzPickOf([cloud], 'cloud/gpt-5', (row) => [row.model], rankingRuleOf(['local'], true));
+  assert.doesNotMatch(bugzCollectRefusal(pick), /no longer ticked/u, 'the collect calls a ticked row unticked');
+  assert.match(bugzCollectRefusal(pick), /runs only on local/u);
 });
 
 test('a pick whose row was removed, with nothing else to offer, is SAID — no inert picker, no "pick one here" (code round, finding 5)', () => {

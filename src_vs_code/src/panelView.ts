@@ -590,7 +590,7 @@ function bugzSection(state: PanelState): string {
   return bugzBody({
     corpus: state.bugz ?? EMPTY_CORPUS,
     models: pick.offered,
-    stranded: pick.stranded,
+    stranded: pick,
     // From CONFIGURATION, which is where the picker writes. They were read from panel fields
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
