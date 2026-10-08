@@ -3,6 +3,7 @@ import { isShippedPrompt } from './rolesMessages';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { roleTone } from './roleTone';
+import { type BucketCounts, lastOn, lastOnBy, onCounts, switchedOn } from './rolesSwitch';
 
 /**
  * The pieces a roles page is drawn from: one role's block, the switch rules it is drawn by, and the notes around it.
@@ -55,9 +56,13 @@ export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
  *
  * <p>It is the rule the sidebar's code-role ticks have had since they shipped, applied to the plan
  * stage as well, which is what the operator asked for when they asked for plan-stage switches.</p>
+ *
+ * <p><b>ON is the one switch</b> (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b): a role the panel's
+ * `roleEnabled` switched off is not a reviewer, whatever the catalog says, so it does not keep a bucket populated. The
+ * new page passes its `roleEnabled`; the Review roles tab, which draws the catalog's switch alone, passes none.</p>
  */
-export function canDeactivate(rows: readonly RoleRow[], role: RoleRow): boolean {
-  return !isActive(role) || activeCount(rows, bucketOf(role)) > 1;
+export function canDeactivate(rows: readonly RoleRow[], role: RoleRow, roleEnabled: Readonly<Record<string, boolean>> = {}): boolean {
+  return !lastOn(rows, role, roleEnabled);
 }
 
 /**
@@ -92,14 +97,33 @@ function kindHint(role: RoleRow): string {
  * How a role block is drawn on the page that draws it. The new Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
  * a prompt `data-role-prompt` — its shared script reads `data-prompt` as a round pick — and shows ONE switch per role,
  * the catalog's and the panel's read as one (`rolesSwitch.ts`).
+ *
+ * <p>It hands the panel's switches rather than a predicate of its own, so a block's tick and its last-role refusal are
+ * both read by `rolesSwitch` — the tick through `switchedOn`, the refusal through `lastOn`, over the same switches
+ * (E5.1b). A predicate for the tick beside a count of the catalog for the refusal is how the two disagreed.</p>
  */
 export interface RoleBlockOptions {
   readonly promptAttr: string;
-  readonly on: (role: RoleRow) => boolean;
+  /** The panel's `roleEnabled` — empty for a page that draws the catalog's switch alone. */
+  readonly roleEnabled: Readonly<Record<string, boolean>>;
+  /** Each bucket's roles ON by the one switch — what the last-ON refusal reads. Counted once per page. */
+  readonly on: BucketCounts;
+  /** Each bucket's roles active in the catalog — what the five-per-bucket room reads. Counted once per page. */
+  readonly active: BucketCounts;
 }
 
-/** The Review roles tab's own: the catalog switch alone, and the attribute its script reads. */
-const OWN_PAGE: RoleBlockOptions = { promptAttr: 'data-prompt', on: isActive };
+/**
+ * The options every block of one page is drawn with — built ONCE per page, with both counts taken here (E5.1b's code
+ * round, finding 1): a block asking its own count rescanned the whole role list, so a page of n roles read it n² times.
+ *
+ * @param rows every role, as the page composes them
+ * @param promptAttr the attribute a prompt is marked with — `data-role-prompt` on the new page, `data-prompt` on the
+ *   Review roles tab
+ * @param roleEnabled the panel's switches — none on the Review roles tab, which draws the catalog's switch alone
+ */
+export function roleBlockOptions(rows: readonly RoleRow[], promptAttr: string, roleEnabled: Readonly<Record<string, boolean>>): RoleBlockOptions {
+  return { promptAttr, roleEnabled, on: onCounts(rows, roleEnabled), active: onCounts(rows, {}) };
+}
 
 /** The prompt id, label and purpose a prompt block is drawn from — the fields of a role's prompt the page shows. */
 interface PromptShown {
@@ -153,20 +177,27 @@ function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): 
       + `every round, unless another prompt is chosen for it. ${escapeHtml(why)}</p>`;
 }
 
-export function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions = OWN_PAGE): string {
+/**
+ * One role's block, from the page's options — whose counts were taken once for the whole page ({@link roleBlockOptions}),
+ * so a block reads no other role.
+ */
+export function roleBlock(role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions): string {
   const shipped = isBuiltIn(role.id);
-  const on = options.on(role);
+  const on = switchedOn(role, options.roleEnabled);
+  // Asked once per block, and answered for all three ways a role leaves its bucket: the switch, the stage picker and
+  // Remove (E5.1b's code round, finding 0) — the host refuses each, and the page offers none of them.
+  const last = lastOnBy(options.on, role, options.roleEnabled);
 
   return `${detailsTag(role, on)}
   <summary>
 ${roleSummary(role, shipped)}
   </summary>
   <div class="fields">
-${roleFields(rows, role, texts, on)}
+${roleFields(role, texts, options, last)}
   </div>
 ${promptBlocks(role, texts, options.promptAttr)}
   <button type="button" class="add" data-add-prompt="${escapeHtml(role.id)}">Add a prompt</button>
-  ${removeRoleButton(role.id, shipped)}
+  ${removeRoleButton(role.id, shipped, last)}
 </details>`;
 }
 
@@ -182,13 +213,13 @@ function roleSummary(role: RoleRow, shipped: boolean): string {
 }
 
 /** What a role's fields say and allow: its name, its stage, its kind, its switch, and why any of them is fixed. */
-function roleFields(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, on: boolean): string {
+function roleFields(role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions, last: boolean): string {
   const shipped = isBuiltIn(role.id);
-  const may = mayFlip(rows, role, on);
-  const last = on && !canDeactivate(rows, role);
+  const on = switchedOn(role, options.roleEnabled);
+  const may = on ? !last : mayActivate(options.active, role);
 
   return `${nameField(role, shipped)}
-${stageField(stageOf(role), shipped)}
+${stageField(stageOf(role), shipped, last)}
     ${programmingFlag(role, shipped)}
     ${activeFlag(on, may)}
     ${switchHint(may, last)}
@@ -198,11 +229,12 @@ ${stageField(stageOf(role), shipped)}
 }
 
 /**
- * Whether the switch may move from where it is. Off by the panel's switch alone, a role the catalog holds active may
- * always be switched on: that write moves no count of the catalog's.
+ * Whether an OFF switch may be turned on — {@link canActivate}, over the page's count. Off by the panel's switch alone, a
+ * role the catalog holds active may always be switched on: that write moves no count of the catalog's. (ON, the switch
+ * may be turned off unless it is the last role ON in its bucket — `roleFields` reads that from `last`.)
  */
-function mayFlip(rows: readonly RoleRow[], role: RoleRow, on: boolean): boolean {
-  return on ? canDeactivate(rows, role) : canActivate(rows, role) || isActive(role);
+function mayActivate(active: BucketCounts, role: RoleRow): boolean {
+  return isActive(role) || (active.get(bucketOf(role)) ?? 0) < MAX_ACTIVE_PER_BUCKET;
 }
 
 function nameField(role: RoleRow, shipped: boolean): string {
@@ -218,14 +250,26 @@ const STAGE_OPTIONS: readonly (readonly [string, string])[] = [
   [FEATURE_STAGE, 'Feature review'],
 ];
 
-function stageField(stage: string, shipped: boolean): string {
-  const options = STAGE_OPTIONS.map(([value, label]) => `<option value="${value}"${stage === value ? ' selected' : ''}>${label}</option>`);
+/**
+ * The stage picker. For the last role ON in its bucket every OTHER stage is drawn disabled: moving it there would leave
+ * its bucket with no reviewer, which the host refuses (`rolesEdit.whyNotMoved`) — a choice the page offers only to have
+ * it refused after the fact is a choice the page should not have offered. Its own stage stays chosen.
+ */
+function stageField(stage: string, shipped: boolean, last: boolean): string {
+  const options = STAGE_OPTIONS.map(([value, label]) => stageOption(value, label, stage, last));
 
   return `    <label>Stage
       <select data-field="stage"${shipped ? ' disabled' : ''}>
         ${options.join('\n        ')}
       </select>
     </label>`;
+}
+
+/** One stage of the picker: chosen when it is the role's, and closed to the last role ON when it is not. */
+function stageOption(value: string, label: string, stage: string, last: boolean): string {
+  const own = stage === value;
+
+  return `<option value="${value}"${own ? ' selected' : ''}${last && !own ? ' disabled' : ''}>${label}</option>`;
 }
 
 function programmingFlag(role: RoleRow, shipped: boolean): string {
@@ -243,7 +287,7 @@ function switchHint(may: boolean, last: boolean): string {
   }
 
   return last
-    ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
+    ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, moving it to another stage or removing it, or the stage would have no reviewer in it at all.</p>'
     : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`;
 }
 
@@ -257,8 +301,14 @@ function promptBlocks(role: RoleRow, texts: Readonly<Record<string, string>>, pr
   return (role.prompts ?? []).map((p) => promptBlock(role, p, texts, promptAttr)).join('\n');
 }
 
-function removeRoleButton(roleId: string, shipped: boolean): string {
-  return shipped ? '' : `<button type="button" class="remove role" data-remove="${escapeHtml(roleId)}">Remove this role</button>`;
+/**
+ * Remove, for a role of the person's own — drawn disabled for the last role ON in its bucket, which the host would refuse
+ * to remove (`rolesEdit.removed`); the switch's hint above says why and what to do first.
+ */
+function removeRoleButton(roleId: string, shipped: boolean, last: boolean): string {
+  return shipped
+    ? ''
+    : `<button type="button" class="remove role" data-remove="${escapeHtml(roleId)}"${last ? ' disabled' : ''}>Remove this role</button>`;
 }
 
 /**

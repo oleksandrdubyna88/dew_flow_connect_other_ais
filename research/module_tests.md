@@ -3024,3 +3024,52 @@ built only by the bundled extension's `ExtensionContext`: they are pinned by sou
 A collect that does start (it spawns coai-mcp against the window's database). The `data-goto` press in a real editor (a
 host cannot reach a webview's DOM). Step 5's prerequisite — every place of the new page held by a test that runs the page
 and works one of its controls — was mapped (the plan's progress line) but not completed; it is E5.1b/E5.1c's.
+
+## E5.1b — the health block on the new page, one ON rule, the owed Setup tests (2026-10-08, `todo/PLAN_one_model_catalog.md`)
+
+- **The consultant health block, on both pages** — `consultantHealthPage.test.ts` runs EVERY case from one table
+  (`PAGES`: the current page's `settingsHtml(…, 'consultant')`, the new page's `catalogHtml(…, 'consultants/consultant')`),
+  each registered once per page: one Check per caller with its id, the click posts it, disabled while checking and
+  after a reload by the server's settled state, none on a too-old server, none in another side's read-only block, a
+  failure of another consultant absent (now guarded: the page must have drawn a block) and the row's own present, the
+  confinement line and the rule's `<pre>`, escaping, the snippet's Copy, a `copied` relabelling only its button, a
+  non-copy `copied` changing nothing (guarded: the page must have drawn the four Checks), an `h4` per side block, no
+  live region. RED before the block was drawn: all 16 new-page cases, e.g. "the page has no checkConsultant button for
+  gemini". **The identity case**, new: a pick that is a catalog row (`{ vendor: 'deep-high' }`, the row's model
+  `gpt-deep-1`) and a server report naming that pair — the row's own failure is shown, with no "which is not what this
+  row names now" notice (RED on the new page: "the picked row's own failure was filtered away as another
+  consultant's"; teeth: `callerHealth` matched by the STORED entry turned it red on both pages).
+- **One ON rule for roles** — `rolesOnTheNewPage.test.ts`, one table over the plan, code, documents and feature
+  buckets: on the new page (`catalogHtml(…, 'reviews/roles')`, run on the DOM shim) the last role ON — the other role
+  active in the catalog but off by `roleEnabled` (plan: off in the catalog, its roles have no second switch) — has its
+  switch disabled with the "only role still active" hint, and with another role ON it does not; at the host
+  (`rowsAfter(…, roleEnabled)`) switching it off is refused, and with another ON it is stored. RED (code, documents,
+  feature; plan was already guarded): "Architecture could be switched off while every other code role is off, so the
+  code stage would run no role", "the host stored Architecture switched off, leaving the code stage with no role ON",
+  and the same for DocumentSummary and FeatureReview. Source pins: `PanelProvider.roleEdited` queues with
+  `() => this.roleSwitches()`, and `rolesHost`'s `store` and `removeConfirmed` hand `roleEnabled()` to `rowsAfter`
+  (teeth: `queueRoleEdit(command)` alone failed "the new page queues its role edits without the panel's switches").
+  `rolesPage`, `rolesEdit`, `settingsShape` and `panelView` tests stayed green over the shared count.
+- **Setup › Team servers and Setup › MCP server, run** — `setupOnTheNewPage.test.ts`, one table: add, sign in, sign out,
+  remove (signed in and out); install when an update is offered, check again, change and move the data folder, delete
+  the old one after a verified move — each button found inside its own place's pane and pressed through the page's own
+  script, the one posted `[type, command, id]` asserted; and no Install when up to date, no delete after an unverified
+  move. `panelPageHarness.pressCommand` presses the one button of a command that has no `data-id`. Teeth, one compiling
+  break at a time, each red and restored: a renamed sign-in / remove / install command, sign out and delete losing their
+  id, add and install gaining one, Check again unwired, move posting change, the page script posting the command as
+  the id (all ten red), setup/team drawn without its servers, Install offered when up to date, delete offered after an
+  unverified move.
+- **The code round's two findings** (both red first). Finding 0 — `rolesOnTheNewPage.test.ts`, one table over the four
+  buckets with a role of one's OWN as the last ON (only such a role has a stage picker and a Remove): the page offers
+  only its own stage (`OPTION`s not `disabled`), draws Remove `disabled` and a click on it posts nothing; with another
+  role ON it offers all three stages and Remove posts. Red: "MyPlan, the last plan role ON, could be moved to another
+  stage or removed on the page" (and MyCode, MyDoc, MyFeature); teeth: the script's disabled check removed turned all
+  four red. Finding 1 — the same file: a page of 1000 roles of one's own (half on) drawn block by block from ONE
+  `roleBlockOptions`, the role list read through a counting proxy (R7's pattern), at most 10 reads per role. Red, against
+  a `roleBlockOptions` seam that carried no counts: "1008 blocks read the role list 3052224 times — every block
+  rescanned it".
+
+**Not covered.** The provider's composition of the new page's role edits beyond the source pins (a host runs only in an
+editor); the queue reading the switches at APPLY time rather than queue time is by construction, not by a run; a
+browser's refusal to click a disabled option or button (the shim models the page's own refusal); the paid Check
+itself, as before (E5.5).

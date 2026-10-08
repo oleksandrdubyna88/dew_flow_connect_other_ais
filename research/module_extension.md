@@ -11419,7 +11419,7 @@ read it; `bugzModel` stays a setting and stays in the migration's backup (T5).
 `scripts/render-page.mjs`'s `settings:<tab>` renders `catalog:<place>`. What ONLY the current page draws is still read
 there, through `currentSettingsHtml` or its own html, each test saying so: the old reviewer card's layout and its inert
 api card, the stage box's own role tick and last-role refusal, the caller-coloured consultant definitions, the
-consultant HEALTH block, the chat's two model selects and "Edit presets…", the question row's own vendor picker.
+consultant HEALTH block (until E5.1b, which runs those tests on both pages), the chat's two model selects and "Edit presets…", the question row's own vendor picker.
 
 **Why steps 4 and 5 stop.** The plan's premise was that no old section is drawn only by the old page. One is: the
 **consultant health block** (`consultantView.definitionRows` → `healthBlock`, epic 5 of
@@ -11433,5 +11433,73 @@ three pages first would leave a default install with none. Both wait for the hea
 
 Smaller differences, recorded where the tests read the current page: the new page's last-role refusal counts the
 catalog's `active` only (`rolesEdit`), not `roleEnabled`, so an install whose old page left every code role but one off
-by `roleEnabled` can switch the last one off there (coai-mcp still refuses the all-off round); the Consultant tab draws
-no caller colour; the api card on an older server says why it cannot run but leaves its fields editable.
+by `roleEnabled` can switch the last one off there (coai-mcp still refuses the all-off round) — **closed by E5.1b,
+below**; the Consultant tab draws no caller colour; the api card on an older server says why it cannot run but leaves
+its fields editable.
+
+## E5.1b — the health block under each pick, and one ON rule for roles (2026-10-08, PLAN_one_model_catalog.md E5.1b)
+
+**The consultant health block is on the new Consultants tab — the same block, not a copy.** One helper,
+`consultantHealthState.callerHealth(kind, consult, health)`, decides a caller's block against the consultant its entry
+RESOLVES to (`consult.byCaller` — the vendor and the model the server would run, model materialised from a catalog row).
+Both tabs call it: the current page through `consultantView.withHealth` (which used to ask with the row's own vendor and
+model — the same resolved pair, now asked in one place), the new page through `consultantPicks.pickHtml`, which draws
+`healthBlock(callerHealth(…))` under each pick. `consultantPicksHtml` takes the health state and
+`catalogSections` passes `state.consultantHealth`. **Why the resolved pair:** a pick is stored as a bare reference
+(`{ vendor: 'deep-high' }`, no model) while the server's `--consultants` report names the row's model; matched by what
+is stored, the row's own failure would be hidden as "about another consultant". Nothing else moved: the Check and Copy
+post the same `checkConsultant` / `copyConsultantSnippet` commands to the same host cases
+(`PanelProvider` command switch), the shared page script relabels a Copy (`copyCommands`), `CONSULTANT_HEALTH_CSS`
+is in the shared sheet both pages carry, and `consultantHealthWatcher.HEALTH_SHOWN_ON` already named
+`consultants/consultant`, so the panel probes while that place is shown.
+
+**One ON rule for roles.** A role is ON when `rolesSwitch.switchedOn(role, roleEnabled)` — the catalog's `active` and,
+for every stage but plan, the panel's `roleEnabled`. `rolesSwitch.rolesOn(rows, bucket, roleEnabled)` is the ONE count
+per bucket and `lastOn` the one last-role rule, read by:
+
+- the new page's role block — `RoleBlockOptions` carries `roleEnabled` (no predicate of its own any more) and the
+  page's two counts, so the tick (`switchedOn`), the last-ON refusal (`lastOnBy`), the five-per-bucket room and the
+  "only role still active in this stage" hint read the same switches; the Review roles tab passes none and counts the
+  catalog alone, as it draws;
+- the host's guard — `rolesEdit.rowsAfter` takes `roleEnabled`, and `lastStanding` (switch off, remove, restage) is
+  `lastOn`; the one queue (`rolesHost.queueRoleEdit(command, roleEnabled)`) carries a READER of the switches, read when
+  the edit is applied (and, for a removal, after the modal question), and `PanelProvider.roleEdited` hands this side's
+  `roleEnabled` (`roleSwitches()`);
+- the current page — `settingsShape.enabledCodeRoles` is `rolesOn` over the code bucket.
+
+The new page refuses the last ON role of EVERY bucket (plan, code, documents, feature) — broader than the current page,
+which guards the result-code bucket only — because a stage with no role is the same failure in each. Plan-stage roles
+have no second switch, so there the count is the catalog's.
+
+**The code round's two findings** (proceed; both accepted). **0 — every way out of a bucket is refused on the page.**
+The block refused only the switch of the last role ON; its stage picker still offered the other stages and its Remove
+still posted, refused late by the host. `roleBlock` asks the last-ON rule once and, for that role, draws every OTHER
+stage `disabled` (its own stays chosen) and Remove `disabled`, under the switch's hint, which now names moving and
+removing too; the new page's script posts nothing for a disabled button. **1 — counted once per page.** `lastOn` per
+block rescanned the whole role list (a thousand roles were three million reads). `rolesSwitch.onCounts(rows,
+roleEnabled)` takes every bucket's ON count in one pass and `lastOnBy(counts, role, roleEnabled)` asks the rule of it;
+`rolesBlocks.roleBlockOptions(rows, promptAttr, roleEnabled)` builds a page's options once with both counts (ON by
+the one switch, and the catalog's `active` for the room), and `roleBlock(role, texts, options)` reads no other role.
+`rolesEmbedded` and the Review roles tab's `rolesHtml` each build the options once. `lastOn` (the host's single
+question) is `lastOnBy` over a fresh count.
+
+```mermaid
+flowchart LR
+  subgraph Health["Consultant health"]
+    CH["callerHealth(kind, consult, health)<br/>identity = consult.byCaller"] --> HB[healthBlock]
+    WH["consultantView.withHealth<br/>(current page)"] --> CH
+    PH["consultantPicks.pickHtml<br/>(new page)"] --> CH
+  end
+  subgraph On["One ON rule"]
+    SO["rolesSwitch.switchedOn"] --> RO["rolesOn(rows, bucket, roleEnabled)"]
+    SO --> OC["onCounts(rows, roleEnabled)<br/>one pass"]
+    OC --> LB[lastOnBy]
+    LB --> LO[lastOn]
+    OC --> BO["roleBlockOptions<br/>(once per page)"]
+    BO --> BL["roleBlock: tick, stage picker, Remove, hint"]
+    LB --> BL
+    LO --> GE["rolesEdit.lastStanding<br/>(switch off, remove, restage)"]
+    RO --> EC["settingsShape.enabledCodeRoles"]
+    PP["PanelProvider.roleEdited"] -->|"queueRoleEdit(command, roleSwitches)"| GE
+  end
+```

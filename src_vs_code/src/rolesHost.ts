@@ -117,20 +117,45 @@ async function redrawAll(): Promise<void> {
 }
 
 /**
+ * The panel's own switch per role (`roleEnabled`), read when an edit is APPLIED rather than when it was queued — the
+ * edit before it in the queue may have moved it. What the last-role guard counts with the catalog's `active`
+ * (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b).
+ */
+export type SwitchesNow = () => Readonly<Record<string, boolean>>;
+
+/**
+ * The Review roles tab's: no panel switches, so the guard counts the catalog's switch alone — which is all that tab
+ * draws, and the tab is deleted with the current page (E5.1 step 5).
+ */
+const CATALOG_ALONE: SwitchesNow = () => ({});
+
+/** One edit in the queue, and the switches it is guarded with. */
+interface QueuedEdit {
+  readonly command: RolesCommand;
+  readonly roleEnabled: SwitchesNow;
+}
+
+/**
  * Commands are applied ONE AT A TIME, and a typed field waits to settle before it is stored — `settledWrites.ts`'s two
  * rules. ONE queue for both pages, so an edit on one cannot overtake an edit on the other.
  */
-const writes = settledWrites<RolesCommand>({
+const writes = settledWrites<QueuedEdit>({
   apply,
   render: redrawAll,
   // Through `reportRefusal`, so the one refusal that HAS a cure — a window that has not caught up with an update cannot
   // store a key it never registered — offers the reload instead of this module's sentence.
   report: (error) => { reportRefusal(rolesSide(), KEY, error, { ordinary: 'ConnectOtherAIs could not save that change to your roles.' }); },
-  fieldOf: rolesFieldOf,
+  fieldOf: (edit) => rolesFieldOf(edit.command),
 });
 
-/** One edit, from either page, in the one queue. */
-export const queueRoleEdit = (command: RolesCommand): Promise<void> => writes.queue(command);
+/**
+ * One edit, from either page, in the one queue.
+ *
+ * @param roleEnabled the panel's switches the edit is guarded with — the new page's Roles &amp; prompts hands the
+ *   panel's, so a role off by `roleEnabled` does not keep its bucket populated (E5.1b); the Review roles tab hands none
+ */
+export const queueRoleEdit = (command: RolesCommand, roleEnabled: SwitchesNow = CATALOG_ALONE): Promise<void> =>
+  writes.queue({ command, roleEnabled });
 
 /** Whatever is still settling — written before a page that typed it goes away. */
 export const flushRoleEdits = (): Promise<void> => writes.flush();
@@ -142,7 +167,7 @@ export const flushRoleEdits = (): Promise<void> => writes.flush();
  * caret to the end of it on every keystroke. Everything that changes the SHAPE of the roles — a role added or removed,
  * a switch, a stage — does. Which tab is open is the old page's own (`rolesPanel.ts`), and changes nothing here.</p>
  */
-async function apply(command: RolesCommand): Promise<boolean> {
+async function apply({ command, roleEnabled }: QueuedEdit): Promise<boolean> {
   if (command.kind === 'tab' || command.kind === 'ignore') {
     return false;
   }
@@ -152,17 +177,17 @@ async function apply(command: RolesCommand): Promise<boolean> {
     return false;
   }
 
-  return await applied(command);
+  return await applied(command, roleEnabled);
 }
 
 /** A command that acts on the roles themselves. */
 type RoleAct = Exclude<RolesCommand, { kind: 'tab' | 'ignore' | 'zoom' | 'tone' }>;
 
 /** What each command that is not a plain row edit does — a table, so each is one small rule. Answers: redraw? */
-const ACTS: { readonly [K in RoleAct['kind']]?: (command: Extract<RoleAct, { kind: K }>) => Promise<boolean> } = {
-  editPrompt: async (command) => {
+const ACTS: { readonly [K in RoleAct['kind']]?: (command: Extract<RoleAct, { kind: K }>, roleEnabled: SwitchesNow) => Promise<boolean> } = {
+  editPrompt: async (command, roleEnabled) => {
     if (command.field !== 'text') {
-      return store(command);
+      return store(command, roleEnabled);
     }
     await writeText(command.id, command.promptId, command.value);
 
@@ -175,7 +200,7 @@ const ACTS: { readonly [K in RoleAct['kind']]?: (command: Extract<RoleAct, { kin
 
     return true;
   },
-  remove: (command) => removeRole(command.id),
+  remove: (command, roleEnabled) => removeRole(command.id, roleEnabled),
   // The cure for a stand-down: a newer build owns the settings file, and reloading is how this window becomes it.
   reloadWindow: () => {
     void vscode.commands.executeCommand('workbench.action.reloadWindow');
@@ -190,10 +215,10 @@ const ACTS: { readonly [K in RoleAct['kind']]?: (command: Extract<RoleAct, { kin
 };
 
 /** The commands that act on the roles themselves: their own rule, or a plain row edit. */
-async function applied(command: RoleAct): Promise<boolean> {
-  const act = ACTS[command.kind] as ((one: RoleAct) => Promise<boolean>) | undefined;
+async function applied(command: RoleAct, roleEnabled: SwitchesNow): Promise<boolean> {
+  const act = ACTS[command.kind] as ((one: RoleAct, switches: SwitchesNow) => Promise<boolean>) | undefined;
 
-  return act === undefined ? store(command) : act(command);
+  return act === undefined ? store(command, roleEnabled) : act(command, roleEnabled);
 }
 
 /** A row edit the rules refuse, said once in one place. */
@@ -218,11 +243,11 @@ function activating(command: RolesCommand): boolean {
 }
 
 /** Everything that changes a ROW rather than a file. */
-async function store(command: RolesCommand): Promise<boolean> {
+async function store(command: RolesCommand, roleEnabled: SwitchesNow): Promise<boolean> {
   // Only `add` pays for the reservations: an id whose deletion has not finished is not free. Through the coordinator,
   // which owns the store. And only a switch ON reads the prompt bodies: a role is not switched on without a question.
   const taken = command.kind === 'add' ? await roleDeletions(rolesSide()).reserved() : new Set<string>();
-  const outcome = rowsAfter(roleRows(), command, taken, await textsFor(command));
+  const outcome = rowsAfter(roleRows(), command, taken, await textsFor(command), roleEnabled());
   if (outcome.kind === 'unchanged') {
     return false;
   }
@@ -245,7 +270,7 @@ async function store(command: RolesCommand): Promise<boolean> {
  * Removing a role: asked first, then the row and its prompt bodies together. Asked because it is the one irreversible
  * thing here; the files go WITH it, or the next role named the same opens with text the person believed deleted.
  */
-async function removeRole(id: string): Promise<boolean> {
+async function removeRole(id: string, roleEnabled: SwitchesNow): Promise<boolean> {
   if (isBuiltIn(id)) {
     void notify({
       as: 'information',
@@ -261,7 +286,7 @@ async function removeRole(id: string): Promise<boolean> {
 
   const name = roleName(id);
 
-  return (await removalConfirmed(id, name)) ? await removeConfirmed(id, name) : false;
+  return (await removalConfirmed(id, name)) ? await removeConfirmed(id, name, roleEnabled) : false;
 }
 
 /** What a role is called, for a sentence — its id when it has no name. */
@@ -291,8 +316,9 @@ async function removalConfirmed(id: string, name: string): Promise<boolean> {
  * writes the tombstone first, so a host that dies in the middle leaves evidence rather than an orphaned prompt and a
  * freed id.
  */
-async function removeConfirmed(id: string, name: string): Promise<boolean> {
-  const outcome = rowsAfter(roleRows(), { kind: 'remove', id });
+async function removeConfirmed(id: string, name: string, roleEnabled: SwitchesNow): Promise<boolean> {
+  // Read AFTER the person answered: the question is modal, and a switch can move while it is open.
+  const outcome = rowsAfter(roleRows(), { kind: 'remove', id }, new Set(), {}, roleEnabled());
   if (outcome.kind === 'refused') {
     sayRefused(outcome.why);
 

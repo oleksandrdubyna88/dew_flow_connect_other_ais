@@ -1136,6 +1136,81 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    allow rule and Copy), the new page's last-role refusal counting `roleEnabled` as the current page does, and the
    page-running tests owed for setup/team and setup/mcp — its own design and plan round; **E5.1c** — steps 4 and 5,
    after E5.1b, when the premise holds.
+   **E5.1b, designed 2026-10-08.** Mapped first (paths under `src_vs_code/src`):
+   1. **The consultant health block on the new Consultants tab — the same block, not a copy.** `healthBlock`
+      (`consultantHealthView.ts:27`) is a pure function of one caller's `RowHealth`; the current page reaches it through
+      `consultantView.consultantRowView` → `withHealth` (`rowHealth(kind, {vendor, model}, health)`, `:253`), the new
+      tab never does (`callersOrDefinitions` replaces those rows with `consultantPicks.pickHtml`'s). One exported helper —
+      a caller's health from `consult.byCaller` and the health state, the identity rule `withHealth` uses today (the
+      RESOLVED definition, so a failure of another vendor/model is not shown) — is called by `withHealth` and by
+      `pickHtml`; `consultantPicksHtml` takes the health state (`catalogSections.ts:38` passes
+      `state.consultantHealth`). Nothing else moves: the page posts the same `checkConsultant` /
+      `copyConsultantSnippet` commands (`panelProvider.ts:2475-2483`), the shared page script redraws a Copy's label
+      (`copyCommands`), `CONSULTANT_HEALTH_CSS` is in the shared `CSS`, and `HEALTH_SHOWN_ON` already names
+      `consultants/consultant` (`consultantHealthWatcher.ts:42`). **The identity risk, tested:** a pick that is a
+      catalog row resolves through `consult.byCaller` to a vendor/model; the health the server reports for that caller
+      (`--consultants`) must be matched by the same pair, or the block would filter its own row's failure away — a
+      test feeds a catalog-row pick and a server report and sees the row's own failure shown.
+   2. **The new page's last-role refusal counts what the current page counts.** Today the new page asks only the
+      catalog's `active` (`rolesBlocks.ts:188` `last = on && !canDeactivate(rows, role)`, `roles.ts:463 activeCount`,
+      and the host's twin `rolesEdit.ts:229 lastStanding` / `:261 whyNotOff`), so two active code roles of which one has
+      `roleEnabled = false` let the other be switched off and the code stage runs no role. One predicate — a role is
+      ON when `rolesSwitch.switchedOn(role, roleEnabled)` — and one count per bucket, in `rolesSwitch.ts`, read by the
+      new page's block, the host's guard and `settingsShape.enabledCodeRoles` (the current page). The new page keeps
+      refusing the last ON role of EVERY bucket (plan, code, documents, feature) — broader than the current page,
+      which guards only the result-code bucket — because a stage with no role is the same failure in each.
+   3. **The page-running tests owed for setup/team and setup/mcp.** Each button of each place pressed on the NEW page
+      (`test/pageScriptHarness.ts` / `runPanel` over `catalogHtml`) and the message it posts asserted: Team servers'
+      add, sign in, sign out, remove; the MCP server's install (when an update is offered), check for update, change
+      and move the data folder, delete the old one after a verified move. Buttons without `data-id` are found by their
+      command (the harness's `click` matches an id; a small helper finds by command).
+   4. **The health tests run on both pages.** `consultantHealthPage.test.ts` (one Check per caller, a click posts its
+      kind, disabled while running and after a reload, none on an old server, the other side read-only, another
+      vendor's failure not shown, confinement and the snippet, escaping, Copy, a copied label redrawn alone, side
+      headings) runs against the current page today (`:58-60`); it runs against the new tab too, from one table.
+   **Tests, first** for 1 (RED: the new tab draws no Check), 2 (RED: the last ON code role can be switched off on the
+   new page and by the host — and, per the plan round's finding, the same attempt on the last ON role of EACH bucket,
+   plan, code, documents and feature, on the page and at the host guard, from one table), and the identity case of 1;
+   3 and 4 add page-running coverage of behaviour that already
+   works, so their teeth are proven by breaking the code they hold, not by a red start. Docs: `research/module_extension.md`
+   (the shared health helper; the one ON rule), `research/module_tests.md` (the places and their tests). After E5.1b,
+   E5.1c (steps 4–5) proceeds: its premise then holds.
+   **Progress** (branch `feat/catalog-e5-health`, 2026-10-08; code round passed — see below). **Part 1 + 4**
+   (`52acc9e3`): `consultantHealthState.callerHealth(kind, consult, health)` — the identity is `consult.byCaller`'s
+   resolved pair — called by `consultantView.withHealth` and by `consultantPicks.pickHtml` (a `pickHealth` beside it
+   draws `healthBlock`); `consultantPicksHtml` takes the health state; `catalogSections` passes `state.consultantHealth`.
+   Verified unchanged, as designed: the host's `checkConsultant`/`copyConsultantSnippet` cases, `copyCommands`,
+   `CONSULTANT_HEALTH_CSS` in the shared sheet, `HEALTH_SHOWN_ON`. `consultantHealthPage.test.ts` runs every case on both
+   pages from one table (`PAGES`) and gains the identity case. Red: all 16 new-page cases, e.g. "the page has no
+   checkConsultant button for gemini", the identity case "the picked row's own failure was filtered away as another
+   consultant's"; teeth: `callerHealth` matched by the STORED entry turned the identity case red on both pages. Two
+   cases that passed vacuously on a page with no block now first assert the block is there. **Part 2** (`ed863ad3`):
+   `rolesSwitch.rolesOn` (the one count per bucket) and `lastOn`; `RoleBlockOptions` carries `roleEnabled` in place of
+   its `on` predicate; `rolesEdit.rowsAfter` takes `roleEnabled`, `lastStanding` is `lastOn` (switch off, remove,
+   restage); `rolesHost.queueRoleEdit(command, roleEnabled)` carries a READER of the switches, read at apply time;
+   `PanelProvider.roleEdited` passes `roleSwitches()`; `settingsShape.enabledCodeRoles` is `rolesOn` over the code
+   bucket. Red, from one table, page and host: "Architecture could be switched off while every other code role is off,
+   so the code stage would run no role", "the host stored Architecture switched off, leaving the code stage with no role
+   ON", the same for DocumentSummary and FeatureReview; the plan bucket was already guarded (its roles have no second
+   switch), so its row is green from the start. Teeth for the provider's source pin: `queueRoleEdit(command)` alone
+   failed. **Part 3** (`7eeee41e`): `setupOnTheNewPage.test.ts` and `panelPageHarness.pressCommand`; ten presses plus no
+   Install when up to date and no delete after an unverified move; thirteen teeth breaks, each red and restored.
+   **Deviations:** the host receives the switches as a reader through the queue, not a value, so an edit queued behind
+   another is guarded by the switches as they are when it applies (and a removal by them after its modal question); the
+   Review roles tab passes none and keeps counting the catalog alone, as it draws — it is deleted with step 5. Part 4
+   landed in part 1's commit, because its table is the test that went red for part 1.
+   **E5.1b's code round** (proceed; codex's four reviewers, gemini out of quota; 2 findings, both accepted, each fixed red
+   first on the same branch): (0, `ecff7617`) the last role ON was refused only at its switch — its stage picker still
+   offered the other stages and its Remove still posted, refused late by the host; `roleBlock` now draws every other
+   stage and Remove `disabled` for it, under the switch's hint (which names moving and removing too), and the page's
+   script posts nothing for a disabled button. Red, from one table over the four buckets with a role of one's own as the
+   last ON: "MyPlan, the last plan role ON, could be moved to another stage or removed on the page" (and MyCode, MyDoc,
+   MyFeature); teeth: the script's check removed. (1, `8f09d50b`) `lastOn` per block rescanned the role list — n²
+   reads; `rolesSwitch.onCounts` counts every bucket in one pass, `lastOnBy` asks the rule of the counts, and
+   `rolesBlocks.roleBlockOptions` builds a page's options once with the ON and the catalog's active counts, so
+   `roleBlock(role, texts, options)` reads no other role. Red (against a seam with no counts): "1008 blocks read the
+   role list 3052224 times — every block rescanned it". Deviation: `roleBlock` lost its `rows` parameter and the Review
+   roles tab builds its options once too, so the old tab is linear as well.
    **E5.1a's code round** (proceed, 8 of 8 reviewers; 8 findings, all accepted, each fixed red first on the same
    branch): (0, 7) the ranking allowlist is the pick's own rule — `bugzPickOf` takes a `RankingRule`
    (`rankingRuleOf`: the server's list, or `RANKING_VENDORS` from a server too old to say), `bugzView` filters no more;

@@ -15,6 +15,7 @@ import {
   utcShort,
 } from './consultantHealth';
 import { type SideFiles, seenOf } from './consultantHealthRead';
+import type { ConsultSettings, ResolvedConsultant } from './consultSettings';
 
 /**
  * What each Consultant row's health block SHOWS, decided — the pure half of E5.2 of
@@ -148,6 +149,34 @@ export function rowHealth(kind: string, identity: RowIdentity, state: Consultant
     otherSides: state.otherSides.map((side) => otherSideBlock(kind, side, state.nowMs)),
   };
 }
+
+/**
+ * One CALLER's health block, decided against the consultant its entry RESOLVES to — the one rule both Consultant tabs
+ * draw by (todo/PLAN_one_model_catalog.md E5.1b): the current page under each caller's own definition
+ * (`consultantView.withHealth`), the new page under each caller's pick (`consultantPicks.pickHtml`).
+ *
+ * <p><b>Why the resolved pair, and why one function.</b> The server reports the consultant it RESOLVED — through
+ * `--consultants`, the vendor and the model it would run — and a failure is hidden when it is about another pair than
+ * the row names (`aboutAnother`, `currentFailure`). A pick on the new page is stored as a bare reference to a catalog
+ * row (`{ vendor: 'deep-high' }`, no model); matched by what is STORED, the row's own failure — reported with the row's
+ * model — would be filtered away as "about another consultant". `consult.byCaller` holds what the entry means, model
+ * materialised, which is what the server compared. Two pages asking the question two ways is how one of them would
+ * come to answer it differently, so both ask it here.</p>
+ *
+ * <p>A caller the map does not hold is matched as no consultant at all (an empty pair) — what the current page's rows
+ * did before this was shared, since an absent entry draws an unplaceable row named ''.</p>
+ */
+export function callerHealth(kind: string, consult: ConsultSettings, state: ConsultantHealthState): RowHealth {
+  return rowHealth(kind, resolvedIdentity(consult.byCaller[kind]), state);
+}
+
+/** The pair a resolved entry names — a definition's and an unplaceable entry's alike, since both carry them. */
+function resolvedIdentity(resolved: ResolvedConsultant | undefined): RowIdentity {
+  return resolved === undefined ? NO_CONSULTANT : { vendor: resolved.vendor, model: resolved.model };
+}
+
+/** The pair of a caller the map does not hold. */
+const NO_CONSULTANT: RowIdentity = { vendor: '', model: '' };
 
 /** The states during which a Check must not be pressed again. */
 const RUNNING = ['checking', 'already-checking'];

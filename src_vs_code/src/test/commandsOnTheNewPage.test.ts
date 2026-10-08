@@ -91,7 +91,9 @@ test('the roles and the commands never read each other\'s controls — each pres
     [command.one((node) => node.dataset.cmdField === 'title', 'a command title'), 'input'],
     [command.one((node) => node.dataset.cmdRemove !== undefined, 'a command\'s Remove'), 'click'],
     [roles.one((node) => node.dataset.field === 'name', 'a role name'), 'input'],
-    [roles.one((node) => node.dataset.restore !== undefined || node.dataset.addPrompt !== undefined, 'a role button'), 'click'],
+    // An ENABLED one: a Restore with nothing to restore is drawn disabled, and the roles' script posts nothing for a
+    // disabled button, as a browser sends it no click (E5.1b's code round, finding 0).
+    [roles.one((node) => !node.disabled && (node.dataset.restore !== undefined || node.dataset.addPrompt !== undefined), 'a role button'), 'click'],
   ];
 
   for (const [node, kind] of presses) {

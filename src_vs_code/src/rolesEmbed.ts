@@ -1,7 +1,6 @@
 import { FEATURE_CODE, FEATURE_DOCUMENT, PLAN_CODE, PLAN_DOCUMENT, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, type RoleRow } from './roles';
 import type { Tombstone } from './roleDeletion';
-import { roleBlock, stageIsFull, strandedHtml, tooOldFor, unknownServerNote, type RoleBlockOptions } from './rolesBlocks';
-import { switchedOn } from './rolesSwitch';
+import { roleBlock, roleBlockOptions, stageIsFull, strandedHtml, tooOldFor, unknownServerNote, type RoleBlockOptions } from './rolesBlocks';
 
 /**
  * Roles & prompts on the new Settings page (todo/PLAN_one_model_catalog.md E4.3): the Review roles tab's own role blocks
@@ -33,7 +32,7 @@ ${roles.join('\n')}${extra}
 
 /** The roles of the given buckets, each as its block. */
 function blocksOf(all: readonly RoleRow[], buckets: readonly string[], texts: Readonly<Record<string, string>>, options: RoleBlockOptions): readonly string[] {
-  return all.filter((role) => buckets.includes(bucketOf(role))).map((role) => roleBlock(all, role, texts, options));
+  return all.filter((role) => buckets.includes(bucketOf(role))).map((role) => roleBlock(role, texts, options));
 }
 
 /** The four stages, in the tab's order, with the tab's own notes. */
@@ -57,7 +56,9 @@ function stages(all: readonly RoleRow[], texts: Readonly<Record<string, string>>
  */
 export function rolesEmbedded(state: RolesEmbedState, roleEnabled: Readonly<Record<string, boolean>>): string {
   const all = composed(state.rows);
-  const options: RoleBlockOptions = { promptAttr: 'data-role-prompt', on: (role) => switchedOn(role, roleEnabled) };
+  // The panel's switches, so each block's tick AND its last-role refusal read the one switch (E5.1b) — and the page's
+  // counts, taken here once rather than by every block (E5.1b's code round, finding 1).
+  const options = roleBlockOptions(all, 'data-role-prompt', roleEnabled);
 
   // `roles-embed` scopes the tab's own layout (catalogCss.ts): the panel's sheet already uses `.role` for Stages' boxes.
   return [
@@ -135,7 +136,9 @@ function rolesPressesScript(): string {
       if (!pressed || typeof pressed.closest !== 'function') { return; }
       for (const [selector, editOf] of rolesPresses) {
         const button = pressed.closest(selector);
-        if (button) { rolesPost(editOf(button), button, true); return; }
+        // A button drawn disabled posts nothing — a browser sends it no click, and the page says so itself rather than
+        // leaning on that (the last role ON's Remove, E5.1b's code round).
+        if (button) { if (!button.disabled) { rolesPost(editOf(button), button, true); } return; }
       }
     });`;
 }

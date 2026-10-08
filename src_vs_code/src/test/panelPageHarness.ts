@@ -616,6 +616,18 @@ export function click(page: Page, command: string, id: string): void {
 }
 
 /**
+ * The ONE button of a command that carries no `data-id`, clicked as a person clicks it — Add a Team server, the MCP
+ * server's Install and Check again, the data folder's two moves (todo/PLAN_one_model_catalog.md E5.1b). {@link click}
+ * matches a command AND an id, and these have no id to match. Refused when the page draws none of them or several: a
+ * press of "the first of two" would pass for whichever one happened to be wired.
+ */
+export function pressCommand(page: Page, command: string): void {
+  const found = page.commands.filter((one) => one.dataset['command'] === command && one.dataset['id'] === undefined);
+  assert.equal(found.length, 1, `the page draws ${found.length} ${command} buttons without an id, where a person meets one`);
+  found[0]!.fire('click');
+}
+
+/**
  * A numbered post — a setting, a prompt or a command — as the host's contract reads it: its number and the id of
  * the document that numbered it are CHECKED (a positive integer and a non-empty string, which the busy mark settles
  * it under, `busyMark.ts`) and then left out, so an assertion about what was asked for is not also an assertion about

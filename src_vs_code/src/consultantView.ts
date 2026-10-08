@@ -21,7 +21,7 @@ import {
   sameVendorNote,
 } from './consultSettings';
 import { ProbeResult, claudeNote } from './claudeModels';
-import { type ConsultantHealthState, type RowHealth, rowHealth } from './consultantHealthState';
+import { type ConsultantHealthState, type RowHealth, callerHealth } from './consultantHealthState';
 import { healthBlock } from './consultantHealthView';
 import { escapeHtml } from './escapeHtml';
 import { help } from './panelControls';
@@ -242,16 +242,20 @@ export function consultantRowView(
   consult: ConsultSettings,
   state: ConsultantViewState,
 ): ConsultantRowView {
-  return withHealth(settledRow(caller, consult, state), caller.id, state.health);
+  return withHealth(settledRow(caller, consult, state), caller.id, consult, state.health);
 }
 
 /**
  * The row with its health block decided against the consultant it NAMES — so a failure of another vendor or model is
  * never drawn under it. No key at all when the section was handed no health: a row value tests compare whole must not
  * grow a field nobody set.
+ *
+ * <p>Through {@link callerHealth}, the rule the new page's picks are drawn by too (todo/PLAN_one_model_catalog.md
+ * E5.1b). It used to ask with the row's own vendor and model, which {@link settledRow} takes from the same resolved
+ * entry — the same pair, asked in one place now so the two tabs cannot drift apart on it.</p>
  */
-function withHealth(view: ConsultantRowView, kind: string, health: ConsultantHealthState | undefined): ConsultantRowView {
-  return health === undefined ? view : { ...view, health: rowHealth(kind, { vendor: view.vendor, model: view.model }, health) };
+function withHealth(view: ConsultantRowView, kind: string, consult: ConsultSettings, health: ConsultantHealthState | undefined): ConsultantRowView {
+  return health === undefined ? view : { ...view, health: callerHealth(kind, consult, health) };
 }
 
 /** Which of the three states the row is in, and everything that follows from it. */

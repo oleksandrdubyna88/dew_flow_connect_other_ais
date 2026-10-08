@@ -1,6 +1,6 @@
 import { FEATURE_CODE, FEATURE_DOCUMENT, PLAN_CODE, PLAN_DOCUMENT, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, type RoleRow } from './roles';
 import { ROLE_TABS, type RolesCommand } from './rolesMessages';
-import { roleBlock, stageIsFull, strandedHtml, tooOldFor, unknownServerNote } from './rolesBlocks';
+import { roleBlock, roleBlockOptions, stageIsFull, strandedHtml, tooOldFor, unknownServerNote } from './rolesBlocks';
 import { formBodyCss } from './formPageStyle';
 import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textOf } from './textControls';
 import type { Tombstone } from './roleDeletion';
@@ -146,6 +146,8 @@ export const ROLES_TRACKED: readonly string[] = ['edit', 'editPrompt', 'add', 'a
 
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
+  // The catalog's switch alone, and the counts taken once for every block (E5.1b's code round, finding 1).
+  const options = roleBlockOptions(all, 'data-prompt', {});
   const openTab = tabShown(state.tab ?? DEFAULT_ROLE_TAB);
   // By BUCKET, not by "plan and everything else". That filter was right while there were two
   // kinds of round, and drew a document role under a heading that was wrong about it the moment
@@ -183,12 +185,12 @@ ${rolesTabs(openTab)}
 
 <section id="section-plan" role="tabpanel" aria-labelledby="tab-plan" data-section="plan"${openTab === 'plan' ? '' : ' hidden'}>
 <p class="note">Roles that read the plan, before any code exists.</p>
-${[...plan, ...waiting].map((r) => roleBlock(all, r, state.texts)).join('\n')}
+${[...plan, ...waiting].map((r) => roleBlock(r, state.texts, options)).join('\n')}
 </section>
 
 <section id="section-code" role="tabpanel" aria-labelledby="tab-code" data-section="code"${openTab === 'code' ? '' : ' hidden'}>
 <p class="note">Roles that read the change itself.</p>
-${code.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+${code.map((r) => roleBlock(r, state.texts, options)).join('\n')}
 <!-- The control lives in the section its effect lands in. A new role always joins the code
      bucket of the result stage, so offered from the plan tab it was a button that quietly
      created something on another tab and moved the person there. (gemini, the code round.) -->
@@ -198,12 +200,12 @@ ${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code 
 
 <section id="section-documents" role="tabpanel" aria-labelledby="tab-documents" data-section="documents"${openTab === 'documents' ? '' : ' hidden'}>
 <p class="note">Roles that read a document rather than a diff — what <code>review_document</code> runs. A role here never sees a checkout or a change.</p>
-${documents.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+${documents.map((r) => roleBlock(r, state.texts, options)).join('\n')}
 </section>
 
 <section id="section-feature" role="tabpanel" aria-labelledby="tab-feature" data-section="feature"${openTab === 'feature' ? '' : ' hidden'}>
 <p class="note">Roles that read a whole feature once every epic has landed — what <code>review_feature</code> runs: the plan, the epics, the implementer&#39;s lessons and an outline of every changed file, never the code itself unless the reviewer asks for it by name.</p>
-${features.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+${features.map((r) => roleBlock(r, state.texts, options)).join('\n')}
 </section>
 
 ${script(nonce, state.busy ?? IDLE)}
