@@ -1129,6 +1129,13 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    `theNewPageJumpsToItsPlaces`; consultants/consultant `consultantPicks` (picker writes); consultants/qconsult
    `qconsultRowPicks` (pick writes); security `securityLane.test.ts`; chat `chatOnTheNewPage`; **setup/team and
    setup/mcp have none** (their controls are buttons; to be written).
+   **E5.1 is split in three, decided 2026-10-08 on that finding** (verified in code: `consultantView.consultantSection`
+   draws `healthBlock` inside each `definitionRows` row, and `callersOrDefinitions` replaces those rows with the new
+   tab's picks, so the new page never draws it): **E5.1a** — steps 1–3, shipped as their own PR from this branch;
+   **E5.1b** — the consultant health block on the new Consultants tab (each caller's ✓ Check, health per side, agy's
+   allow rule and Copy), the new page's last-role refusal counting `roleEnabled` as the current page does, and the
+   page-running tests owed for setup/team and setup/mcp — its own design and plan round; **E5.1c** — steps 4 and 5,
+   after E5.1b, when the premise holds.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
