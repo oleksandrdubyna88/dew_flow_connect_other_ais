@@ -51,7 +51,8 @@ function html(vendors: readonly Vendor[]): string {
  * over a colour none of them assert.</p>
  */
 function rowOf(page: string, id: string): string {
-  const card = '<div class="vendor"';
+  // The new page's Models card (E3.2; E5.1 step 3 reads the page a person sees), which draws the same model words.
+  const card = '<article class="card';
   const anchor = page.indexOf(`data-setting="enabled" data-vendor="${id}"`);
   assert.notEqual(anchor, -1, `${id} has no row`);
   const start = page.lastIndexOf(card, anchor);

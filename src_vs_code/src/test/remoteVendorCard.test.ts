@@ -222,6 +222,9 @@ test('no other runtime lost its caption to the remote arm', () => {
 
   for (const [runtime, expected] of captions) {
     const row: Vendor = { ...ROW, id: runtime, runtime, remoteVendor: undefined, baseUrl: '', model: '' };
-    assert.ok(page({ vendors: [row], teamServers: [] }).includes(expected), `${runtime}: ${expected}`);
+    // The new page's Models card (E5.1 step 3) draws the caption after its own runtime line, without the
+    // `<runtime> · ` lead the current page's card put before it — the caption itself is what must not be lost.
+    const caption = expected.slice(expected.indexOf(' · ') + ' · '.length);
+    assert.ok(page({ vendors: [row], teamServers: [] }).includes(caption), `${runtime}: ${caption}`);
   }
 });

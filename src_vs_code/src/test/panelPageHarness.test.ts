@@ -144,13 +144,15 @@ test('an option the page drew disabled reads disabled, with its title — and an
 });
 
 test('a data-command button is bound by the page and a click posts exactly its command and id', () => {
+  // On the new page's Models tab (E5.1 step 3): a card's Duplicate is a plain data-command button there (its remove asks
+  // first, through the page's one confirm).
   const page = runPanel(panelState('reviewers'));
 
-  assert.ok(page.commands.some((one) => one.dataset['command'] === 'removeVendor'), 'no command button was read off the page');
-  click(page, 'removeVendor', 'codex');
+  assert.ok(page.commands.some((one) => one.dataset['command'] === 'duplicateModel'), 'no command button was read off the page');
+  click(page, 'duplicateModel', 'codex');
 
-  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'removeVendor', id: 'codex' });
-  assert.throws(() => click(page, 'removeVendor', 'nobody'), /no removeVendor button for nobody/u);
+  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'duplicateModel', id: 'codex' });
+  assert.throws(() => click(page, 'duplicateModel', 'nobody'), /no duplicateModel button for nobody/u);
 });
 
 test('a box carries the placeholder the page drew, and a data attribute naming it is not one', () => {

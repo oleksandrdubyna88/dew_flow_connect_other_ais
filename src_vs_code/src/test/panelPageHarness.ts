@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
-import { panelHtml, type PanelFocus, type PanelState, settingsHtml, settingsSections } from '../panelView';
+import { panelHtml, type PanelFocus, type PanelState } from '../panelView';
+import { catalogHtml } from '../catalogPage';
+import { OLD_TAB_PLACES } from '../catalogPlaces';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { LIVE_REGION_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
@@ -409,15 +411,14 @@ function regionsOf(html: string): Map<string, Region> {
 }
 
 /**
- * The page that holds the section a fixture opens: the Settings tab, opened on that section, when the
+ * The page that holds the section a fixture opens: the Settings page, opened on the place that holds that section
+ * now (`OLD_TAB_PLACES`; todo/PLAN_one_model_catalog.md, E5.1 step 3 — the new page, the one a person sees), when the
  * section moved there (`research/PLAN_settings_page.md`) — the sidebar otherwise.
  */
 function pageHolding(state: PanelState): string {
-  const opened = state.openSections[0] ?? '';
+  const place = OLD_TAB_PLACES[state.openSections[0] ?? ''];
 
-  return settingsSections().some((section) => section.id === opened)
-    ? settingsHtml(state, 'test-nonce', opened)
-    : panelHtml(state, 'test-nonce');
+  return place === undefined ? panelHtml(state, 'test-nonce') : catalogHtml(state, 'test-nonce', place);
 }
 
 /** What a run starts from beyond the panel state: the webview's own saved state, as `vscode.getState()` answers it. */

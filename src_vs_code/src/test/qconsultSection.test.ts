@@ -6,6 +6,7 @@ import path from 'node:path';
 import { admit } from '../capabilityAdmission';
 import { QCONSULT_SINCE, type QuestionRowSetting } from '../qconsultSettings';
 import { DEFAULTS } from '../settingsShape';
+import { settingsHtml } from '../panelView';
 import { DEFAULT_VENDORS } from '../vendors';
 import { type Control, type Page, click, panelState, runPanel, withoutSeq } from './panelPageHarness';
 
@@ -175,7 +176,11 @@ test('Add a row, Remove, Add a prompt and Add a folder are buttons the page bind
 });
 
 test('the vendor picker offers the catalogue the stuck consultant does, plus the api presets a question row can run (A11)', () => {
-  const vendor = controlOf(page([row('r')]), 'qconsultRowVendor', 'r');
+  // The CURRENT page's own per-row vendor picker: the new page's question rows pick a catalog row ticked for the question
+  // consultant (E4.2, `qconsultRowPicks.test.ts`) — so this reads the page that draws the picker while it is drawn
+  // (E5.1 step 3).
+  const state = panelState('questionconsultant', { settings: { ...DEFAULTS, qconsult: { ...DEFAULTS.qconsult, rows: [row('r')] } } });
+  const vendor = controlOf(runPanel(state, { html: settingsHtml(state, 'test-nonce', 'questionconsultant') }), 'qconsultRowVendor', 'r');
 
   for (const id of ['claude', 'codex', 'antigravity', 'grok', 'api']) {
     assert.ok(vendor.options.some((one) => one.value === id), `${id} is not offered`);

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { panelState, runPanel } from './panelPageHarness';
+import { paneIn } from './panelPages';
 
 /**
  * The Vendor keys tab, as the Settings page draws it: whether it says a key is needed, and for whom.
@@ -27,13 +28,8 @@ function codexRow(overrides: Partial<Vendor>): Vendor {
 
 /** The markup of the Vendor keys pane alone, as the Settings tab rendered it for these rows. */
 function keysPane(vendors: readonly Vendor[]): string {
-  const html = runPanel(panelState('keys', { vendors })).html;
-  const panes = html.split('data-pane="').slice(1).filter((one) => one.startsWith('keys"'));
-  assert.equal(panes.length, 1, 'the Settings page draws one Vendor keys pane');
-
-  const pane = panes[0] ?? '';
-
-  return pane.slice(0, pane.indexOf('</section>'));
+  // Setup › Vendor keys on the new page (E4.5; E5.1 step 3) — `paneIn` throws when the page draws no such place.
+  return paneIn(runPanel(panelState('keys', { vendors })).html, 'setup/keys');
 }
 
 test('a switched-off OpenRouter row is named as needing a key once it is switched on', () => {

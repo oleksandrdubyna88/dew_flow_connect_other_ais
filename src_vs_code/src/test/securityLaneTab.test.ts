@@ -9,6 +9,7 @@ import type { SecurityTextState } from '../securityPromptFiles';
 import type { PanelState } from '../panelView';
 import { DEFAULT_VENDORS } from '../vendors';
 import { type Control, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
+import { paneIn } from './panelPages';
 
 // The Security lane tab as drawn (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): every test RUNS the page.
 
@@ -17,17 +18,21 @@ const OLD_SERVER = { ...CURRENT_SERVER, version: '0.40.3' } as const;
 const DIR = 'C:/data/prompts';
 const VENDOR = DEFAULT_VENDORS.find(v => v.enabled)!.id;
 
+/**
+ * The shipped reviewers, each ticked Security lane on Models: the page a person sees (E5.1 step 3) offers a pair the rows
+ * ticked for the lane (E4.2), where the old page offered every reviewer.
+ */
+const TICKED = DEFAULT_VENDORS.map(v => ({ ...v, uses: ['security' as const] }));
+
 function tab(lane: SecurityLane = DEFAULT_SECURITY, text: Record<string, SecurityTextState> = {}, saved?: unknown, server: PanelState['server'] = CURRENT_SERVER): Page {
   return runPanel(panelState('securityLane', {
-    settings: { ...DEFAULTS, securityLane: lane }, server, securityPromptText: text, securityPromptDir: DIR,
+    vendors: TICKED, settings: { ...DEFAULTS, securityLane: lane }, server, securityPromptText: text, securityPromptDir: DIR,
   }), { saved });
 }
 
-/** The Security lane pane, as the Settings page drew it. */
+/** The Security lane pane, as the Settings page drew it — the new page's Security lane (E5.1 step 3). */
 function pane(page: Page): string {
-  const start = page.html.indexOf('id="pane-securityLane"');
-  assert.ok(start >= 0, 'the Settings page has no Security lane tab');
-  return page.html.slice(start, page.html.indexOf('</section>', start));
+  return paneIn(page.html, 'security');
 }
 
 /** One prompt's card, from its name to the end of its fieldset. */
@@ -204,7 +209,7 @@ test('a repaint held while the person typed in a fold\'s tag field puts the care
   // The host names the focused control by an id whose last part is the Security field — `prompt:redteam-sql:triggers`,
   // with colons. The pattern that guards that id used to refuse a colon, so the caret was dropped on every such repaint.
   const held = { id: 'securityLane||||prompt:redteam-sql:triggers', start: 1, end: 3 };
-  const page = runPanel(panelState('securityLane', { server: CURRENT_SERVER }, held));
+  const page = runPanel(panelState('securityLane', { vendors: TICKED, server: CURRENT_SERVER }, held));
   const field = control(page, 'prompt:redteam-sql:triggers');
   assert.equal(field.focused, true);
   assert.deepEqual(field.selection, [1, 3]);

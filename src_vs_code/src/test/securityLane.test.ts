@@ -8,12 +8,23 @@ import { DEFAULT_VENDORS } from '../vendors';
 import { SECURITY_SEED } from '../securityLane.generated';
 import { settingMessageFrom } from '../settingRoute';
 import { type Control, lastWrite, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
+import { paneIn } from './panelPages';
+import type { PanelState } from '../panelView';
 
 const CONDITIONAL = SECURITY_SEED.prompts.filter(p => !securityAlways(p.id));
 
+/**
+ * The shipped reviewers, each ticked Security lane on Models: the page a person sees (E5.1 step 3) offers a pair the rows
+ * ticked for the lane (E4.2), where the old page offered every reviewer.
+ */
+const TICKED = DEFAULT_VENDORS.map(v => ({ ...v, uses: ['security' as const] }));
+
+/** The Security lane tab, opened on the new page with the reviewers ticked for it. */
+const lanePanel = (over: Partial<PanelState> = {}): PanelState => panelState('securityLane', { vendors: TICKED, ...over });
+
 test('each of the twelve presets has a real pairing checkbox and switching it off preserves other pairs', () => {
   assert.equal(CONDITIONAL.length, 12);
-  const page = runPanel(panelState('securityLane'));
+  const page = runPanel(lanePanel());
   const vendor = DEFAULT_VENDORS.find(v => v.enabled)!;
   let lane = DEFAULT_SECURITY;
   for (const preset of CONDITIONAL) {
@@ -34,7 +45,7 @@ test('each of the twelve presets has a real pairing checkbox and switching it of
 });
 
 test('security controls run the page and write the selected field through the server settings seam', () => {
-  const page = runPanel(panelState('securityLane'));
+  const page = runPanel(lanePanel());
   const enabled = page.controls.find(c => c.dataset['setting'] === 'securityLane' && c.dataset['securityField'] === 'enabled');
   assert.ok(enabled);
   enabled.checked = true;
@@ -59,7 +70,7 @@ test('a pair survives serialization and editing its stage leaves its prompt and 
 });
 
 test('opening prompt text posts its stable redteam id', () => {
-  const page = runPanel(panelState('securityLane'));
+  const page = runPanel(lanePanel());
   const edit = page.commands.find(c => c.dataset['command'] === 'editSecurityPrompt');
   assert.ok(edit);
   edit.fire('click');
@@ -104,11 +115,9 @@ test('stored custom metadata keeps all thirteen shipped prompts selectable and c
 const OLD_SERVER = { kind: 'known', version: '0.40.3', remembered: false, updateOffered: false } as const;
 const CURRENT_SERVER = { ...OLD_SERVER, version: '0.41.0' } as const;
 
-/** The Security lane tab's own pane, as the Settings page drew it. */
+/** The Security lane tab's own pane, as the Settings page drew it — the new page's Security lane (E5.1 step 3). */
 function lanePane(page: Page): string {
-  const start = page.html.indexOf('id="pane-securityLane"');
-  assert.ok(start >= 0, 'the Settings page has no Security lane tab');
-  return page.html.slice(start, page.html.indexOf('</section>', start));
+  return paneIn(page.html, 'security');
 }
 
 /** A person changing one control the way the page lets them: a box flipped, a field typed into. */
@@ -120,7 +129,7 @@ function change(control: Control): void {
 }
 
 test('no control on an older server\'s Security lane tab can switch the lane on', () => {
-  const page = runPanel(panelState('securityLane', { server: OLD_SERVER }));
+  const page = runPanel(lanePanel({ server: OLD_SERVER }));
   const lane = page.controls.filter(c => c.dataset['setting'] === 'securityLane');
   const enabled = lane.find(c => c.dataset['securityField'] === 'enabled');
   assert.ok(enabled, 'the tab has no lane switch at all');
@@ -145,7 +154,7 @@ test('no control on an older server\'s Security lane tab can switch the lane on'
 });
 
 test('a server new enough for the lane offers its switch, and ticking it turns the lane on', () => {
-  const page = runPanel(panelState('securityLane', { server: CURRENT_SERVER }));
+  const page = runPanel(lanePanel({ server: CURRENT_SERVER }));
   const enabled = page.controls.find(c => c.dataset['securityField'] === 'enabled');
   assert.ok(enabled);
   assert.equal(enabled.disabled, false);
@@ -173,7 +182,7 @@ test('a newly enabled lane selects its conditional authorization check by defaul
 });
 
 function pageWith(securityLane: SecurityLane): Page {
-  return runPanel(panelState('securityLane', { settings: { ...DEFAULTS, securityLane }, server: CURRENT_SERVER }));
+  return runPanel(lanePanel({ settings: { ...DEFAULTS, securityLane }, server: CURRENT_SERVER }));
 }
 
 function routed(page: Page, lane: SecurityLane): SecurityLane {
@@ -201,7 +210,9 @@ test('a removed reviewer stays visible with a repair instruction, and choosing o
   });
   assert.equal(lane.runs[0]?.vendor, 'removed-reviewer');
   const page = pageWith(lane);
-  assert.match(lanePane(page), /Reviewer removed-reviewer is unavailable; select an enabled reviewer/);
+  // The new page's own sentence for a pair whose row left Models (E4.2), where the old page said "unavailable".
+  const stranded = /removed-reviewer is no longer on Models\. This pair keeps asking for it until you pick another/;
+  assert.match(lanePane(page), stranded);
   assert.match(lanePane(page), /Prompt redteam-removed is missing; select a registered prompt/);
 
   const vendor = DEFAULT_VENDORS.find(v => v.enabled)!.id;
@@ -212,7 +223,7 @@ test('a removed reviewer stays visible with a repair instruction, and choosing o
   picker.fire('change');
   const repaired = routed(page, lane);
   assert.equal(repaired.runs[0]?.vendor, vendor);
-  assert.doesNotMatch(lanePane(pageWith(repaired)), /Reviewer removed-reviewer is unavailable/);
+  assert.doesNotMatch(lanePane(pageWith(repaired)), stranded);
 });
 
 // General is a shipped "always" prompt (research/PLAN_the_security_tab_reads_at_a_glance.md, D1): first in the

@@ -6,6 +6,7 @@ import { DEFAULTS, envBlock } from '../settingsShape';
 import { DEFAULT_SECURITY, securityLaneFrom, securityLaneSave, type SecurityLane } from '../securityLane';
 import { DEFAULT_VENDORS } from '../vendors';
 import { type Page, panelState, runPanel } from './panelPageHarness';
+import { paneIn } from './panelPages';
 
 /**
  * A `coai.securityLane` value nobody in this panel wrote — a cloned repository's `.vscode/settings.json`
@@ -19,16 +20,16 @@ const VENDOR = DEFAULT_VENDORS.find((v) => v.enabled)!.id;
 /** Markup that, unescaped inside an attribute, closes it and draws a lane switch of its own. */
 const FORGED = '1"><input type="checkbox" data-setting="securityLane" data-security-field="enabled" checked><b a="';
 
+/** The shipped reviewers ticked Security lane on Models — what the new page offers a pair (E4.2; E5.1 step 3). */
+const TICKED = DEFAULT_VENDORS.map((v) => ({ ...v, uses: ['security' as const] }));
+
 function pageWith(securityLane: SecurityLane): Page {
-  return runPanel(panelState('securityLane', { settings: { ...DEFAULTS, securityLane }, server: SUPPORTED }));
+  return runPanel(panelState('securityLane', { vendors: TICKED, settings: { ...DEFAULTS, securityLane }, server: SUPPORTED }));
 }
 
-/** The Security lane tab's own pane, as the Settings page drew it. */
+/** The Security lane tab's own pane, as the Settings page drew it — the new page's Security lane (E5.1 step 3). */
 function pane(page: Page): string {
-  const start = page.html.indexOf('id="pane-securityLane"');
-  assert.ok(start >= 0, 'the Settings page has no Security lane tab');
-
-  return page.html.slice(start, page.html.indexOf('</section>', start));
+  return paneIn(page.html, 'security');
 }
 
 const switches = (page: Page) => page.controls.filter((c) => c.dataset['securityField'] === 'enabled');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PanelState } from '../panelView';
-import { everyPageHtml } from './panelPages';
+import { currentSettingsHtml, everyPageHtml, paneIn } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -84,13 +84,25 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   ...over,
 });
 
-/** Just the section, so an assertion cannot pass on something another section happens to render. */
+/**
+ * Just the section, so an assertion cannot pass on something another section happens to render — the new page's Chat
+ * tab (E4.6b; E5.1 step 3), which draws the current section's sending fields as they are.
+ */
 function chatSection(html: string): string {
-  const start = html.indexOf('data-section="chat"');
-  assert.ok(start > 0, 'the panel renders no Chat other AIs section at all');
-  const end = html.indexOf('</details>', start);
+  return paneIn(html, 'chat');
+}
 
-  return html.slice(start, end);
+/**
+ * The CURRENT page's Chat other AIs section — for its two model selects and its "Edit presets…", which only that page
+ * draws: the new page's Chat tab draws one radio per row ticked Chat and the presets inline (`chatOnTheNewPage.test.ts`).
+ * Read while the current page is drawn (E5.1 step 3), and goes with it.
+ */
+function currentChatSection(state: PanelState): string {
+  const html = currentSettingsHtml(state);
+  const start = html.indexOf('data-section="chat"');
+  assert.ok(start > 0, 'the current page renders no Chat other AIs section at all');
+
+  return html.slice(start, html.indexOf('</section>', start));
 }
 
 test('what to ask is CHOSEN from the saved prompts, not typed into a box that holds one', () => {
@@ -128,11 +140,14 @@ test('the chosen prompt is the selected option, and the main one is what an empt
   assert.match(unchosen, /<option value=""[^>]*selected>[^<]*main/i, 'an unset choice looks like a broken control');
 });
 
+// Read on the CURRENT page (`currentChatSection`): its "Edit presets…" below, and its two model selects further down —
+// what the new page's Chat tab draws instead is held by `chatOnTheNewPage.test.ts` (E5.1 step 3).
+
 test('the section opens the tab where prompts and models are actually edited', () => {
   // The CRUD tab shipped with no way into it but the command palette — `coai.editChatPresets` was
   // registered, absent from every menu, and named in no view. A command nobody can reach is a
   // feature nobody has.
-  const body = chatSection(everyPageHtml(state(), 'n0nce'));
+  const body = currentChatSection(state());
 
   assert.match(body, /data-command="editChatPresets"/, 'there is no way into the presets tab');
 });
@@ -163,9 +178,9 @@ test('the section offers the chat’s OWN saved models, named by the person who 
   // to list the reviewer ROWS — so a reviewer switched off took the chat with it, and the picker read
   // as a list of somebody's reviewers. Asked for by the operator five times: *"это полностью
   // независимый функционал этот чат… чат никак не должен трогать ревьюы"*.
-  const body = chatSection(everyPageHtml(state({
+  const body = currentChatSection(state({
     chat: { ...chat, models: [saved('m1', 'Architect'), saved('m2', 'Fast', { model: 'gemini-3.8-flash-low' })] },
-  }), 'n0nce'));
+  }));
   const providers = body.slice(body.indexOf('data-setting="chatModel"'), body.indexOf('data-setting="chatModelName"'));
 
   assert.ok(providers.includes('>Architect</option>'), 'a saved model is not offered under its own name');
@@ -173,15 +188,15 @@ test('the section offers the chat’s OWN saved models, named by the person who 
 });
 
 test('an unset model reads as the first one offered, not as an empty box', () => {
-  const body = chatSection(everyPageHtml(state({ vendors: [vendor()] }), 'n0nce'));
+  const body = currentChatSection(state({ vendors: [vendor()] }));
 
   assert.match(body, /<option value=""[^>]*selected>[^<]*first/i, 'an empty setting looks like a broken control');
 });
 
 test('the panel asks which saved model, and then which of ITS models, as the tab does', () => {
-  const body = chatSection(everyPageHtml(state({
+  const body = currentChatSection(state({
     chat: { ...chat, model: 'm2', models: [saved('m1', 'Architect'), saved('m2', 'Fast')] },
-  }), 'n0nce'));
+  }));
 
   assert.match(body, /<select[^>]*data-setting="chatModel"/, 'there is no model select');
   assert.match(body, /<select[^>]*data-setting="chatModelName"/, 'there is no second select beside it');
@@ -189,13 +204,13 @@ test('the panel asks which saved model, and then which of ITS models, as the tab
 });
 
 test('the second select offers the models of the CHOSEN saved model, and nobody else’s', () => {
-  const body = chatSection(everyPageHtml(state({
+  const body = currentChatSection(state({
     chat: {
       ...chat,
       model: 'claude-one',
       models: [saved('agy-one', 'Fast'), saved('claude-one', 'Deep', { runtime: 'claude', model: 'claude-opus-5' })],
     },
-  }), 'n0nce'));
+  }));
   const models = body.slice(body.indexOf('data-setting="chatModelName"'));
 
   assert.ok(models.includes('claude-opus-5'), 'the chosen one’s own model is not offered');
@@ -203,7 +218,7 @@ test('the second select offers the models of the CHOSEN saved model, and nobody 
 });
 
 test('an unset model name reads as the row\'s own model, not as an empty box', () => {
-  const body = chatSection(everyPageHtml(state({ vendors: [vendor()] }), 'n0nce'));
+  const body = currentChatSection(state({ vendors: [vendor()] }));
   const models = body.slice(body.indexOf('data-setting="chatModelName"'));
 
   assert.match(models, /<option value=""[^>]*selected>/, 'an unset model name looks like a broken control');
@@ -233,10 +248,10 @@ test('a model the settings NAME and which cannot answer is shown as chosen, and 
   // can answer" while `settings.json` says `codex` — the section describing a state that is not the
   // one the command will refuse. Disabled, so it cannot be re-picked once it is left. (codex,
   // gemini and local, one finding from three directions.)
-  const body = chatSection(everyPageHtml(state({
+  const body = currentChatSection(state({
     vendors: [vendor(), vendor({ id: 'my-local', runtime: 'local' })],
     chat: { ...chat, model: 'my-local' },
-  }), 'n0nce'));
+  }));
 
   assert.match(body, /<option value="my-local"[^>]*selected[^>]*disabled|<option value="my-local"[^>]*disabled[^>]*selected/,
     'the configured model is not shown as the chosen one');
@@ -267,7 +282,9 @@ test('the panel and the command read the same settings through the same reader',
   assert.ok(body.includes(`<div class="hint">${escapeHtml(asCommandReadsIt.prompt)}</div>`), 'the section shows a different prompt');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.language}" selected>`), 'a different language is selected');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.autoSend}" selected>`), 'a different send rule is selected');
-  assert.ok(body.includes(`<option value="${asCommandReadsIt.model}" selected>`), 'a different model is selected');
+  // The model select is the CURRENT page's (the new page's Chat names a row ticked Chat by its radio), so it is read there.
+  assert.ok(currentChatSection(state({ chat: asCommandReadsIt })).includes(`<option value="${asCommandReadsIt.model}" selected>`),
+    'a different model is selected');
 });
 
 test('a choice naming a prompt that was deleted is SHOWN as chosen, and as gone', () => {
@@ -291,10 +308,10 @@ test('a provider that no longer exists does not borrow the first one’s models'
   // `list.providers[0]`, so the provider select marked the saved row as stranded while the model
   // select beside it filled with an UNRELATED provider's models — the two controls describing a pair
   // nobody ever chose, and offering it as if it were valid.
-  const body = chatSection(everyPageHtml(state({
+  const body = currentChatSection(state({
     vendors: [vendor({ id: 'still-here' })],
     chat: { ...chat, model: 'removed-row', modelName: 'gemini-3.7-flash-high' },
-  }), 'n0nce'));
+  }));
   const models = body.slice(body.indexOf('data-setting="chatModelName"'));
 
   assert.match(models, /<option value="gemini-3.7-flash-high"[^>]*disabled/,

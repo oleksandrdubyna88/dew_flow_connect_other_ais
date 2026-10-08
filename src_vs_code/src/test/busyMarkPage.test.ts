@@ -103,7 +103,8 @@ test('a write settled before the delay never shows the bar at all', () => {
 
 test('a command is numbered and marked too; a focus report is neither', () => {
   const page = reviewers();
-  const button = page.commands.find((one) => one.dataset['command'] === 'removeVendor' && one.dataset['id'] === 'codex');
+  // A card's Duplicate on the new page's Models tab (E5.1 step 3) — a command sent on the first click.
+  const button = page.commands.find((one) => one.dataset['command'] === 'duplicateModel' && one.dataset['id'] === 'codex');
   assert.ok(button !== undefined);
   button.fire('click');
   const command = page.posted.filter((one) => one['type'] === 'command').at(-1);

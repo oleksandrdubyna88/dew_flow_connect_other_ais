@@ -20,6 +20,7 @@ import { DEFAULTS, envBlock, settingMessageFrom, settingWrite } from '../setting
 import { DEFAULT_VENDORS, Vendor, vendorsFrom } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
+import { settingsHtml } from '../panelView';
 
 /**
  * The `api` runtime's version gate and its dialect (PLAN_feature_review.md §4.13, S1.2 part iv).
@@ -160,7 +161,11 @@ test('the api card offers a dialect picker, and changing it writes coai.vendors 
 });
 
 test('against an older server every control of the api card is switched off and the card says why; the others are not', () => {
-  const page = runPanel(panelState('reviewers', { vendors: [...DEFAULT_VENDORS, GROK], server: KNOWN(OLDER) }));
+  // The CURRENT page's reviewer card switches every api control off. The new page's Models card says why the row cannot
+  // run and leaves its fields editable (`modelsTab.test.ts`, "an api row on a server too old for api rows says why its
+  // card is switched off") — so this reads the page that draws the inert card while it is drawn (E5.1 step 3).
+  const state = panelState('reviewers', { vendors: [...DEFAULT_VENDORS, GROK], server: KNOWN(OLDER) });
+  const page = runPanel(state, { html: settingsHtml(state, 'test-nonce', 'reviewers') });
   const grok = page.controls.filter((one) => one.dataset['vendor'] === 'grok');
   const codex = page.controls.filter((one) => one.dataset['vendor'] === 'codex');
 
