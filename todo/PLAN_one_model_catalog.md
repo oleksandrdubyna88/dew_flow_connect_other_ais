@@ -1228,6 +1228,32 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    it stubbed to start: "a collect started with a pick nobody holds", "a collect started with no model") and by a real-
    editor scenario reading the real settings (teeth: planted to start first, it failed "a collect started with the pick
    "gone/qwen3.5" read from the real settings"); the provider's own ports are pinned by source, not run.
+   **E5.1c, designed 2026-10-08 — steps 4 and 5, now that their premise holds.** E5.1a (PR #709) put the jumps on the
+   new page, the Bugz picker on the ticked rows and the test harness on the new page; E5.1b (PR #711) drew the consultant
+   health block on the new Consultants tab, gave both pages one ON rule for roles, and ran every Setup button on the new
+   page. So no old section is drawn ONLY by the old page any more, and every place of the new page is held by a test
+   that RUNS the page and works one of its controls (the place → test list above, setup/team and setup/mcp now
+   `setupOnTheNewPage.test.ts`, consultants/consultant's health `consultantHealthPage.test.ts` on both pages). E5.1c builds
+   steps 4 and 5 exactly as written above, in that order, each green on its own:
+   - **Step 4** deletes the three pages and their panels and turns `coai.editRoles` / `coai.editCommands` /
+     `coai.editChatPresets` into redirects to `reviews/roles` / `reviews/commands` / `chat` (one more release, like T5).
+     Because the current page is still the default until step 5, a redirect that opened "the Settings page" would land
+     on the current page, which has no such editor — so step 4's redirects open the NEW page at the place whatever the
+     preview switch says, and step 5 then removes the switch. The current page's own "Edit roles…" / "Edit commands…" /
+     "Edit presets…" buttons (kept by E5.1a's `editorWay`) post the redirect commands, so they still lead somewhere.
+   - **Step 5** removes the preview switch and the old page (the list above). Every test that reads the current page by
+     name (`currentSettingsHtml` / `settingsHtml`, E5.1a's step 3 and E5.1b's both-pages table) is deleted or reduced
+     to its new-page half, and each deleted assertion's behaviour is named against the new-page test that holds it, in
+     the progress line. `catalogTabsWrite.test.ts`, which sweeps every setting control by comparing with `settingsHtml`,
+     is rewritten to sweep the new page alone. The eslint suppressions of the deleted files are pruned
+     (`--prune-suppressions`); `panelView.ts`'s entry shrinks.
+   - **What does NOT go:** the three editing hosts, `OLD_TAB_PLACES` (so `coai.openSettings(<old tab id>)` still opens
+     the right place), the sidebar's sections, `SETTINGS_CSS` / `settingsTextCss` / `settingsHead` / `SETTINGS_LOADING`
+     (the new page uses them), the restore command and `coai.migratedFrom` (T5).
+   **Tests, first** where behaviour changes: a redirect command opens the NEW page at its place even with the preview
+   off (RED: it opens the current page today); after step 5, `coai.openSettings` with an old tab id opens its place (a
+   real-editor scenario). Docs: `research/module_extension.md` (the switch-over as shipped), `research/module_tests.md`,
+   `research/architecture.md` if it names the old page.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
