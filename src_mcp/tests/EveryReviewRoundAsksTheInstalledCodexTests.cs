@@ -118,7 +118,7 @@ public sealed class EveryReviewRoundAsksTheInstalledCodexTests : IAsyncLifetime
 
     /// <summary>Every codex review launch recorded since the last clear — each one's argv, the stdin field dropped.</summary>
     private List<string[]> Launches() =>
-        [.. Directory.GetFiles(_record, "*.argv").Select(file => File.ReadAllText(file).Split('\0')[..^1]).Where(argv => argv.Contains("exec"))];
+        [.. Directory.GetFiles(_record, "*.argv").Select(file => LaunchRecords.Read(file).Split('\0')[..^1]).Where(argv => argv.Contains("exec"))];
 
     private void Forget()
     {

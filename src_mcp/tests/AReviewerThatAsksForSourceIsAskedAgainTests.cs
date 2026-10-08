@@ -142,7 +142,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
     /// <summary>Every recorded launch's prompt (the last NUL-separated field), oldest first.</summary>
     private IReadOnlyList<string> Prompts() =>
-        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(f => File.ReadAllText(f).Split('\0')[^1])];
+        [.. Directory.GetFiles(_record, "*.argv").OrderBy(File.GetCreationTimeUtc).Select(f => LaunchRecords.Read(f).Split('\0')[^1])];
 
     // ---------- the prefix, the served code, the note ----------
 

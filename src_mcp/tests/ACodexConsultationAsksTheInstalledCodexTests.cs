@@ -35,7 +35,7 @@ public sealed class ACodexConsultationAsksTheInstalledCodexTests : ConsultScenar
             first.TryGetProperty("error", out _).Should().BeFalse(first.ToString());
             await Consult(service, "I ran your check: with two fields it prints 3", first.GetProperty("consultationId").GetString()!);
 
-            var turns = Directory.EnumerateFiles(recorded, "*.argv").Select(file => File.ReadAllText(file).Split('\0')[..^1]).ToList();
+            var turns = Directory.EnumerateFiles(recorded, "*.argv").Select(file => LaunchRecords.Read(file).Split('\0')[..^1]).ToList();
             turns.Should().HaveCount(2).And.Contain(argv => argv.Contains("resume"), "the second turn resumed the conversation");
             turns.Should().OnlyContain(argv => Tiers(argv).SequenceEqual(sent),
                 $"codex {release} with fast Off is told {(sent.Length == 0 ? "no tier" : sent[0])} on every turn");
