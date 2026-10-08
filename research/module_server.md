@@ -1409,8 +1409,12 @@ asked for and not served: …".
 | A refused shell hears about it too | when a reader is attached, the measured `NoCommands` / read-denied follow-up is kept word for word and followed by one sentence naming the block; without a reader the text is unchanged | `AntigravityConsultant.FollowUp` |
 
 **Threat model of the reader.** A link swapped in by another process between the containment check and the read is out
-of scope (plan round, rejected): it needs a writer inside the root, agy in plan mode cannot write there, and such a writer
-could read the outside file itself.
+of scope (plan round, rejected): it needs a writer inside the root, and such a writer could read the outside file itself.
+The plan round also argued that agy in plan mode cannot be that writer — **the live write check refuted it**: agy with
+coai's flags wrote a file inside its `--add-dir` root on Windows and in WSL
+([RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) §3). That is a defect of every agy launch,
+not of the reader — coai's reader only reads — and it is open:
+[todo/PLAN_agy_cannot_write_its_roots.md](../todo/PLAN_agy_cannot_write_its_roots.md).
 
 **What it does not prove.** The scenario tests drive a fake CLI: they prove the block is served, the conversation is
 continued, the tree check runs and the billing; they do not prove the real model writes the block. That is the live

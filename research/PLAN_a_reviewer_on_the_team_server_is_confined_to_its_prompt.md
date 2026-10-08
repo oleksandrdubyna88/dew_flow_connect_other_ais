@@ -62,7 +62,7 @@ nothing either way, which is why it does not wait for the measurement.
 |---|---|---|
 | The server's own configuration in the child's environment | **closed**, all three CLIs: the child gets an allowlist, not the parent's environment | — |
 | Claude reading files or running commands | **closed**: every file and shell tool denied for a confined launch | — |
-| codex / antigravity reading files | **open** — `-s read-only` and `--mode plan` bound WRITES; reads are the OS's to bound | closes it: a service user per host, then per job |
+| codex / antigravity reading files | **open** — `-s read-only` and `--mode plan` bound WRITES; reads are the OS's to bound. *(2026-10-08: refuted for antigravity — agy 1.3.1 in `--mode plan` wrote inside its `--add-dir` root, [RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) §3; open as [PLAN_agy_cannot_write_its_roots.md](../todo/PLAN_agy_cannot_write_its_roots.md).)* | closes it: a service user per host, then per job |
 | The slot's own token in its own environment | **open** — the CLI needs it to sign in | closes the cross-slot half (a job cannot read another slot); the token stays the job's own |
 | Root | **open** | the whole subject |
 
