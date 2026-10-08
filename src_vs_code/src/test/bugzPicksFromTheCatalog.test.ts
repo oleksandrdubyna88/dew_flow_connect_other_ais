@@ -112,11 +112,15 @@ test('a ticked row the ranking allowlist refuses is neither offered nor chosen �
   assert.match(section.text(), /cloud\/gpt-5 is no longer ticked Bugz on Models/u);
 });
 
-test('a pick whose row was removed is stranded the same way', () => {
+test('a pick whose row was removed, with nothing else to offer, is SAID — no inert picker, no "pick one here" (code round, finding 5)', () => {
   const section = bugzSection(stateWith([localRow('local-2', 'gemma4:27b')], 'gone/qwen3.5'));
 
-  assert.deepEqual(selected(section), ['gone/qwen3.5']);
-  assert.match(section.text(), /no longer ticked Bugz on Models, or was removed/u);
+  assert.equal(section.find((node) => node.tagName === 'SELECT').length, 0, 'a picker drawn with nothing in it to choose');
+  assert.match(section.text(), /gone\/qwen3\.5 is no longer ticked Bugz on Models, or was removed/u);
+  assert.doesNotMatch(section.text(), /pick one here/u, 'the line sends the person to a picker that offers nothing');
+  // And the collect's refusal of it, by the same reading.
+  const pick = bugzPickOf([localRow('local-2', 'gemma4:27b')], 'gone/qwen3.5', (row) => [row.model], rankingRuleOf(['local'], true));
+  assert.doesNotMatch(bugzCollectRefusal(pick), /pick one in the Bugz section/u);
 });
 
 test('a collect is refused with a sentence naming Models — for a stranded pick and for none; never for a pick that holds', () => {

@@ -126,15 +126,16 @@ const NONE_TICKED = '<div class="hint">No model is ticked for Bugz. Tick one und
 /**
  * The ranking picker (todo/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked Bugz on Models (`bugzPick.ts`), a
  * stranded pick drawn as what it is, and — while nothing is ticked — the sentence that says so and where to tick one.
- * No picker at all only when there is neither a row to offer nor a pick to show.
+ * A picker only when there is a row to offer: a stranded pick with nothing beside it is SAID, never drawn as a select
+ * that holds one disabled option and offers nothing (E5.1's code round, finding 5).
  */
 function pickerHtml(offered: readonly RankingChoice[], model: string, stranded: string): string {
-  const select = offered.length === 0 && stranded.length === 0
+  const select = offered.length === 0
     ? ''
     : `<select id="bugz-model" data-setting="bugzModel">${firstOption(offered, model, stranded)}${
       offered.map((m) => option(m, model)).join('')}</select>`;
 
-  return `${select}${offered.length === 0 ? NONE_TICKED : ''}${strandedLine(stranded)}`;
+  return `${select}${offered.length === 0 ? NONE_TICKED : ''}${strandedLine(stranded, offered.length > 0)}`;
 }
 
 /**
@@ -150,13 +151,17 @@ function firstOption(offered: readonly RankingChoice[], model: string, stranded:
   return offered.some((m) => m.id === model) ? '' : '<option value="" selected disabled>Pick a model</option>';
 }
 
-/** Why a stranded pick is shown, and what Collect does with it — refuses it by name (the collect's own sentence). */
-function strandedLine(stranded: string): string {
+/**
+ * Why a stranded pick is shown, and what Collect does with it — refuses it by name (the collect's own sentence).
+ *
+ * @param pickable whether the picker offers another model — only then does the line say a pick here would do
+ */
+function strandedLine(stranded: string, pickable: boolean): string {
   return stranded.length === 0
     ? ''
     : `<div class="stale">${escape(stranded)} is no longer ticked Bugz on Models, or was removed. Until you tick a model`
-      + ' for Bugz under Settings › Models, or pick one here, Collect is refused by that name — it never ranks with a'
-      + ' model you did not choose.</div>';
+      + ` for Bugz under Settings › Models${pickable ? ', or pick one here' : ''}, Collect is refused by that name — it`
+      + ' never ranks with a model you did not choose.</div>';
 }
 
 /** The section's body. */

@@ -192,11 +192,18 @@ const WHERE = 'Settings › Models';
  */
 export function bugzCollectRefusal(pick: BugzPick): string {
   if (pick.stranded.length > 0) {
-    return `Bugz is set to rank with ${pick.stranded}, which is no longer ticked Bugz on Models, or was removed. `
-      + `Tick a model for Bugz under ${WHERE}, or pick one in the Bugz section — nothing is collected with a model nobody chose.`;
+    return strandedRefusal(pick);
   }
 
   return pick.chosen.length > 0 ? '' : noPick(pick);
+}
+
+/** A stranded pick, refused by name — and sent to the picker only when it offers another model (finding 5). */
+function strandedRefusal(pick: BugzPick): string {
+  const orHere = pick.offered.length > 0 ? ', or pick one in the Bugz section' : '';
+
+  return `Bugz is set to rank with ${pick.stranded}, which is no longer ticked Bugz on Models, or was removed. `
+    + `Tick a model for Bugz under ${WHERE}${orHere} — nothing is collected with a model nobody chose.`;
 }
 
 /**
