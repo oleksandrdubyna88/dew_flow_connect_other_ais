@@ -3,6 +3,8 @@ import { test } from 'node:test';
 
 import { DEFAULTS } from '../settingsShape';
 import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, selected, work } from './panelPageHarness';
+import { pageTree, selectorsOf } from './pageTree';
+import { runPageHtml } from './pageScriptHarness';
 
 /** A select carrying these option values, built the way the harness builds one from a page. */
 function selectOf(...values: string[]): ReturnType<typeof controlFrom> {
@@ -147,10 +149,15 @@ test('a fixture opening a place of the NEW page runs that page, opened on the pl
   // An old tab id reaches its place through `OLD_TAB_PLACES`; a place's own id (`models`, `reviews/commands`) must reach
   // it too, as `render-page.mjs` does, or a test of the new page silently reads the sidebar's markup instead.
   for (const place of ['models', 'reviews/commands', 'setup/team']) {
-    const page = runPanel(panelState(place));
+    const { html } = runPanel(panelState(place));
+    assert.match(html, /<main class="settings catalog">/u, `${place} ran the sidebar, not the Settings page`);
 
-    assert.match(page.html, /<main class="settings catalog">/u, `${place} ran the sidebar, not the Settings page`);
-    assert.match(page.html, new RegExp(`const heldPlace = "${place.replace('/', '\\/')}"`, 'u'), `${place} is not where the page opens`);
+    // Where it opens is what its own script SHOWS — the page run against the DOM shim over its drawn tree, never the
+    // place read out of its generated source (CodeRabbit on #709).
+    const tree = pageTree(html);
+    runPageHtml(html, selectorsOf(tree, ['[data-setting]', '[data-prompt]', '[data-command]', '[data-tab]', '[data-pane]']), undefined, { value: undefined });
+    const shown = tree.find((node) => node.dataset.pane !== undefined && !node.hidden).map((node) => node.dataset.pane);
+    assert.deepEqual(shown, place.includes('/') ? [place.split('/')[0], place] : [place], `${place} is not the place the page shows`);
   }
 });
 
