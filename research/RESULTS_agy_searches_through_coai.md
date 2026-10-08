@@ -65,11 +65,38 @@ the live text as its input, red on the old parser (`Expected ask.HadBlock to be 
 
 At 16:00Z the agy account's quota was spent ("Individual quota reached … Resets in 1h51m"): three runs a side and one
 `consult` failed in 5–26 s, each classified `rate limited` / `quota` by the product with the reset time — no turn ran,
-so they say nothing about the feature. The runs were repeated after the reset; see §6.
+so they say nothing about the feature, and they show the quota failure is named, not swallowed. The runs were repeated
+after the reset; see §6.
 
-## 6. After the quota reset
+## 6. After the quota reset — the final build (`0ee2366c`), 17:56–18:05Z
 
-FILLED AFTER THE RUN.
+**ask_consultants, the same question:**
+
+| Side | Run | Outcome | Seconds | Lookups served (not served) | Last turn | The answer |
+|---|---|---|---|---|---|---|
+| Windows | 1 | answered | 57.3 | 3 (0) | 4 | none exists in `D:/rsd`; SMTP appears only in `email-switcher` plans and tasks |
+| Windows | 2 | answered | 42.0 | 6 (0) | 3 | none exists; the same plan and task named as designs, not code |
+| Windows | 3 | answered | 55.0 | 4 (0) | 4 | none exists; the same two files named |
+| WSL | 1 | answered | 105.6 | 5 (0) | 3 | **`alert-center/src/notifications/delivery-retry.ts`** (`afterFailure`, `RETRY_DELAYS_MINUTES`) and `email.adapter.ts` |
+| WSL | 2 | answered | 43.8 | 6 (0) | 3 | **`delivery-retry.ts`** and `email.adapter.ts`, with the backoff table — but the advice OPENS with the model's own working notes ("Let's view … The details are clear. Let's compose the answer") before the answer |
+| WSL | 3 | answered | 46.7 | 6 (0) | 3 | **`delivery-retry.ts`** and `email.adapter.ts` (`nodemailer`, transient vs terminal) |
+
+**6 of 6, no block left as an answer** (the §4 fix held in all six). WSL named the real file 3 of 3 again; Windows said
+"none exists" 3 of 3, which the name search over `D:/rsd` supports. Every run used coai's lookups, 3 to 6 per answer.
+
+**consult, one per side** (agy as a claude caller's consultant, `gemini-3.8-flash-medium`):
+
+| Side | Checkout | Problem | Lookup turns (agy's own transcript) | Seconds | The advice |
+|---|---|---|---|---|---|
+| Windows | `D:/rsd/_wt/coai-agy-access` (this branch) | where the 32 KB per-turn budget is enforced and which test pins it | 1 (`turn 2 of 4`) | 116.6 | `WorkspaceLookup.Bounded` with `LookupLimits.TurnBytes` (`LookupBudget.cs`), pinned by the `WorkspaceLookupTests` that narrow `TurnBytes` to 64 bytes — correct, with the check command |
+| WSL | `/home/jinx/git/SSO` | does this repository send e-mail, and is a failed send retried | 2 (`turn 2`, `turn 3 of 4`) | 59.0 | none: no mail client in `package.json`, outbound calls only to Keycloak, the internal API and the alert-center ingest; "email" appears only as an OpenID scope — with file:line evidence |
+
+Each consult is ONE `consult` call and ONE turn on the record (`followedUp: true`, billed once). The WSL checkout had 0
+dirty files before and after.
+
+**What these add.** The defect of §4 did not recur. One answer in six carried the model's working
+notes in front of the answer — agy's prose, which coai passes on as written; not fixed here. Both consults reached for
+coai's lookups on their own and answered from what they found.
 
 ## 7. What these runs are, and are not
 
