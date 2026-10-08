@@ -2942,7 +2942,27 @@ the row* → the choice is in the record and holds across a reload. Two files, p
   copy; a choice that writes without a conflict; the record dropped from `RESTORE_ORDER`; a snapshot reported as
   changed on every run; every preset reported as edited.
 
-**What it does NOT prove.** The host's VS Code binding — `applyRevision` reading through `chatRead`/`userLayer` and
-writing through `saveSetting` inside `inCatalogTurn` — is pinned by reading its source, not run (no unit test loads
-`vscode`); a refused write's notice is not exercised; and no test drives a real older build against a real settings
-file.
+- **The code round's findings** (2026-10-07, all red first): `anOlderBuildsEditIsARevision.test.ts` counts the record's
+  index reads through a Proxy — one `entryOf` lookup reads ≤ 2 entries (red: 1000, the record copied), a 300-preset
+  conflict pass and a 300-entry snapshot pass each ≤ 3000 (red: 90600 / 90601); a source scan that no reader reverses
+  the record and `recordedEntryOf` calls `entryOf`; `chatModelName` written (between the row and the record) only when
+  the chat opens on that row and its model changed; `applyRevisionChoice` over in-memory ports answering "redraw" for a
+  settled conflict and stopping at a refused row write; `chatSettingsFrom` taking the move's presets, so a workspace
+  value raises nothing, and `userChatPresets` reading the user layer. `catalogChatStep.test.ts`: a side inheriting the
+  chat model finds its own row by id though the fingerprints differ. `aRevisionShowsOnChat.test.ts`: a press disables
+  both buttons of the block; the page's message is carried out by `applyRevisionChoice` itself; source pins on the
+  host's ports, the panel's and the migration's reader. Fixtures read back from JSON through a type guard
+  (`test/settingsFileFixture.ts`), never a cast.
+- **In a real editor** — `test/host/revisionScenario.ts`, the last of `npm run test:host`'s scenarios: the SHIPPED
+  extension's migration moves a preset (snapshot written) and, after an older build's edit, makes no second row; a
+  workspace-layer value of the presets raises nothing; *Keep the row* and then — after a later, different edit on the
+  row the chat opens on — *Use the edited values*, each the page's message read by `presetEdit` and carried out by
+  `applyRevisionChoice` with the window's real reads (`userChatPresets`, `chatRead`) and Global `update`s; the record,
+  the row and `chatModelName` read back from the real settings; the migration the row write triggers still makes no
+  second row and raises nothing.
+
+**What it does NOT prove.** The webview click in a real editor (a host cannot reach a webview's DOM — the press is the
+DOM-shim test's); `chatPresetsHost.revisionPorts` itself — it needs the bundled extension's own `ExtensionContext`, so
+the scenario hands the same reads and a Global `update` (what `saveSetting` does on a window without per-side
+settings) and its catalog turn is the compiled copy's, not the bundle's (it waits for the bundle's migration to go quiet
+instead); a per-side overlay write; the refusal notice's wording; and a real older build writing the file.

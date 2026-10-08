@@ -11131,26 +11131,37 @@ starting text, Team server, remote vendor) was silently `unchanged` — Chat kep
   teamServerId, remoteVendor`). `rowOf` is built from `copiedOf(preset)`, so the row and the snapshot cannot list
   different fields. `movedRecordFrom` keeps a 5-field entry; a `copied` that is not an object is dropped (never the
   entry), and only its known string fields are read.
-- **Matched by id, the NEWEST entry** (`chatPresetMove.entryOf`). `wasMoved` is the id alone, so a preset the record
-  holds is never moved again, edited or not, and the chat never lists the edited preset beside its row (`chatModelsOf`).
-  A positional `preset-N` that shifted onto another preset is raised the same way (it used to be moved as a new
-  preset). `chatCatalogModels.movedTo` (a legacy conversation id) takes the newest too, matching
-  `catalogChatStep.recordedEntryOf` — the two disagreed on a pair epic 4's build wrote.
+- **Matched by id, the NEWEST entry** (`chatPresetMove.entryOf` — the ONE implementation of the rule, read backwards
+  from the end with no copy; `newestEntries` is the same rule for every id in one pass). `wasMoved` is the id alone, so a
+  preset the record holds is never moved again, edited or not, and the chat never lists the edited preset beside its row
+  (`chatModelsOf`). A positional `preset-N` that shifted onto another preset is raised the same way (it used to be moved
+  as a new preset). `chatCatalogModels.movedTo` (a legacy conversation id), `catalogChatStep.recordedEntryOf` and a
+  side's inherited chat model (`catalogChatStep.ownRowFor`, which used to compare the 4-field fingerprint) all call
+  `entryOf`.
 - **An entry with no snapshot** (written before R7) takes one from its ROW on disk (`snapshotted`, in `chatMove`, so the
   migration writes it once — a `chatPresetsMoved` write, which also carries any remap an interrupted run still owed). A
   missing row or a missing preset leaves the entry as it is and raises nothing. Known cost: a row edited on Models can be
   raised once; *Keep the row* ends it.
 - **The conflict** (`chatPresetRevision.presetConflicts`, pure): the preset compared with its in-force entry's snapshot,
-  never with the live row; raised only while the row exists. It lists each changed field with the row's value and the
+  never with the live row; raised only while the row exists. One pass: the record (`newestEntries`) and the rows
+  (`rowsById`) are each read once, never once per preset; `snapshotted` likewise. The presets are the ones the MOVE
+  reads — the user layer's, through the one reader `modelKeys.userChatPresets` that the migration
+  (`catalogMigrationHost.chatPresetsOf`), the panel (`chatSettingsFrom(this.read(config), userChatPresets(config))`) and
+  a choice all call — so a repository's value never raises a conflict the move did not record. It lists each changed field with the row's value and the
   edited value. A revision changes nothing in the migration (outcome `unchanged`); the row keeps working.
 - **On Chat** (`chatTabEmbed.conflictBlock`, beside the stranded pick): the row's name, a table of the changed fields
   (on Models now / the edited values) and two buttons, `data-chp-revision="use" | "keep"` in a block named by
   `data-chp-conflict="<presetId>"`. Each posts `{ type: 'chatPresets', edit: { type: 'revision', id, choice } }`,
   numbered; `chatPresetsMessages.presetEdit` reads it as `{ kind: 'revision', presetId, choice }` (anything else is
-  `ignore`). `ChatSettings.conflicts` is read by `chatSettingsFrom` through `chatConflictsReading`, with the models.
-- **The choice** (`chatPresetRevision.revisionWrites`; host `chatPresetsHost.applyRevision`, in one `inCatalogTurn`,
-  through `saveSetting` on this side): *Use the edited values* writes the row first (each changed field takes the
-  preset's value; a cleared one is removed), then the record; *Keep the row* writes the record only. Either way the
+  `ignore`). A press disables BOTH buttons of its block while it is in flight. `ChatSettings.conflicts` is read by
+  `chatSettingsFrom` through `chatConflictsReading`, from the same presets as the models.
+- **The choice** (`chatPresetRevision.revisionWrites` decides; `applyRevisionChoice` carries it out over
+  `RevisionPorts` — the presets, this side's reader, the save, the refusal notice and the catalog's turn — which
+  `chatPresetsHost.revisionPorts` binds to `userChatPresets`, `chatRead`, `saveSetting` on this side and
+  `inCatalogTurn`): *Use the edited values* writes the row first (each changed field takes the preset's value; a cleared
+  one is removed), then — when that row is the one `coai.chatModel` opens on and its model changed — `coai.chatModelName`
+  = the preset's model, then the record; *Keep the row* writes the record only. A refused write stops the rest and is
+  said. Every choice answers "redraw", so one on a conflict already settled ends its busy mark and drops the stale card. Either way the
   in-force entry takes the preset's whole state — `copied` and the `runtime/model/name` fingerprint, so an older build
   reading the record does not move it again. Durable: it lives in the record, so a reload or restart shows no conflict,
   and a later, DIFFERENT edit raises it again. A choice for a preset with no conflict writes nothing. The presets are

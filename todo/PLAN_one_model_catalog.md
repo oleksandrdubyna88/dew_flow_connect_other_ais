@@ -1018,7 +1018,27 @@ changed (a person's own later edit of another field on Models is kept); a run th
 the remap an interrupted run owed (`opensOn` falls back to `remapOf`); `vaultKeyName` is in the snapshot (the move
 copies it) but no preset edit can change it — it is the id the entry is matched by. Not done: the host's VS Code binding
 is pinned by source reading, not run; `catalogChatStep.sameMove` (a side's inherited chat model) still compares
-fingerprints.
+fingerprints. (Both answered by the code round, next paragraph.)
+
+**Progress, 2026-10-07: R7's coai code round** (`proceed`, 8 of 8 reviewers, 10 findings, all accepted) — each fixed on
+the same branch, red first: (0) a real-editor scenario, `test/host/revisionScenario.ts` (the shipped migration moves the
+preset and makes no second row after an older build's edit; a workspace value raises nothing; *Keep the row*, then *Use
+the edited values* on the row the chat opens on, carried out by `applyRevisionChoice` with the window's real reads and
+read back from the real settings) — the webview click and `chatPresetsHost.revisionPorts` itself are not driven there;
+(1) no `as` in the fixtures — `test/settingsFileFixture.ts` reads JSON back through a type guard; (2) `entryOf` is the one
+newest-entry rule — `recordedEntryOf` calls it (red: "catalogChatStep.ts reverses the record"); (3) `entryOf` reads
+backwards and copies nothing (red: "one lookup read 1000 entries"); (4) a side's inherited chat model matches by id
+through `entryOf` — `sameMove` is gone (red: the side's `chatModel` write `undefined`, not `chat-a-2`); (5) *Use the
+edited values* writes `coai.chatModelName` = the preset's model when its row is `coai.chatModel` and the model changed
+(red: no `chatModelName` in the writes); (6) one reader of the presets, `modelKeys.userChatPresets`, for the migration,
+the panel's `chatSettingsFrom` and a choice (red: Chat raised a workspace value's name); (7) a choice always redraws —
+`applyRevisionChoice` answers `true` (red: "a settled conflict's card stays on Chat"); (8) the conflict and snapshot
+passes read the record once (`newestEntries`, `rowsById`; red: 90600 reads for 300 presets; teeth for the snapshot pass:
+90601); (9) a press disables both buttons of its block (red: `[false, false]`). Deviations: the host's choice moved into
+`chatPresetRevision.applyRevisionChoice` over `RevisionPorts`, so its order, stop-at-refusal and redraw are unit-tested;
+a refusal now names the key that was refused; `chatSettingsFrom` takes the presets as an optional second argument (the
+panel passes `userChatPresets(config)`; the chat command's callers still read them through `chatRead`, which is the
+user layer for this key unless a side's overlay holds it); `savedModels` keeps `userLayer(config)`, the same reader.
 
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
