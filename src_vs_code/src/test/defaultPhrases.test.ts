@@ -65,7 +65,16 @@ test('every default phrase has its own stable id, and every name fits on a butto
   const raw = declaredDefault() as readonly Record<string, unknown>[];
   const ids = raw.map((row) => row['id']);
 
-  assert.ok(ids.every((id) => typeof id === 'string' && id.startsWith('phrase-default-')), `ids: ${ids.join(', ')}`);
+  // Pinned exactly: a colour and a button follow the id, so renaming one is a decision, not a tidy-up (CodeRabbit, #710).
+  assert.deepEqual(ids, [
+    'phrase-default-pr-coderabbit-deploy',
+    'phrase-default-what-problem',
+    'phrase-default-questions-plan',
+    'phrase-default-continue',
+    'phrase-default-all-done',
+    'phrase-default-consultant',
+    'phrase-default-progress',
+  ], 'a default phrase id changed or moved');
   assert.equal(new Set(ids).size, ids.length, 'two default phrases share an id, so a click could copy the wrong one');
   assert.deepEqual(phrasesFrom(raw).map((phrase) => phrase.id), ids, 'the reader re-keyed an id, so the colour would move');
   for (const phrase of phrasesFrom(raw)) {
