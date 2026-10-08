@@ -14,7 +14,7 @@
  *
  *   npm run compile && node scripts/render-page.mjs <page> <out.png> [width] [height] [--size n] [--browser path]
  *
- * <page>: sidebar · sidebar-question · settings[:<tab>] · security · commands · roles · presets
+ * <page>: sidebar · sidebar-question · settings[:<tab>] · catalog[:<place>] · security
  *
  * Width: headless Chromium lays a page out at no less than about 500px and CROPS a narrower screenshot, so
  * a 340px sidebar comes out cut at the right edge rather than wrapped. Render the sidebar at 500.
@@ -182,7 +182,7 @@ function page(name, size) {
         // Two chat models that can answer, one that cannot, two prompts (E4.6b).
         chat: {
           // No older build's edit to settle (R7's conflicts) — the field every ChatSettings carries since PR #707.
-          prompt: 'Explain', promptChoice: '', language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '', conflicts: [],
+          prompt: 'Explain', promptChoice: '', language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '', conflicts: [], unreadable: [],
           prompts: [{ id: 'p1', name: 'Explain', text: 'Explain', main: true }, { id: 'p2', name: 'Review', text: 'Review this for bugs.', main: false }],
           models: [
             { id: 'chat-deep', name: 'Deep', runtime: 'claude', model: 'opus', main: false, executablePath: '', baseUrl: '', startingPrompt: 'You review APIs.' },
@@ -197,14 +197,8 @@ function page(name, size) {
       return page(`catalog:${from('catalogPlaces.js').OLD_TAB_PLACES[tab ?? 'reviewers'] ?? tab}`, size);
     case 'security':
       return securityDemo(text);
-    case 'commands':
-      return from('commandsPage.js').commandsHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, ...text }, NONCE);
-    case 'roles':
-      return from('rolesPage.js').rolesHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, ...text }, NONCE);
-    case 'presets':
-      return from('chatPresetsPage.js').chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], ...text }, NONCE);
     default:
-      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], catalog[:<place>], security, commands, roles or presets`);
+      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], catalog[:<place>], or security — the roles, commands and presets are catalog:reviews/roles, catalog:reviews/commands and catalog:chat`);
       process.exit(2);
   }
 }

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 /**
  * The half of the deletion that only a host can do, and so can only be READ.
  *
- * <p>`extension.ts` and `rolesPanel.ts` import `vscode`, and no test in this repository can load
+ * <p>`extension.ts` and `rolesHost.ts` import `vscode`, and no test in this repository can load
  * one. Everything decidable is a value and is RUN — `roleDeletion.test.ts` drives all five steps
  * against an in-memory store and an injected clock. What is left is the wiring: that the coordinator
  * is actually told when the mirror settles, and that activation actually sweeps. A build with both
@@ -82,14 +82,11 @@ test('the roles page reaches the same deletions the host sweeps, from the same m
     /export function roleDeletions\(context: vscode\.ExtensionContext\): RoleDeletions \{\s*deletions \?\?=/u,
     'the coordinator is rebuilt per call, so its store, clock and reporter differ between the page '
     + 'and the host that drives it');
-  assert.match(source('rolesPanel.ts'), /stranded: await roleDeletions\(rolesSide\(\)\)\.stranded\(\)/u,
+  // Drawn by the Settings page's Roles & prompts since the Review roles tab went (PLAN_one_model_catalog.md E5.1 step 4):
+  // the roles' editing core reads the stranded deletions into the state the place is drawn from.
+  assert.match(source('rolesHost.ts'), /stranded: await roleDeletions\(rolesSide\(\)\)\.stranded\(\)/u,
     'the page is drawn without the stranded deletions, so a tombstone that cannot clear is invisible');
-  // The panel itself is a legitimate import — `extension.ts` registers the command that opens it.
-  // What must not come from there is the COORDINATOR, which is what pinned the page into the
-  // activation path.
-  const fromPanel = /import \{([^}]*)\} from '\.\/rolesPanel';/u.exec(source('extension.ts'));
-
-  assert.ok(fromPanel !== null, 'the panel import is gone entirely, so this guard checks nothing');
-  assert.ok(!(fromPanel[1] ?? '').includes('roleDeletions'),
-    'the coordinator is imported from the webview panel again, which is the layering this moved');
+  // What must not come from a webview module is the COORDINATOR, which is what pinned the page into the activation path.
+  assert.match(source('extension.ts'), /import \{[^}]*\broleDeletions\b[^}]*\} from '\.\/roleDeletionsHost';/u,
+    'the coordinator is no longer imported from its own module, which is the layering this moved');
 });

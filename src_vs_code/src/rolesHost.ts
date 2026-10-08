@@ -17,8 +17,8 @@ import { applyTextControl } from './textControlsHost';
 import type { RolesEmbedState } from './rolesEmbed';
 
 /**
- * The editing core of the review roles — what both pages that edit them call (todo/PLAN_one_model_catalog.md E4.3): the
- * Review roles tab (`rolesPanel.ts`) and, on the new Settings page, Reviews › Roles & prompts. Moved here from
+ * The editing core of the review roles — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.3): the
+ * Review roles tab (`rolesPanel.ts`, deleted in E5.1) and, on the new Settings page, Reviews › Roles & prompts. Moved here from
  * `rolesPanel.ts`, never copied: two copies of "which layer is written, in what order, with which refusals" is the
  * defect the reuse rule exists for.
  *

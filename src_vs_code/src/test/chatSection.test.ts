@@ -29,6 +29,7 @@ const chat: ChatSettings = {
   prompts: [],
   models: [],
   conflicts: [],
+  unreadable: [],
   language: 'en',
   autoSend: 'keyboard',
   model: '',

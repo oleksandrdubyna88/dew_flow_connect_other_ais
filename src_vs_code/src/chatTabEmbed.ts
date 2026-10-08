@@ -28,7 +28,7 @@ export function chatTabHtml(state: PanelState): string {
   return `<div class="chat-embed">
 <p class="lead">Ask another AI about a passage without leaving the editor. Which models can answer is ticked <b>Chat</b> on Models; here is which one a chat opens on, what it is sent with, and how.</p>
 <h3>Which model a chat opens on</h3>
-${opensOnHtml(chat, list)}${state.perSide ? '\n<p class="hint">Saved for this side of the machine.</p>' : ''}
+${opensOnHtml(chat, list)}${unreadableHtml(chat.unreadable)}${state.perSide ? '\n<p class="hint">Saved for this side of the machine.</p>' : ''}
 <h3>Sending</h3>
 ${chatSendingFields(chat, '')}
 <h3>Prompt presets</h3>
@@ -36,6 +36,21 @@ ${chatSendingFields(chat, '')}
 ${chat.prompts.map((one) => promptBlock(one, EMBEDDED)).join('\n')}
 <button type="button" data-chp-add="prompt">Add a prompt</button>
 </div>`;
+}
+
+/**
+ * The saved model presets this build cannot read, by name, with what to do — named rather than passed over, as the Chat
+ * presets tab named them until E5.1 deleted it (`chatPresets.unreadableModels`). Empty when there are none.
+ */
+function unreadableHtml(names: readonly string[]): string {
+  if (names.length === 0) {
+    return '';
+  }
+  const one = names.length === 1;
+
+  return `
+<p class="refused">Saved before a model preset carried its own vendor, so ${one ? 'it cannot be run' : 'they cannot be run'}`
+    + ` — add ${one ? 'it' : 'them'} again on Models, ticked <b>Chat</b>: ${names.map((name) => `<b>${escapeHtml(name)}</b>`).join(', ')}.</p>`;
 }
 
 /**

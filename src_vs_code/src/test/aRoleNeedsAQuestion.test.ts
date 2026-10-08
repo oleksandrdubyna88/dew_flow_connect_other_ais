@@ -4,10 +4,8 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { RESULT_STAGE, isActive, whyNotAskable, type RoleRow } from '../roles';
 import { rowsAfter, type RowsOutcome } from '../rolesEdit';
-import { rolesHtml, type RolesPageState } from '../rolesPage';
-import { CUSTOM_ROLES_SINCE } from '../rolesBlocks';
-import { runRolesPage } from './rolesPageHarness';
-import { Node } from './pageScriptHarness';
+import { bubbled } from './pageTree';
+import { roleBlockIn, roleEditsOf, rolesPlaceHtml, runRolesPlace } from './rolesPlaceHarness';
 
 /**
  * Issue #338: a role could be switched on, counted, and never asked. Every new role was created with a
@@ -114,16 +112,7 @@ test('a shipped role is switched on without any text of its own', () => {
   assert.notStrictEqual(outcome.kind, 'refused');
 });
 
-// ---------- the page ----------
-
-const state = (over: Partial<RolesPageState> = {}): RolesPageState => ({
-  rows: [],
-  texts: {},
-  serverVersion: CUSTOM_ROLES_SINCE,
-  perSide: false,
-  uiScale: 0,
-  ...over,
-});
+// ---------- the page: Reviews › Roles & prompts on the Settings page (the Review roles tab went in E5.1 step 4) ----------
 
 function block(html: string, id: string): string {
   const start = html.indexOf(`data-id="${id}"`);
@@ -136,7 +125,7 @@ function block(html: string, id: string): string {
 test('an ACTIVE role that cannot be asked is marked on the page, by name', () => {
   // The routes the refusal cannot see: a text erased after the switch, a hand-edited settings file, a
   // deleted prompt file. Without this the only signal was one line in a round reply.
-  const html = rolesHtml(state({ rows: [{ ...mine, active: true }] }), 'n');
+  const html = rolesPlaceHtml({ rows: [{ ...mine, active: true }] });
   const own = block(html, 'Role2');
 
   assert.match(own, /a round that asks its first prompt will skip it/);
@@ -144,8 +133,8 @@ test('an ACTIVE role that cannot be asked is marked on the page, by name', () =>
 });
 
 test('the mark is absent when the question has text, and when the role is off', () => {
-  const texted = rolesHtml(state({ rows: [{ ...mine, active: true }], texts: { 'role2-general': 'Is it met?' } }), 'n');
-  const off = rolesHtml(state({ rows: [mine] }), 'n');
+  const texted = rolesPlaceHtml({ rows: [{ ...mine, active: true }], texts: { 'role2-general': 'Is it met?' } });
+  const off = rolesPlaceHtml({ rows: [mine] });
 
   assert.doesNotMatch(block(texted, 'Role2'), /a round that asks its first prompt will skip it/);
   assert.doesNotMatch(block(off, 'Role2'), /a round that asks its first prompt will skip it/);
@@ -158,29 +147,24 @@ test('a press on a role’s Active box asks the host ONCE, although the browser 
   // mattered while a refusal needed five roles already on; now that switching on a role with no
   // question is refused as a matter of course, it was two reads of every prompt, two refusals and two
   // notices for one click.
-  const page = runRolesPage(state({ rows: [mine] }));
-  const role = new Node({ id: 'Role2' }, 'DETAILS');
-  const box = new Node({ field: 'active' });
-  box.type = 'checkbox';
+  const { page, pane } = runRolesPlace({ rows: [mine], texts: { 'role2-general': 'Is it met?' } });
+  const box = roleBlockIn(pane, 'Role2').one((node) => node.dataset.field === 'active', 'the switch of Role2');
   box.checked = true;
-  box.parent = role;
 
-  page.fire('input', box);
-  page.fire('change', box);
+  bubbled(page, 'input', box);
+  bubbled(page, 'change', box);
 
-  assert.equal(page.posted.filter((one) => one['field'] === 'active').length, 1, JSON.stringify(page.posted));
+  assert.equal(roleEditsOf(page).filter((one) => one['field'] === 'active').length, 1, JSON.stringify(page.posted));
 });
 
 test('a typed field is still sent as it is typed', () => {
-  const page = runRolesPage(state({ rows: [mine] }));
-  const role = new Node({ id: 'Role2' }, 'DETAILS');
-  const name = new Node({ field: 'name' });
+  const { page, pane } = runRolesPlace({ rows: [mine] });
+  const name = roleBlockIn(pane, 'Role2').one((node) => node.dataset.field === 'name', 'the name box of Role2');
   name.value = 'Моя роль, renamed';
-  name.parent = role;
 
-  page.fire('input', name);
+  bubbled(page, 'input', name);
 
-  assert.equal(page.posted.filter((one) => one['field'] === 'name').length, 1, JSON.stringify(page.posted));
+  assert.equal(roleEditsOf(page).filter((one) => one['field'] === 'name').length, 1, JSON.stringify(page.posted));
 });
 
 // ---------- the sentences, at their edges (the code round) ----------
@@ -204,7 +188,7 @@ test('a cleared name or label falls back to the id rather than to empty quotatio
 test('a role with no prompt is told to add one, not to write in a box it does not have', () => {
   const noPrompt = { ...mine, prompts: [] };
   const refusal = rowsAfter([noPrompt], { kind: 'edit', id: 'Role2', field: 'active', value: true }, new Set(), {});
-  const hint = block(rolesHtml(state({ rows: [{ ...noPrompt, active: true }] }), 'n'), 'Role2');
+  const hint = block(rolesPlaceHtml({ rows: [{ ...noPrompt, active: true }] }), 'Role2');
 
   assert.match(whyOf(refusal), /Add a prompt/);
   assert.doesNotMatch(whyOf(refusal), /box under it/);

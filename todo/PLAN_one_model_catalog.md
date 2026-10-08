@@ -1254,6 +1254,16 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    off, one table row per command naming its OWN place — `coai.editRoles` → `reviews/roles`, `coai.editCommands` → `reviews/commands`, `coai.editChatPresets` → `chat` — so a crossed wire fails (RED: they open the current page today; plan round finding 0); after step 5, `coai.openSettings` with an old tab id opens its place (a
    real-editor scenario). Docs: `research/module_extension.md` (the switch-over as shipped), `research/module_tests.md`,
    `research/architecture.md` if it names the old page.
+   **Progress (2026-10-08, branch `feat/catalog-e5-delete`): step 4 built.** The six modules are deleted; `editorRedirects.ts`
+   registers `coai.editRoles` / `coai.editCommands` / `coai.editChatPresets` as redirects (`EDITOR_PLACES`), each making the
+   slot paint the new page (`setSettingsPreview(true)` — never shipped on its own: step 5 removes the switch in the same
+   PR) and opening its place; `rolesKnowTheServer` and `told()` are gone. **Found while moving the tests:** the presets tab
+   named model presets saved before a preset carried its vendor (`unreadableModels`) and Chat did not — `ChatSettings.
+   unreadable` + a line on Chat (RED: "a saved model that cannot be run was left unmentioned", then green). Deleted
+   tests → where their behaviour is held now: `research/module_tests.md`, *E5.1c step 4* (every row named; the two
+   tabs' own stylesheet tests went with the tabs). Teeth: swapping two `EDITOR_PLACES` turns both rows red; emptying the
+   `unreadable` reader turns `chatSettings.test.ts` red. `npm test` 5801 / 0 failed; eslint clean; suppressions only
+   shrink (two pages pruned).
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"

@@ -9,15 +9,12 @@ import * as vscode from 'vscode';
 
 import { usersPanel } from './bugsKeysPanel';
 import { askForContributorKey, offerOldBugzKeys, settleOldBugzKeys } from './bugzKeyFlows';
-import { openChatPresets } from './chatPresetsPanel';
 import { bindChatPresets } from './chatPresetsHost';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
-import { openRoles } from './rolesPanel';
 import { bindRoles } from './rolesHost';
 import { bindCommands } from './commandsHost';
 import { bindChatSide } from './chatConfig';
-import { openCommands } from './commandsPanel';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
 import {
@@ -55,7 +52,8 @@ import { QuestionConsultWatcher } from './questionConsultWatcher';
 import { qconsultLogHtml } from './qconsultLog';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
-import { openSettings } from './settingsPanel';
+import { openSettings, setSettingsPreview } from './settingsPanel';
+import { editorRedirects } from './editorRedirects';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
@@ -524,11 +522,12 @@ export function activate(context: vscode.ExtensionContext): void {
       await askForContributorKey(context.secrets, bugzServerThisSide(context));
       await panel.render();
     }),
-    vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
-    // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side
-    // setting, and only the context says which side this window is.
-    vscode.commands.registerCommand('coai.editRoles', () => { openRoles(context); }),
-    vscode.commands.registerCommand('coai.editCommands', () => { openCommands(context); }),
+    // The three tabs these opened are gone (PLAN_one_model_catalog.md E5.1 step 4): each command opens the Settings
+    // page at the place that holds its editor now, for one more release.
+    ...editorRedirects((command, run) => vscode.commands.registerCommand(command, run), {
+      useTheNewPage: () => setSettingsPreview(true),
+      openSettingsAt: (place) => { openSettings(panel, place); },
+    }),
     vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
     // The page every notification has been going into since S1. One panel for the window, so a
     // second press reveals the one already open rather than stacking another over it.

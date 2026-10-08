@@ -122,7 +122,6 @@ import { askForContributorKey } from './bugzKeyFlows';
 import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
-import { rolesKnowTheServer } from './rolesPanel';
 import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
 import { roleEdit } from './rolesMessages';
 import { roleSwitchFollows } from './rolesSwitch';
@@ -1199,7 +1198,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const shown = vendors.filter(shownOnTheOldPage);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
-    const server = this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published));
+    const server = await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published);
     const state = {
       settings,
       vendors: shown,
@@ -2052,19 +2051,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         await state.update(revokedKey(server.id, perSide ? side : ''), stamped);
       }
     }
-  }
-
-  /**
-   * The server status, passed through — and told to the roles tab on the way.
-   *
-   * <p>That tab draws its own version-skew banner and has no way to ask for the answer: it is a
-   * panel of its own, opened by a command, with no reference to this provider. Told here, where the
-   * answer is already in hand and every repaint passes through.</p>
-   */
-  private told(server: ServerStatus): ServerStatus {
-    rolesKnowTheServer(server.kind === 'absent' ? '' : server.version);
-
-    return server;
   }
 
   /**

@@ -24,6 +24,7 @@ test('an untouched installation asks for an explanation in English, and waits on
     models: [],
     // Nothing moved, so no older build's edit to raise (R7).
     conflicts: [],
+    unreadable: [],
     language: 'en',
     autoSend: 'keyboard',
     model: '',
@@ -150,4 +151,15 @@ test('choosing a provider clears the model named under the one before it', () =>
   assert.deepStrictEqual(clearedByWriting('chatModel'), ['chatModelName']);
   assert.deepStrictEqual(clearedByWriting('chatModelName'), []);
   assert.deepStrictEqual(clearedByWriting('chatLanguage'), []);
+});
+
+test('a saved model this build cannot read is carried by name, from the same presets the models are read from', () => {
+  // The Chat presets tab named these until E5.1 deleted it; Chat on the Settings page names them now, from this field.
+  const presets = [
+    { id: 'old', name: 'Old codex', provider: 'codex' },
+    { id: 'new', name: 'Deep', runtime: 'claude', model: 'opus' },
+  ];
+
+  assert.deepStrictEqual(chatSettingsFrom(() => undefined, presets).unreadable, ['Old codex']);
+  assert.deepStrictEqual(chatSettingsFrom(() => undefined).unreadable, []);
 });

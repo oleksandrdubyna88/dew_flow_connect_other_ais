@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { usersPageHtml } from '../bugsKeysPage';
-import { commandsHtml } from '../commandsPage';
 import { notificationsPageHtml } from '../notificationsPage';
 import { roundsLogHtml } from '../roundsLog';
 import { settingsHtml, settingsKey } from '../panelView';
@@ -62,10 +61,10 @@ function bodyRule(html: string): string {
   return body;
 }
 
-// These four pages replace their whole document after they open; the host's push reaches a page once,
-// so a page whose builder ignored the two values would lose them on its next draw.
+// These three pages replace their whole document after they open; the host's push reaches a page once,
+// so a page whose builder ignored the two values would lose them on its next draw. (Gate commands was a fourth, until
+// E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted it; its editor is a place of the Settings page, below.)
 const REDRAWN: readonly (readonly [string, (size: number, tone: number) => string])[] = [
-  ['Gate commands', (size, tone) => commandsHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, uiScale: size, textTone: tone }, 'n')],
   ['Notifications', (size, tone) => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1, uiScale: size, textTone: tone }, 'n')],
   ['Review rounds', (size, tone) => roundsLogHtml([], [], 'n', '', '', undefined, { text: { size, tone } })],
   ['Who holds a key', (size, tone) => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n', { size, tone })],
@@ -124,11 +123,11 @@ test('every host that opens a page pushes both the size and the tone to it', () 
   assert.deepEqual(missing, [], `these hosts open a page and push it only one setting, or none: ${missing.join(', ')}`);
 });
 
-test('the host scan still finds the eleven hosts, so it is not passing on an empty list', () => {
+test('the host scan still finds the eight hosts, so it is not passing on an empty list', () => {
   const found = hosts().map((host) => host.file).sort();
 
   assert.deepEqual(found, [
-    'bugsKeysPanel.ts', 'bugzReviewPanel.ts', 'chatPanel.ts', 'chatPresetsPanel.ts', 'commandsPanel.ts', 'helpPanel.ts',
-    'notificationsPanel.ts', 'phrasesPanel.ts', 'rolesPanel.ts', 'roundsLogPanel.ts', 'settingsPanel.ts',
+    'bugsKeysPanel.ts', 'bugzReviewPanel.ts', 'chatPanel.ts', 'helpPanel.ts',
+    'notificationsPanel.ts', 'phrasesPanel.ts', 'roundsLogPanel.ts', 'settingsPanel.ts',
   ]);
 });

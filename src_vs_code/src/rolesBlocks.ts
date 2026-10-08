@@ -8,9 +8,9 @@ import { type BucketCounts, lastOn, lastOnBy, onCounts, switchedOn } from './rol
 /**
  * The pieces a roles page is drawn from: one role's block, the switch rules it is drawn by, and the notes around it.
  *
- * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages draw these: the Review roles tab, and Reviews › Roles
+ * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages drew these until E5.1 deleted the first: the Review roles tab, and Reviews › Roles
  * &amp; prompts on the new Settings page (`rolesEmbed.ts`, todo/PLAN_one_model_catalog.md E4.3), which draws the tab's
- * own blocks rather than a copy of them. Epic 5 deletes the tab (E5.1), so the blocks were moved out first —
+ * own blocks rather than a copy of them. Epic 5 deleted the tab (E5.1), so the blocks were moved out first —
  * prerequisite (b) of that epic. They are drawn byte for byte as before: the move compared the html of every shipped
  * role, in every switch state, from both builds. The functions the move put under the complexity rule — the block, a
  * prompt's block and the version comparison — were split into named parts to get there, and draw the same text.</p>

@@ -31,7 +31,7 @@ const MODELS = [
 
 const CHAT: ChatSettings = {
   prompt: 'Explain, the words', promptChoice: '', prompts: [prompt('p1', 'Explain', true), prompt('p2', 'Review')],
-  models: MODELS, conflicts: [], language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '',
+  models: MODELS, conflicts: [], unreadable: [], language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '',
 };
 
 function stateWith(chat: Partial<ChatSettings> = {}, over: Partial<PanelState> = {}): PanelState {
@@ -171,4 +171,55 @@ test('the chat, the roles and the commands never read each other\'s controls', (
 test('a side that keeps its own settings says the chat models are saved for it', () => {
   assert.doesNotMatch(chatPage().pane.text(), /for this side of the machine/u);
   assert.match(chatPage(stateWith({}, { perSide: true })).pane.text(), /for this side of the machine/u);
+});
+
+// ---------- what the Chat presets tab held, asked of this place since E5.1 step 4 deleted the tab ----------
+
+/** The prompt presets' blocks, in the order drawn. */
+const promptRows = (pane: PageNode): readonly PageNode[] =>
+  pane.find((node) => node.tagName === 'DIV' && node.dataset.chpId !== undefined && node.find((field) => field.dataset.chpList === 'prompt').length > 0);
+
+test('the prompt box is large, because reading a long prompt is the point', () => {
+  // The operator asked for it in as many words: "окно промта большое, что б можно было легко читать".
+  const box = rowOf(chatPage().pane, 'p1').one((node) => node.tagName === 'TEXTAREA' && node.dataset.chpField === 'text', 'the prompt box');
+
+  assert.ok(Number(box.attrs['rows']) >= 12, `the prompt box opens at ${box.attrs['rows']} rows — too small to read a prompt in`);
+});
+
+test('exactly one prompt is ticked as the main one', () => {
+  const ticked = promptRows(chatPage().pane).filter((row) => row.one((node) => node.dataset.chpField === 'main', 'a main tick').checked);
+
+  assert.deepEqual(ticked.map((row) => row.dataset.chpId), ['p1']);
+});
+
+test('with no prompts, the place offers a way to start and draws nothing to remove', () => {
+  const { pane } = chatPage(stateWith({ prompts: [] }));
+
+  assert.equal(pane.find((node) => node.dataset.chpAdd === 'prompt').length, 1, 'no way to add the first prompt');
+  assert.equal(pane.find((node) => node.dataset.chpRemove !== undefined).length, 0, 'an empty list drew a row to remove');
+});
+
+test('everything a person typed is drawn as text, in a prompt\'s name, its words and a model\'s name alike', () => {
+  const html = catalogHtml(stateWith({
+    prompts: [prompt('p', '<img src=x onerror=alert(1)>', true), { id: 'q', name: 'Q', text: '</textarea><script>alert(2)</script>', main: false }],
+    models: [model('chat-deep', '"><b>bold</b>')],
+  }), 'test-nonce', 'chat');
+  const pane = pageTree(html).one((node) => node.dataset.pane === 'chat', 'Chat pane');
+
+  assert.doesNotMatch(html, /<img src=x/u, 'a name reached the page as markup');
+  assert.doesNotMatch(html, /<\/textarea><script>alert\(2\)/u, 'a prompt closed its own box');
+  assert.equal(rowOf(pane, 'p').one((node) => node.dataset.chpField === 'name', 'the name').value, '<img src=x onerror=alert(1)>', 'the name was dropped rather than shown');
+  assert.equal(rowOf(pane, 'q').one((node) => node.dataset.chpField === 'text', 'the words').value, '</textarea><script>alert(2)</script>');
+  assert.match(rowOf(pane, 'chat-deep').text(), /"><b>bold<\/b>/u, 'the model\'s name was not shown as the person typed it');
+});
+
+test('a saved model this build cannot read is named on the place, with what to do — never passed over', () => {
+  const { pane } = chatPage(stateWith({ unreadable: ['Old codex'] }));
+
+  assert.match(pane.text(), /Old codex/u, 'a saved model that cannot be run was left unmentioned');
+  assert.match(pane.text(), /add it again/u, 'the place says it is missing without saying what to do');
+});
+
+test('a place with nothing unreadable says nothing about it', () => {
+  assert.doesNotMatch(chatPage().pane.text(), /add it again/u);
 });

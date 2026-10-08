@@ -664,6 +664,8 @@ conversation all happen because this is not a second path.
 
 ### The presets tab (2026-09-10)
 
+> **Deleted in E5.1 (2026-10-08).** The tab is gone; its prompt presets are edited on Chat of the Settings page and `coai.editChatPresets` opens that place — see *E5.1c* at the end of this file.
+
 `chatPresetsPage.ts` and `chatPresetsPanel.ts` — a page module and a thin panel host, which is the
 arrangement the rounds log and the help page already use rather than a third one. The command is
 `coai.editChatPresets`.
@@ -5946,6 +5948,8 @@ runtime this build knows is now a row in one table.
 
 ### The roles page: a person writes a review role (2026-09-12)
 
+> **Deleted in E5.1 (2026-10-08).** The Review roles tab is gone; Reviews › Roles & prompts on the Settings page draws the same blocks and `coai.editRoles` opens that place — see *E5.1c* at the end of this file.
+
 `coai-mcp` 0.19.0 reads `COAI_ROLES` and nothing wrote it, so a person who wanted the gate to check
 a CV or a set of requirements had to hand-write JSON into `settings.json` and hand-place a markdown
 file beside it. **`rolesPage.ts` + `rolesPanel.ts`** is the fourth page of the shape this extension
@@ -9551,6 +9555,8 @@ Six notification sites (census 132 → 138), a help article `move-your-config` i
 
 ## The Edit commands page (2026-09-24, issue #467, Epic B)
 
+> **Deleted in E5.1 (2026-10-08).** The Gate commands tab is gone; Reviews › Commands on the Settings page draws the same blocks and `coai.editCommands` opens that place — see *E5.1c* at the end of this file.
+
 `coai.editCommands` (the Gate section's **Edit commands…**) opens `commandsPanel.ts`, a thin host over three
 pure modules in the roles page's shape (issue #338's):
 
@@ -11325,18 +11331,19 @@ shell the arguments go as they are.
 
 E5.1 deletes `rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and the old page's settings sections. The new page,
 the editing cores and the panel provider took builders, contracts and handlers from them, so those moved first, into
-modules of their own, as a pure move: no behaviour and no markup changed. The old pages still work; they import from
-the new modules, never the other way.
+modules of their own, as a pure move: no behaviour and no markup changed. The old pages imported from the new modules,
+never the other way — and since E5.1 step 4 deleted the three tabs (*E5.1c* below), the new page and the cores are the
+only users. The table names the users as they are now.
 
 | Module | Holds | Used by |
 |---|---|---|
-| `rolesMessages.ts` | `RolesCommand`, `roleEdit`, `rolesFieldOf`, `ROLE_TABS`, `isShippedPrompt` | `rolesHost`, `rolesEdit`, `panelProvider`, `rolesPanel`, `rolesPage` |
-| `rolesBlocks.ts` | `roleBlock` (+ `RoleBlockOptions`), `canActivate`, `canDeactivate`, `tooOldFor`, `unknownServerNote`, `CUSTOM_ROLES_SINCE`, `stageIsFull`, `strandedHtml` | `rolesEmbed`, `rolesPage`, `panelView` |
-| `commandsMessages.ts` | `PageCommand`, `commandEdit`, `STAGE_NAMES` | `commandsHost`, `panelProvider`, `commandsPanel`, `commandsBlocks` |
-| `commandsBlocks.ts` | `customBlock`, `shippedBlock`, `CommandAttrs`, `commandsSkewNote` | `commandsEmbed`, `commandsPage` |
-| `chatPresetsMessages.ts` | `PresetCommand`, `presetEdit`, `editedRows`, `editRepaints`, `presetSettlesAs` | `chatPresetsHost`, `chatModelEdits`, `panelProvider`, `chatPresetsPanel` |
-| `chatPresetBlocks.ts` | `promptBlock`, `PresetAttrs` | `chatTabEmbed`, `chatPresetsPage` |
-| `test/pageScriptHarness.ts` | the DOM shim every page test runs on: `Node`, `runPageHtml`, `presses`, `Page` | every page test; `rolesPageHarness.ts` keeps `runRolesPage` alone |
+| `rolesMessages.ts` | `RolesCommand`, `roleEdit`, `rolesFieldOf`, `ROLE_TABS`, `isShippedPrompt` | `rolesHost`, `rolesEdit`, `panelProvider` |
+| `rolesBlocks.ts` | `roleBlock` (+ `RoleBlockOptions`), `canActivate`, `canDeactivate`, `tooOldFor`, `unknownServerNote`, `CUSTOM_ROLES_SINCE`, `stageIsFull`, `strandedHtml` | `rolesEmbed`, `panelView` |
+| `commandsMessages.ts` | `PageCommand`, `commandEdit`, `STAGE_NAMES` | `commandsHost`, `panelProvider`, `commandsBlocks` |
+| `commandsBlocks.ts` | `customBlock`, `shippedBlock`, `CommandAttrs`, `commandsSkewNote` | `commandsEmbed` |
+| `chatPresetsMessages.ts` | `PresetCommand`, `presetEdit`, `editedRows`, `editRepaints`, `presetSettlesAs` | `chatPresetsHost`, `chatModelEdits`, `panelProvider` |
+| `chatPresetBlocks.ts` | `promptBlock`, `PresetAttrs` | `chatTabEmbed` |
+| `test/pageScriptHarness.ts` | the DOM shim every page test runs on: `Node`, `runPageHtml`, `presses`, `Page` | every page test; `rolesPlaceHarness.ts` runs Reviews › Roles & prompts (`runRolesPlace`) since `rolesPageHarness.ts` went with the tab |
 
 - **The old sections by name.** `panelView` exports `gateBody`, `keysBody`, `sideBody`, `serverBody`, and two wrappers
   that both pages draw through — `limitsSection` (the round-limit note counts the reviewers on for code) and
@@ -11502,4 +11509,48 @@ flowchart LR
     RO --> EC["settingsShape.enabledCodeRoles"]
     PP["PanelProvider.roleEdited"] -->|"queueRoleEdit(command, roleSwitches)"| GE
   end
+```
+
+## E5.1c — the three tabs are gone; their commands are redirects (2026-10-08, PLAN_one_model_catalog.md E5.1 step 4)
+
+The Review roles, Gate commands and Chat presets tabs are deleted: `rolesPage.ts`, `rolesPanel.ts`, `commandsPage.ts`,
+`commandsPanel.ts`, `chatPresetsPage.ts`, `chatPresetsPanel.ts`. Their editors had been places of the Settings page since
+E4.3, E4.4 and E4.6b — the same blocks (`rolesBlocks`, `commandsBlocks`, `chatPresetBlocks`) posting into the same editing
+cores (`rolesHost`, `commandsHost`, `chatPresetsHost`) — so nothing a person could do on a tab is lost; each test the tabs
+held asks the same of the place now.
+
+- **The commands stay, as redirects, for one more release** (`editorRedirects.ts`, the way T5 keeps the restore command),
+  so a keybinding or a habit still lands somewhere useful. `EDITOR_PLACES` is the one table:
+
+  | Command | Opens the Settings page at |
+  |---|---|
+  | `coai.editRoles` | `reviews/roles` — Roles & prompts |
+  | `coai.editCommands` | `reviews/commands` — Commands |
+  | `coai.editChatPresets` | `chat` — Chat |
+
+  Each redirect first makes the Settings slot paint the NEW page (`setSettingsPreview(true)`) — while the preview switch
+  exists the current page is the default and holds none of the three editors — then opens the one Settings tab at its
+  place. The current page's *Edit roles… / Edit commands… / Edit presets…* buttons post these commands, so they lead
+  there too. `editorRedirects.test.ts` runs one row per command and names each one's OWN place, so crossed wires fail.
+- **`rolesKnowTheServer` is gone, and `told()` with it.** It handed the server's version to the roles tab, which drew
+  its own version-skew banner; the place reads `state.roles.serverVersion` from the panel's own state.
+- **A saved model this build cannot read is named on Chat.** The presets tab named model presets saved before a preset
+  carried its own vendor (`chatPresets.unreadableModels`) and asked for them to be added again; Chat had no such line,
+  so the delete would have made them silent. `ChatSettings.unreadable` is read with the models, from the same presets,
+  and `chatTabEmbed` names them with what to do (*add it again on Models, ticked Chat*).
+- **Out of the build:** the three panels' `sonar.coverage.exclusions` entries, the two pages' eslint suppressions
+  (pruned), and `render-page.mjs`'s `roles` / `commands` / `presets` targets (`catalog:reviews/roles`,
+  `catalog:reviews/commands`, `catalog:chat` draw the same).
+
+```mermaid
+flowchart LR
+  K[keybinding / palette / Edit … button] --> C{coai.editRoles<br/>coai.editCommands<br/>coai.editChatPresets}
+  C -->|editorRedirects| N[useTheNewPage]
+  N --> O[openSettings at EDITOR_PLACES place]
+  O --> R[Reviews › Roles & prompts]
+  O --> M[Reviews › Commands]
+  O --> H[Chat]
+  R --> RH[rolesHost]
+  M --> CH[commandsHost]
+  H --> PH[chatPresetsHost]
 ```
