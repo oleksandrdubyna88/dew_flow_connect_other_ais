@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
 import { chatSettingsFrom, clearedByWriting } from './chatSettings';
+import { userChatPresets } from './modelKeys';
 import { phrasesFrom, type Phrase } from './phrases';
 import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
@@ -1275,8 +1276,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // would only invite somebody to add them to it one day and split the one reader in two. The
       // door, not `config.get`: `chatModel` and `chatModelPresets` are model keys, which a
       // workspace may not set (`modelKeys.ts`).
-      // This side's: the chat model and its name are per side (E4.6a, D8).
-      chat: chatSettingsFrom(this.read(config)),
+      // This side's: the chat model and its name are per side (E4.6a, D8). The presets as the MOVE reads them, so Chat
+      // raises only a conflict the move recorded and a choice can settle (R7's code round, finding 6).
+      chat: chatSettingsFrom(this.read(config), userChatPresets(config)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section, so the markup the paint key is built from changes with it.
       phrases: this.phrases(),

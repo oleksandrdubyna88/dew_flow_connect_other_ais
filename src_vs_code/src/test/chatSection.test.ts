@@ -28,6 +28,7 @@ const chat: ChatSettings = {
   promptChoice: '',
   prompts: [],
   models: [],
+  conflicts: [],
   language: 'en',
   autoSend: 'keyboard',
   model: '',

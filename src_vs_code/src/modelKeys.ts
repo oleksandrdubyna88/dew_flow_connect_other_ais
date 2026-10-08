@@ -50,6 +50,22 @@ export function userLayerReader(merged: ConfigReader, inspect: Inspect): ConfigR
   return (section) => (MODEL_KEYS.includes(section) ? userLayerValue(inspect(section)) : merged(section));
 }
 
+/** The two reads of a configuration this rule needs — `vscode.WorkspaceConfiguration`'s, narrowed so this stays vscode-free. */
+export interface LayeredConfig {
+  get(section: string): unknown;
+  inspect(section: string): Inspected | undefined;
+}
+
+/**
+ * The chat model presets as the chat, the move into the catalog and a choice on Chat ALL read them: the person's own
+ * layer, the shipped presets included when they never changed them (todo/PLAN_one_model_catalog.md, R7's code round,
+ * finding 6). One reader, because a conflict is the preset compared with what the MOVE recorded — read from any other
+ * layer, Chat could raise a conflict the move never saw and a choice could not settle.
+ */
+export function userChatPresets(config: LayeredConfig): unknown {
+  return userLayerReader((section) => config.get(section), (section) => config.inspect(section))('chatModelPresets');
+}
+
 /** The user layer's value, or the manifest default when the person set none. */
 function userLayerValue(inspected: Inspected | undefined): unknown {
   return inspected?.globalValue ?? inspected?.defaultValue;

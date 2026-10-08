@@ -948,7 +948,43 @@ now, by the owner's decision): an OLD coai-mcp still running re-reads the settin
 before the new fields are enabled; then the installed binary's `--features` are checked, the extension activated, and
 the written file read back. Full consultant behaviour needs a binary that lists `consultantRow`.
 
-**Progress, 2026-10-07: prerequisite (b) is done** on branch `refactor/catalog-e5-extract`, as a pure move (no behaviour
+**R7, designed 2026-10-07 (prerequisite (a)).** Mapped first: the move record (`chatPresetMove.MovedPreset`, stored as
+`coai.chatPresetsMoved`) holds `presetId, runtime, model, name, rowId` and no launch fields; `wasMoved` fingerprints on
+those four, so an older build's edit of a CLI path, endpoint, starting text, Team server, remote vendor or the main tick
+is silently `unchanged`, and an edit of name, model or runtime is a second row (`chat-<id>-2`) with a second entry for the
+same `presetId`. And two readers disagree about such a pair: `catalogChatStep.recordedEntryOf` takes the NEWEST entry,
+`chatCatalogModels.movedTo` (a legacy conversation id) the OLDEST.
+- **The record carries a snapshot of EVERYTHING the move copies** (the plan round, finding 2): a new entry gains an
+  optional `copied` — the name, runtime and model AND every launch field `rowOf` copies, as they were moved. A conflict
+  compares the preset with the snapshot, never with the live row, so resolving one ends it. Optional, so every record
+  written before it still parses (`movedRecordFrom` keeps a 5-field entry).
+- **An edit after the move is a conflicting revision of the SAME preset, never a new row.** The move matches a preset to
+  its entry by `presetId`, taking the NEWEST entry for that id (finding 5 — as `recordedEntryOf` does); it is a revision
+  when anything in the snapshot differs from the preset. A revision is not moved and does not touch the row: it is
+  recorded as pending, and the row keeps working as it is.
+- **An entry with no snapshot** (written before it existed) takes its snapshot from its ROW on disk, at its first read
+  by this build (finding 4): an older build's edit already made to the preset then differs from the row, and is raised
+  as a conflict instead of being silently lost. Where the row is gone (the person deleted it — and a deleted row stays
+  deleted), or the preset is gone, the entry is left as it is and raises nothing (finding 3); nothing is read from a
+  value that is not there. Known cost: a row the person edited in the NEW page differs from its old preset too, so it
+  may be raised once; *Keep the row* ends it.
+- **The conflict shows on Chat** (the Settings page's Chat tab, beside the stranded-pick block, `chatTabEmbed`): the row
+  as it is, the preset's edited values, and two choices — *Use the edited values* (the row takes them; the snapshot
+  takes the preset's whole state) or *Keep the row* (the snapshot takes the preset's whole state, the row unchanged).
+- **The choice is durable**: it is written to the record (the snapshot), not to memory, so it survives a reload, a
+  window and a restart; a later, DIFFERENT edit raises the conflict again.
+- **One reader for a pair already on disk** (a record that holds two entries for one id, written by epic 4's code):
+  both readers take the NEWEST, the row an older-build edit went to — `movedTo` changes to match `recordedEntryOf`.
+- **Tests, first**: an edit of EACH field the snapshot holds — the list derived from what `rowOf` copies, not written
+  out by hand (finding 1) — raises a conflict and makes no second row; each choice, and the conflict gone after it; the
+  choice surviving a reload (the record read back); a later different edit raising it again (finding 7); a 5-field
+  record snapshotted from its row, raising an older-build edit and nothing for an unedited preset; a deleted row or a
+  deleted preset raising nothing and throwing nothing; a legacy conversation id on a two-entry record resolving to the
+  newest; the restore still clearing the record. **And the page itself** (findings 0, 6): the assembled Settings page
+  run against the DOM shim, as `bundledPage.test.ts` runs pages, both choices clicked — the right message posted, no
+  other row's action triggered — and the host applying it to the record.
+
+**Progress, 2026-10-07: prerequisite (b) is done and merged (PR #699)** — on branch `refactor/catalog-e5-extract`, as a pure move (no behaviour
 or markup change). The builders, contracts and handlers are in `rolesMessages.ts`, `rolesBlocks.ts`, `commandsMessages.ts`,
 `commandsBlocks.ts`, `chatPresetsMessages.ts` and `chatPresetBlocks.ts`; the page-test shim is `test/pageScriptHarness.ts`
 (`rolesPageHarness.ts` keeps `runRolesPage`); `panelView` exports the moved sections' builders and
@@ -961,6 +997,48 @@ not only the six new-page tests (`pageTree.ts`, which those tests read the page 
 harness); and `roleEdit`, `presetEdit`, `roleBlock`, a role prompt's block and the version comparison were split into
 smaller functions, because the new modules are held to `complexity: 4` and the CI ratchet refuses a suppression in a new
 file — output compared with the previous build and identical.
+
+**Progress, 2026-10-07: prerequisite (a), R7, is built on branch `feat/catalog-e5-r7`** (not pushed, no PR yet). The
+snapshot is `MovedPreset.copied` over `chatPresetMove.COPIED_FIELDS`, which `rowOf` is now built from (`copiedOf`);
+the match is the id, the newest entry (`entryOf`); an entry without a snapshot takes one from its row (`snapshotted`,
+written by the migration); the conflict and both choices are `chatPresetRevision.ts` (pure), the page block
+`chatTabEmbed.conflictBlock`, the message `presetEdit`'s `revision`, the host `chatPresetsHost.applyRevision`; `movedTo`
+takes the newest entry (research/module_extension.md, "An older build's edit after the move is a revision"). Red first,
+each with the real symptom: a name edit made `chat-p-1-2` ("the edit made a second row"); a CLI-path edit raised no
+conflict (`[]`); a new entry had no `copied` (`undefined`); both choices wrote nothing (`[]` against
+`['vendors','chatPresetsMoved']` / `['chatPresetsMoved']`); a 5-field entry raised nothing for an on-disk edit; a deleted
+row came back as a second row; `movedTo('p-1')` gave `chat-p-1`, not the newest `chat-p-1-2`; the chat listed the
+edited preset `p-1` beside `chat-p-1`; a 5-field record owing a remap got no snapshot; on the page `presetEdit` read the
+message as `ignore`, no conflict block was drawn, and the source pin found no `revision` in the host. Deviations and
+consequences: `wasMoved` is the id alone (was a fingerprint), so a positional `preset-N` that shifted onto another preset
+is now raised as a conflict instead of moved into a row of its own (`chatPresetMove.test.ts` changed accordingly), and
+the chat never lists an edited preset beside its row; a choice also updates the entry's `runtime/model/name`, so an older
+build reading the record does not move the preset again; *Use the edited values* changes only the fields the edit
+changed (a person's own later edit of another field on Models is kept); a run that only writes snapshots still writes
+the remap an interrupted run owed (`opensOn` falls back to `remapOf`); `vaultKeyName` is in the snapshot (the move
+copies it) but no preset edit can change it — it is the id the entry is matched by. Not done: the host's VS Code binding
+is pinned by source reading, not run; `catalogChatStep.sameMove` (a side's inherited chat model) still compares
+fingerprints. (Both answered by the code round, next paragraph.)
+
+**Progress, 2026-10-07: R7's coai code round** (`proceed`, 8 of 8 reviewers, 10 findings, all accepted) — each fixed on
+the same branch, red first: (0) a real-editor scenario, `test/host/revisionScenario.ts` (the shipped migration moves the
+preset and makes no second row after an older build's edit; a workspace value raises nothing; *Keep the row*, then *Use
+the edited values* on the row the chat opens on, carried out by `applyRevisionChoice` with the window's real reads and
+read back from the real settings) — the webview click and `chatPresetsHost.revisionPorts` itself are not driven there;
+(1) no `as` in the fixtures — `test/settingsFileFixture.ts` reads JSON back through a type guard; (2) `entryOf` is the one
+newest-entry rule — `recordedEntryOf` calls it (red: "catalogChatStep.ts reverses the record"); (3) `entryOf` reads
+backwards and copies nothing (red: "one lookup read 1000 entries"); (4) a side's inherited chat model matches by id
+through `entryOf` — `sameMove` is gone (red: the side's `chatModel` write `undefined`, not `chat-a-2`); (5) *Use the
+edited values* writes `coai.chatModelName` = the preset's model when its row is `coai.chatModel` and the model changed
+(red: no `chatModelName` in the writes); (6) one reader of the presets, `modelKeys.userChatPresets`, for the migration,
+the panel's `chatSettingsFrom` and a choice (red: Chat raised a workspace value's name); (7) a choice always redraws —
+`applyRevisionChoice` answers `true` (red: "a settled conflict's card stays on Chat"); (8) the conflict and snapshot
+passes read the record once (`newestEntries`, `rowsById`; red: 90600 reads for 300 presets; teeth for the snapshot pass:
+90601); (9) a press disables both buttons of its block (red: `[false, false]`). Deviations: the host's choice moved into
+`chatPresetRevision.applyRevisionChoice` over `RevisionPorts`, so its order, stop-at-refusal and redraw are unit-tested;
+a refusal now names the key that was refused; `chatSettingsFrom` takes the presets as an optional second argument (the
+panel passes `userChatPresets(config)`; the chat command's callers still read them through `chatRead`, which is the
+user layer for this key unless a side's overlay holds it); `savedModels` keeps `userLayer(config)`, the same reader.
 
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the

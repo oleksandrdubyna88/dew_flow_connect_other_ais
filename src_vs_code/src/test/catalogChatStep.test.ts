@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { migrateLayer, MIGRATED, restoreLayer, RESTORED, type CatalogLayer, type LayerWrite } from '../catalogMigration';
 import { DEFAULT_VENDORS } from '../vendors';
+import { recordsIn } from './settingsFileFixture';
 
 /**
  * E4.6a of todo/PLAN_one_model_catalog.md, wired into the epic 1 migration: the chat presets move in the same run, in
@@ -71,24 +72,40 @@ test('a run interrupted after its record was written still points the chat model
   assert.equal(written(resumed, 'chatModel'), 'chat-a');
 });
 
-test('a preset an older build edited after the move, its run interrupted, ends on the EDITED row as an uninterrupted run does', () => {
-  // The own review of epic 4's code round: the record then holds two entries of id `a`, and the resume took the FIRST —
-  // the revision the person had edited away — while the uninterrupted run points the chat at the newest.
+test('a record epic 4 wrote with two entries for one preset, its run interrupted, ends on the NEWEST row', () => {
+  // The own review of epic 4's code round: epic 4's build moved an older build's edit into a second row, so its record
+  // holds two entries of id `a`, and the resume took the FIRST — the revision the person had edited away — while the
+  // uninterrupted run pointed the chat at the newest. Since R7 no build of this one writes such a pair (an edit is a
+  // revision, `anOlderBuildsEditIsARevision.test.ts`), so the pair is written here as epic 4 left it.
   const first = writes({ chatPresets: [preset('a')], chatModel: 'a' });
-  const edited = [preset('a', { model: 'sonnet' })];
-  const second = writes({
-    chatPresets: edited, vendors: written(first, 'vendors'), chatPresetsMoved: written(first, 'chatPresetsMoved'),
+  const rows = recordsIn(written(first, 'vendors'));
+  const revision = { ...rows.find((row) => row['id'] === 'chat-a'), id: 'chat-a-2', model: 'sonnet' };
+  const resumed = writes({
+    chatPresets: [preset('a', { model: 'sonnet' })], vendors: [...rows, revision],
+    chatPresetsMoved: [
+      { presetId: 'a', runtime: 'claude', model: 'opus', name: 'Name of a', rowId: 'chat-a' },
+      { presetId: 'a', runtime: 'claude', model: 'sonnet', name: 'Name of a', rowId: 'chat-a-2' },
+    ],
     chatModel: 'a', marker: MIGRATED, backup: written(first, 'migratedFrom'),
   });
-  const uninterrupted = written(second, 'chatModel');
-  const resumed = migrateLayer({
-    chatPresets: edited, vendors: written(second, 'vendors'), chatPresetsMoved: written(second, 'chatPresetsMoved'),
-    chatModel: 'a', marker: MIGRATED, backup: written(second, 'migratedFrom') ?? written(first, 'migratedFrom'),
-  });
-  const resumedWrites = resumed.kind === 'migrate' ? resumed.writes : [];
 
-  assert.equal(uninterrupted, 'chat-a-2', 'the fixture: the edited revision did not get its own row');
-  assert.equal(written(resumedWrites, 'chatModel'), uninterrupted, `the resume did not end where the uninterrupted run ends: ${JSON.stringify(resumed)}`);
+  assert.equal(written(resumed, 'chatModel'), 'chat-a-2', 'the resume opened on the revision the person had edited away');
+});
+
+test('a side that inherits the chat model finds ITS row for the preset by id, though an older build edited the preset (R7 finding 4)', () => {
+  // The user layer's entry for `a` and the side's carry different fingerprints — the side's preset was edited by an older
+  // build after the user layer settled its own conflict — and `sameMove` compared fingerprints, so the side kept opening
+  // on the unrelated `chat-a` its inherited id names. Every other reader matches by id, the newest entry.
+  const taken = [...DEFAULT_VENDORS.map((row) => ({ ...row })), { id: 'chat-a', runtime: 'codex', model: '', enabled: true, plan: false, code: true }];
+  const sideRow = { id: 'chat-a-2', name: 'Name of a', runtime: 'claude', model: 'opus', enabled: true, plan: false, code: false, document: false, baseUrl: '', executablePath: '', uses: ['chat'], vaultKeyName: 'a' };
+  const outcome = migrateLayer({
+    side: true, chatPresets: [preset('a', { name: 'Renamed by an older build' })], vendors: [...taken, sideRow],
+    chatPresetsMoved: [{ presetId: 'a', runtime: 'claude', model: 'opus', name: 'Name of a', rowId: 'chat-a-2' }],
+    userChatRecord: [{ presetId: 'a', runtime: 'claude', model: 'opus', name: 'Renamed by an older build', rowId: 'chat-a' }],
+    userChatModel: 'chat-a', marker: MIGRATED, backup: { keys: ['vendors', 'consultants', 'qconsultRows'], values: {} },
+  });
+
+  assert.equal(outcome.kind === 'migrate' ? written(outcome.writes, 'chatModel') : undefined, 'chat-a-2', `the side opens on somebody else's row: ${JSON.stringify(outcome)}`);
 });
 
 test('a run interrupted before the chat keys of a MAIN move ends where an uninterrupted run ends — row AND model', () => {

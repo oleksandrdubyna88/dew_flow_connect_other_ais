@@ -14,11 +14,20 @@ import { textControlFrom } from './textControls';
  * close a ring the import-cycle ratchet (`importCycles.test.mjs`) refuses.</p>
  */
 
+/**
+ * The two answers to a preset an older build edited after the move (todo/PLAN_one_model_catalog.md, epic 5 prerequisite
+ * (a), R7): `use` — the row takes the edited values — or `keep` — the row stays as it is. Either way the record's
+ * snapshot takes the preset's whole state (`chatPresetRevision.ts`). Declared here, beside the message that carries it,
+ * because this module imports nothing of the chat's.
+ */
+export type RevisionChoice = 'use' | 'keep';
+
 /** Every message a presets page can send, decided without a host so a test can reach the decision. */
 export type PresetCommand =
   | { readonly kind: 'edit'; readonly list: 'prompt' | 'model'; readonly id: string; readonly field: string; readonly value: string | boolean }
   | { readonly kind: 'add'; readonly list: 'prompt' | 'model' }
   | { readonly kind: 'remove'; readonly list: 'prompt' | 'model'; readonly id: string }
+  | { readonly kind: 'revision'; readonly presetId: string; readonly choice: RevisionChoice }
   | { readonly kind: 'zoom'; readonly delta: number }
   | { readonly kind: 'tone'; readonly delta: number }
   | { readonly kind: 'ignore' };
@@ -129,7 +138,16 @@ const READERS: Readonly<Record<string, (said: Record<string, unknown>) => Preset
   add: (said) => inList(said, (list) => ({ kind: 'add', list })),
   remove: (said) => inList(said, (list) => removalOf(list, idOf(said['id']))),
   edit: (said) => inList(said, (list) => editOf(list, said)),
+  revision: (said) => revisionOf(idOf(said['id']), said['choice']),
 };
+
+/**
+ * A choice on a preset an older build edited after the move (R7) — its preset id and one of the two answers, each
+ * compared by value as a field name is, so nothing else the page could send — `__proto__` included — is taken for one.
+ */
+function revisionOf(presetId: string, choice: unknown): PresetCommand {
+  return presetId.length > 0 && (choice === 'use' || choice === 'keep') ? { kind: 'revision', presetId, choice } : IGNORE;
+}
 
 /** The command a message about one of the two lists makes — or `ignore` when it names neither. */
 function inList(said: Record<string, unknown>, make: (list: 'prompt' | 'model') => PresetCommand): PresetCommand {

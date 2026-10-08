@@ -2917,3 +2917,53 @@ outside that range is told `default` exactly as before. Each path is driven agai
 
 **What it does NOT prove.** A real codex 0.110–0.130 completing a review: none can use this account's model with a
 ChatGPT login (the measurement's every run ended in a 400 after config load), so the fake CLI stands in for the release.
+
+## An older build's edit after the move is a revision (2026-10-07, R7 of `todo/PLAN_one_model_catalog.md` epic 5)
+
+The flow: a chat preset moves into the catalog → an older build edits the preset → this build reads it → Chat (the
+new Settings page) shows the row as it is and the edited values → the person presses *Use the edited values* or *Keep
+the row* → the choice is in the record and holds across a reload. Two files, pure parts and the page RUN:
+
+- **The move and the conflict** — `anOlderBuildsEditIsARevision.test.ts`: the field list DERIVED — every row field a
+  preset's own fields reach, observed by moving variants — equals `COPIED_FIELDS`; a new entry carries the snapshot; an
+  edit of EACH copied field (vaultKeyName aside: it is the preset id, the match key) makes no second row, leaves the row
+  untouched and raises a conflict naming that field; each choice (the row written before the record for *use*), the
+  conflict gone after the file is read back as JSON, and a later different edit raised again; a 5-field entry
+  snapshotted from its row (an on-disk edit raised, an unedited preset not, the run writing it with no new row, and an
+  owed remap written in the same run); a deleted row or preset raising nothing and throwing nothing; epic 4's two-entry
+  record read NEWEST by the move, the conflict and `movedTo`; the chat never listing the edited preset beside its row;
+  a revision `unchanged` in the migration and the restore still clearing the record.
+- **The page and the host** — `aRevisionShowsOnChat.test.ts`: the message read like its neighbours (junk → `ignore`);
+  the assembled Settings page drawn from a settings file through `chatSettingsFrom`, run against the DOM shim, the
+  block drawn with both values and both buttons; each button posting exactly its own numbered `chatPresets` message and
+  nothing else; that message carried through `presetEdit` → `revisionWrites` → the file → a reload, the block gone.
+- Changed with it: `chatPresetMove.test.ts` (a same-id edit is no longer a second row — the old "positional id that
+  shifted" test), `catalogChatStep.test.ts` (epic 4's two-entry record written by hand, since no build writes one now).
+- **Teeth** (each mutation compiled, went red, was restored): a field added to `COPIED_FIELDS` that the move does not
+  copy; a choice that writes without a conflict; the record dropped from `RESTORE_ORDER`; a snapshot reported as
+  changed on every run; every preset reported as edited.
+
+- **The code round's findings** (2026-10-07, all red first): `anOlderBuildsEditIsARevision.test.ts` counts the record's
+  index reads through a Proxy — one `entryOf` lookup reads ≤ 2 entries (red: 1000, the record copied), a 300-preset
+  conflict pass and a 300-entry snapshot pass each ≤ 3000 (red: 90600 / 90601); a source scan that no reader reverses
+  the record and `recordedEntryOf` calls `entryOf`; `chatModelName` written (between the row and the record) only when
+  the chat opens on that row and its model changed; `applyRevisionChoice` over in-memory ports answering "redraw" for a
+  settled conflict and stopping at a refused row write; `chatSettingsFrom` taking the move's presets, so a workspace
+  value raises nothing, and `userChatPresets` reading the user layer. `catalogChatStep.test.ts`: a side inheriting the
+  chat model finds its own row by id though the fingerprints differ. `aRevisionShowsOnChat.test.ts`: a press disables
+  both buttons of the block; the page's message is carried out by `applyRevisionChoice` itself; source pins on the
+  host's ports, the panel's and the migration's reader. Fixtures read back from JSON through a type guard
+  (`test/settingsFileFixture.ts`), never a cast.
+- **In a real editor** — `test/host/revisionScenario.ts`, the last of `npm run test:host`'s scenarios: the SHIPPED
+  extension's migration moves a preset (snapshot written) and, after an older build's edit, makes no second row; a
+  workspace-layer value of the presets raises nothing; *Keep the row* and then — after a later, different edit on the
+  row the chat opens on — *Use the edited values*, each the page's message read by `presetEdit` and carried out by
+  `applyRevisionChoice` with the window's real reads (`userChatPresets`, `chatRead`) and Global `update`s; the record,
+  the row and `chatModelName` read back from the real settings; the migration the row write triggers still makes no
+  second row and raises nothing.
+
+**What it does NOT prove.** The webview click in a real editor (a host cannot reach a webview's DOM — the press is the
+DOM-shim test's); `chatPresetsHost.revisionPorts` itself — it needs the bundled extension's own `ExtensionContext`, so
+the scenario hands the same reads and a Global `update` (what `saveSetting` does on a window without per-side
+settings) and its catalog turn is the compiled copy's, not the bundle's (it waits for the bundle's migration to go quiet
+instead); a per-side overlay write; the refusal notice's wording; and a real older build writing the file.

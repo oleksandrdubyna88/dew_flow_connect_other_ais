@@ -25,7 +25,14 @@ test('a preset becomes a chat row of its own, with every field and its vault key
     plan: false, code: false, document: false, baseUrl: '', executablePath: 'C:\\claude.exe', uses: ['chat'],
     chatStartingPrompt: 'You are an architect.', vaultKeyName: 'preset-lw3-1',
   });
-  assert.deepEqual(moved.record, [{ presetId: 'preset-lw3-1', runtime: 'claude', model: 'opus', name: 'Name of preset-lw3-1', rowId: 'chat-preset-lw3-1' }]);
+  assert.deepEqual(moved.record, [{
+    presetId: 'preset-lw3-1', runtime: 'claude', model: 'opus', name: 'Name of preset-lw3-1', rowId: 'chat-preset-lw3-1',
+    // R7: the snapshot of everything moved, what an older build's later edit is compared with.
+    copied: {
+      name: 'Name of preset-lw3-1', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: 'C:\\claude.exe',
+      chatStartingPrompt: 'You are an architect.', vaultKeyName: 'preset-lw3-1',
+    },
+  }]);
   assert.equal(moved.changed, true);
 });
 
@@ -78,13 +85,15 @@ test('after a collision, a retry adopts the row the interrupted run wrote — ne
   assert.equal(resumed.record[0]!.rowId, 'chat-p-1-2');
 });
 
-test('a recorded id with a different fingerprint is a different preset — a positional id that shifted', () => {
+test('a recorded id with a different fingerprint is the same preset, edited — never a second row', () => {
+  // R7 (epic 5 prerequisite (a)): this used to be moved into `chat-preset-2-2` as "a positional id that shifted"; an
+  // older build's edit of the name or model made exactly that second row. It is a revision now, raised on Chat
+  // (`anOlderBuildsEditIsARevision.test.ts`), and a shifted positional id is raised the same way.
   const first = chatMove({ presets: [preset('preset-2', { name: 'Fast', model: 'haiku' })], rows: BASE, record: [] });
   const shifted = chatMove({ presets: [preset('preset-2', { name: 'Deep', model: 'opus' })], rows: first.rows, record: first.record });
 
-  assert.equal(shifted.changed, true);
-  assert.deepEqual(shifted.rows.map((row) => row['id']).slice(-2), ['chat-preset-2', 'chat-preset-2-2']);
-  assert.equal(shifted.rows.at(-1)!['name'], 'Deep');
+  assert.equal(shifted.changed, false);
+  assert.deepEqual(shifted.rows, first.rows);
 });
 
 test('a mixed-case or odd id keeps no key name it cannot hold, and an id with nothing left still gets a row', () => {
