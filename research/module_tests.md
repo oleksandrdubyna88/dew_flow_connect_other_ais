@@ -2893,7 +2893,7 @@ Two halves, joined by the settings file:
 **What it does NOT prove.** That the vendor actually serves the fast tier: codex reports no tier in its output, and
 claude needs usage credits on this account (research/RESULTS_fast_mode_measured_2026-10-07.md).
 
-### The codex floor, through every launch path (2026-10-07, `todo/PLAN_codex_tier_floor.md`)
+### The codex floor, through every launch path (2026-10-07, `research/PLAN_codex_tier_floor.md`)
 
 The flow: a row left at Off (the default) on a codex 0.110–0.130 — which refuse `service_tier=default` at config load
 (research/RESULTS_codex_service_tier_versions_2026-10-07.md) — is launched with no tier on every path, and a release

@@ -17,7 +17,7 @@
     "",
     "fastMode.refusesStandard (codex only): the releases, both ends included and compared as numbers, that refuse to be",
     "told the standard tier - they take only `fast` or `flex`, and `service_tier=default` fails the launch at config load",
-    "(measured: research/RESULTS_codex_service_tier_versions_2026-10-07.md; the fix: todo/PLAN_codex_tier_floor.md). An",
+    "(measured: research/RESULTS_codex_service_tier_versions_2026-10-07.md; the fix: research/PLAN_codex_tier_floor.md). An",
     "Off row on such a release is sent no tier at all; On still sends `fast`."
   ],
   "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api"],

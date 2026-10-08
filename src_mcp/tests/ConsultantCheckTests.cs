@@ -133,7 +133,7 @@ public sealed class ConsultantCheckTests : IDisposable
 
     /// <summary>
     /// The check launches its consultant the way a consultation does, so it asks the installed codex its release first
-    /// (todo/PLAN_codex_tier_floor.md): an Off row on 0.120.0 — which refuses <c>service_tier=default</c> at config load,
+    /// (research/PLAN_codex_tier_floor.md): an Off row on 0.120.0 — which refuses <c>service_tier=default</c> at config load,
     /// and so would fail every check — is sent no tier; one on 0.160.0 is sent exactly what it was before.
     /// </summary>
     [Theory]

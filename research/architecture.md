@@ -128,7 +128,7 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   reviewer, consultant, question row — as codex's `-c service_tier=default|fast` or claude's one-key `--settings`
   file; the chat applies the same rule with its own file. `--providers` reports the REQUESTED state; what the
   vendor grants is the vendor's (a claude account without usage credits holds On off).
-  *Since [PLAN_codex_tier_floor.md](../todo/PLAN_codex_tier_floor.md) (2026-10-07):* what codex is told also depends on
+  *Since [PLAN_codex_tier_floor.md](PLAN_codex_tier_floor.md) (2026-10-07):* what codex is told also depends on
   the INSTALLED release — codex 0.110–0.130 refuse `service_tier=default` at config load
   ([measured](RESULTS_codex_service_tier_versions_2026-10-07.md)), so an Off row there is sent no tier. The refusing
   range is data (the codex `fastMode` row's `refusesStandard`, checked by both halves). Every launch path asks the

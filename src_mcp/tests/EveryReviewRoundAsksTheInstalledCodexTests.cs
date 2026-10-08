@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Every review round asks the installed codex its release before it builds the roster, and an Off codex row on a release
-/// that refuses the standard tier is sent no tier at all (todo/PLAN_codex_tier_floor.md, build step 4) — the plan round,
+/// that refuses the standard tier is sent no tier at all (research/PLAN_codex_tier_floor.md, build step 4) — the plan round,
 /// the code round with its security lane, and the document round, each through the real service.
 /// </summary>
 /// <remarks>

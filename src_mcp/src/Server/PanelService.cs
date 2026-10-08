@@ -290,7 +290,7 @@ public sealed class PanelService
 
     /// <summary>
     /// The health's sentence — and, for an Off codex row whose installed release refuses the standard tier, what its
-    /// launches are sent instead (todo/PLAN_codex_tier_floor.md), so the card does not claim a state the launch did not send.
+    /// launches are sent instead (research/PLAN_codex_tier_floor.md), so the card does not claim a state the launch did not send.
     /// </summary>
     /// <remarks>
     /// Read off the version the health probe ALREADY asked for — one <c>--version</c> per row, as before — and in the note
@@ -661,7 +661,7 @@ public sealed class PanelService
                 var round = session.State.RoundsRunThisStage + 1;
                 var roles = _settings.Rounds.RolesForRound(Stage.PlanReview, round);
                 // Asked before the roster is built, every round: an Off codex row on 0.110–0.130 must be sent no tier
-                // (todo/PLAN_codex_tier_floor.md).
+                // (research/PLAN_codex_tier_floor.md).
                 var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
 
                 return WithNothingSkippedByRule(
@@ -838,7 +838,7 @@ public sealed class PanelService
                     _roster.Security().Due(Stage.CodeReview, round), collected.Files,
                     new Runners.Feature.SourceResolver(new Runners.Collecting.GitHistory(_launcher),
                         new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
-                // The ordinary reviewers' codex and the security lane's alike (todo/PLAN_codex_tier_floor.md).
+                // The ordinary reviewers' codex and the security lane's alike (research/PLAN_codex_tier_floor.md).
                 var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
@@ -1189,7 +1189,7 @@ public sealed class PanelService
 
                     var round = running.State.RoundsRunThisStage + 1;
                     var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
-                    // As every review stage does before it builds (todo/PLAN_codex_tier_floor.md).
+                    // As every review stage does before it builds (research/PLAN_codex_tier_floor.md).
                     var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
 
                     return WithNothingSkippedByRule(

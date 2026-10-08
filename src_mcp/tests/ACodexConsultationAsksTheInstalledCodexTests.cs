@@ -5,7 +5,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A codex consultation asks the installed codex its release before every turn, and an Off row on a release that refuses
-/// the standard tier is sent no tier at all (todo/PLAN_codex_tier_floor.md, build step 4): the first turn and the resumed
+/// the standard tier is sent no tier at all (research/PLAN_codex_tier_floor.md, build step 4): the first turn and the resumed
 /// one, through the real <c>consult</c> flow — the shape <c>CodexConsultant.PrepareAsync</c> exists for.
 /// </summary>
 /// <remarks>

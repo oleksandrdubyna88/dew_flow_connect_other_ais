@@ -107,7 +107,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
         new("astra", "codex", "codex", "gpt-6-astra", string.Empty, FakeCliExe, string.Empty, prompt, Enabled: true);
 
     /// <summary>
-    /// A codex question row asks the installed codex its release before it launches (todo/PLAN_codex_tier_floor.md): an Off
+    /// A codex question row asks the installed codex its release before it launches (research/PLAN_codex_tier_floor.md): an Off
     /// row on 0.120.0 — which refuses <c>service_tier=default</c> at config load, and so failed every question row there —
     /// is sent no tier; one on 0.160.0 is sent exactly what it was before. The probe runs with the server's environment, so
     /// the steering FILE answers its <c>--version</c> too.
