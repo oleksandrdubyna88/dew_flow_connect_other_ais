@@ -8,6 +8,7 @@ import { type PanelState, settingsHtml } from '../panelView';
 import { settingsFrom } from '../settingsShape';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { type Control, type Page, click, panelState, runPanel, work } from './panelPageHarness';
+import { pageTree, type PageNode } from './pageTree';
 
 /**
  * The Consultant tab's health block, RUN — the Settings page's own script over the markup the panel really renders
@@ -205,10 +206,30 @@ onBothPages('a pick that is a catalog row shows the failure the server reports f
   const deep = { vendor: 'deep-high', model: 'gpt-deep-1', runtime: 'codex', lastFailure: failure, failureCurrent: true };
   const page = run(on, { probe: answered(ALL.map((kind) => row(kind, kind === 'claude' ? deep : {}))) }, [], pickedDeep());
 
-  assert.match(page.html, /THE-PICKED-ROW-FAILED/u, 'the picked row\'s own failure was filtered away as another consultant\'s');
-  assert.match(page.html, /THE-ROW-CURE/u);
-  assert.doesNotMatch(page.html, /which is not what this row names now/u, 'the picked row\'s own facts were called another consultant\'s');
+  const claude = healthUnder(page, 'claude');
+  assert.match(claude, /THE-PICKED-ROW-FAILED/u, 'the picked row\'s own failure was filtered away as another consultant\'s');
+  assert.match(claude, /THE-ROW-CURE/u);
+  assert.doesNotMatch(claude, /which is not what this row names now/u, 'the picked row\'s own facts were called another consultant\'s');
 });
+
+/**
+ * The text of one caller's health block as the page shows it: the block under THAT caller's own pick — on either page the
+ * pick's select is a direct child of the caller's row — so a failure drawn under another caller is not read as this one's.
+ *
+ * <p>The drawn tree IS what the running page shows here (PR #711, CodeRabbit): the page's script changes content only in
+ * its live regions (`live-*`, read through `page.region`) and the nodes it inserts beside a control, and the block is
+ * asserted to sit in no live region, so nothing the script does can replace it after load.</p>
+ */
+function healthUnder(page: Page, caller: string): string {
+  const tree = pageTree(page.html);
+  const row = tree.one((node) => node.tagName === 'DIV' && node.children.some((child) => child.tagName === 'SELECT' && child.dataset.caller === caller), `${caller}'s row`);
+  const sections = row.find((node) => node.tagName === 'SECTION' && node.className.split(' ').includes('consultant-health'));
+  assert.ok(sections.length > 0, `${caller}'s row draws no health block`);
+  const live: readonly PageNode[] = tree.find((node) => node.id.startsWith('live-')).flatMap((region) => region.all());
+  assert.ok(sections.every((section) => !live.includes(section)), `${caller}'s health block sits in a live region, so the script can replace it after load`);
+
+  return sections.map((section) => section.text()).join('\n');
+}
 
 onBothPages('the confinement line and the allow rule\'s text are on the page when the server sent them', (on) => {
   const limitation = { standing: 'unconfined', text: 'THE-LIMITATION-TEXT', evidence: 'source', source: 'documented upstream' };
