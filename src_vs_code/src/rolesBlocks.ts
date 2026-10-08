@@ -3,6 +3,7 @@ import { isShippedPrompt } from './rolesMessages';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { roleTone } from './roleTone';
+import { lastOn, switchedOn } from './rolesSwitch';
 
 /**
  * The pieces a roles page is drawn from: one role's block, the switch rules it is drawn by, and the notes around it.
@@ -55,9 +56,13 @@ export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
  *
  * <p>It is the rule the sidebar's code-role ticks have had since they shipped, applied to the plan
  * stage as well, which is what the operator asked for when they asked for plan-stage switches.</p>
+ *
+ * <p><b>ON is the one switch</b> (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b): a role the panel's
+ * `roleEnabled` switched off is not a reviewer, whatever the catalog says, so it does not keep a bucket populated. The
+ * new page passes its `roleEnabled`; the Review roles tab, which draws the catalog's switch alone, passes none.</p>
  */
-export function canDeactivate(rows: readonly RoleRow[], role: RoleRow): boolean {
-  return !isActive(role) || activeCount(rows, bucketOf(role)) > 1;
+export function canDeactivate(rows: readonly RoleRow[], role: RoleRow, roleEnabled: Readonly<Record<string, boolean>> = {}): boolean {
+  return !lastOn(rows, role, roleEnabled);
 }
 
 /**
@@ -92,14 +97,19 @@ function kindHint(role: RoleRow): string {
  * How a role block is drawn on the page that draws it. The new Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
  * a prompt `data-role-prompt` — its shared script reads `data-prompt` as a round pick — and shows ONE switch per role,
  * the catalog's and the panel's read as one (`rolesSwitch.ts`).
+ *
+ * <p>It hands the panel's switches rather than a predicate of its own, so a block's tick and its last-role refusal are
+ * both read by `rolesSwitch` — the tick through `switchedOn`, the refusal through `lastOn`, over the same switches
+ * (E5.1b). A predicate for the tick beside a count of the catalog for the refusal is how the two disagreed.</p>
  */
 export interface RoleBlockOptions {
   readonly promptAttr: string;
-  readonly on: (role: RoleRow) => boolean;
+  /** The panel's `roleEnabled` — empty for a page that draws the catalog's switch alone. */
+  readonly roleEnabled: Readonly<Record<string, boolean>>;
 }
 
-/** The Review roles tab's own: the catalog switch alone, and the attribute its script reads. */
-const OWN_PAGE: RoleBlockOptions = { promptAttr: 'data-prompt', on: isActive };
+/** The Review roles tab's own: the catalog switch alone (no panel switches), and the attribute its script reads. */
+const OWN_PAGE: RoleBlockOptions = { promptAttr: 'data-prompt', roleEnabled: {} };
 
 /** The prompt id, label and purpose a prompt block is drawn from — the fields of a role's prompt the page shows. */
 interface PromptShown {
@@ -155,14 +165,14 @@ function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): 
 
 export function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, options: RoleBlockOptions = OWN_PAGE): string {
   const shipped = isBuiltIn(role.id);
-  const on = options.on(role);
+  const on = switchedOn(role, options.roleEnabled);
 
   return `${detailsTag(role, on)}
   <summary>
 ${roleSummary(role, shipped)}
   </summary>
   <div class="fields">
-${roleFields(rows, role, texts, on)}
+${roleFields(rows, role, texts, options.roleEnabled)}
   </div>
 ${promptBlocks(role, texts, options.promptAttr)}
   <button type="button" class="add" data-add-prompt="${escapeHtml(role.id)}">Add a prompt</button>
@@ -182,10 +192,13 @@ function roleSummary(role: RoleRow, shipped: boolean): string {
 }
 
 /** What a role's fields say and allow: its name, its stage, its kind, its switch, and why any of them is fixed. */
-function roleFields(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, on: boolean): string {
+function roleFields(
+  rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>, roleEnabled: Readonly<Record<string, boolean>>,
+): string {
   const shipped = isBuiltIn(role.id);
-  const may = mayFlip(rows, role, on);
-  const last = on && !canDeactivate(rows, role);
+  const on = switchedOn(role, roleEnabled);
+  const may = mayFlip(rows, role, on, roleEnabled);
+  const last = lastOn(rows, role, roleEnabled);
 
   return `${nameField(role, shipped)}
 ${stageField(stageOf(role), shipped)}
@@ -199,10 +212,11 @@ ${stageField(stageOf(role), shipped)}
 
 /**
  * Whether the switch may move from where it is. Off by the panel's switch alone, a role the catalog holds active may
- * always be switched on: that write moves no count of the catalog's.
+ * always be switched on: that write moves no count of the catalog's. ON, it may be switched off unless it is the last
+ * role ON in its bucket by the one switch.
  */
-function mayFlip(rows: readonly RoleRow[], role: RoleRow, on: boolean): boolean {
-  return on ? canDeactivate(rows, role) : canActivate(rows, role) || isActive(role);
+function mayFlip(rows: readonly RoleRow[], role: RoleRow, on: boolean, roleEnabled: Readonly<Record<string, boolean>>): boolean {
+  return on ? canDeactivate(rows, role, roleEnabled) : canActivate(rows, role) || isActive(role);
 }
 
 function nameField(role: RoleRow, shipped: boolean): string {

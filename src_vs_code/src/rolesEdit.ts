@@ -3,6 +3,7 @@ import {
   isBuiltIn, promptIdFor, promptIdsInUse, stageOf, whyNotAskable, type RoleRow,
 } from './roles';
 import { isShippedPrompt, type RolesCommand } from './rolesMessages';
+import { lastOn } from './rolesSwitch';
 
 /**
  * What one command from the roles page does to the rows — every rule, and nothing a host can do.
@@ -60,6 +61,12 @@ export function rowsAfter(
    * Empty means none are known, and a role of one's own with none is not switched on.
    */
   texts: Readonly<Record<string, string>> = {},
+  /**
+   * The panel's own switch per role (`roleEnabled`) — what decides, with the catalog's `active`, whether a role is ON and
+   * so whether it is the last ON in its bucket (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b). The new
+   * page's edits hand it in; empty reads the catalog alone, which is all the Review roles tab draws.
+   */
+  roleEnabled: Readonly<Record<string, boolean>> = {},
 ): RowsOutcome {
   // `text` is a FILE and `restorePrompt` deletes one; zoom and tone are different settings entirely; and
   // `finishDeletion` and `reloadWindow` are about a deletion that has already left the rows. All of
@@ -75,10 +82,10 @@ export function rowsAfter(
     return added(current, reserved);
   }
   if (command.kind === 'remove') {
-    return removed(current, command.id);
+    return removed(current, command.id, roleEnabled);
   }
 
-  return onRow(current, command, texts);
+  return onRow(current, command, texts, roleEnabled);
 }
 
 /**
@@ -110,7 +117,7 @@ function added(current: readonly RoleRow[], reserved: ReadonlySet<string>): Rows
  * <p>Left behind, those files come BACK: the next role called "Requirements" generates the same id,
  * which generates the same prompt id, and opens with text the person believed they had deleted.</p>
  */
-function removed(current: readonly RoleRow[], id: string): RowsOutcome {
+function removed(current: readonly RoleRow[], id: string, roleEnabled: Readonly<Record<string, boolean>>): RowsOutcome {
   if (isBuiltIn(id)) {
     return refused('That is a role this product ships — it can be switched off, but not removed.');
   }
@@ -119,7 +126,7 @@ function removed(current: readonly RoleRow[], id: string): RowsOutcome {
   if (mine === undefined) {
     return UNCHANGED;
   }
-  if (lastStanding(mine, current)) {
+  if (lastStanding(mine, current, roleEnabled)) {
     return refused(EMPTY_STAGE);
   }
 
@@ -136,6 +143,7 @@ function onRow(
     kind: 'ignore' | 'zoom' | 'tone' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
   }>,
   texts: Readonly<Record<string, string>>,
+  roleEnabled: Readonly<Record<string, boolean>>,
 ): RowsOutcome {
   const mine = current.find((r) => r.id === command.id);
   const known = mine ?? (isBuiltIn(command.id) ? { id: command.id } : undefined);
@@ -143,7 +151,7 @@ function onRow(
     return UNCHANGED;
   }
 
-  const outcome = changed(known, command, current, texts);
+  const outcome = changed(known, command, current, texts, roleEnabled);
   if (outcome.kind !== 'rows') {
     return outcome;
   }
@@ -164,9 +172,10 @@ function changed(
   }>,
   all: readonly RoleRow[],
   texts: Readonly<Record<string, string>>,
+  roleEnabled: Readonly<Record<string, boolean>>,
 ): RowsOutcome {
   if (command.kind === 'edit') {
-    return edited(row, command, all, texts);
+    return edited(row, command, all, texts, roleEnabled);
   }
   if (command.kind === 'addPrompt') {
     const label = 'A new prompt';
@@ -187,6 +196,7 @@ function edited(
   { field, value }: { readonly field: string; readonly value: string | boolean },
   all: readonly RoleRow[],
   texts: Readonly<Record<string, string>>,
+  roleEnabled: Readonly<Record<string, boolean>>,
 ): RowsOutcome {
   if (fixedOnShipped(row, field)) {
     return refused(
@@ -196,10 +206,10 @@ function edited(
     );
   }
   if (field === 'active') {
-    return switched(row, value === true, all, texts);
+    return switched(row, value === true, all, texts, roleEnabled);
   }
   if (field === 'stage') {
-    return restaged(row, String(value), all);
+    return restaged(row, String(value), all, roleEnabled);
   }
 
   return stored([{ ...row, [field]: value }]);
@@ -225,9 +235,13 @@ const EMPTY_STAGE =
 /** And the sentence for a stage that already has as many as it may run. */
 const STAGE_FULL = 'Five roles are already active in that stage. Switch one off to make room.';
 
-/** Whether this role is the last reviewer its stage has. */
-function lastStanding(row: RoleRow, all: readonly RoleRow[]): boolean {
-  return isActive(row) && activeCount(all, bucketOf(row)) <= 1;
+/**
+ * Whether this role is the last reviewer its stage has — the last one ON in its bucket by the ONE switch
+ * (`rolesSwitch.lastOn`), the count the page's block refuses by too (todo/PLAN_one_model_catalog.md E5.1b). Counting
+ * the catalog's `active` alone let a role go while the only other one was switched off by `roleEnabled`.
+ */
+function lastStanding(row: RoleRow, all: readonly RoleRow[], roleEnabled: Readonly<Record<string, boolean>>): boolean {
+  return lastOn(all, row, roleEnabled);
 }
 
 /**
@@ -235,8 +249,10 @@ function lastStanding(row: RoleRow, all: readonly RoleRow[]): boolean {
  *
  * <p>The page disables both of these; this is the twin that catches a webview posting anyway.</p>
  */
-function switched(row: RoleRow, on: boolean, all: readonly RoleRow[], texts: Readonly<Record<string, string>>): RowsOutcome {
-  const why = on ? whyNotOn(row, all, texts) : whyNotOff(row, all);
+function switched(
+  row: RoleRow, on: boolean, all: readonly RoleRow[], texts: Readonly<Record<string, string>>, roleEnabled: Readonly<Record<string, boolean>>,
+): RowsOutcome {
+  const why = on ? whyNotOn(row, all, texts) : whyNotOff(row, all, roleEnabled);
 
   return why.length > 0 ? refused(why) : stored([{ ...row, active: on }]);
 }
@@ -258,8 +274,8 @@ function whyNotOn(row: RoleRow, all: readonly RoleRow[], texts: Readonly<Record<
   return whyNotAskable(row, texts);
 }
 
-function whyNotOff(row: RoleRow, all: readonly RoleRow[]): string {
-  return lastStanding(row, all) ? EMPTY_STAGE : '';
+function whyNotOff(row: RoleRow, all: readonly RoleRow[], roleEnabled: Readonly<Record<string, boolean>>): string {
+  return lastStanding(row, all, roleEnabled) ? EMPTY_STAGE : '';
 }
 
 /**
@@ -270,20 +286,20 @@ function whyNotOff(row: RoleRow, all: readonly RoleRow[]): string {
  * changes. So does one "moved" to the stage it is already in, which is what a select fires when
  * somebody opens it and picks the same thing.</p>
  */
-function restaged(row: RoleRow, to: string, all: readonly RoleRow[]): RowsOutcome {
+function restaged(row: RoleRow, to: string, all: readonly RoleRow[], roleEnabled: Readonly<Record<string, boolean>>): RowsOutcome {
   const moved: RoleRow = { ...row, stage: to };
   if (!isActive(row) || to === stageOf(row)) {
     return stored([moved]);
   }
 
-  const why = whyNotMoved(row, to, all);
+  const why = whyNotMoved(row, to, all, roleEnabled);
 
   return why.length > 0 ? refused(why) : stored([moved]);
 }
 
 /** What is wrong with the move, or nothing at all. */
-function whyNotMoved(row: RoleRow, to: string, all: readonly RoleRow[]): string {
-  if (lastStanding(row, all)) {
+function whyNotMoved(row: RoleRow, to: string, all: readonly RoleRow[], roleEnabled: Readonly<Record<string, boolean>>): string {
+  if (lastStanding(row, all, roleEnabled)) {
     return EMPTY_STAGE;
   }
 

@@ -1,7 +1,6 @@
 import { FEATURE_CODE, FEATURE_DOCUMENT, PLAN_CODE, PLAN_DOCUMENT, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, type RoleRow } from './roles';
 import type { Tombstone } from './roleDeletion';
 import { roleBlock, stageIsFull, strandedHtml, tooOldFor, unknownServerNote, type RoleBlockOptions } from './rolesBlocks';
-import { switchedOn } from './rolesSwitch';
 
 /**
  * Roles & prompts on the new Settings page (todo/PLAN_one_model_catalog.md E4.3): the Review roles tab's own role blocks
@@ -57,7 +56,8 @@ function stages(all: readonly RoleRow[], texts: Readonly<Record<string, string>>
  */
 export function rolesEmbedded(state: RolesEmbedState, roleEnabled: Readonly<Record<string, boolean>>): string {
   const all = composed(state.rows);
-  const options: RoleBlockOptions = { promptAttr: 'data-role-prompt', on: (role) => switchedOn(role, roleEnabled) };
+  // The panel's switches, so each block's tick AND its last-role refusal read the one switch (E5.1b).
+  const options: RoleBlockOptions = { promptAttr: 'data-role-prompt', roleEnabled };
 
   // `roles-embed` scopes the tab's own layout (catalogCss.ts): the panel's sheet already uses `.role` for Stages' boxes.
   return [

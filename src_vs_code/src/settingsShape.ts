@@ -14,7 +14,8 @@ import { rowsOnTheWire } from './catalogRules';
 import { DEFAULT_VENDORS, Vendor } from './vendors';
 import { RowPriceLookup, rowOnTheWire, vendorsEnv } from './vendorsWire';
 import { FEATURES } from './binaryFeatures';
-import { RESULT_CODE, bucketOf, composed, isActive, rolesFrom, type RoleRow } from './roles';
+import { RESULT_CODE, rolesFrom, type RoleRow } from './roles';
+import { rolesOn } from './rolesSwitch';
 import {
   CALLER_KINDS,
   ConsultantChoice,
@@ -734,9 +735,9 @@ export function enabledCodeRoles(settings: CoaiSettings): readonly string[] {
   // running. Off by EITHER switch: `roleEnabled` is the sidebar's tick, `active` the catalog's, and
   // the server reads both. By BUCKET, not "not the plan stage" (§9.8 of the feature-review plan): that
   // filter took every programming role outside the plan stage for code — the feature role included.
-  return composed(settings.roles)
-    .filter((role) => bucketOf(role) === RESULT_CODE && isActive(role) && roleIsOn(settings, role.id))
-    .map((role) => role.id);
+  // Through `rolesSwitch.rolesOn`, the ONE count the new page's block and the host's guard read too (E5.1b of
+  // todo/PLAN_one_model_catalog.md): the new page used to count `active` alone, and so disagreed with this one.
+  return rolesOn(settings.roles, RESULT_CODE, settings.roleEnabled).map((role) => role.id);
 }
 
 /**

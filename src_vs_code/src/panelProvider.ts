@@ -2256,17 +2256,25 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * the Review roles tab uses too. A role's switch is ONE switch here: once the catalog's `active` has landed — through
    * every refusal the roles have — the panel's `roleEnabled` follows it (`rolesSwitch.ts`), so a server of any version
    * reads the same answer.
+   *
+   * <p>The edit is guarded with the panel's switches too (E5.1b): the queue reads them when it applies the edit, so the
+   * last role ON in a bucket — by both switches, as the page draws it — is refused here as it is disabled there.</p>
    */
   private async roleEdited(edit: unknown): Promise<void> {
     const command = roleEdit(edit);
-    await queueRoleEdit(command);
+    await queueRoleEdit(command, () => this.roleSwitches());
     if (command.kind === 'edit' && command.field === 'active') {
       const config = vscode.workspace.getConfiguration('coai');
-      const next = roleSwitchFollows(roleRows(), command.id, command.value === true, settingsFrom(this.read(config)).roleEnabled);
+      const next = roleSwitchFollows(roleRows(), command.id, command.value === true, this.roleSwitches());
       if (next !== undefined) {
         await this.save(config, 'roleEnabled', next);
       }
     }
+  }
+
+  /** The panel's own switch per role (`roleEnabled`), as this side has it now. */
+  private roleSwitches(): Readonly<Record<string, boolean>> {
+    return settingsFrom(this.read(vscode.workspace.getConfiguration('coai'))).roleEnabled;
   }
 
   /**
