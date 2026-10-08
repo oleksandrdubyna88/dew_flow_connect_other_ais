@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Runners.Feature;
+using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Runners.Consultation;
 
@@ -26,6 +27,15 @@ public sealed record QuestionMaterial(string Outline, SourceTurns Source)
 /// <param name="SaidFinal">Whether the tail of the turn being read said FINAL — the cap, or the budget.</param>
 public sealed record AnsweringMemory(string Base, int Turn, SourceSpend Spent, ImmutableList<ServedSlice> ServedSoFar, bool SaidFinal)
 {
+    /// <summary>
+    /// The vendor's conversation id after the turn being read — empty for a runtime with none (api). An agy row's
+    /// lookup continues THIS conversation rather than resending the prompt (todo/PLAN_agy_searches_through_coai.md, S2).
+    /// </summary>
+    public string Handle { get; init; } = string.Empty;
+
+    /// <summary>The invocation the turn being read was launched with — what a continuation is built from; null before the first.</summary>
+    public ReviewerInvocation? Last { get; init; }
+
     /// <summary>Before the first answer: the base prompt, turn 1, nothing served.</summary>
     public static AnsweringMemory Start(string basePrompt) => new(basePrompt, 1, SourceSpend.None, [], SaidFinal: false);
 }
@@ -35,7 +45,14 @@ public abstract record AnsweringTurn
 {
     /// <param name="Launch">The next turn's launch — the same planned launch with the tail appended to its prompt.</param>
     /// <param name="Note">What this turn was served and refused, one line, for the row's record.</param>
-    public sealed record Next(ConsultantLaunch Launch, AnsweringMemory Memory, string Note) : AnsweringTurn;
+    public sealed record Next(ConsultantLaunch Launch, AnsweringMemory Memory, string Note) : AnsweringTurn
+    {
+        /// <summary>
+        /// A ready invocation the driver launches AS IS — a continuation of the vendor's own conversation — instead of
+        /// building <see cref="Launch"/> again; null for the api rows, whose next turn is a fresh request.
+        /// </summary>
+        public ReviewerInvocation? Invocation { get; init; }
+    }
 
     /// <param name="Advice">The answer, as the route reads it — the envelope's <c>answer</c>, or the prose.</param>
     /// <param name="Note">Why the conversation ended, when it ended for a reason other than an answer with no request.</param>

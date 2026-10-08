@@ -36,6 +36,61 @@ public static class AntigravityFollowUps
         + "by their path. Shell commands (run_command) are refused automatically in this mode — if a check needs "
         + "one, name it in your answer and the caller will run it.";
 
+    /// <summary>How every lookup continuation begins — and the first prompt never does, so the turns can be told apart.</summary>
+    public const string LookupHeadingStart = "## coai looked it up";
+
+    /// <summary>The continuation's heading, with its turn number: <c>{0}</c> is the turn, and the total follows.</summary>
+    /// <remarks>Plain ASCII on purpose: the message travels as JSON on agy's stdin, where a non-ASCII dash may arrive as
+    /// <c>—</c> and a reader matching the raw line would never see the turn.</remarks>
+    public const string LookupTurnMarker = LookupHeadingStart + " - turn {0} of";
+
+    /// <summary>What the last allowed turn is told — a block on it is not served.</summary>
+    public const string LastTurn = "This is your LAST turn";
+
+    /// <summary>
+    /// What a consultant that may ask coai to look is told it has (todo/PLAN_agy_searches_through_coai.md §3): the block,
+    /// its limits, and where it may look — never the continuation's heading, which only coai's reply carries.
+    /// </summary>
+    /// <param name="roots">The granted roots, absolute — a path the model writes must be inside one.</param>
+    /// <param name="followUps">How many times coai will answer a block.</param>
+    public static string LookupToolbox(IReadOnlyList<string> roots, int followUps) =>
+        "You cannot list a folder or search inside one yourself, and shell commands are refused. coai can do both for "
+        + "you, read-only: end your answer with a block like this one (at most "
+        + $"{Core.Feature.LookupBudget.RequestsPerTurn} lines):\n\n"
+        + "```" + Core.Consultation.LookupRequests.Fence + "\n"
+        + "list <folder>\n"
+        + "search \"<text>\" in <folder>\n"
+        + "```\n\n"
+        + "The text is matched literally, ignoring case — not a pattern. A folder is an absolute path inside "
+        + (roots.Count == 1 ? $"{roots[0]} (or a path relative to it)" : "one of: " + string.Join(", ", roots))
+        + $". coai answers in this same conversation, up to {followUps} time{(followUps == 1 ? string.Empty : "s")}; "
+        + "then answer in prose, with no block. Open what it finds with view_file.";
+
+    /// <summary>The message a lookup continuation sends: what coai served and refused, and what to do next.</summary>
+    /// <param name="turn">The turn this message opens, 2 for the first continuation.</param>
+    /// <param name="turns">The most turns this answer may take.</param>
+    /// <param name="served">What coai's reader returned for the block's requests.</param>
+    /// <param name="refused">The block's lines that were not requests, each with why.</param>
+    public static string LookupContinuation(int turn, int turns, LookupServed served, IReadOnlyList<string> refused)
+    {
+        var text = new System.Text.StringBuilder()
+            .Append(string.Format(System.Globalization.CultureInfo.InvariantCulture, LookupTurnMarker, turn)).Append(' ').Append(turns).Append("\n\n");
+        if (served.Text.Length > 0)
+        {
+            text.Append(served.Text).Append("\n\n");
+        }
+
+        foreach (var line in refused)
+        {
+            text.Append("not served: ").Append(line).Append('\n');
+        }
+
+        return text.Append(turn >= turns
+                ? $"\n{LastTurn}: answer now, in plain prose, from what you have read. A {Core.Consultation.LookupRequests.Fence} block will not be served."
+                : $"\nAnswer now in plain prose — or, if you still need to look, end your answer with another {Core.Consultation.LookupRequests.Fence} block.")
+            .ToString();
+    }
+
     /// <summary>The follow-up for a denied shell command — the text measured 6 of 6, word for word.</summary>
     public const string NoCommands =
         "Shell commands are not available in this consultation: run_command was denied and " + StaysDenied + ". "
