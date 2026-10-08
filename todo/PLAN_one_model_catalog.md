@@ -965,6 +965,45 @@ file — output compared with the previous build and identical.
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).
+
+   **E5.1 in detail (mapped 2026-10-08, on main after prerequisite (b), PR #699).** No old section is drawn ONLY by the
+   old page — every one of the twelve is a catalog tab, a `SPLIT` place or a `MOVED_SECTIONS` place — so the old page
+   can go whole. What stays: the three editing HOSTS (`rolesHost`, `commandsHost`, `chatPresetsHost`), which serve the
+   new page's queues; `OLD_TAB_PLACES`, so `coai.openSettings(<old tab id>)` still opens the right place; the sidebar
+   entries of `PANEL_SECTIONS`; the restore command and `coai.migratedFrom` for one more release (T5). Five steps,
+   each green on its own:
+   1. **The new page stops drawing the old pages' buttons.** `gateBody` carries "Edit commands…"
+      (`panelView.ts:1707`) and `stagesBody` "Edit roles…" (`:2555`); both are drawn on the new page today. Each
+      becomes a jump to its place on the new page (`reviews/commands`, `reviews/roles`). A page test clicks each and
+      sees the place open.
+   2. **The sidebar's Bugz picker lists the rows ticked Bugz** (`bugzView.ts:170-192`, today every model of every local
+      engine): the ticked row's model, written to `bugzModel` as `row/model` exactly as the Models tab's tick already
+      writes it (`catalogCommands.ts:64-76`), so the collect path (`panelProvider.ts:3253-3261`) is unchanged; no ticked
+      row says so and points to Models. **T7:** `COAI_BUGZ_MODEL` is removed from the settings file's environment block
+      (`settingsShape.ts:594-599`) — nothing in `src_mcp` or `shared` reads it, and the collect takes `--model` — with
+      `settingsReach.test.ts`'s every-field walk told why. `bugzModel` stays a setting (and in the migration's backup,
+      for T5).
+   3. **The test harness opens the new page.** `test/panelPages.ts` and `test/panelPageHarness.ts` reach a section
+      through `OLD_TAB_PLACES` on the catalog page instead of the old page; the old page still exists, so this step
+      changes tests only and every test that read a section through the old page now reads the page a person sees.
+   4. **The three replaced pages go**: `rolesPage.ts`, `rolesPanel.ts`, `commandsPage.ts`, `commandsPanel.ts`,
+      `chatPresetsPage.ts`, `chatPresetsPanel.ts`; the commands `coai.editRoles`, `coai.editCommands`,
+      `coai.editChatPresets` (manifest, `extension.ts`, `PANEL_COMMANDS`, `VSCODE_COMMAND_FOR`, the provider's cases —
+      `PANEL_COMMANDS` is exhaustive, so a half-removed command does not compile); `rolesKnowTheServer` leaves `told()`;
+      `chatBody`'s "Edit presets…" button; their tests (each behaviour a deleted test held is either held by a new-page
+      test already — say which — or gains one).
+   5. **The preview switch and the old page go**: `coai.settingsPreview` (manifest, `settingsPanel.ts`, `heldAfter`,
+      the provider's four readers, the `settingsPreview` command, the badge, "Use the current page",
+      `stillOnTheOldPage`, the `settings.preview` new-tag); the twelve settings rows of `PANEL_SECTIONS`,
+      `reviewersBody`, `chatBody`, `settingsHtml`/`settingsKey`/`settingsSections`, `settingsBody`, the `'settings'`
+      surface; the help keys that name the old page. Every place of the new page is checked non-empty before the
+      fallback that pointed at the old page is removed.
+   Risks named before the build: eslint suppressions for deleted files are pruned (`--prune-suppressions`; the CI
+   ratchet accepts entries that shrink or go); the import-cycle ratchet must not grow; `install.test.ts` and
+   `helpCoverage.test.ts` hold the manifest's commands and the help's names to the code. **Tests, first** where a
+   behaviour changes (steps 1, 2, and every behaviour a deleted page test held); steps 3–5 remove code, and the
+   proof that nothing a person relied on went with it is a new-page test for each such behaviour, named in the
+   progress line.
 2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
