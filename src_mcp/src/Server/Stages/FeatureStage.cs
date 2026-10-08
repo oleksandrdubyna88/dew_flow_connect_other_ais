@@ -243,7 +243,7 @@ internal sealed class FeatureStage(
             roster.Security().Due(Stage.FeatureReview, round), securityDiff,
             new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), ct);
         // As every review stage does before it builds: an Off codex row on 0.110–0.130 is sent no tier
-        // (todo/PLAN_codex_tier_floor.md).
+        // (research/PLAN_codex_tier_floor.md).
         var tiers = await roster.CodexTiersAsync(launcher, workingDir, ct);
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,

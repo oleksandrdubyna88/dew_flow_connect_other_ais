@@ -1,11 +1,14 @@
 # PLAN — codex 0.110–0.130 are never told a tier they refuse
 
-> Status: **built, not merged (2026-10-07)** — every step on branch `fix/codex-tier-floor`, through the coai plan
-> round and the code round (session `bd66f669`, both `proceed`); see *Progress*. A regression fix for coai-mcp 0.44.0
-> and 0.44.1 (fast mode, PR #693). Scope: `CodexRuntime.TierArgs` and what it reads, `VendorDiagnosis`, the codex row of the `fastMode` block in
-> `shared/feature-availability.json` (and the extension's generator, which checks that block), the docs.
+> Status: **IMPLEMENTED, 2026-10-07** — merged as PR #702 and released in coai-mcp **0.44.2** (published 2026-10-07
+> 20:35 UTC), through the coai plan and code rounds (session `bd66f669`, both `proceed`). What was built
+> differently, and the code round's decisions, are under *Progress*. Open tail: none — a real codex 0.110–0.130
+> completing a review cannot be shown with this account's model (see *Test plan*). A regression fix for coai-mcp
+> 0.44.0 and 0.44.1 (fast mode, PR #693). Scope: `CodexRuntime.TierArgs` and what it reads, `VendorDiagnosis`, the
+> codex row of the `fastMode` block in `shared/feature-availability.json` (and the extension's generator, which checks
+> that block), the docs.
 >
-> Related docs: [RESULTS_codex_service_tier_versions_2026-10-07.md](../research/RESULTS_codex_service_tier_versions_2026-10-07.md)
+> Related docs: [RESULTS_codex_service_tier_versions_2026-10-07.md](RESULTS_codex_service_tier_versions_2026-10-07.md)
 > (the measurement), `PLAN_fast_mode.md` and its extracted tail `PLAN_fast_mode_api_tier.md` (this replaces that tail's
 > "codex version floor" item).
 
@@ -89,8 +92,8 @@ keep `default` unchanged — the per-site tests are what prove the probe is wire
 
 ## Progress
 
-Built on branch `fix/codex-tier-floor`, 2026-10-07, one commit per build step; every step started RED. Not yet merged,
-so the status line above stays as it is.
+Built on branch `fix/codex-tier-floor`, 2026-10-07, one commit per build step; every step started RED. Merged as PR
+#702 and released in coai-mcp 0.44.2 the same day (the status line above).
 
 1. **The diagnosis row** (`89bd13bd`). `VendorDiagnosis` gains ``unknown variant `default`, expected `fast` or `flex` ``
    → "the installed codex (0.110–0.130) cannot be told the standard tier — update codex, or set this row's fast mode to

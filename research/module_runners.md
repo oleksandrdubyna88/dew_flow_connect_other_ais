@@ -2309,7 +2309,7 @@ Which runtime and model has a tier is data: the `fastMode` block of `shared/feat
 when a row's `models` does not match its source — a `models` source lists its models and every other lists none —
 the extension's generator checks the same, `FAST_RULES`).
 
-### The codex floor: a release that refuses Off is not told Off (2026-10-07, todo/PLAN_codex_tier_floor.md)
+### The codex floor: a release that refuses Off is not told Off (2026-10-07, research/PLAN_codex_tier_floor.md)
 
 Measured (`research/RESULTS_codex_service_tier_versions_2026-10-07.md`): codex **0.110.0 through 0.130.0** take only
 `fast` or `flex` for `service_tier`, and refuse `-c service_tier=default` at config load — exit 1, before any request,
