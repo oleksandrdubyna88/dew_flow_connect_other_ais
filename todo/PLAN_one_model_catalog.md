@@ -979,7 +979,11 @@ file — output compared with the previous build and identical.
    2. **The sidebar's Bugz picker lists the rows ticked Bugz** (`bugzView.ts:170-192`, today every model of every local
       engine): the ticked row's model, written to `bugzModel` as `row/model` exactly as the Models tab's tick already
       writes it (`catalogCommands.ts:64-76`), so the collect path (`panelProvider.ts:3253-3261`) is unchanged; no ticked
-      row says so and points to Models. **T7:** `COAI_BUGZ_MODEL` is removed from the settings file's environment block
+      row says so and points to Models. **An install that never ticked Bugz** (the plan round, finding 2): a saved
+      `bugzModel` that names a catalog row and one of its models counts as that row's pick — shown selected — so an
+      upgraded install keeps collecting with the model it had. **A pick whose row is unticked or gone** (finding 5) is
+      drawn as a stranded pick (the Chat tab's pattern) and the collect REFUSES it with a sentence naming Models,
+      never passing an empty or stale `--model`; the same for no pick at all. **T7:** `COAI_BUGZ_MODEL` is removed from the settings file's environment block
       (`settingsShape.ts:594-599`) — nothing in `src_mcp` or `shared` reads it, and the collect takes `--model` — with
       `settingsReach.test.ts`'s every-field walk told why. `bugzModel` stays a setting (and in the migration's backup,
       for T5).
@@ -989,15 +993,24 @@ file — output compared with the previous build and identical.
    4. **The three replaced pages go**: `rolesPage.ts`, `rolesPanel.ts`, `commandsPage.ts`, `commandsPanel.ts`,
       `chatPresetsPage.ts`, `chatPresetsPanel.ts`; the commands `coai.editRoles`, `coai.editCommands`,
       `coai.editChatPresets` (manifest, `extension.ts`, `PANEL_COMMANDS`, `VSCODE_COMMAND_FOR`, the provider's cases —
-      `PANEL_COMMANDS` is exhaustive, so a half-removed command does not compile); `rolesKnowTheServer` leaves `told()`;
+      `PANEL_COMMANDS` is exhaustive, so a half-removed command does not compile) stop opening the old pages and instead
+      open the Settings page at `reviews/roles`, `reviews/commands` and `chat` — kept as those redirects for one more
+      release, as T5 keeps the restore command (finding 0: a person's muscle memory or a keybinding of their own still
+      lands somewhere useful); `rolesKnowTheServer` leaves `told()`;
       `chatBody`'s "Edit presets…" button; their tests (each behaviour a deleted test held is either held by a new-page
       test already — say which — or gains one).
    5. **The preview switch and the old page go**: `coai.settingsPreview` (manifest, `settingsPanel.ts`, `heldAfter`,
       the provider's four readers, the `settingsPreview` command, the badge, "Use the current page",
       `stillOnTheOldPage`, the `settings.preview` new-tag); the twelve settings rows of `PANEL_SECTIONS`,
       `reviewersBody`, `chatBody`, `settingsHtml`/`settingsKey`/`settingsSections`, `settingsBody`, the `'settings'`
-      surface; the help keys that name the old page. Every place of the new page is checked non-empty before the
-      fallback that pointed at the old page is removed.
+      surface; the help keys that name the old page. Before the fallback that pointed at the old page is removed,
+      every place of the new page is held by a test that RUNS the page against the DOM shim and works one of its
+      controls (finding 3) — not by a check that the place has markup.
+   **Order and docs** (findings 4, 6): the build starts after R7 (PR #707) is merged, on a branch carrying it;
+   `research/module_extension.md` and `research/module_tests.md` describe the navigation, the redirect commands and
+   the scenarios as shipped. Rejected: moving the harness step first (finding 1) — the new page already has its own
+   page harness (`test/pageScriptHarness.ts`, used by `rolesOnTheNewPage` and the other new-page tests), so step 1's
+   test runs the new page directly.
    Risks named before the build: eslint suppressions for deleted files are pruned (`--prune-suppressions`; the CI
    ratchet accepts entries that shrink or go); the import-cycle ratchet must not grow; `install.test.ts` and
    `helpCoverage.test.ts` hold the manifest's commands and the help's names to the code. **Tests, first** where a
