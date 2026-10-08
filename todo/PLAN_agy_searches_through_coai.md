@@ -43,10 +43,15 @@ search "<text>" in <path>
 ```
 ````
 
-- `<path>` is absolute or relative to a granted root; `search` is a LITERAL, case-insensitive substring — never a regex
-  (no pattern a model writes can make coai's scan slow). At most 8 lines per block; other lines are named as refused.
+- `<path>` is absolute, or relative to THE granted root when there is exactly one (a consultation's checkout; a question
+  row with one root). With several roots a relative path is refused by name, asking for the absolute one — the prompt
+  lists every granted root's absolute path, so agy always knows them (plan round, gemini). `search` is a LITERAL,
+  case-insensitive substring — never a regex (no pattern a model writes can make coai's scan slow). At most 8 lines per
+  block; other lines are named as refused.
 - A turn whose answer carries a block is a request turn; any prose beside it is kept as the draft. A turn with no block
-  is the answer. The last allowed turn is told it is the last (the api rows' `FINAL` rule, `QuestionTail`).
+  is the answer. The last allowed turn is told it is the last (the api rows' `FINAL` rule, `QuestionTail`). **If the last
+  allowed turn still carries a block** (plan round, gemini): the block is stripped, its prose is the answer with a note
+  that lookups were capped and which were not served; with no prose left, the row ends `failed` saying exactly that.
 
 **The reader, `WorkspaceLookup`** — coai's own code, in coai's process, no shell, no vendor tool:
 - **Containment:** every path is canonicalised component by component with links resolved (`DocumentReader.FollowLink` /
@@ -72,7 +77,8 @@ sum (`ConsultationUsage` gains the N-launch rule; one ledger line per TURN stays
 
 **The consultant.** One `consult` call keeps its single `ConsultationTurn` record but may make up to 3 lookup
 continuations inside it, before `Settle` (`ConsultationService.cs:699`), under the turn's existing deadline; the
-consultation's tree check still runs before every continuation (`ConsultantTurn`'s `changesSoFar`).
+consultation's tree check still runs before every continuation (`ConsultantTurn`'s `changesSoFar`), and the turn is billed
+by the same N-launch cumulative rule as a question row (plan round, gemini).
 
 **The prompt.** `AntigravityFollowUps.Toolbox` stops saying only "your only tool is view_file": it adds the `coai-lookup`
 format and its limits, for both features. The silent-launch follow-up (`NoCommands`) also names the format, because a
@@ -84,8 +90,13 @@ model refused a shell command is exactly the one that needs a listing.
 2. **S2 — question rows**: the seam, `AntigravityConsultant.AfterAsync`, cumulative billing, the prompt; RED first.
 3. **S3 — the consultant**: the bounded loop in `ConsultationService`, the prompt; RED first.
 
-Then docs, the whole C# suite, the extension's suites if a shared file changed, one code round over the branch, PR, merge.
-Live checks after the build. No release in this plan: a release needs the operator's OK.
+Then docs, the whole C# suite, the extension's suites if a shared file changed, one code round over the branch; the LIVE
+CHECKS on the branch build, recorded, BEFORE the PR (plan round, gemini: a fake CLI cannot prove the real agy turn); then
+PR, merge. No release in this plan: a release needs the operator's OK.
+
+The containment re-check runs on the resolved path immediately before each read. A link swapped in by another process
+between that check and the read is out of scope (plan round, codex, rejected): it needs a writer inside the root, agy
+cannot write there, and such a writer could read the outside file itself.
 
 ## 5. Test plan
 
@@ -98,9 +109,11 @@ Live checks after the build. No release in this plan: a release needs the operat
   latest cumulative report; existing denial scenarios still pass.
 - **S3:** a consult scenario on agy: the lookup turn inside one call, the record keeps one turn, the tree check runs before
   the continuation, billed once.
-- **Live, after the build:** three `ask_consultants` per side and one `consult` per side through the branch build; the
-  answers must name a real file or say none exists from what coai served — recorded in
-  `research/RESULTS_agy_searches_through_coai.md`.
+- **Live, on the branch build, before the PR:** three `ask_consultants` per side and one `consult` per side; the answers
+  must name a real file or say none exists from what coai served. Plus a **write check** (plan round, codex): agy with the
+  exact flags coai launches, in a disposable scratch tree under the temp directory, asked to create a sentinel file —
+  the check fails if the file exists afterwards. Nothing is deleted by the check (the owner's rule); its trees are named
+  for the person. All recorded in `research/RESULTS_agy_searches_through_coai.md`.
 
 ## 6. Definition of Done
 
@@ -108,6 +121,7 @@ Live checks after the build. No release in this plan: a release needs the operat
 - [ ] agy keeps `--mode plan`; no flag gives it write access; reviewers untouched.
 - [ ] Every lookup is bounded, contained, redacted, and says when a cap cut it.
 - [ ] Question rows and the consultant both serve lookups and continue the same conversation; billed once per turn.
-- [ ] Live checks per side recorded in `research/`; `module_runners.md`, `module_server.md`, `research/README.md` updated;
+- [ ] Live checks per side and the write check recorded in `research/` before the PR; `module_runners.md`,
+      `module_server.md`, `module_tests.md` (both flows, what the scenarios do not prove), `research/README.md` updated;
       plan promoted; `todo/README.md` row removed.
 - [ ] Whole suites green; gate rounds resolved; PR merged.
