@@ -11385,7 +11385,11 @@ what `bugzSection` draws from and what the provider's collect reads, the provide
 reads, the `no-ranking-model` notice and the one spawn through `serverRun`; a pick that does not hold is refused by its
 sentence and nothing starts (it used to run unranked with none), else `collectArgs` (moved here from the view) starts it.
 The domain (`bugzPick`, `bugzCollect`) imports no view: `RankingChoice`, `RANKING_VENDORS`, `allowedBy` and `mayRank`
-live in `bugzPick.ts`. A stranded pick with nothing else to offer draws no picker and no "pick one here". **T7:**
+live in `bugzPick.ts`. A stranded pick with nothing else to offer draws no picker and no "pick one here". A stranded pick
+says why (`BugzPick.why`, CodeRabbit on #709): `unticked` — its row is not ticked, gone, or lacks the model ("… is no
+longer ticked Bugz on Models, or was removed.") — or `refused` — its row IS ticked and the allowlist refuses it ("… is
+ticked Bugz, but the ranking pass does not run on it — it runs only on local, …"); `strandedHead` is that one sentence
+for the sidebar and the collect's refusal alike. **T7:**
 `COAI_BUGZ_MODEL` left the settings file's environment block (`settingsShape.envBlock`) — nothing in `src_mcp` or `shared`
 read it; `bugzModel` stays a setting and stays in the migration's backup (T5).
 

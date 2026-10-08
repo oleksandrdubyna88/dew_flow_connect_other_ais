@@ -3013,6 +3013,11 @@ The flows and the tests holding them, as shipped (steps 4–5 stopped — `resea
   (stranded, then empty), read back by the provider's readers into `bugzInputsOf`, refused by `collectWithPick` with
   nothing started. Teeth: planted to start first, it failed 'a collect started with the pick "gone/qwen3.5" read from
   the real settings'.
+- **CodeRabbit on #709.** `bugzPicksFromTheCatalog.test.ts`: a ticked row the allowlist refuses is never called
+  "no longer ticked" — not in the stranded line, its option, nor the collect's refusal — and the line names what does
+  rank (red: "a ticked row is called unticked"). `panelPageHarness.test.ts`: the opened place is asserted by RUNNING the
+  page over its drawn tree and reading which panes it shows, not by reading `heldPlace` out of the source (teeth: the
+  script made to ignore the held place failed "reviews/commands is not the place the page shows").
 
 **Not covered.** The provider's own ports — the notice actually shown, no process spawned — because the provider is
 built only by the bundled extension's `ExtensionContext`: they are pinned by source, and the decision they feed is run.
