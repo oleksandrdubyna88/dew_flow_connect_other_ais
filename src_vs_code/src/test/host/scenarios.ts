@@ -9,6 +9,7 @@ import { conversationHooks } from '../../chatHooks';
 import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
 import { backToSource } from '../../chatReturnCommand';
+import { aRevisionInARealEditor } from './revisionScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -868,6 +869,13 @@ const SCENARIOS: readonly Scenario[] = [
       assert.ok(shown !== undefined, 'nothing was opened');
       assert.equal(shown.document.uri.fsPath.toLowerCase(), recorded.toLowerCase());
     },
+  },
+  {
+    // R7 of todo/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration
+    // moving a preset and NOT moving an older build's edit of it, and each choice on the conflict landing in the real
+    // settings. What it does and does not drive is in `revisionScenario.ts`. Last, because it rewrites the catalog's keys.
+    name: 'an older build\'s edit after the move is raised once, and each choice on it lands in the real settings',
+    run: aRevisionInARealEditor,
   },
 ];
 
