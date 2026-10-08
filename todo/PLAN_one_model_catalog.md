@@ -1280,6 +1280,30 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
    CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
    and the downgrade path.
+   **E5.2, designed 2026-10-08 — the help and the docs say the Settings page as it is.** An audit of the English
+   bodies after E5.1c found fourteen articles that name UI the page no longer has: `the-settings-tab` (the preview,
+   **Try the new Settings page** / **Use the current page**, the old tabs), `choose-reviewers` / `a-local-model` /
+   `team-servers` / `the-consultant` / `the-question-consultant` (**Add a reviewer**, the reviewer card, the Reviewers
+   tab), `install-the-server` / `prompts-per-round` / `what-each-ai-has-used` (the reviewer card),
+   `the-gates-commands` / `your-own-roles` (**Edit commands…** / **Edit roles…** opening a page of their own),
+   `chat-with-other-ai` / `the-help-page` / `models-move-into-the-catalog` (**Chat other AIs**, **Edit presets…**, the
+   presets tab). The sidebar's articles say "section" and are right: the sidebar keeps its sections.
+   - **Each of the fourteen is rewritten in all five languages** (`helpContent.ts`, `helpRu/Uk/De/Es.ts`) to name the
+     place as the page draws it — `Models`, `Reviews › Roles & prompts`, `Consultants › Question consultant`,
+     `Setup › Vendor keys`… (the `CATALOG_TABS` labels, which stay English in every language, as button names do now)
+     and its controls (a Models card, **Add a model**, the use ticks). `the-settings-tab` tours `CATALOG_TABS` in order;
+     its test drops `todo`.
+   - **A test holds it:** no article body in any language names the removed UI (a list of the removed labels and
+     words, each with why), so a sixth article cannot bring one back unnoticed; RED first against today's bodies.
+   - **Tooltips (`help.ts`, English):** every key the page attaches is read for the same words; one that describes a
+     removed control is rewritten (the tooltip test already holds that each key is attached).
+   - **Docs:** `research/module_extension.md` (the help as shipped), `research/module_server.md` and
+     `research/architecture.md` where they name the old page; `src_vs_code/CHANGELOG.md` gains the extension's
+     unreleased section for epic 5 (the page, the redirects, the removed switch, what a migrated install sees);
+     `POST_DEPLOY.md` gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
+     and the downgrade path (the old preset key stays frozen, so an older extension still reads it; an older
+     extension's edits never reach coai-mcp, as the table above says; the restore command puts the old settings back, T5).
+   Built after PR #713 merges, on a branch carrying it.
 3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5). Also
    (E5.1c's own review, 2026-10-08) the current-page branches the shared builders still carry, each drawn by nothing
    since step 5 but held by tests of their own: `consultantView`'s caller definitions (`callerRows = ''`,
