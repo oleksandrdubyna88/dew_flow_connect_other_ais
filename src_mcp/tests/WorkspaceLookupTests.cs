@@ -142,6 +142,19 @@ public sealed class WorkspaceLookupTests : IAsyncLifetime
     }
 
     [Fact]
+    public void AFileAnotherProcessIsWriting_IsStillSearched()
+    {
+        // CodeRabbit, #712: File.OpenRead shares only Read, so a log being written was counted "could not be read".
+        var log = Path.Combine(_root, "projA", "app.log");
+        File.WriteAllText(log, $"{MarkerOne} in the log\n");
+        using var writer = new FileStream(log, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+
+        var text = Serve(Lookup(), Search(MarkerOne, "projA"));
+
+        text.Should().Contain("app.log:1:").And.NotContain("could not be read");
+    }
+
+    [Fact]
     public void AnAbsolutePathInNoRoot_IsRefusedByName()
     {
         var text = Serve(Lookup(), List(_outside));

@@ -357,7 +357,8 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
     private void SearchLines(string path, string text, Walk walk)
     {
         var number = 0;
-        foreach (var line in File.ReadLines(path))
+        using var reader = new StreamReader(Shared(path));
+        while (reader.ReadLine() is { } line)
         {
             number++;
             if (line.Contains(text, StringComparison.OrdinalIgnoreCase) && !Hit(path, number, line, walk))
@@ -366,6 +367,14 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
             }
         }
     }
+
+    /// <summary>
+    /// A file opened for reading that lets every other holder in — a log another process is writing is still searched
+    /// (CodeRabbit, #712: <c>File.OpenRead</c> shares only Read, so it counted such a file "could not be read"). A file
+    /// held with no sharing at all is still refused, and counted.
+    /// </summary>
+    private static FileStream Shared(string path) =>
+        new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
     /// <summary>Adds one hit; false once the hit cap is reached (and the walk is stopped, saying so).</summary>
     private bool Hit(string path, int number, string line, Walk walk)
@@ -405,7 +414,7 @@ public sealed class WorkspaceLookup(IReadOnlyList<string> roots, LookupLimits? l
 
     private static bool IsBinary(string path)
     {
-        using var stream = File.OpenRead(path);
+        using var stream = Shared(path);
         var head = new byte[BinarySniffBytes];
         var read = stream.Read(head, 0, head.Length);
 

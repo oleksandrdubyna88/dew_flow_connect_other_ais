@@ -1410,7 +1410,10 @@ asked for and not served: …".
 | A refused shell hears about it too | when a reader is attached, the measured `NoCommands` / read-denied follow-up is kept word for word and followed by one sentence naming the block; without a reader the text is unchanged | `AntigravityConsultant.FollowUp` |
 
 **Threat model of the reader.** A link swapped in by another process between the containment check and the read is out
-of scope (plan round, rejected): it needs a writer inside the root, and such a writer could read the outside file itself.
+of scope (plan round, rejected): it needs a writer inside the root that can create a LINK, and such a writer could read
+the outside file itself. The reader opens the resolved path by name — the check is not bound to a handle — so the
+exclusion rests on who can make a link: agy's file tools write files, and a link takes a shell, which agy is denied (not
+separately measured).
 The plan round also argued that agy in plan mode cannot be that writer — **the live write check refuted it**: agy with
 coai's flags wrote a file inside its `--add-dir` root on Windows and in WSL
 ([RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) §3). That is a defect of every agy launch,

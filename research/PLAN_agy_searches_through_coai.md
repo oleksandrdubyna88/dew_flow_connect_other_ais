@@ -2,7 +2,8 @@
 
 > Status: **IMPLEMENTED, 2026-10-08** (branch `feat/agy-searches-through-coai`; no release — the operator's decision).
 > Live record: [RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) — 6 of 6 asks answered on
-> the final build (WSL went from 1 of 3 to 3 of 3, naming the real file), both consults answered using lookups.
+> the final LIVE-TESTED build (WSL went from 1 of 3 to 3 of 3, naming the real file), both consults answered using
+> lookups; the code-round-2 changes made after it are listed in the record's §7 and are covered by scenario tests only.
 >
 > Deviations: (1) **the plan's premise "agy keeps `--mode plan` — it can write nothing" is FALSE** — the live write check
 > found agy writes inside its `--add-dir` root on both sides; this branch does not change what agy may write, and the
@@ -41,7 +42,8 @@ the operator's ORIGINAL clones, would stay writable; the sandbox covers commands
 to use the previous behavior" (no sandbox); and requests to run outside the sandbox need an approval that
 skip-permissions grants. That plan round (session `0b81ee77`) and its consultation (`f706070d`, codex: "choose isolation
 or have coai perform bounded list/search") are recorded in the git history of this file. Asked again, the operator chose
-**coai searches**: agy keeps `--mode plan` — it can write nothing — and asks coai to list or search; coai does it itself,
+**coai searches**: agy keeps `--mode plan` — it can write nothing *(refuted live: plan mode does not make an `--add-dir`
+root read-only; agy CAN write there — deviation 1)* — and asks coai to list or search; coai does it itself,
 read-only, inside the granted roots, and continues the SAME agy conversation with the result. For **both** features: a
 question row (`ask_consultants`) and the stuck consultant (`consult`).
 
@@ -109,7 +111,9 @@ PR, merge. No release in this plan: a release needs the operator's OK.
 
 The containment re-check runs on the resolved path immediately before each read. A link swapped in by another process
 between that check and the read is out of scope (plan round, codex, rejected): it needs a writer inside the root, agy
-cannot write there, and such a writer could read the outside file itself.
+cannot write there, and such a writer could read the outside file itself. *(Refuted live: agy CAN write files there. What
+still holds: a LINK needs a shell, which agy is denied — not separately measured — and the reader opens the resolved path
+by name, not through a handle bound to the check; see module_server.md, Threat model of the reader.)*
 
 ## 5. Test plan
 

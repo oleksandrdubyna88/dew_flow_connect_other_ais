@@ -84,9 +84,15 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
 
     /// <summary>Why a block will not be served — the cap, or a conversation that cannot be continued — or empty.</summary>
     private string WhyNotContinued(AnsweringMemory memory) =>
-        memory.SaidFinal || memory.Turn >= 1 + FollowUps ? $"lookups capped at {FollowUps} turn{(FollowUps == 1 ? string.Empty : "s")}"
-        : memory.Handle.Length == 0 || memory.Last is null ? "the conversation could not be continued — agy named no conversation id"
+        Capped(memory, FollowUps) ? $"lookups capped at {FollowUps} turn{(FollowUps == 1 ? string.Empty : "s")}"
+        : CannotContinue(memory) ? "the conversation could not be continued — agy named no conversation id"
         : string.Empty;
+
+    /// <summary>The last allowed turn has been taken — or the model was already told this was its last.</summary>
+    private static bool Capped(AnsweringMemory memory, int followUps) => memory.SaidFinal || memory.Turn >= 1 + followUps;
+
+    /// <summary>No conversation to continue: agy named none, or no launch has finished yet.</summary>
+    private static bool CannotContinue(AnsweringMemory memory) => memory.Handle.Length == 0 || memory.Last is null;
 
     private static string Unserved(string why, LookupAsk ask) =>
         $"{why}; asked for and not served: {string.Join("; ", [.. ask.Requests.Select(r => r.Line), .. ask.Refused])}";
