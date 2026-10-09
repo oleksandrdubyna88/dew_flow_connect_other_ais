@@ -14,7 +14,7 @@ import { settledWrites } from './settledWrites';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 
 /**
- * The editing core of the gate's commands — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.4):
+ * The editing core of the gate's commands — what both pages that edited them called (research/PLAN_one_model_catalog.md E4.4):
  * the Gate commands tab (`commandsPanel.ts`, deleted in E5.1) and, on the Settings page, Reviews › Commands. Moved here from
  * `commandsPanel.ts`, never copied — the roles' arrangement (`rolesHost.ts`).
  *

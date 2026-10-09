@@ -17,7 +17,7 @@ import type { ServerResult } from '../teamServerApi';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 
 /**
- * E4.6c of todo/PLAN_one_model_catalog.md (D8): a row's effort and system prompt apply when it CHATS as they do when it
+ * E4.6c of research/PLAN_one_model_catalog.md (D8): a row's effort and system prompt apply when it CHATS as they do when it
  * reviews — by the server's own rules (coai-mcp, E2.2). Effort: claude's `--effort`, a Team server's `effort` field, and
  * nothing for codex or agy. The system prompt: a section before the person's words, never in argv, on the first turn a
  * session hears and on every turn of a session that forgets.

@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// Contract 2 (todo/PLAN_one_model_catalog.md, epic 2, story 5): a review request may carry the row's effort and the
+/// Contract 2 (research/PLAN_one_model_catalog.md, epic 2, story 5): a review request may carry the row's effort and the
 /// person's system prompt, and the server decides what it TAKES — and says what it did not.
 /// </summary>
 /// <remarks>

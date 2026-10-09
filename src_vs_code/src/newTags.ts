@@ -1,5 +1,5 @@
 /**
- * When each new control was first seen, so the page can mark it "new" for a week (todo/PLAN_one_model_catalog.md, E3.1
+ * When each new control was first seen, so the page can mark it "new" for a week (research/PLAN_one_model_catalog.md, E3.1
  * and *Growth surfaces*): one small record in `globalState`, bounded by what is listed here and pruned after 60 days.
  *
  * <p><b>By control, never by a version number.</b> A control is listed here in the change that brings it; its clock

@@ -10,7 +10,7 @@ import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
- * E4.6b of todo/PLAN_one_model_catalog.md: Chat on the new page — which model a chat opens on (the rows ticked Chat that
+ * E4.6b of research/PLAN_one_model_catalog.md: Chat on the new page — which model a chat opens on (the rows ticked Chat that
  * can answer), what it sends with and how, and the prompt presets inline, edited through the presets' own messages into
  * the one editing core (`chatPresetsHost.ts`). The page also draws the roles and the commands, so none of the three
  * reads another's controls. Every control fired at is taken from the page as drawn.

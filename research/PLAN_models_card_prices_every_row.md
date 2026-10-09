@@ -6,7 +6,7 @@
 > the extension's price map for the Settings page (`panelProvider.ts`, `panelView.ts` `cardContextFor`, `priceBook.ts`).
 >
 > Related docs: [module_extension.md](module_extension.md) (*E5.3 — what the old page left behind*),
-> [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md).
+> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md).
 
 ## Symptom
 

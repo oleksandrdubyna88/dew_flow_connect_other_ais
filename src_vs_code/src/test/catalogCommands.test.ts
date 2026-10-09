@@ -5,7 +5,7 @@ import { MAX_ROWS } from '../catalogRules';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 
 /**
- * The Models tab's own edits (todo/PLAN_one_model_catalog.md E3.2): a use ticked or unticked on a row — Bugz moving to
+ * The Models tab's own edits (research/PLAN_one_model_catalog.md E3.2): a use ticked or unticked on a row — Bugz moving to
  * the one row ticked (D7) — and a row duplicated with its own id. Pure: the host saves what these answer.
  */
 

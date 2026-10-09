@@ -301,7 +301,7 @@ public sealed class CollectRunTests : IAsyncLifetime
 
     /// <summary>
     /// A second local instance runs the ranking pass: the allowlist matches the row's runtime, which the caller says,
-    /// not the row id (todo/PLAN_one_model_catalog.md, epic 2, story 1) — and a row merely CALLED local is not let through.
+    /// not the row id (research/PLAN_one_model_catalog.md, epic 2, story 1) — and a row merely CALLED local is not let through.
     /// </summary>
     [Fact]
     public async Task ASecondLocalInstance_IsAllowedByItsRuntime_AndARowCalledLocalOnACloudOneIsNot()

@@ -1,6 +1,6 @@
 namespace CoaiMcp.Core.Catalog;
 
-/// <summary>The catalog's limits, as this binary enforces them (todo/PLAN_one_model_catalog.md D1).</summary>
+/// <summary>The catalog's limits, as this binary enforces them (research/PLAN_one_model_catalog.md D1).</summary>
 /// <remarks>
 /// The extension refuses the same limit at save time (<c>catalogRules.ts</c> <c>MAX_PROMPT_BYTES</c>); the server refuses
 /// it again because a hand-edited settings file reaches it too. Each half pins its own constant to 8192 in a test

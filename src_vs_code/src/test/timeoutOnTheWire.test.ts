@@ -5,7 +5,7 @@ import { vendorsEnv } from '../vendorsWire';
 
 /**
  * A CLI row's own timeout crosses to coai-mcp only when the installed binary lists `timeoutMinutes` in `--features`
- * (todo/PLAN_one_model_catalog.md, epic 2, story 2) — an older binary skips the member and the row would silently run
+ * (research/PLAN_one_model_catalog.md, epic 2, story 2) — an older binary skips the member and the row would silently run
  * on the round's timeout.
  */
 

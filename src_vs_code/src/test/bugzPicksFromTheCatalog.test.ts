@@ -10,7 +10,7 @@ import { panelState } from './panelPageHarness';
 import { pageTree, type PageNode } from './pageTree';
 
 /**
- * E5.1 step 2 of todo/PLAN_one_model_catalog.md: the sidebar's Bugz picker lists the rows ticked Bugz on Models — the
+ * E5.1 step 2 of research/PLAN_one_model_catalog.md: the sidebar's Bugz picker lists the rows ticked Bugz on Models — the
  * one sidebar change of the switch-over. Before it, the picker listed every model of every local engine, and the
  * Models tab's Bugz tick (which writes `bugzModel` as `row/model`) was a second way to say the same thing.
  *

@@ -12,7 +12,7 @@ import { capture } from '../versionProbe';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 
 /**
- * The Models card's ✓ Check and its world-facing parts (todo/PLAN_one_model_catalog.md E3.3, D10): one paid turn of a
+ * The Models card's ✓ Check and its world-facing parts (research/PLAN_one_model_catalog.md E3.3, D10): one paid turn of a
  * catalog row through `coai-mcp --check-model`, the row on stdin, asked first, its state read back from the durable
  * record `model-<id>` — and the CLI, endpoint and Team server lines each card shows.
  */

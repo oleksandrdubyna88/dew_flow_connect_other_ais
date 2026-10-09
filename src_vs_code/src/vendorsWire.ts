@@ -104,7 +104,7 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
 
 /**
  * ONE row as `COAI_VENDORS` writes it — the one field list, also what a consultant entry and a question row carry as
- * `row` (todo/PLAN_one_model_catalog.md, C2) and what `--check-model` is handed. A field the wire gains is gained by all.
+ * `row` (research/PLAN_one_model_catalog.md, C2) and what `--check-model` is handed. A field the wire gains is gained by all.
  */
 export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf: RowPriceLookup, features: readonly string[]): Record<string, unknown> {
   return {

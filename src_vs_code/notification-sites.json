@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 162,
+  "sites": 163,
   "direct": 0,
   "modal": 25,
-  "events": 137,
+  "events": 138,
   "inTheFunnel": 3,
-  "routed": 162,
+  "routed": 163,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 0,
@@ -37,6 +37,7 @@
     "catalog-is-empty",
     "catalog-migration-failed",
     "catalog-migration-left",
+    "catalog-migration-waits-for-reload",
     "catalog-offered-unusable-ids",
     "catalog-restore-confirm",
     "catalog-restore-failed",

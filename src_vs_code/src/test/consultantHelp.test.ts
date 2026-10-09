@@ -9,7 +9,7 @@ import { pageTree, type PageNode } from './pageTree';
 // The census the other way round from helpTooltips.test.ts: there, every tooltip must sit on a control;
 // here, every control of the Consultant tab and the consultation cadence must carry its "?"
 // (research/PLAN_consult_limits_kinds_and_help.md, story 3). The operator's words: a "?" on every new setting.
-// Read off the Settings page as it is DRAWN (todo/PLAN_one_model_catalog.md E5.3) — the tab a person opens.
+// Read off the Settings page as it is DRAWN (research/PLAN_one_model_catalog.md E5.3) — the tab a person opens.
 
 const PANE = pageTree(catalogHtml(panelState('consultant'), 'test-nonce', 'consultants/consultant'))
   .one((node) => node.dataset['pane'] === 'consultants/consultant', 'Consultant pane');

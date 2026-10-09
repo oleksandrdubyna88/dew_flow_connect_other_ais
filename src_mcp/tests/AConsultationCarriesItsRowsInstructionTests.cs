@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A consultation sends the consultant its row's system prompt, and nothing the consultant says back carries that text
-/// into a reply or a record (the cadence consultation for epics 1–3 of todo/PLAN_one_model_catalog.md, finding C2, C2c).
+/// into a reply or a record (the cadence consultation for epics 1–3 of research/PLAN_one_model_catalog.md, finding C2, C2c).
 /// </summary>
 /// <remarks>
 /// The shipped map borrows the codex reviewer row, so a system prompt set on that row is the consultant's too — the same

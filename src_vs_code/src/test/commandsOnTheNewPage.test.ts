@@ -8,7 +8,7 @@ import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
- * E4.4 of todo/PLAN_one_model_catalog.md: Reviews › Commands on the new page — the Gate commands tab's own blocks, drawn
+ * E4.4 of research/PLAN_one_model_catalog.md: Reviews › Commands on the new page — the Gate commands tab's own blocks, drawn
  * by the panel, their edits posted as `commands` messages into the one editing core (`commandsHost.ts`). The page also
  * draws the roles, so the two never read each other's controls. Every control fired at is taken from the page as drawn.
  */

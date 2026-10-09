@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A second row on one runtime probes that runtime's CLI, not a program named after the row
-/// (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+/// (research/PLAN_one_model_catalog.md, epic 2, story 1).
 /// </summary>
 /// <remarks>
 /// The catalog makes "the same vendor many times" ordinary: <c>claude</c> and <c>claude-2</c>, both on the claude runtime.

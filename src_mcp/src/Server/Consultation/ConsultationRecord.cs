@@ -169,7 +169,7 @@ public sealed record ConsultationRecord(
     public int CarryBudget { get; init; }
 
     /// <summary>
-    /// The consultant's row's system prompt as it stood when this consultation opened (todo/PLAN_one_model_catalog.md, C2)
+    /// The consultant's row's system prompt as it stood when this consultation opened (research/PLAN_one_model_catalog.md, C2)
     /// — frozen with the model and the runtime, because a turn's prompt is composed from the record alone: an edit made
     /// today never reaches a conversation opened yesterday. Empty for none, and for a record written before it existed.
     /// </summary>

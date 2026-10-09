@@ -1,10 +1,13 @@
 # PLAN — the chat presets tab writes the settings on every keystroke
 
-> Status: **plan only, nothing implemented yet, 2026-10-03.** Scope: `src_vs_code/src/chatPresetsPage.ts`,
-> `chatPresetsPanel.ts`, tests. Found while surveying the webviews for
-> [PLAN_busy_marks_on_every_webview.md](../research/PLAN_busy_marks_on_every_webview.md) (its §3).
+> Status: **IMPLEMENTED, 2026-10-09 — by other work, not as written.** The presets' edits were moved into one editing
+> core with ONE settled-write queue in catalog E4.6b (`chatPresetsHost.ts`, `presetSettlesAs`: a typed field settles per
+> list, row and field; a tick, pick or press goes straight through), and the tab itself was deleted in E5.1
+> ([PLAN_one_model_catalog.md](PLAN_one_model_catalog.md)); its prompts are edited on Chat through that queue. Scope was:
+> `src_vs_code/src/chatPresetsPage.ts`, `chatPresetsPanel.ts`, tests. Found while surveying the webviews for
+> [PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md) (its §3).
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md).
 
 ## 1. Symptom
 

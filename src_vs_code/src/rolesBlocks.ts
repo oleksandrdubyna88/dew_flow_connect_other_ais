@@ -9,7 +9,7 @@ import { type BucketCounts, lastOn, lastOnBy, onCounts, switchedOn } from './rol
  * The pieces a roles page is drawn from: one role's block, the switch rules it is drawn by, and the notes around it.
  *
  * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages drew these until E5.1 deleted the first: the Review roles tab, and Reviews › Roles
- * &amp; prompts on the Settings page (`rolesEmbed.ts`, todo/PLAN_one_model_catalog.md E4.3), which draws the tab's
+ * &amp; prompts on the Settings page (`rolesEmbed.ts`, research/PLAN_one_model_catalog.md E4.3), which draws the tab's
  * own blocks rather than a copy of them. Epic 5 deleted the tab (E5.1), so the blocks were moved out first —
  * prerequisite (b) of that epic. They are drawn byte for byte as before: the move compared the html of every shipped
  * role, in every switch state, from both builds. The functions the move put under the complexity rule — the block, a
@@ -57,7 +57,7 @@ export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
  * <p>It is the rule the sidebar's code-role ticks have had since they shipped, applied to the plan
  * stage as well, which is what the operator asked for when they asked for plan-stage switches.</p>
  *
- * <p><b>ON is the one switch</b> (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b): a role the panel's
+ * <p><b>ON is the one switch</b> (`rolesSwitch.lastOn`, research/PLAN_one_model_catalog.md E5.1b): a role the panel's
  * `roleEnabled` switched off is not a reviewer, whatever the catalog says, so it does not keep a bucket populated. The
  * new page passes its `roleEnabled`; the Review roles tab, which draws the catalog's switch alone, passes none.</p>
  */
@@ -94,7 +94,7 @@ function kindHint(role: RoleRow): string {
 }
 
 /**
- * How a role block is drawn on the page that draws it. The Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
+ * How a role block is drawn on the page that draws it. The Settings page (research/PLAN_one_model_catalog.md E4.3) marks
  * a prompt `data-role-prompt` — its shared script reads `data-prompt` as a round pick — and shows ONE switch per role,
  * the catalog's and the panel's read as one (`rolesSwitch.ts`).
  *

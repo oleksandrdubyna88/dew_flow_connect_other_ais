@@ -11,7 +11,7 @@ import { CATALOG_TABS } from '../catalogPlaces';
  * copy of the list never heard of. (The Security lane tab shipped without a word here.)
  *
  * <p>It waited as a TODO through E5.1, whose step 5 removed the page the article toured; E5.2 of
- * todo/PLAN_one_model_catalog.md rewrote the article in five languages around `CATALOG_TABS`, and it holds again.</p>
+ * research/PLAN_one_model_catalog.md rewrote the article in five languages around `CATALOG_TABS`, and it holds again.</p>
  */
 for (const language of HELP_LANGUAGES) {
   test(`the ${language} Settings tab article names every Settings tab, in the order the page draws them`, () => {

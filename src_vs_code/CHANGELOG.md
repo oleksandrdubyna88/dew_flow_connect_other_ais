@@ -6,6 +6,12 @@
 the chat showed a dash where the published lists price it, and an `api` model on a reviewer's model showed the
 reviewer's rate instead of its own endpoint's. Each card now shows the price of its own model on its own endpoint.
 
+**Fixed: the first start after an update in place no longer shows an error.** When VS Code updated the extension before
+it had started, moving your models into the catalog could meet settings the window had not loaded yet and showed
+*"Moving the models in your settings into the catalog stopped part way"*. Nothing was written then, and nothing is now:
+the move waits for the window to load them and tries once more — on the next settings change, or ten seconds later. If
+the window still has not loaded them, a warning says so once, with **Reload Window**.
+
 ## Extension 0.65.0 — 2026-10-09
 
 **One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this
@@ -46,6 +52,30 @@ labels, and a test fails if an article or a tooltip names a control the page no 
 - **A fresh install starts with seven useful phrases** in the Phrases section.
 - **A Bugz key is filed under the server that issued it**, and the sidebar reads and writes this side's settings.
 - **Add a model** accepts a model a consultant picked at its own endpoint (it was refused as another caller's).
+
+## Server 0.45.0 — 2026-10-09
+
+**An Antigravity consultant cannot write inside the folders it is given.** `--mode plan` does not stop agy from
+writing: agy 1.3.1 created a file inside its `--add-dir` root, on Windows and in WSL
+(`research/RESULTS_agy_searches_through_coai.md` §3). Every agy launch coai starts — a review, a consultation, a
+question row — now carries two blocks, because each one alone fails open in a case that was measured:
+- an agent, `coai-reader`, whose only tool is `view_file`, started with `--agent coai-reader`;
+- a `PreToolUse` hook that allows `view_file` and denies every other tool. Its handler is coai-mcp itself
+  (`coai-mcp --agy-hook`); a tool call it cannot read is denied.
+- Both live in a folder coai owns in your own application-data folder (`coai-agy/`), owner-only on Linux and macOS.
+  agy runs from there and reaches your checkout through `--add-dir`. Your own agy settings are not touched.
+- If that folder cannot be prepared, agy is not started, and the consultation says which folder to make writable.
+- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on each side, and reads
+  still work, 3 of 3 on each side.
+
+**An Antigravity consultant can list and search the checkout.** In `--mode plan` agy can only open a file by its
+exact path, so a question about the disk often got "run this command yourself". Now agy asks coai with a short
+`coai-lookup` block — `list <folder>` or `search "<text>" in <folder>` (a literal, not a regex) — and coai answers in
+the same agy conversation, up to 3 times per answer, for question rows and inside one `consult` call.
+- The lookup stays inside the granted folders. It never shows `.git`, dependency or build folders, lock files,
+  credential-like names or binaries; results are redacted, and every cap is named in the result.
+- A turn is billed once. Measured through the product: a question row answered 3 of 3 on Windows and 3 of 3 in WSL,
+  and found the right file in WSL 3 of 3 (1 of 3 before).
 
 ## Server 0.44.2 — 2026-10-07
 

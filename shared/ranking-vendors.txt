@@ -1,6 +1,6 @@
 # The RUNTIMES whose models may be shown a finding's OWN WORDS.
 #
-# A runtime, not a row id (todo/PLAN_one_model_catalog.md, epic 2, story 1): a Bugz model is `rowId/model`, and the
+# A runtime, not a row id (research/PLAN_one_model_catalog.md, epic 2, story 1): a Bugz model is `rowId/model`, and the
 # id is a name a person chose — `local-2`, `bugz-local` — while the runtime decides where the text goes. The caller
 # says the row's runtime (`--collect-bugs --runtime`); without it the row id stands in, as it always did.
 #

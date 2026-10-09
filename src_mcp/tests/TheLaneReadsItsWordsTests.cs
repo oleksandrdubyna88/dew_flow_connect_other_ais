@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>COAI_SECURITY_LANE</c> carries a signal's words (<c>signals</c>) and a card's own words (a prompt's <c>words</c>),
-/// and the lane detects with them (todo/PLAN_one_model_catalog.md, epic 2, story 4).
+/// and the lane detects with them (research/PLAN_one_model_catalog.md, epic 2, story 4).
 /// </summary>
 /// <remarks>
 /// Absent, the shipped words. A pattern the engine refuses is a COMPLAINT naming the pattern and its signal — the lane

@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 /// A reviewer list that is EMPTY is empty — never "nothing configured, run the defaults".
 /// </summary>
 /// <remarks>
-/// <para>The cadence consultation for epics 1–3 of todo/PLAN_one_model_catalog.md (finding 3): a catalog whose rows
+/// <para>The cadence consultation for epics 1–3 of research/PLAN_one_model_catalog.md (finding 3): a catalog whose rows
 /// review nothing — a chat model alone, an import, a hand edit — reaches the server as <c>COAI_VENDORS="[]"</c>, and
 /// the server read that like an unset variable and ran Codex and Antigravity, reviewers the person never chose.
 /// The round's own refusal ("nothing could review the stage … every configured vendor is disabled") is the honest

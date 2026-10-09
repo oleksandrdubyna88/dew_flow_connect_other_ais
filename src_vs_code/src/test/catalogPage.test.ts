@@ -7,7 +7,7 @@ import { Node, runPageHtml } from './pageScriptHarness';
 import { bubbled, pageTree, selectorsOf } from './pageTree';
 
 /**
- * The Settings page, RUN (todo/PLAN_one_model_catalog.md, E3.1): six tabs and their sub-tabs, one place held by
+ * The Settings page, RUN (research/PLAN_one_model_catalog.md, E3.1): six tabs and their sub-tabs, one place held by
  * the host, and the one confirm dialog. Every assertion watches the page's own
  * script over nodes read OUT OF its own markup.
  */
@@ -209,7 +209,7 @@ test('Keep it closes the dialog and sends nothing', () => {
 });
 
 test('the Settings page is the only one: it offers no way to another page and calls itself no preview', () => {
-  // E5.1 step 5 of todo/PLAN_one_model_catalog.md removed the page this one replaced and the switch between them. RUN,
+  // E5.1 step 5 of research/PLAN_one_model_catalog.md removed the page this one replaced and the switch between them. RUN,
   // over the drawn tree (PR #713, CodeRabbit): every button the page binds, and everything it posts once loaded.
   const html = catalogHtml(state(), 'test-nonce', 'models');
   const tree = pageTree(html);

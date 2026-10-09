@@ -656,7 +656,7 @@ public sealed class ConsultationService(
 
         var ready = (ConsultantPreparation.Ready)prepared;
         // The row's system prompt is redacted from what the child says, as a reviewer's is: a CLI echoes its prompt, and a
-        // failing one quotes it into the reason that reaches the record and the reply (todo/PLAN_one_model_catalog.md, C2).
+        // failing one quotes it into the reason that reaches the record and the reply (research/PLAN_one_model_catalog.md, C2).
         var launch = consultant.Runtime.Build(ready.Launch) with { Redact = ConsultantTurnInputs.Redacted(record.RowInstruction) };
         // What the turn is SENT rides the record from here on, so every ending — answered or failed — carries it.
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow), Confinement = ready.Confinement };

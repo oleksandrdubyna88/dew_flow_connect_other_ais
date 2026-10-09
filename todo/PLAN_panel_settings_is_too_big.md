@@ -91,6 +91,6 @@ One commit per step, each proved on its own: the build is green, the full suites
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | `VendorDto` and its parsing in `PanelSettings.cs` | as written above | adds row fields in its E2 and no new section; whichever lands second rebases onto the other |

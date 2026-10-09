@@ -100,7 +100,7 @@ public class VendorRuntimeSurvivesParsingTests
     [Fact]
     public void AnUnknownRuntimeSurvivesParsing_SoItIsRefusedByName()
     {
-        // Reversed by todo/PLAN_one_model_catalog.md, epic 2, story 1: it used to become codex, which ran the Codex CLI
+        // Reversed by research/PLAN_one_model_catalog.md, epic 2, story 1: it used to become codex, which ran the Codex CLI
         // on the person's own account for a row set to something else. Kept, the round refuses it by this name
         // (AnUnknownRuntimeIsRefusedByNameTests).
         Parse("something-from-a-newer-panel").Runtime.Should().Be("something-from-a-newer-panel");

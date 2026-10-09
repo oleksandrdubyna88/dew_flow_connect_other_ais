@@ -8,7 +8,7 @@ import { escapeHtml } from './escapeHtml';
 import { DEFAULT_CHAT, chatProviderListFor, chatSendingFields, type PanelState } from './panelView';
 
 /**
- * Chat on the Settings page (todo/PLAN_one_model_catalog.md E4.6b): which model a chat opens on, what it is sent
+ * Chat on the Settings page (research/PLAN_one_model_catalog.md E4.6b): which model a chat opens on, what it is sent
  * with and how, and the prompt presets inline. The models are the rows ticked Chat on Models that can answer; their
  * edits — the opening model, a model's opening text, a prompt — are the Chat presets tab's own messages, posted as
  * `chatPresets` into the one editing core (`chatPresetsHost.ts`). The sending fields are
@@ -123,7 +123,7 @@ const FIELD_LABELS: Readonly<Record<CopiedField, string>> = {
 };
 
 /**
- * A chat preset an older build edited after it moved (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7): the
+ * A chat preset an older build edited after it moved (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7): the
  * row as it is, the edited values beside it, and the two choices. Beside the stranded pick because it is the same kind of
  * thing — what is configured differs from what the chat runs, and only the person can say which is right. Nothing is
  * changed until they choose; the row keeps working meanwhile. Each choice is the presets' own message (`revision`), into

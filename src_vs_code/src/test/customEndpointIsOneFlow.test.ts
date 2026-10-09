@@ -11,7 +11,7 @@ import { test } from 'node:test';
  * the vault entry: two copies of the flow drifting on validation would be two spellings of one name,
  * which is two keys and a credential that is only there half the time. Story C6 extracted the boxes
  * out of `addVendor` for precisely that reason, and this is what stops them being pasted back. (The
- * consultant's own flow that shared them went with the old Settings page, todo/PLAN_one_model_catalog.md
+ * consultant's own flow that shared them went with the old Settings page, research/PLAN_one_model_catalog.md
  * E5.3: a caller now picks a model from Models, where *Add a model* is the one way to make one.)</p>
  *
  * <p><b>Each assertion pins BOTH halves of its condition.</b> A structural test that only checks the

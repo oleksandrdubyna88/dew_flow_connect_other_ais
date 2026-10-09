@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A row whose runtime this build does not run is refused, naming that runtime — never run as something else
-/// (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+/// (research/PLAN_one_model_catalog.md, epic 2, story 1).
 /// </summary>
 /// <remarks>
 /// <para>It used to become <c>codex</c> at parsing, so "a name from a newer panel still launches something". What it

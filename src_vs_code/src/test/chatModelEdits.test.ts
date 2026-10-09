@@ -4,7 +4,7 @@ import { chatModelAdd, chatModelEdit, type ChatModelStores } from '../chatModelE
 import { DEFAULT_VENDORS } from '../vendors';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md: the chat presets page edits ONE store. A model that is a catalog row is
+ * E4.6a of research/PLAN_one_model_catalog.md: the chat presets page edits ONE store. A model that is a catalog row is
  * edited on the row — so a moved preset can never be edited in `chatModelPresets` again — and a preset the move has not
  * taken (before the move, after a refused one, in a restored layer) keeps its own path. Main is the chat model.
  */

@@ -12,7 +12,7 @@ import { roleBlockIn, runRolesPlace } from './rolesPlaceHarness';
 /**
  * The roles' editor shows that a structural change is working (research/PLAN_busy_marks_on_every_webview.md, E3) —
  * Reviews › Roles & prompts on the Settings page, which held these for the Review roles tab until E5.1 step 4 of
- * todo/PLAN_one_model_catalog.md deleted it.
+ * research/PLAN_one_model_catalog.md deleted it.
  *
  * <p>Adding or removing a role or a prompt, restoring one, or switching a role on re-reads every prompt file and redraws
  * — with nothing on screen meanwhile. Typing is not marked: a field settles for 300 ms by design, and a bar over the

@@ -8,7 +8,7 @@ import { editRepaints, editedRows, presetEdit, presetSettlesAs } from '../chatPr
  * makes for the chat page and for the same reason: the module that maps a webview message to an action is otherwise the
  * one no unit test can reach.
  *
- * <p>These sat beside the Chat presets tab's markup tests until E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted
+ * <p>These sat beside the Chat presets tab's markup tests until E5.1 step 4 of research/PLAN_one_model_catalog.md deleted
  * the tab; the parser is the one Chat on the Settings page posts through (`chatTabEmbed.ts`), and what the tab DREW is
  * asked of that place in `chatOnTheNewPage.test.ts`.</p>
  */

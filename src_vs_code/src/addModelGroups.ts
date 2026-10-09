@@ -1,5 +1,5 @@
 /**
- * "Add a model" grouped by WHERE the model runs (todo/PLAN_one_model_catalog.md E3.2): a CLI on this machine, an API key,
+ * "Add a model" grouped by WHERE the model runs (research/PLAN_one_model_catalog.md E3.2): a CLI on this machine, an API key,
  * this machine's GPU, a Team server — the four questions a person can answer before they know a vendor's name. Pure:
  * the host turns a `separator` into the picker's own separator item.
  */
