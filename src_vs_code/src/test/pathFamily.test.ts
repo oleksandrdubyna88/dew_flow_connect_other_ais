@@ -12,54 +12,75 @@ import { RootExistence, directoryAt, existingHere, otherSideHere, qualified, spe
  * file. The JSON is validated into shape rather than cast.
  */
 
-interface Vector {
-  readonly path: string;
-  readonly onWindows: boolean;
-  readonly elsewhere: boolean;
-  readonly why: string;
+/** One vector row, checked: every field read through its type, a missing or mistyped one failing with where it is. */
+interface Row {
+  readonly where: string;
+  text(name: string): string;
+  flag(name: string): boolean;
+  /** A flag a row may leave out — false when absent, and a boolean when present. */
+  optionalFlag(name: string): boolean;
 }
 
-function vectors(): readonly Vector[] {
+/** A parsed JSON value as a vector row — a non-null, non-array object, or a failure naming the row (never a TypeError). */
+function rowOf(value: unknown, where: string): Row {
+  assert.ok(typeof value === 'object' && value !== null && !Array.isArray(value), `${where} is a vector row — a JSON object, not ${JSON.stringify(value)}`);
+  const fields = new Map(Object.entries(value));
+  const field = (name: string, kind: 'string' | 'boolean'): unknown => {
+    const one = fields.get(name);
+    assert.equal(typeof one, kind, `${where}.${name} is a ${kind}, not ${JSON.stringify(one)}`);
+
+    return one;
+  };
+
+  return {
+    where,
+    text: (name) => String(field(name, 'string')),
+    flag: (name) => field(name, 'boolean') === true,
+    optionalFlag: (name) => fields.has(name) && field(name, 'boolean') === true,
+  };
+}
+
+/** A section of `shared/path-family-vectors.json`, every row checked. */
+function rowsOf(section: string): readonly Row[] {
   const file = path.join(__dirname, '..', '..', '..', 'shared', 'path-family-vectors.json');
-  const rows: unknown = (JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>)['vectors'];
-  assert.ok(Array.isArray(rows), 'shared/path-family-vectors.json carries no `vectors` array');
+  const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.ok(typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed), 'shared/path-family-vectors.json is not a JSON object');
+  const rows = new Map(Object.entries(parsed)).get(section);
+  assert.ok(Array.isArray(rows), `shared/path-family-vectors.json carries no \`${section}\` array`);
 
-  return rows.map((row: unknown, at: number) => {
-    const one = row as Record<string, unknown>;
-    assert.equal(typeof one['path'], 'string', `vector ${at} has no path`);
-    assert.equal(typeof one['onWindows'], 'boolean', `vector ${at} has no Windows verdict`);
-    assert.equal(typeof one['elsewhere'], 'boolean', `vector ${at} has no verdict for Linux, WSL or macOS`);
-
-    return { path: one['path'] as string, onWindows: one['onWindows'] as boolean, elsewhere: one['elsewhere'] as boolean, why: String(one['why'] ?? '') };
-  });
+  return rows.map((row: unknown, at: number) => rowOf(row, `${section}[${at}]`));
 }
+
+test('a vector row that is not an object fails naming the row, not with a TypeError from the reader', () => {
+  assert.throws(() => rowOf(null, 'existence[0]'), /existence\[0\] is a vector row — a JSON object, not null/);
+  assert.throws(() => rowOf([], 'existence[1]'), /existence\[1\] is a vector row/);
+  assert.throws(() => rowOf({ path: 3 }, 'existence[2]').text('path'), /existence\[2\]\.path is a string, not 3/);
+  assert.equal(rowOf({ windows: true }, 'x').optionalFlag('unknownHere'), false, 'an optional flag left out is false');
+});
 
 test('which roots are the other side\'s answers the shared vectors, on both platforms, as the server does', () => {
-  const all = vectors();
+  const all = rowsOf('vectors');
   assert.ok(all.length > 5, 'the file is read, not an empty array');
-  assert.ok(all.some((v) => v.onWindows) && all.some((v) => v.elsewhere), 'both directions are in the file');
+  assert.ok(all.some((v) => v.flag('onWindows')) && all.some((v) => v.flag('elsewhere')), 'both directions are in the file');
 
   for (const vector of all) {
-    assert.equal(spelledForTheOtherOs(vector.path, true), vector.onWindows, `on Windows: ${vector.path} — ${vector.why}`);
-    assert.equal(spelledForTheOtherOs(vector.path, false), vector.elsewhere, `elsewhere: ${vector.path} — ${vector.why}`);
+    assert.equal(spelledForTheOtherOs(vector.text('path'), true), vector.flag('onWindows'), `on Windows: ${vector.text('path')} — ${vector.text('why')}`);
+    assert.equal(spelledForTheOtherOs(vector.text('path'), false), vector.flag('elsewhere'), `elsewhere: ${vector.text('path')} — ${vector.text('why')}`);
   }
 });
 
 test('the decision asks whether the root EXISTS here, and answers the shared existence vectors as the server does', () => {
-  // On Windows `/work` is the folder `work` at the root of the current drive: spelled like WSL, and this side's when it is there.
-  const file = path.join(__dirname, '..', '..', '..', 'shared', 'path-family-vectors.json');
-  const rows: unknown = (JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>)['existence'];
-  assert.ok(Array.isArray(rows) && rows.length > 2, 'shared/path-family-vectors.json carries no `existence` array');
+  // On Windows `/work` is the folder `work` (on the system drive): spelled like WSL, and this side's when it is there — or
+  // when the disk could not tell (`unknownHere`, the third code round): only a CONFIRMED absence is the other side's.
+  const all = rowsOf('existence');
+  assert.ok(all.length > 2, 'the file is read, not an empty array');
+  assert.ok(all.some((v) => v.optionalFlag('unknownHere')), 'the unknown state is pinned in the file both halves read');
 
-  for (const [at, row] of rows.entries()) {
-    const one = row as Record<string, unknown>;
-    for (const key of ['windows', 'existsHere', 'otherSide']) {
-      assert.equal(typeof one[key], 'boolean', `existence vector ${at} has no ${key}`);
-    }
+  for (const one of all) {
     assert.equal(
-      otherSideHere(String(one['path']), one['windows'] as boolean, one['existsHere'] as boolean),
-      one['otherSide'],
-      `${String(one['path'])} (windows: ${String(one['windows'])}, exists: ${String(one['existsHere'])}) — ${String(one['why'] ?? '')}`,
+      otherSideHere(one.text('path'), one.flag('windows'), one.flag('existsHere'), one.optionalFlag('unknownHere')),
+      one.flag('otherSide'),
+      `${one.where}: ${one.text('path')} (windows: ${one.flag('windows')}, exists: ${one.flag('existsHere')}, unknown: ${one.optionalFlag('unknownHere')}) — ${one.text('why')}`,
     );
   }
 });
@@ -121,17 +142,14 @@ test('an answer holding an unknown root is not kept: the next render asks the di
 });
 
 test('a root is qualified the way the server qualifies it, answering the shared resolution vectors', () => {
-  const file = path.join(__dirname, '..', '..', '..', 'shared', 'path-family-vectors.json');
-  const rows: unknown = (JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>)['resolution'];
-  assert.ok(Array.isArray(rows) && rows.length > 4, 'shared/path-family-vectors.json carries no `resolution` array');
+  const all = rowsOf('resolution');
+  assert.ok(all.length > 4, 'the file is read, not an empty array');
 
-  for (const [at, row] of rows.entries()) {
-    const one = row as Record<string, unknown>;
-    assert.equal(typeof one['windows'], 'boolean', `resolution vector ${at} has no windows`);
+  for (const one of all) {
     assert.equal(
-      qualified(String(one['path']), one['windows'] as boolean, String(one['systemDrive'])),
-      one['qualified'],
-      `${String(one['path'])} (windows: ${String(one['windows'])}, drive: ${String(one['systemDrive'])}) — ${String(one['why'] ?? '')}`,
+      qualified(one.text('path'), one.flag('windows'), one.text('systemDrive')),
+      one.text('qualified'),
+      `${one.where}: ${one.text('path')} (windows: ${one.flag('windows')}, drive: ${one.text('systemDrive')}) — ${one.text('why')}`,
     );
   }
   assert.equal(systemDriveOf('E:'), 'E:');
