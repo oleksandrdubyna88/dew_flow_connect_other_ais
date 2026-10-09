@@ -112,10 +112,14 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
   const { join } = await import('node:path');
   const host = readFileSync(join(process.cwd(), 'src', 'panelProvider.ts'), 'utf8');
 
-  for (const stored of ["'vendors'", 'write.key', "'consultants'", "'commandModels'"]) {
+  for (const stored of ["'vendors'", 'write.key', "'commandModels'"]) {
     // A substring, not a RegExp built from text: nothing here needs a pattern (CodeQL, on the PR).
     assert.ok(host.includes(`await this.saveWrite(config, ${stored}, `), `a ${stored} write is saved without the snap-back`);
   }
+  // A consultant is a caller's PICK of a catalog row since the caller definitions went with the old page (E5.3): the
+  // pick is the one consultant write, and it snaps back the same way.
+  assert.ok(host.includes('await saveOrSnapBack(() => this.savePick(write.caller, String(write.value ?? \'\')), afterTheWrite(() => this.snapBack(from)), write.value, write.control);'),
+    'a consultant pick is saved without the snap-back');
   assert.match(host, /await writePlain\(write\.key, write\.value, clearedByWriting\(write\.key\), \{[\s\S]*?\}, write\.control\);/,
     'the plain case no longer hands writePlain the control');
   // Each link pinned whole (PR review): the control reaching the rule, the repaint STARTED rather than

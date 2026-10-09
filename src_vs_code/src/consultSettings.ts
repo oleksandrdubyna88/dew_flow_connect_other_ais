@@ -13,7 +13,7 @@
 import { compareVersions } from './coaiInstall';
 import { CONSULTING } from './featureAvailability.generated';
 import { Runtime, RUNTIMES } from './models';
-import { VENDOR_PRESETS, Vendor, vendorsFrom } from './vendors';
+import { Vendor, vendorsFrom } from './vendors';
 
 /**
  * The callers a consultant can be configured for — the kinds `CallerIdentity.KindFrom` answers.
@@ -108,7 +108,7 @@ export interface ConsultSettings {
  * <p>Read from the shared file (PLAN_one_model_catalog.md D4, E1.2), never typed here; coai-mcp's
  * `ConsultantResolution.Consulting` is held to the same file by `FeatureAvailabilityTests` until E2.1 reads
  * it. The alternative was asking the server, which cannot answer before it is installed — and this list
- * decides what a picker OFFERS, which has to be drawable the first time the panel opens.</p>
+ * decides which models may be ticked consultant on Models, which has to be drawable the first time the panel opens.</p>
  *
  * <p>Typed as runtimes rather than strings since {@link resolveConsultant} rule (b) resolves an id
  * INTO one of them: a `find` over this list is then a `Runtime` with no cast standing in for a type.</p>
@@ -188,8 +188,8 @@ type Read = (section: string) => unknown;
  * that runs when the section is edited never runs for the person who never edits it — and the
  * opening symptom of `PLAN_the_consultant_has_its_own_vendors` was a panel nobody had touched.
  * Resolving on read fixes it with no write at all, and identically on both halves once the server
- * applies the same rule (story B3); the first edit in the section is what writes a definition back
- * (story A2). The rows it resolves against are the ones THIS reader sees through `vendorsFrom` — the
+ * applies the same rule (story B3); a pick on the Consultant tab writes a reference to a catalog row
+ * (todo/PLAN_one_model_catalog.md E4.2). The rows it resolves against are the ones THIS reader sees through `vendorsFrom` — the
  * same parse the Reviewers section draws — so a row a person can see is a row a legacy entry can
  * borrow from.</p>
  */
@@ -250,14 +250,11 @@ const CHOICE_SHAPE: Readonly<Record<keyof ConsultantChoice, true>> = {
 export const CHOICE_FIELDS: readonly (keyof ConsultantChoice)[] = Object.keys(CHOICE_SHAPE).filter(isChoiceField);
 
 /**
- * Whether a name is one of the fields a choice has — the ONE answer to that question.
- *
- * <p>Exported because the write path asks it too, of the keys a stored row holds, to tell the fields
- * it manages from a field a newer panel wrote that it must not delete. A second spelling there would
- * be a second list to keep level with this type, which is the whole defect {@link CHOICE_SHAPE}
- * exists to close.</p>
+ * Whether a name is one of the fields a choice has — the ONE answer to that question, which
+ * {@link CHOICE_FIELDS} is derived from. A second spelling would be a second list to keep level with
+ * this type, which is the whole defect {@link CHOICE_SHAPE} exists to close.
  */
-export function isChoiceField(name: string): name is keyof ConsultantChoice {
+function isChoiceField(name: string): name is keyof ConsultantChoice {
   return Object.hasOwn(CHOICE_SHAPE, name);
 }
 
@@ -407,23 +404,15 @@ const CALLER_RUNTIMES: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
- * The note beside a row whose consultant is the caller's own vendor.
+ * Whether a runtime IS the caller's own vendor — the consultant would share its blind spots.
  *
  * <p>Allowed, never refused: the server cannot see the caller's MODEL, only its vendor, so
  * "Fable answering a Sonnet session" and "Sonnet answering itself" look identical from here. The
- * person can tell them apart, so the panel says what to think about rather than deciding for them.</p>
- *
- * <p>The runtime is the RESOLVED one — what {@link resolveConsultant} answered for the entry — and
- * the parameter says so in its type since story C5. It used to be a bare `string`, and the section
- * handed it a reviewer ROW's runtime: the note was then a fact about somebody's reviewer rather than
- * about the consultant this caller will actually reach. `Runtime | ''` is exactly what a resolved
- * entry carries — `''` for one the rule could not place, which is nobody's vendor and so never the
- * caller's own.</p>
+ * person can tell them apart, so the page says what to think about rather than deciding for them
+ * (`consultantPicks.ts`).</p>
  */
-export function sameVendorNote(callerKind: string, runtime: Runtime | ''): string {
-  return (CALLER_RUNTIMES[callerKind] ?? []).includes(runtime)
-    ? 'the same vendor as the caller — worth it only with a stronger model, since a model cannot see its own blind spot'
-    : '';
+export function isCallersOwnRuntime(callerKind: string, runtime: string): boolean {
+  return (CALLER_RUNTIMES[callerKind] ?? []).includes(runtime);
 }
 
 /**
@@ -450,7 +439,7 @@ export const CONSULTANT_DEFINITION_SINCE = '0.23.0';
 
 /**
  * The sentence the Consultant section shows while the installed server would consult through the
- * reviewer row instead of the definition the section draws — or nothing.
+ * reviewer row instead of the definition stored for a caller — or nothing.
  *
  * <p>Nothing unless the server is KNOWN and strictly older — the rule its three siblings apply
  * (`conventionsSkew`, `roleSwitchSkew`, `customRolesSkew` in `panelView.ts`). Pure, with the version
@@ -492,16 +481,16 @@ export function consultantSkewNote(
 /**
  * One name pointing at two endpoints, said rather than silently allowed.
  *
- * <p>The flow that MINTS a name refuses a clash — `endpointConflict`, in the two boxes — but the
- * endpoint box in each row goes nowhere near it, and there is no honest way to make it: refusing an
- * inline edit means throwing away what somebody typed with nowhere to say why. A vendor id keys ONE
+ * <p>The flow that MINTS a name refuses a clash — `endpointConflict`, in the two boxes — but a stored
+ * consultant definition (written before the Consultant tab's picks, or by hand) went nowhere near it, and
+ * rewriting what somebody stored is not the panel's to do. A vendor id keys ONE
  * entry in the vault, so a consultant called `mistral` at one URL beside a reviewer called `mistral`
  * at another is one credential being offered to two services, and only the person can decide which
  * was the mistake. (gemini, C6's code round.)</p>
  *
  * <p>It lives here rather than in the section for the same reason `consultantSkewNote` does: the
- * sentence needs the reviewer ROWS, and the section deliberately holds none since story C5. The
- * panel, which has both, puts it beside the rows.</p>
+ * sentence needs the reviewer ROWS, and the section holds none. The panel, which has both, puts it
+ * beside the section.</p>
  */
 export function vaultKeyNote(consult: ConsultSettings, vendors: readonly Vendor[]): string {
   const split = CALLER_KINDS
@@ -572,109 +561,12 @@ function listed(labels: readonly string[]): string {
 }
 
 /**
- * One entry of the catalogue a consultant may be picked from — the preset's own identity and settings.
- *
- * <p>Structural, and satisfied by a {@link VENDOR_PRESETS} entry without a cast: the catalogue is the
- * one declaration and this is the part of it a consultant needs. `enabled`, the stage ticks and the
- * prices are a REVIEWER's fields and have no meaning here, so they are not in the type the section and
- * the write path see.</p>
- */
-export interface ConsultantPreset {
-  readonly id: string;
-  readonly label: string;
-  readonly hint: string;
-  readonly runtime: Runtime;
-  /** The preset's own model. Empty = the runtime's own default. */
-  readonly model: string;
-  readonly baseUrl: string;
-  readonly executablePath: string;
-}
-
-/**
- * The CATALOGUE a consultant is picked from, and the reason an entry cannot be offered.
- *
- * <p><b>It takes no reviewer rows, since story C5 of `PLAN_the_consultant_has_its_own_vendors`.</b>
- * It used to filter the rows a person had configured in *Reviewers*, which is the whole defect the
- * operator ruled on (2026-09-14): <i>one catalogue of what can be picked, three independent sets of
- * settings</i>. A consultant that borrowed a reviewer row died when that row was removed, refused
- * when it was switched off, and was labelled in internal ids two sections below a picker offering
- * `Codex (OpenAI)` and `DeepSeek`. This is the same filter-and-map the chat's step 1 performs over
- * the same constant (`askWhichVendor` in `chatModelWizard.ts`) — one source, so a vendor added to
- * the product appears in both pickers without anybody remembering to.</p>
- *
- * <p><b>A Team server cannot appear, by construction</b>: `remote` rows are not in `VENDOR_PRESETS`
- * at all, and the chat appends its servers separately. That is the ruling's third clause — Team
- * servers stay forbidden for the consultant — held by the shape rather than by a filter somebody
- * could forget.</p>
- *
- * <p><b>What it refuses, it NAMES.</b> The retired `gemini` preset is the case: Google closed Code
- * Assist for individual accounts, the runtime is not in {@link CONSULTING_RUNTIMES}, and a preset
- * that vanished silently would be a person hunting for a vendor they can see offered one section
- * above. `chatModelsFrom` made the same call.</p>
- *
- * <p><b>The blank-id preset comes back SEPARATELY, as `custom` (story C6).</b> "Another
- * OpenAI-compatible endpoint" has no id, and an id is what keys the vault entry and the usage ledger,
- * so it cannot be an option whose value is stored — picking it would put `''` on disk before anybody
- * was asked for a name. It is not in `offered` for that reason and it is not `refused` either, because
- * it is not a vendor somebody configured and cannot use. It is a REQUEST, carried by
- * {@link CUSTOM_ENDPOINT} and answered by the host, which asks for the name and the URL exactly as
- * *Add a model* does.</p>
- *
- * <p><b>`runtimes` is the one widening</b> (todo/PLAN_question_consultant.md, S4): the question consultant
- * offers the same catalogue under ITS runtimes — the `api` runtime included, which a stuck consultation cannot
- * hold — rather than keeping a second picker beside this one.</p>
- */
-export function consultableVendors(runtimes: readonly Runtime[] = CONSULTING_RUNTIMES): {
-  readonly offered: readonly ConsultantPreset[];
-  readonly refused: readonly { readonly id: string; readonly label: string; readonly why: string }[];
-  /**
-   * The catalogue's own words for "one of your own", and the RUNTIME it says such a thing runs on.
-   *
-   * <p>The runtime travels because the write must not decide it: hard-coding `codex` there meant the
-   * picker showing this preset's label while the stored definition named a runtime the catalogue no
-   * longer said it was — the two would drift the day the blank entry became anything else, and the
-   * endpoint would launch through the wrong CLI or be refused. Absent only if the catalogue drops
-   * the entry, or gives it a runtime that cannot consult. (codex, C6's code round.)</p>
-   */
-  readonly custom: { readonly label: string; readonly hint: string; readonly runtime: Runtime } | undefined;
-} {
-  const named = VENDOR_PRESETS.filter((preset) => preset.id.length > 0);
-  const blank = VENDOR_PRESETS.find((preset) => preset.id.length === 0);
-
-  return {
-    offered: named.filter((preset) => runtimes.includes(preset.runtime)),
-    refused: named
-      .filter((preset) => !runtimes.includes(preset.runtime))
-      .map((preset) => ({
-        id: preset.id,
-        label: preset.label,
-        why: `it runs on '${preset.runtime}', which cannot hold a consultation`,
-      })),
-    custom: blank === undefined || !runtimes.includes(blank.runtime)
-      ? undefined
-      : { label: blank.label, hint: blank.hint, runtime: blank.runtime },
-  };
-}
-
-/**
- * The value that is not a vendor: a request for one, posted as a COMMAND rather than stored.
- *
- * <p>A `<select>` can only carry values, and the one thing that must never reach disk is an entry
- * with no id — `{ vendor: '' }` keys no vault entry and no ledger line, and a person would see it in
- * their settings file and be unable to choose it in the panel. So this option's value is a sentinel
- * the page's script recognises: it posts `customConsultant` with the caller and writes nothing, and
- * the host comes back having asked for a name and a base URL. `__other__` in the model picker is the
- * same shape, and the underscores are what keep it out of the id space `normaliseId` produces.</p>
- */
-export const CUSTOM_ENDPOINT = '__endpoint__';
-
-/**
  * The stored map resolved against the reviewer rows — the RESULT for every caller kind, whole.
  *
  * <p>This is where an unavailable entry lives on. A definition is carried as itself; an entry the
  * rule cannot place is carried as the `unavailable` result — vendor and model raw, and the `why` —
  * rather than as the stored choice it came from. The first cut did the latter, and it cost the one
- * sentence a person can act on: the section (story C5) renders that sentence, and with the reason
+ * sentence a person can act on: the Consultant tab renders that sentence under each pick, and with the reason
  * discarded it would have had to re-run {@link resolveConsultant} against `stored` plus the rows to
  * recover it — two roads to one decision, which is the defect this module's one-reader rule exists
  * to prevent. So the map is typed by what the rule ANSWERED, and `kind` says which it was. (codex
@@ -695,10 +587,9 @@ function resolveAll(
 /**
  * ONE stored row, read exactly as {@link consultSettingsFrom} reads the four.
  *
- * <p>Exported for the WRITE path, which has to start from the row as stored before it resolves and
- * puts a definition back (`consultantRecordUpdate`). It is the same reader rather than a second one
- * on purpose: two spellings of "what does this row say" is how the panel comes to store a shape its
- * own reader will not accept.</p>
+ * <p>Exported for the catalog's fold and migration and the endpoint check, which each read a row as stored. It is
+ * the same reader rather than a second one on purpose: two spellings of "what does this row say" is how the panel
+ * comes to store a shape its own reader will not accept.</p>
  */
 export function consultantChoiceFrom(row: unknown): ConsultantChoice {
   return entryFrom(asRecord(row));

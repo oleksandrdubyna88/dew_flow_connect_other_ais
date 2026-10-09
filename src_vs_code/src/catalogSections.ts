@@ -15,9 +15,9 @@ import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import type { Vendor } from './vendors';
 
 /**
- * What each place of the new Settings page draws besides Models (todo/PLAN_one_model_catalog.md E4.1): the old page's
- * own section for that place, by its own builder — never a copy — so a control behaves the same on both pages until
- * E5 retires the old one. Pure: the page calls it, tests read it.
+ * What each place of the Settings page draws besides Models (todo/PLAN_one_model_catalog.md E4.1): the section the old
+ * page drew for that place, by the same builder — never a copy — which is why a control kept behaving the same through
+ * the switch-over (E5). Pure: the page calls it, tests read it.
  *
  * <p>Every builder is NAMED here, in {@link SPLIT} or {@link MOVED_SECTIONS}. Until E5's prerequisite (b) the moved
  * sections were found by searching the old page's section list (`PANEL_SECTIONS`) through `OLD_TAB_PLACES`, so deleting
@@ -35,7 +35,7 @@ const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
   // Chat, drawn from the rows ticked Chat with the prompt presets inline (E4.6b).
   chat: chatTabHtml,
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),
-  // Each pick with its caller's health block under it — the current page's block, by its own rule (E5.1b).
+  // Each pick with its caller's health block under it, by the one rule (E5.1b).
   'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors, state.consultantHealth)),
   'consultants/qconsult': (state) => questionConsultantSection(state, state.catalogRows ?? state.vendors),
   security: (state) => {
@@ -60,15 +60,15 @@ const UNTICKED: Readonly<Partial<Record<CatalogUse, string>>> = {
 
 /**
  * The state the keys are drawn with: counted across EVERY row (E4.5), because a row that exists for a feature alone still
- * needs its key, and the panel's `vendors` holds the current page's reviewers only.
+ * needs its key, and the panel's `vendors` holds the reviewers only.
  */
 function everyRow(state: PanelState): PanelState {
   return { ...state, vendors: state.catalogRows ?? state.vendors };
 }
 
 /**
- * The old sections drawn here as they are, by place, each by the builder the old page draws it with. The old page's
- * Reviewers tab is Models, which the page builds itself; every other old tab is in {@link SPLIT}.
+ * The sections drawn here as they are, by place, each by the builder the old page drew it with. The old page's
+ * Reviewers tab became Models, which the page builds itself; every other old tab is in {@link SPLIT}.
  */
 const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = {
   // Its "Edit commands…" a jump to Reviews › Commands here, never the commands page (E5.1 step 1).
@@ -96,7 +96,7 @@ function sectionAt(place: string, state: PanelState): string {
   return split === undefined ? `${movedSectionAt(place, state)}${afterAt(place, state)}` : split(state);
 }
 
-/** The current page's section for this place, by its own builder — '' where it has none. */
+/** The moved section for this place, by its own builder — '' where it has none. */
 function movedSectionAt(place: string, state: PanelState): string {
   const moved = MOVED_SECTIONS[place];
 

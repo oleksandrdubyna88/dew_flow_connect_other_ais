@@ -18,7 +18,7 @@ import type { RolesEmbedState } from './rolesEmbed';
 
 /**
  * The editing core of the review roles — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.3): the
- * Review roles tab (`rolesPanel.ts`, deleted in E5.1) and, on the new Settings page, Reviews › Roles & prompts. Moved here from
+ * Review roles tab (`rolesPanel.ts`, deleted in E5.1) and, on the Settings page, Reviews › Roles & prompts. Moved here from
  * `rolesPanel.ts`, never copied: two copies of "which layer is written, in what order, with which refusals" is the
  * defect the reuse rule exists for.
  *
@@ -123,12 +123,6 @@ async function redrawAll(): Promise<void> {
  */
 export type SwitchesNow = () => Readonly<Record<string, boolean>>;
 
-/**
- * The Review roles tab's: no panel switches, so the guard counts the catalog's switch alone — which is all that tab
- * draws, and the tab is deleted with the current page (E5.1 step 5).
- */
-const CATALOG_ALONE: SwitchesNow = () => ({});
-
 /** One edit in the queue, and the switches it is guarded with. */
 interface QueuedEdit {
   readonly command: RolesCommand;
@@ -137,7 +131,7 @@ interface QueuedEdit {
 
 /**
  * Commands are applied ONE AT A TIME, and a typed field waits to settle before it is stored — `settledWrites.ts`'s two
- * rules. ONE queue for both pages, so an edit on one cannot overtake an edit on the other.
+ * rules. ONE queue, so one edit cannot overtake another.
  */
 const writes = settledWrites<QueuedEdit>({
   apply,
@@ -149,12 +143,12 @@ const writes = settledWrites<QueuedEdit>({
 });
 
 /**
- * One edit, from either page, in the one queue.
+ * One edit, in the one queue.
  *
- * @param roleEnabled the panel's switches the edit is guarded with — the new page's Roles &amp; prompts hands the
+ * @param roleEnabled the panel's switches the edit is guarded with — the Settings page's Roles &amp; prompts hands the
  *   panel's, so a role off by `roleEnabled` does not keep its bucket populated (E5.1b); the Review roles tab hands none
  */
-export const queueRoleEdit = (command: RolesCommand, roleEnabled: SwitchesNow = CATALOG_ALONE): Promise<void> =>
+export const queueRoleEdit = (command: RolesCommand, roleEnabled: SwitchesNow): Promise<void> =>
   writes.queue({ command, roleEnabled });
 
 /** Whatever is still settling — written before a page that typed it goes away. */
@@ -390,7 +384,7 @@ export function reportRolesFailure(message: string, error: unknown): void {
 }
 
 /**
- * The roles as the new Settings page's Roles & prompts draws them (E4.3): the rows, the prompt bodies and the deletions
+ * The roles as the Settings page's Roles & prompts draws them (E4.3): the rows, the prompt bodies and the deletions
  * that cannot clear — the same reads the Review roles tab is drawn from.
  */
 export async function rolesEmbedState(serverVersion: string): Promise<RolesEmbedState> {

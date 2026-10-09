@@ -3,7 +3,7 @@ import { escapeHtml } from './escapeHtml';
 import { securityWire, type SecurityLane } from './securityLane';
 
 /**
- * "Try it" on the new page's Security lane tab (todo/PLAN_one_model_catalog.md E4.2): a sample is put to the INSTALLED
+ * "Try it" on the Settings page's Security lane tab (todo/PLAN_one_model_catalog.md E4.2): a sample is put to the INSTALLED
  * binary — `coai-mcp --check-security`, one JSON object on stdin (E2.4) — and what it answers is drawn. Never a
  * JavaScript copy of the matcher: the binary is what runs the lane, so it is the only honest judge of a sample. Pure,
  * apart from the spawn the host makes with {@link securityTryRequest}.

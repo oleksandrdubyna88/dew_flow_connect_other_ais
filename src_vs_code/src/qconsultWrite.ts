@@ -9,7 +9,7 @@ import { VENDOR_PRESETS, type Vendor, normaliseId } from './vendors';
  * The Question consultant section's DECISIONS and its WRITE path (todo/PLAN_question_consultant.md, S4) —
  * which pair a row may run, when its switch may be turned on, and what an edit stores.
  *
- * <p>Pure and `vscode`-free, like `consultantWrite.ts` beside it: the section draws what these answer and the
+ * <p>Pure and `vscode`-free: the section draws what these answer and the
  * host stores what they return, so the rule is a unit test rather than markup. Every refusal here is ALSO a
  * refusal the server makes (`QuestionRows.Parse`, `CapabilityMatrix.Admit`, `QuestionAdmission`, D14 c), so a
  * hand-edited `settings.json` meets the same answer — the panel only says it first.</p>
@@ -127,9 +127,8 @@ export function isQconsultCommand(value: string): value is QconsultCommand {
 
 /** The keys a row's controls carry, and which field each one edits. */
 export const ROW_KEYS = [
-  'qconsultRowVendor', 'qconsultRowModel', 'qconsultRowBaseUrl', 'qconsultRowExecutablePath', 'qconsultRowKey',
   'qconsultRowPrompt', 'qconsultRowEnabled',
-  // The new Settings page's pick of a catalog row ticked "question consultant" (PLAN_one_model_catalog.md E4.2).
+  // The row's pick of a catalog row ticked "question consultant" (PLAN_one_model_catalog.md E4.2).
   'qconsultRowPick',
 ] as const;
 
@@ -169,22 +168,17 @@ type Edit = (row: QuestionRowSetting, value: unknown, rows: readonly QuestionRow
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
-/** One rule per key — a table rather than a switch, so a ninth key is a compile error here and not a silent no-op. */
+/** One rule per key — a table rather than a switch, so a new key is a compile error here and not a silent no-op. */
 const EDITS: Readonly<Record<RowKey, Edit>> = {
-  qconsultRowVendor: (row, value) => vendorChosen(row, text(value)),
-  qconsultRowModel: (row, value) => ({ ...row, model: text(value) }),
-  qconsultRowBaseUrl: (row, value) => ({ ...row, baseUrl: text(value) }),
-  qconsultRowExecutablePath: (row, value) => ({ ...row, executablePath: text(value) }),
-  qconsultRowKey: (row, value) => ({ ...row, key: text(value).toLowerCase() }),
   qconsultRowPrompt: (row, value, _rows, context) => promptChosen(row, text(value), context),
   qconsultRowEnabled: (row, value, rows, context) => switched(row, value === true, rows, context),
   qconsultRowPick: (row, value, _rows, context) => rowPicked(row, text(value), context.vendors),
 };
 
 /**
- * A catalog row picked on the new page (PLAN_one_model_catalog.md E4.2): the question row becomes a REFERENCE to it —
- * its model is edited on Models — and keeps its id and prompt; it goes OFF, as a vendor change does, because the pair
- * it was switched on as is gone. A row not ticked "question consultant" is refused: it arrives in a webview message.
+ * A catalog row picked (PLAN_one_model_catalog.md E4.2): the question row becomes a REFERENCE to it —
+ * its model is edited on Models — and keeps its id and prompt; it goes OFF, because the pair it was switched on as is
+ * gone. A row not ticked "question consultant" is refused: it arrives in a webview message.
  */
 function rowPicked(row: QuestionRowSetting, id: string, vendors: readonly Vendor[]): QuestionRowSetting | undefined {
   if (pickRefusal('qconsult', id, vendors).length > 0) {
@@ -194,22 +188,6 @@ function rowPicked(row: QuestionRowSetting, id: string, vendors: readonly Vendor
   return row.runtime === '' && row.vendor === id
     ? row
     : { ...row, vendor: id, runtime: '', model: '', baseUrl: '', executablePath: '', key: '', enabled: false };
-}
-
-/**
- * A catalogue entry chosen: the row becomes that entry — runtime, model, endpoint — and stays OFF until it is
- * switched on again, because the pair it was switched on as is gone.
- */
-function vendorChosen(row: QuestionRowSetting, id: string): QuestionRowSetting | undefined {
-  const preset = VENDOR_PRESETS.find((p) => p.id === id && p.id.length > 0);
-  if (preset === undefined) {
-    return undefined;
-  }
-
-  return id === row.vendor ? row : {
-    ...row, vendor: preset.id, runtime: preset.runtime, model: preset.model, baseUrl: preset.baseUrl, executablePath: '', key: '',
-    enabled: false,
-  };
 }
 
 /** A prompt chosen — never none, never one the pair cannot run (A3) — and the row goes off with the old pair. */

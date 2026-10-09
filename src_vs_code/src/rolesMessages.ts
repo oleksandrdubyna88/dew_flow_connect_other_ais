@@ -5,14 +5,14 @@ import { textControlFrom } from './textControls';
  * What a message about the review roles MEANS, decided without a host or a page.
  *
  * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Review roles tab, and Reviews ›
- * Roles &amp; prompts on the new Settings page (todo/PLAN_one_model_catalog.md E4.3), whose `roles` messages reach the
- * same editing core (`rolesHost.ts`). Epic 5 deleted the tab (E5.1), and everything the new page and the core still take
+ * Roles &amp; prompts on the Settings page (todo/PLAN_one_model_catalog.md E4.3), whose `roles` messages reach the
+ * same editing core (`rolesHost.ts`). Epic 5 deleted the tab (E5.1), and everything the Settings page and the core still take
  * from it has to live somewhere that survives the deletion — moved out first, prerequisite (b) of that epic, rather than
  * found by a red build on the day the page goes. The contract moved as it was: the vocabulary, the parser, the settle
  * key and the one rule the core reads off a prompt id.</p>
  *
  * <p><b>The edges point one way.</b> This module imports the roles and the text controls and nothing that draws: the
- * tab, the new page's blocks (`rolesBlocks.ts`), the core and the panel all import it, and it imports none of them —
+ * tab, the Settings page's blocks (`rolesBlocks.ts`), the core and the panel all import it, and it imports none of them —
  * least of all `panelView.ts`, which reaches the roles through these modules, so an edge back would close a ring the
  * import-cycle ratchet (`importCycles.test.mjs`) refuses.</p>
  *
@@ -93,7 +93,7 @@ function typedEdit(command: RolesCommand): command is Extract<RolesCommand, { re
  * <p>A table rather than the chain of `if`s this was in `rolesPage.ts`: the move put it in a module held to the
  * complexity rule, and the chain was one of the file's recorded exceptions. Every message reads as it did — the
  * parser's own tests (`rolesPlace.test.ts`, `rolesPlaceColours.test.ts`, `featureStageOnTheRolesPlace.test.ts` since E5.1
- * moved them onto the new page) run against this one.</p>
+ * moved them onto the Settings page) run against this one.</p>
  */
 export function roleEdit(message: unknown): RolesCommand {
   const said = recordOf(message);

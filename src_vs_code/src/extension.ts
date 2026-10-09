@@ -101,7 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
-  // The review roles know this window's side from the start: the new Settings page edits them as well as the Review
+  // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
   bindCommands(context);

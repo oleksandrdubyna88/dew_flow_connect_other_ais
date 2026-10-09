@@ -37,9 +37,9 @@ const legend = (): string => '<ul class="seclane-tags">' + SECURITY_SEED.signals
   `<li><code>${esc(s.id)}</code> ${esc(s.label)}${s.trigger ? '' : ' (focus only)'}</li>`).join('') + '</ul>';
 
 /**
- * @param vendors the rows a pair may name — every row on the current page; the rows ticked Security lane on the new page
+ * @param vendors the rows a pair may name — the rows ticked Security lane on Models
  * @param allRows every catalog row: the ordinary gate is judged on them, and a pair's row that is not in `vendors` is
- *   named from them (todo/PLAN_one_model_catalog.md E4.2); the current page passes `vendors` again
+ *   named from them (todo/PLAN_one_model_catalog.md E4.2)
  */
 export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string, files: SecurityLaneFiles, allRows: readonly Vendor[]): string {
   if ('invalidConfiguration' in lane) return malformedNote(lane.invalidConfiguration);
@@ -131,14 +131,14 @@ const defaultContext = (v: Vendor | undefined): string => v?.runtime === 'local'
 const securityOnly = (v: Vendor | undefined): boolean => v !== undefined && ![v.code, v.plan, v.document, v.feature].some(Boolean);
 
 /**
- * A pair's row the page does not offer, named (todo/PLAN_one_model_catalog.md E4.2, D3): on the new page a row that is
- * gone or not ticked Security lane — '' wherever the page offers every row, as the current page does.
+ * A pair's row the page does not offer, named (todo/PLAN_one_model_catalog.md E4.2, D3): a row that is gone or not
+ * ticked Security lane — '' when the page offers it.
  */
 function strandedNote(vendor: string, offered: readonly Vendor[], allRows: readonly Vendor[]): string {
-  return offered === allRows || offered.some(v => v.id === vendor) ? '' : rowPicks('security', vendor, allRows, 'This pair').note;
+  return offered.some(v => v.id === vendor) ? '' : rowPicks('security', vendor, allRows, 'This pair').note;
 }
 
-/** What to say about a pair's reviewer: stranded on the new page, switched off or gone — or ''. */
+/** What to say about a pair's reviewer: stranded, switched off or gone — or ''. */
 function reviewerWarning(run: SecurityRun, vendor: Vendor | undefined, stranded: string): string {
   if (stranded.length > 0) return stranded;
   return vendor?.enabled ? '' : `Reviewer ${run.vendor} is unavailable; select an enabled reviewer.`;

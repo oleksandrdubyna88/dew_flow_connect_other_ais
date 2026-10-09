@@ -13,7 +13,7 @@ export const FIRST_SEEN_KEY = 'coai.firstSeenControls';
 /** After this, an entry is forgotten — its tag is long gone, and the record must not grow with every release. */
 export const FORGET_AFTER_MS = 60 * 24 * 60 * 60 * 1000;
 
-/** The controls the new Settings page marks as new, by id. Remove an id once its tag no longer matters. */
+/** The controls the Settings page marks as new, by id. Remove an id once its tag no longer matters. */
 export const NEW_CONTROLS: readonly string[] = [
   'model.systemPrompt',
   'model.effort',

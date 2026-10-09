@@ -27,8 +27,8 @@ export const BUSY_BAR = '<div id="busy-bar" class="busy-bar" role="progressbar" 
 /**
  * Its rules. No backticks and no hex: this is interpolated into the page's stylesheet template.
  *
- * <p>The moving stripe is decoration; a viewer who asked for less motion gets a still bar. As `lookingSpinner.ts`
- * does, the preference redefines the animation rather than the element, so no class is defined twice.</p>
+ * <p>The moving stripe is decoration; a viewer who asked for less motion gets a still bar. The preference redefines
+ * the animation rather than the element, so no class is defined twice.</p>
  */
 export const BUSY_CSS = `
   .busy-bar { position: fixed; top: 0; left: 0; right: 0; height: 2px; overflow: hidden; z-index: 10;
@@ -61,7 +61,7 @@ export function busyMarkScript(painted: BusySnapshot, tracked: readonly string[]
 }
 
 /** What the panel's two pages number (research/PLAN_model_search_and_busy_marks.md §3.7). */
-// `roles` and `commands`: an edit of the review roles or the gate's commands on the new Settings page
+// `roles` and `commands`: an edit of the review roles or the gate's commands on the Settings page
 // (PLAN_one_model_catalog.md E4.3, E4.4), numbered like a setting.
 export const PANEL_TRACKED: readonly string[] = ['setting', 'prompt', 'command', 'roles', 'commands', 'chatPresets'];
 

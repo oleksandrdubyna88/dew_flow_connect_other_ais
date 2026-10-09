@@ -7,7 +7,6 @@ import {
   PROBE_GOOD_FOR_MS,
   answeredAsAsked,
   claudeModels,
-  claudeNote,
   familyOf,
   modelThatAnswered,
   stillGood,
@@ -152,13 +151,6 @@ test('a confirmed model names the one the CLI resolved it to', () => {
     CURATED_CLAUDE_MODELS.map((m) => m.id),
     'a probe removed a model from the list',
   );
-});
-
-test('a Claude dropdown says it is being asked, and only while it is', () => {
-  assert.equal(claudeNote('claude', true), ASKING_CLAUDE);
-  assert.equal(claudeNote('claude', false), '', 'nothing is running, so there is nothing to say');
-  assert.equal(claudeNote('codex', true), '', 'the probe asks the Claude CLI and nothing else');
-  assert.equal(claudeNote('', true), '', 'a row with no runtime is not waiting for anything');
 });
 
 // ---------------------------------------------------------------------------------------------

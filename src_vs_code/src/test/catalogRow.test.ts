@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catalogRefusal, MAX_PROMPT_BYTES, MAX_ROWS, reviewsAnything, shownOnTheOldPage } from '../catalogRules';
+import { catalogRefusal, MAX_PROMPT_BYTES, MAX_ROWS, reviewsAnything, isReviewerRow } from '../catalogRules';
 import { DEFAULT_VENDORS, Vendor, vendorsFrom } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 
@@ -97,10 +97,10 @@ test('the old Settings page shows every reviewer and hides a row that exists onl
   const row = DEFAULT_VENDORS[0]!;
   const off = { ...row, plan: false, code: false, document: false };
 
-  assert.equal(shownOnTheOldPage(row), true);
-  assert.equal(shownOnTheOldPage(off), true, 'a reviewer switched off everywhere is still the person’s own row');
-  assert.equal(shownOnTheOldPage({ ...off, uses: ['consultant'] }), false, 'a migrated consultant is not a reviewer');
-  assert.equal(shownOnTheOldPage({ ...row, uses: ['qconsult'] }), true, 'a reviewer that also answers questions');
+  assert.equal(isReviewerRow(row), true);
+  assert.equal(isReviewerRow(off), true, 'a reviewer switched off everywhere is still the person’s own row');
+  assert.equal(isReviewerRow({ ...off, uses: ['consultant'] }), false, 'a migrated consultant is not a reviewer');
+  assert.equal(isReviewerRow({ ...row, uses: ['qconsult'] }), true, 'a reviewer that also answers questions');
 });
 
 test('a row that reviews nothing is told apart from one that reviews a stage', () => {
