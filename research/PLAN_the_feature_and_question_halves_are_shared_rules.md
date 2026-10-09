@@ -1,16 +1,20 @@
 # PLAN — the feature and question halves of the snippet are shared rules
 
 > Status: **IMPLEMENTED, 2026-10-09.** Steps 1–3 shipped: the conventions rules (PR #58, promoted to
-> `release` at `bb022429`) and this repository's snippet built from six mounted halves (artefact v16).
-> **Deviations:** the feature rule's verdicts were corrected twice more before merge, by the conventions
+> `release` at `bb022429`) and this repository's snippet built from six mounted halves (artefact v17).
+> **Deviations:** this repository's half landed in THREE pull requests, not one, because two other
+> sessions moved first: the pin bump with `CONSULTANT_VERSION` 4 (#726, artefact 15), then the feature
+> half from the mount with the `mounted` flag removed (#730, S3.5 of
+> [PLAN_feature_review.md](../todo/PLAN_feature_review.md), artefact 16); the pull request of this plan
+> was cut down to the question half (artefact 17). The feature rule's verdicts were corrected twice more before merge, by the conventions
 > code round and an own review against the server (`proceed`/`good_enough` owe no second round but the
 > person may still ask; `continue_anyway` dropped — a feature round never produces it); the question
 > rule gained an explicit no-consultant door (`ask_human` without a `consultId`) and a Definition of Done
-> matching its exceptions (CodeRabbit); `KNOWN_HALVES` lost its `mounted` flag instead of keeping it all
-> `true`; the bounded smoke run of the reads came back **incomplete** (the native trace overflowed the
+> matching its exceptions (CodeRabbit); the bounded smoke run of the reads came back **incomplete** (the native trace overflowed the
 > harness cap before a final answer), so read evidence is the resolver's `explain`, not the smoke run.
-> **Open tail:** step 4, the pin cascade in the other five consumers — mechanical bump pull requests run
-> after this merges, no plan of their own.
+> **Step 4**, the pin cascade: four consumers were bumped to `bb022429` the same day (mcp #43,
+> sidecar_rust #51, benchmark #71, creds_for_devs #200). **Open tail:** `dew_flow_rag_qln`, last by
+> design (it pins mcp and benchmark too) — a mechanical bump pull request, no plan of its own.
 >
 > Scope: `dew_flow_conventions` (`common/`), this repository's snippet (`src_vs_code/src/claudeSnippet.ts`,
 > `src_vs_code/scripts/prepare-gate.mjs`, their tests, `package.json`), then the `.agents/conventions` /

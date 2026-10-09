@@ -44,14 +44,17 @@ export const CONSULTANT_SOURCE = '.agents/conventions/common/coai-consultant.md'
 export const CONSULTANT_OUTPUT = 'src_vs_code/src/generated/consultantRule.ts';
 
 /**
- * The FEATURE half — a mounted rule like the others since 2026-10-09.
+ * The FEATURE half — a shared rule since conventions #58 (S3.5 of todo/PLAN_feature_review.md, D24).
  *
- * <p>It was this product's own file, `src_vs_code/src/featureRule.md`, under D11 of
- * todo/PLAN_feature_review.md: a rule about when to call one tool of one product is not shared. The
- * operator reversed that on 2026-09-26 for the reason the consultant moved on 2026-09-25 — this server
- * gates every repository in the family — and it moved once `review_feature` had shipped
- * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md). It keeps its own output module, so
- * `claudeSnippet.ts` imports it from where it always did.</p>
+ * <p>Until then it was this product's own file, `src_vs_code/src/featureRule.md` (D11): a rule about
+ * when to call one tool of one product was ruled product material, as the consultant half's was until
+ * 2026-09-25. The same reversal reached it — this server gates every repository in the family — and v3
+ * moved into the conventions with the server's one-round verdicts. So it is read from the pinned mount
+ * and held to its marker and heading the way the other halves are; there is no product copy.</p>
+ *
+ * <p>Generated rather than written as a TypeScript literal for the reason that cost this repository
+ * three broken builds: a backtick inside a template literal ends it, and this text is full of code
+ * spans. Prose stays prose; the generator turns it into a JSON string.</p>
  */
 export const FEATURE_SOURCE = '.agents/conventions/common/coai-feature-gate.md';
 export const FEATURE_OUTPUT = 'src_vs_code/src/generated/featureRule.ts';
@@ -59,15 +62,16 @@ export const FEATURE_OUTPUT = 'src_vs_code/src/generated/featureRule.ts';
 /** The feature half's marker and heading, so a truncated or foreign file fails the build. */
 const FEATURE_MARKER = /^<!-- coai-feature v\d+ -->\n## Reviewing the whole FEATURE before release/;
 
-/** The feature rule: frontmatter and `owns:` lines stripped, held to its marker and heading. */
+/** The feature rule: frontmatter and leading `owns:` lines stripped, held to its marker and heading. */
 export function featureBody(source) {
   return ruleBody(source, FEATURE_SOURCE, FEATURE_MARKER);
 }
 
 /**
- * The QUESTION half — ask the consultants before the person (2026-10-09). A sixth rule file for the
- * reason there is a fourth and a fifth: each half carries its own marker, so a paste made before it
- * existed is recognised as older.
+ * The QUESTION half — ask the consultants before the person (conventions #58, 2026-10-09;
+ * research/PLAN_the_feature_and_question_halves_are_shared_rules.md). A sixth rule file for the reason
+ * there is a fourth and a fifth: each half carries its own marker, so a paste made before it existed
+ * is recognised as older.
  */
 export const QUESTION_SOURCE = '.agents/conventions/common/coai-question-consultant.md';
 export const QUESTION_OUTPUT = 'src_vs_code/src/generated/questionRule.ts';
@@ -187,36 +191,38 @@ export function prepareGate(repo) {
     fs.renameSync(temporary, output);
   } finally { removeOutput(temporary); }
 
-  // The halves that each keep an output module of their own, from the same pinned mount.
-  prepareMountedHalf(repo, CONSULTANT_SOURCE, CONSULTANT_OUTPUT, 'CONSULTANT_RULE', consultantBody, 'the consultant half', '2026-09-25');
-  prepareMountedHalf(repo, FEATURE_SOURCE, FEATURE_OUTPUT, 'FEATURE_RULE', featureBody, 'the feature half', '2026-10-09');
-  prepareMountedHalf(repo, QUESTION_SOURCE, QUESTION_OUTPUT, 'QUESTION_RULE', questionBody, 'the question half', '2026-10-09');
+  // The consultant and feature halves, from the same pinned mount, each into an output of its own.
+  prepareMountedHalf(repo, { source: CONSULTANT_SOURCE, output: CONSULTANT_OUTPUT, constant: 'CONSULTANT_RULE',
+    half: 'the consultant half', since: '2026-09-25', body: consultantBody });
+  prepareMountedHalf(repo, { source: FEATURE_SOURCE, output: FEATURE_OUTPUT, constant: 'FEATURE_RULE',
+    half: 'the feature half', since: 'conventions #58 (2026-10-09)', body: featureBody });
+  prepareMountedHalf(repo, { source: QUESTION_SOURCE, output: QUESTION_OUTPUT, constant: 'QUESTION_RULE',
+    half: 'the question half', since: 'conventions #58 (2026-10-09)', body: questionBody });
 
   return body;
 }
 
 /**
- * One mounted half into its own generated module — invalidate, verify, then write, so a build never
- * compiles against a constant the previous one left behind. Was written out twice (the consultant,
- * then the feature) before the third made it one function.
+ * One half from the pinned mount into its own generated module — invalidate, verify, then write, so a
+ * build never compiles against a constant the previous one left behind.
  */
-function prepareMountedHalf(repo, source, output, exportName, bodyOf, what, since) {
-  const outputFile = path.join(repo, output);
-  const temporary = outputFile + '.tmp';
-  removeOutput(outputFile);
+function prepareMountedHalf(repo, { source, output, constant, half, since, body }) {
+  const file = path.join(repo, output);
+  const temporary = file + '.tmp';
+  removeOutput(file);
   removeOutput(temporary);
   const sourceFile = path.join(repo, source);
   if (!fs.existsSync(sourceFile)) {
-    // Named, because the case is a pin from before the rule arrived: nothing is dirty and nothing
+    // Named, because the case is a pin from before the rule moved: nothing is dirty and nothing
     // mismatches, the file is simply not there — and a bare ENOENT would not say which half.
-    throw new Error(`${source} is missing. It is ${what} of the pasted snippet, `
+    throw new Error(`${source} is missing. It is ${half} of the pasted snippet, `
       + `a shared rule since ${since}: move the .agents/conventions pin to a release that carries it.`);
   }
-  const text = bodyOf(boundedSource(sourceFile));
+  const text = body(boundedSource(sourceFile));
   try {
     fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\n'
-      + `export const ${exportName} = ` + JSON.stringify(text) + ';\n', { flag: 'wx' });
-    fs.renameSync(temporary, outputFile);
+      + `export const ${constant} = ` + JSON.stringify(text) + ';\n', { flag: 'wx' });
+    fs.renameSync(temporary, file);
   } finally { removeOutput(temporary); }
 }
 

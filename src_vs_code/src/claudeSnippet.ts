@@ -65,7 +65,7 @@ export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 16;
+export const ARTEFACT_VERSION = 17;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -160,14 +160,14 @@ export const CONSULTANT_VERSION = 4;
 
 /**
  * The FEATURE half's version — when to call `review_feature`, what to pass it, and what its verdicts
- * mean (story S3.3 of `todo/PLAN_feature_review.md`).
+ * mean (stories S3.3 and S3.5 of `todo/PLAN_feature_review.md`).
  *
- * <p><b>A fifth number, and a mounted rule since v3.</b> Until then it was this product's own file,
- * <c>src_vs_code/src/featureRule.md</c>, under D11 of that plan; the operator ruled on 2026-09-26 that
- * the conventions carry it once `review_feature` shipped, and v3 is the first read from
- * <c>.agents/conventions/common/coai-feature-gate.md</c>. v3 is also a change of meaning, not only of
- * place: v2 told a caller that `revise` meant "call again", while the server already ran D23's
- * one-round budget (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).</p>
+ * <p><b>A fifth number, and a mounted rule like the other four since v3.</b> v1 and v2 were this
+ * product's own file, <c>src_vs_code/src/featureRule.md</c>, under D11's ruling that a rule about one
+ * tool of one server is not shared. Conventions #58 reversed it as 2026-09-25 did for the consultant:
+ * v3 is <c>.agents/conventions/common/coai-feature-gate.md</c>, and it says what the server does — one
+ * round is the budget, a second only on a reviewer failure, a `blocking` finding or the person's
+ * request — where v2 still promised a reopen the server refuses.</p>
  *
  * <p>Not cosmetic: a copy pasted before it carries no feature marker, and the AI obeying it never calls
  * `review_feature` — the whole feature is then released having only ever been reviewed in slices.</p>
@@ -180,7 +180,8 @@ export const FEATURE_VERSION = 3;
  * <p><b>A sixth number, a mounted rule from its first version.</b> The server's phase rule lets planning
  * questions and the first two batches after a plan's `proceed` reach the person directly; the rule sets
  * a higher bar — every question goes to `ask_consultants` first, and the person gets only what the
- * answers did not settle and what is theirs to decide. Asked by the operator on 2026-10-09.</p>
+ * answers did not settle and what is theirs to decide. Asked by the operator on 2026-10-09
+ * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).</p>
  *
  * <p>Not cosmetic either: a paste without it never learns the bar, and the person is asked what the
  * consultants could have settled.</p>
@@ -204,9 +205,8 @@ export const QUESTION_VERSION = 1;
  * conventions repository hashes against a baseline, so it is the one version nobody may raise, and
  * the guard that tells you which numbers to move reads this rather than a hand-typed list.</p>
  *
- * <p>`file` is the half's rule file, a sibling of the gate rule in a conventions mount. Every half is a
- * mounted rule since 2026-10-09; the `mounted` flag that marked the one product-owned half went with
- * it, so there is no second kind of row to judge differently.</p>
+ * <p>`file` is the half's shared rule in a conventions mount — every half is one since S3.5 — and it is
+ * what {@link readSnippetStatus} reads beside a mounted gate rule.</p>
  */
 export const KNOWN_HALVES = [
   { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true, file: 'coai-review-gate.md' },
@@ -288,7 +288,7 @@ export function halvesIn(text: string): readonly { readonly id: string; readonly
 
 /**
  * The shared-rule mounts, and the folder each keeps its rules in. A gate rule found in one of these is
- * one file of six: the other halves are its siblings, not text inside it.
+ * one file of five: the other halves are its siblings, not text inside it.
  */
 const MOUNTED_RULE_FOLDERS: Readonly<Record<string, string>> = {
   '.agents/conventions/common/coai-review-gate.md': '.agents/conventions/common/',
@@ -308,10 +308,14 @@ export const MOUNTED_SIBLINGS: readonly string[] = KNOWN_HALVES
  * The first applicable paste wins, using the same reader for the panel and copy command.
  *
  * <p><b>A mount is read with its siblings</b> (research/PLAN_consult_on_a_cadence.md, story 5.2). A repository
- * that mounts the rules and pasted nothing holds its halves as six files, and reading the gate rule
- * alone told it that it was behind on the ones it had (that was four files then). Only the SELECTED location's own mount is
+ * that mounts the rules and pasted nothing holds its halves as separate files, and reading the gate
+ * rule alone told it that it was behind on the ones it had. Only the SELECTED location's own mount is
  * read — a half missing from it is never filled from another mount — and a real paste still wins over
  * any mount, because that is the text the AI in the repository actually reads.</p>
+ *
+ * <p><b>A mount is judged on every half</b>, as a paste is. While the feature half was this product's
+ * own file, no mount could carry it and a mount was judged on the other four (S3.3a); since S3.5 a mount
+ * that lacks `coai-feature-gate.md` is a pin from before conventions #58, and saying so is the point.</p>
  */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
@@ -347,10 +351,6 @@ export function snippetVersionIn(text: string): number | undefined {
  * `unversioned` means "pasted before this existed", which is true of every copy made until today
  * and is not the same as version zero. `ahead` is a real case too: an extension older than the
  * repository, on a machine that has not updated.</p>
- *
- * <p>A paste and a mount are judged on the same halves. Until 2026-10-09 a mount was judged only on the
- * halves a mount could carry, because the feature half was this product's own; every half is a shared
- * rule now, so a mount missing one is a pin that needs moving.</p>
  */
 export function snippetStatus(pasted: string | undefined): SnippetStatus {
   const current = ARTEFACT_VERSION;
@@ -481,10 +481,9 @@ export function callerVersionIn(text: string): number | undefined {
  * the only thing that matters about the arrangement.</p>
  *
  * <p>The three gates come first, together, because they are the three ways work is REVIEWED; the caller
- * declaration follows them and the two consultants close it on purpose — they are about the assistant
- * asking for help: when it is stuck, and before it puts a question to the person. Every one of them comes
- * from the shared conventions (the consultant since v3, the feature gate since v3, the question
- * consultant from v1).</p>
+ * declaration follows them and the consultant is last on purpose — it is about the assistant asking for
+ * help mid-task. All five come from the shared conventions (the consultant since its v3, see
+ * `CONSULTANT_VERSION`; the feature gate since its v3, see `FEATURE_VERSION`).</p>
  */
 export function claudeSnippet(): string {
   return KNOWN_HALVES.map((half) => half.text).join('\n');

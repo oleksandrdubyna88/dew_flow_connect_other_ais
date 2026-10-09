@@ -173,11 +173,10 @@ test('the caller half of a current paste is the current caller version', () => {
  * and the pinned source, while the version/hash guard above stays independent of generation.
  */
 test('the mounted shared rules are byte-identical to what the menu hands out', () => {
-  // SIX shared files: the gate rule, the document flow, the caller declaration, the consultant (since
-  // 2026-09-25, research/PLAN_consult_on_a_cadence.md, story 5.2) and — since 2026-10-09 — the feature
-  // gate and the question consultant (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).
-  // This is what proves all of them travel verbatim. DERIVED from the table, so a row added there is
-  // compared here without a list to keep.
+  // FIVE shared files: the gate rule, the document flow, the caller declaration, the consultant (shared
+  // since 2026-09-25, research/PLAN_consult_on_a_cadence.md story 5.2) and the feature gate (shared since
+  // conventions #58, S3.5 of todo/PLAN_feature_review.md). This is what proves all of them travel
+  // verbatim. DERIVED from the table, so a row added there is compared here without a list to keep.
   const bodies = KNOWN_HALVES.map((half) => {
     const mounted = path.resolve(__dirname, '../../..', '.agents/conventions/common', half.file);
     assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
@@ -186,13 +185,13 @@ test('the mounted shared rules are byte-identical to what the menu hands out', (
 
     return ruleBody(source);
   });
-  assert.equal(KNOWN_HALVES.length, 6, 'six halves, every one a mounted rule');
+  assert.equal(KNOWN_HALVES.length, 6, 'every half is a mounted shared rule');
 
   // And no local copy is left beside the mount: a second source for the same half is the drift these
   // moves ended, so its absence is part of the guarantee.
-  for (const own of ['consultantRule.md', 'featureRule.md']) {
-    assert.ok(!fs.existsSync(path.resolve(__dirname, '../../..', 'src_vs_code/src', own)),
-      `${own}: that half has one source now — the mounted rule; delete the local copy`);
+  for (const local of ['consultantRule.md', 'featureRule.md']) {
+    const own = path.resolve(__dirname, '../../..', 'src_vs_code/src', local);
+    assert.ok(!fs.existsSync(own), `${local}: the half has one source now — the mounted rule; delete the local copy`);
   }
 
   assert.equal(
@@ -577,7 +576,7 @@ test('no half of the artefact is numbered from zero', () => {
  */
 test('every row names the mounted rule file that carries its marker', () => {
   // `file` is what discovery reads beside a mounted gate rule, so a row pointing at the wrong file
-  // would report a mounting repository as missing a half it has.
+  // would report a mounting repository as missing a half it has. Every half is a shared rule since S3.5.
   for (const half of KNOWN_HALVES) {
     const file = path.resolve(__dirname, '../../..', '.agents/conventions/common', half.file);
     assert.ok(fs.existsSync(file), `${half.id}: ${half.file} is not where its row says (${file})`);

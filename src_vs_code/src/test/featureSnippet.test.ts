@@ -5,15 +5,16 @@ import { test } from 'node:test';
 import { ARTEFACT_VERSION, claudeSnippet, HALF_IDS, KNOWN_HALVES, readSnippetStatus, snippetNote, snippetStatus } from '../claudeSnippet';
 
 /**
- * The feature gate's half of the pasted snippet (story S3.3 of `todo/PLAN_feature_review.md`, D11).
+ * The feature gate's half of the pasted snippet (stories S3.3 and S3.5 of `todo/PLAN_feature_review.md`).
  *
- * <p><b>A mounted rule since v3 (2026-10-09).</b> It was this product's own file under D11 until the
- * operator ruled that the conventions carry it; its one source is now
- * `.agents/conventions/common/coai-feature-gate.md`, emitted by `prepare-gate.mjs` like every other
- * half, and this product keeps no copy (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).</p>
+ * <p><b>A shared rule since conventions #58 (S3.5, D24).</b> Until then it was this product's own file,
+ * `src_vs_code/src/featureRule.md` (D11), and no mount carried it. v3 lives in
+ * `.agents/conventions/common/coai-feature-gate.md`, so a paste and a mount carry the same text — and the
+ * verdict section v2 had wrong (a one-round budget, three grounds for a second) is gone from both.</p>
  */
 
 const FEATURE_ID = 'coai-feature';
+const FEATURE_FILE = 'coai-feature-gate.md';
 const repo = (...parts: string[]): string => path.resolve(__dirname, '../../..', ...parts);
 
 function featureHalf(): (typeof KNOWN_HALVES)[number] {
@@ -23,45 +24,45 @@ function featureHalf(): (typeof KNOWN_HALVES)[number] {
   return half;
 }
 
+/** A shared rule's body as the paste carries it: from its marker on, line endings settled. */
+function mountedBody(file: string): string {
+  const source = fs.readFileSync(repo('.agents', 'conventions', 'common', file), 'utf8').replace(/\r\n/g, '\n');
+  const marker = source.indexOf('<!-- coai-');
+  assert.ok(marker > 0, `${file} carries no marker after its metadata`);
+
+  return source.slice(marker);
+}
+
 test('the feature half is a row of the table, at v3, and travels in the paste', () => {
   const half = featureHalf();
 
   // v2: the half stopped telling callers to pass a `head` the tool did not declare (§9.30).
-  // v3: it became the mounted rule, and its verdicts say what D23 does.
+  // v3: the shared rule — the one-round budget and its three grounds (conventions #58).
   assert.equal(half.version, 3);
   assert.ok(HALF_IDS.includes(FEATURE_ID));
   assert.ok(claudeSnippet().includes('<!-- coai-feature v3 -->'));
-  // The feature half's v2 moved the artefact from 13 to 14 and its move to the mount (v3) to 16; any later
-  // change to the paste only raises it. An exact pin here broke on every unrelated half.
-  assert.ok(ARTEFACT_VERSION >= 16, `the clipboard changed, so the artefact moved past 15 — it is ${ARTEFACT_VERSION}`);
+  // The feature half's v2 moved the artefact from 13 to 14; any later change to the paste only raises it
+  // (15: the consultant half's v4; 16: this half's v3). An exact pin here broke on every unrelated half.
+  assert.ok(ARTEFACT_VERSION >= 16, `the feature half moved to the shared v3, so the artefact moved past 15 — it is ${ARTEFACT_VERSION}`);
 });
 
-test('the half has one source — the mounted rule — and the product keeps no copy', () => {
+test('the half is the mounted shared rule, byte for byte — and the product copy is gone', () => {
   const half = featureHalf();
-  const mounted = repo('.agents', 'conventions', 'common', 'coai-feature-gate.md');
 
-  assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
-  assert.ok(half.text.startsWith('<!-- coai-feature v3 -->\n## Reviewing the whole FEATURE before release'),
-    'the generated constant starts at the marker: frontmatter and owns: lines are delivery metadata');
-  assert.ok(fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n').endsWith(half.text), 'the generated constant is not the mounted rule');
+  assert.equal(half.file as string, FEATURE_FILE, 'the row names the shared rule file a mount carries');
+  assert.equal(half.text, mountedBody(FEATURE_FILE), 'the generated constant is not the mounted rule');
   assert.ok(!fs.existsSync(repo('src_vs_code', 'src', 'featureRule.md')),
-    'a product copy would be a second source for one half — delete src_vs_code/src/featureRule.md');
+    'src_vs_code/src/featureRule.md would be a second source for one half — the shared rule is the only one');
 });
 
-/**
- * D23, the one-round budget the server ships (`FeatureSecondRound.cs`): v2 of this half said `revise`
- * meant "call again", which the server refuses over the same base without a ground.
- */
-test('it says one round is the budget, and the three grounds for a second', () => {
+test('the verdicts are the server’s: one round, and a second only on its three grounds', () => {
   const text = featureHalf().text;
 
   assert.match(text, /One round is the budget/);
   assert.match(text, /a\s+reviewer failure, a `blocking` finding, or the person asking for it/);
-  assert.match(text, /no request of yours adds a\s+third/);
-  assert.match(text, /`good_enough`/, 'good_enough closes the review on resolve');
-  assert.match(text, /needs no new commits and asks only the reviewers that failed/);
   assert.match(text, /`again: true` with a DIFFERENT `baseRef` starts a fresh review/);
-  assert.doesNotMatch(text, /continue_anyway/, 'a feature round never produces continue_anyway');
+  assert.doesNotMatch(text, /reopened only with `again: true`, once the checkout's HEAD has moved/,
+    'v2 promised a reopen the server refuses over the same base');
 });
 
 test('it says WHEN — only at the end of a plan of three or more epics, before the release', () => {
@@ -136,25 +137,41 @@ test('a paste made before the feature half is OLDER, naming it', () => {
 });
 
 /**
- * A repository that MOUNTS the shared rules is judged on the feature half like any other.
+ * A repository that MOUNTS the shared rules is judged on all five halves again (S3.5).
  *
- * <p>Until 2026-10-09 no mount could carry it, so a mount was judged without it. Every half is a shared
- * rule now: a mount from before the move lacks the file, and that is a pin to move — the same sentence a
- * mount missing any other sibling gets. A real PASTE is still judged whole and still wins.</p>
+ * <p>While the feature half was this product's own, no mount could carry it, so a mount was judged on the
+ * other four (S3.3a). Since conventions #58 a mount carries `coai-feature-gate.md` like any other half: a
+ * mount that has it is current, and a mount pinned before it is told the feature gate is missing — which
+ * it is, and the cure is moving its pin. A PASTE is judged whole, as it always was.</p>
  */
-test('a mount without the feature rule is older naming it — and a paste still wins', async () => {
-  // Three states, three fixtures — never one map edited between assertions.
-  const mount: ReadonlyMap<string, string> = new Map(KNOWN_HALVES.map((half): [string, string] =>
-    [`.agents/conventions/common/${half.file}`, fs.readFileSync(repo('.agents', 'conventions', 'common', half.file), 'utf8')]));
-  const beforeTheMove: ReadonlyMap<string, string> = new Map([...mount]
-    .filter(([name]) => name !== '.agents/conventions/common/coai-feature-gate.md'));
-  const withAStalePaste: ReadonlyMap<string, string> = new Map([...mount,
-    ['CLAUDE.md', claudeSnippet().replace(/<!-- coai-feature v\d+ -->/, '')]]);
-  const reader = (files: ReadonlyMap<string, string>) => async (name: string): Promise<string> => files.get(name) ?? '';
+const MOUNTED_RULES = ['coai-review-gate.md', 'coai-document-gate.md', FEATURE_FILE, 'coai-caller-model.md', 'coai-consultant.md', 'coai-question-consultant.md'];
 
-  assert.deepEqual(await readSnippetStatus(reader(mount)), { kind: 'current', current: ARTEFACT_VERSION }, 'six mounted rules and no paste');
-  assert.deepEqual(await readSnippetStatus(reader(beforeTheMove)), { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
-    'a pin from before the move');
-  assert.deepEqual(await readSnippetStatus(reader(withAStalePaste)), { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
-    'a stale paste wins over a current mount');
+/** A reader over a fixed set of files — a fresh map per scenario, never one edited between them. */
+function readerOver(entries: readonly (readonly [string, string])[]): (name: string) => Promise<string> {
+  const files = new Map(entries);
+
+  return async (name) => files.get(name) ?? '';
+}
+
+/** The real shared rules, as a mount at `folder` holds them. */
+function mountAt(folder: string, rules: readonly string[] = MOUNTED_RULES): readonly (readonly [string, string])[] {
+  return rules.map((name) => [`${folder}${name}`, fs.readFileSync(repo('.agents', 'conventions', 'common', name), 'utf8')] as const);
+}
+
+test('a mount is judged on all five halves — current with the feature rule, older on a pin from before it', async () => {
+  const neutral = '.agents/conventions/common/';
+  const beforeTheFeatureRule = mountAt(neutral, MOUNTED_RULES.filter((name) => name !== FEATURE_FILE));
+
+  assert.deepEqual(await readSnippetStatus(readerOver(mountAt(neutral))), { kind: 'current', current: ARTEFACT_VERSION });
+  assert.deepEqual(await readSnippetStatus(readerOver(beforeTheFeatureRule)),
+    { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
+    'a mount pinned before the feature rule lacks it, and is told so');
+  assert.deepEqual(
+    await readSnippetStatus(readerOver([...mountAt(neutral), ['CLAUDE.md', claudeSnippet().replace(/<!-- coai-feature v\d+ -->/, '')]])),
+    { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
+    'a paste without the half wins over a current mount');
+});
+
+test('the legacy mount path carries the feature rule too', async () => {
+  assert.deepEqual(await readSnippetStatus(readerOver(mountAt('.claude/rules/shared/common/'))), { kind: 'current', current: ARTEFACT_VERSION });
 });

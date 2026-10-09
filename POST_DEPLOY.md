@@ -19,7 +19,21 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-09 · extension **0.65.0** (released) · mcp 0.44.2 and server 0.9.0 unchanged, not
+Last verified: 2026-10-09 · mcp **0.45.0** (released) · server **0.10.0** released, NOT deployed — the box serves
+0.9.0 · extension 0.65.0 unchanged · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items
+3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
+`MCP_VERSION=0.45.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.65.0` —
+`SERVER_VERSION` is the DEPLOYED server, so items 9 and 10 say nothing about 0.10.0. MCP: an Antigravity launch can no
+longer write inside its roots (`coai-reader` agent + the `--agy-hook` allowlist, #716) and lists and searches through
+coai (#712). The `mcp-v0.45.0` run (37953979808) failed first on `coai-mcp (win-x64)` and `(osx-arm64)` — the same
+`SecuritySourcesCharacterizationTests.The_collection_deadline_ends_…` race as
+`todo/PLAN_two_equal_deadlines_race_on_macos.md` — and passed on a re-run of those jobs, which published the draft:
+12 assets. By hand, outside the items: the `win-x64` zip's `.sha256` verified, `coai-mcp 0.45.0`, and `--agy-hook`
+answers `deny` for `write_to_file` and `allow` for `view_file`. **The server deploy was rolled back by its own
+canary** (run 37960306469, after a re-minted canary token): codex done; antigravity's slot out of quota (429,
+~111 h); claude's account signed out. Redeploy 0.10.0 once both accounts work again.
+
+Previously verified: 2026-10-09 · extension **0.65.0** (released) · mcp 0.44.2 and server 0.9.0 unchanged, not
 re-released · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them (by POSITION); the Marketplace served
 0.65.0 within minutes of the `extension-v0.65.0` run (37947764852, the vsix attached and published). Manual items 3, 4,
 5, 7, 8, 11 and 12 were not run for this release — item 12, a migrated install opening on Models with every old

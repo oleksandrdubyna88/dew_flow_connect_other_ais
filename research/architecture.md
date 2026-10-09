@@ -243,9 +243,9 @@ What crosses the containers:
   crosses, so the vendor keeps reviewing plans and code) and never writes it on a Team-server row. The
   rounds log draws a skip as its own neutral state, *skipped — did not block*, with the reason; the
   snippet gained a fifth half (`coai-feature` v1, artefact v13) that tells an AI when to call the tool. On
-  2026-10-09 that half moved into the shared conventions as `coai-feature` v3, and a sixth arrived beside
+  2026-10-09 that half moved into the shared conventions as `coai-feature` v3 (#730), and a sixth arrived beside
   it, `coai-question` v1 (ask the consultants before the person): every half is a mounted rule now
-  (artefact v16).
+  (artefact v17).
   See [module_extension.md](module_extension.md).
 - **The Team server runs no feature review** in this version (D10 of the plan). `AcceptedRoles`
   refuses the feature role by name, even under `AllowAny`, and the client never sends one to a remote
