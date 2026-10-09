@@ -169,6 +169,8 @@ extension-marketplace:
     - [pat]   the current release.yml:604 command, with VSCE_PAT in THIS step's env only (rollback, 3.4)
     - [manual] ./node_modules/.bin/vsce show remsoftdev.connect-other-ais --json: parse .versions[0].version; green only if it EQUALS
               the tag's version (the person uploaded it by hand, F3), red otherwise; vsce show exits 0 for ANY existing extension
+              Polled, not asked once: every 30 s for up to 10 min, printing what the gallery serves each time,
+              because a hand upload takes minutes to show (POST_DEPLOY.md:89 measured ~4.5 min); red on timeout
 ```
 
 Every `[x]` step carries `if: steps.mode.outputs.path == 'x'`. The variables are environment-scoped, and
