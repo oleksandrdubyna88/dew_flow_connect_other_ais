@@ -68,6 +68,7 @@ Bugz corpus (the sidebar's own, 5 s). The every-render whole-file read of `usage
 | [PLAN_the_cadence_has_its_own_section.md](../research/PLAN_the_cadence_has_its_own_section.md) (implemented) | what a render gathers per surface | one more registry entry and live region, `cadence` | independent |
 | [PLAN_every_page_reads_alike.md](../research/PLAN_every_page_reads_alike.md) | what a render gathers per surface | the split of the *rounds* registry entry into Active gates and Active consultations | independent; this plan reads the registry as it finds it |
 | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) | what a render gathers, including the model card's new rounds line | that line reads a count CACHED until a round ends (its 2.2 / 2.4) — no spawn per render, so it adds nothing for this plan to measure | independent |
+| [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md) | every other probe a render starts | the Team-server refresh no longer started by the sidebar's render: the page asks for its own data through one owner (its 1.1) — step 3 here inherits that move rather than making it | that one first |
 
 **Disjoint** otherwise: this plan changes how much a render gathers, never what either page draws.
 

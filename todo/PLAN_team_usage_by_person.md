@@ -23,14 +23,15 @@ for the company."* Three things stand in the way today:
    sends it as `{command:'teamUsageScope', id:null}`; `logCommandOf` drops an empty id (`roundsLogMessages.ts:151`) and
    has no case for it anyway (`:155-174`). Only the sidebar's switch knows it (`panelProvider.ts:2485-2494`), and
    nothing posts there any more — so `usageScope` stays `'me'` and `scope=company` is never asked
-   (`panelProvider.ts:3747`). The help (`team-servers`, `helpContent.ts:~281`) promises "Show the whole company".
+   (`panelProvider.ts:3747`). The help (`what-each-ai-has-used`, `helpContent.ts:465`, and its four translations) promises
+   "Show the whole company".
 2. **Team-server figures on the page go stale.** They are fetched only from the end of the sidebar's render
    (`panelProvider.ts:1331`), which returns early when no surface is held; a window press on the page
    (`setUsageWindow`, `:697-701`) does not reset the 60 s freshness the sidebar's own press does (`:2325-2332`). With
    the sidebar closed, the page never refreshes them.
 3. **The server answers less than the tab needs.** `GET /api/usage?scope=company` (`src_server/src/Usage/UsageEndpoints.cs:23-59`)
    answers `vendors[]` and `people[{email, vendors[]}]` sorted by email (`UsageTotals.cs:136-141`) — no display name,
-   no model per row (the ledger line HAS one, `UsageReader.cs:16-28`, folded away at `UsageTotals.cs:113`), no per-day
+   no model per row (the ledger line HAS one, `UsageReader.cs:16-28`, folded away by `Fold`, `UsageTotals.cs:151-187`), no per-day
    series. Sessions (`SessionRecord(Email, Name, CreatedUtc, ExpiresUtc, LastUsedUtc)`, `src_server/src/Sessions.cs:17`)
    are listed by no endpoint, so "last seen" and "signed in but spent nothing" cannot be shown.
 
@@ -67,8 +68,8 @@ and grouping launches by day or person yields launches, not rounds (the question
 | D1 | A non-admin | sees no tab at all; the server's `403` on `scope=company` is the decision, the catalog flag only hides the tab | kept from the earlier plan |
 | D2 | Two casings of one email | one person — the server already groups case-insensitively (`UsageTotals.cs:136-141`); the client never regroups on the raw string | kept |
 | D3 | A person with no runs in the window | not a card; listed in the collapsed *signed in, no recorded runs* group (the operator approved the mockup that shows it — this replaces the earlier "absent") | changed |
-| D4 | Per-person ~$ | the server adds a per-MODEL breakdown under each vendor total; the client prices each model at its public list price (the existing price book), shows a dash for a model with no price, and marks a partly priced total as a floor. Never the vendor's *current* model — that is not what ran | consultant, verified against `priceOfLine` (`usage.ts:266-297`) |
-| D5 | Who signed in | a new admin-only `GET /api/people` projecting unexpired sessions to **email, display name, last used** — never tokens, session ids, creation or expiry. Read from the files directly (`Validate` would write and delete). A caller on a raw identity-provider token has no session file, so the list is "people with an unexpired session", said in the UI | consultant; the projection shape follows the listing in the sibling credentials server |
+| D4 | Per-person ~$ | the server adds a per-MODEL breakdown under each vendor total; the client prices each model at its public list price (the existing price book), shows a dash for a model with no price, and marks a partly priced total as a floor. Never the vendor's *current* model — that is not what ran | consultant, verified against `priceOfLine` (`usage.ts:282-297`) |
+| D5 | Who signed in | a new admin-only `GET /api/people` projecting unexpired sessions to **email, display name, last used** — never tokens, session ids, creation or expiry. Read from the files directly (`Validate` would write and delete). A caller on a raw identity-provider token has no session file, so the list is "people with an unexpired session", said in the UI | consultant; the projection shape follows `dew_flow_creds_for_devs` · `src_minimalapi_server/src/OrgEndpoints.cs:277` |
 | D6 | The *Company* toggle | removed from the spending tab, with its state and the sidebar case; the new tab owns the company view; help aligned | consultant, verified (`roundsLogMessages.ts:151`) |
 | D7 | The chart's data | an additive `daily` object on the company answer — its own UTC range (last 30 days, whatever the chosen window), ordered day buckets per vendor, from the same single ledger scan; absent on an older server = no chart | consultant; the precedent is `kinds`, added the same way |
 | D8 | An older server (no `models`, `daily`, `/api/people`) | every missing piece says *needs Team server ≥ <version>* in its place; never a zero | the rule of the two halves shipping apart |
@@ -80,6 +81,9 @@ and grouping launches by day or person yields launches, not rounds (the question
 | Rounds, retries, repairs, cancelled, budget refusals, cached share, 5 h / 24 h windows, vendor gauges | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) (epics 3, 5, 6) | this plan builds the tab they render into; its 5.2 targets this tab, not the old Team-server block |
 | What a token column means per vendor | [PLAN_usage_that_compares.md](PLAN_usage_that_compares.md) | this plan prices per model from the server's breakdown and compares nothing across vendors |
 | The tab strip's ARIA | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) | the new tab button follows the strip as that plan leaves it; neither waits for the other |
+| Team-server state (`catalogs`, `teamCheckedAt`, `refreshTeamServers`) and `usageScope` leaving `PanelProvider` | [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) clusters 3 and 6 | **this plan** extracts only the usage cache and its refresher into a `vscode`-free module (1.1) and deletes `usageScope` (1.2); that plan moves the rest of cluster 3 and finds cluster 6 one field smaller |
+| The Team-server refresh no longer started by the sidebar's render | **this plan** (1.1) | [PLAN_the_sidebar_pays_only_for_what_it_shows.md](PLAN_the_sidebar_pays_only_for_what_it_shows.md) step 3 wanted the same move for every probe; the Team-server one is done here and that plan inherits it |
+| The usage reader scanning the union of two ranges | **this plan** (2.2) | [PLAN_the_usage_page_reads_the_window_not_the_history.md](PLAN_the_usage_page_reads_the_window_not_the_history.md) (deferred) reads from the end; when it reopens, its stop condition is the OLDER of the two ranges |
 
 ## Epics and stories
 
@@ -98,32 +102,72 @@ Every surface story carries its docs and its help text in all five languages (`H
   `refreshing` early return at `:3788` lets the old request stamp everything fresh for 60 s). RED first:
   `ThePageRefreshesTeamUsage_WithTheSidebarClosed`, `AWindowPress_ReasksTheServer`, `AnAnswerForAnOldWindow_IsDropped`
   (out of order), `MeAndCompany_KeepTheirOwnTotals` (a delayed `me` after `company`), `TodayThenYear_DuringARefresh`.
+  **How, so those tests can fail for the right reason** (own review): today's behaviour is first EXTRACTED unchanged
+  into a `vscode`-free `teamUsageCache.ts` (clock, fetch, the admin flag injected; tests green), and only then do the
+  RED tests above go in against it — `PanelProvider` imports `vscode` and no test can construct it. Freshness is per
+  key too (today one `teamCheckedAt`, `:377`, lets a sidebar `me` refresh make the page's `company` request look
+  fresh). The decision to ask `company` is taken from THIS refresh's catalog answer, not the previous one (today
+  `:3742-3747` asks `me` on a fresh window's first refresh). Delivery: a refresh ends with `this.render()`
+  (`panelProvider.ts:3809`), which repaints the sidebar only, so the cache gets a *changed* callback that calls
+  `refreshRoundsLog`; the 60 s tick is a page-owned interval started in `showRoundsLog` and cleared on dispose, and it
+  asks for company data **only while the Team server tab is the selected one** (each company fetch makes the server
+  parse its whole ledger). Privacy: a `401`/`403` on `company` EVICTS that server's company keys — today a failed fetch
+  keeps the last good answer (`:3760`), which would show a demoted admin every colleague's email — and sign-out,
+  removal or an account change evict every key of that server; one test each.
 - **1.2 The company answer, typed** (Opus) — `Usage.people?: PersonUsage[]` and `unreadableLines?`
   (`teamServerApi.ts:160-165`); for a server whose catalog says admin, the tab asks `scope=company` and the spending
-  tab keeps asking `scope=me`; the dead *Company* toggle (`usageScopeControl`, its state and the sidebar case) goes
-  (D6). Tests over a body the real server produced; a `403` (admin list changed) shows *no longer an admin here*.
+  tab keeps asking `scope=me`; the dead *Company* toggle goes (D6) — everywhere it is threaded: `usageScopeControl`
+  (`teamServerView.ts:161-169`, pinned by `teamUsage.test.ts:68-77`), the positional `usageScope` parameter of
+  `usageTabHtml` (`roundsLog.ts:933`, `:940`), `usageRegion` and `reviewersRegion` (`panelView.ts:2626`, `:2405`),
+  `PanelState.usageScope` (`panelView.ts:142`, `panelProvider.ts:1271`), the provider's field and case (`:373`,
+  `:735`, `:2485-2494`, `:3747`) and `PANEL_COMMANDS` (`panelView.ts:3243`). `usageTabHtml`'s tail parameters become
+  an options object FIRST (no behaviour change), so the callers that pass `'me'` positionally
+  (`chatSpendSection.test.ts`, `forgetAChatRow.test.ts`) change once and mechanically; docs `module_extension.md`
+  (its three mentions) follow. Tests over a body the real server produced; a `403` (admin list changed) shows *no longer an admin here*.
 - **1.3 The tab** (Opus) — a new module `teamServerTab.ts` (pure renderers: toolbar, summary, people, vendors, idle,
   notes) styled with the new Settings tokens — `TOKENS` and the chip / card rules become an exported shared sheet
   (`catalogCss.ts:10-23`, `:125-140`) instead of a copy — and vendor colours from `vendorPalette`
   (`vendorColour.ts:164`). Registered on the page: the tab button (`roundsLog.ts:1528`), its section beside the others
   (`:1558-1561`), `WAITING` (`:1590`) and the 15 s never-received list (`:2294`), a `Region` (`pushLedger.ts:23`,
-  `roundsLogPanel.ts:262-282`), and its commands — window, refresh, search, sort, server — in `LogCommand` / `WORK`
-  (`roundsLogMessages.ts:50-69`, `:216-225`; the mapped type makes a missing one a compile error). Search and sort
+  `roundsLogPanel.ts:262-282`), and its three host commands in `LogCommand` / `WORK` (`roundsLogMessages.ts:50-69`,
+  `:216-225`; the mapped type makes a missing one a compile error) — `teamWindow` (id `<serverId>|<window>`, its own
+  kind: reusing `usageWindow` would move the spending tab), `teamRefresh` and `teamServer` (id = the server id; an
+  id-less command is dropped at `:151`). The tab button and section are ALWAYS rendered, hidden; the push carries an
+  `admin` flag that reveals or hides them — the page is built once (`roundsLogPanel.ts:111`) and admin status usually
+  arrives after it, and a push to an absent section would throw in the message listener. The region is pushed at once
+  from the cache with *Asking <server>…*, then again when the fetch lands, because one refresh can take two 10 s
+  requests and the page's 15 s never-received watchdog (`roundsLog.ts:2293-2304`) must not fire on a slow server.
+  Search and sort
   stay on the page (no round trip), and so does every piece of interaction state: the search text and focus, the sort,
   the selected server and each expanded card (keyed by server plus normalised email) survive a push — the region is
   replaced the way `replaceKeepingFolds` already does for the consultations tabs (`roundsLog.ts:2203`), and the
   toolbar is not replaced at all. The Settings sheet is shared by EXTRACTION: its tokens and chip rules move to a module
   both import, inserted in the same order, and a test asserts `CATALOG_CSS` is byte-identical before and after; the
   Settings cards' four-row subgrid stays the Settings page's — this tab's cards have their own layout, scoped to its
-  section.
+  section. That shared sheet is a LEAF module (`catalogCss.ts` imports `settingsPage`, which would drag `SETTINGS_CSS`
+  onto this page); the section carries the `.catalog` class its tokens are scoped to; no selector in the tab's CSS
+  contains `button` (`roundsLogPage.test.ts:200-212`). Accessibility: chips with `aria-pressed`, cards as
+  `<details data-fold>`, a labelled search box and a sort `<select>`, `aria-live="polite"` on *Read <time>*, the chart
+  with a text alternative and a legend that names each vendor; the `admin` mark is a child element because the tab
+  handler rewrites `className` (`roundsLog.ts:1905`). Every name and email from the server is escaped
+  (`escapeHtml`) — a display name is identity-provider text — and fold keys are compared as attribute values, never
+  built into selectors. Functions within the repo's limits (complexity 4, 50 lines); page helpers embedded the existing
+  way (`roundsLog.ts:1592-1602`), no new suppressions.
 - **1.4 Proven on the page** (Opus) — a bundled-page test on `roundsLogPageHarness.ts` that RUNS the page: an admin
   sees the tab and its people; a non-admin page has no tab button and no section; a `people` push renders cards;
-  search narrows; a push keeps the query, the order, the focused search box and an expanded card (switching servers
+  search narrows (the harness first gains a minimal DOM: `getElementById` returns null for an absent id,
+  `querySelectorAll` and `details` are real — today `roundsLogPageHarness.ts:171-172` invents any element and returns
+  `[]`, so none of this could be observed); a hostile display name renders as text; a push keeps the query, the order, the focused search box and an expanded card (switching servers
   with the same email included); *needs Team server ≥ …* shows where `models` / `daily` / people listing are absent
   and no zero does. Help: the `the-rounds-log` article (it lists the tabs by name) and `team-servers` (the toggle sentence) in all
-  five languages. Docs: `module_extension.md` (the rounds-log page and the spending tab paragraphs).
+  five languages, and the articles to change are three: `what-each-ai-has-used` (the *Show the whole company* sentence,
+  `helpContent.ts:465` and `helpRu`/`helpDe`/`helpEs.ts:208`, `helpUk.ts:200`), `team-servers` (its last sentence,
+  `:281`) and `the-rounds-log` ("six tabs", `:427`); `helpCoverage.test.ts` checks translations of the chat article
+  only, so a per-language assertion that names the new tab is added. Docs: `module_extension.md` (the rounds-log page
+  and the spending tab paragraphs).
 - **1.5 End to end, over a real server** (Opus) — a `*.contract.js` case in `npm run test:contract`, which starts the
-  built `coai-server` on a loopback port: an admin's company fetch through the real client, a window change re-asking,
+  built `coai-server` on a loopback port (the runner gains an admin persona through `Coai__Admins`,
+  `scripts/run-contract.mjs:178-197`, which sets none today): an admin's company fetch through the real client, a window change re-asking,
   a non-admin's `403`; an older-server body for the fallback. (The `/api/people`, `models` and `daily` assertions belong
   to E2, story 2.3, where those exist.) The flow gets its row in `research/module_tests.md`'s catalogue with what it does NOT prove (a host cannot
   read a webview, so the page itself is the bundled harness's).
@@ -131,10 +175,15 @@ Every surface story carries its docs and its help text in all five languages (`H
 ### E2 — the server says who and with what · `feat/team-tab-e2`
 
 - **2.1 `GET /api/people`** (Fable) — admin-only (`RequireCaller` plus the inline admin check and `403`, as
-  `UsageEndpoints.cs:46`); reads `sessions/*.json` directly like `Sweep` (`Sessions.cs:121-142`) without writing;
+  `UsageEndpoints.cs:46`); a new `SessionStore.Active(now)` reads `sessions/*.json` (the directory is private to the
+  store) and NEVER deletes — `Sweep` deletes unreadable files (`Sessions.cs:132-137`) and must not be copied — nor
+  logs a vanished or torn file as a failure (a listing every 60 s per admin would flood the log);
   one row per case-insensitive email: `email`, `displayName` (latest non-empty), `lastUsedUtc` (max over unexpired
   sessions); sorted by email; DTO registered in `ServerJsonContext.cs:199-218`. RED: a non-admin gets `403`; an
-  expired session is not listed; two sessions of one person are one row; no field beyond the three is on the wire.
+  expired session is not listed; two sessions of one person are one row; no field beyond the three is on the wire. The
+  UI says *last seen within the hour* — `LastUsedUtc` is written at one-hour resolution (`Sessions.cs:46`). The
+  contract file mints its own session first (`POST /api/session`) and asserts at least one row: the http personas are
+  raw tokens with no session files, so an empty list would pass a shape check vacuously.
 - **2.2 Models and days on the company answer** (Opus) — additive, company scope only: `VendorTotal` gains
   `models[{model, runs, failed, tokensIn, tokensOut}]` (from `UsageLine.Model`); the answer gains
   `daily{fromUtc, toUtc, days[{day, vendors[{vendor, runs}]}]}` for the last **30 UTC calendar days including today**
@@ -142,7 +191,14 @@ Every surface story carries its docs and its help text in all five languages (`H
   `UsageReader.cs:96`), so a chart built from it on *Today* would show one day: the read covers the UNION of the two
   ranges in one scan, and the summary and the chart are aggregated from it separately. RED: company/Today with one
   launch yesterday and one today — the summary counts one, the chart two; company/Year with a 60-day-old launch — the
-  summary includes it, the chart does not. `me` scope unchanged. `http/usage/usage.http` asserts both; an old line with no model groups under `""` (unknown).
+  summary includes it, the chart does not. `daily` is DENSE (30 buckets, a zero day present), `day` a `yyyy-MM-dd`
+  string the client prints as-is (never through `new Date()`, which would shift it to local time); the chart's 30
+  calendar days are not the *Month* summary's trailing 30 days (`UsageTotals.cs:47`), and the chart says so.
+  `UsageReader.Read` takes the union range. `models` is computed by the shared `Fold` (`UsageTotals.cs:151`) for BOTH
+  scopes — the JSON context writes nulls, so "company only" would put `"models":null` into every `me` answer — grouped
+  by model id ordinal, an empty model labelled *unknown*; each model row carries `costUsd`, `costIsFloor` and
+  `unpricedRuns` like its vendor row. An older server is recognised by the ABSENCE of `daily` (and the catalog's server
+  version), never by an empty `models`, which a new server answers too. `http/usage/usage.http` asserts both; an old line with no model groups under `""` (unknown).
 - **2.3 Contract, release and deploy** (Opus) — the contract suite asserts `/api/people` (admin 200 with exactly three
   fields, non-admin `403`) and the `models` / `daily` fields over the real server; server release; the manual
   `deploy-server.yml` dispatch with the owner's approval; live: `/api/people` answers an admin and refuses a non-admin.
@@ -154,7 +210,10 @@ Every surface story carries its docs and its help text in all five languages (`H
   *signed in, no recorded runs* list (D3, D5); people joined by case-insensitive email, every usage person kept.
 - **3.2 ~$ per model** (Opus) — each person's and vendor's ~$ from `models[]` through the existing price book
   (`PRICE_BOOK.priceOf`, `priceBook.ts`), cached rate when the server reports cached tokens (it does not yet — the
-  every-round plan's 3.1), a dash for an unpriced model, a floor mark when part is unpriced (D4).
+  every-round plan's 3.1), a dash for an unpriced model, a floor mark when part is unpriced (D4). Never the admin's own
+  typed row rates (`priceOfLine` prefers them, `usage.ts:288`) and never a long-context tier (`ModelPrice.tier` is a
+  per-REQUEST threshold, not one for summed totals); a vendor-reported `costUsd` wins over an estimate; the note says
+  that server lines carry no cached count yet, so an estimate over cache-heavy input overstates.
 - **3.3 The chart** (Opus) — a 30-day launches-per-day stacked bar chart from `daily`, drawn to scale with theme
   tokens, its axis labelled *launches*.
 - **3.4 Proven and released** (Opus) — bundled-page tests for each against a new-server body AND an old-server body
@@ -181,8 +240,9 @@ E1 without it.
 | Surface | Size | Retired by | Interrupted |
 |---|---|---|---|
 | `/api/usage` company answer, `models` + `daily` | `daily` is 30 days × vendors (≤ 3 today) ≈ 90 small objects; `models` ≤ vendors × models (≤ 6) | per request | a read; nothing stored |
-| `/api/people` | one row per person with an unexpired session (≈ 5 today) | sessions expire (7 days) and `Sweep` removes them | a read of files that may be swept mid-read: a vanished file is skipped |
-| The tab's state on the page | the last answer per server | the page | refreshed on open and every 60 s |
+| `/api/people` | one row per person; the read is over session FILES — people × sides × renewals within the 7-day TTL (tens, not five) | sessions expire (7 days) and `Sweep` removes them | a read of files that may be swept mid-read: a vanished file is skipped |
+| The host's usage cache | servers × 2 scopes × 4 windows, a few KB each | evicted per server on sign-out, removal, account change and a company `401`/`403`; otherwise replaced | per key sequence; a lost answer leaves the key as it was |
+| The tab's state on the page | the last answer per server | the page | refreshed on open and every 60 s while the tab is selected |
 
 Nothing new is written anywhere.
 
@@ -209,6 +269,16 @@ The cadence consultation for epics 1–3 (codex), each point checked in code: on
 and window, with one owner); a 30-day chart cannot come from a read that keeps only the selected window (2.2 reads the
 union); a push would erase an expanded card and the search (1.3 keeps interaction state on the page); two live checks
 ran ahead of what they need (moved to 2.3 and 3.4).
+
+An own review (Opus) after the consultation, each point checked in code: answers never reached the page and no timer
+drove the 60 s (1.1: a changed-callback and a page-owned interval); freshness was still one stamp (per key now); the
+tab could never appear because admin status arrives after the page is built (1.3: always rendered, hidden, revealed by
+the push); the 15 s watchdog is shorter than one refresh (an *Asking…* push first); a demoted admin would keep the
+company answer (eviction on 401/403, sign-out, removal, account change); the RED tests targeted a class no test can
+construct (extract first); the toggle's removal list and the help article were wrong; plus the commands, `models`
+leaking into `me`, the dense `daily`, the people listing's log noise and vacuous contract, pricing that would have
+used the admin's own rates, escaping, accessibility, the harness that could not see an absent section, three missing
+boundaries and the cost of polling a ledger parse every minute.
 
 ## Definition of Done
 
