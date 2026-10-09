@@ -67,8 +67,8 @@ question row — now carries two blocks, because each one alone fails open in a 
 - Both live in a folder coai owns in your own application-data folder (`coai-agy/`), owner-only on Linux and macOS.
   agy runs from there and reaches your checkout through `--add-dir`. Your own agy settings are not touched.
 - If that folder cannot be prepared, agy is not started, and the consultation says which folder to make writable.
-- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on each side, and reads
-  still work, 3 of 3 on each side.
+- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on
+  each side, and reads still work, 3 of 3 on each side.
 
 **An Antigravity consultant can list and search the checkout.** In `--mode plan` agy can only open a file by its
 exact path, so a question about the disk often got "run this command yourself". Now agy asks coai with a short
