@@ -482,6 +482,15 @@ configured once moved into a **Settings** editor tab, opened by a `$(gear)` besi
 (`coai.openSettings`): Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor
 keys, Team servers, This side, MCP server. Plan: [PLAN_settings_page.md](PLAN_settings_page.md).
 
+**Since catalog epic 5 the tab draws ONE page** (E5.1 removed the page above and the preview switch beside it; E5.2 made
+the help say so — [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md)). Its places are `CATALOG_TABS`
+(`catalogPlaces.ts`): **Models** (every model once, one card each, ticked for what it is used for); **Reviews** ›
+Stages / Roles & prompts / Prompts per round / The gate / Commands / Limits; **Consultants** › Consultant / Question
+consultant; **Security lane**; **Chat**; **Setup** › Vendor keys / Team servers / MCP server / This side. An old place
+id opens the place that holds it now (`OLD_TAB_PLACES`). Nothing crosses a container that did not before: the page
+writes the same settings through the same queue, and the server messages that name **ConnectOtherAIs > Consultant**,
+**> Question consultant**, **> Team servers** and **> MCP server** still name a sub-tab that exists.
+
 ```mermaid
 flowchart LR
   P["PanelProvider<br/>one state, one write queue,<br/>numbered renders, side by side"] --> S["SurfaceSlot sidebar<br/>WebviewView coai.panel"]

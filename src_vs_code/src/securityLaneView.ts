@@ -88,7 +88,7 @@ function runsFooter(lane: SecurityLane, vendors: readonly Vendor[]): string {
 function whyNoPair(lane: SecurityLane, vendors: readonly Vendor[]): string {
   if (lane.runs.length >= SECURITY_MOST_RUNS) return ' — the most a lane holds';
   return vendors.some(v => v.enabled) ? ' — every enabled reviewer is already paired with every prompt it can take'
-    : ' — no reviewer is enabled; enable one under Reviewers';
+    : ' — no model ticked security lane is switched on; tick or switch one on, on Models';
 }
 
 /** Where the malformed value lives and what is wrong with it — the setting a person can open, never the panel's stand-in. */

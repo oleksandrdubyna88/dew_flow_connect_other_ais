@@ -2367,7 +2367,7 @@ ${documents}
 </div>
 <div class="role-group">
   <div class="group-head">Feature stage</div>
-  <div class="hint">What <code>review_feature</code> runs: a reviewer that reads a whole plan’s worth of code, OUTLINED, once every epic has landed — plan-to-code gaps across epics, the seams between them, the members that changed. Its tick is the feature gate’s switch: unticked, the gate records that it did not run and does not block. Which vendors review a feature is each reviewer card’s <b>reviews features</b> box.</div>
+  <div class="hint">What <code>review_feature</code> runs: a reviewer that reads a whole plan’s worth of code, OUTLINED, once every epic has landed — plan-to-code gaps across epics, the seams between them, the members that changed. Its tick is the feature gate’s switch: unticked, the gate records that it did not run and does not block. Which models review a feature is each Models card’s <b>reviews features</b> tick.</div>
 ${features}
 </div>
 <div class="field">

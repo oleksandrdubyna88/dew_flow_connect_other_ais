@@ -11580,8 +11580,8 @@ the page offered); `CONSULTANT_TAB`; seven tooltips only the old page attached (
 - **Kept on purpose:** `SURFACE_IDS` still lists `settings` — it is the page census the page-wide tests walk, and that
   surface is the catalog page now (`panelPages.pageOf`); `SETTINGS_CSS` / `settingsTextCss` / `SETTINGS_LOADING` (the
   catalog page builds on them); the three editing hosts, the sidebar, the restore command and `coai.migratedFrom` (T5).
-- **Help** still tours the old page in five languages; E5.2 rewrites it around this page, and
-  `theSettingsHelpNamesEveryTab.test.ts` waits for it as `todo` over `CATALOG_TABS`.
+- **Help** still toured the old page in five languages when step 5 landed; E5.2 (below) rewrote it around this page,
+  and `theSettingsHelpNamesEveryTab.test.ts` no longer waits as `todo`.
 
 ```mermaid
 flowchart LR
@@ -11591,3 +11591,45 @@ flowchart LR
   P --> K[catalogKey = paint key]
   P --> D[catalogHtml with the held place]
 ```
+
+## E5.2 — the help as shipped (2026-10-09, PLAN_one_model_catalog.md E5.2)
+
+The help names the Settings page as it is, in all five languages: a place is `Tab › Sub-tab` with the English
+`CATALOG_TABS` labels (labels stay English in every language, as button names always have), and a control is named as
+the page draws it — a Models card with its switch, **✓ Check**, **⧉ Duplicate**, **✕**, **Use for** (the four review
+ticks and the five use ticks), **How it answers**, **Connection** and **Price**; **＋ Add a model**; the "used by" line and
+**Change on Models** on a feature's place; **Which model a chat opens on**, **Sending** and **Prompt presets** on Chat;
+**Edit roles…** / **Edit commands…** as jumps.
+
+- **Rewritten:** `the-settings-tab` (tours `CATALOG_TABS` in order and names the three redirect commands),
+  `choose-reviewers`, `a-local-model`, `team-servers`, `the-consultant` (picks from the rows ticked consultant),
+  `the-question-consultant`, `install-the-server`, `prompts-per-round`, `what-each-ai-has-used`, `the-gates-commands`,
+  `your-own-roles` (four headed stages, one **Active** switch), `chat-with-other-ai`, `the-help-page`,
+  `models-move-into-the-catalog` (now also the downgrade path) — the design's fourteen — plus what the guard found
+  beyond them: `vendor-keys` and `security-lane`'s usage; and `the-gate`, whose role tick had moved to Roles & prompts
+  without the guard being able to see it (a place that still exists, named with a claim that no longer holds).
+- **Tooltips (`help.ts`):** `consultCaller` named a reviewer row; `addVendor` described **Add a reviewer** and was
+  attached only through the `PANEL_COMMANDS` literal — it is rewritten for **＋ Add a model** and is now the button's
+  `title` in `modelsTab.ts`.
+- **Held by** `theHelpNamesOnlyTheSettingsPage.test.ts`: every article body in every language and every tooltip is
+  scanned for removed UI by a PER-LANGUAGE list — the English labels in every language (**Add a reviewer**, **Try the new
+  Settings page** / **Use the current page** / `settingsPreview`, **Chat other AIs**, **Edit presets…**, **Which model
+  answers**, `Settings → Reviewers`) plus each language's own words (en *reviewer card / row / list*, *roles page*; ru
+  *карточка ревьюера*, *строка ревьюера*; uk *картка рецензента*, *рядок рецензента*; de *Reviewer-Karte*,
+  *Reviewer-Zeile*, *Rollenseite*; es *tarjeta de revisor*, *fila del revisor*, *página de roles* …), each with why. A
+  canary runs every entry's sample phrase through the same scanner and asserts it is flagged — the first run of it caught
+  a Russian pattern that missed a capitalised *Вкладка*. The sidebar's "section" is not on any list: the sidebar keeps
+  its sections. `helpCoverage.test.ts`'s aliases follow the new words (`coai.vendors`, `coai.chatModel`,
+  `coai.roleEnabled`); the three redirect commands are covered by their own titles now.
+- **Beyond the help, the same words fixed** (the guard cannot see them): the chat's no-model refusal now says to pick one
+  on the Chat tab of Settings or tick one Chat on Models (`chatModels.ts`, held by `chatProviders.test.ts`); the Stages
+  hint says each Models card's **reviews features** tick; the Team-server and vault-key steps of **＋ Add a model** are
+  titled "Add a model…"; the manifest's descriptions of `coai.vendors`, `coai.chatPromptPresets`,
+  `coai.chatModelPresets`, `coai.chatPromptChoice`, `coai.chatModel` and `coai.chatModelName` name Models and Chat.
+  Comments that still say "reviewer card" are E5.3's list.
+- **Checked against the code that draws it** (E5.2's code round and own review): **Change on Models** narrows Models to
+  the models TICKED for a feature (`data-uses` is what a card is used for), not those that could be; a question row that
+  can read this machine carries a **Can read this machine** tick that is on and cannot be taken off — there is no tick a
+  person gives (the guard now names that phrase); the chat's switched-off refusal and the Security lane's empty hint
+  point at Models; `coai.rounds` / `coai.roles` descriptions name Reviews › Stages and Reviews › Roles & prompts; the
+  Marketplace README tours the six tabs; **MCP server** is named as **Setup › MCP server** in every language.

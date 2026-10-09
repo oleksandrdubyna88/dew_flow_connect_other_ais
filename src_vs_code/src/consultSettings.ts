@@ -618,7 +618,7 @@ export interface ConsultantPreset {
  * was asked for a name. It is not in `offered` for that reason and it is not `refused` either, because
  * it is not a vendor somebody configured and cannot use. It is a REQUEST, carried by
  * {@link CUSTOM_ENDPOINT} and answered by the host, which asks for the name and the URL exactly as
- * *Add a reviewer* does.</p>
+ * *Add a model* does.</p>
  *
  * <p><b>`runtimes` is the one widening</b> (todo/PLAN_question_consultant.md, S4): the question consultant
  * offers the same catalogue under ITS runtimes — the `api` runtime included, which a stuck consultation cannot

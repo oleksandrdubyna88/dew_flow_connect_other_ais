@@ -68,7 +68,7 @@ test('a picked preset is saved under the id the offering resolved, and the blank
     'the row is saved under the preset’s own id, so a second one collides with the first',
   );
   assert.ok(
-    host.includes("await this.askCustomEndpoint('Add a reviewer')"),
+    host.includes("await this.askCustomEndpoint('Add a model')"),
     'the blank preset no longer asks for a name and a URL, and would be written with no id',
   );
 });

@@ -83,7 +83,7 @@ export interface ProviderNotes {
   /**
    * The NAMES of the keys in the vault's config entry — never a value (PLAN_feature_review.md S3.6).
    *
-   * <p>What "Add a reviewer" offers as `!name`. Only a string shaped like a name survives the parse:
+   * <p>What "Add a model" offers as `!name`. Only a string shaped like a name survives the parse:
    * the server sends names and nothing else, and a body that sent anything else — a map of names to
    * values, a value on its own — keeps nothing from it here.</p>
    */

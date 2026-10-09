@@ -24,7 +24,7 @@ export interface AskedModel {
 /**
  * The four questions, one at a time.
  *
- * <p>The shape of *Add a reviewer* — `showQuickPick` with a label and the sentence under it — because
+ * <p>The shape of *Add a model* — `showQuickPick` with a label and the sentence under it — because
  * that is what the operator asked for by name, and because a row id alone ("remsoftdev-codex") does
  * not say what it reaches. The list is the configured ROWS rather than the vendor kinds that dialog
  * offers: a vendor cannot say WHICH row answers, and two `codex` rows with different keys or prices
@@ -66,7 +66,7 @@ async function named(chosen: { readonly label: string; readonly vendor: ChatVend
 }
 
 /**
- * Step 1 — the VENDORS, which is the list *Add a reviewer* offers.
+ * Step 1 — the VENDORS, which is the list *Add a model* offers.
  *
  * <p>Asked for five times before it was built, and the reason is the one that made the chat
  * independent in the first place: the person is choosing what will ANSWER, not borrowing somebody's
