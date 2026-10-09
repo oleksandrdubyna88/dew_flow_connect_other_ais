@@ -18,6 +18,7 @@
 //   hook-failing    a handler that exits 1 with no answer
 //   both            the agent AND the hook — a write then needs both to fail (each has a fail-open case alone)
 //   both-read       the both arm, asked to read
+//   both-nogit, both-nogit-read   the same, the cwd NOT a git repository — the layout coai uses, no git process per launch
 //   agent-read      the agent arm, asked to READ a file in the tree and quote its marker — reading must still work
 //   hook-read       the hook arm, the same read
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -80,7 +81,9 @@ function tree() {
 /** The cwd the arm owns, with whatever block the arm puts in it — a git repository, so it is its own project root. */
 function home(arm) {
   const dir = mkdtempSync(join(scratchRoot, `coai-wb-${arm}-`));
-  execFileSync(GIT, ['init', '-q'], { cwd: dir });
+  if (!arm.includes('nogit')) {
+    execFileSync(GIT, ['init', '-q'], { cwd: dir });
+  }
   const agents = join(dir, '.agents');
   if ((arm.startsWith('agent') || arm.startsWith('both')) && arm !== 'agent-unknown') {
     mkdirSync(join(agents, 'agents'), { recursive: true });

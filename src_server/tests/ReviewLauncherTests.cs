@@ -284,6 +284,18 @@ public sealed class ReviewLauncherTests
 
     private static ProcessResult Denied() => new(0, DeniedStream, DeniedSaid, TimedOut: false);
 
+    /// <summary>
+    /// The job's own directory, read off the request: the folder of the schema the CLI is pointed at — an agy reviewer
+    /// no longer RUNS from it (it runs from coai's read-only folder; todo/PLAN_agy_cannot_write_its_roots.md) — else the
+    /// working directory, which it still is for every other vendor.
+    /// </summary>
+    internal static string JobDirectory(ProcessRequest request)
+    {
+        var at = request.Arguments.ToList().FindIndex(arg => arg is "--json-schema" or "--output-schema");
+
+        return at >= 0 && at + 1 < request.Arguments.Count ? Path.GetDirectoryName(request.Arguments[at + 1])! : request.WorkingDirectory;
+    }
+
     private static Task<ReviewAttempt> RunAgy(IProcessLauncher launcher, TimeSpan? runBudget = null) =>
         Run(launcher, runtime: "antigravity", vendorId: "antigravity", model: "gemini-3.8-flash-low",
             environment: SlotEnvironment.For("antigravity", Path.Combine(Path.GetTempPath(), "coai-slot-agy"), token: "not-a-real-token"),
@@ -316,7 +328,8 @@ public sealed class ReviewLauncherTests
         scripted.Requests.Should().HaveCount(2);
         var (first, second) = (scripted.Requests[0], scripted.Requests[1]);
         second.Executable.Should().Be(first.Executable);
-        second.WorkingDirectory.Should().Be(first.WorkingDirectory, "the job's own directory, which still exists");
+        second.WorkingDirectory.Should().Be(first.WorkingDirectory, "the same folder it ran from");
+        JobDirectory(second).Should().Be(JobDirectory(first), "the job's own directory, which still exists");
         second.InheritsEnvironment.Should().Be(first.InheritsEnvironment).And.BeFalse("a follow-up is as confined as the first launch");
         second.Environment.Should().BeEquivalentTo(first.Environment,
             "the conversation is in the slot's HOME — another account, or another TMPDIR, is another machine to agy");
@@ -335,7 +348,7 @@ public sealed class ReviewLauncherTests
         var run = () => RunAgy(scripted);
 
         await run.Should().ThrowAsync<OperationCanceledException>("the job runner owns a cancellation, not this launcher");
-        Directory.Exists(scripted.Requests[0].WorkingDirectory).Should().BeFalse("the finally covers the continuation too");
+        Directory.Exists(JobDirectory(scripted.Requests[0])).Should().BeFalse("the finally covers the continuation too");
     }
 
     [Fact]
@@ -492,8 +505,8 @@ public sealed class ReviewLauncherTests
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
             Requests.Add(request);
-            WorkDirectoryExistedAtEveryLaunch &= Directory.Exists(request.WorkingDirectory);
-            SchemaExistedAtEveryLaunch &= File.Exists(Path.Combine(request.WorkingDirectory, SchemaFile.Name));
+            WorkDirectoryExistedAtEveryLaunch &= Directory.Exists(JobDirectory(request));
+            SchemaExistedAtEveryLaunch &= File.Exists(Path.Combine(JobDirectory(request), SchemaFile.Name));
             if (Requests.Count == 1)
             {
                 await Task.Delay(FirstTakes, ct);
@@ -537,7 +550,7 @@ public sealed class ReviewLauncherTests
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
             Request = request;
-            var schema = Path.Combine(request.WorkingDirectory, SchemaFile.Name);
+            var schema = Path.Combine(JobDirectory(request), SchemaFile.Name);
             SchemaFound = File.Exists(schema);
             SchemaText = SchemaFound ? File.ReadAllText(schema) : string.Empty;
             TemporaryDirectoryExisted =

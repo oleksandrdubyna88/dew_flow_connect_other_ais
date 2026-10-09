@@ -56,6 +56,13 @@ internal static class Program
         /// </remarks>
         Version,
 
+        /// <summary>
+        /// Answers one agy <c>PreToolUse</c> hook call: the payload on stdin, allow <c>view_file</c> or deny, on stdout.
+        /// </summary>
+        /// <remarks>agy starts it, through the read-only folder's script, for every tool call an agy launch makes — so it
+        /// reads no settings, opens no vault and writes no log (todo/PLAN_agy_cannot_write_its_roots.md).</remarks>
+        AgyHook,
+
         /// <summary>Sends the pairs a person kept. The only mode that leaves this machine.</summary>
         UploadPairs,
 
@@ -285,6 +292,7 @@ internal static class Program
                 "--version" or "-v" or "version" => Startup.Version,
                 "--ask-local" => Startup.AskLocal,
                 "--ask-remote" => Startup.AskRemote,
+                Runners.Reviewers.AntigravityReadOnly.HookArgument => Startup.AgyHook,
                 "--ask-api" => Startup.AskApi,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
@@ -360,6 +368,9 @@ internal static class Program
 
             case Startup.AskRemote:
                 return await AskRemote.RunAsync(Flags(args), Note, Console.Out);
+
+            case Startup.AgyHook:
+                return Runners.Reviewers.AntigravityReadOnly.RunHook(Console.In, Console.Out);
 
             case Startup.AskApi:
                 // The key is read from THIS process's environment inside the mode, never from argv.

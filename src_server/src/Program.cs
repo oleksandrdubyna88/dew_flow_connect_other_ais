@@ -20,6 +20,14 @@ using Serilog;
 // resolved before the rate limiter, so the limiter partitions on an email rather than on the
 // proxy's address — which once throttled an entire company as a single client.
 
+// --agy-hook answers one agy PreToolUse call: an agy reviewer started by this server runs from the read-only folder
+// whose hook starts THIS binary (AntigravityReadOnly; todo/PLAN_agy_cannot_write_its_roots.md). Before anything else:
+// it must answer in milliseconds and never start the web host.
+if (args is [AntigravityReadOnly.HookArgument])
+{
+    return AntigravityReadOnly.RunHook(Console.In, Console.Out);
+}
+
 // --healthcheck is the container's probe: this binary asking its own /api/health, because a
 // chiselled image has no curl and nothing to run one with.
 if (args is ["--healthcheck"])

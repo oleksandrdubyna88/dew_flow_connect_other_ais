@@ -768,7 +768,9 @@ public sealed class ConsultationService(
             PreviousAnswerLost: record.Status == ConsultationStatuses.Interrupted,
             Toolbox: toolbox,
             // The consultant's row's own instruction, FROZEN when the consultation opened (C2) — from the record, like the rest.
-            RowInstruction: record.RowInstruction));
+            RowInstruction: record.RowInstruction,
+            // By its path: an antigravity consultant does not run from the checkout (todo/PLAN_agy_cannot_write_its_roots.md).
+            Checkout: repo));
     }
 
     private string Settle(ConsultationRecord record, TurnConsultant consultant, ConsultationLookups.Looked looked, string problem, string nonce, TimeSpan elapsed)

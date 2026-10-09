@@ -30,6 +30,11 @@ subagent"); `mainAgent: true` makes the agent selectable as the session's primar
 | `hook-read` | 3 of 3 (the hook saw and allowed `view_file`) | 3 of 3 |
 | `both-read` | 3 of 3 | 3 of 3 |
 
+**Without a git repository.** The arms above ran from a cwd that was its own git repository. coai's own launch folder is
+not one (no git process per launch), so the combination was measured again from a plain folder: `both-nogit` **0 of 3**
+written and `both-nogit-read` **3 of 3** quoted, on each side; the hook logged `view_file` on every read, so it was
+discovered, and the agent's prose was applied (the model refused citing its instructions), so the agent was too.
+
 ## 3. How each one fails — the reason both are needed
 
 | Arm | What is wrong | Windows | WSL |

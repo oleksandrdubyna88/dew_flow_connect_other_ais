@@ -39,7 +39,8 @@ C4Container
   Rel(mcp, api, "--ask-api child: POST /chat/completions (one JSON, or SSE when the row streams), Bearer key from the vault via ENV")
   Rel(mcp, codex, "spawn, read-only sandbox")
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
-  Rel(mcp, gem, "spawn, approval-mode plan")
+  Rel(mcp, gem, "spawn as the coai-reader agent (tools: view_file), plan mode, from the read-only folder")
+  Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file, deny the rest")
   Rel(mcp, creds, "creds config <key>, once per start, in the background")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
@@ -52,6 +53,7 @@ C4Container
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
   Rel(srv, codex, "spawn, one signed-in account per slot")
+  Rel(gem, srv, "--agy-hook child, for an agy reviewer the server started")
 ```
 
 ### A Team server says which roles it runs, and both clients ask (2026-09-13)
@@ -377,7 +379,18 @@ containment (`DocumentReader`) — the same inversion the api rows' `QuestionMat
 The server attaches it at launch, when the roots are known: a question row's granted roots (`QuestionFanOut`) or a
 consultation's checkout (`ConsultationService`). No process, wire or file changes: the reader runs in `coai-mcp`, and the
 continuation is the same agy conversation (`--conversation <id>`). Live, the seam's model was found able to WRITE in its
-roots despite plan mode — an open defect of every agy launch ([todo](../todo/PLAN_agy_cannot_write_its_roots.md)).
+roots despite plan mode — a defect of every agy launch ([todo](../todo/PLAN_agy_cannot_write_its_roots.md)).
+
+### agy calls BACK into coai, once per tool (2026-10-09)
+
+The write block adds the one arrow that points the other way: **agy starts coai's own binary**. Every agy launch —
+from `coai-mcp` (reviewer, consult, question row) and from the Team server (reviewer) — runs as the `coai-reader` agent
+(`tools: [view_file]`) from a folder coai owns, whose `.agents/hooks.json` makes agy run `coai-mcp --agy-hook` (or
+`coai-server --agy-hook`) before every tool call, through a script in that folder; the handler reads the call on stdin and
+answers `allow` for `view_file` and `deny` for everything else (`AntigravityReadOnly`,
+[RESULTS_agy_write_block.md](RESULTS_agy_write_block.md)). Both binaries therefore carry the hook mode, and both answer it
+before anything else starts — no settings, vault, log or web host. Nothing crosses a network; nothing is written into the
+operator's agy configuration or into a root. The folder is under the system's temporary folder, one per handler binary.
 
 ### And it is SEEN across the seam, twice (2026-09-13)
 

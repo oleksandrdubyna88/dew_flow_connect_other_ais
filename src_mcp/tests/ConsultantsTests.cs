@@ -299,12 +299,18 @@ public sealed class ConsultantsTests : IDisposable
     }
 
     [Fact]
-    public void EVERYConsultantRunsInTheCheckout()
+    public void EVERYConsultantReachesTheCheckout_AndAgyAloneDoesNotRunFromIt()
     {
-        foreach (var consultant in Consultants())
+        foreach (var consultant in Consultants().Where(c => c is not AntigravityConsultant))
         {
             consultant.Build(Launch()).Request.WorkingDirectory.Should().Be(Repo, consultant.Vendor);
         }
+
+        // agy runs from coai's read-only folder — its reader agent and hook are found from the cwd — and reaches the
+        // checkout through --add-dir (todo/PLAN_agy_cannot_write_its_roots.md: plan mode alone let it write there).
+        var agy = Agy().Build(Launch()).Request;
+        agy.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
+        agy.Arguments.Should().ContainInConsecutiveOrder("--add-dir", Repo);
     }
 
     private static IConsultantRuntime[] Consultants() =>

@@ -27,13 +27,36 @@ namespace CoaiMcp.Runners.Consultation;
 /// <c>disk</c> row (<see cref="With"/>), as an api row is handed its source resolver; null everywhere else, and then a
 /// turn's answer is the advice as it was (research/PLAN_agy_searches_through_coai.md, S2).
 /// </param>
-public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor = "antigravity", IWorkspaceLookup? lookup = null)
+/// <param name="prepare">
+/// What prepares the read-only folder every launch runs from (<see cref="AntigravityReadOnly"/>) — the real one unless a
+/// test asks what a failure does.
+/// </param>
+public sealed class AntigravityConsultant(
+    IReviewerRuntime inner,
+    string vendor = "antigravity",
+    IWorkspaceLookup? lookup = null,
+    Func<AntigravityReadOnly.Prepared>? prepare = null)
     : IConsultantRuntime, IAnsweringFollowUps
 {
     public string Vendor => vendor;
 
     /// <summary>The same consultant, able to ask coai to look inside <paramref name="withLookup"/>'s roots.</summary>
-    public AntigravityConsultant With(IWorkspaceLookup withLookup) => new(inner, vendor, withLookup);
+    public AntigravityConsultant With(IWorkspaceLookup withLookup) => new(inner, vendor, withLookup, prepare);
+
+    /// <summary>
+    /// The read-only folder first (todo/PLAN_agy_cannot_write_its_roots.md): a consultation whose folder cannot be
+    /// prepared is REFUSED here, with the reason, before anything is launched — never launched without its block.
+    /// </summary>
+    public Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct) =>
+        Task.FromResult<ConsultantPreparation>((prepare ?? DefaultPrepare)() switch
+        {
+            AntigravityReadOnly.Prepared.Failed failed => new ConsultantPreparation.Refused(
+                new ConsultFailure.VendorRefused(failed.Reason, "make the system's temporary folder writable for this user, then ask again")),
+            _ => new ConsultantPreparation.Ready(launch, string.Empty, string.Empty),
+        });
+
+    private static AntigravityReadOnly.Prepared DefaultPrepare() =>
+        AntigravityReadOnly.Prepare(AntigravityReadOnly.DefaultBase, HookHandler.OfThisProcess());
 
     /// <summary>How many times coai answers a <c>coai-lookup</c> block — none without a lookup.</summary>
     public int FollowUps => lookup is null ? 0 : Core.Feature.LookupBudget.FollowUps;
@@ -171,11 +194,14 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
             [
                 .. Stream,
                 "--mode", "plan",
+                .. AntigravityReadOnly.AgentArguments,
                 .. launch.Handle.Length > 0 ? (string[])["--conversation", launch.Handle] : [],
                 .. Model(launch.Settings),
                 "--add-dir", launch.RepoPath,
             ],
-            launch.RepoPath);
+            // Never the checkout: agy runs from the folder holding its reader agent and hook, and reads the checkout
+            // through --add-dir (research/RESULTS_agy_write_block.md).
+            AntigravityReadOnly.Home());
 
         return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model);
     }
@@ -186,7 +212,9 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     /// </summary>
     private ReviewerInvocation Planned(ConsultantLaunch launch, Confinement.Planned plan)
     {
-        var request = Request(launch, [.. Stream, .. plan.Flags, .. Model(launch.Settings)], ConsultantLaunches.Cwd(launch, plan));
+        // The plan's cwd (the root, or a scratch folder) is replaced by the read-only folder: agy finds its reader agent
+        // and hook from its cwd, and a disk row still reaches its roots through the plan's --add-dir.
+        var request = Request(launch, [.. Stream, .. plan.Flags, .. AntigravityReadOnly.AgentArguments, .. Model(launch.Settings)], AntigravityReadOnly.Home());
 
         return new ReviewerInvocation(
             vendor, ConsultantRoles.Question, ConsultantLaunches.ForQuestion(request), string.Empty, inner, Model: launch.Settings.Model);
