@@ -42,13 +42,19 @@ not an error — naming the cure: reload the window. The side overlay (`globalSt
 2. **The wait.** Before any write, a `migrate` outcome asks the layer which of its writes' keys the registry does not
    know. Any → no write, `waiting(layer, keys)`, return `false`. The user layer answers from
    `config.inspect(key)?.defaultValue === undefined` (a registered key always has a default — VS Code fills one from the
-   type when the manifest gives none; an unknown key has none). The side layer has no `unknownKeys`.
+   type when the manifest gives none; an unknown key has none). The side layer has no `unknownKeys`. **This is an
+   assumption about VS Code, so a real editor checks it** (the plan round): a `test:host` scenario asks the same
+   function about every key the migration writes — all known — and about an undeclared `coai.` key — unknown. If the
+   editor disagrees, the signal changes before anything ships.
 3. **The belt.** A write that fails anyway with VS Code's own refusal (`/is not a registered configuration/`) is treated
    the same way — the check and the write are two calls, and the registry can be between them.
-4. **The host's `waiting`** arms ONE retry: the next `onDidChangeConfiguration` affecting `coai`, or a 30-second timer,
-   whichever is first, then `scheduleCatalogMigration`. Never more than one armed. After three waits in one window it
-   shows a warning — "This window has not loaded the settings of ConnectOtherAIs <version> yet, so your models are moved
-   into the catalog after a reload" — with a *Reload Window* button, and stops retrying.
+4. **The host's `waiting`** arms ONE retry: the next `onDidChangeConfiguration` affecting `coai`, or a 10-second timer,
+   whichever is first, then `scheduleCatalogMigration`. Never more than one armed. Whether VS Code registers an
+   updated extension's settings without a reload is not something this repository can promise (a reviewer says it
+   never does), so the wait is short and happens ONCE: a second wait in the same window shows a warning — "This window
+   has not loaded the settings of ConnectOtherAIs yet, so your models are moved into the catalog after a reload" — with
+   a *Reload Window* button, and no more retries. The arming, the two triggers, the single warning and the stop live
+   in a vscode-free `MigrationWait` (subscribe, timer and warn injected), so they are tested as values.
 
 Rejected: retrying only on the next start — that is today's behaviour minus the toast, and leaves the move undone for a
 whole session in which the new page is showing.
@@ -67,13 +73,17 @@ whole session in which the new page is showing.
 ## Test plan
 
 - The two RED tests through the extracted run, with fake layers and fake reports.
+- `MigrationWait`: one retry armed however many waits arrive; it fires on the configuration event and on the timer,
+  each disposing the other; the second wait warns once and arms nothing.
+- The `test:host` scenario over the real registry (above).
 - A test of the pure "which keys are unknown" decision over a fake `inspect` (registered key with a default, one
   without a declared default, an unknown key).
 - `npm test`, eslint, the family checks, `test:host` (activation runs the migration).
 
 ## Definition of Done
 
-- [ ] An update in place no longer shows an error toast; the move completes in the same window once the registry has the
-      keys (RED first, teeth shown).
+- [ ] An update in place no longer shows an error toast; the move completes in the same window if the registry learns the
+      keys, and otherwise after one warning and a reload (RED first, teeth shown).
 - [ ] A window that never learns the keys says so once, as a warning with Reload Window.
+- [ ] A real editor confirmed the registration signal.
 - [ ] Docs updated; released as 0.65.1; this plan promoted.

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { CatalogLayer, LayerWrite, migrateLayer, MigrationOptions, MigrationOutcome, restoreLayer, RestoreOutcome } from './catalogMigration';
+import { CatalogLayer, LayerWrite, MigrationOptions, MigrationOutcome, restoreLayer, RestoreOutcome } from './catalogMigration';
+import { applyWrites, migrateOne, RunLayer } from './catalogMigrationRun';
 import { overlayKey } from './coaiInstall';
 import { thisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
@@ -26,12 +27,8 @@ import { userChatPresets } from './modelKeys';
  */
 export const MIGRATION_TRIGGERS: readonly string[] = ['vendors', 'consultants', 'qconsultRows', 'bugzModel', 'chatModelPresets'];
 
-/** What a layer is called in a sentence, how it is read, and how one write lands in it. */
-interface Layer {
-  readonly name: string;
-  readonly read: () => CatalogLayer;
-  readonly write: (write: LayerWrite) => Promise<void>;
-}
+/** A layer of this window — the run's shape (`catalogMigrationRun.ts`). */
+type Layer = RunLayer;
 
 const turns = new CatalogTurns();
 
@@ -69,52 +66,10 @@ async function migrateEveryLayer(context: vscode.ExtensionContext): Promise<void
   let wrote = false;
   const options: MigrationOptions = { bugzByRuntime: await bugzByRuntime().catch(() => false) };
   for (const layer of layersOf(context, vscode.workspace.getConfiguration('coai'))) {
-    wrote = (await migrateOne(layer, options)) || wrote;
+    wrote = (await migrateOne(layer, options, { stopped: migrationStopped, left: sayWhatWasLeft })) || wrote;
   }
   if (wrote) {
     afterMigration();
-  }
-}
-
-async function migrateOne(layer: Layer, options: MigrationOptions): Promise<boolean> {
-  const outcome = readAndPlan(layer, options);
-  if (outcome instanceof Error) {
-    await migrationStopped(layer, outcome);
-
-    return false;
-  }
-  await sayWhatWasLeft(layer, outcome);
-  if (outcome.kind !== 'migrate') {
-    return false;
-  }
-
-  return applyWrites(layer, outcome.writes, migrationStopped);
-}
-
-/**
- * The layer read and the plan — or the error a read threw (a corrupted overlay, a settings-store fault), which used to
- * escape every `void` caller unheard and repeat silently on each start (PR #681's code round).
- */
-function readAndPlan(layer: Layer, options: MigrationOptions): MigrationOutcome | Error {
-  try {
-    return migrateLayer(layer.read(), options);
-  } catch (error: unknown) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-}
-
-/** In order, stopping at the first refusal — the order is what makes a stopped run safe to finish later. */
-async function applyWrites(layer: Layer, writes: readonly LayerWrite[], stopped: (layer: Layer, error: unknown) => Promise<void>): Promise<boolean> {
-  try {
-    for (const write of writes) {
-      await layer.write(write);
-    }
-
-    return true;
-  } catch (error: unknown) {
-    await stopped(layer, error);
-
-    return writes.length > 0;
   }
 }
 
