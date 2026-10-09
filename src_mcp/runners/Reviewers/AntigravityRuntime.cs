@@ -52,15 +52,18 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
                 "--print=",
                 "--input-format", "stream-json",
                 "--output-format", "stream-json",
-                // Read-only. The reviewer must not be able to edit the tree it is judging.
+                // Plan mode does NOT make the tree read-only — agy wrote inside its --add-dir root in plan mode
+                // (research/RESULTS_agy_searches_through_coai.md §3). What does is the reader agent and its hook, from
+                // the folder they live in (AntigravityReadOnly; research/RESULTS_agy_write_block.md).
                 "--mode", "plan",
+                .. AntigravityReadOnly.AgentArguments,
                 "--json-schema", schemaFilePath,
                 .. Model(settings),
                 .. Workspace(worktreePath),
             ],
-            worktreePath)
+            AntigravityReadOnly.Home())
         {
-            StdIn = UserMessage(prompt),
+            StdIn = UserMessage(prompt + CheckoutNote(worktreePath)),
             Environment = settings.ApiKey.Length > 0
                 ? new Dictionary<string, string?> { ["ANTIGRAVITY_API_KEY"] = settings.ApiKey }
                 : new Dictionary<string, string?>(),
@@ -71,6 +74,15 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
 
     /// <summary>One NDJSON line. Serialised, never interpolated — a prompt contains quotes.</summary>
     private static string UserMessage(string prompt) => AntigravityStream.UserMessage(prompt);
+
+    /// <summary>
+    /// Where the checkout is, said after the prompt — agy no longer runs FROM it (it runs from the read-only folder), so
+    /// "in your working directory" would send it to the wrong place. Empty when the stage has no checkout to name.
+    /// </summary>
+    private static string CheckoutNote(string worktreePath) =>
+        Workspace(worktreePath).Any()
+            ? $"\n\nThe checkout under review is at {worktreePath}; open its files by that absolute path."
+            : string.Empty;
 
     /// <summary>
     /// A reviewer whose shell command was auto-denied, asked again in the SAME conversation — issue #504.

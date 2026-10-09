@@ -71,6 +71,8 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 // Two placeholders are filled in FAKECLI_STDOUT and FAKECLI_OUTFILE_TEXT (the consultant check, epic 4 — its
 // marker and canary are random, so the answer cannot be scripted in advance):
 //   {{cwd-file:NAME}}      — the trimmed text of NAME in the working directory (a file the consultant READ)
+//   {{adddir-file:NAME}}   — the trimmed text of NAME in the launch's first --add-dir folder (agy runs from coai's
+//                            read-only folder and reaches the checkout through --add-dir)
 //   {{path-in-prompt:SUFFIX}} — that absolute path itself, with forward slashes (FAKECLI_SIDE_EFFECT takes it too)
 //   {{prompt-path:SUFFIX}} — the trimmed text of the absolute path in the prompt that ends in SUFFIX (a read
 //                            OUTSIDE the repository — the leak a confined CLI must refuse)
@@ -542,10 +544,13 @@ static class Placeholders
     public static string Fill(string text, string prompt) =>
         System.Text.RegularExpressions.Regex.Replace(
             text,
-            @"\{\{(cwd-file|prompt-path|path-in-prompt):([^}]+)\}\}",
+            @"\{\{(cwd-file|adddir-file|prompt-path|path-in-prompt):([^}]+)\}\}",
             match => match.Groups[1].Value switch
             {
                 "cwd-file" => Read(Path.Combine(Environment.CurrentDirectory, match.Groups[2].Value)),
+                // A file in the folder this launch was given with --add-dir: how agy reaches a checkout it does not run
+                // from (research/PLAN_agy_cannot_write_its_roots.md — agy runs from coai's read-only folder).
+                "adddir-file" => Read(AddedDir() is { Length: > 0 } added ? Path.Combine(added, match.Groups[2].Value) : string.Empty),
                 "prompt-path" => Read(NamedIn(prompt, match.Groups[2].Value)),
                 // The PATH itself, with forward slashes, so it sits in a JSON string unescaped on any platform.
                 _ => NamedIn(prompt, match.Groups[2].Value).Replace('\\', '/'),
@@ -560,4 +565,13 @@ static class Placeholders
             .FirstOrDefault(token => Path.IsPathRooted(token) && token.EndsWith(suffix, StringComparison.Ordinal)) ?? string.Empty;
 
     private static string Read(string path) => path.Length > 0 && File.Exists(path) ? File.ReadAllText(path).Trim() : string.Empty;
+
+    /// <summary>The value of this launch's first <c>--add-dir</c> — or empty.</summary>
+    private static string AddedDir()
+    {
+        var argv = Environment.GetCommandLineArgs();
+        var at = Array.IndexOf(argv, "--add-dir");
+
+        return at >= 0 && at + 1 < argv.Length ? argv[at + 1] : string.Empty;
+    }
 }

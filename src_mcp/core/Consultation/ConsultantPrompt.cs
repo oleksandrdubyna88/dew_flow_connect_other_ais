@@ -17,6 +17,10 @@ namespace CoaiMcp.Core.Consultation;
 /// The consultant's catalog row's system prompt — the person's own instruction for that model
 /// (todo/PLAN_one_model_catalog.md, C2). Empty for none.
 /// </param>
+/// <param name="Checkout">
+/// The checkout's absolute path, said in the prompt — an antigravity consultant runs from coai's read-only folder, not
+/// from the checkout (research/PLAN_agy_cannot_write_its_roots.md). Empty says "your working directory", as before.
+/// </param>
 public sealed record ConsultantPromptInput(
     string Instruction,
     TurnBudget Budget,
@@ -30,7 +34,8 @@ public sealed record ConsultantPromptInput(
     string CarriedTranscript = "",
     bool PreviousAnswerLost = false,
     string Toolbox = "",
-    string RowInstruction = "");
+    string RowInstruction = "",
+    string Checkout = "");
 
 /// <summary>
 /// Composes the prompt a consultant reads, in an order that is a rule rather than a habit.
@@ -205,8 +210,8 @@ public static class ConsultantPrompt
         // The row's own instruction (C2): after the product's, before the turn's rules, so they come after it again.
         text.Append(Catalog.PersonInstruction.ConsultantSection(input.RowInstruction.Trim()));
         text.AppendLine("## What you have");
-        text.AppendLine("A READ-ONLY checkout in your working directory, and the uncommitted change below. "
-                        + "Do not edit anything. The AI asking is blocked on your answer.");
+        text.AppendLine((input.Checkout.Length > 0 ? $"A READ-ONLY checkout at {input.Checkout}" : "A READ-ONLY checkout in your working directory")
+                        + ", and the uncommitted change below. Do not edit anything. The AI asking is blocked on your answer.");
         if (input.Toolbox.Length > 0)
         {
             text.AppendLine(input.Toolbox.Trim());

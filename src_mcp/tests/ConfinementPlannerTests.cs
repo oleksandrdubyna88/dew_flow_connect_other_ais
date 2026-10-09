@@ -245,15 +245,19 @@ public sealed class ConfinementPlannerTests
     public void AnAgyQuestionLaunch_IsTheMeasuredStreamLaunch_WithThePlansFlags()
     {
         var none = new AntigravityConsultant(new AntigravityRuntime()).Build(Planned("antigravity", CapabilityGrant.None, "gemini-3.1-pro-high"));
+        // Both run as the reader agent from the read-only folder, never from the root or the scratch directory
+        // (research/PLAN_agy_cannot_write_its_roots.md); a disk row still reaches its root through the plan's --add-dir.
         none.Request.Arguments.Should().Equal(
-            "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--model", "gemini-3.1-pro-high");
-        none.Request.WorkingDirectory.Should().Be(Scratch);
+            "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--agent", "coai-reader",
+            "--model", "gemini-3.1-pro-high");
+        none.Request.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
         none.Request.StdIn.Should().Contain("the question").And.StartWith("{", "the prompt rides the stream, serialised");
 
         var disk = new AntigravityConsultant(new AntigravityRuntime()).Build(Planned("antigravity", CapabilityGrant.Disk(RootA)));
         disk.Request.Arguments.Should().Equal(
-            "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--add-dir", RootA);
-        disk.Request.WorkingDirectory.Should().Be(RootA);
+            "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--add-dir", RootA,
+            "--agent", "coai-reader");
+        disk.Request.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
     }
 
     [Fact]
@@ -337,10 +341,15 @@ public sealed class ConfinementPlannerTests
             "exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", Repo, "--json", "-o", codex[codex.IndexOf("-o") + 1], "-m", "m",
             "-c", "service_tier=default", "-");
 
-        new AntigravityConsultant(new AntigravityRuntime()).Build(launch).Request.Arguments.Should().Equal(
-            "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--model", "m", "--add-dir", Repo);
+        // agy's argv CHANGED on purpose (research/PLAN_agy_cannot_write_its_roots.md): it runs as the reader agent, from the
+        // read-only folder, and reaches the checkout through --add-dir — plan mode alone let it write there.
+        var agy = new AntigravityConsultant(new AntigravityRuntime()).Build(launch).Request;
+        agy.Arguments.Should().Equal(
+            "--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "--agent", "coai-reader",
+            "--model", "m", "--add-dir", Repo);
+        agy.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
 
-        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime != "local"))
+        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime is not "local" and not "antigravity"))
         {
             consultant.Build(launch).Request.WorkingDirectory.Should().Be(Repo, consultant.Vendor);
             consultant.Build(launch).Role.Should().Be(ConsultantRoles.Consult, consultant.Vendor);

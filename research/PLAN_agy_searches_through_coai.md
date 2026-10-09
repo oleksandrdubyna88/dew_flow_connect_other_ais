@@ -7,7 +7,7 @@
 >
 > Deviations: (1) **the plan's premise "agy keeps `--mode plan` — it can write nothing" is FALSE** — the live write check
 > found agy writes inside its `--add-dir` root on both sides; this branch does not change what agy may write, and the
-> defect is open as [PLAN_agy_cannot_write_its_roots.md](../todo/PLAN_agy_cannot_write_its_roots.md); (2) a fence agy
+> defect is open as [PLAN_agy_cannot_write_its_roots.md](PLAN_agy_cannot_write_its_roots.md); (2) a fence agy
 > glued to a sentence was read as no block — found live, fixed before the PR; (3) the code round added a 20 s per-block
 > time limit, a turn that cannot hold a result reads nothing, a path the file system cannot hold is refused by name,
 > lock files are hidden when named directly, and the caps no longer follow `SourceBudget`; (4) the refused-shell
@@ -142,4 +142,4 @@ by name, not through a handle bound to the check; see module_server.md, Threat m
       `module_server.md`, `module_tests.md` (both flows, what the scenarios do not prove), `research/README.md` updated;
       plan promoted; `todo/README.md` row removed.
 - [x] Whole suites green; gate rounds resolved.
-- [ ] PR merged — the pull request that carries this record.
+- [x] PR merged — #712, 2026-10-08 20:52Z (`6c8bdefa`).
