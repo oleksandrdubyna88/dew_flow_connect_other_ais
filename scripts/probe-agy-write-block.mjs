@@ -18,6 +18,7 @@
 //   hook-failing    a handler that exits 1 with no answer
 //   both            the agent AND the hook — a write then needs both to fail (each has a fail-open case alone)
 //   both-read       the both arm, asked to read
+//   coai-hook, coai-hook-read     the hook as coai WRITES it, its handler coai's own binary (PROBE_COAI_HANDLER[_DLL]), no agent
 //   both-nogit, both-nogit-read   the same, the cwd NOT a git repository — the layout coai uses, no git process per launch
 //   agent-read      the agent arm, asked to READ a file in the tree and quote its marker — reading must still work
 //   hook-read       the hook arm, the same read
@@ -101,7 +102,29 @@ function home(arm) {
       'coai-write-block': { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command, timeout: 10 }] }] },
     }, null, 2));
   }
+  if (arm.startsWith('coai-hook')) {
+    coaiHook(agents);
+  }
   return dir;
+}
+
+/**
+ * The hook exactly as coai writes it (AntigravityReadOnly): `.\coai-hook.cmd` / `sh ./coai-hook.sh`, the script starting
+ * coai's OWN handler — PROBE_COAI_HANDLER (an executable) and, for a framework-dependent build, PROBE_COAI_HANDLER_DLL.
+ * No agent: what is measured is that coai's handler, started the way agy starts it, holds alone.
+ */
+function coaiHook(agents) {
+  const handler = process.env.PROBE_COAI_HANDLER ?? '';
+  if (handler.length === 0) {
+    throw new Error('the coai-hook arms need PROBE_COAI_HANDLER');
+  }
+  const parts = [handler, ...(process.env.PROBE_COAI_HANDLER_DLL ? [process.env.PROBE_COAI_HANDLER_DLL] : [])].map((p) => `"${p}"`).join(' ');
+  mkdirSync(agents, { recursive: true });
+  writeFileSync(join(agents, 'coai-hook.cmd'), `@${parts} --agy-hook\r\n`);
+  writeFileSync(join(agents, 'coai-hook.sh'), `#!/bin/sh\nexec ${parts} --agy-hook\n`);
+  writeFileSync(join(agents, 'hooks.json'), JSON.stringify({
+    'coai-read-only': { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: process.platform === 'win32' ? '.\\coai-hook.cmd' : 'sh ./coai-hook.sh', timeout: 10 }] }] },
+  }, null, 2));
 }
 
 const message = (text) => JSON.stringify({ event: 'user', message: { role: 'user', content: text } }) + '\n';
@@ -118,7 +141,10 @@ function run(arm, n) {
   const args = ['--print=', '--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan',
     ...agent, '--model', model, '--add-dir', target];
   const t0 = Date.now();
-  const r = spawnSync(exe, args, { cwd, input: message(text), encoding: 'utf8', timeout: 240000 });
+  // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which agy inherits
+  // through coai (2026-10-09): a hook command naming a script bare in the cwd is then not found.
+  const r = spawnSync(exe, args, { cwd, input: message(text), encoding: 'utf8', timeout: 240000,
+    env: { ...process.env, NoDefaultCurrentDirectoryInExePath: '1' } });
   let result = null;
   const tools = [];
   for (const line of (r.stdout ?? '').split('\n').filter(Boolean)) {

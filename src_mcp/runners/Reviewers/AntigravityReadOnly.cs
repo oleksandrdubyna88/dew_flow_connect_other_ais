@@ -52,7 +52,7 @@ public static class AntigravityReadOnly
     /// <summary>
     /// The folder an agy launch runs from, prepared for THIS binary — or an exception: no launch without its block.
     /// </summary>
-    /// <remarks>Checked on every launch rather than once: a temp-folder cleaner may have removed it since the last.</remarks>
+    /// <remarks>Checked on every launch rather than once: something may have removed or changed it since the last.</remarks>
     public static string Home() => Prepare(DefaultBase, HookHandler.OfThisProcess()) switch
     {
         Prepared.Ready ready => ready.Folder,
@@ -97,6 +97,8 @@ public static class AntigravityReadOnly
                 Ensure(Path.Combine(folder, relative), content);
             }
 
+            OwnerOnly([baseDir, folder, Path.Combine(folder, AgentsDir), Path.Combine(folder, AgentsDir, "agents")]);
+
             return new Prepared.Ready(folder);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
@@ -128,16 +130,29 @@ public static class AntigravityReadOnly
         File.Move(temporary, path, overwrite: true);
     }
 
-    /// <summary>A folder only its owner can enter, on Unix; Windows' per-user folder is the owner's already.</summary>
-    private static void CreatePrivate(string directory)
+    private static void CreatePrivate(string directory) => Directory.CreateDirectory(directory);
+
+    private const UnixFileMode Owner = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
+    /// <summary>
+    /// Every folder of ours entered by its owner only, on Unix — set explicitly and checked on every launch, because the
+    /// mode handed to <c>Directory.CreateDirectory</c> was not what the folders got (live in WSL, 2026-10-09: 0755, the
+    /// owner-only test red). Windows' per-user folder is its owner's already.
+    /// </summary>
+    private static void OwnerOnly(IEnumerable<string> directories)
     {
         if (OperatingSystem.IsWindows())
         {
-            Directory.CreateDirectory(directory);
             return;
         }
 
-        Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        foreach (var directory in directories)
+        {
+            if (File.GetUnixFileMode(directory) != Owner)
+            {
+                File.SetUnixFileMode(directory, Owner);
+            }
+        }
     }
 
     /// <summary>The agent: its tool list is the block; its prose tells the model why, which the probe showed it then cites.</summary>

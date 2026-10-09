@@ -390,7 +390,7 @@ from `coai-mcp` (reviewer, consult, question row) and from the Team server (revi
 answers `allow` for `view_file` and `deny` for everything else (`AntigravityReadOnly`,
 [RESULTS_agy_write_block.md](RESULTS_agy_write_block.md)). Both binaries therefore carry the hook mode, and both answer it
 before anything else starts — no settings, vault, log or web host. Nothing crosses a network; nothing is written into the
-operator's agy configuration or into a root. The folder is under the system's temporary folder, one per handler binary.
+operator's agy configuration or into a root. The folder is in the person's own application-data folder (owner-only on Unix — a shared `/tmp` would let another account plant the hook script), one per handler binary.
 
 ### And it is SEEN across the seam, twice (2026-09-13)
 
