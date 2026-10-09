@@ -66,8 +66,8 @@ test('all candidate reads start together but a slower older root copy still wins
  * consultation, point 5).
  *
  * <p>The reader found the first file carrying the gate marker and read every half from it. A mount
- * holds the gate rule and its three siblings as four files, so a repository that pasted nothing and
- * mounted everything was told it was behind on three halves it had. The fixtures above put the whole
+ * holds the gate rule and its sibling rules as separate files (four then, six since 2026-10-09), so a
+ * repository that pasted nothing and mounted everything was told it was behind on halves it had. The fixtures above put the whole
  * snippet into the gate file, which no real mount does — these use the real mounted files.</p>
  */
 test('a mount is read with its sibling rules, and an actual paste still takes precedence', async t => {

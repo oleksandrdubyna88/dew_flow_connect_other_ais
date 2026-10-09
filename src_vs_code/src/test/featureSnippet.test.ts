@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { ARTEFACT_VERSION, claudeSnippet, HALF_IDS, KNOWN_HALVES, readSnippetStatus, snippetNote, snippetStatus } from '../claudeSnippet';
@@ -141,22 +140,19 @@ test('a paste made before the feature half is OLDER, naming it', () => {
  * rule now: a mount from before the move lacks the file, and that is a pin to move — the same sentence a
  * mount missing any other sibling gets. A real PASTE is still judged whole and still wins.</p>
  */
-test('a mount without the feature rule is older naming it — and a paste still wins', async (t) => {
-  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'coai-feature-mount-'));
-  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
-  const files = new Map<string, string>();
-  for (const half of KNOWN_HALVES) {
-    files.set(`.agents/conventions/common/${half.file}`, fs.readFileSync(repo('.agents', 'conventions', 'common', half.file), 'utf8'));
-  }
-  const read = async (name: string): Promise<string> => files.get(name) ?? '';
+test('a mount without the feature rule is older naming it — and a paste still wins', async () => {
+  // Three states, three fixtures — never one map edited between assertions.
+  const mount: ReadonlyMap<string, string> = new Map(KNOWN_HALVES.map((half): [string, string] =>
+    [`.agents/conventions/common/${half.file}`, fs.readFileSync(repo('.agents', 'conventions', 'common', half.file), 'utf8')]));
+  const beforeTheMove: ReadonlyMap<string, string> = new Map([...mount]
+    .filter(([name]) => name !== '.agents/conventions/common/coai-feature-gate.md'));
+  const withAStalePaste: ReadonlyMap<string, string> = new Map([...mount,
+    ['CLAUDE.md', claudeSnippet().replace(/<!-- coai-feature v\d+ -->/, '')]]);
+  const reader = (files: ReadonlyMap<string, string>) => async (name: string): Promise<string> => files.get(name) ?? '';
 
-  assert.deepEqual(await readSnippetStatus(read), { kind: 'current', current: ARTEFACT_VERSION }, 'six mounted rules and no paste');
-
-  files.delete('.agents/conventions/common/coai-feature-gate.md');
-  assert.deepEqual(await readSnippetStatus(read), { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
+  assert.deepEqual(await readSnippetStatus(reader(mount)), { kind: 'current', current: ARTEFACT_VERSION }, 'six mounted rules and no paste');
+  assert.deepEqual(await readSnippetStatus(reader(beforeTheMove)), { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
     'a pin from before the move');
-
-  files.set('.agents/conventions/common/coai-feature-gate.md', fs.readFileSync(repo('.agents', 'conventions', 'common', 'coai-feature-gate.md'), 'utf8'));
-  files.set('CLAUDE.md', claudeSnippet().replace(/<!-- coai-feature v\d+ -->/, ''));
-  assert.deepEqual(await readSnippetStatus(read), { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION });
+  assert.deepEqual(await readSnippetStatus(reader(withAStalePaste)), { kind: 'older', behind: [FEATURE_ID], current: ARTEFACT_VERSION },
+    'a stale paste wins over a current mount');
 });

@@ -76,10 +76,10 @@ test('the half is the mounted rule, verbatim, and the paste without it is OLDER 
   assert.match(snippetNote(status), /the question consultant/);
 
   // And a MOUNT from before the rule existed: five sibling files, no question one.
-  const files = new Map<string, string>();
-  for (const half of KNOWN_HALVES.filter((one) => (one.id as string) !== QUESTION_ID)) {
-    files.set(`.agents/conventions/common/${half.file}`, fs.readFileSync(repo('.agents', 'conventions', 'common', half.file), 'utf8'));
-  }
+  const files: ReadonlyMap<string, string> = new Map(KNOWN_HALVES
+    .filter((one) => (one.id as string) !== QUESTION_ID)
+    .map((half): [string, string] =>
+      [`.agents/conventions/common/${half.file}`, fs.readFileSync(repo('.agents', 'conventions', 'common', half.file), 'utf8')]));
   assert.deepEqual(await readSnippetStatus(async (name) => files.get(name) ?? ''),
     { kind: 'older', behind: [QUESTION_ID], current: ARTEFACT_VERSION });
 });
