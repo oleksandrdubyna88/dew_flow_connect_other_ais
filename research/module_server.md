@@ -1091,7 +1091,9 @@ failure) — `Directory.Exists` had answered false for all of them, so an inacce
 side's and its row disabled. Only a CONFIRMED absence makes a root the other side's (`OtherSideHere(…, unknownHere)`);
 an unknown root stays this side's, goes through D14 (c), and is refused by name: "could not be checked on this machine
 (access denied, or the disk would not answer)". The extension's `directoryAt` answers the same three, and the
-`existence` vectors pin it (`unknownHere`).
+`existence` vectors pin it (`unknownHere`). An UNSPELLABLE name — a NUL (`ArgumentException`) or one Windows refuses
+(`IOException` with ERROR_INVALID_NAME) — is `Absent`: it can never be this machine's folder, and the extension's probe
+answers the same (the fourth code round; the `unspellable` existence vector is answered by both REAL probes).
 Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
 `QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
 no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose

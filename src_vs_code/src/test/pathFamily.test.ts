@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
+import { promises as fsp } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-import { RootExistence, directoryAt, existingHere, otherSideHere, qualified, spelledForTheOtherOs, systemDriveOf } from '../pathFamily';
+import { ROOT_ANSWER_LIFETIME_MS, RootExistence, directoryAt, existingHere, otherSideHere, qualified, spelledForTheOtherOs, systemDriveOf } from '../pathFamily';
 
 /**
  * The TS half of `shared/path-family-vectors.json` — which roots are the OTHER operating system's. The server skips
@@ -125,6 +127,18 @@ test('a stat answers present, absent — ENOENT or ENOTDIR only — or throws fo
   }
 });
 
+test('an unspellable root is ABSENT on the real stat, as the server\'s probe answers it — never unknown', async () => {
+  // The fourth code round: a NUL made Node throw ERR_INVALID_ARG_VALUE, which this probe called unknown while the
+  // server's called it absent. A name that cannot be spelled can never be this machine's folder.
+  const unspellable = rowsOf('existence').filter((row) => row.optionalFlag('unspellable'));
+  assert.ok(unspellable.length > 0, 'the file pins an unspellable root for both halves');
+  const real = directoryAt((one) => fsp.stat(one));
+  for (const row of unspellable) {
+    assert.equal(await real(qualified(row.text('path'), process.platform === 'win32', 'C:')), false, `${row.where}: ${row.text('why')}`);
+  }
+  assert.equal(await real(path.join(os.tmpdir(), 'coai-no-such<folder')), false, 'a name Windows cannot spell is no folder either');
+});
+
 test('an answer holding an unknown root is not kept: the next render asks the disk again', async () => {
   let calls = 0;
   const answers = new RootExistence(async () => {
@@ -184,4 +198,24 @@ test('a repaint with the same roots asks the disk nothing; changed roots, anothe
   answers.forget();
   await answers.of(['/work'], true, 'D:');
   assert.equal(asked.length, 6, 'an explicit change of the roots setting stats again');
+});
+
+test('a definitive answer lives ROOT_ANSWER_LIFETIME_MS: within it one stat, after it a fresh one — a folder made or removed later is seen', async () => {
+  // The fourth code round: kept until the root list changed, a folder created after the first paint stayed "the other
+  // side's" on the page while the server, which reads the disk on every start, already used it.
+  let now = 1_000;
+  let asked = 0;
+  let exists = false;
+  const answers = new RootExistence(async () => { asked += 1; return exists; }, () => now);
+
+  assert.deepEqual((await answers.of(['/work'], true, 'C:')).existing, []);
+  now += ROOT_ANSWER_LIFETIME_MS - 1;
+  exists = true;
+  assert.deepEqual((await answers.of(['/work'], true, 'C:')).existing, [], 'within the lifetime the kept answer stands');
+  assert.equal(asked, 1, 'one stat within the lifetime');
+
+  now += 1;
+  assert.deepEqual((await answers.of(['/work'], true, 'C:')).existing, ['/work'], 'after it, the disk is asked again and the new folder is seen');
+  assert.equal(asked, 2);
+  assert.equal(ROOT_ANSWER_LIFETIME_MS, 60_000, 'the lifetime is the named constant the docs state');
 });

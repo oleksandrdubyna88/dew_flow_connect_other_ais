@@ -22,6 +22,11 @@
 > as the other side's. **Rule: only a CONFIRMED absence makes a root the other side's; an unknown root stays this
 > side's, goes through the ordinary checks, and is refused by name ("could not be checked on this machine").** The
 > `existence` vectors carry `unknownHere`, and both halves read every vector row checked rather than cast.
+> The fourth code round aligned an UNSPELLABLE root — a NUL, or a name Windows refuses — as ABSENT on both halves (the
+> page's probe had called a NUL unknown; the server's had called `<` unknown): such a name can never be this machine's
+> folder; an `unspellable` vector both REAL probes answer pins it. The page's definitive answers now live
+> `ROOT_ANSWER_LIFETIME_MS` (60 s) and are forgotten on every settings mirror, a binary's settled `--features` answer and
+> an install of the server.
 > The plan was written down after the work, when the gate asked for the file; the gate's plan round ran before the code
 > round on the same text.
 >

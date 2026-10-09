@@ -46,6 +46,7 @@
     { "path": "/home/jinx/git", "windows": true, "existsHere": false, "otherSide": true, "why": "the operator's WSL root, which is no folder on the Windows side" },
     { "path": "/work", "windows": true, "existsHere": false, "unknownHere": true, "otherSide": false, "why": "the disk could not answer (access denied, busy) — unknown is not absent: this side's, judged and refused by name if it cannot be used" },
     { "path": "C:\\Users\\jinx\\git", "windows": false, "existsHere": false, "unknownHere": true, "otherSide": false, "why": "the same on the WSL side: only a CONFIRMED absence makes a root the other side's" },
+    { "path": "/home/jinx/a\u0000b", "windows": true, "existsHere": false, "otherSide": true, "unspellable": true, "why": "a name no file system can spell (a NUL) can never be this machine's folder: both halves' REAL probes answer it ABSENT, never unknown — and it is the other side's spelling" },
     { "path": "C:\\Users\\jinx\\git", "windows": false, "existsHere": false, "otherSide": true, "why": "a Windows root read by the WSL side" },
     { "path": "/work", "windows": false, "existsHere": false, "otherSide": false, "why": "this side's own POSIX spelling that does not exist — refused by name, never skipped" },
     { "path": "D:\\rsd", "windows": true, "existsHere": false, "otherSide": false, "why": "this side's own Windows spelling that does not exist — refused by name, never skipped" }

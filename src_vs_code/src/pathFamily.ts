@@ -98,8 +98,12 @@ export function directoryAt(stat: (path: string) => Promise<{ isDirectory(): boo
   };
 }
 
-/** The two stat errors that mean there is no folder at that path — every other one means the disk did not say. */
-const ABSENT: ReadonlySet<string> = new Set(['ENOENT', 'ENOTDIR']);
+/**
+ * The stat errors that mean there is no folder at that path — every other one means the disk did not say. ERR_INVALID_ARG_VALUE
+ * is Node refusing a name no file system can spell (a NUL): such a root can never be this machine's folder, which is what the
+ * server's probe answers too (the fourth code round). A name Windows alone cannot spell (`<`) already comes back ENOENT.
+ */
+const ABSENT: ReadonlySet<string> = new Set(['ENOENT', 'ENOTDIR', 'ERR_INVALID_ARG_VALUE']);
 
 /**
  * The root as this side looks for it — the server's `QuestionRoots.Qualified`: on Windows a root-relative root (one
@@ -120,33 +124,46 @@ export function systemDriveOf(value: string | undefined): string {
 }
 
 /**
+ * How long a DEFINITIVE answer about the roots is kept: a folder created or removed after a paint is seen within this,
+ * as the server sees it on its next start (the fourth code round). An answer holding an unknown root is never kept.
+ */
+export const ROOT_ANSWER_LIFETIME_MS = 60_000;
+
+/**
  * What the disk said about the stored roots, KEPT: a panel repaints often, and a repaint must not stat. The answer is
- * keyed by the platform, the system drive and the root list — any of them changing asks again — and {@link forget}
- * drops it when the roots setting changes, so a folder created since is found on the next paint.
+ * keyed by the platform, the system drive and the root list — any of them changing asks again — lives
+ * {@link ROOT_ANSWER_LIFETIME_MS}, and {@link forget} drops it when the roots setting changes, the settings are mirrored
+ * to the server, or the server is (re)installed.
  */
 export class RootExistence {
-  private kept: { readonly key: string; readonly answer: Promise<Existence> } | undefined;
+  private kept: { readonly key: string; readonly at: number; readonly answer: Promise<Existence> } | undefined;
 
-  constructor(private readonly isDirectory: (path: string) => Promise<boolean>) {}
+  constructor(private readonly isDirectory: (path: string) => Promise<boolean>, private readonly now: () => number = Date.now) {}
 
   of(roots: readonly string[], windows: boolean, systemDrive: string): Promise<Existence> {
     const key = JSON.stringify([windows, systemDrive, roots]);
-    if (this.kept?.key !== key) {
-      const kept = { key, answer: existingHere(roots, windows, systemDrive, this.isDirectory) };
-      this.kept = kept;
-      // An answer holding an UNKNOWN root is not kept: the next render asks the disk again.
-      void kept.answer.then((answer) => {
-        if (answer.unknown.length > 0 && this.kept === kept) {
-          this.kept = undefined;
-        }
-      });
-    }
+    const kept = this.kept;
 
-    return this.kept.answer;
+    return kept !== undefined && kept.key === key && this.now() - kept.at < ROOT_ANSWER_LIFETIME_MS
+      ? kept.answer
+      : this.asked(key, roots, windows, systemDrive);
   }
 
   forget(): void {
     this.kept = undefined;
+  }
+
+  /** The disk asked again, and the answer kept — unless it holds an UNKNOWN root: the next render then asks again. */
+  private asked(key: string, roots: readonly string[], windows: boolean, systemDrive: string): Promise<Existence> {
+    const kept = { key, at: this.now(), answer: existingHere(roots, windows, systemDrive, this.isDirectory) };
+    this.kept = kept;
+    void kept.answer.then((answer) => {
+      if (answer.unknown.length > 0 && this.kept === kept) {
+        this.kept = undefined;
+      }
+    });
+
+    return kept.answer;
   }
 }
 

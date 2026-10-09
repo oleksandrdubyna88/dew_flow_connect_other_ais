@@ -620,6 +620,23 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         QuestionRoots.PresenceOf(Path.Combine(file, "under-a-file")).Should().Be(RootPresence.Absent, "ENOTDIR is absence too");
     }
 
+    [Fact]
+    public void AnUnspellableRoot_IsAbsent_OnTheRealProbe_AsTheExtensionsProbeAnswersIt()
+    {
+        // The fourth code round: the page's probe answered a NUL as UNKNOWN and this one as absent. A name that cannot be
+        // spelled can never be this machine's folder — ABSENT on both halves, pinned by the vectors' `unspellable` rows.
+        var unspellable = SharedVectors.Rows("existence").Where(row => row.OptionalFlag("unspellable")).ToList();
+        unspellable.Should().NotBeEmpty("the file pins an unspellable root for both halves");
+        foreach (var row in unspellable)
+        {
+            QuestionRoots.PresenceOf(QuestionRoots.Qualified(row.Text("path"), OperatingSystem.IsWindows(), "C:"))
+                .Should().Be(RootPresence.Absent, $"{row.Where}: {row.Text("why")}");
+        }
+
+        // A name Windows cannot spell (`<`) — ENOENT to the page's Node probe; ERROR_INVALID_NAME here must say the same.
+        QuestionRoots.PresenceOf(Path.Combine(_projects, "a<b")).Should().Be(RootPresence.Absent, "an invalid name is no folder here");
+    }
+
     public static TheoryData<string, RootPresence> WhatTheDiskSaid => new()
     {
         { nameof(UnauthorizedAccessException), RootPresence.Unknown },

@@ -240,10 +240,15 @@ public static class QuestionRoots
     /// </summary>
     public static RootPresence PresenceOf(string full) => PresenceOf(full, File.GetAttributes);
 
+    /// <summary>ERROR_INVALID_NAME as an HRESULT — "the filename, directory name, or volume label syntax is incorrect".</summary>
+    private const int InvalidName = unchecked((int)0x8007007B);
+
     /// <summary>
     /// The mapping, over an injected attribute read — so the Unknown arm (access denied, a sharing violation), which no
     /// test can provoke on demand on every platform, is tested with the exception types <c>File.GetAttributes</c>
-    /// really throws. Not-found types are caught BEFORE <see cref="IOException"/>, their base.
+    /// really throws. Not-found types are caught BEFORE <see cref="IOException"/>, their base. A name this OS cannot spell
+    /// — a NUL (<see cref="ArgumentException"/>), or one Windows refuses (ERROR_INVALID_NAME) — is ABSENT: it can never be this
+    /// machine's folder, and the extension's probe answers the same (the fourth code round).
     /// </summary>
     public static RootPresence PresenceOf(string full, Func<string, FileAttributes> attributesOf)
     {
@@ -251,7 +256,8 @@ public static class QuestionRoots
         {
             return (attributesOf(full) & FileAttributes.Directory) != 0 ? RootPresence.Present : RootPresence.Absent;
         }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException
+            || e is IOException { HResult: InvalidName })
         {
             return RootPresence.Absent;
         }
