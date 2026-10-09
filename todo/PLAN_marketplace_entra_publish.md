@@ -145,6 +145,10 @@ extension-marketplace:
   runs-on: ubuntu-latest
   timeout-minutes: 15
   environment: marketplace
+  defaults:
+    run:
+      working-directory: src_vs_code   # as the extension job (release.yml:482-484): the .vsix is downloaded
+                                       # HERE, next to the node_modules the vsce steps run from
   permissions:
     contents: read      # gh release download of the asset the extension job attached
     id-token: write     # the GitHub OIDC token azure/login exchanges; this job only
@@ -397,7 +401,10 @@ Tests (in `src_vs_code/src/test/`, in the style of the existing workflow-reading
   - the `mode` step rejects unknown values, and the `pat` branch carries the 2026-12-01 refusal;
   - the provenance checkout has `fetch-depth: 0`, and the `manual` step compares the served version with
     the tag's rather than trusting `vsce show`'s exit code;
-  - the `gh release download` step has `GH_TOKEN` in its `env:`.
+  - the `gh release download` step has `GH_TOKEN` in its `env:`;
+  - the job sets `defaults.run.working-directory: src_vs_code`, and neither the download step nor a vsce
+    step overrides it. The `.vsix` and `node_modules` therefore sit in the one directory that
+    `--packagePath ./*.vsix` and `./node_modules/.bin/vsce` resolve against.
 
   Break-it, per the testing rule: add `VSCE_PAT: ${{ secrets.VSCE_PAT }}` to the Entra publish step, and
   separately drop `env -u VSCE_PAT` from it. Watch T1 fail naming F5 each time, then restore and watch
