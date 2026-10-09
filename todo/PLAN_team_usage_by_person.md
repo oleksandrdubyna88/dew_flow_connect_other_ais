@@ -89,12 +89,15 @@ Every surface story carries its docs and its help text in all five languages (`H
 
 ### E1 — the tab, on today's server (extension only) · `feat/team-tab-e1`
 
-- **1.1 The page owns its Team-server data** (Opus) — the Review rounds page asks for its Team-server usage itself
-  while it is open (60 s freshness, as the sidebar), and a window press re-asks at once; both independent of the
-  sidebar. Every request carries the server, the window and a sequence number; an answer that no longer matches the
-  current selection is dropped, never rendered (an admin pressing Today then Year must not see Today's figures under
-  Year). RED first: `ThePageRefreshesTeamUsage_WithTheSidebarClosed`, `AWindowPress_ReasksTheServer`,
-  `AnAnswerForAnOldWindow_IsDropped` (the two answers complete out of order).
+- **1.1 One owner fetches, the page's visibility asks** (Opus) — the sidebar's `PanelProvider` stays the ONE owner of
+  Team-server requests (catalog and sign-in refresh stay shared), but demand no longer comes only from the sidebar's
+  render (`panelProvider.ts:1331`): the Review rounds page being open asks too, every 60 s and at once on a window
+  press. Usage is cached per **(server, scope, window)** — today one `usage` per server (`panelProvider.ts:393-399`)
+  lets a `me` answer and a `company` answer overwrite each other — each key with its own sequence number, checked
+  BEFORE the cache is written; a changed selection schedules its request even while another is running (today the
+  `refreshing` early return at `:3788` lets the old request stamp everything fresh for 60 s). RED first:
+  `ThePageRefreshesTeamUsage_WithTheSidebarClosed`, `AWindowPress_ReasksTheServer`, `AnAnswerForAnOldWindow_IsDropped`
+  (out of order), `MeAndCompany_KeepTheirOwnTotals` (a delayed `me` after `company`), `TodayThenYear_DuringARefresh`.
 - **1.2 The company answer, typed** (Opus) — `Usage.people?: PersonUsage[]` and `unreadableLines?`
   (`teamServerApi.ts:160-165`); for a server whose catalog says admin, the tab asks `scope=company` and the spending
   tab keeps asking `scope=me`; the dead *Company* toggle (`usageScopeControl`, its state and the sidebar case) goes
@@ -106,16 +109,23 @@ Every surface story carries its docs and its help text in all five languages (`H
   (`:1558-1561`), `WAITING` (`:1590`) and the 15 s never-received list (`:2294`), a `Region` (`pushLedger.ts:23`,
   `roundsLogPanel.ts:262-282`), and its commands — window, refresh, search, sort, server — in `LogCommand` / `WORK`
   (`roundsLogMessages.ts:50-69`, `:216-225`; the mapped type makes a missing one a compile error). Search and sort
-  stay on the page (no round trip).
+  stay on the page (no round trip), and so does every piece of interaction state: the search text and focus, the sort,
+  the selected server and each expanded card (keyed by server plus normalised email) survive a push — the region is
+  replaced the way `replaceKeepingFolds` already does for the consultations tabs (`roundsLog.ts:2203`), and the
+  toolbar is not replaced at all. The Settings sheet is shared by EXTRACTION: its tokens and chip rules move to a module
+  both import, inserted in the same order, and a test asserts `CATALOG_CSS` is byte-identical before and after; the
+  Settings cards' four-row subgrid stays the Settings page's — this tab's cards have their own layout, scoped to its
+  section.
 - **1.4 Proven on the page** (Opus) — a bundled-page test on `roundsLogPageHarness.ts` that RUNS the page: an admin
   sees the tab and its people; a non-admin page has no tab button and no section; a `people` push renders cards;
-  search narrows; *needs Team server ≥ …* shows where `models` / `daily` / people listing are absent and no zero
-  does. Help: the `the-rounds-log` article (it lists the tabs by name) and `team-servers` (the toggle sentence) in all
+  search narrows; a push keeps the query, the order, the focused search box and an expanded card (switching servers
+  with the same email included); *needs Team server ≥ …* shows where `models` / `daily` / people listing are absent
+  and no zero does. Help: the `the-rounds-log` article (it lists the tabs by name) and `team-servers` (the toggle sentence) in all
   five languages. Docs: `module_extension.md` (the rounds-log page and the spending tab paragraphs).
 - **1.5 End to end, over a real server** (Opus) — a `*.contract.js` case in `npm run test:contract`, which starts the
   built `coai-server` on a loopback port: an admin's company fetch through the real client, a window change re-asking,
-  a non-admin's `403`, and (after E2) `/api/people` and the `models` / `daily` fields; an older-server body for the
-  fallback. The flow gets its row in `research/module_tests.md`'s catalogue with what it does NOT prove (a host cannot
+  a non-admin's `403`; an older-server body for the fallback. (The `/api/people`, `models` and `daily` assertions belong
+  to E2, story 2.3, where those exist.) The flow gets its row in `research/module_tests.md`'s catalogue with what it does NOT prove (a host cannot
   read a webview, so the page itself is the bundled harness's).
 
 ### E2 — the server says who and with what · `feat/team-tab-e2`
@@ -127,10 +137,15 @@ Every surface story carries its docs and its help text in all five languages (`H
   expired session is not listed; two sessions of one person are one row; no field beyond the three is on the wire.
 - **2.2 Models and days on the company answer** (Opus) — additive, company scope only: `VendorTotal` gains
   `models[{model, runs, failed, tokensIn, tokensOut}]` (from `UsageLine.Model`); the answer gains
-  `daily{fromUtc, toUtc, days[{day, vendors[{vendor, runs}]}]}` for the last 30 UTC days from the SAME scan. `me`
-  scope unchanged. `http/usage/usage.http` asserts both; an old line with no model groups under `""` (unknown).
-- **2.3 Release and deploy** (Opus) — server release; the manual `deploy-server.yml` dispatch with the owner's
-  approval; live: an admin's tab shows names, last seen and the chart; a non-admin's request to `/api/people` is `403`.
+  `daily{fromUtc, toUtc, days[{day, vendors[{vendor, runs}]}]}` for the last **30 UTC calendar days including today**
+  (day buckets, half-open). Today the reader keeps only the SELECTED window (`UsageEndpoints.cs:56` →
+  `UsageReader.cs:96`), so a chart built from it on *Today* would show one day: the read covers the UNION of the two
+  ranges in one scan, and the summary and the chart are aggregated from it separately. RED: company/Today with one
+  launch yesterday and one today — the summary counts one, the chart two; company/Year with a 60-day-old launch — the
+  summary includes it, the chart does not. `me` scope unchanged. `http/usage/usage.http` asserts both; an old line with no model groups under `""` (unknown).
+- **2.3 Contract, release and deploy** (Opus) — the contract suite asserts `/api/people` (admin 200 with exactly three
+  fields, non-admin `403`) and the `models` / `daily` fields over the real server; server release; the manual
+  `deploy-server.yml` dispatch with the owner's approval; live: `/api/people` answers an admin and refuses a non-admin.
   `module_team_server.md` (routes table, story 2.4 section, *What is on disk*).
 
 ### E3 — the tab uses it · `feat/team-tab-e3`
@@ -143,7 +158,8 @@ Every surface story carries its docs and its help text in all five languages (`H
 - **3.3 The chart** (Opus) — a 30-day launches-per-day stacked bar chart from `daily`, drawn to scale with theme
   tokens, its axis labelled *launches*.
 - **3.4 Proven and released** (Opus) — bundled-page tests for each against a new-server body AND an old-server body
-  (D8); help and docs; the extension release.
+  (D8); help and docs; the extension release; live, against the deployed server: an admin's tab shows names, last seen
+  and the chart.
 
 ## Build order
 
@@ -187,6 +203,12 @@ launches; `/api/people` returns exactly three fields and refuses a non-admin.
 Codex, `proceed`, three findings: stale window answers must be dropped (accepted — 1.1); no end-to-end flow was
 required (accepted — 1.5); the boundaries were said to be one-sided (rejected — they were written into all three
 neighbouring plans in the same commit, which the reviewer, reading the plan text alone, could not see).
+
+The cadence consultation for epics 1–3 (codex), each point checked in code: one usage per server lets `me` and
+`company` overwrite each other and a selection changed mid-refresh is lost (1.1 now keys the cache by server, scope
+and window, with one owner); a 30-day chart cannot come from a read that keeps only the selected window (2.2 reads the
+union); a push would erase an expanded card and the search (1.3 keeps interaction state on the page); two live checks
+ran ahead of what they need (moved to 2.3 and 3.4).
 
 ## Definition of Done
 
