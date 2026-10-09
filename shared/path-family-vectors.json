@@ -15,9 +15,22 @@
     "beside a stored root. Two self-consistent loaders cannot notice they disagree, so both suites answer this",
     "file (QuestionConsultSettingsTests.cs, pathFamily.test.ts).",
     "",
-    "`onWindows` is the verdict of a server or window running on Windows, `elsewhere` of one on Linux, WSL or",
-    "macOS. A root that is neither side's absolute spelling (relative, drive-relative) is the same side's, and",
-    "is refused there by name as before."
+    "`vectors` is the SPELLING alone: `onWindows` is the verdict of a server or window running on Windows,",
+    "`elsewhere` of one on Linux, WSL or macOS. A root that is neither side's absolute spelling (relative,",
+    "drive-relative) is the same side's, and is refused there by name as before.",
+    "",
+    "`existence` is the DECISION, and the spelling is not enough for it (the plan round, 2026-10-09): on Windows",
+    "`/work` is a legal root-relative path to the folder `work` on the current drive. So a root spelled for the",
+    "other OS is the other side's only when it is NOT an existing directory on this machine; one that exists here",
+    "is this side's and goes through the ordinary checks. Answered by `QuestionRoots.OtherSideHere` and the",
+    "extension's `otherSideHere`."
+  ],
+  "existence": [
+    { "path": "/work", "windows": true, "existsHere": true, "otherSide": false, "why": "a root-relative Windows folder that exists — this side's, never skipped" },
+    { "path": "/home/jinx/git", "windows": true, "existsHere": false, "otherSide": true, "why": "the operator's WSL root, which is no folder on the Windows side" },
+    { "path": "C:\\Users\\jinx\\git", "windows": false, "existsHere": false, "otherSide": true, "why": "a Windows root read by the WSL side" },
+    { "path": "/work", "windows": false, "existsHere": false, "otherSide": false, "why": "this side's own POSIX spelling that does not exist — refused by name, never skipped" },
+    { "path": "D:\\rsd", "windows": true, "existsHere": false, "otherSide": false, "why": "this side's own Windows spelling that does not exist — refused by name, never skipped" }
   ],
   "vectors": [
     { "path": "/home/jinx/git", "onWindows": true, "elsewhere": false, "why": "the operator's root, written from a WSL window" },

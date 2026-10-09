@@ -1068,6 +1068,10 @@ cure said *"running without those settings"* every time, for a configuration tha
 `QuestionRoots.OtherSide(root, windows)` now decides, lexically, whether a root is spelled for the OTHER operating system:
 a POSIX absolute path (one leading `/`) on a Windows server, a Windows one (`X:\`, `X:/`, a leading `\` — UNC included)
 on Linux, WSL or macOS; `//server/share` is neither side's alone, and a relative or drive-relative root stays this side's.
+**The spelling is not the whole decision** (the plan round, same day): on Windows `/work` is a legal root-relative path
+to the folder `work` on the current drive, so `QuestionRoots.OtherSideHere(root, windows, existsHere)` skips a root only
+when it is spelled for the other OS AND is no directory here — `Validate` asks its injected `isDirectory` about those
+roots alone, and an existing one is this side's and goes through every check below.
 Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
 `QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
 no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
@@ -1076,8 +1080,8 @@ folder a disk row may read (…) is spelled for the other operating system …; 
 than `blocked` with the planner's "needs at least one root", because the row is fine where those folders are; the
 planner's refusal stands when nothing is set at all, and a pair the matrix refuses keeps its own reason
 (`QuestionAdmission.Refusal`). A missing root of THIS operating system is still refused by name, as before.
-`shared/path-family-vectors.json` holds the shape, answered by `QuestionConsultSettingsTests` and by the extension's
-`pathFamily.test.ts`, so the Settings page names exactly the roots the server skips.
+`shared/path-family-vectors.json` holds the spelling (`vectors`) and the decision (`existence`), answered by
+`QuestionConsultSettingsTests` and by the extension's `pathFamily.test.ts`, so the Settings page names exactly the roots the server skips.
 
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the

@@ -410,6 +410,45 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     }
 
     [Fact]
+    public void OnWindows_ARootRelativeFolderThatExists_IsThisSides_AndOnlyAMissingOneIsTheOtherSides()
+    {
+        // `/work` is a legal Windows path — the folder `work` at the root of the current drive. A person who typed an existing
+        // folder that way must not lose it to the WSL rule: only a POSIX spelling that is NOT a folder here is the other side's.
+        // The disk is injected, so this is the same test on any machine.
+        static bool OnlyWorkExists(string full) => Path.GetFileName(full) == "work";
+
+        var verdict = QuestionRoots.Validate(["/work", "/home/jinx/git"], _data, Places with { Windows = true }, OnlyWorkExists);
+
+        verdict.Accepted.Should().ContainSingle("an existing folder of this machine goes through the ordinary checks")
+            .Which.Should().Be(Path.TrimEndingDirectorySeparator(Path.GetFullPath("/work")));
+        verdict.OtherSide.Should().Equal(["/home/jinx/git"], "the one that is not a folder here is the WSL side's");
+        verdict.Refused.Should().BeEmpty();
+    }
+
+    private sealed record ExistenceVector(string Path, bool Windows, bool ExistsHere, bool OtherSide, string Why);
+
+    [Fact]
+    public void TheOtherSideHere_AnswersTheSharedExistenceVectors_AsTheExtensionDoes()
+    {
+        using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
+        using var parsed = System.Text.Json.JsonDocument.Parse(file);
+        var vectors = parsed.RootElement.GetProperty("existence").EnumerateArray().Select(v => new ExistenceVector(
+            v.GetProperty("path").GetString() ?? "",
+            v.GetProperty("windows").GetBoolean(),
+            v.GetProperty("existsHere").GetBoolean(),
+            v.GetProperty("otherSide").GetBoolean(),
+            v.GetProperty("why").GetString() ?? "")).ToList();
+
+        vectors.Should().HaveCountGreaterThan(2, "the file is read, not an empty array");
+        foreach (var vector in vectors)
+        {
+            QuestionRoots.OtherSideHere(vector.Path, vector.Windows, vector.ExistsHere)
+                .Should().Be(vector.OtherSide, $"{vector.Path} (windows: {vector.Windows}, exists: {vector.ExistsHere}) — {vector.Why}");
+        }
+    }
+
+    [Fact]
     public void RootsMayAlsoBeSemicolonSeparated_ForAHandSetVariable()
     {
         var other = Directory.CreateDirectory(Path.Combine(_projects, "beta")).FullName;
