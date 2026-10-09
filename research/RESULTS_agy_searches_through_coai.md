@@ -48,7 +48,7 @@ agy with the exact flags coai launches (`--print= --input-format stream-json --o
 
 **`--mode plan` does not stop a write inside an `--add-dir` root.** The plan's premise — "agy keeps `--mode plan` — it can
 write nothing" — is false, and so is the reviewer argv's comment (`AntigravityRuntime.cs`, "Read-only"). This branch does
-not change what agy may write (the same flags as before); it is a defect of every agy launch coai makes, recorded as an
+not change what agy may write (the same flags as before); it is a defect of every agy launch coai makes, recorded as a
 defect and fixed by [PLAN_agy_cannot_write_its_roots.md](PLAN_agy_cannot_write_its_roots.md) (2026-10-09). The
 operator's decision (2026-10-08): the installed settings stay as they are, the write block is measured with `--agent`
 first, and this branch merges without a release. Both scratch trees are left in place, with their sentinel, for the person

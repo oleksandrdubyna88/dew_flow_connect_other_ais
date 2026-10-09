@@ -55,7 +55,10 @@ reads, or a model "helping", is enough.
 Asked with the finding: the installed settings stay as they are (no agy row switched off); the write block is measured
 **with `--agent` first**; the lookup branch merges without a release.
 
-## 3. The design — to be measured before it is built
+## 3. The design, as planned (historical)
+
+> This section and §4 are the plan as written BEFORE the build. What shipped is the status block above and its
+> deviations — both candidates together, a per-user folder, and three defects found live.
 
 **First candidate: a custom agent with read tools only.** `agy --help` (1.3.1) lists `--agent` ("Agent for the current CLI
 session") and `agy agents` lists them. If an agent definition can name its tools, coai launches every agy turn with an
@@ -80,10 +83,10 @@ turn or lets the model answer in prose.
 with a sentence naming this defect, and the operator is asked before that ships. A `permissions.deny` in agy's GLOBAL
 settings is NOT a fallback: it changes the operator's own interactive agy, against the decision in §2 (plan round, codex).
 
-**Where every agy argv is built (2026-10-09, read from the code).** Three places, not one — the plan's first draft named
+**Where every agy argv was built before this plan (2026-10-09, read from the code).** Three places, not one — the plan's first draft named
 `AntigravityStream.StreamingFlags`, which nothing uses:
 
-| Launch | Built in | cwd today |
+| Launch | Built in | cwd before this plan |
 |---|---|---|
 | question row, `question-disk` / `question-none` | `ConfinementPlanner.cs:161-163` (fragments) through `AntigravityConsultant.Build` | the operator's ROOT (`CwdKind.Root`) / a scratch dir |
 | stuck consultant (`consult`) | `AntigravityConsultant.cs:173-176` | the caller's checkout |
@@ -101,7 +104,7 @@ The block goes into all three through ONE helper both runners call, and a test e
 - **Fail closed.** M1 also measures what agy does when the hook file is missing, not discovered, or the handler fails or
   times out. A launch whose block cannot be confirmed in place does not start: the turn fails with a named reason.
 
-## 4. Build order
+## 4. Build order, as planned (historical)
 
 1. **M1 — measure** (`scripts/probe-agy-write-block.mjs`): the write check as in RESULTS §3, three runs per side per
    candidate, and the same runs with the lookup prompt, to show reading still works. Record in `research/`.

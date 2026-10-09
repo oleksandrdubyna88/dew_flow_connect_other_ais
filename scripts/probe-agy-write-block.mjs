@@ -60,7 +60,7 @@ let input = '';
 process.stdin.on('data', (c) => { input += c; }).on('end', () => {
   let name = '';
   try { name = JSON.parse(input)?.toolCall?.name ?? ''; } catch { name = ''; }
-  appendFileSync(new URL('./calls.jsonl', import.meta.url), JSON.stringify({ name, at: new Date().toISOString() }) + '\\n');
+  appendFileSync(new URL('./calls.jsonl', import.meta.url), JSON.stringify({ name }) + '\\n');
   process.stdout.write(JSON.stringify(name === 'view_file'
     ? { decision: 'allow' }
     : { decision: 'deny', reason: 'coai: this consultation is read-only' }));
@@ -118,7 +118,13 @@ function coaiHook(agents) {
   if (handler.length === 0) {
     throw new Error('the coai-hook arms need PROBE_COAI_HANDLER');
   }
-  const parts = [handler, ...(process.env.PROBE_COAI_HANDLER_DLL ? [process.env.PROBE_COAI_HANDLER_DLL] : [])].map((p) => `"${p}"`).join(' ');
+  const paths = [handler, ...(process.env.PROBE_COAI_HANDLER_DLL ? [process.env.PROBE_COAI_HANDLER_DLL] : [])];
+  // The product refuses a path a script would misread (HookHandler.Unsafe): the probe refuses the same ones.
+  const bad = paths.find((p) => p.length === 0 || /["\r\n%`$]/u.test(p));
+  if (bad !== undefined) {
+    throw new Error(`a handler path a script would misread: ${JSON.stringify(bad)}`);
+  }
+  const parts = paths.map((p) => `"${p}"`).join(' ');
   mkdirSync(agents, { recursive: true });
   writeFileSync(join(agents, 'coai-hook.cmd'), `@${parts} --agy-hook\r\n`);
   writeFileSync(join(agents, 'coai-hook.sh'), `#!/bin/sh\nexec ${parts} --agy-hook\n`);
@@ -140,7 +146,7 @@ function run(arm, n) {
   const agent = arm.startsWith('agent') || arm.startsWith('both') ? ['--agent', arm === 'agent-unknown' ? 'coai-no-such-agent' : AGENT] : [];
   const args = ['--print=', '--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan',
     ...agent, '--model', model, '--add-dir', target];
-  const t0 = Date.now();
+  const t0 = performance.now();
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which agy inherits
   // through coai (2026-10-09): a hook command naming a script bare in the cwd is then not found.
   const r = spawnSync(exe, args, { cwd, input: message(text), encoding: 'utf8', timeout: 240000,
@@ -160,7 +166,7 @@ function run(arm, n) {
     : [];
   const response = String(result?.response ?? '');
   const row = {
-    arm, run: n, seconds: Math.round((Date.now() - t0) / 100) / 10, exit: r.status,
+    arm, run: n, seconds: Math.round((performance.now() - t0) / 100) / 10, exit: r.status,
     tools: [...new Set(tools)], hookSaw: calls, denied: result?.denied_actions ?? [], status: result?.status ?? '',
     sentinelWritten: existsSync(join(target, 'SENTINEL.txt')),
     readTheMarker: reading ? response.includes(MARKER) : null,
@@ -180,5 +186,5 @@ for (const arm of armsArg.split(',')) {
     rows.push(run(arm, n));
   }
 }
-writeFileSync(out, JSON.stringify({ agy: exe, model, platform: process.platform, at: new Date().toISOString(), rows }, null, 2));
+writeFileSync(out, JSON.stringify({ agy: exe, model, platform: process.platform, rows }, null, 2));
 console.log(`wrote ${out}`);

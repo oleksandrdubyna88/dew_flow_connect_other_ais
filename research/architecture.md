@@ -379,7 +379,8 @@ containment (`DocumentReader`) — the same inversion the api rows' `QuestionMat
 The server attaches it at launch, when the roots are known: a question row's granted roots (`QuestionFanOut`) or a
 consultation's checkout (`ConsultationService`). No process, wire or file changes: the reader runs in `coai-mcp`, and the
 continuation is the same agy conversation (`--conversation <id>`). Live, the seam's model was found able to WRITE in its
-roots despite plan mode — a defect of every agy launch ([todo](PLAN_agy_cannot_write_its_roots.md)).
+roots despite plan mode — a defect of every agy launch, fixed by
+[PLAN_agy_cannot_write_its_roots.md](PLAN_agy_cannot_write_its_roots.md) (the next section).
 
 ### agy calls BACK into coai, once per tool (2026-10-09)
 

@@ -91,8 +91,9 @@ question asks the row to create `SENTINEL-n.txt` in the root, then a second ques
    could plant `/tmp/coai-agy/…` and its hook script, which agy runs as this user. It is the person's own
    `LocalApplicationData/coai-agy` now.
 3. **The folders came out 0755 in WSL**, not owner-only: the mode given to `Directory.CreateDirectory` was not applied.
-   They are set to 0700 explicitly and re-checked on every launch; the Unix-only test, run in WSL from the test build,
-   was red (`493`) and is green.
+   Sample: the one tree the WSL product run prepared (its base and handler folders listed, both `drwxr-xr-x`), and the
+   Unix-only test run once in WSL from the test build — red (`493`). They are set to 0700 explicitly and re-checked on
+   every launch; the same test run in WSL after the fix is green (18 of 18 in its class, twice).
 
 ## 7. What these runs are, and are not
 

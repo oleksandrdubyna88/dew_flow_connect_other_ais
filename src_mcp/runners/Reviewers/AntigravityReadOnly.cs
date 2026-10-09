@@ -141,8 +141,9 @@ public static class AntigravityReadOnly
 
     /// <summary>
     /// Every folder of ours entered by its owner only, on Unix — set explicitly and checked on every launch, because the
-    /// mode handed to <c>Directory.CreateDirectory</c> was not what the folders got (live in WSL, 2026-10-09: 0755, the
-    /// owner-only test red). Windows' per-user folder is its owner's already.
+    /// mode handed to <c>Directory.CreateDirectory</c> was not what the folders got — live in WSL, 2026-10-09: the one
+    /// prepared tree (its base and handler folders) both 0755 after one product run, and the owner-only test red in its
+    /// one WSL run (493). Windows' per-user folder is its owner's already.
     /// </summary>
     private static void OwnerOnly(IEnumerable<string> directories)
     {
