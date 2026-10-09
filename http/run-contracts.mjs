@@ -145,6 +145,30 @@ writeFileSync(
   JSON.stringify([{ id: 'codex', runtime: 'codex', models: ['gpt-5.6-luna'], slots: ['a'] }]),
 );
 
+// ONE ledger line, the developer's, stamped now.
+//
+// The usage answers are shaped by what the ledger holds: with an empty file `vendors` is `[]`, and an
+// assertion over each vendor's `models` passes over nothing — the vacuous green `common/testing.md`
+// warns about. One line gives the personal and the company answer a vendor row with a model under it,
+// and the thirty-day chart a launch in today's bucket, so those shapes are actually checked. The line
+// is the shape `coai-mcp`'s `UsageLedger` writes (mirrored by `UsageEntryDto` on the reading side).
+writeFileSync(
+  path.join(dataDir, 'usage.jsonl'),
+  `${JSON.stringify({
+    utc: new Date().toISOString(),
+    provider: 'codex',
+    model: 'gpt-5.6-luna',
+    role: 'Architecture',
+    stage: 'TeamServer',
+    seconds: 5,
+    tokensIn: 100,
+    tokensOut: 10,
+    costUsd: null,
+    outcome: 'ok',
+    email: DEVELOPER,
+  })}\n`,
+);
+
 // The server's output goes to a FILE, never to a pipe this script holds.
 //
 // This is the whole reason the suite used to hang. `spawnSync` blocks Node's event loop for the

@@ -19,6 +19,21 @@ Authorization: Bearer {{token}}
   test('a torn line is an operator problem and is not reported to a person', () => {
     assert.strictEqual(response.parsedBody.unreadableLines, null);
   });
+  test('every vendor row carries its models — the runner seeds one line, so there IS a row to check', () => {
+    assert.ok(response.parsedBody.vendors.length >= 1, 'no vendor row, so the model breakdown was never checked');
+    for (const vendor of response.parsedBody.vendors) {
+      assert.ok(Array.isArray(vendor.models));
+      for (const model of vendor.models) {
+        assert.deepStrictEqual(
+          Object.keys(model).sort(),
+          ['costIsFloor', 'costUsd', 'failed', 'model', 'runs', 'tokensIn', 'tokensOut', 'unpricedRuns']);
+      }
+      assert.strictEqual(vendor.models.reduce((sum, m) => sum + m.runs, 0), vendor.runs, 'the models sum to their vendor');
+    }
+  });
+  test('the personal answer has no chart — absent, not null, so a client reads absence as "not the company answer"', () => {
+    assert.ok(!('daily' in response.parsedBody));
+  });
 }}
 
 ###
@@ -90,6 +105,35 @@ Authorization: Bearer {{adminToken}}
   });
   test('an admin IS told how many lines could not be read', () => {
     assert.strictEqual(typeof response.parsedBody.unreadableLines, 'number');
+  });
+  test('each vendor is broken down by model, with the cost trio its vendor row carries', () => {
+    assert.ok(response.parsedBody.vendors.length >= 1, 'no vendor row, so the model breakdown was never checked');
+    for (const vendor of response.parsedBody.vendors) {
+      assert.ok(vendor.models.length >= 1);
+      for (const model of vendor.models) {
+        assert.strictEqual(typeof model.model, 'string');
+        assert.strictEqual(typeof model.costIsFloor, 'boolean');
+        assert.strictEqual(typeof model.unpricedRuns, 'number');
+      }
+    }
+  });
+  test('the chart is thirty dense UTC calendar days, each a yyyy-MM-dd string with a row per vendor', () => {
+    const daily = response.parsedBody.daily;
+    assert.ok(daily, 'no daily on the company answer — an older server, or the chart was dropped');
+    assert.ok(Date.parse(daily.fromUtc) < Date.parse(daily.toUtc));
+    assert.strictEqual(daily.days.length, 30);
+    for (const day of daily.days) {
+      assert.match(day.day, /^\d{4}-\d{2}-\d{2}$/);
+      assert.ok(Array.isArray(day.vendors));
+      for (const bar of day.vendors) {
+        assert.strictEqual(typeof bar.vendor, 'string');
+        assert.strictEqual(typeof bar.runs, 'number');
+      }
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    assert.strictEqual(daily.days[29].day, today, 'the last bucket is today, in UTC');
+    const launches = daily.days.flatMap((d) => d.vendors).reduce((sum, bar) => sum + bar.runs, 0);
+    assert.ok(launches >= 1, 'the runner seeds one launch today, and the chart does not show it');
   });
 }}
 

@@ -1,0 +1,91 @@
+# Who has signed in — the admin's roster behind the Team server tab: email, display name, last used,
+# and nothing else. "People" means people with an unexpired SESSION: the three personas of this suite
+# are raw identity tokens with no session file, so the list would be empty and a shape check would pass
+# over nothing. The first request mints a session so that there is at least one row to look at.
+
+# @name a_session_is_minted_so_that_the_roster_has_somebody_in_it
+POST {{baseUrl}}/api/session
+Authorization: Bearer {{token}}
+
+?? status == 201
+
+{{
+  const assert = require('node:assert');
+  test('the session is the developer persona, which is who the roster must then show', () => {
+    assert.strictEqual(response.parsedBody.email, 'dev@example.com');
+  });
+  exports.rosterSessionToken = response.parsedBody.token;
+}}
+
+###
+
+# @name people_answers_an_admin_with_exactly_three_fields_per_person
+# @prod
+GET {{baseUrl}}/api/people
+Authorization: Bearer {{adminToken}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('a list with at least the session minted above in it', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+    assert.ok(response.parsedBody.length >= 1, 'the roster is empty, so the shape below was never checked');
+    assert.ok(response.parsedBody.some((p) => p.email === 'dev@example.com'));
+  });
+  test('every row is exactly email, displayName and lastUsedUtc — never a token, a session id, a creation or an expiry', () => {
+    for (const person of response.parsedBody) {
+      assert.deepStrictEqual(Object.keys(person).sort(), ['displayName', 'email', 'lastUsedUtc']);
+      assert.strictEqual(typeof person.email, 'string');
+      assert.strictEqual(typeof person.displayName, 'string');
+      assert.ok(Number.isFinite(Date.parse(person.lastUsedUtc)), `lastUsedUtc is not a date: ${person.lastUsedUtc}`);
+    }
+  });
+  test('sorted by email', () => {
+    const emails = response.parsedBody.map((p) => p.email.toLowerCase());
+    assert.deepStrictEqual(emails, [...emails].sort());
+  });
+}}
+
+###
+
+# The refusal names the setting, so a person can ask the right operator for it — the same 403 as
+# `scope=company` on /api/usage.
+
+# @name people_is_refused_to_a_non_admin
+GET {{baseUrl}}/api/people
+Authorization: Bearer {{token}}
+
+?? status == 403
+
+{{
+  const assert = require('node:assert');
+  test('it names Coai:Admins', () => {
+    assert.match(response.parsedBody.error, /Coai:Admins/);
+  });
+}}
+
+###
+
+# @name people_without_a_token_is_unauthorized
+GET {{baseUrl}}/api/people
+
+?? status == 401
+
+###
+
+# @name people_from_another_domain_is_forbidden
+GET {{baseUrl}}/api/people
+Authorization: Bearer {{outsiderToken}}
+
+?? status == 403
+
+###
+
+# The session minted above is withdrawn so this file leaves the data directory as it found it.
+
+# @name the_roster_session_is_withdrawn_again
+DELETE {{baseUrl}}/api/session
+Authorization: Bearer {{rosterSessionToken}}
+
+?? status == 204

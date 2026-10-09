@@ -48,6 +48,9 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     private readonly string _dir = Path.Combine(dataDir, "sessions");
     private readonly JsonFileStore _files = new(onFailure);
 
+    /// <summary>The same store with NO reporter — what <see cref="Active"/> reads through. See it for why.</summary>
+    private readonly JsonFileStore _quiet = new();
+
     /// <summary>The file a token lives in: its hash, never itself.</summary>
     public static string FileNameFor(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant() + ".json";
@@ -139,6 +142,38 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
         }
 
         return swept;
+    }
+
+    /// <summary>Every session that has not reached its deadline, read from the files — nothing written back.</summary>
+    /// <remarks>
+    /// <para>The roster behind <c>GET /api/people</c>, asked about once a minute per open admin page. It
+    /// is a READ, and three things it deliberately does not do are each the opposite of a sibling here:</para>
+    /// <list type="bullet">
+    /// <item><b>It never deletes.</b> <see cref="Sweep"/> removes an expired or torn file and
+    /// <see cref="Validate"/> removes an expired one on sight. A listing that deleted would make every
+    /// admin's page a second sweep, on a clock nobody chose.</item>
+    /// <item><b>It never moves <see cref="SessionRecord.LastUsedUtc"/>.</b> Looking at who is signed in is
+    /// not anybody using their session.</item>
+    /// <item><b>It never reports a file it could not read.</b> A vanished file is a session revoked or swept
+    /// between the directory listing and the read; a torn one is a write a killed process left for the
+    /// sweep. Both are expected, and a log line about either sixty times an hour would bury the failures
+    /// that matter — so this reads through a store with no reporter, and the shared read path answers
+    /// null and says nothing. The sweep still removes the litter, and still says so.</item>
+    /// </list>
+    /// <para>Expiry is judged here exactly as <see cref="Validate"/> judges it, so a session this lists is
+    /// one that would still be served.</para>
+    /// </remarks>
+    public IReadOnlyList<SessionRecord> Active(DateTimeOffset nowUtc)
+    {
+        if (!Directory.Exists(_dir))
+        {
+            return [];
+        }
+
+        return [.. Directory.EnumerateFiles(_dir, "*.json")
+            .Select(file => _quiet.Read(file, ServerJsonContext.Default.SessionRecord))
+            .OfType<SessionRecord>()
+            .Where(record => record.ExpiresUtc > nowUtc)];
     }
 
     // The three below are the shared store with this class's naming applied. They were this class's

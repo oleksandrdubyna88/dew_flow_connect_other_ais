@@ -1,6 +1,8 @@
 # PLAN — who on the team is spending it: the Team server tab
 
-> Status: **plan only, nothing implemented yet, 2026-10-09.** Scope: a new admin-only **Team server** tab on the
+> Status: **in progress, 2026-10-09 — E2 stories 2.1 and 2.2 (the server half: `GET /api/people`, `models[]`,
+> `daily`) implemented on `feat/team-tab-server`; E1, E3 and 2.3 (contract-over-the-real-server, release, deploy)
+> open.** Scope: a new admin-only **Team server** tab on the
 > extension's Review rounds page (`src_vs_code`), two additive answers from the Team server (`src_server`), and the
 > removal of the dead *Company* toggle from the spending tab.
 >

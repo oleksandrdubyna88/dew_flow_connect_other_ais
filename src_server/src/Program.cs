@@ -313,6 +313,7 @@ var gate = new CallerFilter(allowedDomains, allowAnyDomain, admins);
 app.MapSessionEndpoints(sessions, gate);
 app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate, acceptedRoles);
 app.MapUsageEndpoints(new UsageReader(dataDir), gate);
+app.MapPeopleEndpoints(sessions, gate);
 app.MapReviewEndpoints(
     jobs,
     catalog,
