@@ -1343,6 +1343,31 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    the comments that still name "the current page" (`catalogSections`, `consultantPicks`, `modelCard`, `panelView`,
    `securityLaneView`, `setupTab`, …). Each goes with its tests, its behaviour named against the Settings-page test
    that holds it.
+   **E5.3, designed 2026-10-09 — what the old page left behind goes.** Three kinds of leftover, each drawn by nothing
+   since E5.1 step 5, each still held alive by tests of its own:
+   - **The mockup.** `new_design/` (17 files, ~6,250 lines, never shipped) and its `sonar.exclusions` entry; the one
+     comment that cites it (`catalogPlaces.ts` CATALOG_TABS) names the plan instead.
+   - **The current-page halves of three shared builders**, each a parameter the Settings page always fills:
+     `consultantBody(consult, state, callerRows = '')` / `consultantSection(state, callerRows = '')` — the
+     `definitionRows` branch (each caller's own vendor/model/endpoint/CLI path) with `row`, `callerColour`, `refusal`
+     and what only it reaches; `qconsultBody`'s `pickFrom` optional → required, `definitionFields` (the row's own vendor,
+     model, endpoint, key name, CLI path) gone; `securityLaneSection(state, offered, allRows = offered)` /
+     `securityLaneBody(…, allRows)` — `allRows` required, and the `offered === allRows` shortcut in `strandedNote`
+     goes with the page that passed the same list twice. Writes the old controls posted (`consultVendor`,
+     `consultModel`, `consultBaseUrl`, `consultExecutablePath`, `qconsultRowVendor` / `Model` / `BaseUrl` / `Key` /
+     `ExecutablePath`) are checked: a setting key no page posts any more is removed from `settingWrite` and its parser
+     only where nothing else (the migration, the server sync, an older settings file) reads it — otherwise kept and
+     said why.
+   - **Comments that describe the current page as present** (`catalogSections`, `consultantPicks`, `consultantHealth*`,
+     `modelCard*`, `modelsTab`, `panelProvider`, `panelView`, `qconsultView`, `rolesHost`, `rolesSwitch`,
+     `securityLaneView`, `setupTab`, `chatTabEmbed`, …) are rewritten to say what is, or deleted where they only
+     compared two pages.
+   **Tests:** each test that holds a removed branch goes with it, its behaviour named against the Settings-page test
+   that holds the same thing (the was → now table in `research/module_tests.md`, as E5.1c did); a behaviour with no
+   Settings-page test gains one before its old test goes. The dead-export and orphan-doc sweeps of E5.1c run before the
+   code round. Nothing a person sees changes, so there is no RED for the deletions themselves; any defect found on
+   the way is red first. Docs: `research/module_extension.md`, `research/module_tests.md`, the plan's progress line.
+   The restore command and `coai.migratedFrom` stay one more release (T5).
 4. **Releases**: mcp 0.44.0 first (E2), the Team server deploy when the operator says, then the extension; post-deploy
    checks against the installed builds.
 
