@@ -182,19 +182,14 @@ test('Models\' cards sit in the same columns — one mechanism, not a copy', () 
 
 /** The rules of a stylesheet at its top level and inside each `@media`, as selector → body, with the media they sit in. */
 function rulesOf(css: string): readonly { readonly media: string; readonly selector: string; readonly body: string }[] {
-  const found: { media: string; selector: string; body: string }[] = [];
   const flat = css.replace(/\/\*[\s\S]*?\*\//gu, '');
-  for (const media of flat.matchAll(/@media\s*([^{]+)\{((?:[^{}]*\{[^{}]*\})*)\s*\}/gu)) {
-    for (const rule of media[2]!.matchAll(/([^{}]+)\{([^{}]*)\}/gu)) {
-      found.push({ media: media[1]!.trim(), selector: rule[1]!.trim(), body: rule[2]!.trim() });
-    }
-  }
+  const rulesIn = (block: string, media: string) => [...block.matchAll(/([^{}]+)\{([^{}]*)\}/gu)]
+    .map((rule) => ({ media, selector: rule[1]!.trim(), body: rule[2]!.trim() }));
+  const inMedia = [...flat.matchAll(/@media\s*([^{]+)\{((?:[^{}]*\{[^{}]*\})*)\s*\}/gu)]
+    .flatMap((media) => rulesIn(media[2]!, media[1]!.trim()));
   const outside = flat.replace(/@media\s*[^{]+\{(?:[^{}]*\{[^{}]*\})*\s*\}/gu, '');
-  for (const rule of outside.matchAll(/([^{}]+)\{([^{}]*)\}/gu)) {
-    found.push({ media: '', selector: rule[1]!.trim(), body: rule[2]!.trim() });
-  }
 
-  return found;
+  return [...inMedia, ...rulesIn(outside, '')];
 }
 
 test('the stylesheet has ONE two-column rule, on the shared class, at Models\' breakpoint — and lifts the narrow column there', () => {
