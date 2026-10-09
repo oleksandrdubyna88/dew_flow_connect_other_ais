@@ -118,6 +118,7 @@ const windows: RootPlaces = {
   systemDirs: ['C:\\Windows', 'C:\\Program Files', 'C:\\ProgramData'],
   caseless: true,
   windows: true,
+  existingHere: [],
 };
 
 test('D14 (c): a drive root, the profile itself, a system folder, the data folder and a relative path are refused by name', () => {

@@ -10343,7 +10343,10 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   relative path — D14 (c), the server's `QuestionRoots` mirrored (and since S4b a folder holding one of those, a
   credential folder, and a link resolving to any of them); a stored root that is one of those shows the refusal
   beside it. **Since 2026-10-09 a stored root spelled for the OTHER operating system** — a WSL path in a Windows
-  window, a Windows path in WSL, which arrive because VS Code shares these settings between the two windows — is
+  window, a Windows path in WSL, which arrive because VS Code shares these settings between the two windows — and
+  that is no folder on this machine (`otherSideHere`; the host asks the disk about those roots alone, `existingHere`
+  into `RootPlaces.existingHere`, so `/work` that exists on a Windows drive is this side's and never called otherwise;
+  residual: a root-relative path names the CURRENT drive, and the extension host's and the server's may differ) — is
   said to be *the other side's folder* (a plain hint, never the `stale` refusal), because the server on this side
   skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
   `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window

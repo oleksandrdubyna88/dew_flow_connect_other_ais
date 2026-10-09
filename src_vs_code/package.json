@@ -1084,7 +1084,7 @@
         "coai.qconsultRoots": {
           "type": "array",
           "default": [],
-          "description": "The folders a disk row may read, read-only — absolute and existing; never a drive root, your profile folder itself, a system folder or the data folder. A folder spelled for the other operating system (a WSL path read by a Windows window, or the reverse) is the other side's: this side skips it and the server on that side reads it.",
+          "description": "The folders a disk row may read, read-only — absolute and existing; never a drive root, your profile folder itself, a system folder or the data folder. A folder spelled for the other operating system (a WSL path read by a Windows window, or the reverse) that is no folder on this machine is the other side's: this side skips it and the server on that side reads it. One that is a folder here (/work on a Windows drive) is this side's.",
           "items": {
             "type": "string"
           }

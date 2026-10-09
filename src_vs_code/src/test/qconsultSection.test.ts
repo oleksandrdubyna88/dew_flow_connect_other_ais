@@ -169,10 +169,10 @@ test('the tab carries a banner for a server known to be older than QCONSULT_SINC
 // ---------- a root of the other operating system (operator, 2026-10-09) ----------
 
 const WINDOWS_PLACES: RootPlaces = {
-  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true,
+  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true, existingHere: [],
 };
 
-const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false };
+const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false, existingHere: [] };
 
 /** The page RUN with these roots stored and this side's places, read back as the tree it drew. */
 function rootsOn(roots: readonly string[], places: RootPlaces): PageNode {
@@ -199,6 +199,15 @@ test('in a Windows window a WSL root is named the other side\'s folder — not r
   assert.equal(foreign.find((node) => node.className.split(' ').includes('stale')).length, 0, 'the WSL root is drawn as broken, which the server no longer says it is');
   assert.doesNotMatch(rootLine(tree, 'D:\\rsd\\work').text(), /other side/, 'this machine\'s own folder is no other side\'s');
   assert.doesNotMatch(tree.text(), /not asked on this side/, 'one folder of this machine is left, so a disk row still runs here');
+});
+
+test('in a Windows window a root-relative folder that EXISTS here (/work) is never called the other side\'s, and a disk row still runs', () => {
+  // `/work` is a legal Windows path to a folder on the current drive; the host found it there, so it is this side's.
+  const tree = rootsOn(['/work', '/home/jinx/git'], { ...WINDOWS_PLACES, existingHere: ['/work'] });
+
+  assert.doesNotMatch(rootLine(tree, '/work').text(), /other side/, 'an existing folder of this machine is called the other side\'s');
+  assert.match(rootLine(tree, '/home/jinx/git').text(), /the other side's folder/, 'the WSL root that is no folder here still is');
+  assert.doesNotMatch(tree.text(), /not asked on this side/, '/work is a folder of this machine, so a disk row runs here');
 });
 
 test('in a WSL window a Windows root is the other side\'s folder, and with no folder of this side a disk row is said to be not asked here', () => {

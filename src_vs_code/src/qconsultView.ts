@@ -3,7 +3,7 @@ import { optionHtml, rowPicks } from './catalogPicks';
 import { escapeHtml } from './escapeHtml';
 import type { HelpKey } from './help';
 import { help, segmentedRadio } from './panelControls';
-import { otherSideNote, spelledForTheOtherOs } from './pathFamily';
+import { otherSideHere, otherSideNote } from './pathFamily';
 import { MAX_ACTIVE_ROWS, type QconsultSettings, type QuestionRowSetting, qconsultSkewNote } from './qconsultSettings';
 import {
   type QuestionPromptView,
@@ -274,7 +274,7 @@ function rootNote(root: string, places: RootPlaces | undefined): string {
   if (places === undefined) {
     return '';
   }
-  if (spelledForTheOtherOs(root, places.windows)) {
+  if (theOtherSides(root, places)) {
     return `<div class="hint">${escapeHtml(otherSideNote(places.windows))}</div>`;
   }
   const refusal = rootRefusal(root, places);
@@ -282,9 +282,14 @@ function rootNote(root: string, places: RootPlaces | undefined): string {
   return refusal.length === 0 ? '' : `<div class="hint stale">${escapeHtml(refusal)}</div>`;
 }
 
+/** The server's decision: spelled for the other OS and no folder here — `/work` that exists on a Windows drive is this side's. */
+function theOtherSides(root: string, places: RootPlaces): boolean {
+  return otherSideHere(root, places.windows, places.existingHere.includes(root));
+}
+
 /** Every stored folder is the other side's: on this side a disk row has nothing to read, and the server does not ask it. */
 function noneOnThisSide(roots: readonly string[], places: RootPlaces | undefined): string {
-  const allTheOtherSides = places !== undefined && roots.length > 0 && roots.every((root) => spelledForTheOtherOs(root, places.windows));
+  const allTheOtherSides = places !== undefined && roots.length > 0 && roots.every((root) => theOtherSides(root, places));
 
   return allTheOtherSides
     ? '\n<div class="hint">Every folder here is the other side\'s, so a disk row is not asked on this side — add a folder of this machine to ask it here too.</div>'

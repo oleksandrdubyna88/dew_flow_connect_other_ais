@@ -1108,7 +1108,8 @@ and the tool, the record and the settings that will reach the extension are S2�
 
 **A disk root of the other operating system (2026-10-09).** VS Code's settings are shared by a WSL window and a
 Windows window, and each side runs its own `coai-mcp`, so `COAI_QCONSULT_ROOTS` reaches both sides carrying both
-sides' folders. Which ones are the OTHER side's is decided twice — the server skips them (`QuestionRoots.OtherSide`),
+sides' folders. Which ones are the OTHER side's — spelled for the other OS and no folder here, because `/work` is a
+real folder on a Windows drive — is decided twice — the server skips them (`QuestionRoots.OtherSide`),
 the Settings page says so beside them (`pathFamily.ts`) — and held level the capability table's way:
 `shared/path-family-vectors.json`, answered by `QuestionConsultSettingsTests` and `pathFamily.test.ts`
 ([module_server.md](module_server.md), [module_extension.md](module_extension.md)).

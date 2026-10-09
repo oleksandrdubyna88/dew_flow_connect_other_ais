@@ -308,6 +308,11 @@ export interface RootPlaces {
    * roots are the OTHER side's (`spelledForTheOtherOs`). A WSL window is not Windows, whatever machine it is on.
    */
   readonly windows: boolean;
+  /**
+   * The stored roots spelled for the other OS that ARE directories here (`existingHere`, asked by the host): on Windows
+   * `/work` is the folder `work` on the current drive, and such a root is this side's — never called the other side's.
+   */
+  readonly existingHere: readonly string[];
 }
 
 /**

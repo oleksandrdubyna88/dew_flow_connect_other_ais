@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
 import { notify } from './notify';
+import { existingHere } from './pathFamily';
 import { askPerson } from './personWait';
 import { type QconsultSettings, qconsultSettingsFrom } from './qconsultSettings';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
@@ -64,8 +65,12 @@ export class QconsultHost {
     return Object.fromEntries(read);
   }
 
-  /** The places a disk root may not be on THIS machine — the server's `SystemPlaces.Current` and the data folder. */
-  places(): RootPlaces {
+  /**
+   * The places a disk root may not be on THIS machine — the server's `SystemPlaces.Current` and the data folder — and
+   * which of the stored `roots` spelled for the other OS are folders here all the same (`/work` on a Windows drive),
+   * asked of the disk only for those, so the page never calls an existing folder the other side's.
+   */
+  async places(roots: readonly string[] = []): Promise<RootPlaces> {
     const windows = process.platform === 'win32';
     const system = windows
       ? [process.env['SystemRoot'], process.env['ProgramFiles'], process.env['ProgramFiles(x86)'], process.env['ProgramData']]
@@ -77,6 +82,7 @@ export class QconsultHost {
       systemDirs: system.filter((one): one is string => typeof one === 'string' && one.length > 0),
       caseless: windows,
       windows,
+      existingHere: await existingHere(roots, windows, async (root) => (await fs.promises.stat(root)).isDirectory()),
     };
   }
 
@@ -183,6 +189,6 @@ async function addRoot(host: QconsultHost, settings: QconsultSettings, hooks: Qc
   if (folder !== undefined) {
     // A folder whose links cannot be followed is judged as it was picked — the server walks them again, and refuses there.
     const real = await fs.promises.realpath(folder.fsPath).catch(() => folder.fsPath);
-    await settled(rootAdded(settings.roots, folder.fsPath, host.places(), real), 'qconsultRoots', (r) => r.roots, hooks);
+    await settled(rootAdded(settings.roots, folder.fsPath, await host.places(), real), 'qconsultRoots', (r) => r.roots, hooks);
   }
 }

@@ -1238,7 +1238,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       securityPromptDir: promptsDir(this.dataDir.fsPath),
       securityPromptText: this.settingsTab.view === undefined ? undefined
         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
-      qconsultPlaces: this.qconsult.places(),
+      qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
