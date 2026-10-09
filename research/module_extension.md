@@ -11621,8 +11621,15 @@ ticks and the five use ticks), **How it answers**, **Connection** and **Price**;
   a Russian pattern that missed a capitalised *Вкладка*. The sidebar's "section" is not on any list: the sidebar keeps
   its sections. `helpCoverage.test.ts`'s aliases follow the new words (`coai.vendors`, `coai.chatModel`,
   `coai.roleEnabled`); the three redirect commands are covered by their own titles now.
-- **Not the help's, left as found** (named for a follow-up rather than changed here): `chatModels.ts` still refuses with
-  "pick one in Settings → Chat other AIs, or add one with Edit chat presets"; the Stages hint says "each reviewer card's
-  **reviews features** box"; the Team-server steps of **＋ Add a model** are titled "Add a reviewer…"; and the manifest's
-  descriptions of `coai.vendors`, `coai.chatPromptPresets`, `coai.chatModelPresets` and `coai.chatPromptChoice` name the
-  Reviewers tab, the presets tab or **Edit chat presets**.
+- **Beyond the help, the same words fixed** (the guard cannot see them): the chat's no-model refusal now says to pick one
+  on the Chat tab of Settings or tick one Chat on Models (`chatModels.ts`, held by `chatProviders.test.ts`); the Stages
+  hint says each Models card's **reviews features** tick; the Team-server and vault-key steps of **＋ Add a model** are
+  titled "Add a model…"; the manifest's descriptions of `coai.vendors`, `coai.chatPromptPresets`,
+  `coai.chatModelPresets`, `coai.chatPromptChoice`, `coai.chatModel` and `coai.chatModelName` name Models and Chat.
+  Comments that still say "reviewer card" are E5.3's list.
+- **Checked against the code that draws it** (E5.2's code round and own review): **Change on Models** narrows Models to
+  the models TICKED for a feature (`data-uses` is what a card is used for), not those that could be; a question row that
+  can read this machine carries a **Can read this machine** tick that is on and cannot be taken off — there is no tick a
+  person gives (the guard now names that phrase); the chat's switched-off refusal and the Security lane's empty hint
+  point at Models; `coai.rounds` / `coai.roles` descriptions name Reviews › Stages and Reviews › Roles & prompts; the
+  Marketplace README tours the six tabs; **MCP server** is named as **Setup › MCP server** in every language.

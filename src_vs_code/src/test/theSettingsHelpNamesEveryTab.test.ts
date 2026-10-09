@@ -17,7 +17,10 @@ for (const language of HELP_LANGUAGES) {
   test(`the ${language} Settings tab article names every Settings tab, in the order the page draws them`, () => {
     const article = HELP_ARTICLES.find((one) => one.id === 'the-settings-tab');
     assert.ok(article, 'there is no the-settings-tab article');
-    const text = bodyFor(article, language).body.whatItIs;
+    const { body, fallback } = bodyFor(article, language);
+    // The language's OWN article: a missing translation falls back to the English, which would pass for every language.
+    assert.equal(fallback, false, `the ${language} article is missing and the English stands in for it`);
+    const text = body.whatItIs;
     const titles = CATALOG_TABS.map((tab) => tab.label);
     assert.ok(titles.length > 4, 'the Settings page drew almost no tabs, so this compared nothing');
 

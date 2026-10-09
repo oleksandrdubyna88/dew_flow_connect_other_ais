@@ -73,9 +73,9 @@ export const HELP = {
   splitWithFable:
     'The split itself is done by the calling assistant’s STRONGEST model — deciding what the epics and stories ARE is the judgement that shapes everything after it — and the risky stories go back to it: payments, money, authentication, security, architecture, data migration. The ordinary ones run on its implementation model. Both are models of YOUR assistant, not reviewers in the list above, and each kind of assistant gets its own: pick them in the rows below the switch. Claude Code is told Fable and Opus unless you change them; Codex, Gemini and any other client are told to use their own strongest model until you name one, never another vendor’s.',
   chatPrompt:
-    'What the selected passage is sent with. One word — Explain — unless you change it, and the box '
-    + 'is several lines high because a word is not always enough: "explain this to somebody who knows '
-    + 'C# but not Rust" is a different question from "explain this". The passage itself always arrives '
+    'Which of your saved prompts the selected passage is sent with — empty is the one marked main. The '
+    + 'words are edited in Prompt presets on this tab, and a prompt is often more than one word: "explain '
+    + 'this to somebody who knows C# but not Rust" is a different question from "explain this". The passage itself always arrives '
     + 'below your instruction, fenced and marked as material, so a paragraph that reads like an order '
     + 'is treated as text rather than obeyed.',
   chatLanguage:
@@ -149,7 +149,7 @@ export const HELP = {
     'Add a model to this side’s catalog: a CLI here, an API key, this machine’s GPU or a Team server — a preset, or any OpenAI-compatible endpoint by name and URL. Then tick on its card what it is used for. More reviewing vendors means more independent eyes — and more cost per round.',
 
   maxRounds:
-    'How many times THIS ROLE may be asked before the policy below takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',
+    'How many times THIS ROLE may be asked before the policy on Reviews › The gate takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',
   gateThreshold:
     'The gate opens for THIS ROLE when this many of its findings are left, or fewer — a finding is counted against the threshold of the role that raised it, so a noisy role cannot spend another role’s tolerance. Only blocking and major findings count, and the same defect raised by two vendors counts once. Zero demands a clean review from this role; two tolerates a couple of disagreements. The stage passes when every role is at or under its own number.',
   codeWorkspace:

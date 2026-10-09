@@ -365,14 +365,14 @@ export function resolveChatPick(
         ok: false,
         refusal: list.providers.length === 0
           ? 'There is no saved model to send this to yet — tick one Chat on Models, in ConnectOtherAIs: Settings.'
-          : 'No saved model is chosen — pick one in Settings › Chat, or tick one Chat on Models.',
+          : 'No saved model is chosen — pick one on the Chat tab of Settings, or tick one Chat on Models.',
       };
     }
 
     return {
       ok: false,
       refusal: disabled !== undefined
-        ? `${providerId} is switched off in Settings → Reviewers — turn it back on to send a chat to it`
+        ? `${providerId} is switched off on Models — switch its card back on to send a chat to it`
         : `${providerId} is not a model this conversation can be sent to any more`,
     };
   }

@@ -1327,7 +1327,14 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    and the translations never did. Docs: CHANGELOG (`## Extension — unreleased (catalog epic 5)`), POST_DEPLOY item 13
    and "Going back from catalog epic 5", `module_extension.md`, `module_server.md`, `architecture.md`. **Deviation:** the
    automated half of item 13 is `catalogMigration.test.ts` for reviewers and consultants and `chatPresetMove.test.ts` /
-   `catalogChatStep.test.ts` for chat models — the design named only the first.
+   `catalogChatStep.test.ts` for chat models — the design named only the first. **Code round** (proceed; 5 accepted, 1
+   rejected — the English-only chrome rule does not cover the five-language help, whose labels stay English) and own
+   review: the guard's canary asserts each entry flags its own sample, it names the three deleted tabs' labels
+   (case-sensitive, so the redirect commands' lower-case titles stay true) and the non-existent accept tick (RED in all
+   five languages); "Change on Models" says the models ticked, not those that can be; the chat's switched-off refusal
+   (RED: "the refusal does not say where to switch it back on"), the Security lane hint, two manifest descriptions,
+   POST_DEPLOY (an older build says it stands down, once), the CHANGELOG's unreadable-presets line, the `chatPrompt` and
+   `maxRounds` tooltips, the Marketplace README's Settings tour, and `Setup › MCP server` in all five languages.
 3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5). Also
    (E5.1c's own review, 2026-10-08) the current-page branches the shared builders still carry, each drawn by nothing
    since step 5 but held by tests of their own: `consultantView`'s caller definitions (`callerRows = ''`,

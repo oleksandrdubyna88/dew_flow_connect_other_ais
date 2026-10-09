@@ -504,7 +504,7 @@
             "DocumentSummary": 1,
             "FeatureReview": 2
           },
-          "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in **ConnectOtherAIs: Settings** → *Prompts per round*."
+          "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in **ConnectOtherAIs: Settings** → *Reviews › Stages*."
         },
         "coai.roleEnabled": {
           "type": "object",
@@ -821,7 +821,7 @@
         "coai.roles": {
           "type": "array",
           "default": [],
-          "markdownDescription": "The review roles you have added or edited, as the server reads them. Edit these in **ConnectOtherAIs: Settings** (*Prompts per round* → **Edit roles…**) rather than here: the page generates the ids, keeps them unique, and writes each prompt’s TEXT to a file beside your other coai data. A role you add needs `coai-mcp` **0.19.0** or later — an older one never reads this key, so the role would show in the panel and run in no round.",
+          "markdownDescription": "The review roles you have added or edited, as the server reads them. Edit these in **ConnectOtherAIs: Settings** → *Reviews › Roles & prompts* (or **Edit roles…** in *Reviews › Stages*) rather than here: the page generates the ids, keeps them unique, and writes each prompt’s TEXT to a file beside your other coai data. A role you add needs `coai-mcp` **0.19.0** or later — an older one never reads this key, so the role would show in the panel and run in no round.",
           "items": {
             "type": "object",
             "required": [

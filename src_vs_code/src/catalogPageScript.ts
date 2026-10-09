@@ -188,7 +188,7 @@ function modelEventsScript(): string {
       saveModelFilters();
       applyModelFilters();
     }
-    // A feature tab's "Change on Models" (E4.1): Models, narrowed to the rows that can be ticked for that feature.
+    // A feature tab's "Change on Models" (E4.1): Models, narrowed to the rows ticked for that feature.
     const narrow = pressed.closest('[data-models-uses]');
     if (narrow) {
       setModelFilter('uses', narrow.dataset.modelsUses || '');

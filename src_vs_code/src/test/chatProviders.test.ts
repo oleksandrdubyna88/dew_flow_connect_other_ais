@@ -374,6 +374,9 @@ test('a provider that is switched off says so, instead of reading as one that is
     /switched off/,
     'a row that is merely off must not be reported as one that no longer exists',
   );
+  // Where to switch it back on is its card on Models, since E5.1 deleted the Reviewers tab (own review of E5.2).
+  assert.match(picked.ok === false ? picked.refusal : '', /on Models/u, 'the refusal does not say where to switch it back on');
+  assert.doesNotMatch(picked.ok === false ? picked.refusal : '', /Reviewers/u, 'the refusal sends the person to a tab that is gone');
 });
 
 test('a provider that never existed still reads as gone, not as switched off', () => {
@@ -546,7 +549,7 @@ test('a saved model that is not chosen is refused with where to choose it — Ch
   const answer = resolveChatPick(presets.map(chatRunSpec), chatProvidersFromPresets(presets, CATALOG), '', '');
   const said = answer.ok === false ? answer.refusal : '';
 
-  assert.match(said, /Settings › Chat/u, 'the refusal does not say where to choose one');
+  assert.match(said, /the Chat tab of Settings/u, 'the refusal does not say where to choose one');
   assert.doesNotMatch(said, /Edit chat presets|Chat other AIs/u, 'the refusal sends the person to a tab that is gone');
 });
 

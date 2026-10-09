@@ -21,8 +21,8 @@ Settings page** / **Use the current page** are gone.
 
 **Chat names a saved model it cannot run.** A model preset saved before presets carried their own vendor is named on
 Chat, with what to do: add it again on Models, ticked chat — and where the old row is kept (`coai.chatModelPresets`),
-since no page edits it any more. It used to be passed over in silence. A chat with no model chosen now says to pick one
-on **Settings › Chat** or tick one Chat on Models.
+since no page edits it any more. The Chat presets tab named them; now Chat does. A chat with no model chosen now says to pick one
+on the **Chat** tab of Settings or tick one Chat on Models.
 
 **What a migrated install sees.** On first start the extension moves every model you defined into the catalog — your
 reviewers, your consultant and question-consultant models, and your saved chat models — and Settings opens on Models with

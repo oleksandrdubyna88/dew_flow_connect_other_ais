@@ -42,6 +42,12 @@ const EVERY_LANGUAGE: readonly Removed[] = [
   { pattern: /Edit presets…/u, why: 'opened the Chat presets tab, which is gone; the prompt presets are drawn on Chat itself', sample: '**Edit presets…** beside it' },
   { pattern: /Which model answers/u, why: 'the old Chat tab\'s two-box model setting; Chat draws Which model a chat opens on', sample: '**Which model answers**' },
   { pattern: /Settings → Reviewers/u, why: 'the old Reviewers tab; every model is a card on Models', sample: 'in Settings → Reviewers' },
+  // The three tabs E5.1 step 4 deleted, by their labels. Case-sensitive on purpose: the palette commands kept as redirects
+  // are titled "Edit review roles" and "Edit chat presets", in lower case, and they are true (the code round, finding 5).
+  // A question row that can read this machine is marked by a tick that is ON and cannot be taken off (D13, revised
+  // 2026-10-03, `qconsultView.flagBlock`) — there is no tick a person gives to accept it (own review of E5.2).
+  { pattern: /I accept that this row/u, why: 'no such tick: Can read this machine is drawn on and cannot be taken off', sample: 'the tick **I accept that this row can read this machine**' },
+  { pattern: /Review roles|Gate commands|Chat presets/u, why: 'a tab E5.1 deleted; its editor is Reviews › Roles & prompts, Reviews › Commands or Chat', sample: 'the **Review roles** tab' },
 ];
 
 /** Each language's own words around the labels. */
@@ -136,13 +142,16 @@ for (const language of HELP_LANGUAGES) {
     for (const one of removedIn(language)) {
       const fake = `Open Settings, then ${one.sample}, and carry on.`;
 
+      // THIS entry flags its own sample — another entry matching it would hide a pattern that matches nothing (code round).
+      assert.ok(one.pattern.test(fake), `the ${language} entry ${one.pattern.source} does not flag its own sample "${one.sample}"`);
       assert.ok(namedRemoved(fake, language).length > 0, `the ${language} scan did not flag "${one.sample}" (${one.pattern.source})`);
     }
   });
 }
 
 test('the canary: a sidebar section, and the Settings page as it is, are not flagged', () => {
-  const asItIs = 'The **Phrases** section of the panel; **＋ Add a model** on Models; Reviews › Roles & prompts; **Edit roles…** jumps there.';
+  const asItIs = 'The **Phrases** section of the panel; **＋ Add a model** on Models; Reviews › Roles & prompts; **Edit roles…** jumps there; '
+    + 'the palette\'s **Edit review roles** and **Edit chat presets** open their places.';
 
   for (const language of HELP_LANGUAGES) {
     assert.deepEqual(namedRemoved(asItIs, language), [], `the ${language} scan flags the page as it is`);

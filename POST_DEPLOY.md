@@ -140,7 +140,8 @@ CLI accepts rather than to sit there.
 **Installing the older extension again is NOT a way back.** The newer extension stamps the settings file coai-mcp reads,
 and an older extension refuses to overwrite a file stamped by a newer one (`serverSettingsSync.ts`). So an older
 extension installs and runs, and **every edit made in it stays in VS Code and never reaches coai-mcp** — rounds go on
-running what the newer extension last wrote, with nothing on screen saying so.
+running what the newer extension last wrote. It says so once, in a notification that is easy to miss (and in
+Notifications), and never again.
 
 - **The way back is the newer extension again.** Reinstall it and edit there; what it writes is what coai-mcp runs.
 - **The old chat preset key stays frozen.** `coai.chatModelPresets` is left as it was when the presets moved, so an

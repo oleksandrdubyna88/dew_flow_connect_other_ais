@@ -103,8 +103,9 @@ The tab is a conversation, not a viewer:
 - **A provider, then one of its models.** A model list belongs to a provider. Switching
   mid-conversation is expected — the whole thread goes across — so every answer is captioned with
   the model that gave it, in that model's colour.
-- **Named prompts and named models**, two rows of buttons above the box, edited in a tab of their
-  own (**Edit chat presets**) that saves as you type.
+- **Named prompts and named models**, two rows of buttons above the box. The prompts are edited on
+  the **Chat** tab of Settings and the models are the ones ticked **Chat** on **Models**; both save as
+  you type.
 - **An empty box with a different model chosen re-asks**: the same question goes to the other model,
   carrying the conversation minus the answer you did not want.
 - **Paste a screenshot** and it goes with the next question. A provider that cannot take one is
@@ -264,35 +265,34 @@ own questions are asked in its chat:
 - **Bugz** — the corpus of defects your gate found and fixed: collect it, review it, send it.
 
 **Everything you configure once is in the Settings tab** — the gear beside the help button in the
-panel's title bar, or **ConnectOtherAIs: Settings** in the command palette. One tab per window, one
-tab of it per part, and the same controls as always:
+panel's title bar, or **ConnectOtherAIs: Settings** in the command palette. One tab per window, and it
+opens on **Models**, because every other part picks from it:
 
-- **Reviewers** — add a vendor, remove one, switch one off, choose its model. Codex's models come
-  from the CLI's own cache, so the list is what this machine can actually reach today; Gemini's and
-  Claude's are curated, and the tab says which is which rather than passing curation off as
-  discovery. Any model can be typed in regardless. **Add a reviewer** offers the whole catalogue
-  whether or not you already have one of each: pick a vendor you already have and it adds a second
-  row under the next free name — `claude-2` beside `claude`, which is how you run one on haiku for
-  the cheap passes and one on opus for the hard rounds — and the entry tells you which name that
-  will be. The filter box searches what each entry SAYS, not only its name.
-- **Chat other AIs** — ask a second model about a passage without leaving VS Code, and find that
-  conversation again afterwards.
-- **Consultant** — the same idea from the other end: `consult` lets an AI ask another vendor's
-  model about your working tree as it stands — when it is stuck, or when the consultation cadence
-  orders one — with its own caps on turns, calls per session and idle time. Every setting in it has a
-  `?` that says what it does.
-- **Prompts per round** — which lens each role is asked through, and the full text of every prompt.
-- **The gate** — rounds and a passing threshold **per role**, each role with a tick box on its own
-  heading, and what happens when the rounds run out.
-- **Limits** — reviewers at once, per vendor (rate limits are per vendor: without that cap one
-  throttled vendor holds every slot), timeouts, and how long a question waits for you.
-- **Vendor keys** — and, first, whether you need any. With signed-in CLIs, you do not.
-- **Team servers** — a company box that reviews for you, with nothing installed here. Sign in, and
-  its reviewers appear beside your local ones; the *reviews documents* box on such a row starts off.
-- **This side** — a local window, or each WSL distro and remote host, can keep its own settings and
-  its own data directory.
-- **MCP server** — install or update it, and see where this window keeps its data.
+- **Models** — every model this side can use, added once with **＋ Add a model** and drawn as one card
+  each: its switch, **✓ Check** (one paid turn that says whether it answers), **⧉ Duplicate**, and
+  **Use for** — the stages it reviews (plans, code, documents, features) and the features that may pick
+  it (consultant, question consultant, security lane, chat, Bugz ranking). Add the same vendor twice
+  and you get two cards, which is how you run one on haiku for the cheap passes and one on opus for
+  the hard rounds. Codex's models come from the CLI's own cache, so the list is what this machine can
+  actually reach today; any model can be typed in regardless. Filters find a model by name, where it
+  runs, what it is used for and its effort.
+- **Reviews** — **Stages** (rounds and a passing threshold per role, and how lenses are dealt),
+  **Roles & prompts** (the questions each reviewer asks, one switch per role, and roles of your own),
+  **Prompts per round** (which lens each role is asked through), **The gate** (what happens when the
+  rounds run out), **Commands** (the orders the gate gives your AI) and **Limits** (reviewers at once,
+  per vendor — rate limits are per vendor — timeouts, and how long a question waits for you).
+- **Consultants** — **Consultant**: `consult` lets an AI ask another vendor's model about your working
+  tree as it stands, when it is stuck or when the consultation cadence orders one; each kind of AI
+  picks a model ticked consultant. **Question consultant**: the rows an AI asks before it asks you.
+- **Security lane** — prompt-and-model pairs that review every code change for security, picked from
+  the models ticked security lane.
+- **Chat** — which model a chat opens on, what it is sent with, and your prompt presets.
+- **Setup** — **Vendor keys** (and, first, whether you need any: with signed-in CLIs you do not),
+  **Team servers** (a company box that reviews for you, with nothing installed here), **MCP server**
+  (install or update it, and see where this window keeps its data) and **This side** (a local window,
+  or each WSL distro and remote host, can keep its own settings and data directory).
 
+A feature's place shows the models ticked for it, with **Change on Models** one press away.
 The arrow keys move along the tabs, Home and End go to the ends, and Ctrl+F searches the tab you are on.
 
 Every setting carries a **?** that explains what it does and why it exists.
