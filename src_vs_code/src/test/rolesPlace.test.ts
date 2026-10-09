@@ -4,26 +4,21 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { escapeHtml } from '../webviewHtml';
 import { MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
-import { rolesHtml, type RolesPageState } from '../rolesPage';
 import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, tooOldFor } from '../rolesBlocks';
 import { isShippedPrompt, roleEdit } from '../rolesMessages';
+import { catalogHtml } from '../catalogPage';
+import { rolesPanelState, rolesPlaceHtml, type RolesPlaceState } from './rolesPlaceHarness';
 
 /**
- * The roles page: what it draws, and what it refuses to offer.
+ * The roles' editor — Reviews › Roles & prompts on the Settings page: what it draws, and what it refuses to offer.
  *
- * <p>Assertions are on the MARKUP and on the pure parser, which is the house style for a page module
- * — the host that writes a setting has no unit test anywhere in this extension, and the structural
- * scans cover its obligations instead.</p>
+ * <p>These held the Review roles tab until E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted it; the tab and the
+ * place drew the same blocks (`rolesBlocks.roleBlock`), so each is asked of the place now (`rolesPlaceHarness.ts`).
+ * Assertions are on the MARKUP and on the pure parser; pressing the controls is `rolesPlaceScript.test.ts`.</p>
  */
 
-const state = (over: Partial<RolesPageState> = {}): RolesPageState => ({
-  rows: [],
-  texts: {},
-  serverVersion: CUSTOM_ROLES_SINCE,
-  perSide: false,
-  uiScale: 0,
-  ...over,
-});
+/** The place's markup for these roles — a server new enough to read them unless a test says otherwise. */
+const placeOf = (over: RolesPlaceState = {}): string => rolesPlaceHtml(over);
 
 const mine: RoleRow = {
   id: 'Requirements',
@@ -42,7 +37,7 @@ function block(html: string, id: string): string {
 }
 
 test('every shipped role is on the page, under its own name', () => {
-  const html = rolesHtml(state(), 'n0nce');
+  const html = placeOf();
 
   for (const role of BUILTIN_ROLES) {
     assert.ok(html.includes(`data-id="${role.id}"`), role.id);
@@ -54,7 +49,7 @@ test('every shipped role is on the page, under its own name', () => {
 });
 
 test('a role a person added is drawn beside them', () => {
-  const html = rolesHtml(state({ rows: [mine] }), 'n0nce');
+  const html = placeOf({ rows: [mine] });
 
   assert.ok(block(html, 'Requirements').includes('Requirements we wrote'));
   assert.ok(!block(html, 'Requirements').includes('shipped'), 'and is not labelled as one of ours');
@@ -63,7 +58,7 @@ test('a role a person added is drawn beside them', () => {
 test('a shipped role cannot be renamed away or removed', () => {
   // Its id keys settings, open sessions and every round already recorded. The page does not offer
   // it; RoleComposition refuses it again, because a page is not a boundary.
-  const one = block(rolesHtml(state(), 'n0nce'), 'Architecture');
+  const one = block(placeOf(), 'Architecture');
 
   assert.ok(one.includes('badge">shipped'), 'it says so');
   assert.ok(!one.includes('data-remove="Architecture"'), 'no Remove button');
@@ -71,7 +66,7 @@ test('a shipped role cannot be renamed away or removed', () => {
 });
 
 test('a shipped prompt may be rewritten and restored, never removed', () => {
-  const html = rolesHtml(state({ texts: { architecture: 'in our words' } }), 'n0nce');
+  const html = placeOf({ texts: { architecture: 'in our words' } });
   const one = block(html, 'Architecture');
 
   assert.ok(one.includes('data-restore="architecture"'), 'Restore is offered');
@@ -80,13 +75,13 @@ test('a shipped prompt may be rewritten and restored, never removed', () => {
 });
 
 test('Restore is disabled while a shipped prompt has never been rewritten', () => {
-  const one = block(rolesHtml(state(), 'n0nce'), 'Architecture');
+  const one = block(placeOf(), 'Architecture');
 
   assert.match(one, /data-restore="architecture" disabled/);
 });
 
 test('a prompt a person added to their own role can be removed', () => {
-  const one = block(rolesHtml(state({ rows: [mine] }), 'n0nce'), 'Requirements');
+  const one = block(placeOf({ rows: [mine] }), 'Requirements');
 
   assert.ok(one.includes('data-remove-prompt="requirements-general"'));
   assert.ok(one.includes('data-remove="Requirements"'), 'and so can the role');
@@ -99,7 +94,7 @@ test('a sixth active role in a stage cannot be ticked, and the page says why', (
     { id: 'One', stage: RESULT_STAGE, prompts: [{ id: 'one-general' }] },
     { id: 'Two', stage: RESULT_STAGE, active: false, prompts: [{ id: 'two-general' }] },
   ];
-  const html = rolesHtml(state({ rows }), 'n0nce');
+  const html = placeOf({ rows });
 
   assert.match(block(html, 'Two'), /data-field="active" disabled/);
   assert.ok(block(html, 'Two').includes('Five roles are already active'));
@@ -116,7 +111,7 @@ test('the last active role in a stage cannot be switched off, and the page says 
     { id: 'SecurityReliability', ...off },
     { id: 'UxDxPerformance', ...off },
   ];
-  const html = rolesHtml(state({ rows }), 'n0nce');
+  const html = placeOf({ rows });
 
   assert.match(block(html, 'Architecture'), /data-field="active"[^>]* disabled/, 'the only one left');
   assert.ok(block(html, 'Architecture').includes('The only role still active in this stage'));
@@ -140,15 +135,14 @@ test('a role already active is never refused its own switch', () => {
 });
 
 test('the plan stage and the code stage are drawn apart', () => {
-  const html = rolesHtml(state({ rows: [{ id: 'Brief', stage: PLAN_STAGE, prompts: [{ id: 'brief-general' }] }] }), 'n0nce');
+  const html = placeOf({ rows: [{ id: 'Brief', stage: PLAN_STAGE, prompts: [{ id: 'brief-general' }] }] });
 
-  // The headings became tabs (issue #293), so the sections are named by `data-section` now. The
-  // guarantee is the one it always was: a plan role is drawn in the plan group and a code role is
-  // not, whatever the group is called on screen.
-  assert.ok(html.indexOf('data-id="Brief"') > html.indexOf('data-section="plan"'));
-  assert.ok(html.indexOf('data-id="Brief"') < html.indexOf('data-section="code"'));
-  assert.ok(html.indexOf('data-id="Architecture"') > html.indexOf('data-section="code"'));
-  assert.ok(html.indexOf('data-id="Architecture"') < html.indexOf('data-section="documents"'));
+  // The stages are headed groups on the place (the tab drew them as tabs, issue #293). The guarantee is the one it
+  // always was: a plan role is drawn in the plan group and a code role is not, whatever the group is called on screen.
+  assert.ok(html.indexOf('data-id="Brief"') > html.indexOf('<h3>Plan stage</h3>'));
+  assert.ok(html.indexOf('data-id="Brief"') < html.indexOf('<h3>Code stage</h3>'));
+  assert.ok(html.indexOf('data-id="Architecture"') > html.indexOf('<h3>Code stage</h3>'));
+  assert.ok(html.indexOf('data-id="Architecture"') < html.indexOf('<h3>Document stage</h3>'));
 });
 
 test('a RESULT-stage document role no longer says it takes part in no round', () => {
@@ -157,7 +151,7 @@ test('a RESULT-stage document role no longer says it takes part in no round', ()
   // is running.
   const rows: RoleRow[] = [{ id: 'Brief', stage: RESULT_STAGE, programmingTask: false, prompts: [{ id: 'brief-general' }] }];
 
-  assert.ok(!block(rolesHtml(state({ rows }), 'n0nce'), 'Brief').includes('takes part in no round'));
+  assert.ok(!block(placeOf({ rows }), 'Brief').includes('takes part in no round'));
 });
 
 test('a PLAN-stage document role still says it takes part in no round', () => {
@@ -165,7 +159,7 @@ test('a PLAN-stage document role still says it takes part in no round', () => {
   // run by nothing. "Not built yet" and "does not exist" are different states, and the page is
   // where a person meets the difference — with the way out named.
   const rows: RoleRow[] = [{ id: 'Brief', stage: PLAN_STAGE, programmingTask: false, prompts: [{ id: 'brief-general' }] }];
-  const drawn = block(rolesHtml(state({ rows }), 'n0nce'), 'Brief');
+  const drawn = block(placeOf({ rows }), 'Brief');
 
   assert.ok(drawn.includes('takes part in no round yet'));
   assert.ok(drawn.includes('review_document'), 'and the sentence says what to do about it');
@@ -177,7 +171,8 @@ test('the page escapes what a person typed, wherever they typed it', () => {
     name: '<img src=x onerror=alert(1)>',
     prompts: [{ id: 'evil-general', label: '<script>a</script>', purpose: '"><b>b' }],
   }];
-  const html = rolesHtml(state({ rows, texts: { 'evil-general': '</textarea><script>c</script>' } }), 'n0nce');
+  // The WHOLE page, not the place: the Settings page names a role elsewhere too (Stages, Prompts per round).
+  const html = catalogHtml(rolesPanelState({ rows, texts: { 'evil-general': '</textarea><script>c</script>' } }), 'n0nce', 'reviews/roles');
 
   assert.doesNotMatch(html, /<img src=x/);
   assert.doesNotMatch(html, /<script>a<\/script>/);
@@ -202,8 +197,8 @@ test('a shipped prompt is known by role and id together', () => {
 });
 
 test('the page says when the roles belong to one side', () => {
-  assert.ok(rolesHtml(state({ perSide: true }), 'n0nce').includes('for this side'));
-  assert.ok(!rolesHtml(state(), 'n0nce').includes('for this side'));
+  assert.ok(placeOf({ perSide: true }).includes('for this side'));
+  assert.ok(!placeOf().includes('for this side'));
 });
 
 test('every message the page can post is parsed into a command', () => {
@@ -268,7 +263,7 @@ test('a shipped role’s name cannot be typed over', () => {
   // person could type in, whose value the server then ignores: the one arrangement worse than either
   // rule on its own, because it saves and then does nothing.
   const shipped = BUILTIN_ROLES[0]!;
-  const block = roleBlockOf(rolesHtml(state(), 'n0nce'), shipped.id);
+  const block = roleBlockOf(placeOf(), shipped.id);
   const name = block.slice(block.indexOf('data-field="name"'));
 
   assert.match(name.slice(0, name.indexOf('>')), /readonly/, 'the name input refuses the keystroke');
@@ -276,14 +271,14 @@ test('a shipped role’s name cannot be typed over', () => {
 
 test('a shipped role’s kind cannot be unticked', () => {
   const shipped = BUILTIN_ROLES[0]!;
-  const block = roleBlockOf(rolesHtml(state(), 'n0nce'), shipped.id);
+  const block = roleBlockOf(placeOf(), shipped.id);
   const flag = block.slice(block.indexOf('data-field="programmingTask"'));
 
   assert.match(flag.slice(0, flag.indexOf('>')), /disabled/, 'the server never reads it from a row');
 });
 
 test('a role a person added is theirs to name and to classify', () => {
-  const block = roleBlockOf(rolesHtml(state({ rows: [mine] }), 'n0nce'), mine.id);
+  const block = roleBlockOf(placeOf({ rows: [mine] }), mine.id);
   const name = block.slice(block.indexOf('data-field="name"'));
   const flag = block.slice(block.indexOf('data-field="programmingTask"'));
 
@@ -294,31 +289,30 @@ test('a role a person added is theirs to name and to classify', () => {
 // ---------- a page that does not know the server yet says so ----------
 
 test('a page opened before the panel has met the server says the check has not run', () => {
-  // `coai.editRoles` is on the command palette, so the page can be the FIRST thing opened in a
-  // window. Until the panel renders, the installed server is unknown — and an unknown server draws
-  // no banner at all, which reads exactly like "checked, and fine". Naming the gap is the honest
-  // shape, and it disappears the moment the version arrives.
-  const html = rolesHtml(state({ serverVersion: '', rows: [mine] }), 'n0nce');
+  // Until the installed server has been looked at, its version is unknown — and an unknown server draws no banner at
+  // all, which reads exactly like "checked, and fine". Naming the gap is the honest shape, and it disappears the moment
+  // the version arrives.
+  const html = placeOf({ serverVersion: '', rows: [mine] });
 
   assert.match(html, /not been checked yet/);
 });
 
 test('a page that knows a new enough server says nothing at all', () => {
-  const html = rolesHtml(state({ serverVersion: CUSTOM_ROLES_SINCE, rows: [mine] }), 'n0nce');
+  const html = placeOf({ serverVersion: CUSTOM_ROLES_SINCE, rows: [mine] });
 
   assert.ok(!html.includes('not been checked yet'));
   assert.ok(!html.includes('does not read'));
 });
 
 test('a page with no roles of its own says nothing either, known server or not', () => {
-  assert.ok(!rolesHtml(state({ serverVersion: '' }), 'n0nce').includes('not been checked yet'),
+  assert.ok(!placeOf({ serverVersion: '' }).includes('not been checked yet'),
     'there is nothing that could fail to run');
 });
 
 // ---------- the nonce is a nonce ----------
 
 test('the nonce reaches the policy and the script as one value', () => {
-  const html = rolesHtml(state(), 'aBc123');
+  const html = catalogHtml(rolesPanelState(), 'aBc123', 'reviews/roles');
 
   assert.ok(html.includes("script-src 'nonce-aBc123'"), 'the policy names it');
   assert.ok(html.includes('<script nonce="aBc123">'), 'and so does the only script on the page');
@@ -332,13 +326,13 @@ test('the page says a new role cannot be switched on while the stage is full', (
     id: `Extra${i}`, stage: RESULT_STAGE, active: true,
   }));
   const off = BUILTIN_ROLES.filter((r) => r.stage !== PLAN_STAGE).map((r) => ({ id: r.id, active: false }));
-  const html = rolesHtml(state({ rows: [...off, ...full] }), 'n0nce');
+  const html = placeOf({ rows: [...off, ...full] });
 
   assert.match(html, /cannot be switched on until one of them is switched off/);
 });
 
 test('the page says nothing of the sort when the stage has room', () => {
-  assert.ok(!rolesHtml(state(), 'n0nce').includes('arrive switched off'));
+  assert.ok(!placeOf().includes('arrive switched off'));
 });
 
 const stuck = (over = {}) => ({
@@ -353,10 +347,10 @@ const stuck = (over = {}) => ({
 });
 
 test('a deletion the server has not been told about is SHOWN, with its reason and its cost', () => {
-  const html = rolesHtml(state({ stranded: [stuck()] }), 'n');
+  const html = placeOf({ stranded: [stuck()] });
 
   // What the page SAYS, which is what this file is for. That the controls are DRAWN and that
-  // pressing them reaches the host is `rolesPageScript.test.ts`, where the page is run.
+  // pressing them reaches the host is `rolesPlaceScript.test.ts`, where the page is run.
   assert.ok(html.includes('Role 2'), 'the role is not named, so nobody knows which deletion is stuck');
   assert.ok(html.includes('the settings could not be written'), 'stranded without its reason is a dead end');
   // The COST, in the words the plan round asked for. "The server may still carry the row" describes
@@ -369,7 +363,7 @@ test('a deletion the server has not been told about is SHOWN, with its reason an
 });
 
 test('nothing stuck draws nothing at all', () => {
-  const html = rolesHtml(state({}), 'n');
+  const html = placeOf({});
 
   assert.ok(!html.includes('Deletions the server has not been told about'),
     'an empty list left an empty box on the page');

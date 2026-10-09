@@ -4,10 +4,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { usersPageHtml } from '../bugsKeysPage';
-import { commandsHtml } from '../commandsPage';
 import { notificationsPageHtml } from '../notificationsPage';
 import { roundsLogHtml } from '../roundsLog';
-import { settingsHtml, settingsKey } from '../panelView';
+import { catalogHtml, catalogKey } from '../catalogPage';
 import { textControlFrom, textControlsScript } from '../textControls';
 import { toneColour } from '../textTone';
 import { scalePx } from '../zoomControl';
@@ -62,10 +61,10 @@ function bodyRule(html: string): string {
   return body;
 }
 
-// These four pages replace their whole document after they open; the host's push reaches a page once,
-// so a page whose builder ignored the two values would lose them on its next draw.
+// These three pages replace their whole document after they open; the host's push reaches a page once,
+// so a page whose builder ignored the two values would lose them on its next draw. (Gate commands was a fourth, until
+// E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted it; its editor is a place of the Settings page, below.)
 const REDRAWN: readonly (readonly [string, (size: number, tone: number) => string])[] = [
-  ['Gate commands', (size, tone) => commandsHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, uiScale: size, textTone: tone }, 'n')],
   ['Notifications', (size, tone) => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1, uiScale: size, textTone: tone }, 'n')],
   ['Review rounds', (size, tone) => roundsLogHtml([], [], 'n', '', '', undefined, { text: { size, tone } })],
   ['Who holds a key', (size, tone) => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n', { size, tone })],
@@ -81,7 +80,7 @@ for (const [name, render] of REDRAWN) {
 }
 
 test('the Settings tab moves its ROOT with a pushed size, because its small print is measured in rem', () => {
-  const html = settingsHtml(panelState(''), 'n', 'reviewers');
+  const html = catalogHtml(panelState(''), 'n', 'models');
   const page = runPageHtml(html, {});
 
   page.message({ type: 'uiScale', px: 20.94, label: '+5' });
@@ -92,12 +91,12 @@ test('the Settings tab moves its ROOT with a pushed size, because its small prin
 test('the Settings tab draws its root and body in the chosen size, and a press does not move its paint key', () => {
   const plain = panelState('');
   const large = { ...plain, uiScale: 3, textTone: 2 };
-  const rules = stylesheet(settingsHtml(large, 'n', 'reviewers'));
+  const rules = stylesheet(catalogHtml(large, 'n', 'models'));
   const root = rules.filter((rule) => rule.selector.trim() === 'html').map((rule) => rule.body).join(' ');
 
   assert.ok(root.includes(`font-size: ${scalePx(3)}px`), `the root is not in the chosen size: ${root}`);
-  assert.ok(bodyRule(settingsHtml(large, 'n', 'reviewers')).includes(`font-size: ${scalePx(3)}px`));
-  assert.equal(settingsKey(large), settingsKey(plain), 'a size or tone change moved the paint key, so every press would reload the tab');
+  assert.ok(bodyRule(catalogHtml(large, 'n', 'models')).includes(`font-size: ${scalePx(3)}px`));
+  assert.equal(catalogKey(large), catalogKey(plain), 'a size or tone change moved the paint key, so every press would reload the tab');
 });
 
 // ---------------------------------------------------------------- the hosts
@@ -124,11 +123,11 @@ test('every host that opens a page pushes both the size and the tone to it', () 
   assert.deepEqual(missing, [], `these hosts open a page and push it only one setting, or none: ${missing.join(', ')}`);
 });
 
-test('the host scan still finds the eleven hosts, so it is not passing on an empty list', () => {
+test('the host scan still finds the eight hosts, so it is not passing on an empty list', () => {
   const found = hosts().map((host) => host.file).sort();
 
   assert.deepEqual(found, [
-    'bugsKeysPanel.ts', 'bugzReviewPanel.ts', 'chatPanel.ts', 'chatPresetsPanel.ts', 'commandsPanel.ts', 'helpPanel.ts',
-    'notificationsPanel.ts', 'phrasesPanel.ts', 'rolesPanel.ts', 'roundsLogPanel.ts', 'settingsPanel.ts',
+    'bugsKeysPanel.ts', 'bugzReviewPanel.ts', 'chatPanel.ts', 'helpPanel.ts',
+    'notificationsPanel.ts', 'phrasesPanel.ts', 'roundsLogPanel.ts', 'settingsPanel.ts',
   ]);
 });

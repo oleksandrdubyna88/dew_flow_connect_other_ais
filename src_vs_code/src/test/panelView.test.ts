@@ -4,13 +4,13 @@ import { test } from 'node:test';
 import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, PANEL_SECTIONS, PanelState } from '../panelView';
-import { currentSettingsHtml, everyPageHtml, paneIn, sectionHtml } from './panelPages';
+import { everyPageHtml, paneIn, sectionHtml } from './panelPages';
 import { DEFAULTS, settingsFrom } from '../settingsShape';
 import { CONSULTANT_DEFINITION_SINCE } from '../consultSettings';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
 import type { TeamServerState } from '../teamServerView';
 import { vendorPalette } from '../vendorColour';
-import { DEFAULT_VENDORS, Vendor } from '../vendors';
+import { DEFAULT_VENDORS } from '../vendors';
 
 /**
  * The palette the page builds for this fixture — from the vendors it configures, which is the same
@@ -481,22 +481,6 @@ test('the disclosure arrow is a drawn chevron, not a punctuation mark', () => {
   assert.ok(css.includes('rotate(45deg)'), 'and it turns when the section opens');
 });
 
-test('every vendor has a green run button next to remove', () => {
-  // The operator asked for a play triangle between the name and remove: it opens that vendor's
-  // own CLI, which is where an account is checked and a signed-out CLI is signed in. The CURRENT page's reviewer card —
-  // the new page draws the button in the CLI table under Setup › Vendor keys, apart from any remove — so this reads
-  // that page while it is drawn (E5.1 step 3) and goes with it.
-  const html = currentSettingsHtml(state(), 'n');
-  assert.ok(html.includes('data-command="runVendor" data-id="codex"'));
-  assert.ok(html.includes('▶'));
-  assert.ok(html.includes('var(--vscode-charts-green)'), 'green from the theme, not a hex of ours');
-  assert.ok(
-    html.indexOf('data-command="runVendor" data-id="codex"') <
-      html.indexOf('data-command="removeVendor" data-id="codex"'),
-    'it sits between the name and remove',
-  );
-});
-
 test('the live regions are addressable, so an update need not reload the panel', () => {
   // The dropdowns closing after two seconds was a full webview reload on every watcher tick.
   // Patching these two containers is what replaced it.
@@ -646,11 +630,9 @@ test('each stage stands in its own frame, and no role appears in two', () => {
   }
   // The feature role reads an outline in a round of its own (S2.1 of the feature-review plan): drawn
   // in its own frame, and never among the code roles it would be counted with. Its switch is the role's ONE switch on
-  // Roles & prompts there (E4.3); the current page's own tick is held below, on that page.
+  // Roles & prompts there (E4.3).
   assert.ok(featureFrame!.includes(of('FeatureReview')), 'the feature role is in the feature frame');
   assert.ok(!codeFrame!.includes(of('FeatureReview')), 'FeatureReview reviews no diff');
-  assert.ok(currentSettingsHtml(state(), 'n0nce').includes('data-setting="roleEnabled" data-role="FeatureReview"'),
-    'and on the current page it has its switch');
 });
 
 test('each code role is wrapped in its own colour, and still says its name', () => {
@@ -785,114 +767,6 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
   assert.match(html, /data-setting="code" data-vendor="codex" disabled/);
 });
 
-// ---------- each stage box sits with the price it belongs to (#124) ----------
-
-/**
- * The vendor's master switch and the two stage boxes used to stack within four lines of each other,
- * with a select between them — three checkboxes reading as one group of three, although the master
- * switch is a different KIND of decision from the two stage boxes. Issue #124, which also says where
- * they should go: onto the price rows, which had empty card in the middle of them.
- *
- * <p>A Team-server row is the case that makes this interesting: it renders no price fields at all —
- * its CLI runs on the server and its price is the company's subscription — so it has nothing to hang
- * a stage box on and keeps the standalone row. Moving them unconditionally would have deleted both
- * controls from every remote reviewer.</p>
- */
-function card(over: Partial<Vendor>): string {
-  // The CURRENT page's reviewer card (`reviewersBody`): the new page's Models card draws a row's stages in its own "Use
-  // for" block (`modelsTab.test.ts`), so these four read the page that draws this card while it is drawn (E5.1 step 3).
-  const html = currentSettingsHtml(state({
-    vendors: [{ id: 'v1', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, ...over }],
-  }), 'n0nce');
-  const from = html.indexOf('<div class="vendor"');
-  const to = html.indexOf('data-command="addVendor"');
-  assert.ok(from > 0 && to > from, 'the card is bounded by the button after the list');
-  return html.slice(from, to);
-}
-
-test('each stage box sits on the row of the price it belongs to', () => {
-  const html = card({});
-
-  for (const [kind, price, label] of [['plan', 'price-in-v1', 'reviews plans'], ['code', 'price-out-v1', 'reviews code']]) {
-    const row = new RegExp(`<div class="field priced">(?:(?!</div>)[\\s\\S])*</div>`, 'g');
-    const rows = [...html.matchAll(row)].map((m) => m[0]);
-    const mine = rows.find((r) => r.includes(`id="${price}"`));
-    assert.ok(mine, `the ${price} row exists`);
-    assert.ok(mine.includes(`data-setting="${kind}"`), `${label} rides with ${price}: ${mine}`);
-    assert.ok(mine.indexOf(`id="${price}"`) < mine.indexOf(`data-setting="${kind}"`), `${label} comes AFTER its price`);
-  }
-
-  // Exactly one of each control, and no standalone row left behind. Raised on the plan round: an
-  // implementation that ADDS the new boxes without removing the old row passes every assertion
-  // above while the card still reads as a group of three.
-  for (const kind of ['plan', 'code']) {
-    assert.equal(html.split(`data-setting="${kind}" data-vendor="v1"`).length - 1, 1, `one ${kind} control`);
-  }
-  // The standalone row on a priced card holds the DOCUMENT box and nothing else. It used to hold
-  // none at all, which was the whole of #124: three boxes in a row four lines under the vendor's own
-  // checkbox read as one group of three, although the master switch is a different kind of decision.
-  // Plan 5 added a third stage and there are only two price rows to hang boxes on, so this one gets
-  // a line at the BOTTOM of the card — far from the master switch, which is what #124 was about.
-  const standalone = [...html.matchAll(/<div class="field stages">[\s\S]*?<\/div>\s*<\/div>/g)].map((m) => m[0]);
-  assert.equal(standalone.length, 1, 'exactly one standalone row, for the box with no price to ride');
-  assert.ok(standalone[0]!.includes('data-setting="document"'), 'and it is the document box');
-  for (const kind of ['plan', 'code']) {
-    assert.ok(!standalone[0]!.includes(`data-setting="${kind}"`), `${kind} rides its price row, not this one`);
-  }
-});
-
-test('a Team-server row keeps its stages row, having no prices to put them on', () => {
-  const html = card({ runtime: 'remote', id: 'v1' });
-
-  assert.ok(!html.includes('id="price-in-v1"') && !html.includes('id="price-out-v1"'), 'a remote row prices nothing here');
-  assert.equal(html.split('class="field stages').length - 1, 1, 'exactly one standalone stages row');
-  const row = /<div class="field stages[^"]*">(?:(?!<\/div>)[\s\S])*<\/div>/.exec(html);
-  assert.ok(row, 'the stages row is there');
-  assert.ok(row[0].includes('data-setting="plan"') && row[0].includes('data-setting="code"'), 'carrying both controls');
-});
-
-test('a vendor that is off has its stage boxes dimmed in both card shapes', () => {
-  // The dimming is one rule, `.vendor .stages.off`. When the boxes left the `.stages` container for
-  // the price rows they left that rule behind — a switched-off hosted vendor's boxes stayed bright
-  // while a remote vendor's dimmed. Raised on the plan round by two vendors independently, and the
-  // reason every stage box is wrapped in a `.stages` span whichever row it sits on.
-  for (const runtime of ['codex', 'remote'] as const) {
-    const html = card({ runtime, enabled: false });
-    // Every stage control, wherever it sits, is wrapped by exactly one `.stages` span — and THAT is
-    // what must carry `off`. The standalone row is layout only and carries no dimming of its own,
-    // so a nested `.stages.off` inside a `.field stages off` cannot happen (raised on the code round).
-    const wrappers = [...html.matchAll(/<span class="stages([^"]*)">((?:(?!<\/span>)[\s\S])*)<\/span>/g)]
-      .filter((m) => /data-setting="(plan|code)"/.test(m[2]));
-
-    assert.equal(wrappers.length, 2, `${runtime}: both stage controls are wrapped in something that can be dimmed`);
-    for (const [, classes] of wrappers) {
-      assert.ok(/\boff\b/.test(classes), `${runtime}: a switched-off vendor's stage boxes are dimmed — got class="stages${classes}"`);
-    }
-    assert.doesNotMatch(html, /<div class="field stages[^"]*\boff\b/, `${runtime}: the row does not dim a second time`);
-    assert.match(html, /data-setting="plan" data-vendor="v1"[^>]*disabled/, `${runtime}: and inert`);
-  }
-});
-
-test('the CLI path is a field of its own, and the stage boxes belong to the prices', () => {
-  // The fragility the code round found: the standalone row was keyed off whether ANY runtime field
-  // came back, while the CLI-path field and the price rows were one function. A flat-rate engine —
-  // a path, no per-token price — would have answered "yes, there are fields" and lost both controls.
-  // The card asks about PRICE rows alone now.
-  //
-  // This asserts the SHAPE that makes the question answerable, not the divergence itself: no runtime
-  // today has a path without prices, so the old condition and the new one agree on every vendor that
-  // exists, and reverting the fix does not go red. What is pinned is that the two kinds of field are
-  // separate and that a stage box lives only on a priced row — which is what the next runtime with a
-  // flat rate will depend on.
-  const html = card({});
-  const withoutPrices = html.replace(/<div class="field priced">(?:(?!<\/div>)[\s\S])*<\/div>/g, '');
-
-  assert.ok(html.includes('data-setting="executablePath"'), 'the CLI path is a field of its own');
-  assert.ok(withoutPrices.includes('data-setting="executablePath"'), 'and it is not inside a priced row');
-  assert.ok(!withoutPrices.includes('data-setting="plan"'), 'every stage box sits on a priced row');
-  assert.ok(!withoutPrices.includes('data-setting="code"'), 'both of them');
-});
-
 /**
  * The round limit's note is a line UNDER its row, not a third thing inside it.
  *
@@ -1021,23 +895,6 @@ test('the round limit says what it works out to, and warns when it cannot be met
  * panel owes is a switch that says so, an arithmetic that agrees with it, and a refusal to remove
  * the last one.</p>
  */
-test('every code role box carries a switch, and the plan role does not', () => {
-  // The CURRENT page's own tick per role box: the new page has ONE switch per role, on Roles & prompts (E4.3), held by
-  // `rolesOnTheNewPage.test.ts` — so this reads the page that draws the tick, while it is drawn (E5.1 step 3).
-  const html = currentSettingsHtml(state(), 'n0nce');
-
-  for (const role of ['Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
-    assert.ok(
-      html.includes(`data-setting="roleEnabled" data-role="${role}"`),
-      `${role} has no switch`,
-    );
-  }
-  assert.ok(
-    !html.includes('data-setting="roleEnabled" data-role="PlanCritique"'),
-    'the plan stage has one role; a switch that turns the whole stage off is a different feature',
-  );
-});
-
 test('a role switched off dims its box and disables the controls that no longer apply', () => {
   const html = everyPageHtml(
     state({ settings: { ...DEFAULTS, roleEnabled: { ...DEFAULTS.roleEnabled, Architecture: false } } }),
@@ -1052,33 +909,6 @@ test('a role switched off dims its box and disables the controls that no longer 
   );
   // And the role is still THERE, with its number kept: this is a switch, not a way of clearing it.
   assert.ok(html.includes('id="rounds-Architecture"'));
-});
-
-test('the last role standing cannot be unticked', () => {
-  const onlyOne = {
-    ...DEFAULTS,
-    roleEnabled: { Conventions: false, Architecture: true, SecurityReliability: false, UxDxPerformance: false },
-  };
-  // The CURRENT page's tick (E5.1 step 3). On the new page the refusal is the roles' own — the only role still active
-  // in its stage (`rolesEdit.test.ts`) — and it counts the catalog's `active` alone, not this `roleEnabled` (reported).
-  const html = currentSettingsHtml(state({ settings: onlyOne }), 'n0nce');
-
-  assert.match(
-    html,
-    /data-setting="roleEnabled" data-role="Architecture"[^>]*disabled/,
-    'removing the last reviewer would start a round nobody answers, which never resolves',
-  );
-  assert.match(
-    html,
-    /data-setting="roleEnabled" data-role="Conventions"(?![^>]*disabled)/,
-    'the ones already off stay clickable, or there is no way back',
-  );
-  // A disabled input shows no title tooltip and cannot be focused by keyboard, so the reason has to
-  // be on the page rather than under the pointer. Raised on the code round and it was right.
-  assert.ok(
-    html.includes('The only role still ticked — tick another one before turning this one off.'),
-    'a control that refuses without saying why reads as broken',
-  );
 });
 
 test('the fan-out sentence counts the roles that will actually run', () => {
@@ -1168,19 +998,6 @@ function promptsSection(html: string): string {
   return `${paneIn(html, 'reviews/stages')}\n${paneIn(html, 'reviews/prompts')}`;
 }
 
-/**
- * The CURRENT page's Prompts section, whole — for the role box's own tick, which only that page draws (the new page has
- * ONE switch per role, on Roles & prompts: E4.3). Read while the page is drawn (E5.1 step 3), and goes with it.
- */
-function currentPromptsSection(state: PanelState): string {
-  const html = currentSettingsHtml(state, 'n0nce');
-  const from = html.indexOf('data-section="prompts"');
-  const to = html.indexOf('data-section="gate"');
-  assert.ok(from > 0 && to > from, 'the Prompts section is bounded by the one after it');
-
-  return html.slice(from, to);
-}
-
 test('a role a person added is drawn in Prompts per round, under their own name', () => {
   const settings = {
     ...DEFAULTS,
@@ -1224,8 +1041,7 @@ test('a document role is drawn in the DOCUMENT frame, with a budget and a switch
 });
 
 // "The Prompts section offers the way into the roles page" read the markup for `data-command="editRoles"`; since E5.1
-// step 1 `theNewPageJumpsToItsPlaces.test.ts` presses it on both running pages — the current page's still opens the
-// roles page, the new page's jumps to Reviews › Roles & prompts.
+// step 1 `theNewPageJumpsToItsPlaces.test.ts` presses it on the running page, where it jumps to Reviews › Roles & prompts.
 
 test('a server too old to read a person’s roles says so, where the roles are drawn', () => {
   // The quietest of the three skews: below 0.19.0 the key is never read, so the roles are in the
@@ -1255,53 +1071,6 @@ test('and says nothing at all when the person has added no role of their own', (
   }), 'n0nce'));
 
   assert.ok(!older.includes('does not read roles'));
-});
-
-/**
- * Two switches reach one role, and the section has to be honest about which one is holding it.
- *
- * <p>`roleEnabled` is this section's own tick and becomes `COAI_ENABLED_&lt;ID&gt;`; `active` is the
- * catalog's, written by the roles page, and becomes a field of `COAI_ROLES`. The server reads both.
- * What it must never do is draw a tick that cannot be ticked: a box whose `on` is computed from BOTH
- * switches, but which only writes ONE of them, springs straight back and tells the person nothing.</p>
- *
- * <p>The three tests below read the CURRENT page, the one page that draws the box's own tick: the new page has no
- * second tick to fight with (E4.3, one switch per role on Roles &amp; prompts), and against it the second and third
- * would pass vacuously on an `indexOf` of -1. They go with the current page (E5.1 step 3).</p>
- */
-test('a role switched off in the catalog has no tick to fight with', () => {
-  const settings = { ...DEFAULTS, roles: [{ id: 'Architecture', active: false }] };
-  const prompts = currentPromptsSection(state({ settings }));
-  const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
-  const tag = box.slice(0, box.indexOf('>'));
-
-  assert.match(tag, /disabled/, 'the tick would post roleEnabled and come back unticked anyway');
-  assert.match(box, /roles page/, 'and the hint says where the switch that IS holding it lives');
-});
-
-test('a role active in the catalog keeps a tick that works', () => {
-  const prompts = currentPromptsSection(state());
-  const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
-
-  assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'));
-});
-
-test('the last role standing counts the roles a person added', () => {
-  // `enabledCodeRoles` walked the SHIPPED five, so a person whose only remaining reviewer was a role
-  // of their own was told they could not untick a shipped one — and the fan-out sentence promised a
-  // round smaller than the one about to run.
-  const off = Object.fromEntries(Object.keys(DEFAULTS.roleEnabled).map((r) => [r, false]));
-  const settings = {
-    ...DEFAULTS,
-    roleEnabled: { ...off, Architecture: true },
-    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
-              prompts: [{ id: 'requirements-general', label: 'General' }] }],
-  };
-  const prompts = currentPromptsSection(state({ settings }));
-  const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
-
-  assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'),
-    'Requirements is the second code role still running, so Architecture is not the last');
 });
 
 test('the fan-out sentence counts a role a person added', () => {
@@ -1638,60 +1407,4 @@ test('the list of what to move is a list, not a sentence sixteen items long', ()
     assert.ok(section.includes(escapeHtml(name)), `${name} is not named where a person would copy it`);
   }
   assert.match(section, /<ul|<li/u, 'sixteen names run together are not read');
-});
-
-/**
- * A Consultant row and the reviewer card of the same name are the same colour, in the SAME page.
- *
- * <p>This is the assertion that fails if the wiring is deleted. `callerColour` can be perfect and
- * every test of it green while `panelHtml` simply never hands the palette to `consultantBody` — and
- * then the section renders neutral edges in VS Code with a fully green suite. So this asserts the
- * rendered page, both halves of the promise in one string: the card's colour, and the row's.
- * (gemini, the plan round: "delete the production line whose absence a user would notice, and watch
- * THAT go red".)</p>
- */
-test('a consultant row wears the same colour as the reviewer card of the same name', () => {
-  // The CURRENT page: its Consultant rows are per caller and coloured; the new page's Consultant tab picks a catalog
-  // row per caller and draws no caller colour (E4.2). Read while the current page is drawn (E5.1 step 3; reported).
-  const html = currentSettingsHtml(state(), 'n0nce');
-
-  // codex is the id that is BOTH a configured reviewer in this fixture and a caller kind, so it is
-  // the one where "the same colour in two sections" is a claim about one page rather than about two
-  // functions. The card is asserted first: without it, the row assertion below compares against
-  // nothing.
-  const shared = DEFAULT_COLOUR('codex');
-
-  // Scoped to CODEX's card, not to "some card wearing codex's colour": with two vendors configured,
-  // a page that swapped their colours would satisfy a bare `includes` twice over and the
-  // codex-to-codex equality this test is named for would be false. So the card is found by the id
-  // its own label carries. (codex, the code round.)
-  const codexCard = html.split('<div class="vendor" ').find((part) => part.includes('for="v-codex"'));
-  assert.ok(codexCard, 'there is no codex reviewer card, so this test is comparing against nothing');
-  assert.ok(
-    codexCard.startsWith(`style="border-left-color:${shared}">`),
-    `codex's own card is not wearing codex's colour: ${codexCard.slice(0, 80)}`,
-  );
-  assert.ok(
-    html.includes(`data-caller="codex" style="border-left-color:${shared}"`),
-    'codex is a different colour in Consultant than on its reviewer card',
-  );
-
-  // claude and gemini are anchored, so they carry their own colour here even though this fixture
-  // configures neither as a reviewer — which is the point of an anchor.
-  for (const id of ['claude', 'gemini']) {
-    assert.ok(
-      html.includes(`data-caller="${id}" style="border-left-color:${DEFAULT_COLOUR(id)}"`),
-      `${id} does not wear its anchored colour in Consultant`,
-    );
-  }
-
-  // The FRAME, not only the edge colour. `consultantBody` emits no stylesheet, so a test over its
-  // output alone stays green after `.consultant-row` loses its rule — and the rows go back to being
-  // flat `.field` blocks with a coloured line, which is the defect reported. Asserted here, where
-  // the page and its stylesheet are the same string. (codex, the code round.)
-  const css = html.split('<style>')[1]?.split('</style>')[0] ?? '';
-  const frame = css.split('.consultant-row {')[1]?.split('}')[0] ?? '';
-  assert.ok(frame.length > 0, 'the .consultant-row rule is gone, so the rows are unframed whatever colour they carry');
-  assert.match(frame, /border: 1px solid/, 'the rows have no frame — only a left edge');
-  assert.match(frame, /border-left: 3px solid/, 'the left edge has no width, so the inline colour paints nothing');
 });

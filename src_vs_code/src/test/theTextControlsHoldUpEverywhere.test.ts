@@ -63,8 +63,9 @@ const code = (file: string): string => blanked(fs.readFileSync(path.join(SRC, fi
 test('a host whose page posts into a queue of its own takes a text press out of it first', () => {
   // Structural, because these hosts import vscode. Otherwise a press flushed a half-typed edit, and a
   // failed tone write surfaced as the page's own "your text was not saved".
-  // The roles' and the commands' queues are their shared editing cores since PLAN_one_model_catalog.md E4.3 / E4.4.
-  for (const [file, queue] of [['phrasesPanel.ts', 'writes.queue('], ['rolesPanel.ts', 'queueRoleEdit('], ['commandsPanel.ts', 'queueCommandEdit(']] as const) {
+  // The roles' and the commands' editors are places of the Settings page since their tabs went (PLAN_one_model_catalog.md
+  // E5.1 step 4); its presses are taken out of the dispatcher first — the test below.
+  for (const [file, queue] of [['phrasesPanel.ts', 'writes.queue(']] as const) {
     const source = code(file);
     const heard = source.indexOf('onDidReceiveMessage(');
     const queued = source.indexOf(queue, heard);
@@ -82,8 +83,7 @@ test('the Settings tab reads the size and tone when its page is BUILT, not befor
   const source = code('panelProvider.ts');
   const pageFor = source.slice(source.indexOf('private pageFor('), source.indexOf('private pageFor(') + 1600);
 
-  assert.match(pageFor, /settingsHtml\(\{ \.\.\.withCaret\(\), uiScale: currentUiScale\(\), textTone: currentTextTone\(\) \}/);
-  // And the new page in the same slot (PLAN_one_model_catalog.md D5), for the same reason.
+  // The one page in the slot since E5.1 step 5 removed the page it replaced.
   assert.match(pageFor, /catalogHtml\(\{ \.\.\.withCaret\(\), uiScale: currentUiScale\(\), textTone: currentTextTone\(\) \}/);
   // Over the raw source: the page name is a string, which the blanked source has emptied.
   assert.match(fs.readFileSync(path.join(SRC, 'panelProvider.ts'), 'utf8'), /private receive\(from: SurfaceSlot, m: PanelMessage\): void \{\s*[\s\S]{0,400}if \(appliedTextControl\(m, 'settings'\)\) \{\s*return;/,

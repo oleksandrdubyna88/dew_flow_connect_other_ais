@@ -92,12 +92,3 @@ export const CONFIRM_DIALOG = `<dialog id="confirm-dialog" aria-labelledby="conf
 <p id="confirm-body"></p>
 <div class="dialog-buttons"><button type="button" id="confirm-keep" autofocus>Keep it</button><button type="button" id="confirm-go"></button></div>
 </dialog>`;
-
-/**
- * What a tab the new page does not draw yet shows: one sentence, and the way back to the page that does (E4 builds
- * these tabs; until then the preview must not look like settings that went missing).
- */
-export function stillOnTheOldPage(tabLabel: string): string {
-  return `<p class="hint">${escapeHtml(tabLabel)} is still on the current Settings page while this one is a preview.</p>`
-    + `<button type="button" data-command="settingsPreview" data-id="off">Open the current Settings page</button>`;
-}

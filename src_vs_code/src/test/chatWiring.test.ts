@@ -285,7 +285,7 @@ const DIRECT_VENDORS = /\.get(?:<[^>]*>)?\(\s*'vendors'\s*\)/g;
 const ANY_VENDORS = /\.get(?:<[^>]*>)?\(\s*'vendors'\s*\)|vendorsFrom\(/g;
 
 test('the chat reads no reviewer row, from either side of the machine', () => {
-  for (const file of ['chatCommand.ts', 'chatPresetsPanel.ts', 'chatPresetsHost.ts', 'chatModelWizard.ts', 'chatPresets.ts', 'chatPanel.ts']) {
+  for (const file of ['chatCommand.ts', 'chatPresetsHost.ts', 'chatModelWizard.ts', 'chatPresets.ts', 'chatPanel.ts']) {
     const text = read(join('src', file));
 
     assert.deepStrictEqual(

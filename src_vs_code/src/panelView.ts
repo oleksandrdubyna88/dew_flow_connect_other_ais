@@ -15,11 +15,10 @@ import { escapeHtml } from './escapeHtml';
 import { jsonForScript } from './webviewHtml';
 import { activeQuestionsBody } from './activeQuestions';
 import type { QuestionConsult } from './questionConsults';
-import { LIVE_REGION_IDS, liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
-import { SETTINGS_CSS, settingsHead, settingsScript, settingsTextCss } from './settingsPage';
-import { textOf } from './textControls';
-import { executableFor } from './vendorTerminal';
-import { LOOKING, LOOKING_CSS } from './lookingSpinner';
+import { LIVE_REGION_IDS, liveRegion, type SectionSpec, sidebarBody, sidebarKey } from './panelSurface';
+
+
+import { LOOKING_CSS } from './lookingSpinner';
 import { SELECT_SEARCH_CSS, selectSearchScript } from './selectSearch';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 import { type BusySnapshot, IDLE } from './busySnapshot';
@@ -56,11 +55,10 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
-import { apiSettingsFields } from './apiSettingsView';
 import { help, segmentedRadio } from './panelControls';
 import { cadenceBlock } from './cadenceSettings';
 import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
-import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance, Runtime } from './models';
+import { allowedModelsFor, ModelChoice, modelsFor, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
@@ -73,8 +71,8 @@ import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile,
 import { vendorPalette, VendorPalette } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
-import { ProbeResult, claudeNote } from './claudeModels';
-import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
+import { ProbeResult } from './claudeModels';
+import { asksAnEndpoint, type EndpointListing } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody } from './bugzView';
 import { bugzInputsOf, bugzPickFrom } from './bugzPick';
@@ -82,7 +80,7 @@ import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
 import { vaultKeyOf } from './vaultKey';
-import { reviewsDocuments, Vendor } from './vendors';
+import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { SECURITY_COMMANDS } from './securityLaneState';
@@ -489,23 +487,6 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   { id: 'cadence', title: 'Consultation cadence', surface: 'sidebar', body: (_state, live) => liveRegion('cadence', live) },
   { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
   { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
-  // The SETTINGS tab: what is configured once, one tab each, in the order the sidebar used to hold them.
-  { id: 'reviewers', title: 'Reviewers', surface: 'settings', body: (state) => reviewersBody(state) },
-  { id: 'chat', title: 'Chat other AIs', surface: 'settings', body: (state) => chatBody(state.chat ?? DEFAULT_CHAT, state) },
-  // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
-  // another vendor about a passage, here an AI asks one about the tree it is stuck in.
-  { id: 'consultant', title: 'Consultant', surface: 'settings', body: (state) => consultantSection(state) },
-  // After the stuck consultant, because the two are the same idea for two moments: there an AI that is STUCK asks
-  // one vendor, here an AI with a QUESTION asks every row before it asks you (todo/PLAN_question_consultant.md, S4).
-  { id: 'questionconsultant', title: 'Question consultant', surface: 'settings', body: (state) => questionConsultantSection(state) },
-  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneSection(state, state.vendors) },
-  { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
-  { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
-  { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsSection(state) },
-  { id: 'keys', title: 'Vendor keys', surface: 'settings', body: (state) => keysBody(state) },
-  { id: 'teamServers', title: 'Team servers', surface: 'settings', body: (state) => teamServersSection(state) },
-  { id: 'side', title: 'This side', surface: 'settings', body: (state) => sideBody(state) },
-  { id: 'server', title: 'MCP server', surface: 'settings', body: (state) => serverBody(state) },
 ];
 
 /**
@@ -532,7 +513,7 @@ export function consultantSection(state: PanelState, callerRows = ''): string {
       // answer a row that holds no reviewer.
       enginesByEndpoint: state.enginesByEndpoint,
       consultPrompt: state.consultPrompt,
-      // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
+      // The REVIEWERS' palette, built from the same canonical list the Models cards use, so a
       // caller wears the colour its vendor has on its card and in a running round. Passed even
       // when no reviewer is configured: the anchored ids answer regardless, which is what an
       // anchor is for.
@@ -935,46 +916,6 @@ function strandedOption(chosen: string, offered: readonly { readonly id: string 
 }
 
 /**
- * The `Chat other AIs` section.
- *
- * <p>Four settings that reach a MODEL rather than a pixel, which is why they are here instead of in
- * `settings.json` where they started: a prompt nobody can see is a prompt nobody corrects, and the
- * one that ships is a single word.</p>
- *
- * <p><b>The model list is the models that can ANSWER, and the ones that cannot are named.</b> Same
- * rule as the command: a person who configured `codex` and finds a picker quietly missing it cannot
- * tell a bug from a policy. The list comes from `chatModelsFrom`, which is the same function the
- * conversation itself picks from — one source, so the picker and the tab cannot disagree.</p>
- */
-function chatBody(chat: ChatSettings, state: PanelState): string {
-  const list = chatProviderListFor(chat, state);
-  // The provider that ANSWERS: the saved row, or — only when nothing is saved — the first that can.
-  // A saved row that no longer resolves must NOT fall through to `providers[0]`: the select above
-  // strands it while this one fills with an unrelated provider's models, and the two controls then
-  // describe a pair nobody chose and offer it as valid. (codex and local, the code round.)
-  const chosen = chat.model.length === 0
-    ? list.providers[0]
-    : list.providers.find((one) => one.id === chat.model);
-  const ownModel = chat.models.find((one) => one.id === chosen?.id)?.model ?? '';
-  const refusals = list.refused.map((row) => row.reason);
-
-  return `${chatSendingFields(chat, '  <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>\n')}<div class="field">
-  ${labelled('chatModel', 'Which model answers', 'chatModel')}
-  <select id="chatModel" data-setting="chatModel">
-${chatOption('', 'The first one that can answer', chat.model)}
-${list.providers.map((provider) => chatOption(provider.id, provider.label, chat.model)).join('\n')}
-${strandedOption(chat.model, list.providers, 'cannot answer a chat')}
-  </select>
-  <select id="chatModelName" data-setting="chatModelName" aria-label="Which of its models">
-${chatOption('', ownModel.length > 0 ? `${ownModel} — what this row is set to` : 'What this row is set to', chat.modelName)}
-${(chosen?.models ?? []).map((model) => chatOption(model.id, model.label, chat.modelName)).join('\n')}
-${strandedOption(chat.modelName, chosen?.models ?? [], 'this provider does not offer it')}
-  </select>
-${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).join('\n')}
-</div>`;
-}
-
-/**
  * The chat's models as providers — which can answer, and which cannot and why — with the panel's OWN catalog in it.
  * Both Settings pages draw from it (todo/PLAN_one_model_catalog.md E4.6b).
  *
@@ -994,12 +935,10 @@ export function chatProviderListFor(chat: ChatSettings, state: PanelState): Chat
 }
 
 /**
- * What to ask about the selection, the language the answer comes in, and who presses send — the fields both Settings
- * pages draw, from this one builder (E4.6b).
- *
- * @param afterPrompt what follows the prompt's hint inside its field — the current page's *Edit presets…*; '' for none
+ * What to ask about the selection, the language the answer comes in, and who presses send — the fields Chat on the
+ * Settings page draws (E4.6b).
  */
-export function chatSendingFields(chat: ChatSettings, afterPrompt: string): string {
+export function chatSendingFields(chat: ChatSettings): string {
   return `<div class="field">
   ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
   <select id="chatPromptChoice" data-setting="chatPromptChoice">
@@ -1008,7 +947,7 @@ ${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptCho
 ${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
   </select>
   <div class="hint">${escapeHtml(chat.prompt)}</div>
-${afterPrompt}</div>
+</div>
 <div class="field">
   ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
   <select id="chatLanguage" data-setting="chatLanguage">
@@ -1158,13 +1097,6 @@ function updateLabel(id: string, cli: CliStatus): string {
   return updateAvailable(cli.installed, cli.latest)
     ? `Update the ${id} CLI to ${cli.latest}`
     : `The ${id} CLI is up to date`;
-}
-
-function reviewersBody(state: PanelState): string {
-  const contextOf = cardContextFor(state);
-
-  return `${state.vendors.map((v) => vendorCard(v, contextOf(v))).join('\n')}
-<button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
 /**
@@ -1430,95 +1362,6 @@ function cachedRate(
 /** The `Vendor` field each rate box writes. */
 const RATE_SETTING: Readonly<Record<'in' | 'out' | 'cached', string>> = { in: 'In', out: 'Out', cached: 'Cached' };
 
-function vendorCard(vendor: Vendor, context: CardContext): string {
-  const {
-    codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude, apiNote,
-    featureNote: featureOff, serverVersion, endpointListing, askingEndpoint,
-  } = context;
-  // The endpoint this row talks to, and what it listed — so a codex row on OpenRouter is offered
-  // OpenRouter's models, never the Codex CLI's cache (research/PLAN_custom_endpoint_model_list.md). The key
-  // name is the row's own (`vaultKeyOf`), the one `--probe-api` is asked with.
-  const rowEndpoint: RowEndpoint = {
-    baseUrl: vendor.baseUrl, keyName: vaultKeyOf(vendor), listed: endpointListing, asking: askingEndpoint ?? false,
-  };
-  const id = escapeHtml(vendor.id);
-  const local = vendor.runtime === 'local';
-  // A hosted API reached directly: no CLI to run, install or update, so the three CLI buttons are
-  // hidden as they are for a local engine; an endpoint, a model typed by hand, and a dialect. When
-  // the installed server is too old to know the runtime the whole card is switched OFF and says why
-  // — the writer keeps the same row out of the settings file, so what the card shows is what the
-  // old server will run: nothing, rather than the wrong vendor (PLAN_feature_review.md §4.13).
-  const api = vendor.runtime === 'api';
-  const off = api && apiNote.length > 0;
-  const disabled = disabledAttr(off);
-  const stageOn = vendor.enabled && !off;
-  // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
-  // its CLI runs there, and its price is the company's subscription rather than this person's. Three
-  // fields that could only be filled in wrongly.
-  const remote = vendor.runtime === 'remote';
-  const models = modelsFor(
-    vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models, claudeProbe,
-    executableFor(vendor), rowEndpoint,
-  );
-  const words = modelWords(vendor.runtime, vendor.baseUrl);
-  const endpoint = endpointField(vendor, id, local, remote, off);
-  // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`
-  // after the out one (issue #124). They used to sit in a row of their own directly under the model,
-  // four lines from the vendor's own checkbox, and the three read as one group of three although the
-  // master switch is a different kind of decision from the two stages.
-  const plan = stageBox('plan', id, vendor.plan, stageOn, 'reviews plans', help('vendorStages'));
-  const code = stageBox('code', id, vendor.code, stageOn, 'reviews code');
-  // The third one is drawn from the RULE rather than from the stored field, because the stored field
-  // can be absent and an unticked box would then be lying about what the next round will do. See
-  // `reviewsDocuments`, which `ProviderSettings.Serves` mirrors on the side that decides.
-  // The fourth rides beside it, on the same line: both are stages a card cannot hang on a price.
-  const document = stageBox(
-    'document', id, reviewsDocuments(vendor), stageOn, 'reviews documents', help('vendorDocuments'))
-    + featureBox(vendor, id, stageOn, featureOff);
-  // An api row's "CLI" is coai-mcp itself, so a CLI path would only ever be filled in wrongly.
-  const executable = runtimeFields(vendor, id, remote || api);
-  const prices = priceFields(vendor, id, local, remote, price, plan, code, off);
-  const dialect = api ? dialectField(vendor, id, off) : '';
-  // Thinking, effort and the review limit, from what coai-mcp reported for this row (S3.8); nothing for a
-  // CLI row or a switched-off card.
-  const perModel = off ? '' : apiSettingsFields(vendor, id, reported[vendor.id], serverVersion);
-  const skew = off ? `<div class="stale">${escapeHtml(apiNote)}</div>` : '';
-  // Keyed off whether the PRICE rows came back empty — not off `remote`, and not off whether any
-  // runtime field was rendered. A card with nothing to hang the boxes on keeps the row: a Team
-  // server's CLI runs on the server and its price is the company's subscription, so it has no price
-  // fields here, and moving the boxes unconditionally would have left every remote reviewer with no
-  // way to say which stages it serves. The row is layout only — each box carries its own dimming.
-  // Two placements for one row, and the position is the part issue #124 paid for. A card with no
-  // prices has nowhere else to put its stage boxes, so all three sit together above the endpoint. A
-  // PRICED card hangs plan and code on the two price rows — which is what #124 moved them onto, to
-  // stop three boxes reading as one group with the master switch four lines above — and there is no
-  // third price to hang the document box on. So it gets a line of its own at the BOTTOM of the card,
-  // where it is still nowhere near the vendor's own checkbox. A box with no home is a decision
-  // nobody can make.
-  const stages = prices.length > 0 ? '' : `<div class="field stages">${plan}${code}${document}</div>`;
-  const documentRow = prices.length > 0 ? `<div class="field stages">${document}</div>` : '';
-
-  return `<div class="vendor" style="border-left-color:${colour}">
-  <div class="head">
-    <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}${disabled}
-           title="${escapeHtml(HELP.vendorEnabled)}">
-    <label class="name" for="v-${id}">${id}</label>${cannotRun(vendor.id, reported)}
-    ${headButtons(vendor, id, local, api, localEngine, cli)}${endpointButton(vendor, id, askingEndpoint ?? false)}
-    <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
-  </div>
-  <div class="field">
-    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(words.title)}"${disabled}>
-      ${modelOptions(models, vendor.model, words.empty)}
-    </select>
-    <div class="hint">${claudeNote(vendor.runtime, askingClaude ?? false).length === 0 ? '' : LOOKING}${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(
-      vendor.runtime, codexModels,
-      { localEngine, discoveredAgy: agyModels, remote: allowedRemote, claudeProbe, askingClaude, endpoint: rowEndpoint },
-    ))}</div>
-  </div>
-  ${skew}${stages}${endpoint}${dialect}${perModel}${executable}${prices}${documentRow}
-</div>`;
-}
-
 /** The attribute that switches a control off, or nothing — one spelling for every control of a card. */
 function disabledAttr(off: boolean): string {
   return off ? ' disabled' : '';
@@ -1668,28 +1511,19 @@ export function sideBody(state: PanelState): string {
 </div>`;
 }
 
-/** Which Settings page draws a section both pages share — the current page, or the new one. */
-export type SettingsPageKind = 'current' | 'new';
-
 /**
- * The way from a section to an editor that was a page of its own (todo/PLAN_one_model_catalog.md, E5.1 step 1). The
- * current page opens that page by its command; the new page HOLDS the editor as a place of its own, so there the same
- * press jumps to it and asks for no page — a page E5.1 deletes. One label on both, so a person who knew the button
- * finds it on either page.
+ * The way from a section to an editor that was a page of its own (todo/PLAN_one_model_catalog.md, E5.1 step 1): the
+ * Settings page HOLDS the editor as a place, so the press jumps to it and asks for no page. The label the old page's
+ * button had, so a person who knew it finds it.
  */
-function editorWay(page: SettingsPageKind, command: string, place: string, label: string): string {
-  return page === 'new'
-    ? `<button type="button" class="run" data-goto="${place}">${label}</button>`
-    : `<button type="button" class="run" data-command="${command}">${label}</button>`;
+function editorWay(place: string, label: string): string {
+  return `<button type="button" class="run" data-goto="${place}">${label}</button>`;
 }
 
 /**
  * The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate.
- *
- * @param page the page drawing it: its "Edit commands…" opens the commands page on the current page, and jumps to
- *   Reviews › Commands on the new one (E5.1 step 1)
  */
-export function gateBody(state: PanelState, page: SettingsPageKind = 'current'): string {
+export function gateBody(state: PanelState): string {
   const s = state.settings;
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
   // sections describing one thing. What is left here is the one decision that belongs to neither
@@ -1720,7 +1554,7 @@ ${gatePerBlock(state)}
 ${commandModelsBlock(state)}
 <div class="field">
   <div class="hint">The words those orders are made of, and commands of your own to hand over with them.</div>
-  ${editorWay(page, 'editCommands', 'reviews/commands', 'Edit commands…')}
+  ${editorWay('reviews/commands', 'Edit commands…')}
 </div>`;
 }
 
@@ -2355,15 +2189,6 @@ function vaultKeySplit(state: PanelState): string {
   return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`;
 }
 
-/** Which of the three things this tick can be is what its tooltip has to explain. */
-function tickHelp(dormant: boolean, last: boolean): string {
-  if (dormant) {
-    return HELP.dormantRole;
-  }
-
-  return last ? HELP.lastRole : HELP.roleEnabled;
-}
-
 /**
  * What a configured Team server will NOT run, said here rather than in a round's result.
  *
@@ -2394,11 +2219,11 @@ function serverNotes(state: PanelState, role: RoleRow): string {
 }
 
 /**
- * Which half of the prompts section a page draws: the old page draws both in one box per role; the new page splits
- * them across Stages (the switch, the rounds, the threshold) and Prompts per round (the round pickers) —
- * todo/PLAN_one_model_catalog.md E4.1. Each control is drawn once on a page either way.
+ * Which half of the prompts section a place draws: Stages (the rounds and the threshold of each role) or Prompts per
+ * round (the round pickers) — todo/PLAN_one_model_catalog.md E4.1. The old page drew both in one box per role, with a
+ * tick of its own per role, until E5.1 step 5 removed it; a role's one switch is on Roles & prompts (E4.3).
  */
-export type PromptsHalf = 'both' | 'stages' | 'prompts';
+export type PromptsHalf = 'stages' | 'prompts';
 
 /** One role's round pickers alone, for the new page's Prompts per round — or why it has none. */
 function pickersOnly(role: RoleRow, on: boolean, off: string, pickers: string): string {
@@ -2416,7 +2241,7 @@ ${rows}
 </div>`).join('\n');
 }
 
-export function promptsBody(state: PanelState, half: PromptsHalf = 'both'): string {
+export function promptsBody(state: PanelState, half: PromptsHalf): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
   // them, under the name they gave it, with its own rounds, threshold and pickers. `composed` is the
@@ -2446,43 +2271,20 @@ export function promptsBody(state: PanelState, half: PromptsHalf = 'both'): stri
     // A switch, but only on the CODE roles: the plan stage has one role, and a checkbox whose only
     // setting turns the whole stage off is a different feature nobody asked for.
     const switched = stage !== 'plan';
-    // Off by EITHER switch. `roleEnabled` is this section's own tick, per role; `active` is the
-    // catalog's, written by the roles page — and the server reads both, so a box showing a role as
-    // on because only the other switch was off would be a box that disagrees with the round.
+    // Off by EITHER switch — `roleEnabled` and the catalog's `active` — the server reads both, and Roles & prompts
+    // shows them as one (E5.1b).
     const on = isActive(role) && (!switched || roleIsOn(s, role.id));
-    // The LAST role standing cannot be unticked. Refusing here, where the pointer is, beats
-    // refusing at round time with an error about a review somebody already waited for — and the
-    // server still refuses the all-off round, because a hand-written env block has no checkbox.
-    // Never for the feature role: unticking it IS the feature gate's switch (§4.2 of the
-    // feature-review plan), and a feature round with nobody in it is recorded as skipped rather
-    // than left open — there is no round that never resolves to protect a person from.
-    const last = switched && on && bucketOf(role) !== FEATURE_CODE && enabledCodeRoles(s).length === 1;
-    // Switched off in the CATALOG, by the roles page. This tick writes `roleEnabled`, which is the
-    // OTHER switch — so ticking it would post a setting, recompute `on` as still false, and spring
-    // straight back with nothing said. A control that cannot do anything is worse than one that is
-    // not offered: this one goes inert and its tooltip says where the switch that IS holding the
-    // role lives.
-    const dormant = switched && !isActive(role);
-    const frozen = last || dormant;
     const inactive = !isActive(role) ? ' off' : '';
     const off = switched && !on ? ' off' : '';
     if (half === 'prompts') {
       return pickersOnly(role, on, off, pickers);
     }
 
-    // The gate and the prompts were two sections describing one thing: how many times this role
-    // asks, how much it may still find, and what it asks each time. One box now.
-    // The new page's Stages draws no tick of its own: a role has ONE switch there, on Roles & prompts (E4.3).
-    const ticked = switched && half === 'both';
+    // How many times this role asks and how much it may still find, in one box. Stages draws no tick of its own: a role
+    // has ONE switch, on Roles & prompts (E4.3).
     return `<div class="role role-${roleTone(role.id, stage)}${off}${inactive}">
-  <div class="head">${ticked
-      ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${frozen ? ' disabled' : ''}
-           title="${escapeHtml(tickHelp(dormant, last))}">
-    <label class="name" for="role-${role.id}">${escapeHtml(label)}</label>`
-      : `<span class="name">${escapeHtml(label)}</span>`}</div>
-${switched && !ticked && !on ? '  <div class="hint">Off — its switch is under Roles &amp; prompts.</div>' : ''}
-${ticked && dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
-${ticked && last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
+  <div class="head"><span class="name">${escapeHtml(label)}</span></div>
+${switched && !on ? '  <div class="hint">Off — its switch is under Roles &amp; prompts.</div>' : ''}
 ${serverNotes(state, role)}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
@@ -2494,7 +2296,6 @@ ${serverNotes(state, role)}
     <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-role="${role.id}"
            value="${s.thresholds[role.id] ?? 3}"${on ? '' : ' disabled'}>
   </div>
-${on && half === 'both' ? pickers : ''}
 </div>`;
   };
 
@@ -2522,8 +2323,7 @@ interface RoleGroups {
 
 /** How each half is drawn around the role boxes: the stages with their own switches, or the round pickers alone. */
 const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: RoleGroups) => string>> = {
-  both: (state, groups) => stagesBody(state, groups, 'current'),
-  stages: (state, groups) => stagesBody(state, groups, 'new'),
+  stages: (state, groups) => stagesBody(state, groups),
   prompts: (_state, { plan, code, documents, features }) =>
     pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
 };
@@ -2532,7 +2332,7 @@ const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: R
  * The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles — the roles page
  * on the current page, a jump to Roles &amp; prompts on the new one, where the roles page's content is (E5.1 step 1).
  */
-function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups, page: SettingsPageKind): string {
+function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
   const s = state.settings;
 
   return `<div class="role-group">
@@ -2571,7 +2371,7 @@ ${documents}
 ${features}
 </div>
 <div class="field">
-  ${editorWay(page, 'editRoles', 'reviews/roles', 'Edit roles…')}
+  ${editorWay('reviews/roles', 'Edit roles…')}
   <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does. The five above are there too.</div>
 </div>`;
 }
@@ -3483,9 +3283,6 @@ export const PANEL_COMMANDS = [
   // The Company/Me control on the spending section, which only an admin is shown. Without it that
   // control would be a button wired to nothing, which is the exact trap this list exists to prevent.
   'teamUsageScope',
-  // Switches the Settings tab between the current page and the new one (PLAN_one_model_catalog.md D5): its id is
-  // `on` or `off`. The configuration change repaints the open tab.
-  'settingsPreview',
   // The new Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
   // row duplicated, and a row removed after the page's own confirm — so the host asks no second question.
   'toggleUse',
@@ -3495,12 +3292,6 @@ export const PANEL_COMMANDS = [
   'checkModel',
   // Try it on the new page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
   'trySecurity',
-  // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
-  // no view, so the only way to reach the CRUD the chat section points at was the command palette.
-  'editChatPresets',
-  // And the way into the roles tab, which the Prompts section points at the same way.
-  'editRoles',
-  'editCommands',
   // A phrase, onto the clipboard. Handled in the provider rather than by a registered command,
   // because it needs the id the button carries and nothing outside the panel ever asks for one.
   'copyPhrase',
@@ -3547,9 +3338,6 @@ export type PanelCommand = (typeof PANEL_COMMANDS)[number];
  */
 export const VSCODE_COMMAND_FOR = {
   installServer: 'coai.installServer',
-  editChatPresets: 'coai.editChatPresets',
-  editRoles: 'coai.editRoles',
-  editCommands: 'coai.editCommands',
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
   moveDataDirectory: 'coai.moveDataDirectory',
@@ -3577,30 +3365,4 @@ export function isPanelCommand(value: string | undefined): value is PanelCommand
  */
 export function staticKey(state: PanelState): string {
   return sidebarKey(PANEL_SECTIONS, state);
-}
-
-/** The sections the Settings tab draws, in order — its tabs. */
-export function settingsSections(): readonly SectionSpec<PanelState>[] {
-  return sectionsOn(PANEL_SECTIONS, 'settings');
-}
-
-/**
- * The Settings tab: the sections that are configured once, one tab each, with the SAME builders, the same
- * controls and the same script as the sidebar that used to hold them (`research/PLAN_settings_page.md`).
- *
- * @param heldTab the tab the host holds; it reaches the page's script, never the markup (D6)
- */
-export function settingsHtml(state: PanelState, nonce: string, heldTab: string): string {
-  const { size, tone } = textOf(state);
-  // The header is drawn OUTSIDE settingsBody, which is the paint key: the two values it shows move by the
-  // host's push, never by a repaint.
-  return pageDocument(settingsHead(size, tone) + settingsBody(settingsSections(), state), nonce, state.focus, {
-    css: SETTINGS_CSS + settingsTextCss(size, tone),
-    script: settingsScript(heldTab),
-  }, state.busy ?? IDLE);
-}
-
-/** What the Settings tab paints on — its body as drawn, which holds no live region and no held tab. */
-export function settingsKey(state: PanelState): string {
-  return settingsBody(settingsSections(), state);
 }

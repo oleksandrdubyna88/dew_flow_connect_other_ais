@@ -15,7 +15,7 @@ import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPresets';
 import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
-import { chooseSettingsTab, heldSettingsTab, setSettingsPreview, settingsPreviewOn, type SettingsHost } from './settingsPanel';
+import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
 import { FIRST_SEEN_KEY } from './newTags';
 import { appliedTextControl } from './textControlsHost';
@@ -32,8 +32,6 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
-  settingsHtml,
-  settingsKey,
   staticKey,
   VSCODE_COMMAND_FOR,
   type ChatLedgers,
@@ -85,7 +83,7 @@ import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } 
 import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
 import { consultantPickWrites } from './consultantPicks';
-import { securityRowsOffered } from './catalogPicks';
+import { rowsFor } from './catalogPicks';
 import { clientFilesFor, ClientReader } from './mcpClientsRead';
 import { MOVE_RECORD } from './dataCommands';
 import type { MoveRecord } from './dataMove';
@@ -122,13 +120,12 @@ import { askForContributorKey } from './bugzKeyFlows';
 import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
-import { rolesKnowTheServer } from './rolesPanel';
 import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
 import { roleEdit } from './rolesMessages';
 import { roleSwitchFollows } from './rolesSwitch';
 import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
 import { commandEdit } from './commandsMessages';
-import { flushChatPresetEdits, onChatPresetsRedraw, queueChatPresetEdit } from './chatPresetsHost';
+import { flushChatPresetEdits, onChatPresetsRedraw, pruneDeadModelRows, queueChatPresetEdit } from './chatPresetsHost';
 import { presetEdit } from './chatPresetsMessages';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
@@ -1005,13 +1002,23 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The Settings tab was opened: it is painted like the sidebar, and heard like it. */
   attachSettings(panel: vscode.WebviewPanel): void {
     this.settingsTab.attach(panel);
-    // The Consultant tab's watcher pauses with the tab: nobody is reading its stores (epic 5's review).
-    panel.onDidDispose(() => { this.settingsTab.detach(panel); this.consultantHealth.pause(); });
+    // The Consultant tab's watcher pauses with the tab: nobody is reading its stores (epic 5's review). What was still
+    // settling in an editor on it is written now, as each editing tab did on its own close (E5.1c's code round).
+    panel.onDidDispose(() => {
+      this.settingsTab.detach(panel);
+      this.consultantHealth.pause();
+      void Promise.all([flushRoleEdits(), flushCommandEdits(), flushChatPresetEdits()]);
+    });
     // Hidden behind another editor tab: nobody is reading the Consultant tab, so its watcher pauses; shown again, a render
     // decides whether it resumes (the whole-branch review, N2).
     panel.onDidChangeViewState(() => { if (panel.visible) { void this.render(); } else { this.consultantHealth.pause(); } });
     panel.webview.onDidReceiveMessage((m: PanelMessage) => { this.receive(this.settingsTab, m); });
-    void this.render();
+    // The litter rows an older build wrote are cleared when the page that lists the chat's models opens, as the presets
+    // tab cleared them (E5.1c's code round) — awaited before the first paint, so it never draws a row being removed. A
+    // cleanup that cannot run is said, and the tab paints anyway.
+    void pruneDeadModelRows()
+      .catch((error: unknown) => { console.error('ConnectOtherAIs: the unusable model presets could not be cleared', error); })
+      .then(() => this.render());
   }
 
   /** The command asked for a tab of a Settings page already open: the page is told, and nothing repaints. */
@@ -1076,23 +1083,17 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
     // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
     const withCaret = (): PanelState => ({ ...state, focus: slot.focus(), busy: this.inFlight.snapshot() });
-    if (slot === this.settingsTab && settingsPreviewOn()) {
-      // The new page in the SAME slot (D5): one panel, one page at a time, every write through the one path below.
-      // The body IS the key: built once, and handed to the document rather than built a second time (epic 3's code round).
+    if (slot === this.settingsTab) {
+      // The Settings page (PLAN_one_model_catalog.md; the only one since E5.1 step 5): every write through the one path
+      // below. The body IS the key: built once, and handed to the document rather than built a second time (epic 3's
+      // code round). The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen
+      // probes after gathering it, and a press in between would otherwise be drawn over by the old value — with the same
+      // paint key, so nothing would ever repaint it.
       const body = catalogKey(state);
 
       return {
         key: body,
         html: () => catalogHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab(), body),
-      };
-    }
-    if (slot === this.settingsTab) {
-      // The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen probes
-      // after gathering it, and a press in between would otherwise be drawn over by the old value — with
-      // the same paint key, so nothing would ever repaint it.
-      return {
-        key: settingsKey(state),
-        html: () => settingsHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab()),
       };
     }
 
@@ -1199,7 +1200,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const shown = vendors.filter(shownOnTheOldPage);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
-    const server = this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published));
+    const server = await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published);
     const state = {
       settings,
       vendors: shown,
@@ -1893,8 +1894,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       const read = this.read(config);
       // Nothing is saved against a malformed setting: writing the panel's stand-in would replace
       // what the person wrote in settings JSON, which is the one place they are told to correct it.
-      // Named against the rows the page that wrote OFFERED: the new page's are the rows ticked Security lane (E4.2).
-      const offered = securityRowsOffered(vendorsFrom(read('vendors')), settingsPreviewOn());
+      // Named against the rows the page OFFERED: the rows ticked Security lane (E4.2).
+      const offered = rowsFor('security', vendorsFrom(read('vendors')));
       const next = securityLaneSave(read('securityLane'), message.securityField, message.value, offered);
       if (next !== undefined) {
         await this.save(config, 'securityLane', next);
@@ -2052,19 +2053,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         await state.update(revokedKey(server.id, perSide ? side : ''), stamped);
       }
     }
-  }
-
-  /**
-   * The server status, passed through — and told to the roles tab on the way.
-   *
-   * <p>That tab draws its own version-skew banner and has no way to ask for the answer: it is a
-   * panel of its own, opened by a command, with no reference to this provider. Told here, where the
-   * answer is already in hand and every repaint passes through.</p>
-   */
-  private told(server: ServerStatus): ServerStatus {
-    rolesKnowTheServer(server.kind === 'absent' ? '' : server.version);
-
-    return server;
   }
 
   /**
@@ -2441,21 +2429,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // and its own failure. The button's job is only to reach it.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.installServer);
         break;
-      case 'editChatPresets':
-        // The same shape, and for the same reason: the tab is opened by a registered command that
-        // owns its own panel. Without this the section could name the presets it picks from and
-        // offer no way to reach them — which is the state it shipped in.
-        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editChatPresets);
-        break;
-      case 'editCommands':
-        // The gate's commands page (issue #467), opened the way the roles page is.
-        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editCommands);
-        break;
-      case 'editRoles':
-        // The same shape again: the roles tab owns its own panel and is opened by a registered
-        // command, so the Prompts section can point at the roles it draws.
-        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editRoles);
-        break;
       case 'editPhrases':
         // Once more for the phrases tab, which the Phrases section points at. A tab reachable only
         // from the command palette is a tab the operator could not find — the deviation the presets
@@ -2530,10 +2503,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       case 'trySecurity':
         await this.trySecurity(id ?? '');
-        break;
-      case 'settingsPreview':
-        // The configuration change repaints the open tab on the other page; nothing else to do here.
-        await setSettingsPreview(id === 'on');
         break;
       case 'teamUsageScope':
         // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
@@ -3189,9 +3158,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The MCP clients' config files, each read again only when it changed (E4.5). */
   private readonly clients = new ClientReader();
 
-  /** Whether the new Settings page is what the Settings slot would paint — the tab open, the preview on. */
+  /** Whether the Settings page can be shown — its tab is open. */
   private newPageCanShow(): boolean {
-    return this.settingsTab.view !== undefined && settingsPreviewOn();
+    return this.settingsTab.view !== undefined;
   }
 
   /**

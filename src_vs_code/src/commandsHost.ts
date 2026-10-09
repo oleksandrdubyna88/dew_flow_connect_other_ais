@@ -14,8 +14,8 @@ import { settledWrites } from './settledWrites';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 
 /**
- * The editing core of the gate's commands — what both pages that edit them call (todo/PLAN_one_model_catalog.md E4.4):
- * the Gate commands tab (`commandsPanel.ts`) and, on the new Settings page, Reviews › Commands. Moved here from
+ * The editing core of the gate's commands — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.4):
+ * the Gate commands tab (`commandsPanel.ts`, deleted in E5.1) and, on the new Settings page, Reviews › Commands. Moved here from
  * `commandsPanel.ts`, never copied — the roles' arrangement (`rolesHost.ts`).
  *
  * <p>Everything DECIDED is `commands.ts` and `commandsEdit.ts`. What is here is what only a host can do: read a setting,

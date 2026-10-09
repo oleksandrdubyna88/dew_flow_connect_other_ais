@@ -1,6 +1,6 @@
 import { catalogHtml, catalogKey } from '../catalogPage';
 import { OLD_TAB_PLACES } from '../catalogPlaces';
-import { panelHtml, type PanelState, settingsHtml, staticKey } from '../panelView';
+import { panelHtml, type PanelState, staticKey } from '../panelView';
 import { SURFACE_IDS, type SurfaceId } from '../panelSurface';
 
 /**
@@ -11,8 +11,8 @@ import { SURFACE_IDS, type SurfaceId } from '../panelSurface';
  * derived from `SURFACE_IDS`, and {@link pageOf} switches over the surface exhaustively — a surface
  * added without a page here is a compile error, not a page nobody scans.</p>
  *
- * <p><b>The Settings surface is the NEW page</b> (todo/PLAN_one_model_catalog.md, E5.1 step 3): the page a person
- * sees once the switch-over ships, so every test that read a section through the old page reads it there. Its body
+ * <p><b>The Settings surface is the Settings page</b> (todo/PLAN_one_model_catalog.md) — the only one since E5.1 step 5
+ * removed the page it replaced, so every test that read a section through the old page reads it there. Its body
  * draws every place at once, each pane hidden until the script shows one, so the page opened on Models holds the
  * markup of every place.</p>
  */
@@ -54,15 +54,6 @@ export function keyOf(surface: SurfaceId, state: PanelState): string {
  */
 export function paintKeys(state: PanelState): string {
   return SURFACE_IDS.map((surface) => `${surface}:${keyOf(surface, state)}`).join(' | ');
-}
-
-/**
- * The CURRENT Settings page, whole — for a test of something only it draws, while it is still drawn: the default page
- * until the preview switch goes (E5.1 step 5), so what it alone shows still ships and is still held. Every such test
- * says so beside it, and goes with the page.
- */
-export function currentSettingsHtml(state: PanelState, nonce = 'n0nce'): string {
-  return settingsHtml(state, nonce, '');
 }
 
 export function everyPanelPage(state: PanelState): readonly { readonly surface: SurfaceId; readonly html: string }[] {

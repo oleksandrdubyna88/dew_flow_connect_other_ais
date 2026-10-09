@@ -1022,61 +1022,48 @@ test('the review page bundles without dragging the host into it', () => {
   assert.match(open, /\.ln::before\s*\{\s*content:\s*attr\(data-ln\)/u, 'and ships the rule that draws them');
 });
 
-test('the Settings tab bundles without the host, and the shipped page switches a tab on a press', async () => {
-  const bundle = bundleOf('panelView.ts', 'settingsHtml, settingsSections');
+test('the Settings page bundles without the host, and the shipped page switches a tab on a press', async () => {
+  // The Settings page is the catalog page (todo/PLAN_one_model_catalog.md; the only one since E5.1 step 5).
+  const bundle = bundleOf('catalogPage.ts', 'catalogHtml');
 
   assert.doesNotMatch(bundle, /require\("vscode"\)/u, 'the Settings page imports the vscode API, which a webview does not have');
   const shim = { exports: {} as Record<string, unknown> };
   new Function('module', 'exports', bundle)(shim, shim.exports);
-  const shipped = shim.exports as {
-    settingsHtml?: (state: unknown, nonce: string, tab: string) => string;
-    settingsSections?: () => readonly { id: string }[];
-  };
-  assert.equal(typeof shipped.settingsHtml, 'function', 'the bundle exports no Settings page to render');
+  const shipped = shim.exports as { catalogHtml?: (state: unknown, nonce: string, place: string) => string };
+  assert.equal(typeof shipped.catalogHtml, 'function', 'the bundle exports no Settings page to render');
 
   // The state the page is drawn from, from the compiled modules: the bundle is under test, not the fixture.
-  const { DEFAULTS } = await import('../settingsShape');
-  const { DEFAULT_VENDORS } = await import('../vendors');
-  const { Node, runPageHtml } = await import('./pageScriptHarness');
-  const html = shipped.settingsHtml!({
-    settings: DEFAULTS, vendors: DEFAULT_VENDORS, codexModels: [], agyModels: [], localEngines: {},
-    server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,
-    questions: [], sessions: [], openSections: [], usage: [], usageWindow: 'week', latestServerVersion: '',
-    cliStatus: {}, modelPrices: {}, snippetStatus: { kind: 'absent', current: 0 },
-  }, 'n', 'limits');
+  const { panelState } = await import('./panelPageHarness');
+  const { pageTree, selectorsOf } = await import('./pageTree');
+  type PageNode = ReturnType<typeof pageTree>;
+  const { runPageHtml } = await import('./pageScriptHarness');
+  const html = shipped.catalogHtml!(panelState('reviewers'), 'n', 'reviews/gate');
+  const tree = pageTree(html);
+  const page = runPageHtml(html, selectorsOf(tree, ['[data-tab]', '[data-pane]']));
+  const panes = tree.find((node) => node.dataset.pane !== undefined);
+  // Shown: the pane and every pane around it — a sub-pane left open under a hidden tab is not on screen.
+  const visible = (pane: PageNode): boolean => panes.every((outer) => !outer.hidden || !outer.all().includes(pane)) && !pane.hidden;
+  const shown = (): readonly (string | undefined)[] => panes.filter(visible).map((pane) => pane.dataset.pane);
 
-  const ids = shipped.settingsSections!().map((section) => section.id);
-  assert.ok(ids.length >= 2, 'a Settings page with fewer than two tabs proves nothing about switching');
-  const tabs = ids.map((id) => new Node({ tab: id }, 'BUTTON'));
-  const panes = ids.map((id) => new Node({ pane: id, section: id }, 'SECTION'));
-  const page = runPageHtml(html, { '[data-tab]': tabs, '[data-pane]': panes });
-
-  assert.deepEqual(panes.filter((pane) => !pane.hidden).map((pane) => pane.dataset['pane']), ['limits'],
-    'the shipped page does not open on the tab the host holds');
-  page.fire('click', tabs[0]!);
-  assert.deepEqual(panes.filter((pane) => !pane.hidden).map((pane) => pane.dataset['pane']), [ids[0]]);
-  assert.deepEqual(page.posted.filter((m) => m['type'] === 'tab'), [{ type: 'tab', id: ids[0] }],
+  assert.deepEqual(shown(), ['reviews', 'reviews/gate'], 'the shipped page does not open on the place the host holds');
+  page.fire('click', tree.one((node) => node.dataset.tab === 'setup', 'the Setup tab'));
+  assert.deepEqual(shown(), ['setup', 'setup/keys']);
+  assert.deepEqual(page.posted.filter((m) => m['type'] === 'tab'), [{ type: 'tab', id: 'setup/keys' }],
     'the shipped page switches without telling the host, so the next repaint throws the choice away');
 });
 
-test('the panel page bundles with its list search ranking embedded whole, and the minified text ranks as the source does', async () => {
+test('the Settings page bundles with its list search ranking embedded whole, and the minified text ranks as the source does', async () => {
   // The search box over a long model list (research/PLAN_model_search_and_busy_marks.md, Epic 2) embeds `rankChoices` by
   // its SOURCE TEXT, exactly as the rounds log embeds `rowMatches` — the 0.29.10 defect is a renamed helper inside it.
-  const bundle = bundleOf('panelView.ts', 'settingsHtml');
+  const bundle = bundleOf('catalogPage.ts', 'catalogHtml');
   const shim = { exports: {} as Record<string, unknown> };
   new Function('module', 'exports', bundle)(shim, shim.exports);
-  const shipped = shim.exports as { settingsHtml?: (state: unknown, nonce: string, tab: string) => string };
-  assert.equal(typeof shipped.settingsHtml, 'function');
+  const shipped = shim.exports as { catalogHtml?: (state: unknown, nonce: string, place: string) => string };
+  assert.equal(typeof shipped.catalogHtml, 'function');
 
-  const { DEFAULTS } = await import('../settingsShape');
-  const { DEFAULT_VENDORS } = await import('../vendors');
+  const { panelState } = await import('./panelPageHarness');
   const { rankChoices } = await import('../selectSearch');
-  const html = shipped.settingsHtml!({
-    settings: DEFAULTS, vendors: DEFAULT_VENDORS, codexModels: [], agyModels: [], localEngines: {},
-    server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,
-    questions: [], sessions: [], openSections: [], usage: [], usageWindow: 'week', latestServerVersion: '',
-    cliStatus: {}, modelPrices: {}, snippetStatus: { kind: 'absent', current: 0 },
-  }, 'n', 'reviewers');
+  const html = shipped.catalogHtml!(panelState('reviewers'), 'n', 'models');
   const open = html.lastIndexOf('<script');
   const script = html.slice(html.indexOf('>', open) + 1, html.indexOf('</script>', open));
 

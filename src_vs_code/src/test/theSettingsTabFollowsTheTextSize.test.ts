@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { panelHtml, settingsHtml } from '../panelView';
+import { catalogHtml } from '../catalogPage';
+import { panelHtml } from '../panelView';
 import { stylesheet } from './cssRules';
 import { panelState } from './panelPageHarness';
 
@@ -40,7 +41,7 @@ test('the sidebar roots its text in the theme\'s size, so the rem units read exa
 });
 
 test('the MCP server tab is drawn one and a half times as large — every length in it, the rem-sized notes included', () => {
-  const rules = stylesheet(settingsHtml(panelState(''), 'n', 'server'));
+  const rules = stylesheet(catalogHtml(panelState(''), 'n', 'setup/mcp'));
   const pane = rules.filter((rule) => /\.sec-server\b/.test(rule.selector)).map((rule) => rule.body).join(' ');
 
   // zoom, not font-size: 1.5em. A parent's font-size does not reach anything measured in rem, which is how

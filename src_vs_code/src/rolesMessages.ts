@@ -4,9 +4,9 @@ import { textControlFrom } from './textControls';
 /**
  * What a message about the review roles MEANS, decided without a host or a page.
  *
- * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages post these messages: the Review roles tab, and Reviews ›
+ * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Review roles tab, and Reviews ›
  * Roles &amp; prompts on the new Settings page (todo/PLAN_one_model_catalog.md E4.3), whose `roles` messages reach the
- * same editing core (`rolesHost.ts`). Epic 5 deletes the tab (E5.1), and everything the new page and the core still take
+ * same editing core (`rolesHost.ts`). Epic 5 deleted the tab (E5.1), and everything the new page and the core still take
  * from it has to live somewhere that survives the deletion — moved out first, prerequisite (b) of that epic, rather than
  * found by a red build on the day the page goes. The contract moved as it was: the vocabulary, the parser, the settle
  * key and the one rule the core reads off a prompt id.</p>
@@ -92,8 +92,8 @@ function typedEdit(command: RolesCommand): command is Extract<RolesCommand, { re
  *
  * <p>A table rather than the chain of `if`s this was in `rolesPage.ts`: the move put it in a module held to the
  * complexity rule, and the chain was one of the file's recorded exceptions. Every message reads as it did — the
- * parser's own tests (`rolesPage.test.ts`, `editRolesInTabs.test.ts`, `featureStageOnRolesPage.test.ts`) run against
- * this one unchanged.</p>
+ * parser's own tests (`rolesPlace.test.ts`, `rolesPlaceColours.test.ts`, `featureStageOnTheRolesPlace.test.ts` since E5.1
+ * moved them onto the new page) run against this one.</p>
  */
 export function roleEdit(message: unknown): RolesCommand {
   const said = recordOf(message);

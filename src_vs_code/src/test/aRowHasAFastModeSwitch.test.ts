@@ -4,7 +4,7 @@ import { catalogHtml } from '../catalogPage';
 import { HELP } from '../help';
 import { ignoredSaid } from '../modelCard';
 import { NEW_CONTROLS } from '../newTags';
-import { settingsHtml, type PanelState } from '../panelView';
+import { type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
@@ -78,9 +78,7 @@ test('a binary that does not take it says so on the card, for a state that is no
   assert.equal(said(['apiStream'], row({})), '', 'Off, the default, says nothing');
 });
 
-test('the select is new, has its own help, and the current Settings page draws no fast-mode control', () => {
+test('the select is new and has its own help', () => {
   assert.ok(NEW_CONTROLS.includes('model.fast'));
   assert.match(HELP.fastMode, /fast/u);
-  const state = stateWith([row({ fast: 'on' })], { serverFeatures: ['fastMode'] });
-  assert.deepEqual(selects(runPanel(state, { html: settingsHtml(state, 'test-nonce', 'reviewers') })), []);
 });

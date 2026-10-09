@@ -142,8 +142,8 @@ export class BugzReviewPanel {
    * Which pairs are showing their code.
    *
    * <p>Here rather than in the page, because {@link draw} replaces `webview.html` wholesale and the
-   * new document remembers nothing — `rolesPanel.ts` holds its open tab for exactly this reason and
-   * explains it at length. Every decision redraws, so without this a person who opened four rows,
+   * new document remembers nothing — `settingsPanel.ts` holds its open place for exactly this reason (as the deleted
+   * `rolesPanel.ts` held its tab). Every decision redraws, so without this a person who opened four rows,
    * ticked one and pressed Keep would be thrown back to a fully collapsed list.</p>
    *
    * <p><b>A Set of `findingId`, not of positions.</b> A redraw can reorder rows and can drop the one

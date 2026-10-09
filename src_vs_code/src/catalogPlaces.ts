@@ -103,35 +103,3 @@ export function placeOf(requested: unknown, held: string): string {
 function askedPlace(requested: unknown): string {
   return typeof requested === 'string' ? canonical(OLD_TAB_PLACES[requested] ?? requested) : '';
 }
-
-/** The old page's tab for a place, so switching the preview off keeps the person where they were — '' when it had none. */
-export function oldIdOf(place: string): string {
-  return Object.entries(OLD_TAB_PLACES).find(([, at]) => at === canonical(place))?.[0] ?? '';
-}
-
-/**
- * What the one Settings tab holds for EACH page (epic 3's code round): the new page's place and the current page's tab,
- * so switching the preview off opens the tab the person last had there — not the first tab, for a place the current
- * page never had.
- */
-export interface HeldTabs {
-  readonly place: string;
-  readonly oldTab: string;
-}
-
-/** The held tabs after a request on the page that is showing — the other page's position moves only where both have it. */
-export function heldAfter(held: HeldTabs, requested: unknown, preview: boolean, oldIds: readonly string[]): HeldTabs {
-  return preview ? heldOnNew(held, requested) : heldOnOld(held, requested, oldIds);
-}
-
-function heldOnNew(held: HeldTabs, requested: unknown): HeldTabs {
-  const place = placeOf(requested, held.place || placeOf(held.oldTab, ''));
-
-  return { place, oldTab: oldIdOf(place) || held.oldTab };
-}
-
-function heldOnOld(held: HeldTabs, requested: unknown, oldIds: readonly string[]): HeldTabs {
-  const oldTab = typeof requested === 'string' && oldIds.includes(requested) ? requested : held.oldTab;
-
-  return { place: OLD_TAB_PLACES[oldTab] ?? held.place, oldTab };
-}

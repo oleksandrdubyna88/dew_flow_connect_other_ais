@@ -4,9 +4,9 @@ import { escapeHtml } from './webviewHtml';
 /**
  * One saved prompt preset as a block — the piece both pages that edit the presets draw.
  *
- * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> The Chat presets tab draws it, and so does Chat on the new
+ * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> The Chat presets tab drew it until E5.1 deleted the tab, and so does Chat on the new
  * Settings page (`chatTabEmbed.ts`, todo/PLAN_one_model_catalog.md E4.6b), which draws the tab's own block rather than a
- * copy, under attribute names of its own ({@link PresetAttrs}). Epic 5 deletes the tab (E5.1), so the block was moved
+ * copy, under attribute names of its own ({@link PresetAttrs}). Epic 5 deleted the tab (E5.1), so the block was moved
  * out first — prerequisite (b) of that epic — exactly as it was.</p>
  *
  * <p><b>Everything in it is text the person in front of it wrote</b> — their own name for their own prompt, which they

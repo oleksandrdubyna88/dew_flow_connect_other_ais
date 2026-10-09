@@ -1,7 +1,7 @@
 import { DEFAULT_CHAT_PROMPT } from './chatPrompt';
 import { chatModelsReading } from './chatCatalogModels';
 import { chatConflictsReading, type PresetConflict } from './chatPresetRevision';
-import { ModelPreset, PromptPreset, chatPromptPresetsFrom, mainPrompt } from './chatPresets';
+import { ModelPreset, PromptPreset, chatPromptPresetsFrom, mainPrompt, unreadableModels } from './chatPresets';
 import { LANGUAGES, LanguageCode } from './settingsShape';
 
 /**
@@ -57,6 +57,11 @@ export interface ChatSettings {
    * so the page cannot raise a conflict about rows it does not list.
    */
   readonly conflicts: readonly PresetConflict[];
+  /**
+   * The saved model presets this build cannot read, by the name their owner gave them (`chatPresets.unreadableModels`) —
+   * named on Chat rather than passed over, as the Chat presets tab named them until E5.1 deleted it.
+   */
+  readonly unreadable: readonly string[];
   /** The language answers are asked in. Its own setting, NOT `coai.helpLanguage` — see below. */
   readonly language: LanguageCode;
   readonly autoSend: ChatAutoSend;
@@ -118,6 +123,7 @@ export function chatSettingsFrom(read: (key: string) => unknown, presets: unknow
     // the list the chat opens from, so the picker never strands the row `coai.chatModel` names after the move.
     models: chatModelsReading(presets, read),
     conflicts: chatConflictsReading(presets, read),
+    unreadable: unreadableModels(presets),
     modelName: text(read('chatModelName'), ''),
     // English by default, and NOT `coai.helpLanguage`: that one is set to English on the owner's
     // machine, so borrowing it would have delivered English explanations — exactly what the feature

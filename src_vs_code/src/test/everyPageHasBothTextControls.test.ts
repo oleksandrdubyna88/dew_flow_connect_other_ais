@@ -3,14 +3,10 @@ import { test } from 'node:test';
 
 import { usersPageHtml } from '../bugsKeysPage';
 import { reviewPageHtml } from '../bugzReviewPage';
-import { chatPresetsHtml } from '../chatPresetsPage';
-import { commandsHtml } from '../commandsPage';
 import { renderHelpHtml } from '../helpPage';
 import { notificationsPageHtml } from '../notificationsPage';
 import { phrasesHtml } from '../phrasesPage';
-import { rolesHtml } from '../rolesPage';
 import { roundsLogHtml } from '../roundsLog';
-import { settingsHtml } from '../panelView';
 import { catalogHtml } from '../catalogPage';
 import { panelState } from './panelPageHarness';
 import { Node, runPageHtml, type Page } from './pageScriptHarness';
@@ -25,7 +21,9 @@ import { Node, runPageHtml, type Page } from './pageScriptHarness';
  * builder and its OWN script is run in the shared shim, because a page that draws a button and wires it to
  * nothing reads exactly like a working one in its source text.</p>
  *
- * <p>The Chat page is the eleventh; its state is large enough that its own tests
+ * <p>The Chat presets, Review roles and Gate commands tabs were three more, until E5.1 step 4 of
+ * todo/PLAN_one_model_catalog.md deleted them — their editors are places of the Settings page, whose controls are the
+ * page's own. The Chat page is the ninth; its state is large enough that its own tests
  * (`chatPage.test.ts`, `aQuestionCanWait.test.ts`) are where both of its controls are run.</p>
  */
 
@@ -36,16 +34,12 @@ const ROUNDS_IDS = ['failed', 'rows', 'empty', 'count', 'exportpicked', 'clearpi
 const NOTIFICATION_IDS = ['mark-all', 'notice', 'from', 'to', 'range-note', 'find', 'source', 'where', 'prev', 'next', 'ack-note', 'clear'];
 
 const PAGES: readonly (readonly [name: string, render: () => string, ids?: readonly string[]])[] = [
-  ['Chat presets', () => chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], uiScale: 0 }, 'n')],
   ['Phrases', () => phrasesHtml({ rows: [], uiScale: 0 }, 'n')],
-  ['Review roles', () => rolesHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, uiScale: 0 }, 'n')],
-  ['Gate commands', () => commandsHtml({ rows: [], texts: {}, serverVersion: '', perSide: false }, 'n')],
   ['Notifications', () => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1 }, 'n'), NOTIFICATION_IDS],
   ['Review rounds', () => roundsLogHtml([], [], 'n'), ROUNDS_IDS],
   ['Who holds a key', () => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n')],
-  ['Settings tab', () => settingsHtml(panelState(''), 'n', 'reviewers')],
-  // The new Settings page, in the same tab while it is a preview (PLAN_one_model_catalog.md E3).
-  ['new Settings page', () => catalogHtml(panelState(''), 'n', 'models')],
+  // The Settings page (PLAN_one_model_catalog.md E3) — the only one in its tab since E5.1 step 5 removed the page it replaced.
+  ['Settings page', () => catalogHtml(panelState(''), 'n', 'models')],
   ['Help', () => renderHelpHtml({ language: 'en' }), HELP_IDS],
   ['Review bugs', () => reviewPageHtml({ pairs: [], nonce: 'n' }), BUGZ_IDS],
 ];
@@ -120,6 +114,6 @@ for (const [name, render, ids] of PAGES) {
   });
 }
 
-test('the census renders the eleven pages it names — a table that lost a row would pass for the ones left', () => {
-  assert.equal(PAGES.length, 11);
+test('the census renders the seven pages it names — a table that lost a row would pass for the ones left', () => {
+  assert.equal(PAGES.length, 7);
 });

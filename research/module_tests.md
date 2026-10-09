@@ -3074,3 +3074,42 @@ and works one of its controls — was mapped (the plan's progress line) but not 
 editor); the queue reading the switches at APPLY time rather than queue time is by construction, not by a run; a
 browser's refusal to click a disabled option or button (the shim models the page's own refusal); the paid Check
 itself, as before (E5.5).
+
+## E5.1c step 4 — the three tabs' tests, asked of their places (2026-10-08, PLAN_one_model_catalog.md E5.1)
+
+The Review roles, Gate commands and Chat presets tabs are deleted; each behaviour their tests held is asked of the place
+of the Settings page that draws the same blocks, through the page's own script (`pageTree.ts` + `pageScriptHarness.ts`).
+
+| Was | Now | What it holds |
+|---|---|---|
+| `rolesPageHarness.ts` | `rolesPlaceHarness.ts` | Roles & prompts drawn and RUN: `runRolesPlace`, `rolesPlaceHtml`, `roleBlockIn`, `roleEditsOf` |
+| `rolesPage.test.ts` | `rolesPlace.test.ts` | what the roles' editor draws and refuses to offer; the pure parser |
+| `rolesPageScript.test.ts` | `rolesPlaceScript.test.ts` | every press fired at the control the place DREW |
+| `editRolesInTabs.test.ts` | `rolesPlaceColours.test.ts` | the green frame and the sidebar's palette, in the whole document |
+| `rolesBusyMark.test.ts`, `commandsBusyMark.test.ts` | `rolesPlaceBusyMark.test.ts`, `commandsPlaceBusyMark.test.ts` | numbered presses and the bar on the place |
+| `featureStageOnRolesPage.test.ts` | `featureStageOnTheRolesPlace.test.ts` | the Stage select offers `feature`, and choosing it moves the role under *Feature stage* |
+| `chatPresetsPage.test.ts` | `chatPresetsMessages.test.ts` (the parser, repaint and settle rules) + `chatOnTheNewPage.test.ts` (a large prompt box, one main tick, escaping, the empty list, unreadable models) | |
+| `commandsPage.test.ts` | `commandsMessages.test.ts` (the parser, the skew note) + `commandsOnTheNewPage.test.ts` (Remove, a tick and a stage once on change, markers and Restore, escaping, the stale note) | |
+| `formPagesShareOneColumn.test.ts`, `theRolesPageKeepsItsTextSize.test.ts` | — | the tabs' OWN stylesheets, gone with them; the Settings page's column and text size are `theTextControlsHoldUpEverywhere.test.ts` and `everyPageHasBothTextControls.test.ts` (the census is eight pages now) |
+
+New: `editorRedirects.test.ts` — one row per redirected command naming its own place (a crossed wire is red: swapping
+two places fails both rows); `theSettingsTabKeepsWhatWasTyped.test.ts` — closing the Settings tab flushes the roles',
+commands' and presets' queues, opening it prunes the dead model presets (red with either line removed); `chatSettings.test.ts` reads
+`unreadable` from the presets the models come from (red when the reader is emptied).
+
+### E5.1c step 5 — the tests that read the current page
+
+| Was | Now |
+|---|---|
+| `settingsPage.test.ts` (the old strip) | `catalogPage.test.ts`: opens on the held place, an unknown place opens the first tab, a press tells the host, arrows in ONE strip — plus, moved: a key the strip does not own is left alone, and a repaint puts the caret back in its hidden pane |
+| `consultantSectionScript.test.ts` (each caller's own definition) | gone with the definitions: a caller picks a catalog row (`consultantPicks.test.ts`) |
+| `catalogTabsWrite.test.ts` (old page vs new, control by control) | every setting control of the Settings page writes ITS OWN key |
+| `bundledPage.test.ts` (`settingsHtml` bundled) | `catalogHtml` bundled: no `vscode`, switches a tab, embeds `rankChoices` whole |
+| `consultantHealthPage.test.ts` (both pages) | the Settings page — still a table, one row |
+| `panelView.test.ts` / `chatSection.test.ts` / `apiRuntimeGate.test.ts` / `selectSearchPage.test.ts` / `qconsultSection.test.ts` cases of the old reviewer card, per-role tick, caller colours, chat model selects, inert api card, per-row vendor picker | removed with what they drew; the Models card, Roles & prompts, Chat and the question rows are `modelsTab`, `rolesOnTheNewPage`, `chatOnTheNewPage`, `qconsultRowPicks` |
+| `textControls`, `theSettingsTabFollowsTheTextSize`, `busyMarkPage`, `everyPageHasBothTextControls` (census 7) | the same claims of `catalogHtml` / `catalogKey` |
+| `epicThreeCodeRound` "each page keeps its own place", `catalogPlaces` `oldIdOf` | gone: one page, one held place |
+
+New: `catalogPage.test.ts` "the Settings page is the only one" (no `settingsPreview` command, no preview badge);
+`consultantHealthWatcher.test.ts` asks the places and `placeOf('consultant')`; `panelSections.test.ts` holds that no
+section is declared for the settings surface.

@@ -72,7 +72,7 @@ function everyRow(state: PanelState): PanelState {
  */
 const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = {
   // Its "Edit commands…" a jump to Reviews › Commands here, never the commands page (E5.1 step 1).
-  'reviews/gate': (state) => gateBody(state, 'new'),
+  'reviews/gate': (state) => gateBody(state),
   'reviews/limits': limitsSection,
   'setup/keys': (state) => keysBody(everyRow(state)),
   'setup/team': teamServersSection,

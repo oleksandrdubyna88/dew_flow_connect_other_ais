@@ -25,9 +25,6 @@ import type { HealthSide } from './consultantSides';
 /** The same five seconds the consultation and escalation watchers poll at, for the same reason. */
 export const HEALTH_POLL_MS = 5000;
 
-/** The Settings tab's id for the Consultant tab — `settingsSections()` in `panelView.ts`. */
-export const CONSULTANT_TAB = 'consultant';
-
 /**
  * Whether the Consultant tab is SHOWING — the Settings tab is open and visible, and the tab it holds is the Consultant
  * tab — which is the only time its health is computed and its stores are watched (the whole-branch review, N2): a hidden
@@ -35,11 +32,12 @@ export const CONSULTANT_TAB = 'consultant';
  * block nobody can see.
  */
 export function consultantTabShowing(settingsVisible: boolean, heldTab: string): boolean {
-  // On the new page the Consultant tab is a place, and the Models tab shows each row's ✓ Check (PLAN_one_model_catalog.md E3.3).
+  // The Consultant tab is a place, and the Models tab shows each row's ✓ Check (PLAN_one_model_catalog.md E3.3). The held
+  // tab is always a place since E5.1 step 5: an old id (`consultant`) reaches `consultants/consultant` through placeOf.
   return settingsVisible && HEALTH_SHOWN_ON.includes(heldTab);
 }
 
-const HEALTH_SHOWN_ON: readonly string[] = [CONSULTANT_TAB, 'consultants/consultant', 'models'];
+const HEALTH_SHOWN_ON: readonly string[] = ['consultants/consultant', 'models'];
 
 export interface HealthWatchPorts {
   /** The sides to read, asked on every refresh — the setting that names them can change while the window is open. */

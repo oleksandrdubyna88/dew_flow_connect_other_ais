@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
-import { settingsHtml, type PanelState } from '../panelView';
+import { type PanelState } from '../panelView';
 import { questionPrompts, rowEdited } from '../qconsultWrite';
 import type { QuestionRowSetting } from '../qconsultSettings';
 import { DEFAULTS } from '../settingsShape';
@@ -58,8 +58,6 @@ test('the new page draws a pick per question row, not the definition fields; the
   assert.ok(stranded.options.some((one) => one.value === 'chat-fast' && one.text.includes('(stranded)')));
   assert.match(pageTree(html).one((node) => node.dataset.pane === 'consultants/qconsult', 'the pane').text(),
     /chat-fast is not ticked for the question consultant on Models/);
-  const current = runPanel(state, { html: settingsHtml(state, 'test-nonce', 'questionconsultant') }).controls;
-  assert.ok(current.some((one) => one.dataset['setting'] === 'qconsultRowVendor'), 'the current page lost its own picker');
 });
 
 test('changing a row\'s pick on the new page writes it', () => {

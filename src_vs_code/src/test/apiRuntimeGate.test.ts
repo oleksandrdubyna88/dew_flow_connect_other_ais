@@ -20,7 +20,6 @@ import { DEFAULTS, envBlock, settingMessageFrom, settingWrite } from '../setting
 import { DEFAULT_VENDORS, Vendor, vendorsFrom } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
-import { settingsHtml } from '../panelView';
 
 /**
  * The `api` runtime's version gate and its dialect (PLAN_feature_review.md §4.13, S1.2 part iv).
@@ -158,21 +157,6 @@ test('the api card offers a dialect picker, and changing it writes coai.vendors 
   picker[0]!.fire('change');
 
   assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(page))), { kind: 'vendor', key: 'dialect', vendor: 'grok', value: 'openai', control: 'select' });
-});
-
-test('against an older server every control of the api card is switched off and the card says why; the others are not', () => {
-  // The CURRENT page's reviewer card switches every api control off. The new page's Models card says why the row cannot
-  // run and leaves its fields editable (`modelsTab.test.ts`, "an api row on a server too old for api rows says why its
-  // card is switched off") — so this reads the page that draws the inert card while it is drawn (E5.1 step 3).
-  const state = panelState('reviewers', { vendors: [...DEFAULT_VENDORS, GROK], server: KNOWN(OLDER) });
-  const page = runPanel(state, { html: settingsHtml(state, 'test-nonce', 'reviewers') });
-  const grok = page.controls.filter((one) => one.dataset['vendor'] === 'grok');
-  const codex = page.controls.filter((one) => one.dataset['vendor'] === 'codex');
-
-  assert.ok(grok.length >= 4, 'the api card has its enabled box, model, endpoint and dialect');
-  assert.ok(grok.every((one) => one.disabled), `every api control is off: ${grok.filter((one) => !one.disabled).map((one) => one.dataset['setting']).join(', ')} still live`);
-  assert.ok(codex.some((one) => !one.disabled), 'a codex row is untouched by the api gate');
-  assert.match(page.html, /does not know the api runtime/u);
 });
 
 test('against a server that knows the runtime, or none the panel can version, the api card is live', () => {

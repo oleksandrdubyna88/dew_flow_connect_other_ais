@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogBody, catalogHtml } from '../catalogPage';
 import { CATALOG_TABS } from '../catalogPlaces';
-import { settingsHtml } from '../panelView';
-import { click, panelState, runPanel, withoutSeq } from './panelPageHarness';
+import { panelState, withoutSeq } from './panelPageHarness';
 import { Node, runPageHtml } from './pageScriptHarness';
+import { bubbled, pageTree, selectorsOf } from './pageTree';
 
 /**
- * The new Settings page, RUN (todo/PLAN_one_model_catalog.md, E3.1): six tabs and their sub-tabs, one place held by
- * the host, the one confirm dialog, and the way back to the current page. Every assertion watches the page's own
+ * The Settings page, RUN (todo/PLAN_one_model_catalog.md, E3.1): six tabs and their sub-tabs, one place held by
+ * the host, and the one confirm dialog. Every assertion watches the page's own
  * script over nodes read OUT OF its own markup.
  */
 
@@ -147,6 +147,39 @@ test('the arrow keys move within ONE strip: a sub-tab moves to the next sub-tab,
   assert.deepEqual(shown(running), ['reviews', 'reviews/roles']);
 });
 
+// These two held the current page's strip (settingsPage.test.ts) until E5.1 step 5 removed that page; the rest of that
+// file is asked of this page above.
+
+test('a key the strip does not own is left alone', () => {
+  const running = run('reviews/gate');
+  const gate = running.tabs.find((tab) => tab.dataset['tab'] === 'reviews/gate')!;
+
+  const typed = running.page.fire('keydown', gate, { key: 'a' });
+  const tabbed = running.page.fire('keydown', gate, { key: 'Tab' });
+
+  assert.equal(typed.defaultPrevented, false);
+  assert.equal(tabbed.defaultPrevented, false, 'Tab must still leave the strip');
+  assert.deepEqual(shown(running), ['reviews', 'reviews/gate']);
+});
+
+test('a repaint under a control someone is typing in puts the caret back, in the place it is in', () => {
+  // The panel's shared script restores the caret; on this page every pane is drawn hidden until the page's own script
+  // opens the held place — so the order of the two is the whole defect. Restored first, the control is in a pane that is
+  // not rendered, a browser refuses the focus, and the next keystrokes go nowhere. The shim refuses it the same way
+  // (pageScriptHarness `Node.focus`).
+  const html = catalogHtml({ ...state(), focus: { id: 'model|codex||', start: 1, end: 1 } }, 'test-nonce', 'models');
+  const tabs = tabsOf(html);
+  const panes = panesOf(html);
+  assert.ok(panes.every((pane) => pane.hidden), 'the page is drawn with every pane hidden, which is the case this is about');
+  const models = panes.find((pane) => pane.dataset['pane'] === 'models')!;
+  const box = new Node({ setting: 'model', vendor: 'codex' }, 'INPUT').under(models);
+
+  runPageHtml(html, { '[data-tab]': tabs, '[data-pane]': panes, '[data-setting]': [box] });
+
+  assert.equal(models.hidden, false, 'the held place was not opened');
+  assert.equal(box.focused, true, 'the caret was put back before its pane was shown, so the control never got it');
+});
+
 test('a button that asks opens the one dialog and sends nothing until the action button is pressed', () => {
   const asks = new Node({ asks: 'removeVendor', id: 'codex-2', askTitle: 'Remove codex-2?', askBody: 'b', askAction: 'Remove', askDanger: 'true' }, 'BUTTON');
   const running = run('models', [asks]);
@@ -175,12 +208,22 @@ test('Keep it closes the dialog and sends nothing', () => {
   assert.deepEqual(running.page.posted.filter((m) => m['type'] === 'command'), [], 'a kept action is not sent by a later press');
 });
 
-test('the new page offers the way back, and the current page offers the new one', () => {
-  const back = runPanel(state(), { html: catalogHtml(state(), 'test-nonce', 'models') });
-  click(back, 'settingsPreview', 'off');
-  assert.deepEqual(back.posted.filter((m) => m['type'] === 'command').map(withoutSeq).at(-1), { type: 'command', command: 'settingsPreview', id: 'off' });
+test('the Settings page is the only one: it offers no way to another page and calls itself no preview', () => {
+  // E5.1 step 5 of todo/PLAN_one_model_catalog.md removed the page this one replaced and the switch between them. RUN,
+  // over the drawn tree (PR #713, CodeRabbit): every button the page binds, and everything it posts once loaded.
+  const html = catalogHtml(state(), 'test-nonce', 'models');
+  const tree = pageTree(html);
+  const commands = tree.find((node) => node.dataset.command !== undefined);
+  const page = runPageHtml(html, selectorsOf(tree, ['[data-tab]', '[data-pane]', '[data-command]']));
+  for (const button of commands) {
+    bubbled(page, 'click', button);
+  }
 
-  const current = runPanel(state(), { html: settingsHtml(state(), 'test-nonce', 'reviewers') });
-  click(current, 'settingsPreview', 'on');
-  assert.deepEqual(current.posted.filter((m) => m['type'] === 'command').map(withoutSeq).at(-1), { type: 'command', command: 'settingsPreview', id: 'on' });
+  assert.ok(commands.length > 0, 'the page bound no command button, so this pressed nothing');
+  assert.deepEqual(commands.filter((node) => node.dataset.command === 'settingsPreview').map((node) => node.text()), [],
+    'a button still switches to a page that is gone');
+  assert.deepEqual(page.posted.filter((m) => m['command'] === 'settingsPreview'), [], 'a press asked for a page that is gone');
+  assert.equal(tree.one((node) => node.tagName === 'H1', 'the page heading').text(), 'Settings', 'the page still calls itself a preview');
+  assert.deepEqual(tree.find((node) => /Use the current page|still on the current Settings page/u.test(node.own)).map((node) => node.own), [],
+    'the page still points at the page it replaced');
 });

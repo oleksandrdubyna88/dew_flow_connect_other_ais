@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChatCatalog, ChatProvider, chatProvidersFromPresets } from './chatModels';
+import { ChatCatalog } from './chatModels';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import {
   ModelPreset,
@@ -8,7 +8,6 @@ import {
   freshPromptRow,
   rowsAfterMain,
   deadModelRow,
-  unreadableModels,
 } from './chatPresets';
 import { chatRead, savedModels } from './chatConfig';
 import { chatModelAdd, chatModelEdit, type ChatModelStores, type ChatModelWrite } from './chatModelEdits';
@@ -22,8 +21,8 @@ import { settledWrites } from './settledWrites';
 import { teamServersFrom } from './teamServers';
 
 /**
- * The editing core of the chat presets — what both pages that edit them call (todo/PLAN_one_model_catalog.md E4.6b):
- * the Chat presets tab (`chatPresetsPanel.ts`) and, on the new Settings page, Chat. Moved here from
+ * The editing core of the chat presets — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.6b):
+ * the Chat presets tab (`chatPresetsPanel.ts`, deleted in E5.1) and, on the new Settings page, Chat. Moved here from
  * `chatPresetsPanel.ts`, never copied — the roles' and the commands' arrangement (`rolesHost.ts`, `commandsHost.ts`).
  *
  * <p>Everything DECIDED is `chatPresetsMessages.ts`, `chatPresets.ts` and `chatModelEdits.ts`. What is here is what only a
@@ -127,16 +126,6 @@ function chatCatalogHere(): ChatCatalog {
     store === undefined ? EMPTY_DISCOVERY : discoveryFrom(store.get(DISCOVERY_KEY)),
     teamServersFrom(config().get('teamServers')),
   );
-}
-
-/** The rows a model preset may point at — the same list the chat's own picker offers. */
-export function presetProviders(): readonly ChatProvider[] {
-  return chatProvidersFromPresets(presetModels(), chatCatalogHere()).providers;
-}
-
-/** Saved models this build cannot read, by name — shown on the presets tab rather than passed over. */
-export function unreadablePresetModels(): readonly string[] {
-  return unreadableModels(config().get(MODELS_KEY));
 }
 
 async function write(key: string, value: unknown): Promise<void> {

@@ -3,10 +3,10 @@ import { textControlFrom } from './textControls';
 /**
  * What a message about the chat presets MEANS, and the edit decisions taken on it — without a host or a page.
  *
- * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> Two pages post these messages: the Chat presets tab, and
+ * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Chat presets tab, and
  * Chat on the new Settings page (todo/PLAN_one_model_catalog.md E4.6b), whose `chatPresets` messages reach the same
  * editing core (`chatPresetsHost.ts`). That core and `chatModelEdits.ts` took their command type and their edit
- * decisions from the tab, which epic 5 deletes (E5.1), so they were moved out first — prerequisite (b) of that epic —
+ * decisions from the tab, which epic 5 deleted (E5.1), so they were moved out first — prerequisite (b) of that epic —
  * exactly as they were.</p>
  *
  * <p><b>The edges point one way.</b> This module imports the text controls and nothing else of this extension. The core
@@ -114,7 +114,7 @@ export function presetSettlesAs(command: PresetCommand): string | undefined {
  *
  * <p>A table of the message types rather than the chain of `if`s this was in `chatPresetsPage.ts`: the move put it in
  * a module held to the complexity rule, and the chain was one of that file's recorded exceptions. Its own tests
- * (`chatPresetsPage.test.ts`, `chatOnTheNewPage.test.ts`) run against this one.</p>
+ * (`chatPresetsMessages.test.ts`, `chatOnTheNewPage.test.ts`) run against this one.</p>
  */
 export function presetEdit(message: unknown): PresetCommand {
   const said = recordOf(message);

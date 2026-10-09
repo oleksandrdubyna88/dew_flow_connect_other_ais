@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogBody, catalogHtml } from '../catalogPage';
-import { SHIPPED_COMMANDS, type CommandRow } from '../commands';
+import { SHIPPED_COMMANDS, fileIdOf, type CommandRow } from '../commands';
 import { type PanelState } from '../panelView';
 import { panelState } from './panelPageHarness';
 import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
@@ -102,4 +102,74 @@ test('the roles and the commands never read each other\'s controls — each pres
 
   assert.deepEqual(page.posted.filter((one) => one['type'] === 'roles' || one['type'] === 'commands').map((one) => one['type']),
     ['commands', 'commands', 'roles', 'roles']);
+});
+
+// ---------- what the Gate commands tab held, asked of this place since E5.1 step 4 deleted the tab ----------
+
+/** The place's state with these commands' texts and this server — the rows are {@link mine}. */
+function withTexts(texts: Readonly<Record<string, string>>, serverVersion = ''): PanelState {
+  const base = stateWith();
+
+  return { ...base, commands: { rows: [mine], texts, serverVersion, perSide: false } };
+}
+
+/** The Commands pane's markup, as drawn. */
+const paneHtml = (state: PanelState): string => {
+  const html = catalogHtml(state, 'test-nonce', 'reviews/commands');
+  const open = html.indexOf('data-pane="reviews/commands"');
+  assert.notEqual(open, -1, 'the page draws no Commands pane');
+
+  return html.slice(open, html.indexOf('data-pane=', open + 1) === -1 ? html.length : html.indexOf('data-pane=', open + 1));
+};
+
+test('Remove posts the removal of THAT command, and a tick or a stage posts once, on change — never again on input', () => {
+  const { page, pane } = commandsPage();
+  const row = yourCommand(pane);
+  const on = row.one((node) => node.dataset.cmdField === 'enabled', 'its switch');
+  on.checked = false;
+  const stage = row.one((node) => node.tagName === 'SELECT' && node.dataset.cmdField === 'stage', 'its stage');
+  stage.value = 'plan';
+
+  bubbled(page, 'input', on);
+  bubbled(page, 'change', on);
+  bubbled(page, 'input', stage);
+  bubbled(page, 'change', stage);
+  bubbled(page, 'click', row.one((node) => node.dataset.cmdRemove !== undefined, 'its Remove'));
+
+  assert.deepEqual(page.posted.filter((one) => one['type'] === 'commands').map((one) => one['edit']), [
+    { type: 'switch', id: 'cmd-ab12', value: false },
+    { type: 'restage', id: 'cmd-ab12', value: 'plan' },
+    { type: 'remove', id: 'cmd-ab12' },
+  ]);
+});
+
+test('each shipped text shows its marker, its shipped words faintly, and Restore only when overridden', () => {
+  // Read off the RUNNING page's nodes (PR #713, CodeRabbit), not its markup.
+  const plain = commandsPage(withTexts({})).pane;
+  const rewritten = commandsPage(withTexts({ 'command-autonomy': 'Mine.', 'command-preamble': '  \n' })).pane;
+  const restores = (pane: PageNode): readonly (string | undefined)[] =>
+    pane.find((node) => node.dataset.cmdRestore !== undefined).map((node) => node.dataset.cmdRestore);
+  const autonomy = plain.one((node) => node.dataset.cmdText === 'command-autonomy', 'the autonomy text');
+
+  assert.ok(plain.find((node) => node.tagName === 'B' && node.text() === 'Work AUTONOMOUSLY. ').length > 0, 'the marker is not drawn');
+  assert.match(autonomy.attrs['placeholder'] ?? '', /^Say that you are working autonomously/u, 'the shipped words are not drawn faintly');
+  assert.ok(plain.find((node) => node.className === 'note' && node.text().includes('The server fills in {scope}')).length > 0,
+    'the placeholder the server fills is not named');
+  assert.deepEqual(restores(plain), [], 'a Restore is offered with nothing to restore');
+  assert.deepEqual(restores(rewritten), ['command-autonomy'], 'a blank file is no override, as the server reads it');
+});
+
+test('a title or a text holding markup is drawn as text', () => {
+  // A text can hold `</textarea><script>` — it is the person's own words, pasted from anywhere. (codex, the plan round.)
+  const state = withTexts({ [fileIdOf('cmd-ab12')]: '</textarea><script>alert(2)</script>', 'command-autonomy': '</textarea><img onerror=x>' });
+  const html = paneHtml({ ...state, commands: { ...state.commands!, rows: [{ ...mine, title: '"><script>alert(1)</script>' }] } });
+
+  assert.doesNotMatch(html, /<script>alert/u);
+  assert.doesNotMatch(html, /<img/u);
+  assert.match(html, /&lt;\/textarea&gt;&lt;script&gt;alert\(2\)/u);
+});
+
+test('an older server is told, on the place, that it ignores the commands', () => {
+  assert.match(paneHtml(withTexts({}, '0.32.0')), /class="stale"/u);
+  assert.doesNotMatch(paneHtml(withTexts({}, '0.33.0')), /class="stale"/u);
 });

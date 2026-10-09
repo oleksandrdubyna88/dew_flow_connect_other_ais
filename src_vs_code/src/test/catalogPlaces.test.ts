@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CATALOG_TABS, OLD_TAB_PLACES, oldIdOf, placeOf } from '../catalogPlaces';
+import { CATALOG_TABS, OLD_TAB_PLACES, placeOf } from '../catalogPlaces';
 
 /**
  * Where the new Settings page opens (todo/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
@@ -45,10 +45,4 @@ test('an old id, a new place or a bare tab is taken; anything else leaves the he
     assert.equal(placeOf(stray, 'chat'), 'chat', `${JSON.stringify(stray)} changes nothing`);
   }
   assert.equal(placeOf(undefined, ''), 'models', 'nothing held opens the first tab');
-});
-
-test('going back to the old page keeps the person where they were, where the old page has the place', () => {
-  assert.equal(oldIdOf('reviews/gate'), 'gate');
-  assert.equal(oldIdOf('setup/mcp'), 'server');
-  assert.equal(oldIdOf('reviews/roles'), '', 'a place the old page never had opens its first tab');
 });

@@ -17,8 +17,8 @@ import { applyTextControl } from './textControlsHost';
 import type { RolesEmbedState } from './rolesEmbed';
 
 /**
- * The editing core of the review roles — what both pages that edit them call (todo/PLAN_one_model_catalog.md E4.3): the
- * Review roles tab (`rolesPanel.ts`) and, on the new Settings page, Reviews › Roles & prompts. Moved here from
+ * The editing core of the review roles — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.3): the
+ * Review roles tab (`rolesPanel.ts`, deleted in E5.1) and, on the new Settings page, Reviews › Roles & prompts. Moved here from
  * `rolesPanel.ts`, never copied: two copies of "which layer is written, in what order, with which refusals" is the
  * defect the reuse rule exists for.
  *
@@ -165,7 +165,7 @@ export const flushRoleEdits = (): Promise<void> => writes.flush();
  *
  * <p>A text edit does NOT redraw: the person is typing in the box, and replacing the document under them would move the
  * caret to the end of it on every keystroke. Everything that changes the SHAPE of the roles — a role added or removed,
- * a switch, a stage — does. Which tab is open is the old page's own (`rolesPanel.ts`), and changes nothing here.</p>
+ * a switch, a stage — does. Which place is open is the Settings tab's own (`settingsPanel.ts`), and changes nothing here.</p>
  */
 async function apply({ command, roleEnabled }: QueuedEdit): Promise<boolean> {
   if (command.kind === 'tab' || command.kind === 'ignore') {

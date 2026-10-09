@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import { BUSY_AFTER_MS } from '../busyMark';
 import type { BusySnapshot } from '../busySnapshot';
-import { settingsKey, staticKey } from '../panelView';
+import { catalogKey } from '../catalogPage';
+import { staticKey } from '../panelView';
 import { type Control, type Page, panelState, runPanel } from './panelPageHarness';
 
 /**
@@ -173,7 +174,7 @@ test('what is in flight never changes the paint key, so drawing the bar never re
   const busy = { ...idle, busy: { count: 3, oldestMs: 1_200 } };
 
   assert.equal(staticKey(busy), staticKey(idle));
-  assert.equal(settingsKey(busy), settingsKey(idle));
+  assert.equal(catalogKey(busy), catalogKey(idle));
 });
 
 test('a new document’s own seq 1 is not cleared by its predecessor’s seq 1 finishing', () => {

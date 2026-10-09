@@ -88,10 +88,6 @@ const SHELL = `
     border: 1px solid var(--border-strong); border-radius: 14px; padding: 3px 12px; color: var(--muted);
   }
   .catalog .pane .tabs .tab.on { color: var(--vscode-foreground); border-color: var(--focus); background: var(--secondary); }
-  .settingsHead .preview-badge {
-    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; vertical-align: middle;
-    border: 1px solid var(--vscode-textLink-foreground); color: var(--vscode-textLink-foreground); border-radius: 3px; padding: 0 5px;
-  }
   .settingsHead button { width: auto; margin: 0; }
   .catalog .hint { color: var(--muted); }
   .catalog button { width: auto; }
