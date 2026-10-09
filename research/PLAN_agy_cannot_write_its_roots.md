@@ -16,9 +16,10 @@
 > `sh -c` (agy offers no exe+argv form): `.agents/PROJECT.md` lists `--agy-hook` among the one-shot modes, and the why is in
 > `AntigravityReadOnly` and `module_runners.md` — a paragraph in `PROJECT.md` pushed a tier rule out of the reviewers'
 > rules budget (`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` red), so it was not kept there.
-> Open tail: none in this plan; the Team server's container must have `sh` for the reviewer's hook (unverified — a
-> server deploy is the operator's), and the extension's own agy CHAT runs in an empty directory with no root, outside
-> this plan.
+> Open tail: none in this plan. Checked on the Team server host (2026-10-09, read-only): coai-server is a systemd
+> service on the host (not a container), `User=root`, `/bin/sh` → dash, agy 1.3.2, `ProtectHome=no` and
+> `ProtectSystem=full` leave `/root/.local/share/coai-agy` writable, and the reviewers' confined environment passes
+> `PATH` — the hook can run there. The extension's own agy CHAT runs in an empty directory with no root, outside this plan.
 >
 > Scope: every place coai builds an agy argv — the question rows' fragments
 > (`src_mcp/core/QuestionConsult/ConfinementPlanner.cs:161-163`), the consultant
