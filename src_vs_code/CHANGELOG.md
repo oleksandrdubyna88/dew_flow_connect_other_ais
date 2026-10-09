@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Fixed: a question-consultant folder from the other side is no longer an error.** VS Code shares your settings
+between a WSL window and a Windows one, so a folder added in WSL (`/home/you/git`) was read on Windows too, and the
+server greeted every Windows start with "is not a directory on this machine". A folder written for the other OS that
+does not exist here is now skipped on this side without a word, and the Settings page says it is the other side's; a
+disk row with no folder of this machine is inactive here. A hand-written folder that starts at the root of a drive
+(`/work` on Windows) now means the system drive on both the page and the server (needs coai-mcp with this fix).
+
 **Fixed: the first start after an update in place no longer shows an error.** When VS Code updated the extension before
 it had started, moving your models into the catalog could meet settings the window had not loaded yet and showed
 *"Moving the models in your settings into the catalog stopped part way"*. Nothing was written then, and nothing is now:
