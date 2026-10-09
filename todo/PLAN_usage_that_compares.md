@@ -12,6 +12,7 @@
 |---|---|---|
 | The Team server writes cached + reasoning tokens and `usage not captured` (today: 0 on every server line) | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 3.1 | this plan then has the server's cache term to define, not only the client's |
 | What a token COLUMN means per vendor, and how cache is shown | **this plan** | the round counter shows medians per launch per row and never compares rows' token counts |
+| Per-model ~$ on the Team server tab, priced from the server's per-model breakdown | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md), stories 2.2 and 3.2 | compares nothing across vendors; when this plan defines the columns, that tab reads them |
 
 [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) goes first: it lands the fields this plan defines.
 

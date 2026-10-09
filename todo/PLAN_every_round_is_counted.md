@@ -85,7 +85,7 @@ is the one question the data cannot settle — the counter has to make it settle
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| Round fields in `/api/usage`'s `vendors[]` and `people[].vendors[]` | **this plan** (5.1) | PLAN_team_usage_by_person renders `people[]` and shows the fields when present; needs nothing from them |
+| Round fields in `/api/usage`'s `vendors[]` and `people[].vendors[]` | **this plan** (5.1) | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md) builds the admin-only **Team server** tab on the Review rounds page; this plan's 5.2 renders its server fields INTO that tab (not the old Team-server block), and the tab counts launches until they arrive |
 | Cached + reasoning tokens and `usage not captured` on server lines | **this plan** (3.1) | PLAN_usage_that_compares decides what a token COLUMN means per vendor; this plan stops the server dropping fields |
 | A `5h` / `24h` window and the multi-window query on `/api/usage` | **this plan** (5.1) | [PLAN_the_usage_page_reads_the_window_not_the_history.md](PLAN_the_usage_page_reads_the_window_not_the_history.md) (deferred) — reopen condition unchanged; one scan answers every window, see *Growth* |
 | Effort and tier with their source on every ledger line | **this plan** (3.4) | [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) step 3 owns the ledger's MODEL field; the effort already on `ReviewerState` came from [the shipped repair plan](../research/PLAN_the_log_names_every_model_and_its_effort.md) |
