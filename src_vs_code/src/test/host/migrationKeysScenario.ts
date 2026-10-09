@@ -6,7 +6,7 @@ import { unknownKeysOf } from '../../catalogMigrationRun';
 
 /**
  * The registry signal the catalog migration waits on, held to a REAL editor
- * (todo/PLAN_catalog_migration_waits_for_its_settings.md; its plan round, findings 1 and 2).
+ * (research/PLAN_catalog_migration_waits_for_its_settings.md; its plan round, findings 1 and 2).
  *
  * <p><b>What it drives for real.</b> The shipped extension, activated, and VS Code's own settings registry read through
  * `WorkspaceConfiguration.inspect` exactly as the migration's user layer reads it: every key the move writes to

@@ -5,7 +5,7 @@ import { migrateOne, unknownKeysOf, unregisteredKeyIn } from '../catalogMigratio
 
 /**
  * The move into the catalog WAITS while this window does not know a key it is about to write
- * (todo/PLAN_catalog_migration_waits_for_its_settings.md).
+ * (research/PLAN_catalog_migration_waits_for_its_settings.md).
  *
  * <p>Extension 0.65.0, 2026-10-09, on the operator's Windows machine: VS Code updated the extension in place before it
  * had activated, the move ran, and its first write was refused — `Unable to write to User Settings because
@@ -79,6 +79,39 @@ test('a key the window does not know yet is found BEFORE any write — nothing i
   assert.equal(wrote, false);
   assert.deepEqual(told.waiting, [['migratedFrom']]);
   assert.deepEqual(told.stopped, []);
+});
+
+test('a first write refused as unknown reports that NOTHING was written — no mirror, no redraw follows', async () => {
+  const told = heard();
+  const layer = {
+    name: 'your settings',
+    read: () => LAYER,
+    write: async () => {
+      throw new Error(REFUSAL);
+    },
+  };
+
+  assert.equal(await migrateOne(layer, {}, reportsInto(told)), false,
+    'the run said it wrote, so the host mirrored and redrew an unmigrated layer');
+});
+
+test('a refusal in another language is still a wait when the registry, asked again, does not know the key', async () => {
+  const told = heard();
+  let asked = 0;
+  const layer = {
+    name: 'your settings',
+    read: () => LAYER,
+    write: async () => {
+      throw new Error('In die Benutzereinstellungen kann nicht geschrieben werden, weil coai.migratedFrom keine registrierte Konfiguration ist.');
+    },
+    // Known when the run checks before writing; unknown when asked again after the refusal.
+    unknownKeys: (keys: readonly string[]) => (asked++ === 0 ? [] : [...keys]),
+  };
+
+  await migrateOne(layer, {}, reportsInto(told));
+
+  assert.deepEqual(told.stopped, [], "a German editor's refusal of an unregistered key was shown as an error");
+  assert.deepEqual(told.waiting, [['migratedFrom']]);
 });
 
 test('a refusal that is NOT about an unknown key still stops, and says so', async () => {

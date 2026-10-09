@@ -1,10 +1,15 @@
 # PLAN — the catalog migration waits until this window knows the settings it writes
 
-> Status: **plan only, nothing implemented yet (2026-10-09).** Scope: `src_vs_code/src/catalogMigrationHost.ts`, a new
-> vscode-free `catalogMigrationRun.ts`, tests. A patch release of the extension (0.65.1).
+> Status: **IMPLEMENTED, 2026-10-09 — to ship in the next extension patch (0.65.1).** **Deviations:** the warning comes
+> after ONE retry, not three (the plan round: VS Code may never register an updated extension's keys without a
+> reload); the code round added that a wait while the retry is armed is the same wait, that a pass in which no layer
+> waited settles it, that a refused first write reports nothing written, and that a refusal is also a wait when the
+> registry, asked again, does not know the key — VS Code's words are translated. The registry signal was confirmed in
+> VS Code 1.141 by a `test:host` scenario, against a reviewer's claim that no default is filled from the type. Scope
+> was: `src_vs_code/src/catalogMigrationHost.ts`, a new vscode-free `catalogMigrationRun.ts`, tests.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (E1.3, the host half of the move).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) (E1.3, the host half of the move).
 
 ## Symptom
 

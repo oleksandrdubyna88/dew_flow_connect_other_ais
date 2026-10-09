@@ -44,7 +44,7 @@ let bugzByRuntime: () => Promise<boolean> = () => Promise.resolve(false);
 
 /**
  * The one retry, then the one warning, of a move that met a key this window does not know yet
- * (todo/PLAN_catalog_migration_waits_for_its_settings.md). Made on activation, disposed with the extension.
+ * (research/PLAN_catalog_migration_waits_for_its_settings.md). Made on activation, disposed with the extension.
  */
 let wait: MigrationWait | undefined;
 
@@ -73,9 +73,25 @@ export function inCatalogTurn<T>(work: () => Promise<T>): Promise<T> {
 
 async function migrateEveryLayer(context: vscode.ExtensionContext): Promise<void> {
   let wrote = false;
+  let waited = false;
+  const waiting = (): void => {
+    waited = true;
+    wait?.wait();
+  };
   const options: MigrationOptions = { bugzByRuntime: await bugzByRuntime().catch(() => false) };
   for (const layer of layersOf(context, vscode.workspace.getConfiguration('coai'))) {
-    wrote = (await migrateOne(layer, options, { stopped: migrationStopped, left: sayWhatWasLeft, waiting: () => wait?.wait() })) || wrote;
+    wrote = (await migrateOne(layer, options, { stopped: migrationStopped, left: sayWhatWasLeft, waiting })) || wrote;
+  }
+  afterThePass(wrote, waited);
+}
+
+/**
+ * Settled only by a pass in which no layer waited: the side overlay landing beside a waiting user layer is not the move
+ * going through, and must not take that layer's retry down. The mirror follows only a pass that wrote.
+ */
+function afterThePass(wrote: boolean, waited: boolean): void {
+  if (!waited) {
+    wait?.settled();
   }
   if (wrote) {
     afterMigration();

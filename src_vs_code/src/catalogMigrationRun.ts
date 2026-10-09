@@ -2,7 +2,7 @@ import { CatalogLayer, LayerWrite, migrateLayer, MigrationOptions, MigrationOutc
 
 /**
  * One layer's run of the move into the catalog — read, plan, write in order — without `vscode`, so the host's half of
- * PLAN_one_model_catalog.md E1.3 is a value a test can drive (todo/PLAN_catalog_migration_waits_for_its_settings.md).
+ * PLAN_one_model_catalog.md E1.3 is a value a test can drive (research/PLAN_catalog_migration_waits_for_its_settings.md).
  * `catalogMigrationHost.ts` supplies the layers and the reports; nothing here decides what a person is told.
  */
 
@@ -68,18 +68,29 @@ async function writeUnlessWaiting(layer: RunLayer, writes: readonly LayerWrite[]
     return false;
   }
 
-  return applyWrites(layer, writes, (stoppedLayer, error) => stoppedOrWaiting(stoppedLayer, error, reports));
+  return applyWrites(layer, writes, (stoppedLayer, error, write) => stoppedOrWaiting(stoppedLayer, error, write, reports));
 }
 
-/** The belt: the check and the write are two calls, and the registry is VS Code's to change between them. */
-async function stoppedOrWaiting(layer: RunLayer, error: unknown, reports: RunReports): Promise<void> {
-  const key = unregisteredKeyIn(error);
-  if (key.length > 0) {
-    reports.waiting(layer, [key]);
+/**
+ * The belt: the check and the write are two calls, and the registry is VS Code's to change between them. A refusal is a
+ * wait when VS Code's words name the key, or — since those words are translated with the editor's language — when the
+ * registry, asked again, does not know the refused key.
+ */
+async function stoppedOrWaiting(layer: RunLayer, error: unknown, write: LayerWrite, reports: RunReports): Promise<void> {
+  const unknown = refusedAsUnknown(layer, error, write);
+  if (unknown.length > 0) {
+    reports.waiting(layer, unknown);
 
     return;
   }
   await reports.stopped(layer, error);
+}
+
+/** The key a refusal was about when it is one the window does not know — by VS Code's words, else by asking again. */
+function refusedAsUnknown(layer: RunLayer, error: unknown, write: LayerWrite): readonly string[] {
+  const named = unregisteredKeyIn(error);
+
+  return named.length > 0 ? [named] : layer.unknownKeys?.([write.key]) ?? [];
 }
 
 /**
@@ -94,17 +105,27 @@ function readAndPlan(layer: RunLayer, options: MigrationOptions): MigrationOutco
   }
 }
 
-/** In order, stopping at the first refusal — the order is what makes a stopped run safe to finish later. */
-export async function applyWrites(layer: RunLayer, writes: readonly LayerWrite[], stopped: (layer: RunLayer, error: unknown) => Promise<void>): Promise<boolean> {
-  try {
-    for (const write of writes) {
+/**
+ * In order, stopping at the first refusal — the order is what makes a stopped run safe to finish later. Whether the
+ * layer was written to: every write made, or a stop after at least one landed. A refusal of the FIRST write wrote
+ * nothing, and says so, so no mirror or redraw follows an unchanged layer (the code round's finding).
+ */
+export async function applyWrites(
+  layer: RunLayer,
+  writes: readonly LayerWrite[],
+  stopped: (layer: RunLayer, error: unknown, write: LayerWrite) => Promise<void>,
+): Promise<boolean> {
+  let landed = 0;
+  for (const write of writes) {
+    try {
       await layer.write(write);
+    } catch (error: unknown) {
+      await stopped(layer, error, write);
+
+      return landed > 0;
     }
-
-    return true;
-  } catch (error: unknown) {
-    await stopped(layer, error);
-
-    return writes.length > 0;
+    landed += 1;
   }
+
+  return true;
 }

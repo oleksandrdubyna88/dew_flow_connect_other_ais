@@ -250,7 +250,7 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // the catalog meanwhile (`a-catalog-edit-refused`, a third site of the same refusal).
 // 161 → 162 on 2026-10-08, PLAN_one_model_catalog.md E5.1 step 2: a Bugz collect with a stranded pick, or none, is
 // refused by a sentence naming Models (`no-ranking-model`) instead of running with an empty or stale `--model`.
-// 162 → 163 on 2026-10-09, todo/PLAN_catalog_migration_waits_for_its_settings.md: a window that will not load the
+// 162 → 163 on 2026-10-09, research/PLAN_catalog_migration_waits_for_its_settings.md: a window that will not load the
 // updated extension's settings says once that the move waits for a reload (`catalog-migration-waits-for-reload`, a
 // warning with Reload Window) — instead of the ERROR an update in place used to show.
 const PLACES_THIS_SPEAKS = 163;

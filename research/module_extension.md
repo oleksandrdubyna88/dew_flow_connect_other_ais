@@ -10637,17 +10637,21 @@ flowchart LR
   (`catalog-migration-left`) or a stopped run (`catalog-migration-failed`). *ConnectOtherAIs: Restore settings from
   before the catalog* (`coai.restoreCatalogBackup`) asks first, naming the layers (`catalog-restore-confirm`), or says
   there is nothing to restore (`catalog-restore-none`). Help article `models-move-into-the-catalog`, five languages.
-- **The move waits for the window's settings registry** (todo/PLAN_catalog_migration_waits_for_its_settings.md, 2026-10-09).
+- **The move waits for the window's settings registry** (research/PLAN_catalog_migration_waits_for_its_settings.md, 2026-10-09).
   Extension 0.65.0 on the operator's Windows machine: VS Code updated the extension in place before it activated, and the
   first write (`migratedFrom`) was refused — `coai.migratedFrom is not a registered configuration` — so an ERROR toast
   greeted the upgrade. One layer's run now lives in vscode-free `catalogMigrationRun.ts` (`migrateOne`, `applyWrites`):
   before the first write it asks the layer for `unknownKeys` — the user layer answers from
   `inspect(key).defaultValue === undefined` (`unknownKeysOf`; VS Code fills a default from the type, so a declared key
   always has one — held to a real editor by the `test:host` scenario `migrationKeysScenario.ts`); the side overlay
-  needs no registry. Any unknown key → nothing written, `waiting`. A write refused anyway with VS Code's words
-  (`unregisteredKeyIn`) is the same wait, not a stop. The host's `MigrationWait` (`migrationWait.ts`, vscode-free)
-  arms ONE retry — the next `coai` configuration change or 10 s, whichever first — and a second wait shows one warning
-  with **Reload Window** (`catalog-migration-waits-for-reload`) and retries no more.
+  needs no registry. Any unknown key → nothing written, `waiting`. A write refused anyway is the same wait, not a stop,
+  when VS Code's words name the key (`unregisteredKeyIn`, English) or — those words are translated — when the registry,
+  asked again, does not know the refused key. `applyWrites` reports "written" only when a write LANDED, so a refused
+  first write is followed by no mirror and no redraw. The host's `MigrationWait` (`migrationWait.ts`, vscode-free)
+  arms ONE retry — the next `coai` configuration change or 10 s, whichever first; a wait while it is armed is the same
+  wait (another layer of the same pass); a wait after the retry ran shows one warning with **Reload Window**
+  (`catalog-migration-waits-for-reload`) and retries no more. A pass in which no layer waited `settled()`s it, so a
+  later update in place in the same window gets its own retry.
 - Not moved here: chat presets (conversations refer to a preset by id — E4.3, with the chat tab) and the Bugz model
   (ranking matches the row id `local` on both halves — E2.1, with the runtime match).
 

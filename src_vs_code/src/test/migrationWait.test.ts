@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { Armed, MigrationWait, RETRY_AFTER_MS } from '../migrationWait';
 
 /**
- * One retry, then one warning (todo/PLAN_catalog_migration_waits_for_its_settings.md): a window that has not
+ * One retry, then one warning (research/PLAN_catalog_migration_waits_for_its_settings.md): a window that has not
  * registered the keys the move writes gets one more try — on the next settings change or after a short timer — and is
  * told to reload when that try waits too.
  */
@@ -77,14 +77,27 @@ test('a second wait in the same window warns once, retries nothing more, and lea
   assert.equal(h.live.size, 0);
 });
 
-test('a second wait before the retry fired still warns, and takes the armed retry down', () => {
+test('a wait while the retry is still armed is the same wait — two layers in one pass do not skip the retry', () => {
   const h = hooks();
   const wait = new MigrationWait(h.hooks);
   wait.wait();
   wait.wait();
 
-  assert.equal(h.told.warnings, 1);
-  assert.equal(h.live.size, 0);
+  assert.equal(h.told.warnings, 0, 'a second layer waiting in the same pass warned before the one retry ran');
+  assert.deepEqual([...h.live].sort(), ['change', 'timer']);
+});
+
+test('a move that went through settles the wait: a later wait in the same window gets its own retry', () => {
+  const h = hooks();
+  const wait = new MigrationWait(h.hooks);
+  wait.wait();
+  h.fire('timer');
+  wait.settled();
+
+  wait.wait();
+
+  assert.equal(h.told.warnings, 0, 'a wait after a move that went through warned without a retry');
+  assert.deepEqual([...h.live].sort(), ['change', 'timer']);
 });
 
 test('disposing the wait leaves nothing armed', () => {

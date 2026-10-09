@@ -886,7 +886,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: theDefaultPhrasesInARealEditor,
   },
   {
-    // todo/PLAN_catalog_migration_waits_for_its_settings.md, its plan round's findings 1 and 2: the registry signal the
+    // research/PLAN_catalog_migration_waits_for_its_settings.md, its plan round's findings 1 and 2: the registry signal the
     // migration waits on, read from the real editor. What it does and does not drive is in `migrationKeysScenario.ts`.
     name: 'every key the catalog migration writes is known to the real settings registry, and an undeclared one is not',
     run: theMigrationKeysAreKnownInARealEditor,

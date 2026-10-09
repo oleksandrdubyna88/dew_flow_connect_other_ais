@@ -1,6 +1,6 @@
 /**
  * What the move into the catalog does while this window does not know a key it writes
- * (todo/PLAN_catalog_migration_waits_for_its_settings.md): try once more, and then say so.
+ * (research/PLAN_catalog_migration_waits_for_its_settings.md): try once more, and then say so.
  *
  * <p>VS Code can update an extension in place, before it activates, and the window's settings registry may not hold
  * the new version's keys yet — a write to one is refused. Whether the registry catches up without a reload is VS Code's
@@ -37,15 +37,26 @@ export class MigrationWait {
 
   constructor(private readonly hooks: WaitHooks, private readonly ms = RETRY_AFTER_MS) {}
 
-  /** The move could not write a key this window does not know. The first time arms one retry; any later time warns, once. */
+  /**
+   * The move could not write a key this window does not know. The first time arms one retry; a wait while it is still
+   * armed is the same wait (another layer of the same pass); a wait after the retry ran warns, once.
+   */
   wait(): void {
+    if (this.armed.length > 0) {
+      return;
+    }
     this.waits += 1;
     if (this.waits === 1) {
       this.arm();
     } else if (this.waits === 2) {
-      this.disarm();
       this.hooks.warn();
     }
+  }
+
+  /** The move went through: a later wait in this window — a newer update in place — starts from its own retry. */
+  settled(): void {
+    this.disarm();
+    this.waits = 0;
   }
 
   /** Nothing left armed — the extension is going away. */
