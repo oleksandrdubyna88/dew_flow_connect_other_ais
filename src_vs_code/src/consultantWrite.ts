@@ -140,6 +140,10 @@ function carriesAKey(parsed: URL): boolean {
  * <p>A holder with no endpoint of its own still holds the NAME — `claude` is a catalogue preset and
  * a vault key — so it clashes, and the sentence then stops short of telling anyone to use an
  * endpoint there is none of.</p>
+ *
+ * <p>A consultant holds an endpoint only when its entry DEFINES one. A caller's pick is a bare reference to a catalog
+ * row (`{ vendor: '<row id>' }`, E4.2) whose endpoint is the row's — already a holder above, at its real URL; read
+ * as a holder of its own it had none, and the row's own URL was refused as a clash (E5.3's code round).</p>
  */
 function holders(
   vendors: readonly Vendor[],
@@ -151,6 +155,7 @@ function holders(
       .map((one) => ({ id: one.id, baseUrl: one.baseUrl, what: `what this build calls ${one.label}` })),
     ...Object.values(consultants)
       .map((one) => consultantChoiceFrom(one))
+      .filter((one) => one.baseUrl.length > 0)
       .map((one) => ({ id: one.vendor, baseUrl: one.baseUrl, what: "another caller's consultant" })),
   ];
 }

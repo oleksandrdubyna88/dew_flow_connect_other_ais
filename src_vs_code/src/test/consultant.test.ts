@@ -659,6 +659,19 @@ test('an id already held at a DIFFERENT endpoint is refused — one name is one 
   assert.equal(endpointConflict('brand-new', 'https://new.example/v1', rows, consultants), '');
 });
 
+test('a caller\'s PICK of a catalog row holds no endpoint of its own — its row does', () => {
+  // A pick is stored as a bare reference (`{ vendor: '<row id>' }`, E4.2); read as a holder it had an empty endpoint, so
+  // configuring that very row at its own URL in Add a model was refused as a clash with "another caller's consultant"
+  // (E5.3's code round, four findings). The row itself is the holder, at its real URL.
+  const rows = [{ ...vendor('my-model'), baseUrl: 'http://localhost:11434/v1' }];
+  const picked = { claude: { vendor: 'my-model' }, codex: { vendor: 'my-model' } };
+
+  assert.equal(endpointConflict('my-model', 'http://localhost:11434/v1', rows, picked), '',
+    'the row\'s own endpoint was refused because a caller picked the row');
+  assert.match(endpointConflict('my-model', 'https://elsewhere.example/v1', rows, picked), /my-model/,
+    'another endpoint under the row\'s name is still one name at two endpoints');
+});
+
 test('a name the CATALOGUE already means something by is refused at a different endpoint', () => {
   // With no `deepseek` reviewer row a person could name their own endpoint `deepseek`, and the next
   // caller to pick DeepSeek from the catalogue would share its vault key with a different service.

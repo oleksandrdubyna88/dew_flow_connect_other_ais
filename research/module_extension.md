@@ -11654,6 +11654,10 @@ Nothing a person sees changes: everything removed here was drawn by nothing sinc
 - `queueRoleEdit` takes the switches it is guarded with as a required argument (the deleted roles tab was the only
   caller of the default). `shownOnTheOldPage` is `isReviewerRow` — it still decides the panel's `vendors`.
 - Comments that described "the current page", "both pages" or "the new page" as present now say the Settings page.
+- **Fixed on the way (code round, RED first):** `endpointConflict` read every caller's consultant entry as a holder of an
+  endpoint, and a PICK (`{ vendor: '<row id>' }`) has none of its own — so configuring a picked row at its own URL in
+  **＋ Add a model** was refused as "another caller's consultant". A consultant holds an endpoint only when its entry
+  defines one; the row is the holder of its own URL.
 
 **Found on the way, not fixed here:** a Models card takes its catalog price from `state.modelPrices[model]`, which is
 priced from the reviewers only (`isReviewerRow`, to keep a hidden api consultant from overwriting a reviewer's rate
