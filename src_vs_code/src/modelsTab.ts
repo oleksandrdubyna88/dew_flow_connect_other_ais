@@ -1,3 +1,4 @@
+import { CARD_COLUMNS } from './cardColumns';
 import { CATALOG_USES } from './catalogFields';
 import { lastStagesOf } from './catalogWriteRules';
 import { escapeHtml } from './escapeHtml';
@@ -93,7 +94,8 @@ export function modelsTabHtml(shown: PanelState): string {
 
   return `<p class="lead">Every model this side can use, added once. Tick what each one is used for; one model can be added `
     + `more than once with different settings.</p>${toolbar(rows)}${filters(rows)}`
-    + `<div class="cards">${cards.join('\n')}</div>`
+    // The page's columns (`cardColumns.ts`), which every other tab's cards share.
+    + `<div class="cards ${CARD_COLUMNS}">${cards.join('\n')}</div>`
     + `<div class="empty-state" data-models-empty hidden>No model matches these filters. <button type="button" id="model-clear">Clear the filters</button></div>`;
 }
 

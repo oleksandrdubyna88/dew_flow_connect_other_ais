@@ -1,3 +1,4 @@
+import { cardColumns } from './cardColumns';
 import { SHIPPED_COMMANDS, type CommandRow } from './commands';
 import { commandsSkewNote, customBlock, shippedBlock, type CommandAttrs } from './commandsBlocks';
 import { escapeHtml } from './escapeHtml';
@@ -24,7 +25,7 @@ const EMBEDDED: CommandAttrs = {
   restore: 'data-cmd-restore', file: 'data-cmd-file', add: 'data-cmd-add',
 };
 
-/** The commands, as the Settings page draws them — the tab's text, in its order. */
+/** The commands, as the Settings page draws them — the tab's text, in its order, each list's blocks in the page's columns. */
 export function commandsEmbedded(state: CommandsEmbedState): string {
   const note = commandsSkewNote(state.serverVersion);
 
@@ -33,11 +34,11 @@ export function commandsEmbedded(state: CommandsEmbedState): string {
 ${note.length > 0 ? `<div class="stale" role="status">${escapeHtml(note)}</div>` : ''}
 <h3>Yours</h3>
 <p class="note">Commands you add are given after the built-in orders, in the rounds you choose. One is switched on only once it has text.</p>
-${state.rows.map((row) => customBlock(row, state.texts, EMBEDDED)).join('\n')}
+${cardColumns(state.rows.map((row) => customBlock(row, state.texts, EMBEDDED)).join('\n'))}
 <button type="button" ${EMBEDDED.add}>Add a command</button>
 <h3>Shipped</h3>
 <p class="note">The words the built-in orders are made of. Write your own to replace them; an empty box is the shipped text, shown faintly. The words in <code>bold</code> before a box are kept by the server — they are how an order is recognised.</p>
-${SHIPPED_COMMANDS.map((one) => shippedBlock(one, state.texts, EMBEDDED)).join('\n')}
+${cardColumns(SHIPPED_COMMANDS.map((one) => shippedBlock(one, state.texts, EMBEDDED)).join('\n'))}
 </div>`;
 }
 

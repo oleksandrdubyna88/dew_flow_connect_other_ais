@@ -1,3 +1,4 @@
+import { cardColumns } from './cardColumns';
 import type { ChatProviderList } from './chatModels';
 import type { ModelPreset } from './chatPresets';
 import { promptBlock, type PresetAttrs } from './chatPresetBlocks';
@@ -20,7 +21,7 @@ import { DEFAULT_CHAT, chatProviderListFor, chatSendingFields, type PanelState }
 
 const EMBEDDED: PresetAttrs = { row: 'data-chp-id', list: 'data-chp-list', field: 'data-chp-field', remove: 'data-chp-remove' };
 
-/** Chat, as the Settings page draws it. */
+/** Chat, as the Settings page draws it — the models, the sending fields and the presets each in the page's columns. */
 export function chatTabHtml(state: PanelState): string {
   const chat = state.chat ?? DEFAULT_CHAT;
   const list = chatProviderListFor(chat, state);
@@ -30,10 +31,10 @@ export function chatTabHtml(state: PanelState): string {
 <h3>Which model a chat opens on</h3>
 ${opensOnHtml(chat, list)}${unreadableHtml(chat.unreadable)}${state.perSide ? '\n<p class="hint">Saved for this side of the machine.</p>' : ''}
 <h3>Sending</h3>
-${chatSendingFields(chat)}
+${cardColumns(chatSendingFields(chat))}
 <h3>Prompt presets</h3>
 <p class="note">Everything here is saved as you type. The one marked <b>main</b> is sent when a capture sends by itself.</p>
-${chat.prompts.map((one) => promptBlock(one, EMBEDDED)).join('\n')}
+${cardColumns(chat.prompts.map((one) => promptBlock(one, EMBEDDED)).join('\n'))}
 <button type="button" data-chp-add="prompt">Add a prompt</button>
 </div>`;
 }
@@ -63,7 +64,8 @@ const MANY_UNREADABLE = { they: 'they', them: 'them', rows: 'rows stay' } as con
 
 /**
  * The models that can answer, a stranded choice, a preset an older build edited after the move, what answers when nothing
- * is chosen, and the ones that cannot.
+ * is chosen, and the ones that cannot. The models are the page's columns; the two warnings above them, a conflict's
+ * table among them, span both.
  */
 function opensOnHtml(chat: ChatSettings, list: ChatProviderList): string {
   const pool = chat.models.filter((one) => list.providers.some((provider) => provider.id === one.id));
@@ -72,7 +74,7 @@ function opensOnHtml(chat: ChatSettings, list: ChatProviderList): string {
   return [
     strandedHtml(chat, chosen, pool),
     ...chat.conflicts.map(conflictBlock),
-    ...pool.map((one) => modelBlock(one, chosen)),
+    cardColumns(pool.map((one) => modelBlock(one, chosen)).join('\n')),
     unchosenHint(chosen, pool),
     refusalsHtml(list),
   ].filter((part) => part.length > 0).join('\n');

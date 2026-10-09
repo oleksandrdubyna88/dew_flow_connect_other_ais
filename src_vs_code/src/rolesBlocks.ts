@@ -1,5 +1,6 @@
 import { FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_CODE, RESULT_STAGE, activeCount, bucketOf, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
 import { isShippedPrompt } from './rolesMessages';
+import { cardColumns } from './cardColumns';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { roleTone } from './roleTone';
@@ -298,7 +299,9 @@ function shippedHint(shipped: boolean): string {
 }
 
 function promptBlocks(role: RoleRow, texts: Readonly<Record<string, string>>, promptAttr: string): string {
-  return (role.prompts ?? []).map((p) => promptBlock(role, p, texts, promptAttr)).join('\n');
+  // In the Settings page's columns (`cardColumns.ts`): a role spans the page, its prompts two side by side on a wide
+  // editor — a stage often holds one role, so the roles side by side would leave the page as empty as before.
+  return cardColumns((role.prompts ?? []).map((p) => promptBlock(role, p, texts, promptAttr)).join('\n'));
 }
 
 /**
