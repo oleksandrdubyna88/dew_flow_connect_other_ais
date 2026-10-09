@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
 import { notify } from './notify';
-import { existingHere } from './pathFamily';
+import { RootExistence, systemDriveOf } from './pathFamily';
 import { askPerson } from './personWait';
 import { type QconsultSettings, qconsultSettingsFrom } from './qconsultSettings';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
@@ -67,14 +67,16 @@ export class QconsultHost {
 
   /**
    * The places a disk root may not be on THIS machine — the server's `SystemPlaces.Current` and the data folder — and
-   * which of the stored `roots` spelled for the other OS are folders here all the same (`/work` on a Windows drive),
-   * asked of the disk only for those, so the page never calls an existing folder the other side's.
+   * which of the stored `roots` spelled for the other OS are folders here all the same (`/work` on the system drive),
+   * asked of the disk only for those and only when the roots, the platform or the drive changed (`RootExistence`), so
+   * the page never calls an existing folder the other side's and a repaint stats nothing.
    */
   async places(roots: readonly string[] = []): Promise<RootPlaces> {
     const windows = process.platform === 'win32';
     const system = windows
       ? [process.env['SystemRoot'], process.env['ProgramFiles'], process.env['ProgramFiles(x86)'], process.env['ProgramData']]
       : ['/usr/share'];
+    const systemDrive = systemDriveOf(process.env['SystemDrive']);
 
     return {
       dataDir: this.dataDir.fsPath,
@@ -82,9 +84,18 @@ export class QconsultHost {
       systemDirs: system.filter((one): one is string => typeof one === 'string' && one.length > 0),
       caseless: windows,
       windows,
-      existingHere: await existingHere(roots, windows, async (root) => (await fs.promises.stat(root)).isDirectory()),
+      existingHere: await this.rootAnswers.of(roots, windows, systemDrive),
+      systemDrive,
     };
   }
+
+  /** The roots setting changed: the next paint asks the disk again (a folder created since is then found). */
+  forgetRootAnswers(): void {
+    this.rootAnswers.forget();
+  }
+
+  /** What the disk said about the stored roots spelled for the other OS — asked one root at a time, and kept. */
+  private readonly rootAnswers = new RootExistence(async (root) => (await fs.promises.stat(root)).isDirectory());
 
   /** One control of a row, or one prompt's box, changed. A refused edit snaps back rather than storing what the server would refuse. */
   async write(key: string, id: string, value: unknown, hooks: QconsultWriteHooks): Promise<void> {
@@ -132,8 +143,8 @@ const COMMANDS: Readonly<Record<QconsultCommand, Command>> = {
   qconsultAddPrompt: (_host, _id, settings, hooks) => addPrompt(settings, hooks),
   qconsultRemovePrompt: (_host, id, settings, hooks) => settled(promptRemoved(settings.prompts, settings.rows, id), 'qconsultPrompts', (r) => r.prompts, hooks),
   qconsultRestorePrompt: (host, id) => host.restore(id),
-  qconsultAddRoot: (host, _id, settings, hooks) => addRoot(host, settings, hooks),
-  qconsultRemoveRoot: (_host, id, settings, hooks) => hooks.save('qconsultRoots', rootRemoved(settings.roots, id)),
+  qconsultAddRoot: (host, _id, settings, hooks) => { host.forgetRootAnswers(); return addRoot(host, settings, hooks); },
+  qconsultRemoveRoot: (host, id, settings, hooks) => { host.forgetRootAnswers(); return hooks.save('qconsultRoots', rootRemoved(settings.roots, id)); },
 };
 
 /** A change that may be refused: stored, or its sentence said — never both, never silence. */

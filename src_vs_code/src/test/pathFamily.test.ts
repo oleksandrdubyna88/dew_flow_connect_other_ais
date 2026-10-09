@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { existingHere, otherSideHere, spelledForTheOtherOs } from '../pathFamily';
+import { RootExistence, existingHere, otherSideHere, qualified, spelledForTheOtherOs, systemDriveOf } from '../pathFamily';
 
 /**
  * The TS half of `shared/path-family-vectors.json` — which roots are the OTHER operating system's. The server skips
@@ -66,11 +66,60 @@ test('the decision asks whether the root EXISTS here, and answers the shared exi
 
 test('the window asks the disk only about roots spelled for the other OS, and keeps the ones that are folders here', async () => {
   const asked: string[] = [];
-  const isDirectory = async (one: string): Promise<boolean> => { asked.push(one); return one === '/work'; };
+  const isDirectory = async (one: string): Promise<boolean> => { asked.push(one); return one === 'Q:\\work'; };
 
-  const found = await existingHere(['/work', '/home/jinx/git', 'D:\\rsd'], true, isDirectory);
+  // Q: is no drive any window stands on: the disk is asked on the SYSTEM drive, never the current one (the code round).
+  const found = await existingHere(['/work', '/home/jinx/git', 'D:\\rsd'], true, 'Q:', isDirectory);
 
-  assert.deepEqual(found, ['/work'], 'the root-relative folder that exists is this side\'s; the WSL one is not');
-  assert.deepEqual(asked, ['/work', '/home/jinx/git'], 'a root of this OS\'s own spelling is not asked — it is this side\'s whatever the disk says');
-  assert.deepEqual(await existingHere(['/work'], true, async () => { throw new Error('EACCES'); }), [], 'a root the disk cannot answer for is not claimed as this side\'s');
+  assert.deepEqual(found, ['/work'], 'the root-relative folder that exists is this side\'s, named as it is stored; the WSL one is not');
+  assert.deepEqual(asked, ['Q:\\work', 'Q:\\home\\jinx\\git'], 'asked on the system drive, and a root of this OS\'s own spelling not at all');
+  assert.deepEqual(await existingHere(['/work'], true, 'C:', async () => { throw new Error('EACCES'); }), [], 'a root the disk cannot answer for is not claimed as this side\'s');
+});
+
+test('a root is qualified the way the server qualifies it, answering the shared resolution vectors', () => {
+  const file = path.join(__dirname, '..', '..', '..', 'shared', 'path-family-vectors.json');
+  const rows: unknown = (JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>)['resolution'];
+  assert.ok(Array.isArray(rows) && rows.length > 4, 'shared/path-family-vectors.json carries no `resolution` array');
+
+  for (const [at, row] of rows.entries()) {
+    const one = row as Record<string, unknown>;
+    assert.equal(typeof one['windows'], 'boolean', `resolution vector ${at} has no windows`);
+    assert.equal(
+      qualified(String(one['path']), one['windows'] as boolean, String(one['systemDrive'])),
+      one['qualified'],
+      `${String(one['path'])} (windows: ${String(one['windows'])}, drive: ${String(one['systemDrive'])}) — ${String(one['why'] ?? '')}`,
+    );
+  }
+  assert.equal(systemDriveOf('E:'), 'E:');
+  assert.equal(systemDriveOf(undefined), 'C:', 'unset falls back to C:, as the server does');
+  assert.equal(systemDriveOf('  '), 'C:');
+});
+
+test('a repaint with the same roots asks the disk nothing; changed roots, another drive or a forget ask again — one stat at a time', async () => {
+  let inFlight = 0;
+  let most = 0;
+  const asked: string[] = [];
+  const isDirectory = async (one: string): Promise<boolean> => {
+    asked.push(one);
+    inFlight += 1;
+    most = Math.max(most, inFlight);
+    await new Promise((resolve) => { setTimeout(resolve, 1); });
+    inFlight -= 1;
+
+    return one === 'C:\\work';
+  };
+  const answers = new RootExistence(isDirectory);
+
+  assert.deepEqual(await answers.of(['/work', '/home/a', '/home/b'], true, 'C:'), ['/work']);
+  assert.deepEqual(await answers.of(['/work', '/home/a', '/home/b'], true, 'C:'), ['/work'], 'the cached answer');
+  assert.equal(asked.length, 3, 'two renders with the same roots stat once');
+  assert.equal(most, 1, 'the disk is asked one root at a time');
+
+  await answers.of(['/work'], true, 'C:');
+  assert.equal(asked.length, 4, 'a changed root list stats again');
+  await answers.of(['/work'], true, 'D:');
+  assert.equal(asked.length, 5, 'another system drive stats again');
+  answers.forget();
+  await answers.of(['/work'], true, 'D:');
+  assert.equal(asked.length, 6, 'an explicit change of the roots setting stats again');
 });

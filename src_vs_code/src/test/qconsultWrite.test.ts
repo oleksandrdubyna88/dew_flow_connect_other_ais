@@ -119,6 +119,7 @@ const windows: RootPlaces = {
   caseless: true,
   windows: true,
   existingHere: [],
+  systemDrive: 'C:',
 };
 
 test('D14 (c): a drive root, the profile itself, a system folder, the data folder and a relative path are refused by name', () => {

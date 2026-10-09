@@ -345,6 +345,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   public questionConsults: { readonly questions: readonly QuestionConsult[] } | undefined;
   private readonly qconsult: QconsultHost;
+
+  /** `coai.qconsultRoots` changed: the next paint asks the disk again about the roots spelled for the other OS. */
+  forgetQconsultRootAnswers(): void {
+    this.qconsult.forgetRootAnswers();
+  }
   private readonly roundsLog_: RoundsLogCache;
 
 

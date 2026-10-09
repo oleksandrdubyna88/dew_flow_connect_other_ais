@@ -310,9 +310,14 @@ export interface RootPlaces {
   readonly windows: boolean;
   /**
    * The stored roots spelled for the other OS that ARE directories here (`existingHere`, asked by the host): on Windows
-   * `/work` is the folder `work` on the current drive, and such a root is this side's — never called the other side's.
+   * `/work` is the folder `work` on the system drive, and such a root is this side's — never called the other side's.
    */
   readonly existingHere: readonly string[];
+  /**
+   * The drive a root-relative Windows root is looked for on — `%SystemDrive%`, or `C:` (`systemDriveOf`): never the
+   * current drive, which this window's host and the server need not share. The server's `SystemPlaces.SystemDrive`.
+   */
+  readonly systemDrive: string;
 }
 
 /**

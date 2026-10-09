@@ -169,10 +169,10 @@ test('the tab carries a banner for a server known to be older than QCONSULT_SINC
 // ---------- a root of the other operating system (operator, 2026-10-09) ----------
 
 const WINDOWS_PLACES: RootPlaces = {
-  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true, existingHere: [],
+  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true, existingHere: [], systemDrive: 'C:',
 };
 
-const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false, existingHere: [] };
+const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false, existingHere: [], systemDrive: 'C:' };
 
 /** The page RUN with these roots stored and this side's places, read back as the tree it drew. */
 function rootsOn(roots: readonly string[], places: RootPlaces): PageNode {

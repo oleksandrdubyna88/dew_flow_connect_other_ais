@@ -486,6 +486,9 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     },
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('coai.qconsultRoots')) {
+        panel.forgetQconsultRootAnswers();
+      }
       if (e.affectsConfiguration('coai')) {
         // Re-read WHERE first: `mirrorSettings` writes the settings file into the data directory, so
         // a changed `coai.dataDirectory` has to be in effect before that write chooses its path.
