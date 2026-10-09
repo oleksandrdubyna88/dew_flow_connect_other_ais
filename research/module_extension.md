@@ -11692,8 +11692,8 @@ price from `state.modelPrices[model]`, priced from the reviewers only, so a cons
 - `billedRoute` is ALSO what the by-model `modelPrices(vendors)` of the spending and consultation tabs routes an api row
   by, so a row's card and its runs are priced on one route. Those tabs are otherwise unchanged (every row and the chat
   presets, by model).
-- Tests: `aModelsCardPricesItsOwnRow.test.ts` runs the Models tab (`pageTree` over `modelsTabHtml`) with the map
+- Tests: `aModelsCardPricesItsOwnRow.test.ts` runs the Settings page on Models (`catalogHtml` → `pageTree` → `runPageHtml`; CodeRabbit, PR #723) with the map
   `cardPrices` builds — a consultant-only row's card shows its price (RED: `—`), a reviewer and an api consultant on one
   model show 1.25 and 3 (RED: both 1.25), an unknown model keeps its dash; `theCardsArePricedFromEveryRow.test.ts` pins
-  the render's wiring (every row, the one price book, read by id). Break-it: reading by model, pricing only the reviewers,
+  the render's wiring (every row, the one price book). Break-it: reading by model, pricing only the reviewers,
   routing an api row off its endpoint, and the render pricing `shown` each turn a test red.

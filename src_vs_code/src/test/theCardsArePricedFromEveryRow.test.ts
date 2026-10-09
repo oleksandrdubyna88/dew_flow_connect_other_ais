@@ -10,8 +10,9 @@ import { test } from 'node:test';
  * because the map was keyed by MODEL and an `api` row's routed price was spread last — priced from every row, a hidden
  * `api` consultant with a reviewer's model put ITS endpoint's rate on the reviewer's card. Now the map is keyed by row
  * (`priceBook.cardPrices`), so pricing every row cannot move a price between cards, and a row that reviews nothing gets
- * its own price. `aModelsCardPricesItsOwnRow.test.ts` runs the page for the behaviour; this pins the render's wiring,
- * which is the extension host's and is not run by a unit test — as `thePanelReadsThisSide` pins its reads.</p>
+ * its own price. `aModelsCardPricesItsOwnRow.test.ts` runs the page for the behaviour — a card reading by id included;
+ * this pins only the render's wiring, which is the extension host's and is not run by a unit test — as
+ * `thePanelReadsThisSide` pins its reads (CodeRabbit, PR #723).</p>
  */
 
 const source = (file: string): string => fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
@@ -24,12 +25,4 @@ test('the render prices the cards from every row, through the price service', ()
     'priced from the reviewers only, a consultant-only row shows a dash where the list prices it');
   assert.match(panel, /return cardPrices\(rows, \(model, baseUrl\) => PRICE_BOOK\.priceOf\(model, baseUrl\)\);/u,
     'the cards are not priced by the window\'s one price book');
-});
-
-test('a card reads its own row\'s price, never its model\'s', () => {
-  const view = source('panelView.ts');
-
-  assert.match(view, /price: state\.cardPrices\[v\.id\],/u);
-  assert.doesNotMatch(view, /state\.cardPrices\[v\.model\]/u,
-    'read by model, two rows on one model and two endpoints share one rate again');
 });
