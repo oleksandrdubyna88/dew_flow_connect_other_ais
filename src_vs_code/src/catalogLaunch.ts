@@ -3,7 +3,7 @@ import type { Vendor } from './vendors';
 /**
  * What a catalog row's LAUNCH is, said once (PLAN_one_model_catalog.md E1.3/E1.4; PR #681's code round).
  *
- * <p>The migration asks "may this definition join that row?" and the old page's save asks "did this edit change the
+ * <p>The migration asks "may this definition join that row?" and the panel's save asks "did this edit change the
  * row it owns?" — the same question, and it was answered twice, with different fields: the save's copy left out
  * `dialect`. Each new launch field (a thinking flag, a second effort knob) would have had to be added to both. Now
  * both read {@link sameLaunch}, and a rewrite writes the fields {@link withLaunch} names.</p>

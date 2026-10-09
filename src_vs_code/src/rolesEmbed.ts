@@ -3,7 +3,7 @@ import type { Tombstone } from './roleDeletion';
 import { roleBlock, roleBlockOptions, stageIsFull, strandedHtml, tooOldFor, unknownServerNote, type RoleBlockOptions } from './rolesBlocks';
 
 /**
- * Roles & prompts on the new Settings page (todo/PLAN_one_model_catalog.md E4.3): the Review roles tab's own role blocks
+ * Roles & prompts on the Settings page (todo/PLAN_one_model_catalog.md E4.3): the Review roles tab's own role blocks
  * (`rolesBlocks.roleBlock`, never a copy), drawn in the panel's document and edited through the one editing core
  * (`rolesHost.ts`) by `roles` messages.
  *
@@ -50,7 +50,7 @@ function stages(all: readonly RoleRow[], texts: Readonly<Record<string, string>>
 }
 
 /**
- * The roles, as the new page draws them.
+ * The roles, as the Settings page draws them.
  *
  * @param roleEnabled the panel's own switch per role — read with the catalog's as ONE switch
  */

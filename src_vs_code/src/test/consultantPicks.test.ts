@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogBody, catalogHtml } from '../catalogPage';
 import { consultantPickView, consultantPickWrites } from '../consultantPicks';
-import { DEFAULT_CONSULT, type ConsultantChoice } from '../consultSettings';
+import { DEFAULT_CONSULT, type ConsultantChoice, type ConsultSettings, resolveConsultant } from '../consultSettings';
 import { foldedWrite } from '../catalogEdit';
+import { type PanelState } from '../panelView';
+import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
+import { pageTree, type PageNode } from './pageTree';
 
 /**
  * E4.2 of todo/PLAN_one_model_catalog.md, the consultant half: on the new page a caller's consultant is PICKED from the
@@ -95,4 +98,51 @@ test('the new page draws one picker per caller, and changing it writes the pick'
 
   const { key, value, caller } = lastWrite(page);
   assert.deepEqual({ key, value, caller }, { key: 'consultantRow', value: 'deep-high', caller: 'gemini' });
+});
+
+// ---------------------------------------------------------------------------------------------
+// What the page SAYS under each pick — run on the Consultant tab as drawn (todo/PLAN_one_model_catalog.md E5.3)
+
+/** The settings with these callers' stored entries, resolved against the rows as the reader resolves them. */
+function consultWith(stored: Readonly<Record<string, ConsultantChoice>>, rows: readonly Vendor[]): ConsultSettings {
+  const byCaller = Object.fromEntries(Object.entries(stored).map(([caller, one]) => [caller, resolveConsultant(one, rows)]));
+
+  return { ...DEFAULT_CONSULT, stored: { ...DEFAULT_CONSULT.stored, ...stored }, byCaller: { ...DEFAULT_CONSULT.byCaller, ...byCaller } };
+}
+
+/** One caller's pick on the Consultant tab, as the page draws it. */
+function pickOn(consult: ConsultSettings, rows: readonly Vendor[], caller: string): PageNode {
+  const state: PanelState = { ...panelState('consultant', { settings: { ...DEFAULTS, consult } }), catalogRows: rows };
+  const pane = pageTree(catalogHtml(state, 'test-nonce', 'consultants/consultant'))
+    .one((node) => node.dataset['pane'] === 'consultants/consultant', 'Consultant pane');
+
+  return pane.one((node) => node.className === 'field consult-pick' && node.find((one) => one.id === `consult-row-${caller}`).length > 0,
+    `${caller}'s pick`);
+}
+
+test('a Gemini CLI caller pointed at an Antigravity row is told it is its own vendor — a caller kind is not a runtime', () => {
+  // The row that runs Gemini models is on the `antigravity` runtime, so a name-to-name comparison withholds the word
+  // from the one caller most likely to be pointed back at itself — and a row from before the `gemini` runtime retired
+  // still exists in people's settings.
+  const agy = row('agy-pro', ['consultant'], 'antigravity');
+  const retired = row('old-gemini', ['consultant'], 'gemini');
+  const rows = [...ROWS, agy, retired];
+  const consult = consultWith({ gemini: reference('agy-pro'), claude: reference('agy-pro'), other: reference('deep-high') }, rows);
+
+  assert.match(pickOn(consult, rows, 'gemini').text(), /same vendor as the caller/, 'the Gemini CLI asking Antigravity is not told it is asking itself');
+  assert.doesNotMatch(pickOn(consult, rows, 'claude').text(), /same vendor as the caller/, 'Claude Code asking Antigravity is told it is asking itself');
+  assert.doesNotMatch(pickOn(consult, rows, 'other').text(), /same vendor as the caller/, 'another client is not any vendor, so nothing is itself');
+  assert.match(pickOn(consultWith({ gemini: reference('old-gemini') }, rows), rows, 'gemini').text(), /same vendor as the caller/,
+    'a row on the retired gemini runtime is the Gemini CLI too');
+});
+
+test('a caller whose consultant cannot be placed says why under its pick, and its id is shown as text', () => {
+  // The rule's own sentence (`resolveConsultant`), never one invented by the page: it is what a person acts on. The id
+  // is a name somebody typed, so it is read as text — never drawn as markup.
+  const odd = '<b>retired</b>';
+  const pick = pickOn(consultWith({ other: reference(odd) }, ROWS), ROWS, 'other');
+
+  assert.match(pick.text(), /no reviewer is named '<b>retired<\/b>' and it is not a runtime this build can consult with/,
+    'the reason the consultant cannot run is not said under its pick');
+  assert.deepEqual(pick.find((node) => node.tagName === 'B'), [], 'the stored id was drawn as markup');
 });

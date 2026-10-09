@@ -735,8 +735,8 @@ export function enabledCodeRoles(settings: CoaiSettings): readonly string[] {
   // running. Off by EITHER switch: `roleEnabled` is the sidebar's tick, `active` the catalog's, and
   // the server reads both. By BUCKET, not "not the plan stage" (§9.8 of the feature-review plan): that
   // filter took every programming role outside the plan stage for code — the feature role included.
-  // Through `rolesSwitch.rolesOn`, the ONE count the new page's block and the host's guard read too (E5.1b of
-  // todo/PLAN_one_model_catalog.md): the new page used to count `active` alone, and so disagreed with this one.
+  // Through `rolesSwitch.rolesOn`, the ONE count the Settings page's block and the host's guard read too (E5.1b of
+  // todo/PLAN_one_model_catalog.md): the Settings page used to count `active` alone, and so disagreed with this one.
   return rolesOn(settings.roles, RESULT_CODE, settings.roleEnabled).map((role) => role.id);
 }
 

@@ -3113,3 +3113,18 @@ commands' and presets' queues, opening it prunes the dead model presets (red wit
 New: `catalogPage.test.ts` "the Settings page is the only one" (no `settingsPreview` command, no preview badge);
 `consultantHealthWatcher.test.ts` asks the places and `placeOf('consultant')`; `panelSections.test.ts` holds that no
 section is declared for the settings surface.
+
+## E5.3 — the tests that held the old page's builders (2026-10-09, PLAN_one_model_catalog.md E5.3)
+
+| Was | Now |
+|---|---|
+| `consultant.test.ts`: the catalogue picker per caller (offered entries, labels, refusals, kept model, endpoint of your own, caller colours, local engines, Claude probe, codex cache) and the composite definition write (vendor/model/endpoint/CLI path, materialise, keep unknown fields) | gone with the caller definitions: a caller picks a catalog row (`consultantPicks.test.ts`); what a row is and how it answers is its Models card (`modelsTab.test.ts`) |
+| `consultant.test.ts` "a caller pointed at its own vendor is told what to think" | `consultantPicks.test.ts` "a Gemini CLI caller pointed at an Antigravity row is told it is its own vendor" |
+| `consultant.test.ts` "an entry the rule cannot place carries its REASON", "a vendor id is escaped" | `consultantPicks.test.ts` "a caller whose consultant cannot be placed says why under its pick, and its id is shown as text" |
+| `consultant.test.ts` "no Team server can be offered as a consultant", "a catalogue entry that cannot hold a conversation is NAMED" | `modelsTab.test.ts` "a row that cannot hold a consultation — a Team server — cannot be ticked consultant, and its card names the runtimes that can" |
+| `consultant.test.ts` / `consultantHelp.test.ts` "every caller kind is named in words a person reads" | `consultantHelp.test.ts` "each caller's pick is named in words a person reads, and carries the \"?\"" |
+| `customEndpointIsOneFlow.test.ts` "both flows go through it", "the consultant flow writes the CALLER it was given" | one flow now (Add a model); the consultant custom endpoint went with the definitions |
+| `claudeModels.test.ts` "a Claude dropdown says it is being asked", `panelPhrasesScript.test.ts` "the looking mark is one rule" | gone with `claudeNote` and `LOOKING`, which only the old rows drew |
+| `qconsultWrite.test.ts` "choosing another vendor or prompt takes the row off" | "choosing another prompt takes the row off" — a row picks a catalog row; there is no vendor control |
+| `refusedSelect.test.ts`: a `'consultants'` composite write snaps back | a consultant PICK (`savePick`) snaps back |
+| `catalogRow.test.ts`, `theOldPagePricesWhatItShows.test.ts` name `shownOnTheOldPage` | `isReviewerRow` |

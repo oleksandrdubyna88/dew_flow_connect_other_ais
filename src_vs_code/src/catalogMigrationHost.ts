@@ -16,7 +16,7 @@ import { userChatPresets } from './modelKeys';
  * workspace value is never migrated into it) and, when this side keeps its own settings, this side's overlay.
  * Another side's overlay is migrated by a window on that side. Runs are queued, never concurrent: activation,
  * a configuration change, and a save of a model key each ask for one, and the writes of one run are what the
- * next run reads. They share the catalog's turns with the old page's save ({@link inCatalogTurn}), so neither
+ * next run reads. They share the catalog's turns with the panel's save ({@link inCatalogTurn}), so neither
  * reads the other half-written; a request before a run starts joins it ({@link CatalogTurns}).</p>
  */
 
@@ -58,7 +58,7 @@ export function scheduleCatalogMigration(context: vscode.ExtensionContext): Prom
 }
 
 /**
- * A write of the catalog's keys that reads them first — the old page's save — taken as one turn, so no migration
+ * A write of the catalog's keys that reads them first — the panel's save — taken as one turn, so no migration
  * reads between its read and its last write. Its work must not await a migration (the triggers it fires are `void`).
  */
 export function inCatalogTurn<T>(work: () => Promise<T>): Promise<T> {

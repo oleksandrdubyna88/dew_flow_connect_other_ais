@@ -6,9 +6,9 @@ import { normaliseId, Vendor, vendorsFrom } from './vendors';
 import { asRecord, isRecord, Launch, listOf, RawRow, rawId, sameLaunch, withLaunch } from './catalogLaunch';
 
 /**
- * The old Settings page writes through the catalog (PLAN_one_model_catalog.md E1.4, "one write road").
+ * The panel writes through the catalog (PLAN_one_model_catalog.md E1.4, "one write road").
  *
- * <p>The old page edits a consultant or a question row as a DEFINITION: it resolves the reference, changes one
+ * <p>A write of a consultant or a question row may carry a DEFINITION: it resolves the reference, changes one
  * field and writes the whole entry back (`consultantRecordUpdate`; the question tab writes every row resolved).
  * Left to the migration, every such edit would fork a new catalog row and orphan the one before. So, before the
  * write, the change is folded into the catalog: an entry that referred to a catalog row NOTHING ELSE uses has

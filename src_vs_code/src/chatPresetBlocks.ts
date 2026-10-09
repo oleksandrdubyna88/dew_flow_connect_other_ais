@@ -2,7 +2,7 @@ import type { PromptPreset } from './chatPresets';
 import { escapeHtml } from './webviewHtml';
 
 /**
- * One saved prompt preset as a block — the piece both pages that edit the presets draw.
+ * One saved prompt preset as a block — the piece Chat draws.
  *
  * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> The Chat presets tab drew it until E5.1 deleted the tab, and so does Chat on the new
  * Settings page (`chatTabEmbed.ts`, todo/PLAN_one_model_catalog.md E4.6b), which draws the tab's own block rather than a
@@ -26,7 +26,7 @@ import { escapeHtml } from './webviewHtml';
 const PROMPT_ROWS = 14;
 
 /**
- * The attribute names a prompt block carries. The tab's own are the defaults; the new Settings page's Chat draws the
+ * The attribute names a prompt block carries. The tab's own are the defaults; the Settings page's Chat draws the
  * same block with names of its own (todo/PLAN_one_model_catalog.md E4.6b), because that page also draws the roles,
  * whose wiring reads `data-field` and `data-remove` — the commands' arrangement (`commandsBlocks.CommandAttrs`).
  */

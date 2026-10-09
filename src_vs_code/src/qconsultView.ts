@@ -1,12 +1,6 @@
 import type { Admission } from './capabilityAdmission';
-import { RUNTIMES as QUESTION_RUNTIMES } from './capabilityAdmission';
 import { optionHtml, rowPicks } from './catalogPicks';
-import { type ProbeResult } from './claudeModels';
-import { consultableVendors } from './consultSettings';
-import { type VendorOption, catalogueOptions } from './consultantView';
 import { escapeHtml } from './escapeHtml';
-import type { LocalEngine } from './localEngines';
-import { type ModelChoice, RUNTIMES, type Runtime, modelsFor } from './models';
 import type { HelpKey } from './help';
 import { help, segmentedRadio } from './panelControls';
 import { MAX_ACTIVE_ROWS, type QconsultSettings, type QuestionRowSetting, qconsultSkewNote } from './qconsultSettings';
@@ -26,9 +20,10 @@ import type { Vendor } from './vendors';
  * base prompt each, on or off, at most six on — the prompts with their capability, the folders a disk row may
  * read, the mode and the limits.
  *
- * <p>The `consultantView.ts` split: {@link questionRowView} DECIDES what a row offers and whether its switch
- * may be turned on, and the markup only renders that value — so a test asserts the decision, and the page test
- * runs the page. An incompatible pair is DISABLED with the capability table's own reason (A3); a pair that can
+ * <p>{@link questionRowView} DECIDES which prompts a row offers and whether its switch may be turned on, and the
+ * markup only renders that value — so a test asserts the decision, and the page test runs the page. Who a row asks
+ * is a pick of a catalog row ticked "question consultant" (todo/PLAN_one_model_catalog.md E4.2); its model is edited
+ * on Models. An incompatible pair is DISABLED with the capability table's own reason (A3); a pair that can
  * read this machine (D13) is shown so — with a tick that is ON and cannot be taken off, because no setting of that
  * runtime confines what it reads (revised by the operator on 2026-10-03; there is no acknowledgement to give).</p>
  */
@@ -36,21 +31,14 @@ import type { Vendor } from './vendors';
 /** What the section needs beyond the settings. */
 export interface QconsultViewState {
   readonly vendors: readonly Vendor[];
-  readonly codexModels?: readonly ModelChoice[];
-  readonly agyModels?: readonly ModelChoice[];
-  readonly claudeProbe?: ProbeResult | undefined;
-  readonly enginesByEndpoint?: Readonly<Record<string, LocalEngine>> | undefined;
   /** The installed server's version — the banner, when it is known to be too old. */
   readonly serverVersion: string;
   /** Each SHIPPED prompt's override file as it is on disk; absent or empty = the shipped words. */
   readonly promptOverrides?: Readonly<Record<string, string>> | undefined;
   /** Where a disk root may not be on this machine; absent draws no refusal beside a root. */
   readonly places?: RootPlaces | undefined;
-  /**
-   * The new Settings page's catalog rows (PLAN_one_model_catalog.md E4.2): given, each row PICKS one ticked "question
-   * consultant" instead of drawing its own vendor, model, endpoint, key and CLI path; absent, the current page.
-   */
-  readonly pickFrom?: readonly Vendor[] | undefined;
+  /** The catalog rows a question row picks from — those ticked "question consultant" among them (PLAN_one_model_catalog.md E4.2). */
+  readonly pickFrom: readonly Vendor[];
 }
 
 /** One option of a row's prompt picker: the prompt, and — when this row's runtime cannot run it — why. */
@@ -65,27 +53,13 @@ export interface PromptOption {
 export interface QuestionRowView {
   readonly id: string;
   readonly vendor: string;
-  readonly vendors: readonly VendorOption[];
   readonly runtime: string;
-  readonly model: string;
-  readonly models: readonly ModelChoice[];
   readonly prompt: string;
   readonly prompts: readonly PromptOption[];
   readonly admission: Admission;
   readonly enabled: boolean;
   /** Why the switch of a row that is OFF may not be turned on — empty when it may. */
   readonly blocked: string;
-  readonly takesBaseUrl: boolean;
-  readonly takesKey: boolean;
-  readonly takesExecutablePath: boolean;
-  readonly baseUrl: string;
-  readonly key: string;
-  readonly executablePath: string;
-}
-
-/** The runtimes the question consultant launches, as the panel's `Runtime` — the capability table's list. */
-function questionRuntimes(): readonly Runtime[] {
-  return RUNTIMES.filter((runtime) => (QUESTION_RUNTIMES as readonly string[]).includes(runtime));
 }
 
 /** What one row shows, decided — exported because it is what the tests assert. */
@@ -96,48 +70,13 @@ export function questionRowView(row: QuestionRowSetting, settings: QconsultSetti
   return {
     id: row.id,
     vendor: row.vendor,
-    vendors: catalogueOptions(consultableVendors(questionRuntimes())),
     runtime,
-    model: row.model,
-    models: modelsOf(row, runtime, state),
     prompt: row.prompt,
     prompts: prompts.map((p) => promptOption(p, runtime, row, state.vendors)),
     admission: rowAdmission(row, prompts, state.vendors),
     enabled: row.enabled,
     blocked: row.enabled ? '' : enableBlocker(row, settings.rows, prompts, state.vendors),
-    ...fieldsOf(row, runtime),
   };
-}
-
-function fieldsOf(row: QuestionRowSetting, runtime: string): Pick<QuestionRowView, 'takesBaseUrl' | 'takesKey' | 'takesExecutablePath' | 'baseUrl' | 'key' | 'executablePath'> {
-  return {
-    takesBaseUrl: ['codex', 'local', 'api'].includes(runtime),
-    takesKey: runtime === 'api',
-    takesExecutablePath: ['claude', 'codex', 'antigravity'].includes(runtime),
-    baseUrl: row.baseUrl,
-    key: row.key,
-    executablePath: row.executablePath,
-  };
-}
-
-/** The models the runtime offers — through the same `modelsFor` the reviewer and consultant rows use. */
-function modelsOf(row: QuestionRowSetting, runtime: string, state: QconsultViewState): readonly ModelChoice[] {
-  return (RUNTIMES as readonly string[]).includes(runtime) ? listed(row, runtime as Runtime, state) : [];
-}
-
-function listed(row: QuestionRowSetting, runtime: Runtime, state: QconsultViewState): readonly ModelChoice[] {
-  return modelsFor(runtime, state.codexModels ?? [], row.model, engineOf(row, runtime, state), state.agyModels ?? [], [], state.claudeProbe,
-    row.executablePath, { baseUrl: row.baseUrl, keyName: keyNameOf(row) });
-}
-
-/** The local engine probed at a local row's endpoint, when one has been. */
-function engineOf(row: QuestionRowSetting, runtime: Runtime, state: QconsultViewState): LocalEngine | undefined {
-  return runtime === 'local' ? (state.enginesByEndpoint ?? {})[row.baseUrl] : undefined;
-}
-
-/** The vault entry an api row's key is filed under: its own key name, or its vendor id. */
-function keyNameOf(row: QuestionRowSetting): string {
-  return row.key.length > 0 ? row.key : row.vendor;
 }
 
 /** A prompt as this row's picker offers it: disabled, with the table's reason, when the row's runtime cannot run it (A3). */
@@ -194,12 +133,12 @@ ${settings.rows.map((row) => rowHtml(questionRowView(row, settings, state), stat
 }
 
 /** One row: its switch, who answers, its prompt, the caveat and its tick, and Remove. */
-function rowHtml(view: QuestionRowView, pickFrom: readonly Vendor[] | undefined): string {
+function rowHtml(view: QuestionRowView, pickFrom: readonly Vendor[]): string {
   const id = escapeHtml(view.id);
 
   return `<div class="field qconsult-row" data-row="${id}">
   ${rowSwitch(view)}
-${pickFrom === undefined ? definitionFields(view) : pickField(view, pickFrom)}
+${pickField(view, pickFrom)}
   <label for="qconsultRowPrompt-${id}">${help('qconsultRowPrompt')}Prompt</label>
   <select id="qconsultRowPrompt-${id}" data-setting="qconsultRowPrompt" data-caller="${id}">
 ${promptOptions(view)}
@@ -210,20 +149,7 @@ ${rowHints(view)}
 </div>`;
 }
 
-/** The current page: the row's own vendor, model, endpoint, key name and CLI path. */
-function definitionFields(view: QuestionRowView): string {
-  const id = escapeHtml(view.id);
-
-  return `  <select id="qconsultRowVendor-${id}" data-setting="qconsultRowVendor" data-caller="${id}">
-${optionsWithKept(view.vendors, view.vendor)}
-  </select>
-  ${modelControl(view)}
-${view.takesBaseUrl ? textField(view.id, 'qconsultRowBaseUrl', 'Endpoint', view.baseUrl, 'https://api.example.com/v1') : ''}
-${view.takesKey ? textField(view.id, 'qconsultRowKey', 'Vault key name', view.key, 'empty = the vendor id') : ''}
-${view.takesExecutablePath ? textField(view.id, 'qconsultRowExecutablePath', 'Where its CLI is', view.executablePath, 'leave empty to look it up on PATH') : ''}`;
-}
-
-/** The new page: the catalog row this row asks, picked from the rows ticked "question consultant" (E4.2). */
+/** The catalog row this row asks, picked from the rows ticked "question consultant" (E4.2). */
 function pickField(view: QuestionRowView, rows: readonly Vendor[]): string {
   const id = escapeHtml(view.id);
   const picks = rowPicks('qconsult', view.vendor, rows, 'This row');
@@ -238,28 +164,6 @@ function rowSwitch(view: QuestionRowView): string {
   const disabled = view.blocked.length > 0 ? ` disabled title="${escapeHtml(view.blocked)}"` : '';
 
   return `<div class="check-row"><label for="qconsultRowEnabled-${id}"><input type="checkbox" id="qconsultRowEnabled-${id}" data-setting="qconsultRowEnabled" data-caller="${id}"${view.enabled ? ' checked' : ''}${disabled}> ${id} runs</label></div>`;
-}
-
-/** The catalogue, and the row's own vendor kept when the catalogue does not list it. */
-function optionsWithKept(options: readonly VendorOption[], current: string): string {
-  const kept = options.some((o) => o.value === current) ? [] : [{ value: current, label: `${current} — not in the catalogue`, hint: '' }];
-
-  return [...kept, ...options].map((o) => option(o.value, o.label, current, o.hint)).join('\n');
-}
-
-/** A select when the runtime offers models, a box otherwise — an api row's model is whatever its endpoint calls it. */
-function modelControl(view: QuestionRowView): string {
-  const id = escapeHtml(view.id);
-  if (view.models.length === 0) {
-    return `<input type="text" id="qconsultRowModel-${id}" data-setting="qconsultRowModel" data-caller="${id}" value="${escapeHtml(view.model)}" placeholder="model — empty is the runtime's default">`;
-  }
-  const kept = view.models.some((m) => m.id === view.model) || view.model.length === 0 ? '' : option(view.model, `${view.model} — not offered here`, view.model);
-
-  return `<select id="qconsultRowModel-${id}" data-setting="qconsultRowModel" data-caller="${id}">
-${option('', "the runtime's own default", view.model)}
-${view.models.map((m) => option(m.id, m.label, view.model)).join('\n')}
-${kept}
-  </select>`;
 }
 
 /** The prompts, each refused pair DISABLED with its reason; a row with no prompt shows one it cannot keep. */
@@ -376,17 +280,4 @@ function numberField(setting: HelpKey, label: string, value: number, max: number
   <label for="${setting}">${help(setting)}${escapeHtml(label)}</label>
   <input type="number" id="${setting}" min="1" max="${max}" data-setting="${setting}" value="${value}">
 </div>`;
-}
-
-function textField(row: string, setting: string, label: string, value: string, placeholder: string): string {
-  const id = escapeHtml(row);
-
-  return `  <label for="${setting}-${id}">${escapeHtml(label)}</label>
-  <input type="text" id="${setting}-${id}" data-setting="${setting}" data-caller="${id}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}">`;
-}
-
-function option(value: string, label: string, selected: string, hint = ''): string {
-  const title = hint.length === 0 ? '' : ` title="${escapeHtml(hint)}"`;
-
-  return `    <option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}${title}>${escapeHtml(label)}</option>`;
 }

@@ -3,8 +3,8 @@
 > Status: **in progress, 2026-10-07 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
 > the measured live calls wait on the operator); E3 merged (PR #687); E4 merged (PR #688, its consultations and code
 > gate passed); E5 open — R7 first, then extract-before-delete, with the rollout order as its own milestone.** The design is accepted: the clickable mockup in
-> [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
-> checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
+> `new_design/` (it drove 61 checks with `node new_design/check.mjs`; deleted in E5.3 once the page it drew shipped —
+> git history keeps it). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
 > (`src_server`), help in five languages, and the docs. The sidebar and the Review rounds page are out of scope, with
 > ONE stated exception: the sidebar's Bugz ranking picker reads the catalog (E5.1).
@@ -1372,6 +1372,18 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    code round. Nothing a person sees changes, so there is no RED for the deletions themselves; any defect found on
    the way is red first. Docs: `research/module_extension.md`, `research/module_tests.md`, the plan's progress line.
    The restore command and `coai.migratedFrom` stay one more release (T5).
+   **Progress (2026-10-09, branch `feat/catalog-e5-cleanup`): E5.3 built.** `new_design/` and its Sonar entry gone;
+   `consultantBody`/`consultantSection` take the picks (definitions, the composite `consultants` write, the custom
+   consultant endpoint, the catalogue picker, `sameVendorNote`, `LOOKING`, `claudeNote` gone), `qconsultBody` takes
+   `pickFrom` (`definitionFields` gone), `securityLaneSection`/`Body` take `allRows`; `queueRoleEdit`'s default and
+   `CATALOG_ALONE` gone; `shownOnTheOldPage` → `isReviewerRow`; comments say the Settings page. The panel messages the
+   old controls posted — `consultVendor`, `consultModel`, `consultBaseUrl`, `consultExecutablePath`, `qconsultRowVendor`
+   / `Model` / `BaseUrl` / `Key` / `ExecutablePath` — are posted by no page and handled by nothing now (each enumerated:
+   no src reference left; one test fixture string in `panelPageHarness.test.ts`). Removed tests → the Settings-page tests
+   that hold their behaviour: `research/module_tests.md`, *E5.3*; four gained ones (own vendor, unplaceable caller,
+   Team server not a consultant, caller names). Sweeps: no new dead export, no orphaned doc block. **Found, not fixed:**
+   a Models card prices from `modelPrices[model]`, built from the reviewers only, so a consultant-only row shows no
+   catalog price — it predates E5; follow-up `todo/PLAN_models_card_prices_every_row.md`.
 4. **Releases**: mcp 0.44.0 first (E2), the Team server deploy when the operator says, then the extension; post-deploy
    checks against the installed builds.
 

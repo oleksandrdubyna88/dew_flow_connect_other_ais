@@ -151,20 +151,19 @@ export function rowHealth(kind: string, identity: RowIdentity, state: Consultant
 }
 
 /**
- * One CALLER's health block, decided against the consultant its entry RESOLVES to — the one rule both Consultant tabs
- * draw by (todo/PLAN_one_model_catalog.md E5.1b): the current page under each caller's own definition
- * (`consultantView.withHealth`), the new page under each caller's pick (`consultantPicks.pickHtml`).
+ * One CALLER's health block, decided against the consultant its entry RESOLVES to (todo/PLAN_one_model_catalog.md
+ * E5.1b) — drawn under each caller's pick (`consultantPicks.pickHtml`). Both Consultant tabs drew by it until E5.3
+ * removed the old page's caller definitions.
  *
  * <p><b>Why the resolved pair, and why one function.</b> The server reports the consultant it RESOLVED — through
  * `--consultants`, the vendor and the model it would run — and a failure is hidden when it is about another pair than
- * the row names (`aboutAnother`, `currentFailure`). A pick on the new page is stored as a bare reference to a catalog
+ * the row names (`aboutAnother`, `currentFailure`). A pick is stored as a bare reference to a catalog
  * row (`{ vendor: 'deep-high' }`, no model); matched by what is STORED, the row's own failure — reported with the row's
  * model — would be filtered away as "about another consultant". `consult.byCaller` holds what the entry means, model
- * materialised, which is what the server compared. Two pages asking the question two ways is how one of them would
- * come to answer it differently, so both ask it here.</p>
+ * materialised, which is what the server compared.</p>
  *
- * <p>A caller the map does not hold is matched as no consultant at all (an empty pair) — what the current page's rows
- * did before this was shared, since an absent entry draws an unplaceable row named ''.</p>
+ * <p>A caller the map does not hold is matched as no consultant at all (an empty pair), since an absent entry draws an
+ * unplaceable row named ''.</p>
  */
 export function callerHealth(kind: string, consult: ConsultSettings, state: ConsultantHealthState): RowHealth {
   return rowHealth(kind, resolvedIdentity(consult.byCaller[kind]), state);

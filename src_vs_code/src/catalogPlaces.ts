@@ -1,5 +1,5 @@
 /**
- * Where the new Settings page can open (todo/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
+ * Where the Settings page can open (todo/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
  * for every id the old page answered to.
  *
  * <p>A PLACE is `tab` or `tab/sub` — the one string the host holds and the page's script opens, so a deep link names a
@@ -12,14 +12,14 @@ export interface CatalogSub {
   readonly label: string;
 }
 
-/** One tab of the new page, and its sub-tabs — none for a tab that is one page. */
+/** One tab of the Settings page, and its sub-tabs — none for a tab that is one page. */
 export interface CatalogTab {
   readonly id: string;
   readonly label: string;
   readonly subs: readonly CatalogSub[];
 }
 
-/** The six tabs, in the order the design gives them (`new_design/app.js` TABS, without the mockup's Design notes). */
+/** The six tabs, in the order the redesign gave them (todo/PLAN_one_model_catalog.md, E3). */
 export const CATALOG_TABS: readonly CatalogTab[] = [
   { id: 'models', label: 'Models', subs: [] },
   {

@@ -53,13 +53,12 @@ export function reviewsAnything(row: Vendor): boolean {
 }
 
 /**
- * Whether the OLD Settings page lists a row among its reviewers. A row that reviews nothing and exists for its
- * `uses` alone came from the catalog — a migrated consultant, say — and the old page has no place for it: shown
- * as a reviewer with every box unticked, it would be a change the person can see in an epic that promises none,
- * and removing it as clutter would take their consultant with it (plan-round finding 7). Display only: every
- * write still reads, and keeps, every row.
+ * Whether a row is one of the REVIEWERS — the panel's `vendors`, which the gate, the limits and the spending count.
+ * A row that reviews nothing and exists for its `uses` alone — a migrated consultant, say — is not (plan-round finding
+ * 7; the old page listed only these). Display only: every write still reads, and keeps, every row, and Models draws
+ * them all (`catalogRows`).
  */
-export function shownOnTheOldPage(row: Vendor): boolean {
+export function isReviewerRow(row: Vendor): boolean {
   return reviewsAnything(row) || row.uses === undefined;
 }
 

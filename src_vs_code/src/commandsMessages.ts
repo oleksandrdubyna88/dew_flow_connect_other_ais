@@ -5,7 +5,7 @@ import type { RowCommand } from './commandsEdit';
  * What a message about the gate commands MEANS, decided without a host or a page.
  *
  * <p><b>Why this is not in `commandsPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Gate commands tab, and
- * Reviews › Commands on the new Settings page (todo/PLAN_one_model_catalog.md E4.4), whose `commands` messages reach the
+ * Reviews › Commands on the Settings page (todo/PLAN_one_model_catalog.md E4.4), whose `commands` messages reach the
  * same editing core (`commandsHost.ts`). Epic 5 deleted the tab (E5.1); the core's command type and the panel's parser
  * cannot be deleted with it, so they were moved out first — prerequisite (b) of that epic — exactly as they were.</p>
  *

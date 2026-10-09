@@ -9,7 +9,7 @@ import { escapeHtml } from './webviewHtml';
  * read either.
  *
  * <p><b>Why this is not in `commandsPage.ts` any more.</b> Two pages drew these until E5.1 deleted the first: the Gate commands tab, and Reviews ›
- * Commands on the new Settings page (`commandsEmbed.ts`, todo/PLAN_one_model_catalog.md E4.4), which draws the tab's own
+ * Commands on the Settings page (`commandsEmbed.ts`, todo/PLAN_one_model_catalog.md E4.4), which draws the tab's own
  * blocks rather than a copy of them, under attribute names of its own ({@link CommandAttrs}). Epic 5 deleted the tab
  * (E5.1), so the blocks were moved out first — prerequisite (b) of that epic — exactly as they were.</p>
  *
@@ -29,7 +29,7 @@ export function commandsSkewNote(serverVersion: string): string {
 }
 
 /**
- * The attributes a command block carries. The Gate commands tab's own, or — on the new Settings page, which also draws
+ * The attributes a command block carries. The Gate commands tab's own, or — on the Settings page, which also draws
  * the roles (todo/PLAN_one_model_catalog.md E4.4) — names of its own, so the roles' wiring never reads a command's
  * control.
  */

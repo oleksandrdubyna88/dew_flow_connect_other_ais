@@ -30,10 +30,6 @@ export const HELP = {
     'Lets an AI working with this gate ask ANOTHER vendor’s model for a second opinion — a consultant that reads this checkout read-only, with the uncommitted change, and answers advice the AI must verify. Three kinds exist: STUCK, when the AI itself is not getting out; CADENCE, when the gate orders one for a group of epics; RISK, when it orders one for a piece the AI named as risky. Off switches off all three: the AI is told no consultant can be had, and a cadence set to Require stands its refusal down, with the reason written on the round.',
   consultCaller:
     'Which vendor answers when THIS kind of AI consults, and on which model. A different vendor from the caller is the point: a model cannot see its own blind spot. Empty model is the vendor’s own default. The model is a card on Models, ticked consultant: its model, effort and prompt are edited there, and the same card may review as well.',
-  consultBaseUrl:
-    'The address of the vendor’s API, for a vendor this build talks to over HTTP rather than through its CLI. Empty uses the vendor’s own public endpoint.',
-  consultExecutablePath:
-    'Where the vendor’s command-line tool is. Empty looks it up on PATH, which is what you want unless it is installed somewhere PATH does not reach.',
   consultTurns:
     'How many question-and-answer turns one consultation may have — five unless you change it — for EVERY kind: stuck, cadence and risk alike. The last turn closes it; a follow-up after that is refused and a fresh problem statement opens a new one. It bounds a conversation that circles.',
   consultCallsPerSession:

@@ -1,7 +1,7 @@
 import { escapeHtml } from './escapeHtml';
 
 /**
- * The new Settings page's shared pieces (todo/PLAN_one_model_catalog.md, E3.1): what a control says when the installed
+ * The Settings page's shared pieces (todo/PLAN_one_model_catalog.md, E3.1): what a control says when the installed
  * coai-mcp cannot use it, the "new" tag, the one confirm, and what a tab not built yet shows. Pure — every tab of the
  * page draws through these, so a sentence or a rule lives in one place.
  */

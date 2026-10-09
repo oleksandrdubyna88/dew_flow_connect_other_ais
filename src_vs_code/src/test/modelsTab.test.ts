@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
+import { CONSULTING_RUNTIMES } from '../consultSettings';
 import { modelsTabHtml } from '../modelsTab';
 import { skewSaid } from '../modelCard';
 import { cardContextFor, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { click, lastWrite, panelState, runPanel, withoutSeq } from './panelPageHarness';
 import { Node, runPageHtml } from './pageScriptHarness';
+import { pageTree } from './pageTree';
 
 /**
  * The Models tab, RUN (todo/PLAN_one_model_catalog.md E3.2): one card per catalog row, every control writing that row
@@ -62,6 +64,24 @@ test('a use is ticked by command; one the runtime cannot take is drawn off and s
   assert.deepEqual(page.posted.filter((m) => m['type'] === 'command').map(withoutSeq).at(-1), { type: 'command', command: 'toggleUse', id: 'codex|consultant' });
   assert.doesNotMatch(html, /data-id="codex\|bugz"/, 'Bugz is not offered on a CLI row, so it carries no command');
   assert.match(html, /Not offered: Bugz ranking — Bugz ranks with a model on this machine/);
+});
+
+test('a row that cannot hold a consultation — a Team server — cannot be ticked consultant, and its card names the runtimes that can', () => {
+  // What the old Consultant tab said under its vendor picker ("cannot consult — it runs on …"), said where a consultant
+  // is chosen now: the card's consultant tick (todo/PLAN_one_model_catalog.md E5.3). A Team server is the case the
+  // ruling forbids outright.
+  const team = codex({ id: 'acme-codex', runtime: 'remote', baseUrl: 'https://coai.acme.example' });
+  const page = run(stateWith([codex(), team]));
+  const card = pageTree(page.html).one((node) => node.dataset['modelCard'] === 'acme-codex', 'Team-server card');
+  const tick = card.one((node) => node.tagName === 'LABEL' && node.text().trim() === 'consultant', 'consultant tick on the Team-server card');
+
+  assert.equal(tick.one((node) => node.tagName === 'INPUT', 'its box').disabled, true, 'a Team server can be ticked consultant');
+  assert.ok(!page.commands.some((one) => one.dataset['id'] === 'acme-codex|consultant'), 'the page binds a consultant toggle on a Team server');
+  assert.ok(page.commands.some((one) => one.dataset['id'] === 'codex|consultant'), 'and a codex row is still offered it');
+  for (const runtime of CONSULTING_RUNTIMES) {
+    assert.ok((tick.attrs['title'] ?? '').includes(runtime), `the reason does not name ${runtime}, a runtime a consultation runs on`);
+  }
+  assert.match(card.text(), /Not offered: consultant, question consultant — a consultation runs on/);
 });
 
 test('remove asks first — removeModel, never a command sent on the first click', () => {

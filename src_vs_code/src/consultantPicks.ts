@@ -1,12 +1,13 @@
-import { CALLER_KINDS, DEFAULT_CONSULT, type ConsultantChoice, type ConsultSettings, type ResolvedConsultant } from './consultSettings';
+import { CALLER_KINDS, DEFAULT_CONSULT, type ConsultantChoice, type ConsultSettings, type ResolvedConsultant, isCallersOwnRuntime } from './consultSettings';
 import { optionHtml, pickRefusal, rowPicks, type PickOption } from './catalogPicks';
 import { type ConsultantHealthState, callerHealth } from './consultantHealthState';
 import { healthBlock } from './consultantHealthView';
 import { escapeHtml } from './escapeHtml';
+import { help } from './panelControls';
 import type { Vendor } from './vendors';
 
 /**
- * The new Settings page's consultant picks (todo/PLAN_one_model_catalog.md E4.2): a caller's consultant is CHOSEN from
+ * The Settings page's consultant picks (todo/PLAN_one_model_catalog.md E4.2): a caller's consultant is CHOSEN from
  * the rows ticked Consultant on Models, where the model itself is edited — and stored as a reference to that row.
  * Pure: the page draws the view, the host applies the writes.
  *
@@ -36,9 +37,6 @@ export interface PickWrites {
   readonly refusal: string;
 }
 
-/** The runtime a caller kind runs on — the vendor a consultant would share with it — or '' for another client. */
-const CALLER_RUNTIME: Readonly<Record<string, string>> = { claude: 'claude', codex: 'codex', gemini: 'gemini' };
-
 /** The row id a stored entry picks — '' when it is the caller's shipped pair, which is what absence means (D2). */
 function pickedId(caller: string, stored: ConsultantChoice): string {
   const shipped = DEFAULT_CONSULT.stored[caller];
@@ -47,11 +45,15 @@ function pickedId(caller: string, stored: ConsultantChoice): string {
   return same ? '' : stored.vendor;
 }
 
-/** A word about a pick of the caller's own vendor — offered, never refused — or ''. */
+/**
+ * A word about a pick of the caller's own vendor — offered, never refused — or ''. Whether a runtime IS the caller is
+ * `consultSettings`' rule: the Gemini CLI's own vendor runs on `antigravity`, so a name-to-name comparison said nothing
+ * to the one caller most likely to be pointed back at itself.
+ */
 function sameVendorNote(caller: string, picked: string, rows: readonly Vendor[]): string {
   const row = rows.find((one) => one.id === picked);
 
-  return row !== undefined && row.runtime === CALLER_RUNTIME[caller] ? 'The same vendor as the caller: it can be a stronger model, but it shares the caller’s blind spots.' : '';
+  return row !== undefined && isCallersOwnRuntime(caller, row.runtime) ? 'The same vendor as the caller: it can be a stronger model, but it shares the caller’s blind spots.' : '';
 }
 
 /**
@@ -116,7 +118,7 @@ function pickHtml(caller: { id: string; label: string }, consult: ConsultSetting
   const note = view.note.length === 0 ? '' : `\n  <div class="hint stranded">${escapeHtml(view.note)}</div>`;
 
   return `<div class="field consult-pick">
-  <label for="consult-row-${caller.id}">${escapeHtml(caller.label)} asks</label>
+  <label for="consult-row-${caller.id}">${help('consultCaller')}${escapeHtml(caller.label)} asks</label>
   <select id="consult-row-${caller.id}" data-setting="consultantRow" data-caller="${caller.id}">${view.options.map((one) => optionHtml(one, view.selected)).join('')}</select>
   <div class="hint">${escapeHtml(runsOn(consult.byCaller[caller.id] ?? DEFAULT_CONSULT.byCaller[caller.id]!))}</div>${note}
 ${pickHealth(caller.id, consult, health)}
@@ -124,21 +126,19 @@ ${pickHealth(caller.id, consult, health)}
 }
 
 /**
- * The caller's health block under its pick — the block the current page draws under each caller's own definition
- * (each side's facts, this side's paid Check, agy's allow rule and its Copy), decided by the same `callerHealth` and drawn
- * by the same `healthBlock`, never a copy (todo/PLAN_one_model_catalog.md E5.1b). Without it the new page held no Check
- * at all, and deleting the current page (E5.1 step 5) would have deleted the feature. Empty while the panel has no
- * health to give, as on the current page.
+ * The caller's health block under its pick (each side's facts, this side's paid Check, agy's allow rule and its Copy),
+ * decided by `callerHealth` and drawn by `healthBlock` (todo/PLAN_one_model_catalog.md E5.1b). Empty while the panel has
+ * no health to give.
  */
 function pickHealth(kind: string, consult: ConsultSettings, health: ConsultantHealthState | undefined): string {
   return healthBlock(health === undefined ? undefined : callerHealth(kind, consult, health));
 }
 
 /**
- * Every caller's picker — what the new page draws where the current page draws each caller's own definition.
+ * Every caller's picker — what the Consultant tab draws under its switch.
  *
  * @param health what the server says about each caller's consultant (`PanelState.consultantHealth`), or `undefined`
- *   before the first probe — the same value the current page's rows are drawn with
+ *   before the first probe
  */
 export function consultantPicksHtml(consult: ConsultSettings, rows: readonly Vendor[], health: ConsultantHealthState | undefined): string {
   return `${CALLER_KINDS.map((caller) => pickHtml(caller, consult, rows, health)).join('\n')}
