@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.45.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.44.2...mcp-v0.45.0) (2026-10-09)
+
+
+### Features
+
+* an antigravity consultant searches through coai (list and search, read-only, same conversation) ([#712](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/712)) ([6c8bdef](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6c8bdefab795f2c57808c3bc8846e24ea79e639c))
+
+
+### Bug Fixes
+
+* an agy launch cannot write inside its roots — a reader agent and an allowlist hook ([#716](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/716)) ([ec1c912](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ec1c9122b00b85782e803278da108b008622c652))
+
 ## [0.44.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.44.1...mcp-v0.44.2) (2026-10-07)
 
 
