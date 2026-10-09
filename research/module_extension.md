@@ -2611,6 +2611,21 @@ it is IN the mount makes the mount dirty, and the resolver — which runs first 
 instead. So the malformed-text case asks `consultantBody` directly, and a clean pinned mount that lacks
 the rule is its own case.
 
+## The feature and question halves are read from the mount (2026-10-09)
+
+[PLAN_the_feature_and_question_halves_are_shared_rules.md](PLAN_the_feature_and_question_halves_are_shared_rules.md).
+The conventions now carry the feature gate (`common/coai-feature-gate.md`, v3) and a new rule, the
+question consultant (`common/coai-question-consultant.md`, v1: ask the consultants before the person, in
+every phase). Every half of the paste is a mounted rule now.
+
+| what | where |
+|---|---|
+| **The generator reads both from the mount.** `FEATURE_SOURCE` moved to `.agents/conventions/common/coai-feature-gate.md`; `QUESTION_SOURCE` is new; both go through `ruleBody` with their own marker and heading. The consultant, feature and question halves are emitted by one `prepareMountedHalf` (it was written out twice before the third); a pin from before either rule fails naming the file and the fix. | `scripts/prepare-gate.mjs` |
+| **The product copy is deleted**, and a test asserts it stays deleted, as the consultant's does. | `src_vs_code/src/featureRule.md` (gone), `snippetVersion.test.ts`, `featureSnippet.test.ts` |
+| **One kind of row.** `KNOWN_HALVES` lost its `mounted` flag and `readSnippetStatus` its `MOUNTABLE_HALVES`: a mount is judged on every half, so a mount from before the move is told the pin is behind, exactly as for any other missing sibling. `MOUNTED_SIBLINGS` is every row but the gate. | `claudeSnippet.ts` |
+| **Versions**: `FEATURE_VERSION` 3 (the text moved AND its verdicts now say what D23 does — v2 said `revise` meant "call again"), `CONSULTANT_VERSION` 4 (trigger 7: a cadence consultation counts only after `close_consult` records an outcome), `QUESTION_VERSION` 1 (a sixth row, last), `ARTEFACT_VERSION` 15, the menu title `(v15)`, `SNIPPET_BODY_SHA` re-pinned. The gate half stays frozen at v5. | `claudeSnippet.ts`, `package.json` |
+| **Tests.** `questionSnippet.test.ts` (new): the row, the marker, the load-bearing sentences, a paste and a mount without it are `older` naming it. `featureSnippet.test.ts`: the mount is the one source, the D23 sentences, a mount missing the file is `older`. `prepareGate.test.mjs`: one missing-file case per emitted half, and the two new bodies stripped and refused like any mounted rule. `snippetDiscovery`/`snippetVersion`: six files, derived from the table. | `src_vs_code/src/test/` |
+
 ## The consultant's kinds on every card, and a "?" on every consultant setting (2026-09-26)
 
 Stories 2 and 3 of [PLAN_consult_limits_kinds_and_help.md](PLAN_consult_limits_kinds_and_help.md).

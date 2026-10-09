@@ -135,7 +135,7 @@ test('a paste with no document half is reported as older', () => {
     snippetStatus(gateOnly),
     {
       kind: 'older',
-      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant'],
+      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant', 'coai-question'],
       current: ARTEFACT_VERSION,
     },
     'the AI obeying it will never call review_document, which is what "older" is for',
@@ -157,7 +157,7 @@ test('a paste with no caller half is reported as older', () => {
     snippetStatus(withoutCaller),
     {
       kind: 'older',
-      behind: ['coai-caller', 'coai-consultant'],
+      behind: ['coai-caller', 'coai-consultant', 'coai-question'],
       current: ARTEFACT_VERSION,
     },
   );
@@ -173,16 +173,12 @@ test('the caller half of a current paste is the current caller version', () => {
  * and the pinned source, while the version/hash guard above stays independent of generation.
  */
 test('the mounted shared rules are byte-identical to what the menu hands out', () => {
-  // FOUR shared files: the gate rule, the document flow, the caller declaration and — since
-  // 2026-09-25 — the consultant, which moved from this repository into the conventions when the
-  // operator ruled it shared (research/PLAN_consult_on_a_cadence.md, story 5.2). This is what proves all of
-  // them travel verbatim. Every mounted row of the table is read from the mount; the one row that is
-  // NOT mounted — the feature half, this product's own (D11 of todo/PLAN_feature_review.md) — from its
-  // own file. DERIVED from the table, so a row added there is compared here without a list to keep.
+  // SIX shared files: the gate rule, the document flow, the caller declaration, the consultant (since
+  // 2026-09-25, research/PLAN_consult_on_a_cadence.md, story 5.2) and — since 2026-10-09 — the feature
+  // gate and the question consultant (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).
+  // This is what proves all of them travel verbatim. DERIVED from the table, so a row added there is
+  // compared here without a list to keep.
   const bodies = KNOWN_HALVES.map((half) => {
-    if (!half.mounted) {
-      return fs.readFileSync(productRuleFile(half.file), 'utf8').replace(/\r\n/g, '\n');
-    }
     const mounted = path.resolve(__dirname, '../../..', '.agents/conventions/common', half.file);
     assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
     const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
@@ -190,12 +186,14 @@ test('the mounted shared rules are byte-identical to what the menu hands out', (
 
     return ruleBody(source);
   });
-  assert.equal(KNOWN_HALVES.filter((half) => half.mounted).length, 4, 'four halves are still mounted rules');
+  assert.equal(KNOWN_HALVES.length, 6, 'six halves, every one a mounted rule');
 
-  // And no local copy is left beside the mount: a second source for the same half is the drift this
-  // move ended, so its absence is part of the guarantee.
-  const own = path.resolve(__dirname, '../../..', 'src_vs_code/src/consultantRule.md');
-  assert.ok(!fs.existsSync(own), 'the consultant half has one source now — the mounted rule; delete the local copy');
+  // And no local copy is left beside the mount: a second source for the same half is the drift these
+  // moves ended, so its absence is part of the guarantee.
+  for (const own of ['consultantRule.md', 'featureRule.md']) {
+    assert.ok(!fs.existsSync(path.resolve(__dirname, '../../..', 'src_vs_code/src', own)),
+      `${own}: that half has one source now — the mounted rule; delete the local copy`);
+  }
 
   assert.equal(
     bodies.join('\n'),
@@ -203,11 +201,6 @@ test('the mounted shared rules are byte-identical to what the menu hands out', (
     'the rules differ from the generated delivery. Run npm run prepare:gate; edit the canonical source only.',
   );
 });
-
-/** A product-owned half's source: `src_vs_code/src/<file>`, three directories above the compiled test. */
-function productRuleFile(file: string): string {
-  return path.resolve(__dirname, '../../..', 'src_vs_code/src', file);
-}
 
 /**
  * The consultant half travels, and an AI reading the paste can act on it.
@@ -370,7 +363,7 @@ test('the same text pasted into a CLAUDE.md is still a stale paste, with the old
     snippetStatus(mounted),
     {
       kind: 'older',
-      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant'],
+      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant', 'coai-question'],
       current: ARTEFACT_VERSION,
     },
   );
@@ -582,15 +575,11 @@ test('no half of the artefact is numbered from zero', () => {
  * wrong constant would compose a paste whose markers disagree with its bodies, and every other test
  * here would go on passing.</p>
  */
-test('every row names the rule file that carries its marker — in the mount, or in this product', () => {
+test('every row names the mounted rule file that carries its marker', () => {
   // `file` is what discovery reads beside a mounted gate rule, so a row pointing at the wrong file
-  // would report a mounting repository as missing a half it has. A product-owned row (`mounted:
-  // false`, the feature half) names its file under `src_vs_code/src` instead, and is never looked for
-  // in a mount.
+  // would report a mounting repository as missing a half it has.
   for (const half of KNOWN_HALVES) {
-    const file = half.mounted
-      ? path.resolve(__dirname, '../../..', '.agents/conventions/common', half.file)
-      : productRuleFile(half.file);
+    const file = path.resolve(__dirname, '../../..', '.agents/conventions/common', half.file);
     assert.ok(fs.existsSync(file), `${half.id}: ${half.file} is not where its row says (${file})`);
     assert.deepEqual(halvesIn(fs.readFileSync(file, 'utf8')).map((one) => one.id), [half.id],
       `${half.file} does not carry ${half.id}'s marker`);

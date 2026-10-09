@@ -44,32 +44,40 @@ export const CONSULTANT_SOURCE = '.agents/conventions/common/coai-consultant.md'
 export const CONSULTANT_OUTPUT = 'src_vs_code/src/generated/consultantRule.ts';
 
 /**
- * The FEATURE half, which is THIS product's own file and not a shared rule (D11 of
- * todo/PLAN_feature_review.md).
+ * The FEATURE half — a mounted rule like the others since 2026-10-09.
  *
- * <p>It says when to call one tool of one product — `review_feature`, at the end of a plan of three or
- * more epics — which is the ruling the consultant half lived under until 2026-09-25: specific material
- * belongs to the project that owns it. So it is read from this repository, the way the consultant
- * was, and held to its marker and heading the way the mounted halves are.</p>
- *
- * <p>Generated rather than written as a TypeScript literal for the reason that cost this repository
- * three broken builds: a backtick inside a template literal ends it, and this text is full of code
- * spans. Prose stays prose; the generator turns it into a JSON string.</p>
+ * <p>It was this product's own file, `src_vs_code/src/featureRule.md`, under D11 of
+ * todo/PLAN_feature_review.md: a rule about when to call one tool of one product is not shared. The
+ * operator reversed that on 2026-09-26 for the reason the consultant moved on 2026-09-25 — this server
+ * gates every repository in the family — and it moved once `review_feature` had shipped
+ * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md). It keeps its own output module, so
+ * `claudeSnippet.ts` imports it from where it always did.</p>
  */
-export const FEATURE_SOURCE = 'src_vs_code/src/featureRule.md';
+export const FEATURE_SOURCE = '.agents/conventions/common/coai-feature-gate.md';
 export const FEATURE_OUTPUT = 'src_vs_code/src/generated/featureRule.ts';
 
 /** The feature half's marker and heading, so a truncated or foreign file fails the build. */
 const FEATURE_MARKER = /^<!-- coai-feature v\d+ -->\n## Reviewing the whole FEATURE before release/;
 
-/** The feature block, verbatim. Ours, so there is no frontmatter to strip — only line endings to settle. */
+/** The feature rule: frontmatter and `owns:` lines stripped, held to its marker and heading. */
 export function featureBody(source) {
-  const text = source.replaceAll('\r\n', '\n');
-  if (!FEATURE_MARKER.test(text)) {
-    throw new Error(`${FEATURE_SOURCE}: missing the coai-feature marker or its heading`);
-  }
+  return ruleBody(source, FEATURE_SOURCE, FEATURE_MARKER);
+}
 
-  return text;
+/**
+ * The QUESTION half — ask the consultants before the person (2026-10-09). A sixth rule file for the
+ * reason there is a fourth and a fifth: each half carries its own marker, so a paste made before it
+ * existed is recognised as older.
+ */
+export const QUESTION_SOURCE = '.agents/conventions/common/coai-question-consultant.md';
+export const QUESTION_OUTPUT = 'src_vs_code/src/generated/questionRule.ts';
+
+/** The question half's marker and heading. */
+const QUESTION_MARKER = /^<!-- coai-question v\d+ -->\n## Before you ask the person, ask the consultants/;
+
+/** The question rule, stripped and held the same way. */
+export function questionBody(source) {
+  return ruleBody(source, QUESTION_SOURCE, QUESTION_MARKER);
 }
 
 /** The marker this file is recognised by, so a truncated or wrong file fails the build. */
@@ -179,53 +187,37 @@ export function prepareGate(repo) {
     fs.renameSync(temporary, output);
   } finally { removeOutput(temporary); }
 
-  // The consultant half, from the same pinned mount. Same invalidate-then-write, so a build never
-  // compiles against a constant left by the previous one.
-  const consultantFile = path.join(repo, CONSULTANT_OUTPUT);
-  const consultantTemporary = consultantFile + '.tmp';
-  removeOutput(consultantFile);
-  removeOutput(consultantTemporary);
-  const consultantSource = path.join(repo, CONSULTANT_SOURCE);
-  if (!fs.existsSync(consultantSource)) {
-    // Named, because the case is a pin from before the rule moved: nothing is dirty and nothing
-    // mismatches, the file is simply not there — and a bare ENOENT would not say which half.
-    throw new Error(`${CONSULTANT_SOURCE} is missing. It is the consultant half of the pasted snippet, `
-      + 'a shared rule since 2026-09-25: move the .agents/conventions pin to a release that carries it.');
-  }
-  const consultant = consultantBody(boundedSource(consultantSource));
-  try {
-    fs.writeFileSync(consultantTemporary, '// Generated from pinned conventions; do not edit.\n'
-      + 'export const CONSULTANT_RULE = ' + JSON.stringify(consultant) + ';\n', { flag: 'wx' });
-    fs.renameSync(consultantTemporary, consultantFile);
-  } finally { removeOutput(consultantTemporary); }
-
-  prepareFeature(repo);
+  // The halves that each keep an output module of their own, from the same pinned mount.
+  prepareMountedHalf(repo, CONSULTANT_SOURCE, CONSULTANT_OUTPUT, 'CONSULTANT_RULE', consultantBody, 'the consultant half', '2026-09-25');
+  prepareMountedHalf(repo, FEATURE_SOURCE, FEATURE_OUTPUT, 'FEATURE_RULE', featureBody, 'the feature half', '2026-10-09');
+  prepareMountedHalf(repo, QUESTION_SOURCE, QUESTION_OUTPUT, 'QUESTION_RULE', questionBody, 'the question half', '2026-10-09');
 
   return body;
 }
 
 /**
- * The feature half, from this repository's own file — invalidate, verify, then write, so a build never
- * compiles against a constant the previous one left behind.
+ * One mounted half into its own generated module — invalidate, verify, then write, so a build never
+ * compiles against a constant the previous one left behind. Was written out twice (the consultant,
+ * then the feature) before the third made it one function.
  */
-function prepareFeature(repo) {
-  const featureFile = path.join(repo, FEATURE_OUTPUT);
-  const featureTemporary = featureFile + '.tmp';
-  removeOutput(featureFile);
-  removeOutput(featureTemporary);
-  const featureSource = path.join(repo, FEATURE_SOURCE);
-  if (!fs.existsSync(featureSource)) {
-    // Named, because this is a file somebody could move without knowing what reads it — and the
-    // message it would otherwise produce is a bare ENOENT on a path.
-    throw new Error(`${FEATURE_SOURCE} is missing. It is the feature half of the pasted snippet, `
-      + 'kept as markdown in this repository; restore it from git rather than editing the generated constant.');
+function prepareMountedHalf(repo, source, output, exportName, bodyOf, what, since) {
+  const outputFile = path.join(repo, output);
+  const temporary = outputFile + '.tmp';
+  removeOutput(outputFile);
+  removeOutput(temporary);
+  const sourceFile = path.join(repo, source);
+  if (!fs.existsSync(sourceFile)) {
+    // Named, because the case is a pin from before the rule arrived: nothing is dirty and nothing
+    // mismatches, the file is simply not there — and a bare ENOENT would not say which half.
+    throw new Error(`${source} is missing. It is ${what} of the pasted snippet, `
+      + `a shared rule since ${since}: move the .agents/conventions pin to a release that carries it.`);
   }
-  const feature = featureBody(boundedSource(featureSource));
+  const text = bodyOf(boundedSource(sourceFile));
   try {
-    fs.writeFileSync(featureTemporary, `// Generated from ${FEATURE_SOURCE}; do not edit.\n`
-      + 'export const FEATURE_RULE = ' + JSON.stringify(feature) + ';\n', { flag: 'wx' });
-    fs.renameSync(featureTemporary, featureFile);
-  } finally { removeOutput(featureTemporary); }
+    fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\n'
+      + `export const ${exportName} = ` + JSON.stringify(text) + ';\n', { flag: 'wx' });
+    fs.renameSync(temporary, outputFile);
+  } finally { removeOutput(temporary); }
 }
 
 const here = fileURLToPath(import.meta.url);
