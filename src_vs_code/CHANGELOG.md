@@ -1,6 +1,6 @@
 # Changelog
 
-## Extension — unreleased (catalog epic 5)
+## Extension 0.65.0 — 2026-10-09
 
 **One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this
 side can use, added once with **＋ Add a model**, one card each, ticked for what it is used for (reviews plans, code,
@@ -32,6 +32,14 @@ will not overwrite the settings file this one stamped, so its edits never reach 
 
 **The help says the page as it is**, in all five languages: every place is named `Tab › Sub-tab` with the page's own
 labels, and a test fails if an article or a tooltip names a control the page no longer draws.
+
+**Also in 0.65.0.**
+- **Per-model fast mode** on a Models card — Off by default, On, or as the CLI is set; codex 0.110–0.130 are never sent
+  the standard tier they refuse.
+- **An api row can stream its answer**, switched per row on its Models card.
+- **A fresh install starts with seven useful phrases** in the Phrases section.
+- **A Bugz key is filed under the server that issued it**, and the sidebar reads and writes this side's settings.
+- **Add a model** accepts a model a consultant picked at its own endpoint (it was refused as another caller's).
 
 ## Server 0.44.2 — 2026-10-07
 
