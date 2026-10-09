@@ -23,20 +23,35 @@ reviewer's card for the same model (PR #681's review; `theOldPagePricesWhatItSho
 Every Models card shows the catalog price of its own row, and no row's price can be overwritten by another row's
 endpoint. The spending and consultation tabs, which price every row on purpose, are unchanged.
 
-## Design (to be reviewed)
+## Design
 
-Key the map the Models cards read by ROW (`id`), not by model: `modelPrices(rows)` computes each row's price from its own
-model and its own route, so two rows on the same model and different endpoints each keep their own rate. The reviewers'
-by-model map stays for the old consumers that need it, or they move to the by-row map in the same change — decided by
-reading each consumer (`panelProvider.ts` lines that call `this.modelPrices`, `roundsLog.ts`, `vendorsWire.ts`).
+The consumers were read (2026-10-09): `PanelState.modelPrices` has ONE reader, `cardContextFor`'s `price:` in
+`panelView.ts`, which the Models cards use. The spending tab (`usageTab`) and the consultation tab
+(`consultationsTab`) are handed their own map from `this.modelPrices(vendors)` — every row and the chat presets, by
+model — and do not read the state's field. So only the cards' map changes.
+
+1. **A pure function in the price service**, `cardPrices(rows, priceOf)` in `priceBook.ts`: for each row, the price of
+   ITS model on ITS route — an `api` row's `baseUrl`, `''` for every other runtime, exactly as `modelPrices` routes
+   today — keyed by the row's `id`. A row the lists do not know (or with no model) has no entry. The provider calls it
+   with `PRICE_BOOK.priceOf` over EVERY catalog row, after the same `refreshPriceTables()`.
+2. **The state field becomes `cardPrices`** (keyed by row id, documented so), and `cardContextFor` reads
+   `state.cardPrices[v.id]`. Keyed by row, no row's route can land on another row's card — the guarantee the
+   reviewers-only list was protecting holds by construction, so the list goes from the price call (it stays for
+   `vendors: shown`).
+3. **The by-model `modelPrices(vendors)`** stays as it is for the two tabs.
+
+Rejected: keeping the field by model and pricing every row — two rows on one model and two endpoints would still share
+one rate, which is the bug's other half.
 
 ## Build order
 
-1. RED: a Models-card test that RUNS the page with a consultant-only row on a model no reviewer uses and asserts its
+1. RED: `cardPrices` lands with today's semantics (reviewer rows, by model) and a Models-card test that RUNS the page with a consultant-only row on a model no reviewer uses and asserts its
    price is drawn; and one with an api consultant and a reviewer on the same model, each card showing its own rate.
 2. The by-row price map and `cardContextFor` reading it.
 3. GREEN, then the break-it check (the old by-model read turns the first test red).
-4. Docs: `research/module_extension.md`; `theOldPagePricesWhatItShows.test.ts` updated to the new guarantee.
+4. Docs: `research/module_extension.md`; `theOldPagePricesWhatItShows.test.ts` updated to the new guarantee (was: the
+   price call takes `shown`; now: it takes every row and the card reads by id); the ~30 test states that set
+   `modelPrices: {}` renamed.
 
 ## Test plan
 
