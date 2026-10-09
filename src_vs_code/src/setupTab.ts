@@ -5,7 +5,7 @@ import type { Runtime } from './models';
 import type { Vendor } from './vendors';
 
 /**
- * The Settings page's Setup additions (todo/PLAN_one_model_catalog.md E4.5): the CLIs the models run on, whether
+ * The Settings page's Setup additions (research/PLAN_one_model_catalog.md E4.5): the CLIs the models run on, whether
  * each MCP client registers coai, and the data folder's "moved from" record. Pure — the host reads the files and the
  * versions, these decide and draw.
  */

@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// coai-mcp reads <c>shared/feature-availability.json</c> itself — the file the extension generates its pickers from
-/// (todo/PLAN_one_model_catalog.md D4; epic 1 story 2 made the file, epic 2 story 1 makes this half read it).
+/// (research/PLAN_one_model_catalog.md D4; epic 1 story 2 made the file, epic 2 story 1 makes this half read it).
 /// </summary>
 /// <remarks>
 /// Until epic 2, <see cref="ConsultantResolution.Consulting"/> was a literal held level with the file by this test. Now it

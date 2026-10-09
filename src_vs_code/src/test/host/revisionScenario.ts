@@ -10,7 +10,7 @@ import { userChatPresets } from '../../modelKeys';
 import { recordsIn, type RawRecord } from '../settingsFileFixture';
 
 /**
- * R7 (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a)) in a REAL editor — its code round's finding 0.
+ * R7 (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a)) in a REAL editor — its code round's finding 0.
  *
  * <p><b>What it drives for real.</b> The shipped extension, activated: its catalog migration moves a chat preset into a
  * row of its own when `coai.chatModelPresets` changes, and moves nothing — makes no second row — when an older build's

@@ -8,7 +8,7 @@ import type { MovedPreset } from '../chatPresetMove';
 import { CONVERSATION_VERSION, recordFrom } from '../chatStore';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md, the guarantee the move exists to keep: a conversation resumed after its
+ * E4.6a of research/PLAN_one_model_catalog.md, the guarantee the move exists to keep: a conversation resumed after its
  * preset moved into the catalog opens on the SAME model — the row it was spoken to when that row is still there, and an
  * old preset id followed to the row it became — never the first model in the list, which is somebody else's model,
  * prompt and effort.

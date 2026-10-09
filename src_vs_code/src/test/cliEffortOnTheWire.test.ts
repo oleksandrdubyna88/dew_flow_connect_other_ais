@@ -5,7 +5,7 @@ import { vendorsEnv } from '../vendorsWire';
 
 /**
  * A CLI row's effort crosses to coai-mcp only when the installed binary lists `cliEffort` in `--features`
- * (todo/PLAN_one_model_catalog.md, epic 2, story 2). What it means is the runtime's and coai-mcp decides it: claude's
+ * (research/PLAN_one_model_catalog.md, epic 2, story 2). What it means is the runtime's and coai-mcp decides it: claude's
  * level as `--effort`, a codex row's kept and not sent while codex is unmeasured. An api row's effort keeps its own
  * road (`apiSettingsOnTheWire`).
  */

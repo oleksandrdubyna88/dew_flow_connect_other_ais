@@ -22,7 +22,7 @@ import { Node, runPageHtml, type Page } from './pageScriptHarness';
  * nothing reads exactly like a working one in its source text.</p>
  *
  * <p>The Chat presets, Review roles and Gate commands tabs were three more, until E5.1 step 4 of
- * todo/PLAN_one_model_catalog.md deleted them — their editors are places of the Settings page, whose controls are the
+ * research/PLAN_one_model_catalog.md deleted them — their editors are places of the Settings page, whose controls are the
  * page's own. The Chat page is the ninth; its state is large enough that its own tests
  * (`chatPage.test.ts`, `aQuestionCanWait.test.ts`) are where both of its controls are run.</p>
  */

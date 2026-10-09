@@ -22,7 +22,7 @@ import type { Vendor } from './vendors';
  *
  * <p>{@link questionRowView} DECIDES which prompts a row offers and whether its switch may be turned on, and the
  * markup only renders that value — so a test asserts the decision, and the page test runs the page. Who a row asks
- * is a pick of a catalog row ticked "question consultant" (todo/PLAN_one_model_catalog.md E4.2); its model is edited
+ * is a pick of a catalog row ticked "question consultant" (research/PLAN_one_model_catalog.md E4.2); its model is edited
  * on Models. An incompatible pair is DISABLED with the capability table's own reason (A3); a pair that can
  * read this machine (D13) is shown so — with a tick that is ON and cannot be taken off, because no setting of that
  * runtime confines what it reads (revised by the operator on 2026-10-03; there is no acknowledgement to give).</p>

@@ -60,7 +60,7 @@ public sealed record FastModeRow(string Runtime, string Source, IReadOnlyList<st
 
 /// <summary>
 /// Which runtime serves which feature, and which efforts each accepts — read from the file the extension generates its
-/// pickers from (todo/PLAN_one_model_catalog.md D4), so the server and the panel cannot disagree about either.
+/// pickers from (research/PLAN_one_model_catalog.md D4), so the server and the panel cannot disagree about either.
 /// </summary>
 /// <remarks>
 /// Embedded like <c>runtime-capabilities.json</c>, and REFUSED whole when it is not usable: a server that guessed a list

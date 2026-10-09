@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { OVERLAID_SETTINGS } from '../settingsShape';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md: the chat's model and its model name are per side (D8 — chat models are per
+ * E4.6a of research/PLAN_one_model_catalog.md: the chat's model and its model name are per side (D8 — chat models are per
  * side; the model the chat opens on names one of THIS side's rows). So the chat's settings are read through this side —
  * `chatRead` — never the user layer alone, which answers the shared value and opens a side on a row it may not have.
  * Structural, because these hosts import vscode and no test here can run them; `thePanelReadsThisSide.test.ts` counts

@@ -151,7 +151,7 @@ export function rowHealth(kind: string, identity: RowIdentity, state: Consultant
 }
 
 /**
- * One CALLER's health block, decided against the consultant its entry RESOLVES to (todo/PLAN_one_model_catalog.md
+ * One CALLER's health block, decided against the consultant its entry RESOLVES to (research/PLAN_one_model_catalog.md
  * E5.1b) — drawn under each caller's pick (`consultantPicks.pickHtml`). Both Consultant tabs drew by it until E5.3
  * removed the old page's caller definitions.
  *

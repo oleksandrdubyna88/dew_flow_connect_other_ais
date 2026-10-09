@@ -8,7 +8,7 @@ import { click, panelState, runPanel } from './panelPageHarness';
 import { pageTree } from './pageTree';
 
 /**
- * E4.5 of todo/PLAN_one_model_catalog.md: the new page's Setup — the CLIs the models run on, whether each MCP client
+ * E4.5 of research/PLAN_one_model_catalog.md: the new page's Setup — the CLIs the models run on, whether each MCP client
  * registers coai (READ from its config file, never written, and nothing else in it shown), and the data folder's
  * "moved from" record surviving a reload with the way to delete the old folder.
  */

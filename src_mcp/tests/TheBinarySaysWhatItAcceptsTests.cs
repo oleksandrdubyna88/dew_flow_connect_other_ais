@@ -5,7 +5,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>--features</c>: the binary lists the capabilities it has, and the extension sends a field only when it is listed
-/// (todo/PLAN_one_model_catalog.md, epic 2, as revised by its plan round — "capability, not version numbers").
+/// (research/PLAN_one_model_catalog.md, epic 2, as revised by its plan round — "capability, not version numbers").
 /// </summary>
 /// <remarks>
 /// A constant such as <c>SYSTEM_PROMPT_SINCE = "0.44.0"</c> guesses the release number before release-please cuts it,

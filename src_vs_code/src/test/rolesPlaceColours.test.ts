@@ -17,7 +17,7 @@ import { rolesPanelState, type RolesPlaceState } from './rolesPlaceHarness';
  * <p>Issue #293, in three parts: the page was one column of everything, a prompt you add landed among the shipped ones
  * looking identical to them, and every left edge was the same blue while the sidebar had given each role its own tone.
  * The Review roles tab answered it with tabs, a green frame and the sidebar's palette; E5.1 step 4 of
- * todo/PLAN_one_model_catalog.md deleted that tab, and its place on the Settings page draws the stages as headed groups
+ * research/PLAN_one_model_catalog.md deleted that tab, and its place on the Settings page draws the stages as headed groups
  * (`rolesPlace.test.ts`, "the plan stage and the code stage are drawn apart") — which place is open is held by the host
  * (`catalogPlaces.test.ts`). The frame and the palette are asked of the place here, in the WHOLE document, whose one
  * stylesheet the place is drawn with.</p>

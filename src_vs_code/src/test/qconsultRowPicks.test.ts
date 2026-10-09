@@ -10,7 +10,7 @@ import { lastWrite, panelState, runPanel } from './panelPageHarness';
 import { pageTree } from './pageTree';
 
 /**
- * E4.2 of todo/PLAN_one_model_catalog.md, the question consultant's half: on the new page a question row PICKS a
+ * E4.2 of research/PLAN_one_model_catalog.md, the question consultant's half: on the new page a question row PICKS a
  * catalog row ticked "question consultant" — its model is edited on Models — and keeps its own id, prompt and switch.
  */
 

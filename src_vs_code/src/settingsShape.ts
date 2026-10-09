@@ -592,7 +592,7 @@ export function envBlock(
   if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
     env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
   }
-  // The Bugz server. NOT the Bugz model (todo/PLAN_one_model_catalog.md T7, removed in E5.1): it was written here as
+  // The Bugz server. NOT the Bugz model (research/PLAN_one_model_catalog.md T7, removed in E5.1): it was written here as
   // `COAI_BUGZ_MODEL` so a collect started from a terminal could find it, and nothing in coai-mcp ever read that key —
   // the collector takes the model as `--model`, which the panel passes when it starts a collect. A key nothing reads
   // is a setting that looks wired and is not; `settingsReach.test.ts` says why its walk skips `bugzModel`.
@@ -635,7 +635,7 @@ function wireEntry(one: ResolvedConsultant, row: Readonly<Record<string, unknown
 
 /**
  * The catalog row a stored reference names, as `COAI_VENDORS` would write it — the consultant's effort, system prompt,
- * timeout and key travel with it (todo/PLAN_one_model_catalog.md, C2). Only to a binary that lists `consultantRow`: an
+ * timeout and key travel with it (research/PLAN_one_model_catalog.md, C2). Only to a binary that lists `consultantRow`: an
  * older one skips an unknown member without a word, so the person would believe settings applied that were not. Found
  * by the rule `resolveConsultant` uses for a reference — the row with that id, switched on or off — and written switched
  * on, as `--check-model` is handed it, because a consultant-only row reviews nothing.
@@ -736,7 +736,7 @@ export function enabledCodeRoles(settings: CoaiSettings): readonly string[] {
   // the server reads both. By BUCKET, not "not the plan stage" (§9.8 of the feature-review plan): that
   // filter took every programming role outside the plan stage for code — the feature role included.
   // Through `rolesSwitch.rolesOn`, the ONE count the Settings page's block and the host's guard read too (E5.1b of
-  // todo/PLAN_one_model_catalog.md): the Settings page used to count `active` alone, and so disagreed with this one.
+  // research/PLAN_one_model_catalog.md): the Settings page used to count `active` alone, and so disagreed with this one.
   return rolesOn(settings.roles, RESULT_CODE, settings.roleEnabled).map((role) => role.id);
 }
 

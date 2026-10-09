@@ -885,7 +885,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: theDefaultPhrasesInARealEditor,
   },
   {
-    // R7 of todo/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration
+    // R7 of research/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration
     // moving a preset and NOT moving an older build's edit of it, and each choice on the conflict landing in the real
     // settings. What it does and does not drive is in `revisionScenario.ts`. Last, because it rewrites the catalog's keys.
     name: 'an older build\'s edit after the move is raised once, and each choice on it lands in the real settings',

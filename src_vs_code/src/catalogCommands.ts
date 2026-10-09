@@ -5,7 +5,7 @@ import { freeVendorId, type Vendor } from './vendors';
 import { vaultKeyOf } from './vaultKey';
 
 /**
- * The Models tab's own edits (todo/PLAN_one_model_catalog.md E3.2) — what the catalog becomes when a use is ticked or a
+ * The Models tab's own edits (research/PLAN_one_model_catalog.md E3.2) — what the catalog becomes when a use is ticked or a
  * row duplicated. Pure: the host saves `rows` (and `bugzModel` when it moved) through the panel's one save, and shows
  * `refused` or `said` when there is one.
  */

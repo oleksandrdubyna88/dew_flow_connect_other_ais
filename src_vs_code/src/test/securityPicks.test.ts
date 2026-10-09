@@ -14,7 +14,7 @@ import { bubbled, pageTree, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
- * E4.2 of todo/PLAN_one_model_catalog.md, the security half: on the new page the lane's pairs are made from the rows
+ * E4.2 of research/PLAN_one_model_catalog.md, the security half: on the new page the lane's pairs are made from the rows
  * ticked Security lane, a pair whose row is not ticked is kept and named (D3), and "Try it" asks the installed binary —
  * `coai-mcp --check-security`, on stdin — what the lane makes of a sample: never a JavaScript copy of the matcher.
  */

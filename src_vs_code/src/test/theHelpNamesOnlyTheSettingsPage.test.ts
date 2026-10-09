@@ -5,7 +5,7 @@ import { HELP } from '../help';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor, type HelpLanguage } from '../helpContent';
 
 /**
- * The help sends nobody to UI the Settings page no longer draws (todo/PLAN_one_model_catalog.md, E5.2).
+ * The help sends nobody to UI the Settings page no longer draws (research/PLAN_one_model_catalog.md, E5.2).
  *
  * <p>E5.1 removed the old Settings page: its Reviewers tab and reviewer cards, **Add a reviewer**, the Review roles, Gate
  * commands and Chat presets tabs, the pages **Edit roles…** and **Edit commands…** opened, **Chat other AIs**, and the

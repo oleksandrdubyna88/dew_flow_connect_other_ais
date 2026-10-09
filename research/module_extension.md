@@ -10531,7 +10531,7 @@ belongs to the extension as a whole:
   population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
   `securityCommands.ts`, which import `vscode`.
 
-## The reviewer list grows into the model catalog (2026-10-04, `todo/PLAN_one_model_catalog.md` E1)
+## The reviewer list grows into the model catalog (2026-10-04, `research/PLAN_one_model_catalog.md` E1)
 
 Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
 

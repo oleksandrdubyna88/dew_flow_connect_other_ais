@@ -6,7 +6,7 @@ import { commandEdit } from '../commandsMessages';
 /**
  * What the commands' host reads a message as, and what it tells an older server — decided without a page.
  *
- * <p>These sat beside the Gate commands tab's own tests until E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted the
+ * <p>These sat beside the Gate commands tab's own tests until E5.1 step 4 of research/PLAN_one_model_catalog.md deleted the
  * tab; the parser is the one Reviews › Commands on the Settings page posts through (`commandsEmbed.ts`), and what the
  * tab DREW and POSTED is asked of that place in `commandsOnTheNewPage.test.ts`.</p>
  */

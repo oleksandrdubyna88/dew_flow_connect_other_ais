@@ -61,7 +61,7 @@ export interface QconsultSettings {
   readonly questionsPerSession: number;
   readonly freeBatches: number;
   /**
-   * Each question row that refers to a catalog row → that row's id (todo/PLAN_one_model_catalog.md, C2). A resolved row
+   * Each question row that refers to a catalog row → that row's id (research/PLAN_one_model_catalog.md, C2). A resolved row
    * keeps only the KEY name, which two catalog rows can share — a GLM on low effort and the same GLM on high — so the
    * id is kept here, beside the rows rather than in them: the rows are the wire, byte for byte.
    */

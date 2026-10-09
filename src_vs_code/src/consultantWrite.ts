@@ -6,7 +6,7 @@
  * different endpoint, and a URL that is not one or carries a key.</p>
  *
  * <p>This module was the Consultant section's write path until the Settings page replaced each caller's own
- * definition with a pick of a catalog row (todo/PLAN_one_model_catalog.md E5.3); a pick is written by
+ * definition with a pick of a catalog row (research/PLAN_one_model_catalog.md E5.3); a pick is written by
  * `consultantPicks.ts`.</p>
  */
 
