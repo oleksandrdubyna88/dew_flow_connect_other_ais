@@ -76,6 +76,7 @@ export class QconsultHost {
       profile: os.homedir(),
       systemDirs: system.filter((one): one is string => typeof one === 'string' && one.length > 0),
       caseless: windows,
+      windows,
     };
   }
 

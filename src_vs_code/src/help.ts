@@ -57,7 +57,7 @@ export const HELP = {
   qconsultPrompts:
     'The instructions a row is given ahead of the question. Three ship — projects on this disk, the internet, the best developer’s opinion — and you can edit their words (Restore default puts the shipped ones back) or add your own, each with the capability it needs.',
   qconsultRoots:
-    'The folders a disk row may read, read-only. Never a drive root, your profile folder itself, a system folder or the data folder: each of those is refused here and by the server, by name.',
+    'The folders a disk row may read, read-only. Never a drive root, your profile folder itself, a system folder or the data folder: each of those is refused here and by the server, by name. A WSL path in a Windows window, or a Windows path in WSL, is the other side’s folder — these settings are shared by both windows — so this side skips it and the server on that side reads it.',
   qconsultRowMinutes:
     'How long one row may take on one question — five minutes unless you change it. A row past it is timed out and the others still answer; the AI gets what came back.',
   qconsultQuestionsPerSession:

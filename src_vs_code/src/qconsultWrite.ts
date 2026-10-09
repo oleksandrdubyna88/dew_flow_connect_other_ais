@@ -303,6 +303,11 @@ export interface RootPlaces {
   readonly systemDirs: readonly string[];
   /** Windows compares paths without case; elsewhere case is part of the name. */
   readonly caseless: boolean;
+  /**
+   * Whether this window's extension host — and so the server it starts — runs on Windows: what decides which stored
+   * roots are the OTHER side's (`spelledForTheOtherOs`). A WSL window is not Windows, whatever machine it is on.
+   */
+  readonly windows: boolean;
 }
 
 /**
