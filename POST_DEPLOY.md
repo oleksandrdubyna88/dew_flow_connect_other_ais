@@ -86,7 +86,7 @@ as hung, and the re-attempt took 7m26s and published cleanly. The registry is si
 mornings. Read the step's own elapsed time against the JOB's history before acting, and prefer waiting
 — the only thing a cancel buys is another cold `npm ci`.
 
-**Item 12 spends money, on purpose, and that is why it is manual (2026-09-11).** Since the server
+**Item 11 spends money, on purpose, and that is why it is manual (2026-09-11; item 12 until 2026-10-09).** Since the server
 launches every reviewer confined, each claude launch sends a `--disallowedTools` list read off the
 CLI installed HERE (2.1.258), and every launch starts from an allowlisted environment rather than the
 server's own. Whether the box's CLI accepts that argv, and whether each vendor can still start without
@@ -113,7 +113,7 @@ can see it — so it runs when a person decides to spend it, never on every pass
 
 ## When item 11 fails: the way back, written down before it is needed
 
-Item 12 is the only check whose failure means **every review of a vendor is dead**, and it is the one
+Item 11 is the only check whose failure means **every review of a vendor is dead**, and it is the one
 most likely to be met at an awkward hour, so the recovery belongs here rather than in somebody's head.
 Asked for on the plan round of the confinement change (codex, Major): a deployment whose only guard is
 an observation needs a written way back.
@@ -204,7 +204,7 @@ Partial verification: extension **0.32.3**, MCP **0.18.16-sharedrules.20260910**
 Item 4 passes: the installed globalStorage binary reports that version and its SHA matches
 `research/shared-rules-adoption-smoke.json`. Five real stdio contract cases pass against it.
 The installed extension bundle matches the inspected VSIX, including all canonical gate-body
-bytes. Item 11's manual panel scenario and an existing editor host reloading are still open;
+bytes. The (since retired) shared-instructions item's manual panel scenario and an existing editor host reloading are still open;
 no existing agent/editor process was stopped. Marketplace and Team-server items are not
 claims about this local-only installation.
 
