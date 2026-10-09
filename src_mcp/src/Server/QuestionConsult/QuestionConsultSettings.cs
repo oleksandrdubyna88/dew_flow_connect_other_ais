@@ -81,6 +81,18 @@ public static class QuestionConsultKeys
 }
 
 /// <summary>
+/// What the disk said about a root: a folder, CONFIRMED no folder (not found, not a directory, a file), or nothing it
+/// could tell (access denied, busy, an I/O failure) — the third code round, 2026-10-09: "cannot tell" is not "absent",
+/// and only a confirmed absence lets a root be the other side's. The extension's <c>directoryAt</c> answers the same three.
+/// </summary>
+public enum RootPresence
+{
+    Present,
+    Absent,
+    Unknown,
+}
+
+/// <summary>
 /// The places on THIS machine a disk root may not be (D14 c): the profile directory itself, and the system
 /// directories. Injected, so a test can name temp folders as them.
 /// </summary>
@@ -119,7 +131,10 @@ public static class QuestionConsultReader
     {
         var rows = QuestionRows.Parse(env(QuestionConsultKeys.Rows));
         var prompts = QuestionPromptSet.ParseCustom(env(QuestionConsultKeys.Prompts));
-        var roots = QuestionRoots.Validate(Listed(env(QuestionConsultKeys.Roots)), dataDir, places, isDirectory ?? Directory.Exists);
+        var listed = Listed(env(QuestionConsultKeys.Roots));
+        var roots = isDirectory is null
+            ? QuestionRoots.Validate(listed, dataDir, places, QuestionRoots.PresenceOf)
+            : QuestionRoots.Validate(listed, dataDir, places, isDirectory);
         var (mode, modeComplaint) = ModeOf(env(QuestionConsultKeys.Mode));
 
         var settings = new QuestionConsultSettings
@@ -212,18 +227,48 @@ public static class QuestionRoots
     /// </param>
     public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused, IReadOnlyList<string> OtherSide);
 
+    /// <summary>A two-valued disk, as the tests and a caller with only <c>Directory.Exists</c> have it: present or absent.</summary>
+    public static Verdict Validate(
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null) =>
+        Validate(roots, dataDir, places, full => isDirectory(full) ? RootPresence.Present : RootPresence.Absent, followLink);
+
+    /// <summary>
+    /// What the disk says about a path: a folder, CONFIRMED none — not found, not a directory, a file, a name this OS
+    /// cannot spell — or <see cref="RootPresence.Unknown"/> when it could not tell (access denied, busy, an I/O failure).
+    /// <c>Directory.Exists</c> answers false for all of those alike, which is how an inaccessible root was skipped as
+    /// the other side's (the third code round, 2026-10-09).
+    /// </summary>
+    public static RootPresence PresenceOf(string full)
+    {
+        try
+        {
+            return (File.GetAttributes(full) & FileAttributes.Directory) != 0 ? RootPresence.Present : RootPresence.Absent;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
+        {
+            return RootPresence.Absent;
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+        {
+            return RootPresence.Unknown;
+        }
+    }
+
+    /// <param name="presence">What the disk says about a qualified root — <see cref="PresenceOf"/> in production, injected in a test.</param>
     /// <param name="followLink">
     /// Resolves ONE path entry's link (<see cref="DocumentReader.FollowLink"/> by default): every component of a root,
     /// and of each refused place, is walked through it (<see cref="DocumentReader.Canonical"/>), so a junction or a
     /// symlink is judged at its final target (S4b item 2).
     /// </param>
     public static Verdict Validate(
-        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null)
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, RootPresence> presence, Func<string, string>? followLink = null)
     {
         // Every root is looked for, judged and kept QUALIFIED: a root-relative Windows root on the system drive, never on
         // whatever drive this process stands on (the code round, 2026-10-09). The other side's list keeps the spelling.
         string Here(string root) => Qualified(root, places.Windows, places.SystemDrive);
-        bool TheOtherSides(string root) => OtherSideHere(root, places.Windows, OtherSide(root, places.Windows) && isDirectory(Full(Here(root))));
+        bool TheOtherSides(string root) => OtherSide(root, places.Windows) && Skipped(root, presence(Full(Here(root))));
+        bool Skipped(string root, RootPresence said) =>
+            OtherSideHere(root, places.Windows, said == RootPresence.Present, said == RootPresence.Unknown);
         // Decided ONCE per root: the decision may probe the disk, and its answer serves both lists (the code round).
         var decided = roots.Select(root => (Root: root, OtherSide: TheOtherSides(root))).ToList();
         var otherSide = decided.Where(one => one.OtherSide).Select(one => one.Root.Trim()).Distinct(StringComparer.Ordinal).ToList();
@@ -232,7 +277,7 @@ public static class QuestionRoots
         var refused = new List<string>();
         foreach (var root in decided.Where(one => !one.OtherSide).Select(one => Here(one.Root)))
         {
-            var why = WhyNot(root, seen, isDirectory);
+            var why = WhyNot(root, seen, presence);
             if (why.Length > 0)
             {
                 refused.Add(why);
@@ -275,7 +320,10 @@ public static class QuestionRoots
     /// way must not lose it — an existing one is this side's and goes through the ordinary checks. Answered by
     /// <c>shared/path-family-vectors.json</c>'s <c>existence</c> vectors, as the extension's <c>otherSideHere</c> is.
     /// </summary>
-    public static bool OtherSideHere(string root, bool windows, bool existsHere) => !existsHere && OtherSide(root, windows);
+    /// <param name="unknownHere">The disk could not tell (<see cref="RootPresence.Unknown"/>): such a root is NEVER the other side's —
+    /// it stays this side's and is judged, and refused by name when it cannot be read (the third code round).</param>
+    public static bool OtherSideHere(string root, bool windows, bool existsHere, bool unknownHere = false) =>
+        !existsHere && !unknownHere && OtherSide(root, windows);
 
     /// <summary>
     /// The root as this side looks for it and keeps it: on Windows a root-relative root — one leading <c>/</c>, or a
@@ -321,7 +369,7 @@ public static class QuestionRoots
     public static IReadOnlyList<string> CredentialDirectories { get; } = [".ssh", ".aws", ".gnupg", ".config/gcloud", ".claude", ".codex", ".azure"];
 
     /// <summary>Why a root may not be read, or empty. The checks in the order a person would fix them — on the path as written AND on what it resolves to.</summary>
-    private static string WhyNot(string root, Seen seen, Func<string, bool> isDirectory)
+    private static string WhyNot(string root, Seen seen, Func<string, RootPresence> presence)
     {
         if (!IsAbsolute(root))
         {
@@ -333,9 +381,16 @@ public static class QuestionRoots
 
         return Place(full, seen) is { Length: > 0 } place ? place
             : Place(real, seen) is { Length: > 0 } target ? $"{target} ('{full}' resolves to it)"
-            : !isDirectory(full) ? $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists"
-            : string.Empty;
+            : Missing(root, presence(full));
     }
+
+    /// <summary>Why a root that passed every place check still cannot be read: no folder, or a disk that would not say.</summary>
+    private static string Missing(string root, RootPresence said) => said switch
+    {
+        RootPresence.Present => string.Empty,
+        RootPresence.Unknown => $"{QuestionConsultKeys.Roots}: '{root}' could not be checked on this machine (access denied, or the disk would not answer) — a disk row needs a folder it can read",
+        _ => $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists",
+    };
 
     /// <summary>The first place this path may not be — each check its own sentence, or empty.</summary>
     private static string Place(string full, Seen seen) =>

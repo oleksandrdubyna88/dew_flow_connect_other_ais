@@ -44,6 +44,8 @@
   "existence": [
     { "path": "/work", "windows": true, "existsHere": true, "otherSide": false, "why": "a root-relative Windows folder that exists — this side's, never skipped" },
     { "path": "/home/jinx/git", "windows": true, "existsHere": false, "otherSide": true, "why": "the operator's WSL root, which is no folder on the Windows side" },
+    { "path": "/work", "windows": true, "existsHere": false, "unknownHere": true, "otherSide": false, "why": "the disk could not answer (access denied, busy) — unknown is not absent: this side's, judged and refused by name if it cannot be used" },
+    { "path": "C:\\Users\\jinx\\git", "windows": false, "existsHere": false, "unknownHere": true, "otherSide": false, "why": "the same on the WSL side: only a CONFIRMED absence makes a root the other side's" },
     { "path": "C:\\Users\\jinx\\git", "windows": false, "existsHere": false, "otherSide": true, "why": "a Windows root read by the WSL side" },
     { "path": "/work", "windows": false, "existsHere": false, "otherSide": false, "why": "this side's own POSIX spelling that does not exist — refused by name, never skipped" },
     { "path": "D:\\rsd", "windows": true, "existsHere": false, "otherSide": false, "why": "this side's own Windows spelling that does not exist — refused by name, never skipped" }

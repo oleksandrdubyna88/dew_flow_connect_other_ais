@@ -16,6 +16,12 @@
 > The second code round added the live seam leg `scripts/seam-qconsult-roots.mjs` (the page's decision against the real
 > binary's, through `--providers` and `ask_consultants` — no new CLI flag), an UNKNOWN state for a `stat` that fails with
 > anything but ENOENT/ENOTDIR (never called the other side's, never cached), and one disk probe per other-side root.
+> The third code round made the SERVER answer the same three states: `QuestionRoots.PresenceOf` tells a folder, a
+> confirmed absence (not found, not a directory, a file, a name this OS cannot spell) and UNKNOWN (access denied, an
+> I/O failure) apart — `Directory.Exists` had answered false for all of them, so an inaccessible `/work` was skipped
+> as the other side's. **Rule: only a CONFIRMED absence makes a root the other side's; an unknown root stays this
+> side's, goes through the ordinary checks, and is refused by name ("could not be checked on this machine").** The
+> `existence` vectors carry `unknownHere`, and both halves read every vector row checked rather than cast.
 > The plan was written down after the work, when the gate asked for the file; the gate's plan round ran before the code
 > round on the same text.
 >

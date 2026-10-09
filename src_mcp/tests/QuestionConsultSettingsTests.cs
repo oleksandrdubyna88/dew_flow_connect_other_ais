@@ -381,17 +381,76 @@ public sealed class QuestionConsultSettingsTests : IDisposable
 
     private sealed record FamilyVector(string Path, bool OnWindows, bool Elsewhere, string Why);
 
-    private static IReadOnlyList<FamilyVector> FamilyVectors()
-    {
-        using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
-        using var parsed = System.Text.Json.JsonDocument.Parse(file);
+    private static IReadOnlyList<FamilyVector> FamilyVectors() =>
+        [.. SharedVectors.Rows("vectors").Select(v => new FamilyVector(
+            v.Text("path"), v.Flag("onWindows"), v.Flag("elsewhere"), v.Text("why")))];
 
-        return [.. parsed.RootElement.GetProperty("vectors").EnumerateArray().Select(v => new FamilyVector(
-            v.GetProperty("path").GetString() ?? "",
-            v.GetProperty("onWindows").GetBoolean(),
-            v.GetProperty("elsewhere").GetBoolean(),
-            v.GetProperty("why").GetString() ?? ""))];
+    /// <summary>
+    /// <c>shared/path-family-vectors.json</c>, read CHECKED: every row a JSON object and every field of its declared type,
+    /// or the test fails naming the section, the row and the field — never an InvalidOperationException from a null row
+    /// (the third code round). <c>pathFamily.test.ts</c> reads the file the same way.
+    /// </summary>
+    private static class SharedVectors
+    {
+        public static IReadOnlyList<Row> Rows(string section)
+        {
+            using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
+                AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
+            using var parsed = System.Text.Json.JsonDocument.Parse(file);
+            parsed.RootElement.TryGetProperty(section, out var rows).Should().BeTrue($"the file has a `{section}` section");
+            rows.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Array, $"`{section}` is an array");
+
+            return [.. rows.EnumerateArray().Select((row, at) => Row.Of(row.Clone(), $"{section}[{at}]"))];
+        }
+
+        public sealed record Row(System.Text.Json.JsonElement Element, string Where)
+        {
+            public static Row Of(System.Text.Json.JsonElement element, string where)
+            {
+                element.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Object, $"{where} is a vector row — a JSON object, not {element.ValueKind}");
+
+                return new Row(element, where);
+            }
+
+            public string Text(string name)
+            {
+                var value = Field(name);
+                value.ValueKind.Should().Be(System.Text.Json.JsonValueKind.String, $"{Where}.{name} is a string");
+
+                return value.GetString() ?? string.Empty;
+            }
+
+            public bool Flag(string name)
+            {
+                var value = Field(name);
+                (value.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                    .Should().BeTrue($"{Where}.{name} is a boolean, not {value.ValueKind}");
+
+                return value.GetBoolean();
+            }
+
+            /// <summary>A flag a row may leave out, false when absent — and a boolean when present.</summary>
+            public bool OptionalFlag(string name) => Element.TryGetProperty(name, out _) && Flag(name);
+
+            private System.Text.Json.JsonElement Field(string name)
+            {
+                Element.TryGetProperty(name, out var value).Should().BeTrue($"{Where} has a `{name}`");
+
+                return value;
+            }
+        }
+    }
+
+    [Fact]
+    public void AVectorRowThatIsNotAnObject_FailsNamingTheRow_NotWithAnExceptionFromTheReader()
+    {
+        using var parsed = System.Text.Json.JsonDocument.Parse("""[null, {"path": 3}]""");
+        var rows = parsed.RootElement.EnumerateArray().ToList();
+
+        var nullRow = () => SharedVectors.Row.Of(rows[0], "existence[0]");
+        nullRow.Should().Throw<Exception>().WithMessage("*existence[0] is a vector row*Null*");
+        var wrongField = () => SharedVectors.Row.Of(rows[1], "existence[1]").Text("path");
+        wrongField.Should().Throw<Exception>().WithMessage("*existence[1].path is a string*");
     }
 
     [Fact]
@@ -500,15 +559,8 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     [Fact]
     public void TheQualification_AnswersTheSharedResolutionVectors_AsTheExtensionDoes()
     {
-        using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
-        using var parsed = System.Text.Json.JsonDocument.Parse(file);
-        var vectors = parsed.RootElement.GetProperty("resolution").EnumerateArray().Select(v => new ResolutionVector(
-            v.GetProperty("path").GetString() ?? "",
-            v.GetProperty("windows").GetBoolean(),
-            v.GetProperty("systemDrive").GetString() ?? "",
-            v.GetProperty("qualified").GetString() ?? "",
-            v.GetProperty("why").GetString() ?? "")).ToList();
+        var vectors = SharedVectors.Rows("resolution").Select(v => new ResolutionVector(
+            v.Text("path"), v.Flag("windows"), v.Text("systemDrive"), v.Text("qualified"), v.Text("why"))).ToList();
 
         vectors.Should().HaveCountGreaterThan(4, "the file is read, not an empty array");
         foreach (var vector in vectors)
@@ -526,27 +578,46 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         SystemPlaces.SystemDriveOf("  ").Should().Be("C:");
     }
 
-    private sealed record ExistenceVector(string Path, bool Windows, bool ExistsHere, bool OtherSide, string Why);
+    private sealed record ExistenceVector(string Path, bool Windows, bool ExistsHere, bool UnknownHere, bool OtherSide, string Why);
 
     [Fact]
     public void TheOtherSideHere_AnswersTheSharedExistenceVectors_AsTheExtensionDoes()
     {
-        using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
-        using var parsed = System.Text.Json.JsonDocument.Parse(file);
-        var vectors = parsed.RootElement.GetProperty("existence").EnumerateArray().Select(v => new ExistenceVector(
-            v.GetProperty("path").GetString() ?? "",
-            v.GetProperty("windows").GetBoolean(),
-            v.GetProperty("existsHere").GetBoolean(),
-            v.GetProperty("otherSide").GetBoolean(),
-            v.GetProperty("why").GetString() ?? "")).ToList();
+        var vectors = SharedVectors.Rows("existence").Select(v => new ExistenceVector(
+            v.Text("path"), v.Flag("windows"), v.Flag("existsHere"), v.OptionalFlag("unknownHere"), v.Flag("otherSide"), v.Text("why"))).ToList();
 
         vectors.Should().HaveCountGreaterThan(2, "the file is read, not an empty array");
+        vectors.Should().Contain(vector => vector.UnknownHere, "the unknown state is pinned in the file both halves read");
         foreach (var vector in vectors)
         {
-            QuestionRoots.OtherSideHere(vector.Path, vector.Windows, vector.ExistsHere)
-                .Should().Be(vector.OtherSide, $"{vector.Path} (windows: {vector.Windows}, exists: {vector.ExistsHere}) — {vector.Why}");
+            QuestionRoots.OtherSideHere(vector.Path, vector.Windows, vector.ExistsHere, vector.UnknownHere)
+                .Should().Be(vector.OtherSide, $"{vector.Path} (windows: {vector.Windows}, exists: {vector.ExistsHere}, unknown: {vector.UnknownHere}) — {vector.Why}");
         }
+    }
+
+    [Fact]
+    public void OnWindows_ARootTheDiskCannotAnswerFor_IsNotTheOtherSides_ItIsJudgedHereAndRefusedByName()
+    {
+        // The third code round: "cannot tell" is not "absent". An inaccessible `/work` → `C:\work` was skipped as the WSL
+        // side's (and its row disabled) because the probe answered false on an access error. Only CONFIRMED absence skips.
+        var verdict = QuestionRoots.Validate(["/work"], _data, Places with { Windows = true, SystemDrive = "C:" }, _ => RootPresence.Unknown);
+
+        verdict.OtherSide.Should().BeEmpty("a root whose existence is unknown is not the other side's");
+        verdict.Accepted.Should().BeEmpty();
+        verdict.Refused.Should().ContainSingle("it is this side's, judged, and refused by name because it cannot be used")
+            .Which.Should().Contain("could not be checked on this machine");
+    }
+
+    [Fact]
+    public void ThePresenceProbe_TellsAFolderAFileAndNothingApart()
+    {
+        var file = Path.Combine(_projects, "a-file.txt");
+        File.WriteAllText(file, "x");
+
+        QuestionRoots.PresenceOf(_projects).Should().Be(RootPresence.Present);
+        QuestionRoots.PresenceOf(file).Should().Be(RootPresence.Absent, "a file is no folder");
+        QuestionRoots.PresenceOf(Path.Combine(_projects, "gone")).Should().Be(RootPresence.Absent);
+        QuestionRoots.PresenceOf(Path.Combine(file, "under-a-file")).Should().Be(RootPresence.Absent, "ENOTDIR is absence too");
     }
 
     [Fact]

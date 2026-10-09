@@ -1085,6 +1085,13 @@ it. An explicit WSL share (`\\wsl.localhost\<distro>\…`) is an ordinary Window
 name when unreachable — never skipped; a bare `/home/…` with no folder here is skipped, since the setting names no distro.
 Each root is DECIDED ONCE in `Validate` (one disk probe per other-side root, its answer serving both lists). The two
 halves are checked against each other live by the seam leg `scripts/seam-qconsult-roots.mjs` ([module_tests.md](module_tests.md)).
+**Three answers from the disk, not two** (the third code round): `QuestionRoots.PresenceOf` returns `RootPresence.Present`,
+`Absent` (not found, not a directory, a file, a name this OS cannot spell) or `Unknown` (access denied, any other I/O
+failure) — `Directory.Exists` had answered false for all of them, so an inaccessible `/work` was skipped as the other
+side's and its row disabled. Only a CONFIRMED absence makes a root the other side's (`OtherSideHere(…, unknownHere)`);
+an unknown root stays this side's, goes through D14 (c), and is refused by name: "could not be checked on this machine
+(access denied, or the disk would not answer)". The extension's `directoryAt` answers the same three, and the
+`existence` vectors pin it (`unknownHere`).
 Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
 `QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
 no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
