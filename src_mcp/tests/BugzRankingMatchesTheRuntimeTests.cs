@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The ranking model is allowed by the RUNTIME of the row it names, not by the row being called <c>local</c>
-/// (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+/// (research/PLAN_one_model_catalog.md, epic 2, story 1).
 /// </summary>
 /// <remarks>
 /// <para>A Bugz model is <c>rowId/model</c>, and the allowlist compared the row id: a second local instance

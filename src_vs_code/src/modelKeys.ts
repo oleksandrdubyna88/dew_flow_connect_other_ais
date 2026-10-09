@@ -58,7 +58,7 @@ export interface LayeredConfig {
 
 /**
  * The chat model presets as the chat, the move into the catalog and a choice on Chat ALL read them: the person's own
- * layer, the shipped presets included when they never changed them (todo/PLAN_one_model_catalog.md, R7's code round,
+ * layer, the shipped presets included when they never changed them (research/PLAN_one_model_catalog.md, R7's code round,
  * finding 6). One reader, because a conflict is the preset compared with what the MOVE recorded — read from any other
  * layer, Chat could raise a conflict the move never saw and a choice could not settle.
  */

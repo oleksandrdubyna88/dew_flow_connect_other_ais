@@ -65,7 +65,7 @@ export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 15;
+export const ARTEFACT_VERSION = 16;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -149,7 +149,8 @@ export const CALLER_VERSION = 2;
  * 2026-09-13 that a rule about when to call one tool of one server is not shared. The ruling was
  * reversed on 2026-09-25 — this server gates every repository in the family, so a rule about when to
  * call its consultant is as shared as the gate rule — and v3, which added the cadence trigger, is the
- * first read from <c>.agents/conventions/common/coai-consultant.md</c>.</p>
+ * first read from <c>.agents/conventions/common/coai-consultant.md</c>. v4 (conventions #58): a
+ * cadence consultation counts only after `close_consult` records its outcome.</p>
  *
  * <p>It is not cosmetic, for the same reason theirs are not: a copy pasted before the consultant
  * existed carries no consultant marker, and the AI obeying it never calls `consult` — it goes on

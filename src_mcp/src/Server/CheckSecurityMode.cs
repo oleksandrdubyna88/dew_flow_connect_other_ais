@@ -7,7 +7,7 @@ namespace CoaiMcp.Server;
 /// <summary>
 /// <c>--check-security [--validate]</c>: what the security lane would make of a piece of text — the signals it raises,
 /// the cards that would be due, the patterns it refuses — read from ONE JSON object on stdin, answered as one on stdout
-/// (todo/PLAN_one_model_catalog.md, epic 2, story 4: what the editor's "Try it" calls).
+/// (research/PLAN_one_model_catalog.md, epic 2, story 4: what the editor's "Try it" calls).
 /// </summary>
 /// <remarks>
 /// <para><b>Stdin, never argv.</b> A sample can hold a token, and a command line is in process listings, in shell history,

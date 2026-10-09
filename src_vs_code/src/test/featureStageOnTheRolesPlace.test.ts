@@ -15,7 +15,7 @@ import { roleBlockIn, roleEditsOf, rolesPlaceHtml, runRolesPlace, type RolesPlac
  * (`RoleStages.All`) — but the Stage select offered Plan review and Code review only, so a feature-stage
  * row was drawn with the first option showing and could never be put there from the page at all.</p>
  *
- * <p>These held the Review roles tab until E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted it; they ask the same
+ * <p>These held the Review roles tab until E5.1 step 4 of research/PLAN_one_model_catalog.md deleted it; they ask the same
  * of Reviews › Roles & prompts on the Settings page, which draws the same blocks. Choosing is run through the page's
  * own script and the host's own edit, and the place re-drawn from what the host stored.</p>
  */

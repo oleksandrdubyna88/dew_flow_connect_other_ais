@@ -4,7 +4,7 @@ import { catalogHtml } from '../catalogPage';
 import { panelState, runPanel, withoutSeq, type Control, type Page } from './panelPageHarness';
 
 /**
- * E4.1 of todo/PLAN_one_model_catalog.md: a section moved onto the new page is the SAME section — each control on it
+ * E4.1 of research/PLAN_one_model_catalog.md: a section moved onto the new page is the SAME section — each control on it
  * writes through the same shared script. Until E5.1 step 5 every setting control of the current Settings page was changed
  * on both pages and what each posted compared; with that page gone, every setting control of the Settings page is
  * changed in turn and must write ITS OWN setting — a control that writes nothing, or another key, is a control wired to

@@ -85,6 +85,6 @@ is not that machine — it is an instruction, and a caller can decline it with a
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | which vendor answers which caller by default | as written above | keeps the shipped map (an absent caller is the shipped pair); this plan owns the measurement |

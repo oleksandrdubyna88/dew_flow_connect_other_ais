@@ -11,7 +11,7 @@ import { pageTree, selectorsOf, type PageNode } from './pageTree';
 
 /**
  * Reviews › Roles & prompts on the Settings page, drawn and RUN — what the Review roles tab's tests read once that tab
- * was deleted (todo/PLAN_one_model_catalog.md E5.1 step 4). The tab drew the same blocks (`rolesBlocks.roleBlock`), so
+ * was deleted (research/PLAN_one_model_catalog.md E5.1 step 4). The tab drew the same blocks (`rolesBlocks.roleBlock`), so
  * what it held about a role is asked here of the page a person sees.
  *
  * <p>Every control a test fires at is taken from the page as drawn (`pageTree.ts`), never built by the test.</p>

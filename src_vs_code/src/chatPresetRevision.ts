@@ -6,7 +6,7 @@ import type { RevisionChoice } from './chatPresetsMessages';
 
 /**
  * A chat preset an OLDER build edited after the move into the catalog — a conflicting revision of the same preset — and
- * the two ways to settle it (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7). Pure.
+ * the two ways to settle it (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7). Pure.
  *
  * <p><b>Why it is a conflict and not a move.</b> An older build still reads and writes `coai.chatModelPresets`, and the
  * presets stay in the settings until epic 5 for exactly that build. The move used to match a preset to its record entry by

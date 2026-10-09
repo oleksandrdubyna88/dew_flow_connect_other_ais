@@ -5,7 +5,7 @@ import { freeChatRowId, takenRowIds } from './chatPresetMove';
 import { vendorsFrom } from './vendors';
 
 /**
- * The chat presets page's model edits, routed to ONE store (todo/PLAN_one_model_catalog.md E4.6a). A model the chat
+ * The chat presets page's model edits, routed to ONE store (research/PLAN_one_model_catalog.md E4.6a). A model the chat
  * lists from a catalog row is edited on that row; a preset the move has not taken — before the move, after a refused
  * one, in a restored layer — keeps the preset's own path, and is the only thing that path ever writes. A moved preset is
  * listed as its row, never as the preset, so it can never be edited in `chatModelPresets` again. Pure: the host saves.

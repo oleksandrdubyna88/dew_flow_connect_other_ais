@@ -2623,7 +2623,7 @@ every phase). Every half of the paste is a mounted rule now.
 | **The generator reads both from the mount.** `FEATURE_SOURCE` moved to `.agents/conventions/common/coai-feature-gate.md`; `QUESTION_SOURCE` is new; both go through `ruleBody` with their own marker and heading. The consultant, feature and question halves are emitted by one `prepareMountedHalf` (it was written out twice before the third); a pin from before either rule fails naming the file and the fix. | `scripts/prepare-gate.mjs` |
 | **The product copy is deleted**, and a test asserts it stays deleted, as the consultant's does. | `src_vs_code/src/featureRule.md` (gone), `snippetVersion.test.ts`, `featureSnippet.test.ts` |
 | **One kind of row.** `KNOWN_HALVES` lost its `mounted` flag and `readSnippetStatus` its `MOUNTABLE_HALVES`: a mount is judged on every half, so a mount from before the move is told the pin is behind, exactly as for any other missing sibling. `MOUNTED_SIBLINGS` is every row but the gate. The panel still words that as *copy it again and replace the old block*, which is the wrong cure for a mount (move the pin) — a known gap, now met by every mount on an old pin, owned by [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md). | `claudeSnippet.ts` |
-| **Versions**: `FEATURE_VERSION` 3 (the text moved AND its verdicts now say what D23 does — v2 said `revise` meant "call again"), `CONSULTANT_VERSION` 4 (trigger 7: a cadence consultation counts only after `close_consult` records an outcome), `QUESTION_VERSION` 1 (a sixth row, last), `ARTEFACT_VERSION` 15, the menu title `(v15)`, `SNIPPET_BODY_SHA` re-pinned. The gate half stays frozen at v5. | `claudeSnippet.ts`, `package.json` |
+| **Versions**: `FEATURE_VERSION` 3 (the text moved AND its verdicts now say what D23 does — v2 said `revise` meant "call again"), `CONSULTANT_VERSION` 4 (trigger 7; it arrived first with the minimal pin bump, #726, at artefact 15), `QUESTION_VERSION` 1 (a sixth row, last), `ARTEFACT_VERSION` 16, the menu title `(v16)`, `SNIPPET_BODY_SHA` re-pinned. The gate half stays frozen at v5. | `claudeSnippet.ts`, `package.json` |
 | **Tests.** `questionSnippet.test.ts` (new): the row, the marker, the load-bearing sentences, a paste and a mount without it are `older` naming it. `featureSnippet.test.ts`: the mount is the one source, the D23 sentences, a mount missing the file is `older`. `prepareGate.test.mjs`: one missing-file case per emitted half, and the two new bodies stripped and refused like any mounted rule. `snippetDiscovery`/`snippetVersion`: six files, derived from the table. | `src_vs_code/src/test/` |
 
 ## The consultant's kinds on every card, and a "?" on every consultant setting (2026-09-26)
@@ -10546,7 +10546,7 @@ belongs to the extension as a whole:
   population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
   `securityCommands.ts`, which import `vscode`.
 
-## The reviewer list grows into the model catalog (2026-10-04, `todo/PLAN_one_model_catalog.md` E1)
+## The reviewer list grows into the model catalog (2026-10-04, `research/PLAN_one_model_catalog.md` E1)
 
 Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
 

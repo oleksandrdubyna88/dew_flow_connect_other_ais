@@ -4,7 +4,7 @@ import { sourceOf } from './sourceReading';
 
 /**
  * What the three editing tabs did on their own, and the Settings tab must do now that their editors are its places
- * (todo/PLAN_one_model_catalog.md E5.1 step 4; E5.1c's code round, findings 2 and 3).
+ * (research/PLAN_one_model_catalog.md E5.1 step 4; E5.1c's code round, findings 2 and 3).
  *
  * <p>The tabs' hosts ran in a VS Code panel no unit test can build, so the WIRING is held here, over the provider's
  * source — the editing cores' own queues and the prune are tested where they live (`settledWrites.test.ts`,

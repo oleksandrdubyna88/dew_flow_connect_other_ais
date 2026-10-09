@@ -885,7 +885,7 @@ function strandedOption(chosen: string, offered: readonly { readonly id: string 
 
 /**
  * The chat's models as providers — which can answer, and which cannot and why — with the panel's OWN catalog in it.
- * Both Settings pages draw from it (todo/PLAN_one_model_catalog.md E4.6b).
+ * Both Settings pages draw from it (research/PLAN_one_model_catalog.md E4.6b).
  *
  * <p>The half `PLAN_provider_then_model.md` left open: three of the four model sources are FETCHED rather than read —
  * the codex and agy CLIs' own lists and a Team server's allowlist — and all three are already in hand HERE. The chat
@@ -1462,7 +1462,7 @@ export function teamServersSection(state: PanelState): string {
  *
  * <p>Exported, as the gate, limits, keys and MCP server tabs below are, because the Settings page draws each in
  * its own place by its own builder (Setup › This side here) — `catalogSections.MOVED_SECTIONS`,
- * todo/PLAN_one_model_catalog.md E4.1 and E5 prerequisite (b).</p>
+ * research/PLAN_one_model_catalog.md E4.1 and E5 prerequisite (b).</p>
  */
 export function sideBody(state: PanelState): string {
   const here = state.side.length === 0 ? 'this machine' : state.side;
@@ -1479,7 +1479,7 @@ export function sideBody(state: PanelState): string {
 }
 
 /**
- * The way from a section to an editor that was a page of its own (todo/PLAN_one_model_catalog.md, E5.1 step 1): the
+ * The way from a section to an editor that was a page of its own (research/PLAN_one_model_catalog.md, E5.1 step 1): the
  * Settings page HOLDS the editor as a place, so the press jumps to it and asks for no page. The label the old page's
  * button had, so a person who knew it finds it.
  */
@@ -2188,7 +2188,7 @@ function serverNotes(state: PanelState, role: RoleRow): string {
 
 /**
  * Which half of the prompts section a place draws: Stages (the rounds and the threshold of each role) or Prompts per
- * round (the round pickers) — todo/PLAN_one_model_catalog.md E4.1. The old page drew both in one box per role, with a
+ * round (the round pickers) — research/PLAN_one_model_catalog.md E4.1. The old page drew both in one box per role, with a
  * tick of its own per role, until E5.1 step 5 removed it; a role's one switch is on Roles & prompts (E4.3).
  */
 export type PromptsHalf = 'stages' | 'prompts';

@@ -9,7 +9,7 @@ import { VENDOR_PRESETS } from './vendors';
 
 /**
  * *Add a model* on the chat presets page: the four questions a chat model is made of, asked one at a time. Moved from
- * `chatPresetsPanel.ts` (todo/PLAN_one_model_catalog.md E4.6b) so the presets' editing core (`chatPresetsHost.ts`)
+ * `chatPresetsPanel.ts` (research/PLAN_one_model_catalog.md E4.6b) so the presets' editing core (`chatPresetsHost.ts`)
  * can ask them without importing the page that draws them.
  */
 

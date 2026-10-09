@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A codex row on somebody else's endpoint (OpenRouter, DeepSeek) consults through the Codex CLI with ITS provider —
-/// on the first turn and on every resume (todo/PLAN_one_model_catalog.md, epic 2, story 3; D9).
+/// on the first turn and on every resume (research/PLAN_one_model_catalog.md, epic 2, story 3; D9).
 /// </summary>
 /// <remarks>
 /// <para>The codex consultant built its own argv and never asked the endpoint runtime for its provider overrides, so an

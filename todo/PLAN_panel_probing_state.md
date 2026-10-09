@@ -144,6 +144,6 @@ server), so its "Server section" wording means the MCP server TAB, since that pl
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | how a probe says it is working | as written above | uses it on the Models tab; this plan owns it |

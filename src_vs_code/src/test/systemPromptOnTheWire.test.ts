@@ -8,7 +8,7 @@ import { vendorsEnv } from '../vendorsWire';
 
 /**
  * A row's system prompt crosses to coai-mcp only when the installed binary lists `systemPrompt` in `--features`
- * (todo/PLAN_one_model_catalog.md, epic 2: "capability, not version numbers").
+ * (research/PLAN_one_model_catalog.md, epic 2: "capability, not version numbers").
  *
  * <p>An older binary reads the settings file too and skips a member it does not know, so sending it there would be a
  * prompt the person wrote that silently does nothing; held back, the card can say it is not sent.</p>

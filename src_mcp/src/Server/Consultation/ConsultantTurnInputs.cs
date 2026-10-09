@@ -27,7 +27,7 @@ internal static class ConsultantTurnInputs
         RuntimeResolution.NameOf(row.Identity()) == "api" ? WithModule(Plain(row, model, timeout, dataDir, keys), row, overrides) : Plain(row, model, timeout, dataDir, keys);
 
     /// <summary>
-    /// The row's own timeout, else the caller's (todo/PLAN_one_model_catalog.md, C2) — the reviewers' rule
+    /// The row's own timeout, else the caller's (research/PLAN_one_model_catalog.md, C2) — the reviewers' rule
     /// (<c>RosterBuilder.TimeoutFor</c>): an api row keeps the caller's, its own limit being the whole conversation's
     /// (<c>reviewMinutes</c>). Bounds the launch AND the turn's backstop, so neither cuts the other short.
     /// </summary>
@@ -36,7 +36,7 @@ internal static class ConsultantTurnInputs
 
     /// <summary>
     /// The texts a consultation or question launch must not hand back into a record — the row's system prompt, when it has
-    /// one (todo/PLAN_one_model_catalog.md, C2), as a reviewer's (<c>ReviewerInvocation.Redact</c>).
+    /// one (research/PLAN_one_model_catalog.md, C2), as a reviewer's (<c>ReviewerInvocation.Redact</c>).
     /// </summary>
     /// <remarks>Trimmed as the composers trim it before sending (epic 4's code round): a CLI echoes what it was SENT, and
     /// whitespace alone is no text — redacting it would rewrite every gap in the child's output.</remarks>

@@ -5,7 +5,7 @@ import { textControlFrom } from './textControls';
  * What a message about the review roles MEANS, decided without a host or a page.
  *
  * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Review roles tab, and Reviews ›
- * Roles &amp; prompts on the Settings page (todo/PLAN_one_model_catalog.md E4.3), whose `roles` messages reach the
+ * Roles &amp; prompts on the Settings page (research/PLAN_one_model_catalog.md E4.3), whose `roles` messages reach the
  * same editing core (`rolesHost.ts`). Epic 5 deleted the tab (E5.1), and everything the Settings page and the core still take
  * from it has to live somewhere that survives the deletion — moved out first, prerequisite (b) of that epic, rather than
  * found by a red build on the day the page goes. The contract moved as it was: the vocabulary, the parser, the settle

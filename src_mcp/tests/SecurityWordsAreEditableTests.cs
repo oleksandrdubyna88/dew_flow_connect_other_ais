@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The security lane's signal words are editable, and a card has words of its own — a word, a phrase, a piece of code, or
-/// a <c>/regex/</c> (todo/PLAN_one_model_catalog.md, epic 2, story 4).
+/// a <c>/regex/</c> (research/PLAN_one_model_catalog.md, epic 2, story 4).
 /// </summary>
 /// <remarks>
 /// <para>A signal's words, when the setting gives them, REPLACE its shipped words; its shipped pattern (the SQL

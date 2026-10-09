@@ -1,5 +1,5 @@
 /**
- * The settings file as R7's tests hold it (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a)) — written, then read
+ * The settings file as R7's tests hold it (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a)) — written, then read
  * back as a window that reloads reads it. Typed by a guard, never by a cast (R7's code round, finding 1): a value read back
  * from JSON is `unknown` until something has looked at it.
  */

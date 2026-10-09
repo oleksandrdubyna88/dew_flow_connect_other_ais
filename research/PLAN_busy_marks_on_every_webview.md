@@ -3,7 +3,7 @@
 > Status: **IMPLEMENTED, 2026-10-03.** Plan gate proceed (1 of 1, gemini; 4 accepted, 1 rejected). Code gate per epic:
 > E1 proceed (4/4; 1 accepted), E2 proceed (4/4; 5 accepted), E3 proceed (4/4; 1 accepted). Deviations in §9. The
 > release (an extension minor, its CHANGELOG on the release PR) follows the merge. Open tail:
-> [PLAN_chat_presets_write_every_keystroke.md](../todo/PLAN_chat_presets_write_every_keystroke.md). Scope: the extension's other webviews, each with its
+> [PLAN_chat_presets_write_every_keystroke.md](PLAN_chat_presets_write_every_keystroke.md). Scope: the extension's other webviews, each with its
 > own message loop. The open tail of [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md)
 > (its §8), extracted when that plan was promoted. Three epics, one branch, one plan round, one code round per epic.
 >
@@ -162,4 +162,4 @@ None new: one `InFlight` per open webview, bounded by what one person presses wh
 - **Measured:** only the `coai-mcp` spawn and the rounds read were timed (§2). The other pages are classed by what
   their host awaits.
 - **Open, as asked by §8:** the chat presets per-keystroke write is
-  [PLAN_chat_presets_write_every_keystroke.md](../todo/PLAN_chat_presets_write_every_keystroke.md).
+  [PLAN_chat_presets_write_every_keystroke.md](PLAN_chat_presets_write_every_keystroke.md).

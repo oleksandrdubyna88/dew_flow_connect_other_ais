@@ -36,7 +36,7 @@ public static class ContractVersion
     /// <para>One was the first release, before anything had changed shape. The mechanism had to
     /// EXIST before the first change or it never usefully exists at all: the day a response shape
     /// moves, the old clients are already in the field with no way to say what they speak.</para>
-    /// <para>Two (todo/PLAN_one_model_catalog.md E2.5): a request may carry <c>effort</c> and
+    /// <para>Two (research/PLAN_one_model_catalog.md E2.5): a request may carry <c>effort</c> and
     /// <c>systemPrompt</c>, and the accepted answer says which it <c>dropped</c> or <c>clamped</c>.
     /// Additive both ways — a contract-1 client sends neither and reads past the notes — so the
     /// minimum stays one. A client that sees "1" on a response knows every new field was dropped.</para>
