@@ -85,6 +85,45 @@ public sealed class AntigravityReadOnlyTests : IDisposable
     }
 
     [Fact]
+    public async Task TheHookCommand_AsAgyRunsIt_StartsTheHandler_EvenWhereTheCurrentDirectoryIsNotSearched()
+    {
+        // Live, 2026-10-09: Claude Code sets NoDefaultCurrentDirectoryInExePath=1, agy inherits it, and `cmd /c
+        // coai-hook.cmd` then answered "not recognized" — on Windows the hook silently did nothing. The command is run
+        // here exactly as agy runs it: by the platform's shell, from the hooks file's folder, with that variable set.
+        var folder = ((AntigravityReadOnly.Prepared.Ready)AntigravityReadOnly.Prepare(
+            _base, new HookHandler("dotnet", [Path.Combine(AppContext.BaseDirectory, "coai-mcp.dll")]))).Folder;
+        var agents = Path.Combine(folder, ".agents");
+        var command = JsonDocument.Parse(File.ReadAllText(Path.Combine(agents, "hooks.json"))).RootElement
+            .GetProperty("coai-read-only").GetProperty("PreToolUse")[0].GetProperty("hooks")[0].GetProperty("command").GetString()!;
+        var shell = OperatingSystem.IsWindows() ? new ProcessRequest("cmd", ["/c", command], agents) : new ProcessRequest("sh", ["-c", command], agents);
+
+        var answer = await new ProcessLauncher().RunAsync(
+            shell with
+            {
+                StdIn = Payload("write_to_file"),
+                Environment = new Dictionary<string, string?> { ["NoDefaultCurrentDirectoryInExePath"] = "1" },
+                Timeout = TimeSpan.FromSeconds(60),
+            },
+            TestContext.Current.CancellationToken);
+
+        answer.StdOut.Should().Contain("\"decision\":\"deny\"", $"the hook must reach the handler: {answer.StdErr}");
+    }
+
+    [Fact]
+    public void TheFolder_IsThePersonsOwn_NeverTheSharedTemporaryFolder()
+    {
+        // Security review of 0a32211c: on Linux /tmp is shared by every user, so another account could plant the
+        // folder — and its hook script, which agy runs as this user — before coai wrote it.
+        AntigravityReadOnly.DefaultBase.Should().Be(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-agy"));
+        AntigravityReadOnly.DefaultBase.Should().NotStartWith(Path.GetTempPath());
+        if (!OperatingSystem.IsWindows())
+        {
+            var folder = ((AntigravityReadOnly.Prepared.Ready)AntigravityReadOnly.Prepare(_base, Handler)).Folder;
+            File.GetUnixFileMode(folder).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
     public void TheFolder_HoldsTheReaderAgent_AndTheHookThatStartsThisHandler()
     {
         var folder = ((AntigravityReadOnly.Prepared.Ready)AntigravityReadOnly.Prepare(_base, Handler)).Folder;
@@ -94,7 +133,7 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         var hooks = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, ".agents", "hooks.json"))).RootElement;
         var group = hooks.GetProperty("coai-read-only").GetProperty("PreToolUse")[0];
         group.GetProperty("matcher").GetString().Should().Be("*", "every tool call reaches the handler");
-        group.GetProperty("hooks")[0].GetProperty("command").GetString().Should().Be(OperatingSystem.IsWindows() ? "coai-hook.cmd" : "sh coai-hook.sh");
+        group.GetProperty("hooks")[0].GetProperty("command").GetString().Should().Be(OperatingSystem.IsWindows() ? @".\coai-hook.cmd" : "sh ./coai-hook.sh");
         File.ReadAllText(Path.Combine(folder, ".agents", "coai-hook.cmd")).Should().Be($"@\"{Handler.Executable}\" --agy-hook\r\n");
         File.ReadAllText(Path.Combine(folder, ".agents", "coai-hook.sh")).Should().Be($"#!/bin/sh\nexec \"{Handler.Executable}\" --agy-hook\n");
     }

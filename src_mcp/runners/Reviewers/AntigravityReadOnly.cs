@@ -42,8 +42,10 @@ public static class AntigravityReadOnly
     /// <summary>The arguments every agy argv carries.</summary>
     public static IReadOnlyList<string> AgentArguments { get; } = ["--agent", AgentName];
 
-    /// <summary>Where the folders live: the system's temporary folder, under a name of coai's own.</summary>
-    public static string DefaultBase => Path.Combine(Path.GetTempPath(), "coai-agy");
+    /// <summary>Where the folders live: the person's OWN application-data folder, never the shared temporary one.</summary>
+    /// <remarks>Security review of 0a32211c: on Linux <c>/tmp</c> is shared by every account, so another one could plant
+    /// the folder — and the hook script agy runs as this user — before coai wrote it. Created owner-only on Unix.</remarks>
+    public static string DefaultBase => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-agy");
 
     private const string AgentsDir = ".agents";
 
@@ -81,6 +83,12 @@ public static class AntigravityReadOnly
             return new Prepared.Failed($"agy was not launched: its hook handler {why}");
         }
 
+        if (!Path.IsPathRooted(baseDir))
+        {
+            // No per-user application-data folder (no HOME): a relative base would land beside whatever the process runs in.
+            return new Prepared.Failed($"agy was not launched: there is no per-user folder to hold its read-only agent and hook ('{baseDir}')");
+        }
+
         var folder = Path.Combine(baseDir, handler.Key());
         try
         {
@@ -114,10 +122,22 @@ public static class AntigravityReadOnly
             return;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        CreatePrivate(Path.GetDirectoryName(path)!);
         var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
         File.WriteAllText(temporary, content);
         File.Move(temporary, path, overwrite: true);
+    }
+
+    /// <summary>A folder only its owner can enter, on Unix; Windows' per-user folder is the owner's already.</summary>
+    private static void CreatePrivate(string directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(directory);
+            return;
+        }
+
+        Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
     /// <summary>The agent: its tool list is the block; its prose tells the model why, which the probe showed it then cites.</summary>
@@ -145,8 +165,10 @@ public static class AntigravityReadOnly
                     ["hooks"] = new JsonArray(new JsonObject
                     {
                         ["type"] = "command",
-                        // The handler's cwd is this file's folder, so the script is named, never a path.
-                        ["command"] = windows ? "coai-hook.cmd" : "sh coai-hook.sh",
+                        // The handler's cwd is this file's folder; the script is named RELATIVE to it, explicitly. A bare
+                        // `coai-hook.cmd` is not found where NoDefaultCurrentDirectoryInExePath is set — Claude Code sets
+                        // it, agy inherits it — and on Windows the hook then silently did nothing (live, 2026-10-09).
+                        ["command"] = windows ? @".\coai-hook.cmd" : "sh ./coai-hook.sh",
                         ["timeout"] = 10,
                     }),
                 }),
