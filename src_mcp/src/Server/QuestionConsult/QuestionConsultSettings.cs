@@ -238,11 +238,18 @@ public static class QuestionRoots
     /// <c>Directory.Exists</c> answers false for all of those alike, which is how an inaccessible root was skipped as
     /// the other side's (the third code round, 2026-10-09).
     /// </summary>
-    public static RootPresence PresenceOf(string full)
+    public static RootPresence PresenceOf(string full) => PresenceOf(full, File.GetAttributes);
+
+    /// <summary>
+    /// The mapping, over an injected attribute read — so the Unknown arm (access denied, a sharing violation), which no
+    /// test can provoke on demand on every platform, is tested with the exception types <c>File.GetAttributes</c>
+    /// really throws. Not-found types are caught BEFORE <see cref="IOException"/>, their base.
+    /// </summary>
+    public static RootPresence PresenceOf(string full, Func<string, FileAttributes> attributesOf)
     {
         try
         {
-            return (File.GetAttributes(full) & FileAttributes.Directory) != 0 ? RootPresence.Present : RootPresence.Absent;
+            return (attributesOf(full) & FileAttributes.Directory) != 0 ? RootPresence.Present : RootPresence.Absent;
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
         {

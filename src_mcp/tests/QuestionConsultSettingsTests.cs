@@ -620,6 +620,35 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         QuestionRoots.PresenceOf(Path.Combine(file, "under-a-file")).Should().Be(RootPresence.Absent, "ENOTDIR is absence too");
     }
 
+    public static TheoryData<string, RootPresence> WhatTheDiskSaid => new()
+    {
+        { nameof(UnauthorizedAccessException), RootPresence.Unknown },
+        { "sharing violation", RootPresence.Unknown },
+        { nameof(FileNotFoundException), RootPresence.Absent },
+        { nameof(DirectoryNotFoundException), RootPresence.Absent },
+        { "a file's attributes", RootPresence.Absent },
+        { "a directory's attributes", RootPresence.Present },
+    };
+
+    [Theory]
+    [MemberData(nameof(WhatTheDiskSaid))]
+    public void ThePresenceProbe_MapsWhatTheDiskReaderSaid_ThrowingTheRealExceptionTypes(string said, RootPresence expected)
+    {
+        // The disk read is injected, so the Unknown arm — an access-denied or busy path, which no test can make on demand
+        // on every platform — is reached with the exception types File.GetAttributes really throws.
+        Func<string, FileAttributes> reader = said switch
+        {
+            nameof(UnauthorizedAccessException) => _ => throw new UnauthorizedAccessException("Access to the path is denied."),
+            "sharing violation" => _ => throw new IOException("The process cannot access the file because it is being used by another process.", unchecked((int)0x80070020)),
+            nameof(FileNotFoundException) => _ => throw new FileNotFoundException("Could not find file."),
+            nameof(DirectoryNotFoundException) => _ => throw new DirectoryNotFoundException("Could not find a part of the path."),
+            "a file's attributes" => _ => FileAttributes.Archive,
+            _ => _ => FileAttributes.Directory | FileAttributes.ReadOnly,
+        };
+
+        QuestionRoots.PresenceOf(@"C:\work", reader).Should().Be(expected, $"the disk said: {said}");
+    }
+
     [Fact]
     public void RootsMayAlsoBeSemicolonSeparated_ForAHandSetVariable()
     {
