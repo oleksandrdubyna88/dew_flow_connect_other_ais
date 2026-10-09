@@ -87,6 +87,7 @@ is the one question the data cannot settle — the counter has to make it settle
 |---|---|---|
 | Round fields in `/api/usage`'s `vendors[]` and `people[].vendors[]` | **this plan** (5.1) | PLAN_team_usage_by_person renders `people[]` and shows the fields when present; needs nothing from them |
 | Cached + reasoning tokens and `usage not captured` on server lines | **this plan** (3.1) | PLAN_usage_that_compares decides what a token COLUMN means per vendor; this plan stops the server dropping fields |
+| Pricing a line: its own model, cached input at the cached rate, a reported cost never re-estimated | **this plan** (2.5) | [PLAN_usage_that_compares.md](PLAN_usage_that_compares.md) defines what each vendor's token columns MEAN; 2.5 prices only where cached is measured to be a subset of input (codex, api rows) and uses claude's reported cost instead of an estimate |
 | A `5h` / `24h` window and the multi-window query on `/api/usage` | **this plan** (5.1) | [PLAN_the_usage_page_reads_the_window_not_the_history.md](PLAN_the_usage_page_reads_the_window_not_the_history.md) (deferred) — reopen condition unchanged; one scan answers every window, see *Growth* |
 | Effort and tier with their source on every ledger line | **this plan** (3.4) | [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) step 3 owns the ledger's MODEL field; the effort already on `ReviewerState` came from [the shipped repair plan](../research/PLAN_the_log_names_every_model_and_its_effort.md) |
 | The canary's `kind` | **this plan** (3.5) | [PLAN_a_credential_that_is_not_a_person.md](PLAN_a_credential_that_is_not_a_person.md) replaces the canary's credential; disjoint |
@@ -165,6 +166,22 @@ Answers the operator's question for this machine's work from the whole history, 
   and no zero.
 - **2.4 Model card line** (Opus) — `7 days: 214 rounds · 31 consults · 5 h: 12` on the card (`src_vs_code/src/modelCard.ts`),
   from the cached read.
+- **2.5 Tokens and money beside every count** (Opus) — asked by the operator on 2026-10-09 (*"token counting, prices and
+  so on are needed too"*). Per vendor row × model × kind × window, beside the rounds: tokens **in / cached / out /
+  reasoning** as totals and per round / per consultation, and the money:
+  - a cost the vendor REPORTED (claude, priced `api` rows) is shown as money and never re-estimated;
+  - otherwise a `~` list-price estimate priced **per ledger line by that line's own model** — never the row's current
+    model — with the line's cached input at the model's cached rate (codex reports `cached_input_tokens` as a subset of
+    input, `UsageAccountingTests`), a long-context tier applied per LINE (it is a per-request threshold), and a line
+    with no price or with usage not captured making its total a floor (`≥ ~$…`);
+  - **~$ per round and per consultation**, so 66.8 M tokens of `gpt-6-astra` consultations in a week read as money.
+  Two defects in today's spending tab are fixed on the way, each RED first: `totalsByVendor` prices a row's whole
+  history at the row's CURRENT model (`priceOf(provider, …)`, `src_vs_code/src/usage.ts:174`) — after the Gemini row
+  moved to `flash-medium`, every earlier `flash-low` line is priced as `flash-medium` (`APastLine_IsPricedAtItsOwnModel`);
+  and it prices all input at the full rate, because the extension's `UsageEntry` (`usage.ts:9`, parsed at `:66`) does
+  not even read `tokensCached`, `tokensReasoning` or `kind` from the ledger (`CachedInput_IsPricedAtTheCachedRate`,
+  `TheParser_KeepsCachedReasoningAndKind`). The typed row rate still wins over a list price for the row's OWN lines,
+  as `priceOfLine` decides (`usage.ts:282-297`).
 
 ### E3 — the ledger tells the truth · `feat/round-counter-e3-ledger-truth`
 
@@ -274,6 +291,10 @@ Answers the operator's question for this machine's work from the whole history, 
   for that account (both local stores, plus the server rounds of that account's slot via `slot`); when a known
   consumer cannot be counted, the number is hidden and the tab says which consumer is missing. Tests: a reset boundary,
   a missing reading, an unchanged reading, a missing consumer.
+  **A subscription's share** (the operator's "price" for a flat plan): an optional `planPricePerMonth` the person types
+  on the model card — never looked up — turns the gauge into money: *≈ $0.42 of your plan per round* = monthly price ×
+  weekly-% per round ÷ 100 ÷ (weeks in the month). Shown only beside a gauge reading and labelled as a share, never
+  summed with a list-price estimate; without a gauge it is not shown at all.
 - **6.3 The record** (Opus) — the status line says what was not possible; README rows; the plan promoted with its
   deviations and its open tail; a second server deploy only if 6.1 exists.
 
@@ -323,6 +344,8 @@ records that failure).
 | `TheLedgerRead_StopsAtTheOldestWindow` (a fixture ledger with a year of lines before the window: lines read ≤ the window's + one chunk) | 2.1 |
 | `ConsultationsAndQuestions_AreCountedBesideRounds` | 2.1 |
 | `roundsBlock` renderer cases, and the bundled-page run of the Review rounds page (counts shown; unavailable ≠ 0; the store sentence) | 2.3 |
+| `APastLine_IsPricedAtItsOwnModel`, `CachedInput_IsPricedAtTheCachedRate`, `TheParser_KeepsCachedReasoningAndKind`, `AReportedCost_IsNeverReEstimated`, `AnUnpricedLine_MakesTheTotalAFloor`, `ALongContextTier_AppliesPerLine` | 2.5 |
+| `ASubscriptionShare_NeedsAGaugeReading`, `ASubscriptionShare_IsNeverSummedWithAnEstimate` | 6.2 |
 | `TheCardLine_DoesNotSpawnPerRender`, `AConsultationOnlySession_RefreshesTheCount`, `AnIdleWindow_FallsOnAFakeClock`, `TheOtherSidesStore_IsNamedNotOpened` | 2.2 / 2.4 |
 | `TheServerLedger_KeepsCachedAndReasoningTokens` — real `ReviewLauncher`, fake `IProcessLauncher` with a codex `turn.completed` carrying `cached_input_tokens` | 3.1 |
 | `ANonZeroExit_KeepsItsUsage`, `AContinuationThatEndsBadly_KeepsTheFirstLaunchsUsage` | 3.1 |
@@ -375,6 +398,10 @@ the local counter reads the ledger only back to its oldest window.
       scope follows it and the status line says what was not possible.
 - [ ] The Spending tab shows rounds per vendor row and stage for 5 h / 24 h / 7 d, consultations / questions / chat
       beside them, and the per-round figure honestly labelled — from the whole history, naming the store(s) it read.
+- [ ] Tokens (in / cached / out / reasoning) and money sit beside every count: reported cost as money, otherwise a `~`
+      estimate priced per line by its own model with cached input at the cached rate, per round and per consultation;
+      the two pricing defects of today's spending tab are fixed RED first; a typed plan price shows a subscription share
+      only beside a gauge reading.
 - [ ] The Team-server block shows server rounds per vendor, `runsWithoutRound` apart; `people[].vendors[]` carries the
       same fields.
 - [ ] Server lines carry cached and reasoning tokens; a withdrawn, abandoned or backstopped launch is named as such
