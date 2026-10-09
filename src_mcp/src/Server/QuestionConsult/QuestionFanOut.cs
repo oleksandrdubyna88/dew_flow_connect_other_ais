@@ -199,10 +199,23 @@ public sealed class QuestionFanOut(
 
         // A CLI row is given no outline (A9 names the api rows): building one cost every question six seconds before
         // ANY row launched (S4b item 11).
-        return new RowInput.Launch(row, QuestionPrompt.Compose(new QuestionPromptInput(
+        var looking = WithLookup(row);
+        return new RowInput.Launch(looking, QuestionPrompt.Compose(new QuestionPromptInput(
             instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty,
-            row.Prompt.Capability == Capability.Disk ? input.Settings.Roots : [], input.Nonce)));
+            row.Prompt.Capability == Capability.Disk ? looking.Plan.Grant.Roots : [], input.Nonce)
+        {
+            Toolbox = looking.Runtime is AntigravityConsultant agy ? agy.LookupToolbox : string.Empty,
+        }));
     }
+
+    /// <summary>
+    /// An antigravity DISK row, able to ask coai to list and search its granted roots — it cannot do either itself in plan
+    /// mode (research/PLAN_agy_searches_through_coai.md, S2); every other row as it was.
+    /// </summary>
+    private static RowAdmission.Admitted WithLookup(RowAdmission.Admitted row) =>
+        row.Runtime is AntigravityConsultant agy && row.Plan.Grant.Capability == Capability.Disk
+            ? row with { Runtime = agy.With(new WorkspaceLookup(row.Plan.Grant.Roots)) }
+            : row;
 
     /// <summary>An api row's launch: its material (the outline, the source turns) on the runtime, and the prompt that names them.</summary>
     private RowInput.Launch ApiLaunch(RowAdmission.Admitted row, ApiConsultant api, FanOutInput input, string instruction, CheckedContext context, string outline) =>
