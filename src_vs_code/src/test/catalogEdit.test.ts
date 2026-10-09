@@ -2,22 +2,25 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CatalogState, editThroughCatalog } from '../catalogEdit';
 import { CatalogLayer, migrateLayer } from '../catalogMigration';
-import { consultantRecordUpdate } from '../consultantWrite';
 import { qconsultSettingsFrom } from '../qconsultSettings';
 import { envBlock, settingsFrom } from '../settingsShape';
 import { vendorsFrom } from '../vendors';
 
 /**
- * The old Settings page writes through the catalog (PLAN_one_model_catalog.md E1.4).
+ * A write of `consultants` or `qconsultRows` goes through the catalog (PLAN_one_model_catalog.md E1.4).
  *
- * <p>The old page still edits a consultant or a question row as a DEFINITION — it resolves the reference,
- * changes one field, and writes the whole entry back. Left alone, the migration would then fork a new row for
- * every edit and orphan the one before. So an edit of an entry that refers to a catalog row nothing else uses
- * rewrites THAT row, and the entry stays a reference; a reference the edit removes takes its row with it.</p>
+ * <p>The old Settings page edited a consultant as a DEFINITION — it resolved the reference, changed one field, and
+ * wrote the whole entry back; the question tab still writes every row back resolved. Left alone, the migration would
+ * then fork a new row for every edit and orphan the one before. So an edit of an entry that refers to a catalog row
+ * nothing else uses rewrites THAT row, and the entry stays a reference; a reference the edit removes takes its row
+ * with it. The consultant definitions below are what the old page wrote (E5.3 removed it): no page writes one now,
+ * and the fold is held here until it is decided whether it goes too.</p>
  */
 
 const REVIEWERS = [{ id: 'codex', runtime: 'codex', model: 'gpt-x', enabled: true }];
 const GLM = { vendor: 'glm', runtime: 'codex', model: 'glm-5.3', baseUrl: 'https://glm.example/v1', executablePath: '' };
+/** The migrated GLM consultant with its model edited to glm-6, as the old page stored it: a definition again. */
+const GLM_6 = { vendor: 'glm', runtime: 'codex', model: 'glm-6', baseUrl: 'https://glm.example/v1' };
 
 /** A layer after the migration: what every test starts from. */
 function migrated(layer: CatalogLayer): CatalogState {
@@ -46,8 +49,8 @@ function saved(state: CatalogState, key: 'consultants' | 'qconsultRows', value: 
 
 test('editing a migrated consultant\'s model rewrites its row and keeps the reference', () => {
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
-  const edited = consultantRecordUpdate(state.consultants as Record<string, unknown>, 'codex', 'consultModel', 'glm-6', vendorsFrom(state.vendors));
-  const after = saved(state, 'consultants', edited);
+  // The definition the old page wrote for a model changed from glm-5.3 to glm-6.
+  const after = saved(state, 'consultants', { codex: GLM_6 });
   const rows = vendorsFrom(after.vendors);
 
   assert.deepEqual((after.consultants as Record<string, unknown>)['codex'], { vendor: 'consult-codex' });
@@ -58,8 +61,8 @@ test('editing a migrated consultant\'s model rewrites its row and keeps the refe
 
 test('picking another vendor for a migrated consultant rewrites the same row', () => {
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
-  const edited = consultantRecordUpdate(state.consultants as Record<string, unknown>, 'codex', 'consultVendor', 'claude', vendorsFrom(state.vendors));
-  const after = saved(state, 'consultants', edited);
+  // The definition the old page wrote for Claude picked in place of glm: the catalogue's Claude entry.
+  const after = saved(state, 'consultants', { codex: { vendor: 'claude', runtime: 'claude', model: 'haiku' } });
   const row = vendorsFrom(after.vendors).find((one) => one.id === 'consult-codex');
 
   assert.equal(row?.runtime, 'claude');
@@ -77,8 +80,7 @@ test('a reference the edit removes takes its catalog row with it', () => {
 
 test('a row two entries share is never rewritten by an edit of one of them', () => {
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM, gemini: GLM } });
-  const edited = consultantRecordUpdate(state.consultants as Record<string, unknown>, 'codex', 'consultModel', 'glm-6', vendorsFrom(state.vendors));
-  const after = saved(state, 'consultants', edited);
+  const after = saved(state, 'consultants', { codex: GLM_6, gemini: { vendor: 'consult-codex' } });
 
   assert.equal(vendorsFrom(after.vendors).find((row) => row.id === 'consult-codex')?.model, 'glm-5.3', 'gemini still has its model');
   assert.equal((after.consultants as Record<string, Record<string, string>>)['codex']?.['runtime'], 'codex', 'the edit stays a definition, for the migration to give its own row');
@@ -126,8 +128,7 @@ test('a rewritten row is the definition\'s launch, whole: a dialect the definiti
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
   // A person hand-gave the consultant's row a dialect; the old page's definition has no field for one.
   const withDialect = { ...state, vendors: (state.vendors as Record<string, unknown>[]).map((raw) => (raw['id'] === 'consult-codex' ? { ...raw, dialect: 'anthropic' } : raw)) };
-  const edited = consultantRecordUpdate(withDialect.consultants as Record<string, unknown>, 'codex', 'consultModel', 'glm-6', vendorsFrom(withDialect.vendors));
-  const row = vendorsFrom(saved(withDialect, 'consultants', edited).vendors).find((one) => one.id === 'consult-codex');
+  const row = vendorsFrom(saved(withDialect, 'consultants', { codex: GLM_6 }).vendors).find((one) => one.id === 'consult-codex');
 
   assert.equal(row?.model, 'glm-6');
   assert.equal(row?.dialect, undefined, 'the launch is compared and written as ONE set of fields (catalogLaunch.ts), dialect included');

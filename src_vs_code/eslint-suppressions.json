@@ -454,11 +454,6 @@
       "count": 4
     }
   },
-  "src/consultantView.ts": {
-    "complexity": {
-      "count": 3
-    }
-  },
   "src/consultantWrite.ts": {
     "complexity": {
       "count": 2

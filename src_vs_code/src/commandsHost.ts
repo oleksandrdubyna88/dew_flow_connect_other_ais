@@ -15,12 +15,11 @@ import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 
 /**
  * The editing core of the gate's commands — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.4):
- * the Gate commands tab (`commandsPanel.ts`, deleted in E5.1) and, on the new Settings page, Reviews › Commands. Moved here from
+ * the Gate commands tab (`commandsPanel.ts`, deleted in E5.1) and, on the Settings page, Reviews › Commands. Moved here from
  * `commandsPanel.ts`, never copied — the roles' arrangement (`rolesHost.ts`).
  *
  * <p>Everything DECIDED is `commands.ts` and `commandsEdit.ts`. What is here is what only a host can do: read a setting,
- * write one, write a file — through ONE settled-write queue for both pages, so an edit on one cannot overtake the
- * other's. Whoever draws the commands listens with {@link onCommandsRedraw}.</p>
+ * write one, write a file — through ONE settled-write queue, so one edit cannot overtake another. Whoever draws the commands listens with {@link onCommandsRedraw}.</p>
  */
 
 const SECTION = 'coai';
@@ -122,7 +121,7 @@ const writes = settledWrites<PageCommand>({
   fieldOf,
 });
 
-/** One edit, from either page, in the one queue. */
+/** One edit, in the one queue. */
 export const queueCommandEdit = (command: PageCommand): Promise<void> => writes.queue(command);
 
 /** Whatever is still settling — written before a page that typed it goes away. */
@@ -242,7 +241,7 @@ export function reportCommandsFailure(message: string, error: unknown): void {
   });
 }
 
-/** The commands as the new Settings page's Commands draws them (E4.4) — the same reads the Gate commands tab is drawn from. */
+/** The commands as the Settings page's Commands draws them (E4.4) — the same reads the Gate commands tab is drawn from. */
 export async function commandsEmbedState(serverVersion: string): Promise<CommandsEmbedState> {
   return {
     rows: commandRows(),

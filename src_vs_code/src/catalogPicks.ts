@@ -4,7 +4,7 @@ import { USE_LABELS } from './modelCardFields';
 import type { Vendor } from './vendors';
 
 /**
- * A feature picking a catalog row on the new Settings page (todo/PLAN_one_model_catalog.md E4.2) — the half the
+ * A feature picking a catalog row on the Settings page (todo/PLAN_one_model_catalog.md E4.2) — the half the
  * consultant's callers, the question consultant's rows and the security lane's pairs share. Pure.
  *
  * <p>The list is the rows ticked for that use on Models. A pick of a row no longer ticked, or no longer there, stays
@@ -30,7 +30,7 @@ export function tickedFor(row: Vendor, use: CatalogUse): boolean {
   return (row.uses ?? []).includes(use);
 }
 
-/** The rows ticked for a use — what the new page offers, and what the host checks a write from it against. */
+/** The rows ticked for a use — what the Settings page offers, and what the host checks a write from it against. */
 export function rowsFor(use: CatalogUse, rows: readonly Vendor[]): readonly Vendor[] {
   return rows.filter((row) => tickedFor(row, use));
 }

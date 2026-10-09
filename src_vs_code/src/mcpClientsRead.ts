@@ -3,7 +3,7 @@ import path from 'node:path';
 import { CLIENT_FILES, clientRegistration, type ClientKind, type ClientRegistration } from './setupTab';
 
 /**
- * The host half of the new page's MCP clients table (todo/PLAN_one_model_catalog.md E4.5): each client's config file is
+ * The host half of the Settings page's MCP clients table (todo/PLAN_one_model_catalog.md E4.5): each client's config file is
  * READ from disk — never written, no process launched — and handed to `clientRegistration`, which keeps only whether
  * coai is registered there.
  *

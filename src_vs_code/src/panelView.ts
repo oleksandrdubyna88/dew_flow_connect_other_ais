@@ -18,7 +18,6 @@ import type { QuestionConsult } from './questionConsults';
 import { LIVE_REGION_IDS, liveRegion, type SectionSpec, sidebarBody, sidebarKey } from './panelSurface';
 
 
-import { LOOKING_CSS } from './lookingSpinner';
 import { SELECT_SEARCH_CSS, selectSearchScript } from './selectSearch';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 import { type BusySnapshot, IDLE } from './busySnapshot';
@@ -37,7 +36,7 @@ import type { CommandsEmbedState } from './commandsEmbed';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
-import { CALLER_KINDS, CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
+import { CALLER_KINDS, consultantSkewNote, vaultKeyNote } from './consultSettings';
 import {
   COMMAND_MODEL_RUNTIMES,
   ModelSlot,
@@ -264,21 +263,21 @@ export interface PanelState {
    */
   readonly serverFeatures?: readonly string[] | undefined;
   /**
-   * EVERY catalog row, the ones that review nothing included — `vendors` is the current page's reviewers only
-   * (`shownOnTheOldPage`). The new page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
+   * EVERY catalog row, the ones that review nothing included — `vendors` is the reviewers only
+   * (`isReviewerRow`). The Settings page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
    */
   readonly catalogRows?: readonly Vendor[];
-  /** What the installed binary last said about a sample on the new page's Security lane tab (`securityTry.ts`, E4.2). */
+  /** What the installed binary last said about a sample on the Settings page's Security lane tab (`securityTry.ts`, E4.2). */
   readonly securityTry?: SecurityTryResult | undefined;
   /** Whether each MCP client registers coai, read from its own config file (`setupTab.ts`, E4.5). */
   readonly mcpClients?: readonly ClientRegistration[] | undefined;
   /** The data folder's last move, as this profile remembers it across a reload (`coai.lastDataMove`, E4.5). */
   readonly lastDataMove?: MoveRecord | undefined;
-  /** The review roles as the new page's Roles & prompts draws them (`rolesEmbed.ts`, E4.3) — read only while it can be shown. */
+  /** The review roles as the Settings page's Roles & prompts draws them (`rolesEmbed.ts`, E4.3) — read only while it can be shown. */
   readonly roles?: RolesEmbedState | undefined;
-  /** The gate's commands as the new page's Commands draws them (`commandsEmbed.ts`, E4.4) — read only while it can be shown. */
+  /** The gate's commands as the Settings page's Commands draws them (`commandsEmbed.ts`, E4.4) — read only while it can be shown. */
   readonly commands?: CommandsEmbedState | undefined;
-  /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
+  /** When each control the Settings page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
   readonly now?: number;
@@ -493,34 +492,14 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
  * The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in the sidebar, under
  * Active consultations.
  *
- * @param callerRows the new page's picks from the catalog (E4.2), drawn where each caller's definition is; '' for the current page
+ * @param callerRows each caller's pick from the catalog (`consultantPicksHtml`, E4.2), drawn under the switch
  */
-export function consultantSection(state: PanelState, callerRows = ''): string {
+export function consultantSection(state: PanelState, callerRows: string): string {
   return consultantSkew(state)
     + vaultKeySplit(state)
-    // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
-    // borrowed a reviewer row is the defect this plan ended. The rows still reach the PANEL — the
-    // skew note above reads them, because what an older server does with a definition is decided
-    // through them.
-    + consultantBody(state.settings.consult, {
-      codexModels: state.codexModels,
-      agyModels: state.agyModels,
-      claudeProbe: state.claudeProbe,
-      askingClaude: state.askingClaude,
-      // The engines, so a LOCAL consultant has a dropdown that asked one. It used to pass
-      // nothing, and a saved model was then labelled gone by something that had never looked.
-      // Keyed by endpoint: the reviewer-row map next to it is keyed by vendor id and could never
-      // answer a row that holds no reviewer.
-      enginesByEndpoint: state.enginesByEndpoint,
-      consultPrompt: state.consultPrompt,
-      // The REVIEWERS' palette, built from the same canonical list the Models cards use, so a
-      // caller wears the colour its vendor has on its card and in a running round. Passed even
-      // when no reviewer is configured: the anchored ids answer regardless, which is what an
-      // anchor is for.
-      palette: vendorPalette(state.vendors.map((v) => v.id)),
-      // Each row's health block: the server's facts, this side's Check, other sides read-only (epic 5).
-      health: state.consultantHealth,
-    }, callerRows)
+    // Each caller's pick carries its own health block (`consultantPicks.ts`); the body draws the switch, the caps and
+    // the prompt around the picks.
+    + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt }, callerRows)
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);
@@ -529,10 +508,10 @@ export function consultantSection(state: PanelState, callerRows = ''): string {
 /**
  * The Security lane tab.
  *
- * @param offered the rows a pair may name — the current page's reviewers, or the new page's rows ticked Security lane (E4.2)
- * @param allRows every catalog row, which the new page names a stranded pair from; the current page reads `offered`
+ * @param offered the rows a pair may name — the rows ticked Security lane on Models (E4.2)
+ * @param allRows every catalog row, which a stranded pair's row is named from
  */
-export function securityLaneSection(state: PanelState, offered: readonly Vendor[], allRows: readonly Vendor[] = offered): string {
+export function securityLaneSection(state: PanelState, offered: readonly Vendor[], allRows: readonly Vendor[]): string {
   return securityLaneBody(state.settings.securityLane, offered, serverVersionOf(state), securityFilesOf(state), allRows);
 }
 
@@ -545,16 +524,12 @@ function securityFilesOf(state: PanelState): { text: Readonly<Record<string, Sec
 }
 
 /** The Question consultant tab: the rows, the prompts, the folders, the mode and the limits. Its live questions are in the sidebar. */
-export function questionConsultantSection(state: PanelState, pickFrom?: readonly Vendor[]): string {
+export function questionConsultantSection(state: PanelState, pickFrom: readonly Vendor[]): string {
   return qconsultBody(state.settings.qconsult, {
-    // EVERY catalog row, not the current page's reviewers: since epic 1 a question row refers to an `ask-<id>` row that
-    // reviews nothing, and resolved against the reviewers it read as having no runtime and could not be switched on.
+    // EVERY catalog row, not only the reviewers: since epic 1 a question row refers to an `ask-<id>` row that reviews
+    // nothing, and resolved against the reviewers it read as having no runtime and could not be switched on.
     vendors: state.catalogRows ?? state.vendors,
     pickFrom,
-    codexModels: state.codexModels,
-    agyModels: state.agyModels,
-    claudeProbe: state.claudeProbe,
-    enginesByEndpoint: state.enginesByEndpoint,
     serverVersion: state.server.version,
     promptOverrides: state.qconsultPromptOverrides,
     places: state.qconsultPlaces,
@@ -656,13 +631,6 @@ ${busyMarkScript(busy)}
         : { type: 'command', command: 'customModel', id: el.dataset.vendor }, el);
       return;
     }
-    if (value === '${CUSTOM_ENDPOINT}') {
-      // Not a vendor — a request for one. An id keys the vault entry, so nothing may be stored until
-      // the host has asked for a name and a base URL; the caller says whose row is waiting for it.
-      el.value = real.get(el) || '';
-      send({ type: 'command', command: 'customConsultant', id: el.dataset.caller }, el);
-      return;
-    }
     // \`change\` compares with the value the control had when it gained FOCUS, not with the value
     // last sent — so typing, pausing past the write, then blurring wrote the same string twice.
     if (posted.get(el) === value) {
@@ -762,7 +730,7 @@ ${busyMarkScript(busy)}
     }
   });
   window.addEventListener('pagehide', () => flush());
-${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT, NEW_PROMPT_SENTINEL])}
+${selectSearchScript(['', '__other__', NEW_PROMPT_SENTINEL])}
 
   // A repaint that could not be withheld any longer lands under a focused control. The provider
   // names it, and the caret comes back to the end of what is in it — the end rather than where it
@@ -1100,8 +1068,7 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 /**
- * What each card needs beyond its row — for the current page's card and the new page's (PLAN_one_model_catalog.md E3.2),
- * so the two draw a row from the same facts.
+ * What each Models card needs beyond its row (PLAN_one_model_catalog.md E3.2).
  */
 export function cardContextFor(state: PanelState): (vendor: Vendor) => CardContext {
   // Built ONCE, from the whole configured list: "no two reviewers share a colour" is a statement
@@ -1493,7 +1460,7 @@ export function teamServersSection(state: PanelState): string {
  * about to keep three sets of settings, and the only way to be sure which one is being edited is to
  * read it off the panel that is editing it.</p>
  *
- * <p>Exported, as the gate, limits, keys and MCP server tabs below are, because the new Settings page draws each in
+ * <p>Exported, as the gate, limits, keys and MCP server tabs below are, because the Settings page draws each in
  * its own place by its own builder (Setup › This side here) — `catalogSections.MOVED_SECTIONS`,
  * todo/PLAN_one_model_catalog.md E4.1 and E5 prerequisite (b).</p>
  */
@@ -1521,7 +1488,7 @@ function editorWay(place: string, label: string): string {
 }
 
 /**
- * The gate tab: what happens when the rounds run out. The new Settings page draws it at Reviews › The gate.
+ * The gate tab: what happens when the rounds run out. The Settings page draws it at Reviews › The gate.
  */
 export function gateBody(state: PanelState): string {
   const s = state.settings;
@@ -1688,7 +1655,7 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
 }
 
 /**
- * The Limits tab, as both Settings pages draw it: the round limit's note counts the reviewers switched on for code.
+ * The Limits tab: the round limit's note counts the reviewers switched on for code.
  * One function rather than the expression written into each page's table, which would be the second copy that drifts.
  */
 export function limitsSection(state: PanelState): string {
@@ -1702,7 +1669,7 @@ export function limitsSection(state: PanelState): string {
  * know the answer is "not yet". A field that cannot say whether it applies to you is a field that
  * gets filled in wrongly, so this one says it.</p>
  *
- * <p>The new Settings page draws it at Setup › Vendor keys, handed every catalog row as `vendors` (E4.5).</p>
+ * <p>The Settings page draws it at Setup › Vendor keys, handed every catalog row as `vendors` (E4.5).</p>
  */
 export function keysBody(state: PanelState): string {
   // Every row whose models belong to an endpoint, by the same decision the model list and its label use. Counting only
@@ -1794,7 +1761,7 @@ export function serverSentence(server: ServerStatus, side: string): string {
  * never ran at all for weeks, asking GitHub for the newest release of any kind and being handed
  * an extension tag.</p>
  *
- * <p>The new Settings page draws it at Setup › MCP server.</p>
+ * <p>The Settings page draws it at Setup › MCP server.</p>
  */
 export function serverBody(state: PanelState): string {
   const installed = `<div class="status">${escapeHtml(serverSentence(state.server, state.side))}</div>`;
@@ -2163,7 +2130,7 @@ function customRolesSkew(server: ServerStatus, settings: CoaiSettings): string {
  * lives — and this only puts it in the section it is about, in the class its three siblings use, so a
  * person reads one kind of warning for one kind of problem. It is rendered in `panelView.ts` rather
  * than in `consultantView.ts` because the installed server is the PANEL's knowledge, not the
- * section's: `consultantBody` takes the settings and the rows and knows nothing about a binary.</p>
+ * section's: `consultantBody` takes the settings and the callers' picks and knows nothing about a binary.</p>
  */
 function consultantSkew(state: PanelState): string {
   // The rows go in because the note's question is what an OLDER server would answer, and an older
@@ -2178,10 +2145,11 @@ function consultantSkew(state: PanelState): string {
  * One vendor id pointing at two endpoints — the consultant's, and the reviewer's of that name.
  *
  * <p>Beside the section rather than inside it, and for the same reason as {@link consultantSkew}:
- * the sentence needs the reviewer ROWS, which `consultantBody` has not had since story C5. The
- * `stale` class is the one its three siblings use, so a person reads one kind of warning for one
- * kind of problem. (gemini, C6's code round — the endpoint box in a row cannot be refused without
- * silently discarding what somebody typed, so what it can do is say so.)</p>
+ * the sentence needs the reviewer ROWS, which `consultantBody` does not take. The `stale` class is the
+ * one its three siblings use, so a person reads one kind of warning for one kind of problem. A stored
+ * definition can still name an id a reviewer row holds at another endpoint — written before the picks,
+ * or by hand — and the panel says so rather than rewriting what somebody stored. (gemini, C6's code
+ * round.)</p>
  */
 function vaultKeySplit(state: PanelState): string {
   const note = vaultKeyNote(state.settings.consult, state.vendors);
@@ -2225,7 +2193,7 @@ function serverNotes(state: PanelState, role: RoleRow): string {
  */
 export type PromptsHalf = 'stages' | 'prompts';
 
-/** One role's round pickers alone, for the new page's Prompts per round — or why it has none. */
+/** One role's round pickers alone, for the Settings page's Prompts per round — or why it has none. */
 function pickersOnly(role: RoleRow, on: boolean, off: string, pickers: string): string {
   return `<div class="role role-${roleTone(role.id, stageOf(role))}${off}">
   <div class="head"><span class="name">${escapeHtml(role.name ?? role.id)}</span></div>
@@ -2233,7 +2201,7 @@ ${on ? pickers : '  <div class="hint">Switched off on Stages — no round asks i
 </div>`;
 }
 
-/** The new page's Prompts per round: the stages' heads and each role's pickers, nothing else. */
+/** Prompts per round: the stages' heads and each role's pickers, nothing else. */
 function pickersBody(groups: readonly (readonly [string, string])[]): string {
   return groups.map(([head, rows]) => `<div class="role-group">
   <div class="group-head">${head}</div>
@@ -2329,8 +2297,8 @@ const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: R
 };
 
 /**
- * The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles — the roles page
- * on the current page, a jump to Roles &amp; prompts on the new one, where the roles page's content is (E5.1 step 1).
+ * The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles — a jump to
+ * Roles &amp; prompts (E5.1 step 1).
  */
 function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
   const s = state.settings;
@@ -3161,11 +3129,6 @@ const CSS = `
     background: var(--vscode-inputValidation-warningBorder);
     color: var(--vscode-editor-background);
   }
-  /* One framed group per CALLER, modelled on .role rather than on .vendor: its neighbours here are
-     fields in a section, not cards in a list, so it takes the role box's tighter metrics. The edge
-     colour arrives inline, per caller; the width and the fallback are here, so a row without a
-     colour is still a deliberate box rather than a bare one. */
-  .consultant-row { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--vscode-widget-border); border-radius: 3px; padding: 6px 8px 2px; margin: 0 0 8px; }
 ${CONSULTANT_HEALTH_CSS}
   .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
   /* One assistant's two model boxes, side by side: the sidebar is narrow, so a three-column table
@@ -3216,7 +3179,6 @@ ${ROLE_TONE_CSS}
   .subject { font-weight: 600; margin: 6px 0 1px; }
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }
-${LOOKING_CSS}
 ${SELECT_SEARCH_CSS}
 ${BUSY_CSS}
 `;
@@ -3258,10 +3220,6 @@ export const PANEL_COMMANDS = [
   'fixWslNetwork',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
-  // And by the consultant's vendor picker, for the same reason: "another endpoint" is a request for
-  // a name and a base URL, and an id keys the vault entry, so nothing may be stored before there is
-  // one. Carries the CALLER as its id — four rows share the control.
-  'customConsultant',
   'editSecurityPrompt',
   // A hand-registered general's leftover conditions, cleared in one press (research/PLAN_the_security_tab_reads_at_a_glance.md, D6).
   // The Consultant tab's health block (PLAN_the_consultant_works_on_every_vendor.md, epic 5): one real, paid check of a
@@ -3283,14 +3241,14 @@ export const PANEL_COMMANDS = [
   // The Company/Me control on the spending section, which only an admin is shown. Without it that
   // control would be a button wired to nothing, which is the exact trap this list exists to prevent.
   'teamUsageScope',
-  // The new Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
+  // The Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
   // row duplicated, and a row removed after the page's own confirm — so the host asks no second question.
   'toggleUse',
   'duplicateModel',
   'removeModel',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
-  // Try it on the new page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
+  // Try it on the Settings page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
   'trySecurity',
   // A phrase, onto the clipboard. Handled in the provider rather than by a registered command,
   // because it needs the id the button carries and nothing outside the panel ever asks for one.
@@ -3303,7 +3261,7 @@ export const PANEL_COMMANDS = [
   // And moving what the old folder already holds, which is a different job with the opposite
   // refusal: a move wants an EMPTY destination where the change above wants a full one.
   'moveDataDirectory',
-  // And deleting what a VERIFIED move left behind, offered on the new page's MCP server tab after a reload (E4.5).
+  // And deleting what a VERIFIED move left behind, offered on the Settings page's MCP server tab after a reload (E4.5).
   'deleteOldDataFolder',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;
   // Review opens what it collected; and the server address is asked for in a dialog rather than

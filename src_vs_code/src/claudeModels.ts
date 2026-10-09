@@ -62,21 +62,6 @@ export interface ProbeResult {
 /** What a dropdown says while the probe is out. Named here, beside the probe it describes. */
 export const ASKING_CLAUDE = 'asking the Claude CLI which models it reaches\u2026';
 
-/**
- * What a model dropdown has to say about ITSELF right now, or nothing when it has nothing.
- *
- * <p>The probe is four real requests to a real CLI and takes seconds. A dropdown that simply sat
- * there holding the curated list for that long would read as the finished answer, and a person
- * would choose from it believing nothing else was coming.</p>
- *
- * <p>Only the Claude branch, because only the Claude branch is what this probe asks. A codex row
- * is not waiting for it and must not borrow its spinner — a control that says it is working while
- * nothing is working for it is the same defect one runtime over.</p>
- */
-export function claudeNote(runtime: string, asking: boolean): string {
-  return runtime === 'claude' && asking ? ASKING_CLAUDE : '';
-}
-
 export const CLAUDE_CANDIDATES: readonly string[] = ['haiku', 'sonnet', 'opus', 'fable'];
 
 /** How long an answer is trusted. A subscription does not gain a model family in an afternoon. */

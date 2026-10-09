@@ -7,7 +7,7 @@ import { textControlsScript } from './textControls';
 import { jsonForScript } from './webviewHtml';
 
 /**
- * The new Settings page's own script (todo/PLAN_one_model_catalog.md, E3.1), appended to the shared page script that
+ * The Settings page's own script (todo/PLAN_one_model_catalog.md, E3.1), appended to the shared page script that
  * `pageDocument` already runs — the settings writes, the commands, focus restore, the busy marks.
  *
  * <p><b>Two levels of tabs, one place.</b> A top tab's key is its id (`reviews`); a sub-tab's key is the whole place

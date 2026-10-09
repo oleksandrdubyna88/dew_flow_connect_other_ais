@@ -17,8 +17,8 @@ import { reviewsDocuments, type Vendor } from './vendors';
 
 /**
  * One card of the Models tab (todo/PLAN_one_model_catalog.md E3.2): what the row is, what it is used for, how it
- * answers, and how it is reached — drawn from the SAME facts and the same controls as the current page's card
- * (`cardContextFor`, `stageBox`, `priceFields` …), so a choice made on either page is stored the same way.
+ * answers, and how it is reached — drawn from the same facts and controls the old page's reviewer card had
+ * (`cardContextFor`, `stageBox`, `priceFields` …), so a row migrated from it is stored the same way.
  *
  * <p>Four parts, each one row of the grid's subgrid, so two cards side by side line their parts up and end together.</p>
  */
@@ -143,8 +143,8 @@ export function ignoredSaid(vendor: Vendor, binary: BinarySays): readonly string
 }
 
 /**
- * Everything the card's one note says about this side's coai-mcp: an api row it cannot run at all (the current page's
- * note, kept on the new page — the epics 4–5 consultation, §7 parity), then what it ignores on the row.
+ * Everything the card's one note says about this side's coai-mcp: an api row it cannot run at all (the old page's
+ * note, kept — the epics 4–5 consultation, §7 parity), then what it ignores on the row.
  */
 export function skewSaid(vendor: Vendor, binary: BinarySays, apiNote: string): readonly string[] {
   return [...(apiNote.length > 0 ? [apiNote] : []), ...ignoredSaid(vendor, binary)];

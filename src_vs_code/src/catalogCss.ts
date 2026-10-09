@@ -1,10 +1,10 @@
 import { SETTINGS_CSS } from './settingsPage';
 
 /**
- * The new Settings page's stylesheet (todo/PLAN_one_model_catalog.md, E3), from the accepted mockup (`new_design/`).
+ * The Settings page's stylesheet (todo/PLAN_one_model_catalog.md, E3), from the accepted mockup (`new_design/`).
  *
  * <p>The mockup named its own colours with Dark Modern and Light Modern values; here every token is the editor's own
- * theme variable, so a light, dark or high-contrast theme needs nothing of this sheet. It extends the old page's sheet
+ * theme variable, so a light, dark or high-contrast theme needs nothing of this sheet. It extends `SETTINGS_CSS`
  * (tabs, the text controls, `[hidden]` winning) rather than copying it.</p>
  */
 const TOKENS = `
@@ -172,5 +172,5 @@ const MODELS = `
   .catalog .used-by { margin-top: 8px; font-size: 0.9em; color: var(--muted); }
   .catalog .empty-state { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 24px; text-align: center; color: var(--muted); }`;
 
-/** The whole sheet the new page carries beside the shared one `pageDocument` draws. */
+/** The whole sheet the Settings page carries beside the shared one `pageDocument` draws. */
 export const CATALOG_CSS = `${SETTINGS_CSS}${TOKENS}${SHELL}${MODELS}`;

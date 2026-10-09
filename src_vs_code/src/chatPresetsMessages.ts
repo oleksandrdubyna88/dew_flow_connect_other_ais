@@ -4,7 +4,7 @@ import { textControlFrom } from './textControls';
  * What a message about the chat presets MEANS, and the edit decisions taken on it — without a host or a page.
  *
  * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Chat presets tab, and
- * Chat on the new Settings page (todo/PLAN_one_model_catalog.md E4.6b), whose `chatPresets` messages reach the same
+ * Chat on the Settings page (todo/PLAN_one_model_catalog.md E4.6b), whose `chatPresets` messages reach the same
  * editing core (`chatPresetsHost.ts`). That core and `chatModelEdits.ts` took their command type and their edit
  * decisions from the tab, which epic 5 deleted (E5.1), so they were moved out first — prerequisite (b) of that epic —
  * exactly as they were.</p>
@@ -97,7 +97,7 @@ export function editRepaints(command: Extract<PresetCommand, { kind: 'edit' }>):
 const TYPED: readonly string[] = ['name', 'text', 'startingPrompt'];
 
 /**
- * The key a typed edit settles under in the one queue both pages share (`chatPresetsHost.ts`,
+ * The key a typed edit settles under in the one queue (`chatPresetsHost.ts`,
  * todo/PLAN_one_model_catalog.md E4.6b) — per list, row and field, so typing in two boxes stores both — or nothing for a
  * tick, a pick or a press, which has no caret to disturb and goes straight through.
  */

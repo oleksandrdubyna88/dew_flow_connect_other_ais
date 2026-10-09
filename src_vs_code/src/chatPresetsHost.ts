@@ -22,12 +22,11 @@ import { teamServersFrom } from './teamServers';
 
 /**
  * The editing core of the chat presets — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.6b):
- * the Chat presets tab (`chatPresetsPanel.ts`, deleted in E5.1) and, on the new Settings page, Chat. Moved here from
+ * the Chat presets tab (`chatPresetsPanel.ts`, deleted in E5.1) and, on the Settings page, Chat. Moved here from
  * `chatPresetsPanel.ts`, never copied — the roles' and the commands' arrangement (`rolesHost.ts`, `commandsHost.ts`).
  *
  * <p>Everything DECIDED is `chatPresetsMessages.ts`, `chatPresets.ts` and `chatModelEdits.ts`. What is here is what only a
- * host can do: read a setting and write one — through ONE settled-write queue for both pages, so an edit on one cannot
- * overtake the other's. Whoever draws the presets listens with {@link onChatPresetsRedraw}.</p>
+ * host can do: read a setting and write one — through ONE settled-write queue, so one edit cannot overtake another. Whoever draws the presets listens with {@link onChatPresetsRedraw}.</p>
  */
 
 const SECTION = 'coai';
@@ -185,7 +184,7 @@ const writes = settledWrites<PresetCommand>({
   fieldOf: presetSettlesAs,
 });
 
-/** One edit, from either page, in the one queue. */
+/** One edit, in the one queue. */
 export const queueChatPresetEdit = (command: PresetCommand): Promise<void> => writes.queue(command);
 
 /** Whatever is still settling — written before a page that typed it goes away. */

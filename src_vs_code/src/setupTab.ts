@@ -5,7 +5,7 @@ import type { Runtime } from './models';
 import type { Vendor } from './vendors';
 
 /**
- * The new Settings page's Setup additions (todo/PLAN_one_model_catalog.md E4.5): the CLIs the models run on, whether
+ * The Settings page's Setup additions (todo/PLAN_one_model_catalog.md E4.5): the CLIs the models run on, whether
  * each MCP client registers coai, and the data folder's "moved from" record. Pure — the host reads the files and the
  * versions, these decide and draw.
  */
@@ -55,7 +55,7 @@ function cliRow(group: CliGroup, status: Readonly<Record<string, CliStatus>>, bu
 }
 
 /**
- * The CLI table — the current page's own ▶ ⤓ ⟳ buttons, for the first model on each CLI.
+ * The CLI table — the ▶ ⤓ ⟳ buttons the old page's reviewer card carried, for the first model on each CLI.
  *
  * @param buttons the current card's builder (`panelView.cliButtons`), passed in so this module stays pure
  */

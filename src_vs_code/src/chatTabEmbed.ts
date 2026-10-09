@@ -8,11 +8,11 @@ import { escapeHtml } from './escapeHtml';
 import { DEFAULT_CHAT, chatProviderListFor, chatSendingFields, type PanelState } from './panelView';
 
 /**
- * Chat on the new Settings page (todo/PLAN_one_model_catalog.md E4.6b): which model a chat opens on, what it is sent
+ * Chat on the Settings page (todo/PLAN_one_model_catalog.md E4.6b): which model a chat opens on, what it is sent
  * with and how, and the prompt presets inline. The models are the rows ticked Chat on Models that can answer; their
  * edits — the opening model, a model's opening text, a prompt — are the Chat presets tab's own messages, posted as
- * `chatPresets` into the one editing core (`chatPresetsHost.ts`). The sending fields are the current page's own
- * (`chatSendingFields`), written through `data-setting`.
+ * `chatPresets` into the one editing core (`chatPresetsHost.ts`). The sending fields are
+ * `chatSendingFields`, written through `data-setting`.
  *
  * <p>The page also draws the roles, whose wiring reads `data-field` and `data-remove`, and the commands; so a block here
  * carries names of its own ({@link EMBEDDED}), and each wiring reads only its own.</p>
@@ -20,7 +20,7 @@ import { DEFAULT_CHAT, chatProviderListFor, chatSendingFields, type PanelState }
 
 const EMBEDDED: PresetAttrs = { row: 'data-chp-id', list: 'data-chp-list', field: 'data-chp-field', remove: 'data-chp-remove' };
 
-/** Chat, as the new page draws it. */
+/** Chat, as the Settings page draws it. */
 export function chatTabHtml(state: PanelState): string {
   const chat = state.chat ?? DEFAULT_CHAT;
   const list = chatProviderListFor(chat, state);
@@ -96,7 +96,7 @@ function modelBlock(one: ModelPreset, chosen: string): string {
 
 /**
  * A saved choice that no longer resolves stays on screen, chosen and disabled: what is configured is what is shown, and
- * the chat refuses it by name rather than sending the passage to somebody else's model (the current page's rule).
+ * the chat refuses it by name rather than sending the passage to somebody else's model.
  */
 function strandedHtml(chat: ChatSettings, chosen: string, pool: readonly ModelPreset[]): string {
   return chosen.length === 0 || pool.some((one) => one.id === chosen) ? '' : strandedBlock(chosen, chat.models.find((one) => one.id === chosen));

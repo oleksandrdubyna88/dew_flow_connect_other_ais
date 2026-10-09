@@ -78,7 +78,7 @@ export type MigrationOutcome =
   | { readonly kind: 'refused'; readonly why: string }
   | { readonly kind: 'migrate'; readonly writes: readonly LayerWrite[]; readonly skipped: readonly string[] };
 
-/** What a definition needs of a row — one {@link Launch}, the shape the old page's save compares with too. */
+/** What a definition needs of a row — one {@link Launch}, the shape the panel's save compares with too. */
 type Definition = Launch;
 
 /** A definition found in the layer, the row id it would like, and the reference that must not equal its shipped pair. */

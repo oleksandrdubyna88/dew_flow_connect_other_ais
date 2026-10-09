@@ -44,8 +44,6 @@ import { ChatTurnRecord } from './chatUsage';
 import { chatUsagePath, readChatUsage } from './chatUsageFile';
 import {
   badEndpoint,
-  consultantEndpointWrite,
-  consultantRecordUpdate,
   endpointAnswer,
   endpointConflict,
 } from './consultantWrite';
@@ -89,7 +87,7 @@ import { MOVE_RECORD } from './dataCommands';
 import type { MoveRecord } from './dataMove';
 import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
-import { shownOnTheOldPage } from './catalogRules';
+import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
@@ -1057,7 +1055,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     } else if (m.type === 'roles') {
       this.track(from, m, () => this.roleEdited(m.edit));
     } else if (m.type === 'commands' || m.type === 'chatPresets') {
-      // An edit from the new page's Commands (E4.4) or Chat (E4.6b), into the one queue its own tab uses too.
+      // An edit from the Settings page's Commands (E4.4) or Chat (E4.6b), into the one queue its own tab uses too.
       this.track(from, m, () => (m.type === 'commands' ? queueCommandEdit(commandEdit(m.edit)) : queueChatPresetEdit(presetEdit(m.edit))));
     } else if (m.type === 'command') {
       this.track(from, m, () => this.run(m.command, m.id, from));
@@ -1194,17 +1192,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
     const sessions = await this.readSessions();
-    // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer on
-    // this page. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
+    // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
     // one list: priced from every row, a hidden api consultant put its endpoint's rate on a reviewer's card.
-    const shown = vendors.filter(shownOnTheOldPage);
+    const shown = vendors.filter(isReviewerRow);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
     const server = await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published);
     const state = {
       settings,
       vendors: shown,
-      // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
+      // The Settings page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the reviewers only.
       catalogRows: vendors,
       securityTry: this.securityTry,
       ...(await this.newPageReads(server)),
@@ -1249,7 +1246,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
       rankByRuntime: hasFeature(features, FEATURES.bugzRuntime),
-      // The new Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
+      // The Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
       // control was first seen, and the clock its "new" marks are measured against.
       serverFeatures: settledFeatures(features),
       firstSeen: this.context.globalState.get<Record<string, number>>(FIRST_SEEN_KEY) ?? {},
@@ -1923,7 +1920,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     switch (write.kind) {
       case 'vendor': {
-        // Refused BEFORE it is saved, for both pages: a prompt past 8 KiB, an effort the runtime refuses, the last
+        // Refused BEFORE it is saved: a prompt past 8 KiB, an effort the runtime refuses, the last
         // model of a review stage switched off (catalogWriteRules.ts; PLAN_one_model_catalog.md E3.2). The control
         // snaps back and the person is told why.
         const refused = rowWriteRefusal(this.vendorsHere(), write.vendor, write.key, write.value,
@@ -1958,25 +1955,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         return;
       }
       case 'caller': {
+        // A caller's pick of a catalog row is the one consultant control a page draws (`consultantPicks.ts`); a key
+        // no page posts writes nothing.
         if (write.key === 'consultantRow') {
           await saveOrSnapBack(() => this.savePick(write.caller, String(write.value ?? '')), afterTheWrite(() => this.snapBack(from)), write.value, write.control);
-          return;
         }
-        // Merged the same way a role record is, and into `consultants` rather than the control's own
-        // key: the four rows are one map, so the key a control carries says which HALF of a row
-        // changed — the vendor or its model — and is never a setting of its own. The caps beside
-        // them are ordinary settings and take the plain path below.
-        // Read through the SIDE-AWARE reader, because `consultants` is one of the overlaid
-        // settings: reading the shared value and then saving the merge into the side overlay would
-        // drop whatever that side had already chosen. Written and read by the same rule.
-        // (CodeRabbit, on the pull request.)
-        const current = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
-        // The rows go in because the WRITE resolves too: what is stored stops being a reference to a
-        // reviewer row the moment a person edits the section, so the definition being written has to
-        // be worked out from the rows this side can see — the same reader, on the same config, as the
-        // line above.
-        const rows = vendorsFrom(this.read(config)('vendors'));
-        await this.saveWrite(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows), write, from);
         return;
       }
       case 'commandModel': {
@@ -2225,7 +2208,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // setting globally. The REPORT stayed with the callers, because only a caller knows whether a
     // notification or a banner is the right surface — this panel has no banner, so it is the toast.
     // A consultant or question row is folded through the catalog first (PLAN_one_model_catalog.md E1.4): an edit
-    // of an entry that refers to a catalog row rewrites that row, so the old page never forks or orphans one.
+    // of an entry that refers to a catalog row rewrites that row, so the panel never forks or orphans one.
     // The rows are saved FIRST, so a refusal between the two leaves a row nobody refers to yet. A catalog key is
     // read and written in ONE turn of the catalog, so a migration never reads it half-saved (PR #681's code round).
     try {
@@ -2240,7 +2223,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * An edit of the review roles from the new page's Roles & prompts (PLAN_one_model_catalog.md E4.3), into the one queue
+   * An edit of the review roles from the Settings page's Roles & prompts (PLAN_one_model_catalog.md E4.3), into the one queue
    * the Review roles tab uses too. A role's switch is ONE switch here: once the catalog's `active` has landed — through
    * every refusal the roles have — the panel's `roleEnabled` follows it (`rolesSwitch.ts`), so a server of any version
    * reads the same answer.
@@ -2266,7 +2249,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * A caller's consultant picked on the new page (PLAN_one_model_catalog.md E4.2): a reference to a catalog row, read and
+   * A caller's consultant picked on the Settings page (PLAN_one_model_catalog.md E4.2): a reference to a catalog row, read and
    * written in ONE catalog turn, and never through the fold — a pick moves which row a caller asks, and the fold would
    * read a caller re-pointed away from a row only it used as that row's removal. A refusal is said; the picker snaps back.
    */
@@ -2350,11 +2333,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'customModel':
         if (id !== undefined) {
           await this.customModel(id, from);
-        }
-        break;
-      case 'customConsultant':
-        if (id !== undefined) {
-          await this.customConsultant(id);
         }
         break;
       case 'editSecurityPrompt':
@@ -3152,7 +3130,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** How long Try it waits: one classification of at most 64 K characters, never a vendor turn. */
   private static readonly TRY_SECURITY_CAP_MS = 15_000;
 
-  /** What the installed binary last said about a sample — this window's, drawn on the new page's Security lane tab. */
+  /** What the installed binary last said about a sample — this window's, drawn on the Settings page's Security lane tab. */
   private securityTry: SecurityTryResult | undefined;
 
   /** The MCP clients' config files, each read again only when it changed (E4.5). */
@@ -3164,7 +3142,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * What only the new Settings page draws — the roles' prompt files (E4.3), the command texts (E4.4) and the MCP
+   * What only the Settings page draws — the roles' prompt files (E4.3), the command texts (E4.4) and the MCP
    * clients' config files (E4.5) — read only while that page can be shown, so a sidebar repaint reads no file.
    */
   private async newPageReads(server: ServerStatus): Promise<Pick<PanelState, 'roles' | 'commands' | 'mcpClients'>> {
@@ -3181,13 +3159,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     };
   }
 
-  /** A change to the roles' shape, from either page that edits them, redraws the new page's Roles & prompts (E4.3). */
+  /** A change to the roles' shape redraws the Settings page's Roles & prompts (E4.3). */
   private readonly rolesRedraw = onRolesRedraw(() => this.render());
 
-  /** The same for the gate's commands, edited from the new page's Commands or the Gate commands tab (E4.4). */
+  /** The same for the gate's commands, edited from the Settings page's Commands or the Gate commands tab (E4.4). */
   private readonly commandsRedraw = onCommandsRedraw(() => this.render());
 
-  /** The same for the chat presets, edited from the new page's Chat or the Chat presets tab (E4.6b). */
+  /** The same for the chat presets, edited from the Settings page's Chat or the Chat presets tab (E4.6b). */
   private readonly chatPresetsRedraw = onChatPresetsRedraw(() => this.render());
 
   /**
@@ -3250,12 +3228,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * list hides), the saved pick, the engines last seen, the server's ranking list and whether it ranks by runtime.
    */
   private async bugzInputsNow(): Promise<BugzInputs> {
-    // Built as the render builds its state — `vendors` the current page's reviewers, `catalogRows` every row — and read
+    // Built as the render builds its state — `vendors` the reviewers, `catalogRows` every row — and read
     // through the sidebar's own reader, so the collect cannot judge a pick differently from how the picker drew it.
     const rows = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));
 
     return bugzInputsOf({
-      vendors: rows.filter(shownOnTheOldPage),
+      vendors: rows.filter(isReviewerRow),
       catalogRows: rows,
       settings: this.settings(),
       localEngines: this.localEngines,
@@ -4191,12 +4169,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
-   * A name and a base URL, asked once for both the reviewer list and the consultant.
-   *
-   * <p>ONE function because the two flows must mint the same id from the same words: the id keys the
-   * vault entry, and two spellings of one name are two keys and a credential that is only there
-   * half the time. It lived inline in {@link addVendor} until story C6 needed the same two boxes for
-   * the consultant, and a second copy would have drifted on validation first.</p>
+   * A name and a base URL for a model of your own, asked for *Add a model*.
    *
    * <p>The name box refuses a name that normalises to nothing, and refuses one another row already
    * holds AT A DIFFERENT ENDPOINT — said while the box is open rather than after it closes, which is
@@ -4204,7 +4177,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * the same name is not a clash: it is one service named once. Dismissing either box returns
    * `undefined` and nothing anywhere is written. (gemini, C6's plan round.)</p>
    */
-  private async askCustomEndpoint(title: string, caller = ''): Promise<{ id: string; baseUrl: string } | undefined> {
+  private async askCustomEndpoint(title: string): Promise<{ id: string; baseUrl: string } | undefined> {
     const config = vscode.workspace.getConfiguration('coai');
     const rows = vendorsFrom(this.read(config)('vendors'));
     const consultants = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
@@ -4222,32 +4195,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       title: `${title}: ${normaliseId(name)}`,
       prompt: 'Its OpenAI-compatible base URL',
       placeHolder: 'https://api.example.com/v1',
-      validateInput: (v) => (badEndpoint(v) ?? (endpointConflict(name, v, rows, consultants, caller) || undefined)),
+      validateInput: (v) => (badEndpoint(v) ?? (endpointConflict(name, v, rows, consultants) || undefined)),
     }));
 
     return endpointAnswer(name, baseUrl);
-  }
-
-  /**
-   * "Another OpenAI-compatible endpoint", chosen in one caller's consultant row.
-   *
-   * <p>The picker posted a COMMAND rather than a setting, because the option it carries has no id
-   * and an id is what keys the vault entry — so the name is asked for FIRST and the write happens
-   * once, with everything it needs. The definition lands in that caller's consultant record and
-   * nowhere else: it is not appended to the reviewer rows, because three independent sets of
-   * settings is the whole ruling, and a consultant that added itself to somebody's reviewers would
-   * be the coupling this plan removed coming back through the last open door. (gemini, C6's plan
-   * round, on where the definition lands.)</p>
-   */
-  private async customConsultant(caller: string): Promise<void> {
-    const own = await this.askCustomEndpoint('A consultant of your own', caller);
-    if (own === undefined) {
-      return; // dismissed at either box — the row keeps the vendor it had
-    }
-
-    const config = vscode.workspace.getConfiguration('coai');
-    const current = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
-    await this.save(config, 'consultants', consultantEndpointWrite(current, caller, own.id, own.baseUrl));
   }
 
   /** One place a new reviewer is written, so both routes refuse a duplicate the same way. */
@@ -4307,7 +4258,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
     // Counted as the page shows them: a catalog-only row is no reviewer, so it cannot keep the panel populated.
-    if (vendors.filter(shownOnTheOldPage).length <= 1) {
+    if (vendors.filter(isReviewerRow).length <= 1) {
       void notify({
         as: 'warning',
         class: 'refusal',

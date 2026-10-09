@@ -11633,3 +11633,33 @@ ticks and the five use ticks), **How it answers**, **Connection** and **Price**;
   person gives (the guard now names that phrase); the chat's switched-off refusal and the Security lane's empty hint
   point at Models; `coai.rounds` / `coai.roles` descriptions name Reviews › Stages and Reviews › Roles & prompts; the
   Marketplace README tours the six tabs; **MCP server** is named as **Setup › MCP server** in every language.
+
+## E5.3 — what the old page left behind (2026-10-09, PLAN_one_model_catalog.md E5.3)
+
+Nothing a person sees changes: everything removed here was drawn by nothing since E5.1 step 5.
+
+- **The mockup** `new_design/` (17 files, never shipped) and its `sonar.exclusions` entry are gone; git history keeps it.
+- **The current-page halves of three shared builders.** `consultantBody` / `consultantSection` take the callers' picks
+  as a required argument — the caller definitions (vendor, model, endpoint, CLI path per caller) went, with the
+  composite `consultants` write the panel used for them (`consultantRecordUpdate`, `consultantEndpointWrite`, the
+  custom-endpoint consultant flow), the catalogue picker (`consultableVendors`, `CUSTOM_ENDPOINT`, `ConsultantPreset`),
+  `sameVendorNote` (the Settings page's pick says it through `isCallersOwnRuntime`), the `LOOKING` spinner and
+  `claudeNote`, which only the old rows wore. `qconsultBody` takes `pickFrom` as required and `definitionFields` (a
+  question row's own vendor/model/endpoint/key/CLI path) went with the handlers of their messages. `securityLaneSection`
+  / `securityLaneBody` take `allRows` as required; `strandedNote` no longer special-cases one list passed twice.
+- **The panel messages those controls posted** (`consultVendor`, `consultModel`, `consultBaseUrl`,
+  `consultExecutablePath`, `qconsultRowVendor` / `Model` / `BaseUrl` / `Key` / `ExecutablePath`) have no page that posts
+  them and no handler; a caller's consultant is written as a PICK (`consultantRow` → `savePick`, with the snap-back).
+  The restore command never used them — it writes whole settings from `coai.migratedFrom` (`restoreLayer`).
+- `queueRoleEdit` takes the switches it is guarded with as a required argument (the deleted roles tab was the only
+  caller of the default). `shownOnTheOldPage` is `isReviewerRow` — it still decides the panel's `vendors`.
+- Comments that described "the current page", "both pages" or "the new page" as present now say the Settings page.
+- **Fixed on the way (code round, RED first):** `endpointConflict` read every caller's consultant entry as a holder of an
+  endpoint, and a PICK (`{ vendor: '<row id>' }`) has none of its own — so configuring a picked row at its own URL in
+  **＋ Add a model** was refused as "another caller's consultant". A consultant holds an endpoint only when its entry
+  defines one; the row is the holder of its own URL.
+
+**Found on the way, not fixed here:** a Models card takes its catalog price from `state.modelPrices[model]`, which is
+priced from the reviewers only (`isReviewerRow`, to keep a hidden api consultant from overwriting a reviewer's rate
+for the same model). So a row that is not a reviewer — a consultant-only model — shows no catalog price on Models.
+It predates E5; recorded as a follow-up in the plan.

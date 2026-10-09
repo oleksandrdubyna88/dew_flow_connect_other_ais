@@ -3,8 +3,8 @@
 > Status: **in progress, 2026-10-07 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
 > the measured live calls wait on the operator); E3 merged (PR #687); E4 merged (PR #688, its consultations and code
 > gate passed); E5 open — R7 first, then extract-before-delete, with the rollout order as its own milestone.** The design is accepted: the clickable mockup in
-> [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
-> checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
+> `new_design/` (it drove 61 checks with `node new_design/check.mjs`; deleted in E5.3 once the page it drew shipped —
+> git history keeps it). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
 > (`src_server`), help in five languages, and the docs. The sidebar and the Review rounds page are out of scope, with
 > ONE stated exception: the sidebar's Bugz ranking picker reads the catalog (E5.1).
@@ -1343,6 +1343,51 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    the comments that still name "the current page" (`catalogSections`, `consultantPicks`, `modelCard`, `panelView`,
    `securityLaneView`, `setupTab`, …). Each goes with its tests, its behaviour named against the Settings-page test
    that holds it.
+   **E5.3, designed 2026-10-09 — what the old page left behind goes.** Three kinds of leftover, each drawn by nothing
+   since E5.1 step 5, each still held alive by tests of its own:
+   - **The mockup.** `new_design/` (17 files, ~6,250 lines, never shipped) and its `sonar.exclusions` entry; the one
+     comment that cites it (`catalogPlaces.ts` CATALOG_TABS) names the plan instead.
+   - **The current-page halves of three shared builders**, each a parameter the Settings page always fills:
+     `consultantBody(consult, state, callerRows = '')` / `consultantSection(state, callerRows = '')` — the
+     `definitionRows` branch (each caller's own vendor/model/endpoint/CLI path) with `row`, `callerColour`, `refusal`
+     and what only it reaches; `qconsultBody`'s `pickFrom` optional → required, `definitionFields` (the row's own vendor,
+     model, endpoint, key name, CLI path) gone; `securityLaneSection(state, offered, allRows = offered)` /
+     `securityLaneBody(…, allRows)` — `allRows` required, and the `offered === allRows` shortcut in `strandedNote`
+     goes with the page that passed the same list twice. Making a parameter required lets the compiler list every
+     caller (plan round finding 1) — today `catalogSections.ts` alone. The messages the old controls posted
+     (`consultVendor`, `consultModel`, `consultBaseUrl`, `consultExecutablePath`, `qconsultRowVendor` / `Model` /
+     `BaseUrl` / `Key` / `ExecutablePath`) are the PANEL's vocabulary, not keys of `settings.json`: each is enumerated
+     with every reference to it (finding 3) and its handler goes only where no page posts it and nothing else calls it.
+     The restore command does not go through them — it writes whole settings (`coai.vendors`, `coai.consultants`,
+     `coai.qconsultRows`) from `coai.migratedFrom` through `restoreLayer`, held by `catalogMigration.test.ts`.
+   - **Comments that describe the current page as present** (`catalogSections`, `consultantPicks`, `consultantHealth*`,
+     `modelCard*`, `modelsTab`, `panelProvider`, `panelView`, `qconsultView`, `rolesHost`, `rolesSwitch`,
+     `securityLaneView`, `setupTab`, `chatTabEmbed`, …) are rewritten to say what is, or deleted where they only
+     compared two pages.
+   **Tests:** each test that holds a removed branch goes with it, its behaviour named against the Settings-page test
+   that holds the same thing (the was → now table in `research/module_tests.md`, as E5.1c did); a behaviour with no
+   Settings-page test gains one before its old test goes — a test that RUNS the page (`pageTree` + the page's own script
+   through `runPanel` / `runPageHtml`, or the bundle) and names the observable it asserts, never a scan of the markup
+   (findings 2 and 4), and shown red with the behaviour taken out. The dead-export and orphan-doc sweeps of E5.1c run before the
+   code round. Nothing a person sees changes, so there is no RED for the deletions themselves; any defect found on
+   the way is red first. Docs: `research/module_extension.md`, `research/module_tests.md`, the plan's progress line.
+   The restore command and `coai.migratedFrom` stay one more release (T5).
+   **Progress (2026-10-09, branch `feat/catalog-e5-cleanup`): E5.3 built.** `new_design/` and its Sonar entry gone;
+   `consultantBody`/`consultantSection` take the picks (definitions, the composite `consultants` write, the custom
+   consultant endpoint, the catalogue picker, `sameVendorNote`, `LOOKING`, `claudeNote` gone), `qconsultBody` takes
+   `pickFrom` (`definitionFields` gone), `securityLaneSection`/`Body` take `allRows`; `queueRoleEdit`'s default and
+   `CATALOG_ALONE` gone; `shownOnTheOldPage` → `isReviewerRow`; comments say the Settings page. The panel messages the
+   old controls posted — `consultVendor`, `consultModel`, `consultBaseUrl`, `consultExecutablePath`, `qconsultRowVendor`
+   / `Model` / `BaseUrl` / `Key` / `ExecutablePath` — are posted by no page and handled by nothing now (each enumerated:
+   no src reference left; one test fixture string in `panelPageHarness.test.ts`). Removed tests → the Settings-page tests
+   that hold their behaviour: `research/module_tests.md`, *E5.3*; four gained ones (own vendor, unplaceable caller,
+   Team server not a consultant, caller names). Sweeps: no new dead export, no orphaned doc block. **Found, not fixed:**
+   a Models card prices from `modelPrices[model]`, built from the reviewers only, so a consultant-only row shows no
+   catalog price — it predates E5; follow-up `todo/PLAN_models_card_prices_every_row.md`. **Code round:** the first saw
+   only the mockup's deletion (the diff budget), so it was split into its own commit and the code reviewed again over the
+   rest: four findings, one defect — `endpointConflict` read a caller's PICK as an endpoint holder with none, refusing a
+   picked row at its own URL (RED: "the row's own endpoint was refused because a caller picked the row"; fixed, teeth
+   shown).
 4. **Releases**: mcp 0.44.0 first (E2), the Team server deploy when the operator says, then the extension; post-deploy
    checks against the installed builds.
 

@@ -69,18 +69,14 @@ test('a flagged row switches on with nothing to tick — the flag is enough (D13
   assert.equal(rowEdited([agy], 'agy', 'qconsultRowEnabled', true, context)?.[0]?.enabled, true, 'agy on disk is flagged too, and switches on the same way');
 });
 
-test('choosing another vendor or prompt takes the row off: it was switched on as another pair', () => {
+test('choosing another prompt takes the row off: it was switched on as another pair', () => {
+  // Choosing another MODEL is a pick of a catalog row, and goes off the same way (qconsultRowPicks.test.ts).
   const running = row('astra', { vendor: 'codex', runtime: 'codex', prompt: 'question-web', enabled: true });
 
-  assert.deepEqual(
-    rowEdited([running], 'astra', 'qconsultRowVendor', 'claude', context)![0],
-    { ...running, vendor: 'claude', runtime: 'claude', model: 'haiku', enabled: false },
-  );
   assert.deepEqual(
     rowEdited([running], 'astra', 'qconsultRowPrompt', 'question-opinion', context)![0],
     { ...running, prompt: 'question-opinion', enabled: false },
   );
-  assert.equal(rowEdited([running], 'astra', 'qconsultRowVendor', 'no-such-vendor', context), undefined);
 });
 
 test('a new row is added off, with a prompt its runtime admits, under an id no row holds', () => {

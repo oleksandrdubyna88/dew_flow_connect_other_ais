@@ -5,41 +5,23 @@ import {
   CHOICE_FIELDS,
   CONSULTANT_DEFINITION_SINCE,
   CONSULTING_RUNTIMES,
-  CUSTOM_ENDPOINT,
   ConsultantChoice,
   DEFAULT_CONSULT,
   ResolvedConsultant,
   consultSettingsFrom,
-  consultableVendors,
   consultantSkewNote,
   isDefaultConsult,
   resolveConsultant,
+  isCallersOwnRuntime,
   sameCallers,
-  sameVendorNote,
   vaultKeyNote,
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
-import {
-  CALLER_NEUTRAL,
-  ConsultantRowView,
-  ConsultantViewState,
-  callerColour,
-  consultantBody,
-  consultantRowView,
-} from '../consultantView';
-import { ASKING_CLAUDE } from '../claudeModels';
-import { LocalEngine, OLLAMA_PROBE, openAiBaseOf } from '../localEngines';
-import { vendorPalette } from '../vendorColour';
-import {
-  badEndpoint,
-  consultantEndpointWrite,
-  consultantRecordUpdate,
-  endpointAnswer,
-  endpointConflict,
-} from '../consultantWrite';
+import { consultantBody } from '../consultantView';
+import { badEndpoint, endpointAnswer, endpointConflict } from '../consultantWrite';
 import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
-import { VENDOR_PRESETS, Vendor, normaliseId, vendorsFrom } from '../vendors';
+import { Vendor, vendorsFrom } from '../vendors';
 
 /**
  * The Consultant section: who answers each kind of caller, the caps, and the prompt box.
@@ -230,20 +212,17 @@ test('sameCallers compares all five fields — a definition is not the legacy pa
   assert.ok(sameCallers(asDefinition, { ...asDefinition }));
 });
 
-test('the same-vendor note is offered for thought rather than refused', () => {
-  assert.match(sameVendorNote('claude', 'claude'), /stronger model/);
-  assert.equal(sameVendorNote('claude', 'codex'), '');
-});
-
 test('a caller kind is not a runtime, and `gemini` is the case that proves it', () => {
   // The vendor row that runs Gemini models is on the `antigravity` runtime, so a name-to-name
   // comparison withheld the warning from the one caller most likely to be pointed at itself.
-  assert.match(sameVendorNote('gemini', 'antigravity'), /stronger model/);
-  assert.match(sameVendorNote('gemini', 'gemini'), /stronger model/, 'a row configured before that runtime retired still exists');
-  assert.equal(sameVendorNote('gemini', 'claude'), '');
+  // What the Consultant tab says it with is run in consultantPicks.test.ts; this is the rule it asks.
+  assert.equal(isCallersOwnRuntime('gemini', 'antigravity'), true);
+  assert.equal(isCallersOwnRuntime('gemini', 'gemini'), true, 'a row configured before that runtime retired still exists');
+  assert.equal(isCallersOwnRuntime('gemini', 'claude'), false);
+  assert.equal(isCallersOwnRuntime('claude', 'claude'), true);
   // `other` is not any vendor, so nothing is "itself" — saying so of an arbitrary script would be
   // a guess dressed as advice.
-  assert.equal(sameVendorNote('other', 'codex'), '');
+  assert.equal(isCallersOwnRuntime('other', 'codex'), false);
 });
 
 test('a cap the server could not hold is not a cap', () => {
@@ -611,60 +590,6 @@ test('the note is silent when nothing on the wire is a definition — a legacy e
 // ---------------------------------------------------------------------------------------------
 // Which rows may be consulted
 
-test('a catalogue entry that cannot hold a conversation is NAMED with its reason, never filtered away', () => {
-  // Derived from the catalogue, not copied out of it: a hand-written expectation here would go red
-  // the day somebody adds a vendor — for a change that alters nothing this test describes — and
-  // would still be green if a preset stopped being named. (`common/testing.md`, the palette test.)
-  const { refused } = consultableVendors();
-  const cannot = named().filter((one) => !CONSULTING_RUNTIMES.includes(one.runtime));
-
-  assert.deepEqual([...refused].map((one) => one.id).sort(), cannot.map((one) => one.id).sort(),
-    'every preset this build cannot consult with is named here — one missing is a silent gap');
-  assert.ok(refused.every((one) => one.why.includes(preset(one.id).runtime)),
-    'the reason must name the runtime, or it explains nothing');
-  assert.ok(refused.every((one) => one.label === preset(one.id).label && one.label.length > 0),
-    'a person reads the label, not the id');
-});
-
-test('no Team server can be offered as a consultant, by construction rather than by a filter', () => {
-  // The ruling's third clause. It holds because `remote` rows are not in VENDOR_PRESETS at all —
-  // the chat appends its servers separately — so there is no filter here that somebody could
-  // forget, and no reachable input that would put one in the list.
-  const { offered, refused } = consultableVendors();
-
-  assert.ok(!offered.some((one) => one.runtime === 'remote'));
-  assert.ok(!refused.some((one) => one.id.includes('-')), 'a Team-server row id is `<server>-<vendor>`, and none can reach this list');
-});
-
-/** The catalogue as *Add a reviewer* holds it — every named preset, which is the source of truth here. */
-function named(): readonly (typeof VENDOR_PRESETS)[number][] {
-  return VENDOR_PRESETS.filter((one) => one.id.length > 0);
-}
-
-function preset(id: string): (typeof VENDOR_PRESETS)[number] {
-  const found = named().find((one) => one.id === id);
-  assert.ok(found !== undefined, `the catalogue has no preset '${id}'`);
-
-  return found;
-}
-
-test('the picker is the CATALOGUE — every consulting preset is offered, whatever is in Reviewers', () => {
-  const { offered, refused } = consultableVendors();
-
-  assert.deepEqual(
-    [...offered.map((one) => one.id), ...refused.map((one) => one.id)].sort(),
-    named().map((one) => one.id).sort(),
-    'every named preset is accounted for — offered or refused — and none is silently absent',
-  );
-  assert.deepEqual(
-    offered.map((one) => one.id),
-    named().filter((one) => CONSULTING_RUNTIMES.includes(one.runtime)).map((one) => one.id),
-    'what a person can pick is what the product SUPPORTS, not what somebody happens to review with',
-  );
-  assert.ok(offered.every((one) => one.label === preset(one.id).label && one.hint === preset(one.id).hint),
-    'each entry carries the label and the sentence Add a reviewer shows — one catalogue, read the same way twice');
-});
-
 test('the offered runtimes are the ones the server can actually resolve', () => {
   // The extension's copy of `ConsultantResolution.Consulting`. It decides what a picker OFFERS,
   // which has to be drawable before the server is installed — so it is a mirror, and this is the
@@ -674,210 +599,10 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
 });
 
 // ---------------------------------------------------------------------------------------------
-// The section itself — decided as a VALUE, rendered as markup
-
-/** One caller's row, resolved the way the reader resolves it, then decided the way the section does. */
-function viewOf(stored: ConsultantChoice, rows: readonly Vendor[] = [], caller = 'claude'): ConsultantRowView {
-  const settings = {
-    ...DEFAULT_CONSULT,
-    byCaller: { ...DEFAULT_CONSULT.byCaller, [caller]: resolveConsultant(stored, rows) },
-  };
-
-  return consultantRowView({ id: caller, label: 'Claude Code' }, settings, {});
-}
-
-test("a consultant the catalogue knows is offered under the catalogue's own label", () => {
-  const view = viewOf(definition('codex', 'codex'));
-
-  assert.equal(view.state, 'offered');
-  assert.equal(view.vendor, 'codex');
-  assert.ok(view.options.some((one) => one.value === 'codex' && one.label === 'Codex (OpenAI)'),
-    'the row offers an internal id where Add a reviewer offers a name');
-});
-
-test('a consultant the catalogue does NOT know stays selected, labelled from what it is', () => {
-  // Every custom endpoint is one of these, and so is a preset this build retires. Falling through to
-  // the first offered entry would show a pair nobody chose and offer it as valid.
-  const view = viewOf(definition('mine', 'codex', '', 'https://api.example.com/v1'));
-
-  assert.equal(view.state, 'stranded');
-  assert.equal(view.options[0]!.value, 'mine', 'the stored choice is not in the catalogue and must still be the selected one');
-  assert.match(view.options[0]!.label, /mine — your own, on codex at https:\/\/api\.example\.com\/v1/);
-  assert.ok(view.options.some((one) => one.value === 'codex'), 'and the catalogue is still offered beside it');
-});
-
-test('an entry the rule cannot place carries its REASON and offers no model', () => {
-  const view = viewOf(legacy('retired-thing'), []);
-
-  assert.equal(view.state, 'unavailable');
-  assert.deepEqual(view.models, [], "offering another runtime's models would be a choice nobody made");
-  assert.equal(view.hints.length, 1);
-  assert.match(view.hints[0]!, /retired-thing/, 'the reason names the vendor, and it comes from the rule that refused it');
-});
-
-test('a row carries only the settings its runtime actually has', () => {
-  const codex = viewOf(definition('codex', 'codex'));
-  const claude = viewOf(definition('claude', 'claude'));
-  const local = viewOf(definition('local', 'local'));
-
-  assert.deepEqual([codex.takesBaseUrl, codex.takesExecutablePath], [true, true]);
-  assert.deepEqual([claude.takesBaseUrl, claude.takesExecutablePath], [false, true],
-    'the Claude CLI has no OpenAI-compatible endpoint to point anywhere');
-  assert.deepEqual([local.takesBaseUrl, local.takesExecutablePath], [true, false],
-    'a local engine is an endpoint and not a CLI');
-});
-
-test('the section says what this build cannot consult through, rather than offering it silently', () => {
-  // ConsultantResolution matches `"codex" when vendor.BaseUrl.Length == 0` and answers CannotConsult
-  // for everything else, which ConsultantsTests pins. So DeepSeek, OpenRouter and any custom endpoint
-  // are storable and not runnable, and the row has to say so.
-  const custom = viewOf(definition('deepseek', 'codex', 'deepseek-chat', 'https://api.deepseek.com/v1'));
-  const plain = viewOf(definition('codex', 'codex'));
-
-  assert.ok(custom.hints.some((hint) => /custom endpoint/.test(hint)),
-    'a consultant this build refuses by name must say so where it is chosen');
-  assert.ok(!plain.hints.some((hint) => /custom endpoint/.test(hint)), 'and a plain codex consultant must not');
-});
-
-test('a consultant materialised from a Team-server row says the build cannot consult there', () => {
-  // The other half of CannotConsult, and the half the section was silent about. Rule (a) hands back
-  // whatever runtime the row is on, `remote` included — materialising is not permitting — and the
-  // server refuses it at the launch: `ConsultationService.OnTheVendorAsync` asks
-  // `ConsultantResolution.For` before anything runs and answers by name, so nothing is ever routed at
-  // a Team server. What a person saw was a row offering a CLI path, and a model list telling them
-  // their model is one "this server does not offer any more" — three sentences about settings that
-  // will never be read, and none about the refusal that is actually coming.
-  const view = viewOf(legacy('acme-codex'), [{ ...vendor('acme-codex', 'remote'), model: 'gpt-5' }]);
-
-  assert.equal(view.runtime, 'remote', 'the entry still resolves to the row it names — the rule is unchanged');
-  assert.ok(view.hints.some((hint) => /cannot hold a consultation/.test(hint) && /remote/.test(hint)),
-    'the row has to name the runtime the server will refuse it for');
-  assert.ok(view.hints.some((hint) => CONSULTING_RUNTIMES.every((one) => hint.includes(one))),
-    'and which runtimes can, because that is the sentence a person acts on');
-  assert.deepEqual(view.models, [], 'a runtime that will never be asked has no models to offer');
-  assert.deepEqual([view.takesBaseUrl, view.takesExecutablePath], [false, false],
-    'and no settings of its own, because nothing here will be launched');
-});
-
-test('the model a refused consultant is on is KEPT — emptying the list never drops it under the person', () => {
-  const view = viewOf(legacy('acme-codex'), [{ ...vendor('acme-codex', 'remote'), model: 'gpt-5' }]);
-
-  assert.equal(view.keptModel, 'gpt-5', 'a saved value the list no longer holds is the row’s to carry, not the list’s');
-  assert.equal(viewOf(definition('claude', 'claude', 'haiku')).keptModel, '',
-    'and a model the list DOES hold is not repeated beside it');
-});
-
-test('the empty model option says what is true of THIS row, rather than one sentence for all of them', () => {
-  assert.match(viewOf(definition('codex', 'codex')).modelPlaceholder, /default/);
-  assert.match(viewOf(legacy('retired-thing'), []).modelPlaceholder, /cannot place|can place/);
-  assert.ok(!/default/.test(viewOf(legacy('acme-codex'), [vendor('acme-codex', 'remote')]).modelPlaceholder),
-    'a runtime this build will never ask has no default to fall back to, and saying it has one is a lie a person acts on');
-});
-
-test('an entry the rule could not place is not shown as a CHOSEN catalogue vendor', () => {
-  // The repair is in the same select, and it has to be REACHABLE. Marking the catalogue's own
-  // deepseek as selected makes choosing it fire no change event at all, so the one click a person
-  // would try does nothing and the row stays unplaceable. (codex, C6's code round — a regression
-  // from C5's de-duplication, which removed the only other option there was to pick.)
-  const view = viewOf(legacy('deepseek'), []);
-
-  assert.equal(view.state, 'unavailable');
-  assert.equal(view.selected, '', 'nothing storable is selected, so every catalogue entry is one change event away');
-  assert.ok(view.options.some((one) => one.value === 'deepseek'), 'and the entry that repairs it is offered');
-});
-
-test('a vendor the catalogue can still offer is never in the list twice', () => {
-  // `deepseek` is in the catalogue AND can be a stored entry the rule could not place — no reviewer
-  // row of that name, and it is not a runtime. The row then carried its own option and the
-  // catalogue's, two `<option value="deepseek">` in one select: a person clicks the vendor in front
-  // of them, hits whichever the browser selects, and reads the same broken row back.
-  const view = viewOf(legacy('deepseek'), []);
-
-  assert.equal(view.options.filter((one) => one.value === 'deepseek').length, 1);
-});
-
-test('every row offers the way to an endpoint of your own, and it is never the one selected', () => {
-  // The catalogue's blank preset — the entry *Add a reviewer* makes storable by ASKING for a name.
-  // C5 left it out because an id keys the vault entry and one that stores '' is an entry a person
-  // can see and cannot choose; C6 gives it the flow that mints one, so it can be offered.
-  const view = viewOf(definition('codex', 'codex'));
-  const custom = view.options.find((one) => one.value === CUSTOM_ENDPOINT);
-  const blank = VENDOR_PRESETS.find((one) => one.id.length === 0);
-
-  assert.ok(custom !== undefined, 'the ruling is that the list of what can be picked is the same list');
-  assert.equal(custom.label, blank!.label, 'under the catalogue’s own words, like every other option');
-  assert.equal(custom.hint, blank!.hint);
-  assert.ok(view.options.every((one) => one.value !== view.vendor || one.value !== CUSTOM_ENDPOINT),
-    'the sentinel is a request, never a selection');
-});
-
-test("an option carries the catalogue's own hint, not a bare name", () => {
-  const offered = viewOf(definition('codex', 'codex')).options.find((one) => one.value === 'deepseek');
-
-  assert.ok(offered !== undefined, 'the catalogue is offered in every row');
-  assert.equal(offered.hint, preset('deepseek').hint,
-    'Add a reviewer shows the sentence that says what a vendor IS; a picker that drops it leaves a person guessing');
-});
-
-test('a caller pointed at its own vendor is told what to think, and no other caller is', () => {
-  assert.ok(viewOf(definition('claude', 'claude'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
-  assert.ok(!viewOf(definition('codex', 'codex'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
-});
-
-test('every caller kind is named in words a person reads', () => {
-  // The CONTROLS each caller gets are counted in `consultantSectionScript.test.ts`, over a page that
-  // has actually been run — a substring assertion cannot tell a control wired to the right caller
-  // from one wired to the wrong one, which is the whole reason the rule refuses it. What is left
-  // here is copy, and copy has no branch for a running page to reveal. (codex, C6's code round.)
-  const html = consultantBody(DEFAULT_CONSULT, {});
-
-  for (const { label } of CALLER_KINDS) {
-    assert.ok(html.includes(`${label} asks`), `${label} is not named in words`);
-  }
-});
-
-test('a saved model is kept whatever the vendor lists, and named for what it is', () => {
-  // Two different keepers, and they belong to different states. On a row with a RUNTIME, `modelsFor`
-  // keeps a model it does not know and marks it as yours — the same function the reviewer cards use,
-  // so the two sections cannot label one model two ways.
-  const known = viewOf(definition('codex', 'codex', 'gpt-4'));
-
-  assert.equal(known.model, 'gpt-4');
-  assert.ok(known.models.some((one) => one.id === 'gpt-4' && /yours/.test(one.label)),
-    'the shared model list is what keeps it, and it says whose it is');
-
-  // On an UNAVAILABLE row there is no runtime to ask for a list at all, so the saved model would
-  // vanish from the very row asking about it. The section keeps it and names it for what it is.
-  const unplaceable = viewOf(legacy('retired-thing', 'r1'), []);
-
-  assert.deepEqual(unplaceable.models, []);
-  assert.equal(unplaceable.keptModel, 'r1', 'the row carries it, which is the decision — the markup only renders one');
-});
-
-test('a vendor id is escaped, because it is a name a person typed', () => {
-  // A source assertion on purpose: there is no program to run for "this value appears escaped", and
-  // `.agents/PROJECT.md` keeps exactly that case legitimate.
-  const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: resolveConsultant(legacy('<script>x</script>'), []) } },
-    {},
-  );
-
-  assert.ok(!html.includes('<script>x</script>'));
-});
-
-test("the section stopped saying 'the row's own' anywhere, because there is no row to borrow from", () => {
-  // Copy, and the absence of it: what the empty model option SAYS is decided in `modelPlaceholder`
-  // and asserted as a value two tests above. This is the phrase the old section used, which must not
-  // survive anywhere in the words — there is no branch here for a running page to show.
-  assert.ok(!consultantBody(DEFAULT_CONSULT, {}).includes('the row’s own'));
-});
-
-test("the section says these settings are the consultant's own", () => {
-  assert.match(consultantBody(DEFAULT_CONSULT, {}), /These are the CONSULTANT’s own settings|These are the CONSULTANT's own settings/);
-});
+// The section around the callers' picks: the caps and the prompt box
 
 test('the three caps are on screen with the numbers in force', () => {
-  const html = consultantBody({ ...DEFAULT_CONSULT, turns: 3, callsPerSession: 4, idleMinutes: 30 }, {});
+  const html = consultantBody({ ...DEFAULT_CONSULT, turns: 3, callsPerSession: 4, idleMinutes: 30 }, {}, '');
 
   assert.match(html, /data-setting="consultTurns" value="3"/);
   assert.match(html, /data-setting="consultCallsPerSession" value="4"/);
@@ -886,12 +611,12 @@ test('the three caps are on screen with the numbers in force', () => {
 });
 
 test('the prompt box shows the override on disk, and says what empty means', () => {
-  const shipped = consultantBody(DEFAULT_CONSULT, {});
+  const shipped = consultantBody(DEFAULT_CONSULT, {}, '');
   assert.match(shipped, /data-setting="consultPrompt" data-file="consult.md"/);
   assert.match(shipped, /Empty is the prompt this build ships with/);
   assert.match(shipped, /data-command="restoreConsultPrompt"/);
 
-  const edited = consultantBody(DEFAULT_CONSULT, { consultPrompt: 'Answer <b>briefly</b>.' });
+  const edited = consultantBody(DEFAULT_CONSULT, { consultPrompt: 'Answer <b>briefly</b>.' }, '');
   assert.match(edited, /Answer &lt;b&gt;briefly&lt;\/b&gt;\./, 'a prompt is text, and it is escaped like every other value');
 });
 
@@ -900,109 +625,12 @@ test('the prompt box shows the override on disk, and says what empty means', () 
 
 test('a caller-keyed control is routed by its caller, not as a vendor called `claude`', () => {
   assert.deepEqual(
-    settingWrite({ key: 'consultVendor', value: 'claude', caller: 'codex' }),
-    { kind: 'caller', key: 'consultVendor', value: 'claude', caller: 'codex' },
+    settingWrite({ key: 'consultantRow', value: 'claude', caller: 'codex' }),
+    { kind: 'caller', key: 'consultantRow', value: 'claude', caller: 'codex' },
   );
   // And the caller wins over a vendor that rode along: the consultant rows are the only controls
   // that carry one, and a row for the `claude` caller must never be looked up as the `claude` row.
-  assert.equal(settingWrite({ key: 'consultVendor', value: 'x', vendor: 'claude', caller: 'claude' })?.kind, 'caller');
-});
-
-test('writing one caller keeps the other three, and a new vendor brings its OWN model', () => {
-  const stored = {
-    claude: { vendor: 'codex', model: 'gpt-5.6-luna' },
-    codex: { vendor: 'claude', model: 'opus' },
-  };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'antigravity', []);
-
-  // The old vendor's model goes — a model named for one vendor is not a model the next one offers —
-  // and what replaces it is the CATALOGUE entry's own, since story C5: picking `Antigravity (Google)`
-  // here stores exactly what picking it in *Add a reviewer* would, because it is the same catalogue.
-  // Antigravity ships a default model of its own, and a row without one cannot run.
-  assert.deepEqual(changed['claude'], { vendor: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high' },
-    'the vendor a person picked is stored as the catalogue describes it');
-  assert.deepEqual(changed['codex'], stored['codex'], 'the callers nobody touched must survive the write');
-
-  const model = consultantRecordUpdate(changed, 'claude', 'consultModel', 'gemini-3.7-flash-high', []);
-  assert.deepEqual(model['claude'], { vendor: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high' });
-});
-
-/**
- * The write half of story A2: what is STORED stops being a reference to somebody's reviewer.
- *
- * <p>Story A1 made a legacy entry resolve on READ, which fixed the symptom with no write at all. It
- * left the file itself still holding `{vendor, model}` — so the consultant went on following a
- * reviewer row until somebody touched the section. These tests pin the other half: the first edit
- * writes what will actually run.</p>
- */
-test('changing a model writes the caller\u0027s whole definition, not a bare reference', () => {
-  const stored = { claude: { vendor: 'codex', model: '' } };
-  const rows = [{ ...vendor('codex'), model: 'gpt-5.6-luna', executablePath: 'C:/codex.cmd' }];
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'gpt-6-astra', rows);
-
-  assert.deepEqual(
-    changed['claude'],
-    { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', executablePath: 'C:/codex.cmd' },
-    'the edit must materialise the runtime and the CLI path the entry was borrowing, not write a reference again');
-});
-
-test('choosing a vendor stores the CATALOGUE entry, never a reviewer row of the same name', () => {
-  // Changed deliberately in story C5, and it is the last place the consultant reached into somebody
-  // else's settings. Until then, picking `codex` borrowed the model off a reviewer row that happened
-  // to share the name — which is the borrowing this whole plan removes, arriving by the back door at
-  // the moment of choosing. A person who wants that model picks it in the box beside the vendor,
-  // where they can see it. The reviewer row here is deliberately tuned differently to prove it is
-  // not consulted.
-  const stored = { claude: { vendor: 'antigravity', model: 'gemini-3.7' } };
-  const rows = [{ ...vendor('codex'), model: 'gpt-5.6-luna', executablePath: 'C:/someone-elses/codex.cmd' }];
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'codex', rows);
-
-  assert.deepEqual(changed['claude'], { vendor: 'codex', runtime: 'codex', model: '' },
-    'the catalogue describes plain codex, and that is what a person picking it asked for');
-});
-
-test('an empty vendor id is never written', () => {
-  const stored = { claude: { vendor: 'codex', model: 'gpt-5.6-luna' } };
-
-  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultVendor', '   ', []), stored,
-    'a blank id keys no vault entry and names no runtime; the map must come back untouched');
-});
-
-test('a base URL the person typed replaces the endpoint, never the model', () => {
-  const stored = { claude: { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat' } };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', 'https://api.deepseek.com/v1', []);
-
-  assert.deepEqual(
-    changed['claude'],
-    { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
-    'the model must survive an endpoint edit');
-});
-
-/**
- * A guard rather than a reproduction: both hold at HEAD, and they are here because the change above
- * is exactly the kind that would break them silently — rebuilding the row from `CALLER_KINDS`, or
- * inventing a runtime for an entry the rule could not place.
- */
-test('a caller kind this build does not know survives a write', () => {
-  const stored = { claude: { vendor: 'codex', model: '' }, futureKind: { vendor: 'x', model: 'y' } };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'opus', []);
-
-  assert.deepEqual(changed['futureKind'], { vendor: 'x', model: 'y' },
-    'a newer panel may know more caller kinds than this one, and the server keeps them for that reason');
-});
-
-test('editing the model of an entry this build cannot place invents no runtime', () => {
-  const stored = { claude: { vendor: 'retired-vendor', model: '' } };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'something', []);
-
-  assert.deepEqual(changed['claude'], { vendor: 'retired-vendor', model: 'something' },
-    'an unplaceable entry is shown back exactly as stored; guessing a runtime would send the tree somewhere nobody chose');
+  assert.equal(settingWrite({ key: 'consultantRow', value: 'x', vendor: 'claude', caller: 'claude' })?.kind, 'caller');
 });
 
 test('a stored runtime is recognised without case, so both halves read one file the same way', () => {
@@ -1015,239 +643,59 @@ test('a stored runtime is recognised without case, so both halves read one file 
     'recognised without case and answered in the list own spelling, so one name reaches the wire');
 });
 
-test('a new vendor leaves none of the old one\u0027s endpoint or CLI path behind', () => {
-  const stored = {
-    claude: {
-      vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat',
-      baseUrl: 'https://api.deepseek.com/v1', executablePath: 'C:/codex.cmd',
-    },
-  };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'claude', []);
-
-  // `claude` in the catalogue ships `haiku`, so that is what a person picking it gets — the endpoint
-  // and CLI path of the vendor they left behind are what must not survive.
-  assert.deepEqual(changed['claude'], { vendor: 'claude', runtime: 'claude', model: 'haiku' },
-    'the row is REPLACED by what the new vendor resolves to; a merge would have left DeepSeek\u0027s endpoint pointing out of a Claude consultant');
-});
-
-test('an endpoint typed at an entry this build cannot place is refused, not stored', () => {
-  const stored = { claude: { vendor: 'retired-vendor', model: 'm' } };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', 'https://api.example.com/v1', []);
-
-  assert.deepEqual(changed['claude'], { vendor: 'retired-vendor', model: 'm' },
-    'an entry with no runtime has nothing for an endpoint to belong to; storing one would make a bare reference look like a definition');
-});
-
-test('a consultant\u0027s own endpoint survives an edit to its model', () => {
-  const stored = {
-    claude: { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
-  };
-  // A row of the same name, deliberately carrying DIFFERENT values: if the write re-lent the row's
-  // endpoint the way a legacy reference does, this is what would overwrite the person's own.
-  const rows = [{ ...vendor('deepseek'), model: 'deepseek-reasoner', baseUrl: 'https://api.deepseek.com/BETA' }];
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'deepseek-reasoner', rows);
-
-  assert.deepEqual(
-    changed['claude'],
-    { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-reasoner', baseUrl: 'https://api.deepseek.com/v1' },
-    'a definition resolves to itself, so only the field the person edited moves — the row lends nothing to a consultant that is no longer a reference to it');
-});
-
-/**
- * The three the code round found, and one it asked to be pinned.
- *
- * <p>All four are about the row a write STARTS from: an absent one, an unchanged one, and one
- * carrying more than this build knows. Each was observed failing for its own symptom.</p>
- */
-test('a first edit on a caller nobody has configured materialises that caller\u0027s shipped default', () => {
-  // A side that holds a value for one caller and nothing for the other is ordinary: the panel writes
-  // the caller somebody edited, so a workspace overlay holds exactly the rows that were touched there.
-  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: '' } };
-
-  const changed = consultantRecordUpdate(stored, 'codex', 'consultModel', 'opus', []);
-
-  assert.deepEqual(changed['codex'], { vendor: 'claude', runtime: 'claude', model: 'opus' },
-    'an absent row means the shipped pair, exactly as the READER reads it — starting from a blank vendor stores one the next read throws away, and the person\u0027s edit with it');
-});
-
-test('choosing the vendor that is already chosen keeps the consultant\u0027s own model and endpoint', () => {
-  const stored = {
-    claude: { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
-  };
-  const rows = [{ ...vendor('deepseek'), model: 'deepseek-reasoner', baseUrl: 'https://api.deepseek.com/BETA' }];
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'deepseek', rows);
-
-  assert.deepEqual(changed['claude'], stored['claude'],
-    'clearing the model is for a vendor CHANGE; re-sending the vendor already chosen must not hand the row\u0027s values back over the person\u0027s own');
-});
-
-test('picking the vendor the row already shows MATERIALISES it, when what is stored is only a reference', () => {
-  // The catalogue offers DeepSeek, and a stored entry can hold that id with nothing to resolve it —
-  // no reviewer row of that name, and it is not a runtime, so rule (c) leaves it unavailable. The
-  // row said DeepSeek and the picker offered DeepSeek, and `id === starting.vendor` handed the same
-  // unresolved reference straight back: a person clicked the vendor in front of them and the row
-  // did not change. The A2 guard this narrows is for a DEFINITION, where re-sending the vendor must
-  // not hand a reviewer row's values back over what the person set.
-  const changed = consultantRecordUpdate({ claude: { vendor: 'deepseek', model: '' } }, 'claude', 'consultVendor', 'deepseek', []);
-
-  assert.deepEqual(changed['claude'], {
-    vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1',
-  });
-});
-
-test('choosing a catalogue entry that is not itself a runtime writes THAT preset’s definition', () => {
-  // `deepseek` and `openrouter` name no runtime and need no reviewer row: what they ARE is a
-  // runtime plus an endpoint, and that is exactly what the catalogue holds. Stored as a bare
-  // reference they resolve to UNAVAILABLE — so the picker would offer an entry the section then
-  // draws as unplaceable, in one gesture.
-  const changed = consultantRecordUpdate({}, 'claude', 'consultVendor', 'deepseek', []);
-
-  assert.deepEqual(changed['claude'], {
-    vendor: 'deepseek',
-    runtime: 'codex',
-    model: 'deepseek-chat',
-    baseUrl: 'https://api.deepseek.com/v1',
-  }, 'the catalogue entry a person picked is what has to be stored — its runtime and its endpoint, never its name alone');
-});
-
-test('a field this build does not know inside a caller\u0027s row survives an edit beside it', () => {
-  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: '', region: 'eu-west' } };
-
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'gpt-6-astra', []);
-
-  assert.deepEqual(changed['claude'], { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', region: 'eu-west' },
-    'a newer panel may hold fields inside a row as well as caller kinds beside it — an edit to one field must not delete the rest');
-});
-
-test('a caller kind this build does not have is not written at all', () => {
-  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: '' } };
-
-  assert.deepEqual(consultantRecordUpdate(stored, '__proto__', 'consultModel', 'x', []), stored,
-    'the caller comes from a webview message, and the only ones this build emits are its own four');
-  assert.deepEqual(consultantRecordUpdate(stored, 'not-a-caller', 'consultVendor', 'codex', []), stored);
-});
-
-test('a CLI path replaces the path, never the model, and an unknown key writes nothing', () => {
-  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' } };
-
-  assert.deepEqual(
-    consultantRecordUpdate(stored, 'claude', 'consultExecutablePath', 'D:/tools/codex.cmd', [])['claude'],
-    { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', executablePath: 'D:/tools/codex.cmd' });
-  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultSomethingElse', 'x', []), stored,
-    'a key this map does not name must write nothing — it used to land in the model');
-});
-
-/**
- * What the ROWS argument decides — and what this cannot prove.
- *
- * <p>It proves the function materialises from the rows it is HANDED, so handing it the wrong side's
- * rows would store the wrong side's values. It does not prove `panelProvider` hands it the right
- * ones: that is one line reading `this.read(config)('vendors')` beside the line that reads the
- * consultants map, and it needs a running extension host to observe. Said here rather than left to
- * be inferred from a green test.</p>
- */
-test('the reviewer rows handed to the write are the ones materialised', () => {
-  const stored = { claude: { vendor: 'codex', model: '' } };
-  const oneSide = [{ ...vendor('codex'), model: 'gpt-5.6-luna' }];
-  const otherSide = [{ ...vendor('codex'), model: 'gpt-6-astra', executablePath: 'D:/other/codex.cmd' }];
-
-  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultModel', '', oneSide)['claude'],
-    { vendor: 'codex', runtime: 'codex', model: '' });
-  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', '', otherSide)['claude'],
-    { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', executablePath: 'D:/other/codex.cmd' },
-    'the other side\u0027s row lends its model and CLI path, so the rows argument is what decides');
-});
-
 // ---------------------------------------------------------------------------------------------
-// Story C6 — an endpoint of the consultant's own: the name and the URL a person typed
-
-test("a custom endpoint is stored as THAT caller's own definition — the runtime and the URL, nothing borrowed", () => {
-  const written = consultantEndpointWrite(DEFAULT_CONSULT.stored, 'gemini', 'mistral', 'https://api.mistral.ai/v1');
-
-  // The runtime is DERIVED from the catalogue's blank preset, not named here: the write must store
-  // what that entry says it is, or the picker offers one thing under a label and stores another the
-  // day somebody edits the catalogue. (codex, C6's code round.)
-  assert.deepEqual(written['gemini'],
-    {
-      vendor: 'mistral',
-      runtime: VENDOR_PRESETS.find((one) => one.id.length === 0)!.runtime,
-      model: '',
-      baseUrl: 'https://api.mistral.ai/v1',
-    },
-    'what the catalogue’s blank preset IS: its runtime at an endpoint, under the name that keys the vault');
-  assert.deepEqual(written['claude'], DEFAULT_CONSULT.stored['claude'],
-    'and the other three callers are untouched — the command carries a caller for a reason');
-});
-
-test('a name that normalises to nothing writes nothing, and neither does a caller this build does not have', () => {
-  // The id is the vault key. There is no entry to store it under and nothing to show a person, so
-  // the only honest outcome is no write at all.
-  assert.deepEqual(consultantEndpointWrite(DEFAULT_CONSULT.stored, 'gemini', '  ', 'https://api.example.com/v1'),
-    DEFAULT_CONSULT.stored);
-  assert.deepEqual(consultantEndpointWrite(DEFAULT_CONSULT.stored, '__proto__', 'mistral', 'https://api.example.com/v1'),
-    DEFAULT_CONSULT.stored);
-});
-
-test('the name is normalised the way Add a reviewer normalises it — one flow, one id, one vault key', () => {
-  assert.equal(
-    (consultantEndpointWrite(DEFAULT_CONSULT.stored, 'claude', 'My Mistral!', 'https://api.mistral.ai/v1')['claude'] as { vendor: string }).vendor,
-    normaliseId('My Mistral!'),
-  );
-});
+// A model of your own: what the name and the URL boxes of *Add a model* refuse (story C6's checks)
 
 test('an id already held at a DIFFERENT endpoint is refused — one name is one credential', () => {
   // Two endpoints under one name would send one key to whichever answered second. The check spans
-  // the reviewer rows AND the other callers, because both key the vault by id.
+  // the reviewer rows AND the callers' consultants, because both key the vault by id.
   const rows = [{ ...vendor('mistral'), baseUrl: 'https://api.mistral.ai/v1' }];
   const consultants = { gemini: { vendor: 'acme', runtime: 'codex', model: '', baseUrl: 'https://acme.example/v1' } };
 
-  assert.match(endpointConflict('mistral', 'https://other.example/v1', rows, consultants, 'claude'), /mistral/);
-  assert.match(endpointConflict('acme', 'https://other.example/v1', rows, consultants, 'claude'), /acme/);
-  assert.equal(endpointConflict('mistral', 'https://api.mistral.ai/v1', rows, consultants, 'claude'), '',
+  assert.match(endpointConflict('mistral', 'https://other.example/v1', rows, consultants), /mistral/);
+  assert.match(endpointConflict('acme', 'https://other.example/v1', rows, consultants), /acme/);
+  assert.equal(endpointConflict('mistral', 'https://api.mistral.ai/v1', rows, consultants), '',
     'the same endpoint under the same name is one vault key used twice, which is the point of a name');
-  assert.equal(endpointConflict('brand-new', 'https://new.example/v1', rows, consultants, 'claude'), '');
+  assert.equal(endpointConflict('brand-new', 'https://new.example/v1', rows, consultants), '');
 });
 
-test("a caller can change its OWN endpoint — its own record is not something it collides with", () => {
-  // Re-running the flow on a caller that already has a custom endpoint is how a person moves it from
-  // one port to another. Counting that caller's own record as a clash makes its URL unchangeable
-  // for good, and the message tells them a name they chose is somebody else's. (gemini, twice.)
-  const mine = { claude: { vendor: 'local-mistral', runtime: 'codex', model: '', baseUrl: 'http://localhost:8000/v1' } };
+test('a caller\'s PICK of a catalog row holds no endpoint of its own — its row does', () => {
+  // A pick is stored as a bare reference (`{ vendor: '<row id>' }`, E4.2); read as a holder it had an empty endpoint, so
+  // configuring that very row at its own URL in Add a model was refused as a clash with "another caller's consultant"
+  // (E5.3's code round, four findings). The row itself is the holder, at its real URL.
+  const rows = [{ ...vendor('my-model'), baseUrl: 'http://localhost:11434/v1' }];
+  const picked = { claude: { vendor: 'my-model' }, codex: { vendor: 'my-model' } };
 
-  assert.equal(endpointConflict('local-mistral', 'http://localhost:8080/v1', [], mine, 'claude'), '');
-  assert.match(endpointConflict('local-mistral', 'http://localhost:8080/v1', [], mine, 'gemini'), /local-mistral/,
-    'another caller holding it is still a clash — it is the same vault key');
+  assert.equal(endpointConflict('my-model', 'http://localhost:11434/v1', rows, picked), '',
+    'the row\'s own endpoint was refused because a caller picked the row');
+  assert.match(endpointConflict('my-model', 'https://elsewhere.example/v1', rows, picked), /my-model/,
+    'another endpoint under the row\'s name is still one name at two endpoints');
 });
 
 test('a name the CATALOGUE already means something by is refused at a different endpoint', () => {
   // With no `deepseek` reviewer row a person could name their own endpoint `deepseek`, and the next
   // caller to pick DeepSeek from the catalogue would share its vault key with a different service.
   // The catalogue is a holder of names exactly as the rows are. (codex, C6's code round.)
-  assert.match(endpointConflict('deepseek', 'https://mine.example/v1', [], {}, 'claude'), /deepseek/);
-  assert.equal(endpointConflict('deepseek', 'https://api.deepseek.com/v1', [], {}, 'claude'), '',
+  assert.match(endpointConflict('deepseek', 'https://mine.example/v1', [], {}), /deepseek/);
+  assert.equal(endpointConflict('deepseek', 'https://api.deepseek.com/v1', [], {}), '',
     'the catalogue entry at its own URL is the same service named once');
 });
 
 test('the cure never names an endpoint that does not exist', () => {
   // `claude` is a catalogue preset with no base URL of its own. Telling a person to "use that
   // endpoint" when there is none to use is advice they cannot follow. (gemini, C6's code round.)
-  const why = endpointConflict('claude', 'https://mine.example/v1', [], {}, 'codex');
+  const why = endpointConflict('claude', 'https://mine.example/v1', [], {});
 
   assert.match(why, /claude/);
   assert.ok(!/use that endpoint/.test(why), 'there is no endpoint to point at, so the sentence must not point at one');
 });
 
 test('one name at two endpoints is SAID, however the second one got there', () => {
-  // `endpointConflict` guards the flow that MINTS a name; the inline endpoint box in each row goes
-  // nowhere near it. A person can edit a consultant's URL to anything, under a name a reviewer row
-  // already holds, and the vault entry that name keys is then pointed at two services. The panel
-  // cannot refuse that edit without silently discarding what somebody typed, so it SAYS it — beside
-  // the section, the way the server-skew note does, because the sentence needs the reviewer rows and
-  // the section deliberately has none. (gemini, C6's code round.)
+  // `endpointConflict` guards the flow that MINTS a name; a stored consultant definition — written before
+  // the picks, or by hand — goes nowhere near it, and can hold any URL under a name a reviewer row already
+  // holds, so the vault entry that name keys is pointed at two services. The panel does not rewrite what
+  // somebody stored, so it SAYS it — beside the section, the way the server-skew note does, because the
+  // sentence needs the reviewer rows and the section has none. (gemini, C6's code round.)
   const consult = {
     ...DEFAULT_CONSULT,
     byCaller: {
@@ -1319,13 +767,6 @@ test('a dismissed box writes nothing — the SECOND one as much as the first', (
     { id: 'my-mistral', baseUrl: 'https://api.mistral.ai/v1' });
 });
 
-test('a Team server is not a thing a custom endpoint can become', () => {
-  // The forbidding is by construction: `remote` is the runtime, and this write names `codex`.
-  const written = consultantEndpointWrite(DEFAULT_CONSULT.stored, 'codex', 'acme-codex', 'https://coai.acme.example');
-
-  assert.equal((written['codex'] as { runtime: string }).runtime, 'codex');
-});
-
 test('an emptied prompt box removes the override rather than writing a prompt that says nothing', () => {
   assert.deepEqual(consultPromptWrite(''), { kind: 'remove' });
   assert.deepEqual(consultPromptWrite('  \n  '), { kind: 'remove' });
@@ -1333,175 +774,4 @@ test('an emptied prompt box removes the override rather than writing a prompt th
   // Kept verbatim: a prompt's trailing blank line is the author's, and the server composes its own
   // sections after it.
   assert.deepEqual(consultPromptWrite('Answer briefly.\n\n'), { kind: 'write', text: 'Answer briefly.\n\n' });
-});
-
-// ---------- each row is a framed group in its client's own colour (issue #291) ----------
-//
-// REVIEWERS draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
-// the same colour follows it into Active gates and the rounds log. CONSULTANT drew four flat
-// `.field` blocks: no frame, nothing grouping a caller's controls, no colour. `.consultant-row`
-// existed as a data hook with no CSS rule anywhere.
-//
-// Three of the four caller ids are ANCHORED in vendorColour.ts, so they get the colour they already
-// have everywhere else for free. `other` is not a vendor and takes a neutral edge — the operator's
-// ruling, and it is also what stops it colliding with a configured reviewer's colour.
-
-test('a caller wears the colour its vendor has everywhere else', () => {
-  const configured = ['codex', 'antigravity', 'local'];
-  const palette = vendorPalette(configured);
-
-  // Against the ALLOCATOR, never a hard-coded hex: a literal here would drift the day the palette
-  // moves and would say nothing about whether the two views agree.
-  for (const id of ['claude', 'codex', 'gemini']) {
-    assert.equal(callerColour(id, palette), palette(id), `${id} does not wear its own vendor colour`);
-  }
-});
-
-test('another client is not dressed as a vendor', () => {
-  const palette = vendorPalette(['codex', 'antigravity']);
-
-  assert.equal(callerColour('other', palette), CALLER_NEUTRAL, 'another client was given a vendor colour');
-  // Both halves. Asserting only "it is the neutral token" would pass if the palette happened to
-  // return that token; this says the palette was not consulted for it at all.
-  assert.notEqual(callerColour('other', palette), palette('other'), 'the neutral edge is whatever the palette said');
-});
-
-test('no palette means a neutral edge, not a crash and not a colour', () => {
-  assert.equal(callerColour('claude', undefined), CALLER_NEUTRAL);
-  assert.equal(callerColour('other', undefined), CALLER_NEUTRAL);
-});
-
-test('every consultant row is a framed box carrying its own edge colour', () => {
-  const palette = vendorPalette(['codex', 'antigravity']);
-
-  const html = consultantBody(DEFAULT_CONSULT, { palette });
-
-  for (const { id } of CALLER_KINDS) {
-    const expected = callerColour(id, palette);
-    assert.ok(
-      html.includes(`data-caller="${id}" style="border-left-color:${expected}"`),
-      `${id}'s row carries no edge colour of its own`,
-    );
-  }
-});
-
-test('the rows still do what they did, and still say what they said', () => {
-  // The frame must not have been bought by rewriting the controls or dropping the guidance.
-  const palette = vendorPalette(['codex']);
-  const framed = consultantBody(DEFAULT_CONSULT, { palette });
-  const plain = consultantBody(DEFAULT_CONSULT, {});
-
-  for (const { id, label } of CALLER_KINDS) {
-    for (const hook of [
-      `id="consultVendor-${id}"`,
-      `data-setting="consultVendor" data-caller="${id}"`,
-      `id="consultModel-${id}"`,
-      `data-setting="consultModel" data-caller="${id}"`,
-    ]) {
-      assert.ok(framed.includes(hook), `${id} lost ${hook}`);
-    }
-    assert.ok(framed.includes(`${label} asks`), `${label} is no longer named in words`);
-  }
-
-  // Every hint the section carried before still reads the same. A row refactor that dropped one
-  // would otherwise pass every assertion above. (codex, the plan round.)
-  const hints = (text: string): readonly string[] => text.split('<div class="hint">').slice(1).map((part) => part.split('</div>')[0] ?? '');
-  assert.deepEqual(hints(framed), hints(plain), 'the guidance under the rows changed');
-});
-
-// ---------------------------------------------------------------------------------------------
-// What the row ASKED before it drew a list (issue #301)
-
-/** One caller's row against a given panel state, so a test can hand it what was discovered. */
-function viewWith(stored: ConsultantChoice, state: ConsultantViewState, caller = 'claude'): ConsultantRowView {
-  const settings = {
-    ...DEFAULT_CONSULT,
-    byCaller: { ...DEFAULT_CONSULT.byCaller, [caller]: resolveConsultant(stored, []) },
-  };
-
-  return consultantRowView({ id: caller, label: 'Claude Code' }, settings, state);
-}
-
-/**
- * An engine that answered, at one endpoint.
- *
- * <p>Keyed by the ENDPOINT the row stores rather than by a reviewer row: since story C5 the section
- * holds no reviewer rows, so there is nothing to borrow an engine from, and two callers pointing at
- * one engine share its answer.</p>
- */
-function engineAt(models: readonly string[]): LocalEngine {
-  return {
-    kind: 'ollama',
-    probeUrl: OLLAMA_PROBE,
-    apiBaseUrl: openAiBaseOf(OLLAMA_PROBE),
-    reachable: true,
-    status: '0.33.2',
-    models: models.map((id) => ({ id, detail: '' })),
-  };
-}
-
-test("a local consultant's dropdown offers what the engine at ITS endpoint answered", () => {
-  const view = viewWith(
-    definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:11434'),
-    { enginesByEndpoint: { 'http://127.0.0.1:11434': engineAt(['qwen3-coder:30b', 'gpt-oss:20b']) } },
-  );
-
-  assert.deepEqual(view.models.map((m) => m.id), ['qwen3-coder:30b', 'gpt-oss:20b'],
-    'the dropdown was empty: nothing passed the engine, so the list had nothing in it');
-  assert.equal(view.keptModel, '', 'the saved model is in the list, so nothing has to be carried beside it');
-});
-
-test('a local consultant nobody asked an engine for is NOT told its model is gone', () => {
-  // No engine for this endpoint. Not probed yet is a different sentence from "it refused", and it
-  // was the false one that shipped: a saved model was labelled gone by something that never looked.
-  const view = viewWith(definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:11434'), {});
-  const said = view.models.find((m) => m.id === 'qwen3-coder:30b')?.label ?? '';
-
-  assert.ok(said.includes('has not been asked yet'), `an unprobed endpoint says so; it said "${said}"`);
-  assert.ok(!said.includes('NOT on this engine any more'),
-    'nothing asked the engine, so nothing may claim the model left it');
-});
-
-test('an engine at ANOTHER endpoint is not this row\'s answer', () => {
-  const view = viewWith(
-    definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:8000'),
-    { enginesByEndpoint: { 'http://127.0.0.1:11434': engineAt(['gpt-oss:20b']) } },
-  );
-
-  assert.ok(!view.models.some((m) => m.id === 'gpt-oss:20b'),
-    'a second local consultant on another port would show the first one\'s models');
-});
-
-test('a consultant on Claude says it is being asked while the probe runs', () => {
-  const asking = viewWith(definition('claude', 'claude'), { askingClaude: true });
-  const quiet = viewWith(definition('claude', 'claude'), {});
-
-  assert.equal(asking.modelNote, ASKING_CLAUDE, 'seconds of real requests, and silence reads as an empty list');
-  assert.equal(quiet.modelNote, '', 'nothing is running, so the row says nothing');
-});
-
-test('a consultant on another runtime says nothing about a Claude probe', () => {
-  assert.equal(
-    viewWith(definition('codex', 'codex'), { askingClaude: true }).modelNote, '',
-    'the probe asks the Claude CLI; a codex row is not waiting for it',
-  );
-});
-
-// ---------------------------------------------------------------------------------------------
-// A consultant on somebody else's endpoint (research/PLAN_custom_endpoint_model_list.md, 2026-10-01)
-
-test('a codex consultant on another endpoint is offered its saved model, never the Codex CLI cache', () => {
-  const view = viewWith(
-    definition('openrouter', 'codex', 'deepseek/deepseek-chat', 'https://openrouter.ai/api/v1'),
-    { codexModels: [{ id: 'gpt-6-luna', label: 'GPT-6 Luna' }] },
-  );
-
-  assert.deepEqual(view.models.map((m) => m.id), ['deepseek/deepseek-chat'],
-    'OpenAI slugs from the Codex cache are not names that endpoint accepts');
-});
-
-test('a codex consultant on the Codex CLI’s own endpoint still gets the cache', () => {
-  const view = viewWith(definition('codex', 'codex', ''), { codexModels: [{ id: 'gpt-6-luna', label: 'GPT-6 Luna' }] });
-
-  assert.ok(view.models.some((m) => m.id === 'gpt-6-luna'));
 });

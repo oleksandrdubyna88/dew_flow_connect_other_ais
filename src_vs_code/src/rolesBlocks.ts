@@ -9,7 +9,7 @@ import { type BucketCounts, lastOn, lastOnBy, onCounts, switchedOn } from './rol
  * The pieces a roles page is drawn from: one role's block, the switch rules it is drawn by, and the notes around it.
  *
  * <p><b>Why this is not in `rolesPage.ts` any more.</b> Two pages drew these until E5.1 deleted the first: the Review roles tab, and Reviews › Roles
- * &amp; prompts on the new Settings page (`rolesEmbed.ts`, todo/PLAN_one_model_catalog.md E4.3), which draws the tab's
+ * &amp; prompts on the Settings page (`rolesEmbed.ts`, todo/PLAN_one_model_catalog.md E4.3), which draws the tab's
  * own blocks rather than a copy of them. Epic 5 deleted the tab (E5.1), so the blocks were moved out first —
  * prerequisite (b) of that epic. They are drawn byte for byte as before: the move compared the html of every shipped
  * role, in every switch state, from both builds. The functions the move put under the complexity rule — the block, a
@@ -20,7 +20,7 @@ import { type BucketCounts, lastOn, lastOnBy, onCounts, switchedOn } from './rol
  * their own role, and somebody will paste a `&lt;script&gt;` into it to see what happens. The answer must be that
  * they see a `&lt;script&gt;`.</p>
  *
- * <p><b>The edges point one way.</b> The tab, the new page's embed and `panelView.ts` (for {@link CUSTOM_ROLES_SINCE})
+ * <p><b>The edges point one way.</b> The tab, the Settings page's embed and `panelView.ts` (for {@link CUSTOM_ROLES_SINCE})
  * import this module, and it imports none of them: an edge back into `panelView.ts` would close a ring the
  * import-cycle ratchet (`importCycles.test.mjs`) refuses.</p>
  */
@@ -94,7 +94,7 @@ function kindHint(role: RoleRow): string {
 }
 
 /**
- * How a role block is drawn on the page that draws it. The new Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
+ * How a role block is drawn on the page that draws it. The Settings page (todo/PLAN_one_model_catalog.md E4.3) marks
  * a prompt `data-role-prompt` — its shared script reads `data-prompt` as a round pick — and shows ONE switch per role,
  * the catalog's and the panel's read as one (`rolesSwitch.ts`).
  *
@@ -117,9 +117,9 @@ export interface RoleBlockOptions {
  * round, finding 1): a block asking its own count rescanned the whole role list, so a page of n roles read it n² times.
  *
  * @param rows every role, as the page composes them
- * @param promptAttr the attribute a prompt is marked with — `data-role-prompt` on the new page, `data-prompt` on the
- *   Review roles tab
- * @param roleEnabled the panel's switches — none on the Review roles tab, which draws the catalog's switch alone
+ * @param promptAttr the attribute a prompt is marked with — `data-role-prompt`, because the panel's own script reads
+ *   `data-prompt` as a round pick
+ * @param roleEnabled the panel's switches, read with the catalog's as ONE switch (E5.1b)
  */
 export function roleBlockOptions(rows: readonly RoleRow[], promptAttr: string, roleEnabled: Readonly<Record<string, boolean>>): RoleBlockOptions {
   return { promptAttr, roleEnabled, on: onCounts(rows, roleEnabled), active: onCounts(rows, {}) };

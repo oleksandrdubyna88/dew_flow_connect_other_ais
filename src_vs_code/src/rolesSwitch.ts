@@ -1,7 +1,7 @@
 import { bucketOf, composed, isActive, PLAN_STAGE, stageOf, type RoleBucket, type RoleRow } from './roles';
 
 /**
- * ONE switch per role on the new Settings page (todo/PLAN_one_model_catalog.md E4.3). A role has had two: the catalog's
+ * ONE switch per role on the Settings page (todo/PLAN_one_model_catalog.md E4.3). A role has had two: the catalog's
  * `active` (a `COAI_ROLES` row, written by the Review roles tab) and the panel's `roleEnabled` (`COAI_ENABLED_*`, read by
  * a server from 0.18.13 — `ROLE_SWITCH_SINCE`). A box showing one of them disagreed with a round decided by both. Here
  * they are read as one — on only when both are — and written as one: `active` first, through every refusal the roles
@@ -25,9 +25,9 @@ export function switchedOn(role: RoleRow, roleEnabled: Readonly<Record<string, b
  *
  * <p><b>The one count, read by every place that guards a bucket</b> (todo/PLAN_one_model_catalog.md E5.1b): the new
  * page's role block (`rolesBlocks.canDeactivate`), the host's twin of it (`rolesEdit.ts`, `lastStanding`) and the current
- * page's code-role count (`settingsShape.enabledCodeRoles`). The new page counted the catalog's `active` alone — two
+ * page's code-role count (`settingsShape.enabledCodeRoles`). The Settings page counted the catalog's `active` alone — two
  * active code roles, one of them switched off by `roleEnabled`, let the other be switched off too, and the code stage
- * ran no role at all — while the current page counted both switches. Two counts of one thing is how they came to
+ * ran no role at all — while the old page counted both switches. Two counts of one thing is how they came to
  * disagree, so there is one.</p>
  *
  * <p>An empty `roleEnabled` reads the catalog alone, which is what a page that knows only the catalog's switch (the
