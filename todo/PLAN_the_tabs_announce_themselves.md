@@ -225,6 +225,6 @@ this plan settles on differs, the new page follows it rather than keeping its ow
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | `tabKeys` on the new Settings page | as written above | consumes `tabKeys` (its E3.1); this plan keeps steps 2–4 |

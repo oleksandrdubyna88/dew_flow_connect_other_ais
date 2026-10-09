@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A runtime that writes its prompt to a file names that file on the invocation, so the scheduler can delete it when
-/// the turn ends (<see cref="ReviewerInvocation.TempFiles"/>; todo/PLAN_one_model_catalog.md, epic 2).
+/// the turn ends (<see cref="ReviewerInvocation.TempFiles"/>; research/PLAN_one_model_catalog.md, epic 2).
 /// </summary>
 public sealed class ARuntimeNamesThePromptFileItWroteTests : IDisposable
 {

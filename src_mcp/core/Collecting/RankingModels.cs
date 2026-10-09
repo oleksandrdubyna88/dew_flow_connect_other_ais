@@ -30,7 +30,7 @@ public static class RankingModels
     /// <remarks>
     /// A runtime rather than a whole model name, because the model half changes whenever somebody pulls a new one and a
     /// list of exact names would refuse a model the person installed this morning. And a runtime rather than the row id
-    /// it used to be (todo/PLAN_one_model_catalog.md, epic 2, story 1): the id is a name a person chose — `local-2`, the
+    /// it used to be (research/PLAN_one_model_catalog.md, epic 2, story 1): the id is a name a person chose — `local-2`, the
     /// migration's `bugz-local` — while the runtime is what decides whether the text leaves the machine.
     /// </remarks>
     /// <remarks>

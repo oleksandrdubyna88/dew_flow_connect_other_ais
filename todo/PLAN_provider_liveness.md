@@ -116,6 +116,6 @@ a hypothetical "refresh might be ignored" that the plan's own test already cover
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | the probe and how a model's state is drawn | as written above | fixes the probe running the row id (its E2.1) and draws the verdict (E3); this plan owns the three liveness states and their cache |

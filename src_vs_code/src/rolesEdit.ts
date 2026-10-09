@@ -63,7 +63,7 @@ export function rowsAfter(
   texts: Readonly<Record<string, string>> = {},
   /**
    * The panel's own switch per role (`roleEnabled`) — what decides, with the catalog's `active`, whether a role is ON and
-   * so whether it is the last ON in its bucket (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b). The new
+   * so whether it is the last ON in its bucket (`rolesSwitch.lastOn`, research/PLAN_one_model_catalog.md E5.1b). The new
    * page's edits hand it in; empty reads the catalog alone, which is all the Review roles tab draws.
    */
   roleEnabled: Readonly<Record<string, boolean>> = {},
@@ -237,7 +237,7 @@ const STAGE_FULL = 'Five roles are already active in that stage. Switch one off 
 
 /**
  * Whether this role is the last reviewer its stage has — the last one ON in its bucket by the ONE switch
- * (`rolesSwitch.lastOn`), the count the page's block refuses by too (todo/PLAN_one_model_catalog.md E5.1b). Counting
+ * (`rolesSwitch.lastOn`), the count the page's block refuses by too (research/PLAN_one_model_catalog.md E5.1b). Counting
  * the catalog's `active` alone let a role go while the only other one was switched off by `roleEnabled`.
  */
 function lastStanding(row: RoleRow, all: readonly RoleRow[], roleEnabled: Readonly<Record<string, boolean>>): boolean {

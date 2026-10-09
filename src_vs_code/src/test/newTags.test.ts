@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { FORGET_AFTER_MS, seenNow } from '../newTags';
 
 /**
- * The first-seen record behind the page's "new" marks (todo/PLAN_one_model_catalog.md, E3.1): bounded by the listed
+ * The first-seen record behind the page's "new" marks (research/PLAN_one_model_catalog.md, E3.1): bounded by the listed
  * controls, pruned after 60 days, and never an error whatever was stored.
  */
 

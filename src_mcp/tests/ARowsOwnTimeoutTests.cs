@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A CLI row's own timeout replaces the round's reviewer timeout for that row (todo/PLAN_one_model_catalog.md, epic 2,
+/// A CLI row's own timeout replaces the round's reviewer timeout for that row (research/PLAN_one_model_catalog.md, epic 2,
 /// story 2): a slow model on one row no longer needs every reviewer of the round to wait as long.
 /// </summary>
 /// <remarks>

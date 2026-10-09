@@ -28,7 +28,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
     /// <summary>The claude CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
     /// <remarks>
     /// Not the row id, which the interface's default would have been: a second claude row (`claude-2`) made the probe start
-    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// a program of that name and report a working reviewer as missing (research/PLAN_one_model_catalog.md, epic 2, story 1).
     /// </remarks>
     public string DefaultExecutable => "claude";
 
@@ -70,7 +70,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
     /// <summary>
     /// A row's effort, as the installed CLI spells it (2.1.289: <c>--effort &lt;level&gt;</c>; the levels are
     /// shared/feature-availability.json's) — nothing when the row sets none. An older CLI refuses the flag itself, and
-    /// VendorDiagnosis names it. One spelling for a reviewer and a consultant (todo/PLAN_one_model_catalog.md, C2).
+    /// VendorDiagnosis names it. One spelling for a reviewer and a consultant (research/PLAN_one_model_catalog.md, C2).
     /// </summary>
     internal static string[] EffortArguments(ReviewerSettings settings) =>
         settings.ReasoningEffort.Length > 0 ? ["--effort", settings.ReasoningEffort] : [];

@@ -2,7 +2,7 @@ import { chatModelPresetsFrom } from './chatPresets';
 import { chatMove, entryOf, movedRecordFrom, type ChatMove, type MovedPreset } from './chatPresetMove';
 
 /**
- * The chat presets' step of the catalog migration (todo/PLAN_one_model_catalog.md E4.6a): which rows a layer gains, and
+ * The chat presets' step of the catalog migration (research/PLAN_one_model_catalog.md E4.6a): which rows a layer gains, and
  * which of the chat's own keys it writes — run inside `migrateLayer`, so it shares its turn, its backup and its order.
  * Pure.
  *

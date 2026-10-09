@@ -8,7 +8,7 @@ import { camel } from './datasetName';
  *
  * <p>Moved out of `rolesPageHarness.ts`, where it was written for the roles page and then widened for every other page
  * (issue #467), because the new Settings page's tests run on it too and epic 5 deletes the roles page that file is
- * named for (todo/PLAN_one_model_catalog.md, E5 prerequisite (b)). What the roles page alone needs, `runRolesPage`
+ * named for (research/PLAN_one_model_catalog.md, E5 prerequisite (b)). What the roles page alone needs, `runRolesPage`
  * in `rolesPageHarness.ts`, stays there and is built on this. A second DOM shim is two shims that drift, and the one
  * thing a shim must be is the same for everybody asserting against it.</p>
  *

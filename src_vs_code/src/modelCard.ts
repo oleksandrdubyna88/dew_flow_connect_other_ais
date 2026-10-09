@@ -16,7 +16,7 @@ import { executableFor } from './vendorTerminal';
 import { reviewsDocuments, type Vendor } from './vendors';
 
 /**
- * One card of the Models tab (todo/PLAN_one_model_catalog.md E3.2): what the row is, what it is used for, how it
+ * One card of the Models tab (research/PLAN_one_model_catalog.md E3.2): what the row is, what it is used for, how it
  * answers, and how it is reached — drawn from the same facts and controls the old page's reviewer card had
  * (`cardContextFor`, `stageBox`, `priceFields` …), so a row migrated from it is stored the same way.
  *

@@ -218,6 +218,6 @@ Every range here is stale after it and is re-measured, which this plan already r
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | the settings half of `panelView.ts` | as written above | deletes it in its E5; this plan keeps the sidebar half and `roundsLog.ts` |

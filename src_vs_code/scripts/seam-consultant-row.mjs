@@ -1,5 +1,5 @@
 /**
- * The consultant-row leg of the settings seam (todo/PLAN_one_model_catalog.md, finding C2 of the epics 1–3 consultation).
+ * The consultant-row leg of the settings seam (research/PLAN_one_model_catalog.md, finding C2 of the epics 1–3 consultation).
  *
  * <p>A consultant entry that refers to a catalog row carries that row as `row` — written by the extension's own
  * `rowOnTheWire`, read by the server with the reviewer row's own parser. The two halves have to agree on every field's

@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A prompt file a launch wrote for its child is gone once the launch's turn ends — answered, failed or timed out
-/// (todo/PLAN_one_model_catalog.md, epic 2: "a prompt file is deleted in finally").
+/// (research/PLAN_one_model_catalog.md, epic 2: "a prompt file is deleted in finally").
 /// </summary>
 /// <remarks>
 /// An api, local or Team server reviewer reads its prompt from a <c>.prompt</c> file in the round's answers directory,

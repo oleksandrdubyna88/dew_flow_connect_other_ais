@@ -1,7 +1,7 @@
 import { bucketOf, composed, isActive, PLAN_STAGE, stageOf, type RoleBucket, type RoleRow } from './roles';
 
 /**
- * ONE switch per role on the Settings page (todo/PLAN_one_model_catalog.md E4.3). A role has had two: the catalog's
+ * ONE switch per role on the Settings page (research/PLAN_one_model_catalog.md E4.3). A role has had two: the catalog's
  * `active` (a `COAI_ROLES` row, written by the Review roles tab) and the panel's `roleEnabled` (`COAI_ENABLED_*`, read by
  * a server from 0.18.13 — `ROLE_SWITCH_SINCE`). A box showing one of them disagreed with a round decided by both. Here
  * they are read as one — on only when both are — and written as one: `active` first, through every refusal the roles
@@ -23,7 +23,7 @@ export function switchedOn(role: RoleRow, roleEnabled: Readonly<Record<string, b
  * The roles ON in one bucket by {@link switchedOn} — the roles a round of that bucket launches, since a server of either
  * age skips a role off by either switch.
  *
- * <p><b>The one count, read by every place that guards a bucket</b> (todo/PLAN_one_model_catalog.md E5.1b): the new
+ * <p><b>The one count, read by every place that guards a bucket</b> (research/PLAN_one_model_catalog.md E5.1b): the new
  * page's role block (`rolesBlocks.canDeactivate`), the host's twin of it (`rolesEdit.ts`, `lastStanding`) and the current
  * page's code-role count (`settingsShape.enabledCodeRoles`). The Settings page counted the catalog's `active` alone — two
  * active code roles, one of them switched off by `roleEnabled`, let the other be switched off too, and the code stage

@@ -161,7 +161,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         launcher.Vendors.Should().OnlyContain(l => l.Request.Executable == "claude");
     }
 
-    /// <summary>A question row's catalog row sets its CLI effort, and the launch is told it (todo/PLAN_one_model_catalog.md, C2).</summary>
+    /// <summary>A question row's catalog row sets its CLI effort, and the launch is told it (research/PLAN_one_model_catalog.md, C2).</summary>
     [Fact]
     public async Task AQuestionRowsEffort_ReachesItsLaunch()
     {
@@ -177,7 +177,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
 
     /// <summary>
     /// A question row reads its catalog row's system prompt; a WEB row is still given strictly the question (A2) — the
-    /// person's instruction is not the sanitiser's to vet (todo/PLAN_one_model_catalog.md, C2).
+    /// person's instruction is not the sanitiser's to vet (research/PLAN_one_model_catalog.md, C2).
     /// </summary>
     [Fact]
     public async Task AQuestionRowsInstruction_ReachesItsPrompt_ButNeverAWebRow()

@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A Team server row sends its effort and its system prompt as contract 2's FIELDS, and what the server did not apply
-/// reaches that reviewer's note (todo/PLAN_one_model_catalog.md, epic 2, story 5).
+/// reaches that reviewer's note (research/PLAN_one_model_catalog.md, epic 2, story 5).
 /// </summary>
 /// <remarks>
 /// <para>The system prompt travels in a file beside the prompt file — never argv, which is in every process listing — and

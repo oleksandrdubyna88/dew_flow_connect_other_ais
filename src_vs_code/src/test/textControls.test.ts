@@ -63,7 +63,7 @@ function bodyRule(html: string): string {
 
 // These three pages replace their whole document after they open; the host's push reaches a page once,
 // so a page whose builder ignored the two values would lose them on its next draw. (Gate commands was a fourth, until
-// E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted it; its editor is a place of the Settings page, below.)
+// E5.1 step 4 of research/PLAN_one_model_catalog.md deleted it; its editor is a place of the Settings page, below.)
 const REDRAWN: readonly (readonly [string, (size: number, tone: number) => string])[] = [
   ['Notifications', (size, tone) => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1, uiScale: size, textTone: tone }, 'n')],
   ['Review rounds', (size, tone) => roundsLogHtml([], [], 'n', '', '', undefined, { text: { size, tone } })],

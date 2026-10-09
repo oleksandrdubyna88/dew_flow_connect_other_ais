@@ -7,7 +7,7 @@ import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
- * Found while building E4.2 of todo/PLAN_one_model_catalog.md: epic 1's migration turns a question row's own definition
+ * Found while building E4.2 of research/PLAN_one_model_catalog.md: epic 1's migration turns a question row's own definition
  * into a reference to a catalog row (`ask-<id>`) that reviews nothing — and the current page resolved question rows
  * against the panel's `vendors`, which since E1.4 holds the REVIEWERS only. So a migrated row read as having no runtime:
  * its switch was disabled ("'' is not a runtime the question consultant can launch") and its vendor "not in the

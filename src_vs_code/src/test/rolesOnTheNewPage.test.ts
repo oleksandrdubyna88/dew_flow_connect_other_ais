@@ -14,7 +14,7 @@ import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
- * E4.3 of todo/PLAN_one_model_catalog.md: Roles & prompts on the new page — the Review roles tab's content drawn by the
+ * E4.3 of research/PLAN_one_model_catalog.md: Roles & prompts on the new page — the Review roles tab's content drawn by the
  * panel, its edits posted as `roles` messages into the one editing core (`rolesHost.ts`), and ONE switch per role:
  * the catalog's `active` and the panel's `roleEnabled` read as one and written as one. Every control a test fires at
  * is taken from the page as drawn (`pageTree.ts`).

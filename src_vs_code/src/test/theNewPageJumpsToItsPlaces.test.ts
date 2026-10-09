@@ -7,7 +7,7 @@ import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { presses, runPageHtml } from './pageScriptHarness';
 
 /**
- * E5.1 step 1 of todo/PLAN_one_model_catalog.md: the new page stops drawing the old pages' buttons. The gate's
+ * E5.1 step 1 of research/PLAN_one_model_catalog.md: the new page stops drawing the old pages' buttons. The gate's
  * "Edit commands…" and the stages' "Edit roles…" opened the commands page and the roles page — pages E5.1 deletes,
  * whose content is a place of THIS page now (Reviews › Commands, Reviews › Roles & prompts). So each is a jump: pressed,
  * the place it names is shown, the host is told the place as any tab press tells it, and nothing asks for a page.

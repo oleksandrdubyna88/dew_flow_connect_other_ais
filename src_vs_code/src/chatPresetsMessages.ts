@@ -4,7 +4,7 @@ import { textControlFrom } from './textControls';
  * What a message about the chat presets MEANS, and the edit decisions taken on it — without a host or a page.
  *
  * <p><b>Why this is not in `chatPresetsPage.ts` any more.</b> Two pages posted these messages until E5.1 deleted the first: the Chat presets tab, and
- * Chat on the Settings page (todo/PLAN_one_model_catalog.md E4.6b), whose `chatPresets` messages reach the same
+ * Chat on the Settings page (research/PLAN_one_model_catalog.md E4.6b), whose `chatPresets` messages reach the same
  * editing core (`chatPresetsHost.ts`). That core and `chatModelEdits.ts` took their command type and their edit
  * decisions from the tab, which epic 5 deleted (E5.1), so they were moved out first — prerequisite (b) of that epic —
  * exactly as they were.</p>
@@ -15,7 +15,7 @@ import { textControlFrom } from './textControls';
  */
 
 /**
- * The two answers to a preset an older build edited after the move (todo/PLAN_one_model_catalog.md, epic 5 prerequisite
+ * The two answers to a preset an older build edited after the move (research/PLAN_one_model_catalog.md, epic 5 prerequisite
  * (a), R7): `use` — the row takes the edited values — or `keep` — the row stays as it is. Either way the record's
  * snapshot takes the preset's whole state (`chatPresetRevision.ts`). Declared here, beside the message that carries it,
  * because this module imports nothing of the chat's.
@@ -98,7 +98,7 @@ const TYPED: readonly string[] = ['name', 'text', 'startingPrompt'];
 
 /**
  * The key a typed edit settles under in the one queue (`chatPresetsHost.ts`,
- * todo/PLAN_one_model_catalog.md E4.6b) — per list, row and field, so typing in two boxes stores both — or nothing for a
+ * research/PLAN_one_model_catalog.md E4.6b) — per list, row and field, so typing in two boxes stores both — or nothing for a
  * tick, a pick or a press, which has no caret to disturb and goes straight through.
  */
 export function presetSettlesAs(command: PresetCommand): string | undefined {

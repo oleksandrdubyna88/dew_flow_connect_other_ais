@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { chatSettingsFrom } from '../chatSettings';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md, the panel's half. After the move `coai.chatModel` names a ROW, so the
+ * E4.6a of research/PLAN_one_model_catalog.md, the panel's half. After the move `coai.chatModel` names a ROW, so the
  * settings' chat picker must list the rows ticked Chat — the same list the chat itself opens from — and not the presets
  * the move took. Listing the presets showed the chat's own model as one that "cannot answer a chat", and offered the
  * old preset ids beside it.

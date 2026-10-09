@@ -10,7 +10,7 @@ import { pageTree } from './pageTree';
 
 /**
  * Setup › Team servers and Setup › MCP server on the NEW Settings page, RUN — every button of both places pressed
- * through the page's own script and the message it posts asserted (todo/PLAN_one_model_catalog.md E5.1b).
+ * through the page's own script and the message it posts asserted (research/PLAN_one_model_catalog.md E5.1b).
  *
  * <p><b>Why these two, and why now.</b> Before E5.1 step 5 deletes the current page, every place of the new page has to
  * have a test that runs it and works a control, or a control wired on the current page alone would go with it unseen.

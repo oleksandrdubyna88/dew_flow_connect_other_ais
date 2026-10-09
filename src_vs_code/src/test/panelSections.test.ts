@@ -44,7 +44,7 @@ test('every section has an id of its own', () => {
 });
 
 test('the sidebar draws its sections, and the Settings surface is the Settings page, not sections', () => {
-  // Since E5.1 step 5 of todo/PLAN_one_model_catalog.md the Settings slot paints the catalog page (`catalogPage.ts`) and
+  // Since E5.1 step 5 of research/PLAN_one_model_catalog.md the Settings slot paints the catalog page (`catalogPage.ts`) and
   // no section is declared for it: a section given the settings surface would be drawn by nothing.
   assert.ok(PANEL_SECTIONS.some((section) => section.surface === 'sidebar'), 'the sidebar would be an empty page');
   assert.deepEqual(PANEL_SECTIONS.filter((section) => section.surface !== 'sidebar').map((section) => section.id), []);

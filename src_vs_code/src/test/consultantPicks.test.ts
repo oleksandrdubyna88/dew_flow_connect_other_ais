@@ -11,7 +11,7 @@ import { lastWrite, panelState, runPanel } from './panelPageHarness';
 import { pageTree, type PageNode } from './pageTree';
 
 /**
- * E4.2 of todo/PLAN_one_model_catalog.md, the consultant half: on the new page a caller's consultant is PICKED from the
+ * E4.2 of research/PLAN_one_model_catalog.md, the consultant half: on the new page a caller's consultant is PICKED from the
  * rows ticked Consultant — the model itself is edited on its Models card. Absent is the shipped pair (D2); a pick of a
  * row no longer ticked, or gone, is shown and named, never cleared (D3); the caller's own vendor is offered, never
  * refused.
@@ -101,7 +101,7 @@ test('the new page draws one picker per caller, and changing it writes the pick'
 });
 
 // ---------------------------------------------------------------------------------------------
-// What the page SAYS under each pick — run on the Consultant tab as drawn (todo/PLAN_one_model_catalog.md E5.3)
+// What the page SAYS under each pick — run on the Consultant tab as drawn (research/PLAN_one_model_catalog.md E5.3)
 
 /** The settings with these callers' stored entries, resolved against the rows as the reader resolves them. */
 function consultWith(stored: Readonly<Record<string, ConsultantChoice>>, rows: readonly Vendor[]): ConsultSettings {

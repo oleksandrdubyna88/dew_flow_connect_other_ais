@@ -412,7 +412,7 @@ function regionsOf(html: string): Map<string, Region> {
 
 /**
  * The page that holds the section a fixture opens: the Settings page, opened on the place that holds that section
- * now (`OLD_TAB_PLACES`; todo/PLAN_one_model_catalog.md, E5.1 step 3 — the new page, the one a person sees), when the
+ * now (`OLD_TAB_PLACES`; research/PLAN_one_model_catalog.md, E5.1 step 3 — the new page, the one a person sees), when the
  * section moved there (`research/PLAN_settings_page.md`) — the sidebar otherwise. A place of the new page named as
  * itself (`models`, `reviews/commands`) opens there too, as `render-page.mjs` reads it (E5.1's code round, finding 4):
  * otherwise a test of the new page would run the sidebar's markup and pass or fail about the wrong page.
@@ -617,7 +617,7 @@ export function click(page: Page, command: string, id: string): void {
 
 /**
  * The ONE button of a command that carries no `data-id`, clicked as a person clicks it — Add a Team server, the MCP
- * server's Install and Check again, the data folder's two moves (todo/PLAN_one_model_catalog.md E5.1b). {@link click}
+ * server's Install and Check again, the data folder's two moves (research/PLAN_one_model_catalog.md E5.1b). {@link click}
  * matches a command AND an id, and these have no id to match. Refused when the page draws none of them or several: a
  * press of "the first of two" would pass for whichever one happened to be wired.
  */

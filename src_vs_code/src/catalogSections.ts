@@ -15,7 +15,7 @@ import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import type { Vendor } from './vendors';
 
 /**
- * What each place of the Settings page draws besides Models (todo/PLAN_one_model_catalog.md E4.1): the section the old
+ * What each place of the Settings page draws besides Models (research/PLAN_one_model_catalog.md E4.1): the section the old
  * page drew for that place, by the same builder — never a copy — which is why a control kept behaving the same through
  * the switch-over (E5). Pure: the page calls it, tests read it.
  *

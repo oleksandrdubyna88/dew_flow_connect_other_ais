@@ -45,6 +45,6 @@ one, and a Windows window shows the WSL side's health READ-ONLY. The operator ch
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | the consultant check record | as written above | generalises `ConsultCheckState` into a check of any model (its D10); this plan keeps the cross-side launch |
