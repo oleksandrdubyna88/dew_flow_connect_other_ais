@@ -68,11 +68,6 @@ node .agents/conventions/tools/pin-check.mjs
   been right to (2026-09-07, 2026-09-15).
   **Adding a one-shot mode means adding it here — in THIS file.** Inside `ServeAsync`
   the rule is unchanged and absolute.
-  `--agy-hook` is the one mode a CLI starts rather than a person or the extension: every agy launch runs as the
-  `coai-reader` agent behind a `PreToolUse` hook, and agy starts this binary (`coai-mcp`, and `coai-server` for its
-  reviewers) once per tool call — the payload on stdin, `allow` / `deny` on stdout. agy runs it through its own
-  `cmd /c` / `sh -c`, a fixed script coai writes into the read-only folder: coai's own launches stay exe + argv
-  (`AntigravityReadOnly`, research/RESULTS_agy_write_block.md).
 
   The rule names **64 and only 64**: a mode whose ARGUMENTS are wrong answers another non-zero
   code (`--upload-pairs` answers 65 for a missing `--server`), because 64 means *never heard of

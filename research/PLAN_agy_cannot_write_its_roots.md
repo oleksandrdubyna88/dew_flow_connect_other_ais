@@ -13,7 +13,9 @@
 > script was not found under `NoDefaultCurrentDirectoryInExePath` (Claude Code sets it; it is named relatively now), the
 > `/tmp` folder, and folders created 0755 in WSL; (5) a consult whose folder cannot be prepared is refused as
 > `vendor-refused` with the folder named — not a new failure kind; (6) the hook runs through agy's own `cmd /c` /
-> `sh -c` (agy offers no exe+argv form), recorded as the one such exception in `.agents/PROJECT.md`.
+> `sh -c` (agy offers no exe+argv form): `.agents/PROJECT.md` lists `--agy-hook` among the one-shot modes, and the why is in
+> `AntigravityReadOnly` and `module_runners.md` — a paragraph in `PROJECT.md` pushed a tier rule out of the reviewers'
+> rules budget (`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` red), so it was not kept there.
 > Open tail: none in this plan; the Team server's container must have `sh` for the reviewer's hook (unverified — a
 > server deploy is the operator's), and the extension's own agy CHAT runs in an empty directory with no root, outside
 > this plan.
