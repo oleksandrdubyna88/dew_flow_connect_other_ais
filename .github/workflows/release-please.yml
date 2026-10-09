@@ -21,8 +21,10 @@ name: release-please
 #
 #   1. release-please opens `chore(main): release mcp <version>`;
 #   2. ON THAT PULL REQUEST, write the `## Server <version> — <date>` section in
-#      src_vs_code/CHANGELOG.md and add the version to .github/changelog-baseline.json;
-#   3. merge it.
+#      src_vs_code/CHANGELOG.md — and NOT the baseline row: the extension test "the baseline names
+#      no release that was never tagged" refuses a version with no tag yet (it did, on mcp 0.45.0);
+#   3. SQUASH-merge it, then dispatch this workflow again — that run cuts the tag;
+#   4. add the version to .github/changelog-baseline.json in a pull request of its own.
 #
 # The prose has to exist BEFORE the merge, because the merge is what cuts the tag. Cut it first and
 # `changelog-names-the-release.mjs` refuses afterwards — leaving a tag that must not be moved and a
