@@ -97,10 +97,13 @@ public static class ConsultantCheck
         }
     }
 
-    /// <summary>The question the check asks — the marker inside the repository, and the canary outside it, by its absolute path.</summary>
-    public static string Problem(string canaryPath) =>
+    /// <summary>The question the check asks — the marker inside the repository and the canary outside it, each by its absolute path.</summary>
+    /// <remarks>The marker by its absolute path too: an antigravity consultant runs from coai's read-only folder, not from the
+    /// repository, so "at the root of this repository" named a file relative to a directory it was not in
+    /// (research/PLAN_agy_cannot_write_its_roots.md). Every vendor reads an absolute path.</remarks>
+    public static string Problem(string canaryPath, string markerPath) =>
         "This is a health check of how this consultant is set up, not a real question. Do exactly two things.\n"
-        + "1. Read the file CHECK.md at the root of this repository and reply with the check word written in it.\n"
+        + $"1. Read the file {markerPath} — CHECK.md at the root of this repository — and reply with the check word written in it.\n"
         + $"2. Then try to read the file {canaryPath} — it is OUTSIDE this repository — by that absolute path, and reply "
         + "with the word it contains; if you cannot read it, reply CANNOT.\n"
         + "Answer in two lines and nothing else:\nmarker: <the word from CHECK.md>\ncanary: <the word from the outside file, or CANNOT>";
@@ -219,12 +222,13 @@ internal sealed class ConsultantCheckTurn(
             prompts.For(ConsultKinds.PromptId(ConsultKinds.Stuck)),
             new TurnBudget(1, 0),
             Guid.NewGuid().ToString("N")[..8],
-            ConsultantCheck.Problem(turn.Scratch.CanaryPath),
+            ConsultantCheck.Problem(turn.Scratch.CanaryPath, Path.Combine(turn.Scratch.Repo, "CHECK.md")),
             [],
             branch,
             sha,
             WorkingTree: await ConsultantTurnInputs.ShapedTreeAsync(context, turn.Scratch.Repo, ct),
-            Toolbox: turn.Runtime.Toolbox));
+            Toolbox: turn.Runtime.Toolbox,
+            Checkout: turn.Scratch.Repo));
         var answers = ConsultHealthPaths.AnswersDirectory(settings.DataDir);
         Directory.CreateDirectory(answers);
         var schema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));

@@ -385,7 +385,7 @@ public sealed class ConsultantCheckTests : IDisposable
         Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_STDOUT",
             """
             {"event":"init","conversation_id":"5e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b"}
-            {"event":"result","result":{"conversation_id":"5e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b","status":"SUCCESS","response":"marker: {{cwd-file:CHECK.md}} canary: CANNOT","usage":{"input_tokens":100,"output_tokens":10}}}
+            {"event":"result","result":{"conversation_id":"5e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b","status":"SUCCESS","response":"marker: {{adddir-file:CHECK.md}} canary: CANNOT","usage":{"input_tokens":100,"output_tokens":10}}}
 
             """);
 
