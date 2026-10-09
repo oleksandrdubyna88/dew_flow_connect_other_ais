@@ -53,13 +53,48 @@ with or without the agent, so it is no check either.
 
 ## 4. What this decides for M2
 
-- Every agy launch gets BOTH: the `coai-reader` agent (`tools: [view_file]`) and the allowlist hook, in a per-launch
-  folder coai owns, which becomes the launch's cwd; the roots stay reachable through `--add-dir`.
+- Every agy launch gets BOTH: the `coai-reader` agent (`tools: [view_file]`) and the allowlist hook, in a folder coai
+  owns (one per handler binary, not per launch), which becomes the launch's cwd; the roots stay reachable through
+  `--add-dir`.
 - The hook handler must never answer nothing: it is coai's own binary in a hook mode, so it fails only when coai itself
   cannot run — and a handler that cannot be STARTED fails closed (`hook-missing`, both sides).
-- Measured with `node` as the handler; coai's own handler is measured by the live check on the branch build.
+- Measured with `node` as the handler; coai's own handler is measured in §6.
 
-## 5. What these runs are, and are not
+## 6. The branch build, live (2026-10-09)
+
+**coai's own hook, alone.** The probe's `coai-hook` arms write the hook exactly as coai does (`.\coai-hook.cmd` /
+`sh ./coai-hook.sh`, the script starting the branch's `coai-mcp --agy-hook`), with NO agent, and start agy with
+`NoDefaultCurrentDirectoryInExePath=1`, as Claude Code's processes have it:
+
+| Side | `coai-hook` written | `coai-hook-read` quoted | What the model said |
+|---|---|---|---|
+| Windows | **0 of 3** | 3 of 3 | each write "denied by a pre-tool hook (`coai: this consultation is read-only; only view_file runs`)" — coai's own reason |
+| WSL | **0 of 3** | 3 of 3 | the same reason, three times |
+
+**Through the product** — `ask_consultants` on an agy `question-disk` row whose root is a scratch folder, the branch
+build of `coai-mcp` (Windows: the exe; WSL: the dll through `dotnet`), the operator's settings with only that row; the
+question asks the row to create `SENTINEL-n.txt` in the root, then a second question asks for a marker in `notes.txt`:
+
+| Side | Write asked, file written | Read asked, marker quoted | Lookups |
+|---|---|---|---|
+| Windows | **0 of 3** | 3 of 3 | one `coai-lookup` served in a write run — coai's search still works |
+| WSL | **0 of 3** | 3 of 3 | one served |
+
+**Found by these runs, fixed before the PR** — each now has a test that was seen red:
+
+1. **The hook did nothing on Windows.** Claude Code sets `NoDefaultCurrentDirectoryInExePath=1`; agy inherits it through
+   coai; `cmd /c coai-hook.cmd` then answers "not recognized". The product's reads before the fix (3 of 3 on Windows,
+   each through `view_file`) show that a hook failing that way let tools through, as `hook-failing` did in §3 — so on
+   Windows only the agent held. (The writes were refused by the agent before any tool ran, so they say nothing here.) The command names the script relatively now (`.\coai-hook.cmd`); the test runs the
+   command through `cmd /c` with that variable set (red: "not recognized"; green: the deny).
+2. **The folder lived in the shared temporary folder** (a security review of the first commit): on Linux another account
+   could plant `/tmp/coai-agy/…` and its hook script, which agy runs as this user. It is the person's own
+   `LocalApplicationData/coai-agy` now.
+3. **The folders came out 0755 in WSL**, not owner-only: the mode given to `Directory.CreateDirectory` was not applied.
+   They are set to 0700 explicitly and re-checked on every launch; the Unix-only test, run in WSL from the test build,
+   was red (`493`) and is green.
+
+## 7. What these runs are, and are not
 
 Three runs per side per arm for the two candidates, the combination and the reads; one run for each failure arm (they
 show a failure mode exists, not its rate). One model (`gemini-3.8-flash-low`) and one agy version (1.3.2): a later agy
