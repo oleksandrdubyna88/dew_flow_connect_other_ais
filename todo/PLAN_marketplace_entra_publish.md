@@ -248,8 +248,10 @@ A new `.github/workflows/marketplace-identity.yml`, `workflow_dispatch` only, on
 3. `env -u VSCE_PAT vsce verify-pat remsoftdev --azure-credential`. **No `continue-on-error`.** Before
    O5 it fails red, which is expected, and step 2 has already printed the id. After O5 the run is green
    only if this passes, so a green run is the evidence, not a log line somebody has to read;
-4. `vsce show remsoftdev.connect-other-ais --json`, with `if: always()`, printing the version the
-   gallery serves. This is a public read with no credential (F6);
+4. `vsce show remsoftdev.connect-other-ais --json`, with
+   `if: always() && steps.install.outcome == 'success'` (2b carries `id: install`), printing the
+   version the gallery serves. It still runs when step 3 failed, but never after a failed install, so
+   nothing unpinned ever runs in a job that holds `id-token: write`. This is a public read with no credential (F6);
 5. an input `check_pat` (boolean, default false). When it is true, steps 1, 2 and 3 are **skipped**
    (2b still runs), and one
    step runs `vsce verify-pat remsoftdev` with `VSCE_PAT` in its own `env:`. That is a separate run that
@@ -403,7 +405,7 @@ Tests (in `src_vs_code/src/test/`, in the style of the existing workflow-reading
 - **T2 (S1)** — `marketplace-identity.yml` is `workflow_dispatch` only, its one job is in
   `marketplace`, it installs from the lockfile (`npm ci --ignore-scripts`) before any `vsce` and calls
   `./node_modules/.bin/vsce`. Its `verify-pat --azure-credential` starts with `env -u VSCE_PAT` and has
-  no `continue-on-error`, its `vsce show` is `if: always()`, and its `az rest` prints a `--query`
+  no `continue-on-error`, its `vsce show` runs only after a successful install, and its `az rest` prints a `--query`
   projection rather than the raw response.
 - The new jobs must **not** run `npm test`. If one ever does, `jobsRunningTheSuite`
   (`changelogNamesTheRelease.test.ts:308-319`) requires it to fetch tags, which is correct and is left
