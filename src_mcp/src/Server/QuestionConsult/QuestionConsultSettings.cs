@@ -30,6 +30,12 @@ public sealed record QuestionConsultSettings
     /// <summary>The folders a <c>disk</c> row may read — validated (D14 c), absolute, existing.</summary>
     public IReadOnlyList<string> Roots { get; init; } = [];
 
+    /// <summary>
+    /// The roots spelled for the OTHER operating system — a WSL path read by a Windows server, a Windows path read by a
+    /// Linux one — as written. Skipped here, never refused: the server on that side reads them (<see cref="QuestionRoots.OtherSide"/>).
+    /// </summary>
+    public IReadOnlyList<string> OtherSideRoots { get; init; } = [];
+
     /// <summary>How long one row may run; past it the row is <c>timed_out</c> and the others still answer (A1).</summary>
     public TimeSpan RowBudget { get; init; } = TimeSpan.FromMinutes(DefaultRowMinutes);
 
@@ -81,6 +87,9 @@ public static class QuestionConsultKeys
 /// <param name="SystemDirectories">Windows, Program Files, ProgramData (and what the platform calls them) — a root in or under one.</param>
 public sealed record SystemPlaces(string UserProfile, IReadOnlyList<string> SystemDirectories)
 {
+    /// <summary>Whether this machine spells paths the Windows way — what decides which roots are the OTHER side's.</summary>
+    public bool Windows { get; init; } = OperatingSystem.IsWindows();
+
     public static SystemPlaces Current { get; } = new(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         [.. new[]
@@ -110,6 +119,7 @@ public static class QuestionConsultReader
             RowsUnreadable = rows.Unreadable,
             Prompts = QuestionPromptSet.With(prompts.Prompts),
             Roots = roots.Accepted,
+            OtherSideRoots = roots.OtherSide,
             RowBudget = TimeSpan.FromMinutes(PanelSettings.IntVar(env, QuestionConsultKeys.RowMinutes, QuestionConsultSettings.DefaultRowMinutes)),
             QuestionsPerSession = PanelSettings.IntVar(env, QuestionConsultKeys.QuestionsPerSession, QuestionConsultSettings.DefaultQuestionsPerSession),
             FreeBatches = PanelSettings.IntVar(env, QuestionConsultKeys.FreeBatches, QuestionConsultSettings.DefaultFreeBatches),
@@ -170,7 +180,8 @@ public static class QuestionConsultReader
 /// directory (or inside one), inside the data directory, not absolute, or not an existing directory — and
 /// (S4b item 2) when it CONTAINS the profile, the data directory or a system directory, when it is a
 /// credential directory or inside one, or contains one, judged on the path as written AND on what its
-/// junctions and symlinks resolve to.
+/// junctions and symlinks resolve to. A root spelled for the OTHER operating system is none of these: it is
+/// skipped before any check, the other side's folder (<see cref="OtherSide(string, bool)"/>, operator 2026-10-09).
 /// </summary>
 /// <remarks>
 /// <para>The reviewer's scenario is concrete: a drive root is the whole disk, and a <c>--restricted</c> claude
@@ -183,7 +194,11 @@ public static class QuestionConsultReader
 /// </remarks>
 public static class QuestionRoots
 {
-    public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused);
+    /// <param name="OtherSide">
+    /// The roots spelled for the other operating system, trimmed and as written — skipped, never judged against this
+    /// machine's places, and never refused (<see cref="OtherSide(string, bool)"/>).
+    /// </param>
+    public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused, IReadOnlyList<string> OtherSide);
 
     /// <param name="followLink">
     /// Resolves ONE path entry's link (<see cref="DocumentReader.FollowLink"/> by default): every component of a root,
@@ -193,10 +208,12 @@ public static class QuestionRoots
     public static Verdict Validate(
         IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null)
     {
+        var listed = roots.ToList();
+        var otherSide = listed.Where(root => OtherSide(root, places.Windows)).Select(root => root.Trim()).Distinct(StringComparer.Ordinal).ToList();
         var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
         var accepted = new List<string>();
         var refused = new List<string>();
-        foreach (var root in roots)
+        foreach (var root in listed.Where(root => !OtherSide(root, places.Windows)))
         {
             var why = WhyNot(root, seen, isDirectory);
             if (why.Length > 0)
@@ -209,8 +226,46 @@ public static class QuestionRoots
             }
         }
 
-        return new Verdict(accepted, refused);
+        return new Verdict(accepted, refused, otherSide);
     }
+
+    /// <summary>
+    /// Whether a root is spelled for the OTHER operating system — a POSIX path (<c>/home/…</c>, <c>/mnt/c/…</c>) on a
+    /// Windows server, a Windows one (<c>C:\…</c>, <c>d:/…</c>, <c>\\server\share</c>) on Linux, WSL or macOS.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it is skipped rather than refused</b> (operator, 2026-10-09): VS Code's user settings are shared by a
+    /// WSL window and a plain Windows window on one machine, and each side runs its own server — so a root written from
+    /// one side reaches the other. It is not missing; it is the other side's folder, and the server THERE reads it. Judged
+    /// here it became "not a directory on this machine" and a failure notice on every start of this side.</para>
+    /// <para>Lexical, so a test decides both directions on any machine. <c>//server/share</c> is neither side's alone — a UNC
+    /// share on Windows, a path from <c>/</c> on POSIX — and a relative or drive-relative root is this side's, refused by
+    /// name as before. <c>shared/path-family-vectors.json</c> is answered by this and by the extension's
+    /// <c>spelledForTheOtherOs</c>, so the Settings page names exactly the roots this skips.</para>
+    /// </remarks>
+    public static bool OtherSide(string root, bool windows)
+    {
+        var text = root.Trim();
+
+        return windows ? IsPosixAbsolute(text) : IsWindowsAbsolute(text);
+    }
+
+    /// <summary>What a server says about a root it skipped — the Information line its log carries (<c>StartupNotices</c>).</summary>
+    public static string SkippedSentence(string root, bool windows) => windows
+        ? $"{QuestionConsultKeys.Roots}: '{root}' is a Linux, WSL or macOS path and this server runs on Windows — it is the other side's folder, read by the server there; this side skips it"
+        : $"{QuestionConsultKeys.Roots}: '{root}' is a Windows path and this server does not run on Windows — it is the Windows side's folder, read by the server there; this side skips it";
+
+    /// <summary>Why a disk row is not asked on this side when every root it could read is the other side's.</summary>
+    public static string InactiveSentence(IReadOnlyList<string> otherSide) =>
+        $"inactive on this side — every folder a disk row may read ({string.Join(", ", otherSide.Select(root => $"'{root}'"))}) is spelled for "
+        + "the other operating system, so the server there reads it and this one has none; add a folder of this machine in "
+        + "ConnectOtherAIs > Question consultant to ask this row here too";
+
+    private static bool IsPosixAbsolute(string text) => text.StartsWith('/') && !text.StartsWith("//", StringComparison.Ordinal);
+
+    private static bool IsWindowsAbsolute(string text) =>
+        text.Length >= 3 && char.IsAsciiLetter(text[0]) && text[1] == ':' && text[2] is '/' or '\\'
+        || text.StartsWith('\\');
 
     /// <summary>The folders a root may be under but never ABOVE, as their credentials live in them: a vendor's sign-in, a machine's keys.</summary>
     /// <remarks>Matched as path segments wherever they are (a <c>.ssh</c> copied to a backup is still keys), and as directories under the profile.</remarks>

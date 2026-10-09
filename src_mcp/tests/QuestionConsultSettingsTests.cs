@@ -326,6 +326,89 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         read.Complaints.Should().ContainSingle().Which.Key.Should().Be(QuestionConsultKeys.Roots);
     }
 
+    // ---------- a root of the other operating system (operator, 2026-10-09) ----------
+
+    /// <summary>A folder spelled for the OTHER side of this machine: a WSL path on Windows, a Windows path elsewhere.</summary>
+    private static string OtherSidesRoot => OperatingSystem.IsWindows() ? "/home/jinx/git" : @"C:\Users\jinx\git";
+
+    [Fact]
+    public void ARootOfTheOtherOperatingSystem_IsSkippedNotRefused_AndEveryOtherSettingStands()
+    {
+        // VS Code user settings are shared by a WSL window and a Windows window, so the root written from one side
+        // reaches the other. It is not this machine's folder to judge: the server on that side reads it.
+        var env = Env(
+            (QuestionConsultKeys.Mode, "remind"),
+            (QuestionConsultKeys.Rows, """[{"id":"a","vendor":"claude","runtime":"claude","prompt":"question-disk","enabled":true}]"""),
+            (QuestionConsultKeys.Roots, $"[\"{OtherSidesRoot.Replace(@"\", @"\\")}\", \"{_projects.Replace('\\', '/')}\"]"));
+
+        var read = QuestionConsultReader.Read(env, _data, Places);
+
+        read.Complaints.Should().BeEmpty("a folder of the other side is skipped, never a failure said on every start of this one");
+        read.Settings.OtherSideRoots.Should().Equal([OtherSidesRoot], "what was skipped is kept, so it can be said where a person looks");
+        read.Settings.Roots.Should().ContainSingle("this machine's folder still applies").Which.Should().Be(Path.GetFullPath(_projects));
+        read.Settings.Mode.Should().Be("remind");
+        read.Settings.Rows.Should().ContainSingle().Which.Enabled.Should().BeTrue();
+        PanelSettings.FromEnvironment(env).Unrecognised.Should().BeEmpty("nothing reaches the panel's 'could not understand a setting' toast");
+    }
+
+    [Theory]
+    [InlineData(true, "/home/jinx/git")]
+    [InlineData(true, "/mnt/c/work")]
+    [InlineData(false, @"C:\Users\jinx\git")]
+    [InlineData(false, "d:/work")]
+    [InlineData(false, @"\\wsl.localhost\Ubuntu\home\jinx\git")]
+    public void TheOtherSidesSpelling_IsSkippedOnEitherPlatform_WhicheverThisOneIs(bool windows, string root)
+    {
+        // The platform is a fact of SystemPlaces, so both directions are a test on any one machine.
+        var verdict = QuestionRoots.Validate([root], _data, Places with { Windows = windows }, _ => false);
+
+        verdict.Refused.Should().BeEmpty($"'{root}' is the other side's folder on a {(windows ? "Windows" : "Linux")} server, not a missing one");
+        verdict.Accepted.Should().BeEmpty("and it is never read here");
+        verdict.OtherSide.Should().Equal([root]);
+    }
+
+    [Fact]
+    public void AMissingRootOfThisOperatingSystem_IsStillRefusedByName()
+    {
+        // The skip is for the other side's spelling only: this side's folder that does not exist is still a mistake to fix.
+        var missing = Path.Combine(_projects, "gone");
+
+        var verdict = QuestionRoots.Validate([missing], _data, Places, Directory.Exists);
+
+        verdict.OtherSide.Should().BeEmpty();
+        verdict.Refused.Should().ContainSingle().Which.Should().Contain("not a directory on this machine");
+    }
+
+    private sealed record FamilyVector(string Path, bool OnWindows, bool Elsewhere, string Why);
+
+    private static IReadOnlyList<FamilyVector> FamilyVectors()
+    {
+        using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
+        using var parsed = System.Text.Json.JsonDocument.Parse(file);
+
+        return [.. parsed.RootElement.GetProperty("vectors").EnumerateArray().Select(v => new FamilyVector(
+            v.GetProperty("path").GetString() ?? "",
+            v.GetProperty("onWindows").GetBoolean(),
+            v.GetProperty("elsewhere").GetBoolean(),
+            v.GetProperty("why").GetString() ?? ""))];
+    }
+
+    [Fact]
+    public void TheOtherSide_AnswersTheSharedVectors_AsTheExtensionDoes()
+    {
+        // shared/path-family-vectors.json is answered by pathFamily.test.ts too: the Settings page says "the other
+        // side's" beside exactly the roots this server skips.
+        var vectors = FamilyVectors();
+
+        vectors.Should().HaveCountGreaterThan(5, "the file is read, not an empty array");
+        foreach (var vector in vectors)
+        {
+            QuestionRoots.OtherSide(vector.Path, windows: true).Should().Be(vector.OnWindows, $"on Windows: {vector.Path} — {vector.Why}");
+            QuestionRoots.OtherSide(vector.Path, windows: false).Should().Be(vector.Elsewhere, $"elsewhere: {vector.Path} — {vector.Why}");
+        }
+    }
+
     [Fact]
     public void RootsMayAlsoBeSemicolonSeparated_ForAHandSetVariable()
     {

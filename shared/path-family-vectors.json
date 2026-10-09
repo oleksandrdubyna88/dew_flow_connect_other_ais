@@ -1,0 +1,34 @@
+{
+  "$comment": [
+    "Golden vectors for ONE question: is this folder spelled for the OTHER operating system — a root the",
+    "server on this side must skip rather than refuse?",
+    "",
+    "VS Code user settings are shared between a WSL window and a plain Windows window on one machine, so a",
+    "question-consultant disk root written from WSL (`/home/jinx/git`) is read by the Windows window too. Each",
+    "side runs its own coai-mcp. The Windows server refused that root as 'not a directory on this machine' and",
+    "the panel raised a failure toast on every start (operator, 2026-10-09, extension 0.65.0 / coai-mcp 0.44.2).",
+    "The root is not wrong — it is the other side's folder, and the server THERE reads it.",
+    "",
+    "Both halves decide this independently — `QuestionRoots.OtherSide` in C#",
+    "(src_mcp/src/Server/QuestionConsult/QuestionConsultSettings.cs) for what the server skips, and",
+    "`spelledForTheOtherOs` in the extension (src_vs_code/src/pathFamily.ts) for what the Settings page says",
+    "beside a stored root. Two self-consistent loaders cannot notice they disagree, so both suites answer this",
+    "file (QuestionConsultSettingsTests.cs, pathFamily.test.ts).",
+    "",
+    "`onWindows` is the verdict of a server or window running on Windows, `elsewhere` of one on Linux, WSL or",
+    "macOS. A root that is neither side's absolute spelling (relative, drive-relative) is the same side's, and",
+    "is refused there by name as before."
+  ],
+  "vectors": [
+    { "path": "/home/jinx/git", "onWindows": true, "elsewhere": false, "why": "the operator's root, written from a WSL window" },
+    { "path": "/mnt/c/work", "onWindows": true, "elsewhere": false, "why": "WSL's view of the Windows disk is still a POSIX spelling — no translation is guessed" },
+    { "path": "  /home/jinx/git  ", "onWindows": true, "elsewhere": false, "why": "judged trimmed, as the server reads the list" },
+    { "path": "C:\\Users\\jinx\\git", "onWindows": false, "elsewhere": true, "why": "a drive-qualified Windows path, written from a Windows window" },
+    { "path": "d:/work", "onWindows": false, "elsewhere": true, "why": "a drive letter with a forward slash is still Windows" },
+    { "path": "\\\\server\\share\\proj", "onWindows": false, "elsewhere": true, "why": "a UNC share with backslashes" },
+    { "path": "\\\\wsl.localhost\\Ubuntu\\home\\jinx\\git", "onWindows": false, "elsewhere": true, "why": "how a Windows window names a WSL folder — Windows's spelling, not WSL's" },
+    { "path": "//server/share/proj", "onWindows": false, "elsewhere": false, "why": "a UNC share with forward slashes on Windows, a path from / on POSIX — reachable on both, so neither skips it" },
+    { "path": "src/alpha", "onWindows": false, "elsewhere": false, "why": "relative — this side's, and refused here by name as not absolute" },
+    { "path": "C:work", "onWindows": false, "elsewhere": false, "why": "drive-relative — refused as not absolute, not skipped" }
+  ]
+}

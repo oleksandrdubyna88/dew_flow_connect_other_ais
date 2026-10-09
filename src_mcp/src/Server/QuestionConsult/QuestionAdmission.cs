@@ -72,13 +72,36 @@ public static class QuestionAdmission
             return new RowAdmission.Refused(row, prompt, RowOutcomes.Blocked, refusal);
         }
 
-        return ConfinementPlanner.Plan(RuntimeResolution.NameOf(identity), Grant(prompt.Capability, settings.Roots)) switch
+        return Plan(row, prompt, provider, runtime, settings, RuntimeResolution.NameOf(identity));
+    }
+
+    /// <summary>The planner's verdict on runtime × grant — admitted with its flag, or refused with its sentence.</summary>
+    private static RowAdmission Plan(
+        QuestionRow row, QuestionPromptDefinition prompt, ProviderSettings provider, IConsultantRuntime runtime, QuestionConsultSettings settings, string name) =>
+        ConfinementPlanner.Plan(name, Grant(prompt.Capability, settings.Roots)) switch
         {
             Confinement.Planned plan => Planned(row, prompt, provider, runtime, plan),
-            Confinement.Refused refused => new RowAdmission.Refused(row, prompt, RowOutcomes.Blocked, refused.Reason),
+            Confinement.Refused refused => Refusal(row, prompt, settings, name, refused.Reason),
             _ => throw new InvalidOperationException("the union is closed"),
         };
-    }
+
+    /// <summary>
+    /// A refused plan is BLOCKED — except a disk row whose every root is the other side's (operator, 2026-10-09): that row
+    /// is fine where those folders are, so here it is not asked (<see cref="RowOutcomes.Disabled"/>) and says so plainly.
+    /// </summary>
+    private static RowAdmission.Refused Refusal(QuestionRow row, QuestionPromptDefinition prompt, QuestionConsultSettings settings, string runtime, string reason) =>
+        InactiveHere(prompt, settings, runtime)
+            ? new RowAdmission.Refused(row, prompt, RowOutcomes.Disabled, QuestionRoots.InactiveSentence(settings.OtherSideRoots))
+            : new RowAdmission.Refused(row, prompt, RowOutcomes.Blocked, reason);
+
+    /// <summary>A disk row its runtime can run, with no root of this machine and at least one of the other side's.</summary>
+    private static bool InactiveHere(QuestionPromptDefinition prompt, QuestionConsultSettings settings, string runtime) =>
+        prompt.Capability == Capability.Disk
+        && OnlyTheOtherSidesRoots(settings)
+        && CapabilityMatrix.Admit(runtime, Capability.Disk) is Admission.Admitted;
+
+    private static bool OnlyTheOtherSidesRoots(QuestionConsultSettings settings) =>
+        settings.Roots.Count == 0 && settings.OtherSideRoots.Count > 0;
 
     /// <summary>
     /// D13 on the SERVER, revised by the operator on 2026-10-03: a pair the planner admits but FLAGS — the runtime can

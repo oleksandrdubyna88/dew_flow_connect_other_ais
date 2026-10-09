@@ -1059,6 +1059,26 @@ admits `api`). D13's flag is shown beside every answer. S3 made the server refus
 `acknowledged` tick; **the operator revised that on 2026-10-03** — the flag is enough, there is nothing to
 acknowledge (*The door to the person* below), and an old `acknowledged` field is read past.
 
+**A root of the other operating system is skipped, not refused (operator, 2026-10-09).** VS Code's user settings are
+shared by a WSL window and a plain Windows window on one machine, and each side runs its own `coai-mcp` — so a disk root
+written from WSL (`/home/jinx/git`) reached the Windows server, which refused it as *"not a directory on this machine"*;
+the panel turned that into a `server-did-not-understand-a-setting` failure toast on every start (extension 0.65.0 /
+coai-mcp 0.44.2). Only that root was dropped — the other question-consultant settings always applied — but the toast's
+cure said *"running without those settings"* every time, for a configuration that is right on its own side.
+`QuestionRoots.OtherSide(root, windows)` now decides, lexically, whether a root is spelled for the OTHER operating system:
+a POSIX absolute path (one leading `/`) on a Windows server, a Windows one (`X:\`, `X:/`, a leading `\` — UNC included)
+on Linux, WSL or macOS; `//server/share` is neither side's alone, and a relative or drive-relative root stays this side's.
+Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
+`QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
+no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
+EVERY root is the other side's (no root of this machine) is admitted as `disabled` — *"inactive on this side — every
+folder a disk row may read (…) is spelled for the other operating system …; add a folder of this machine …"* — rather
+than `blocked` with the planner's "needs at least one root", because the row is fine where those folders are; the
+planner's refusal stands when nothing is set at all, and a pair the matrix refuses keeps its own reason
+(`QuestionAdmission.Refusal`). A missing root of THIS operating system is still refused by name, as before.
+`shared/path-family-vectors.json` holds the shape, answered by `QuestionConsultSettingsTests` and by the extension's
+`pathFamily.test.ts`, so the Settings page names exactly the roots the server skips.
+
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
 commit) — `AskHumanService`, with the two helpers it called on the service forwarded under their names and
