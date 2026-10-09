@@ -149,7 +149,12 @@ extension-marketplace:
     contents: read      # gh release download of the asset the extension job attached
     id-token: write     # the GitHub OIDC token azure/login exchanges; this job only
   steps:
-    - checkout (persist-credentials: false) + setup-node, as in the extension job
+    - checkout (persist-credentials: false, fetch-depth: 0): the ONLY checkout in this job. A second one would
+      `git clean -ffdx` (the action's default `clean: true`) away node_modules and the downloaded .vsix
+    - provenance: git merge-base --is-ancestor "$GITHUB_SHA" origin/main, else red. Runs before anything is
+      installed or downloaded. Depth 0 because a depth-1 clone cannot prove that a tag behind main's tip is
+      an ancestor
+    - setup-node, as in the extension job
     - npm ci --ignore-scripts   (src_vs_code; the lockfile decides which vsce runs, as release.yml:549-551 already argues)
     - gh release download "$GITHUB_REF_NAME" --pattern '*.vsix'   (env GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}, as release.yml:561
                                                                    does; the exact bytes release.yml:579 attached; never a rebuild)
@@ -157,7 +162,6 @@ extension-marketplace:
       reads vars.MARKETPLACE_AUTH and vars.AZURE_CLIENT_ID; writes `path=entra|pat|manual|skip`:
         unset/entra + client id present -> entra;  unset/entra + no client id -> skip (::warning::, as release.yml:600-603)
         pat -> pat (refused, red, on/after 2026-12-01);  manual -> manual;  ANY other value -> red, naming the three
-    - [entra] provenance: checkout with fetch-depth: 0 (a depth-1 clone cannot prove a tag behind main's tip is an ancestor), then git merge-base --is-ancestor "$GITHUB_SHA" origin/main, else red
     - [entra] azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0      if: steps.mode.outputs.path == 'entra'
               with: client-id: ${{ vars.AZURE_CLIENT_ID }}, tenant-id: ${{ vars.AZURE_TENANT_ID }}, allow-no-subscriptions: true
     - [entra] env -u VSCE_PAT ./node_modules/.bin/vsce verify-pat remsoftdev --azure-credential     (membership preflight, F6)
@@ -182,10 +186,17 @@ short-lived GitHub assertion for the Azure DevOps token when vsce asks. T1 pins 
   server and time out on the client, and a re-run would then fail on "version already exists". The
   version itself is still guarded by the tag/manifest check (`release.yml:533-541`), so this cannot
   hide a wrong version.
-- **Provenance.** The environment admits any `extension-v*` tag (O3), and this repository has no tag
-  ruleset (D2). So the job also refuses a tag whose commit is not on `main`. Without that, a tag on an
-  unmerged commit, possibly one carrying a modified `release.yml`, could mint the token. Reviewed code
-  is the only code that reaches `azure/login`.
+- **Provenance guards against ACCIDENTS, not against a writer.** The environment admits any
+  `extension-v*` tag (O3), and this repository has no tag ruleset (D2). So the job refuses a tag whose
+  commit is not on `main`, which catches a tag cut on the wrong commit.
+  - **It cannot stop a person with write access.** That person can tag a commit whose workflow no longer
+    contains the check. They can also dispatch `marketplace-identity.yml`, or any workflow naming the
+    environment, **against such a tag**: `workflow_dispatch` accepts a tag ref, and the environment
+    admits every `extension-v*` tag.
+  - The real boundary is therefore **who can write to this repository**, which today is the owner alone
+    (D2). That is the same trusted-writer model under which `VSCE_PAT` can be used today.
+  - Enforcement beyond it is external to the workflow: a required reviewer on `marketplace` (D2), or a
+    tag ruleset. The plan does not claim more than that.
 - **The order stays the same:** GitHub release first, Marketplace second (§1). Reordering is out of scope.
 - **Pin the action by SHA, not by tag**, like every other `uses:` line here. The SHA above was resolved
   on 2026-10-09; the implementer re-resolves it (F12), and Dependabot's `github-actions` ecosystem
@@ -223,19 +234,22 @@ Entra. `manual` stays.
 A new `.github/workflows/marketplace-identity.yml`, `workflow_dispatch` only, one job in environment
 `marketplace`, with permissions `contents: read` and `id-token: write`:
 
-0. checkout (`persist-credentials: false`), `setup-node`, and `npm ci --ignore-scripts` in `src_vs_code`,
-   as in 3.3. Every `vsce` below means `./node_modules/.bin/vsce`, the lockfile's version (F7). A fresh
-   runner has no bare `vsce`, and an unpinned `npx` would choose its own version;
+0. checkout (`persist-credentials: false`), the job's only one;
 1. `azure/login` (same pin and inputs as 3.3);
 2. `az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798`,
    printing **only** `id` and `displayName` through `--query`. The id is an identifier, not a secret, and
-   it is what O5 pastes;
+   it is what O5 pastes. This is the cheapest first answer to N6, and it comes **before** any Node
+   setup;
+2b. `setup-node` and `npm ci --ignore-scripts` in `src_vs_code`. Every `vsce` below means
+   `./node_modules/.bin/vsce`, the lockfile's version (F7). A fresh runner has no bare `vsce`, and an
+   unpinned `npx` would choose its own version;
 3. `env -u VSCE_PAT vsce verify-pat remsoftdev --azure-credential`. **No `continue-on-error`.** Before
    O5 it fails red, which is expected, and step 2 has already printed the id. After O5 the run is green
    only if this passes, so a green run is the evidence, not a log line somebody has to read;
 4. `vsce show remsoftdev.connect-other-ais --json`, with `if: always()`, printing the version the
    gallery serves. This is a public read with no credential (F6);
-5. an input `check_pat` (boolean, default false). When it is true, steps 1–3 are **skipped**, and one
+5. an input `check_pat` (boolean, default false). When it is true, steps 1, 2 and 3 are **skipped**
+   (2b still runs), and one
    step runs `vsce verify-pat remsoftdev` with `VSCE_PAT` in its own `env:`. That is a separate run that
    proves the **rollback** still authenticates, without publishing anything.
 
@@ -268,9 +282,10 @@ before a release, or after anyone touches the Azure side.
   narrows the **ref**, not the person. `dew_flow_creds_for_devs` closes the gap with a tag ruleset
   that blocks creation except for its release App. This repository pushes its release tags **by hand**
   (`.agents/conventions/common/task-lifecycle.md` §3), so copying that ruleset would change the
-  release procedure, and that is out of scope here. What this plan adds instead is the provenance step
-  (3.3): a tag whose commit is not on `main` cannot reach `azure/login`. If the owner also wants the
-  tag's AUTHOR guarded, the choice is between D2 = yes and a separate decision about a tag ruleset.
+  release procedure, and that is out of scope here. The provenance step (3.3) catches a tag cut on the
+  wrong commit by accident. It does not stop a writer who means to bypass it (3.3 says why). If the owner
+  wants more than the trusted-writer model, the choice is between D2 = yes and a separate decision about
+  a tag ruleset.
 
 ## 4. Owner steps, once, in Azure and on the Marketplace (no code)
 
@@ -374,7 +389,7 @@ Tests (in `src_vs_code/src/test/`, in the style of the existing workflow-reading
     `extension-marketplace`, so the old publish cannot be left behind in `extension`. If it were, it
     would publish with the PAT first, and R1 would prove nothing;
   - `azure/login@` is followed by a 40-hex SHA, and it is immediately followed by the two vsce steps;
-  - the provenance step precedes `azure/login`;
+  - the provenance step comes right after the single checkout, before `npm ci` and the download, and there is exactly one checkout in the job;
   - the `mode` step rejects unknown values, and the `pat` branch carries the 2026-12-01 refusal;
   - the provenance checkout has `fetch-depth: 0`, and the `manual` step compares the served version with
     the tag's rather than trusting `vsce show`'s exit code;
@@ -408,8 +423,9 @@ Verification on the real services:
   gallery catches up; it takes minutes (`POST_DEPLOY.md:89`).
 - **V5 (negative, S1)** — dispatching the probe from a non-`main` branch is refused by the
   environment's deployment policy (F13). That proves no other **branch** can mint the token. It does
-  not prove anything about tags: any `extension-v*` tag passes the policy. For tags, the provenance
-  step (3.3) is the guard, and T1 pins it.
+  not prove anything about tags: any `extension-v*` tag passes the policy, a dispatch against such a
+  tag included. For tags the boundary is who can write (D2). The provenance step only catches accidents
+  (3.3).
 
 ## 7. Growth surfaces
 
