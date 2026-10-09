@@ -7,6 +7,7 @@ import {
   ARTEFACT_VERSION,
   claudeSnippet,
   CONSULTANT_VERSION,
+  KNOWN_HALVES,
   readSnippetStatus,
   SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
@@ -86,7 +87,7 @@ test('a mount is read with its sibling rules, and an actual paste still takes pr
     }
   };
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
-  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-feature-gate.md', 'coai-caller-model.md', 'coai-consultant.md', 'coai-question-consultant.md'];
+  const rules = KNOWN_HALVES.map((half) => half.file);
   const mount = async (at: string, which: readonly string[] = rules): Promise<void> => {
     for (const name of which) {
       await write(`${at}/${name}`, await fs.readFile(path.join(real, name), 'utf8'));
@@ -113,7 +114,7 @@ test('the legacy mount location is read with its siblings too', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-legacy-mount-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
-  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-feature-gate.md', 'coai-caller-model.md', 'coai-consultant.md', 'coai-question-consultant.md'];
+  const rules = KNOWN_HALVES.map((half) => half.file);
   const files = new Map<string, string>(await Promise.all(rules.map(async (name): Promise<[string, string]> =>
     [`.claude/rules/shared/common/${name}`, await fs.readFile(path.join(real, name), 'utf8')])));
 
@@ -126,7 +127,7 @@ test('a missing half is never filled from ANOTHER mount', async t => {
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
   const text = async (name: string): Promise<string> => fs.readFile(path.join(real, name), 'utf8');
   // The neutral mount carries only its gate rule; a legacy mount beside it carries the siblings.
-  const siblings = ['coai-document-gate.md', 'coai-feature-gate.md', 'coai-caller-model.md', 'coai-consultant.md', 'coai-question-consultant.md'];
+  const siblings = KNOWN_HALVES.filter((half) => half.id !== 'coai-snippet').map((half) => half.file);
   const files = new Map<string, string>([
     ['.agents/conventions/common/coai-review-gate.md', await text('coai-review-gate.md')],
     ...await Promise.all(siblings.map(async (name): Promise<[string, string]> => [`.claude/rules/shared/common/${name}`, await text(name)])),

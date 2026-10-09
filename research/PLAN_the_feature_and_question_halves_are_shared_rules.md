@@ -73,7 +73,7 @@
   judged on all six — a mount from before the move is `older` on the missing file, i.e. a pin to move.
 - **D5 — version dance in this repository.** `SNIPPET_VERSION` stays 5 (frozen). `FEATURE_VERSION` 2→3,
   `CONSULTANT_VERSION` 3→4, `QUESTION_VERSION` new at 1, `SNIPPET_BODY_SHA` recomputed,
-  `ARTEFACT_VERSION` 14→15, `package.json` title "Copy the CLAUDE.md snippet (v15)". *(Shipped as 16: a minimal pin bump, PR #726, landed first with `CONSULTANT_VERSION` 4 and artefact 15, so this change took 16.)*
+  `ARTEFACT_VERSION` 14→15, `package.json` title "Copy the CLAUDE.md snippet (v15)". *(Shipped as 16: a minimal pin bump, PR #726, landed first with `CONSULTANT_VERSION` 4 and artefact 15, and the feature move, #730, took 16 — so this change shipped 17.)*
 - **D6 — the product copy goes.** `src_vs_code/src/featureRule.md` is deleted; `prepare-gate.mjs` reads
   `FEATURE_SOURCE = '.agents/conventions/common/coai-feature-gate.md'` through `ruleBody` (frontmatter and
   leading `owns:` stripped) and adds `QUESTION_SOURCE`; both emitted like the consultant (own output
@@ -119,7 +119,7 @@
 ## Definition of Done
 
 - [ ] Both rules on conventions `main`, promoted to `release`.
-- [ ] The snippet hands out v16 built from six mounted halves; no product copy of any half remains.
+- [ ] The snippet hands out v17 built from six mounted halves; no product copy of any half remains.
 - [ ] All extension and mcp suites green on the PR's head sha; reviewer threads resolved.
 - [ ] Every consumer's pin at the new release, `pin-check` green; rag_qln's code pins current, its build run.
 - [ ] Release notes drafted for the operator; the release PR left unmerged.
