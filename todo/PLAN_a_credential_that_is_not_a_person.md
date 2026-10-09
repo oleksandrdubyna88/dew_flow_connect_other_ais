@@ -7,6 +7,15 @@
 > Related docs: [module_team_server.md](../research/module_team_server.md),
 > [architecture.md](../research/architecture.md), [deploy/README.md](../deploy/README.md).
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| The canary's request says `"kind":"canary"`, and `/api/usage` keeps it out of rounds | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 3.5 | disjoint from the credential |
+| What the canary authenticates WITH | **this plan** | — |
+
+Disjoint; whichever lands second keeps the other's line in `deploy/systemd-release.sh`.
+
 ## The symptom
 
 The deploy's canary authenticates as a **person**. `/etc/coai-canary.token` holds an ordinary
