@@ -202,12 +202,23 @@ test('in a Windows window a WSL root is named the other side\'s folder — not r
 });
 
 test('in a Windows window a root-relative folder that EXISTS here (/work) is never called the other side\'s, and a disk row still runs', () => {
-  // `/work` is a legal Windows path to a folder on the current drive; the host found it there, so it is this side's.
+  // `/work` is a legal Windows path to a folder on the system drive; the host found it there, so it is this side's.
   const tree = rootsOn(['/work', '/home/jinx/git'], { ...WINDOWS_PLACES, existingHere: ['/work'] });
 
   assert.doesNotMatch(rootLine(tree, '/work').text(), /other side/, 'an existing folder of this machine is called the other side\'s');
   assert.match(rootLine(tree, '/home/jinx/git').text(), /the other side's folder/, 'the WSL root that is no folder here still is');
   assert.doesNotMatch(tree.text(), /not asked on this side/, '/work is a folder of this machine, so a disk row runs here');
+});
+
+test('in a Windows window a root-relative root is judged at its system-drive path: /Windows, the profile and the data folder are refused as the server refuses them', () => {
+  // The server qualifies `/Windows` to `C:\Windows` before D14 (c) and refuses it; the page must judge the same path.
+  const roots = ['/Windows', '/Users/me', '/Users/me/AppData/Local/coai-mcp/x'];
+  const tree = rootsOn(roots, { ...WINDOWS_PLACES, existingHere: roots });
+
+  const stale = (root: string): string => rootLine(tree, root).find((node) => node.className.split(' ').includes('stale')).map((node) => node.text()).join(' ');
+  assert.match(stale('/Windows'), /system folder/, 'the system folder spelled from the root of the drive is not refused on the page');
+  assert.match(stale('/Users/me'), /profile folder itself/);
+  assert.match(stale('/Users/me/AppData/Local/coai-mcp/x'), /inside the data folder/);
 });
 
 test('in a WSL window a Windows root is the other side\'s folder, and with no folder of this side a disk row is said to be not asked here', () => {

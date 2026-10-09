@@ -141,6 +141,17 @@ test('a root added twice in two spellings is one root', () => {
   assert.match(rootAdded([], 'C:\\', windows).refusal, /drive root/);
 });
 
+test('on Windows a root-relative root is judged at its system-drive path, as the server judges it — refusals and duplicates alike', () => {
+  // The server qualifies `/Windows` → `C:\Windows` before every check (QuestionRoots.Qualified); the write side must too.
+  assert.match(rootRefusal('/Windows', windows), /system folder/);
+  assert.match(rootRefusal('\\Users\\me', windows), /profile folder itself/);
+  assert.match(rootRefusal('/Users/me/AppData/Local/coai-mcp/escalations', windows), /inside the data folder/);
+  assert.match(rootRefusal('/Users/me/.ssh', windows), /credential folder/);
+  assert.equal(rootRefusal('/work', windows), '', 'an ordinary folder on the system drive');
+  assert.deepEqual(rootAdded(['/work'], 'C:\\work', windows).roots, ['/work'], 'a picked C:\\work is the stored /work, not a second root');
+  assert.equal(rootRefusal('/Windows', { ...windows, windows: false, caseless: false, systemDirs: ['/usr/share'] }), '', 'elsewhere /Windows is an ordinary POSIX folder');
+});
+
 // ---------- S4b item 2: ancestors, credential folders, links ----------
 
 test('a folder that CONTAINS the profile, the data folder or a system folder is refused — reading it reads them', () => {

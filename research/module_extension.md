@@ -10348,7 +10348,9 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   into `RootPlaces.existingHere`, so `/work` that exists is this side's and never called otherwise; it is looked for on
   the SYSTEM drive, `RootPlaces.systemDrive` from `%SystemDrive%` or `C:` — `qualified`, the server's rule — never the
   current one; the answers are KEPT in `RootExistence`, keyed by platform, drive and root list, asked one root at a
-  time, and dropped when `coai.qconsultRoots` changes or a root is added or removed, so a repaint stats nothing) — is
+  time, and dropped when `coai.qconsultRoots` changes or a root is added or removed, so a repaint stats nothing;
+  `rootRefusal` and Add a folder's duplicate check judge the QUALIFIED path too, so `/Windows` is refused on the page
+  as the server refuses `C:\Windows`, and a picked `C:\work` is the stored `/work`) — is
   said to be *the other side's folder* (a plain hint, never the `stale` refusal), because the server on this side
   skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
   `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window
