@@ -5,7 +5,14 @@
 > `qconsultView.ts`, `qconsultWrite.ts`, `qconsultHost.ts`, `escalationDirs.ts`; `shared/path-family-vectors.json`.
 > **Deviations:** the plan round added that a root spelled like the other OS but EXISTING here is this side's (Windows
 > root-relative `/work`); the first code round added that such a root is resolved against the SYSTEM drive on both sides
-> (never the process's current drive) and kept qualified, and that the page's existence answers are cached per root list.
+> (never the process's current drive) and kept qualified, and that the page's existence answers are cached per root list;
+> the cadence consultant found the page's refusal checks still judged the root AS WRITTEN (`/Windows` got no refusal on
+> the page while the server refused `C:\Windows`), so `rootRefusal` and Add a folder's duplicate check now judge the
+> qualified path too. **Compatibility decision (coordinator, 2026-10-09):** before this change the server kept
+> `Full(root)`, so a hand-written `/work` meant the SERVER's current drive (`D:\work` for a server started from D:); it
+> now means `%SystemDrive%\work` on both sides. Kept deliberately — one base for the page and the server — and pinned by
+> `TheDeliberateChange_AHandWrittenRootRelativeRoot_NowMeansTheSystemDrive_NotTheServersCurrentDrive`; only a
+> hand-written root-relative root is affected, because Add a folder always writes a drive-qualified path.
 > The plan was written down after the work, when the gate asked for the file; the gate's plan round ran before the code
 > round on the same text.
 >

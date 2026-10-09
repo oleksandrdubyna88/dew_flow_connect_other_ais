@@ -444,6 +444,43 @@ public sealed class QuestionConsultSettingsTests : IDisposable
             .And.NotContain(Path.TrimEndingDirectorySeparator(Path.GetFullPath("/work")), "and never on whatever drive is current");
     }
 
+    [Fact]
+    public void TheDeliberateChange_AHandWrittenRootRelativeRoot_NowMeansTheSystemDrive_NotTheServersCurrentDrive()
+    {
+        // A COMPATIBILITY DECISION, pinned (coordinator, 2026-10-09). Before this change the server kept Full(root): `/work`
+        // resolved against coai-mcp's own current drive — `D:\work` for a server started from D:. Now it is
+        // `%SystemDrive%\work`, one base for the page and the server. Only a HAND-WRITTEN root-relative root is affected:
+        // "Add a folder…" always writes a drive-qualified path. This test fails if anyone restores the current-drive reading.
+        var current = Path.GetPathRoot(Environment.CurrentDirectory) ?? string.Empty;
+        var systemDrive = current.StartsWith("C", StringComparison.OrdinalIgnoreCase) ? "E:" : "C:"; // never the current drive
+        var expected = Path.TrimEndingDirectorySeparator(Path.GetFullPath(systemDrive + @"\work"));
+
+        var verdict = QuestionRoots.Validate(["/work"], _data, Places with { Windows = true, SystemDrive = systemDrive }, _ => true);
+
+        verdict.Accepted.Should().Equal([expected], $"`/work` means {systemDrive}\\work, the system drive");
+        verdict.Accepted.Should().NotContain(Path.TrimEndingDirectorySeparator(Path.GetFullPath("/work")),
+            $"and no longer the server's current drive ({current})");
+    }
+
+    [Fact]
+    public void OnWindows_AMissingPosixRootIsSkipped_WhileAnExplicitWslShareRootGoesThroughTheOrdinaryChecks()
+    {
+        // The setting carries no distro, so `/home/jinx/git` cannot be translated and is the WSL side's; the person who
+        // wants that folder read from Windows names it explicitly, and that spelling is an ordinary Windows root.
+        const string posix = "/home/jinx/git";
+        const string share = @"\\wsl.localhost\Ubuntu\home\jinx\git";
+        var reachable = Path.TrimEndingDirectorySeparator(Path.GetFullPath(share));
+
+        var verdict = QuestionRoots.Validate([posix, share], _data, Places with { Windows = true, SystemDrive = "C:" }, full => full == reachable);
+
+        verdict.OtherSide.Should().Equal([posix], "no folder here, no distro to translate it with: the other side's");
+        verdict.Accepted.Should().Equal([reachable], "the explicit WSL share is this side's root, judged and kept as written");
+        verdict.Refused.Should().BeEmpty();
+        QuestionRoots.Validate([share], _data, Places with { Windows = true }, _ => false).Refused
+            .Should().ContainSingle("an explicit share that is not reachable is THIS side's mistake, refused by name, never skipped")
+            .Which.Should().Contain("not a directory on this machine");
+    }
+
     private sealed record ResolutionVector(string Path, bool Windows, string SystemDrive, string Qualified, string Why);
 
     [Fact]

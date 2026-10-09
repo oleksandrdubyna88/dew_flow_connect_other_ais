@@ -1077,7 +1077,12 @@ with the SYSTEM drive (`QuestionRoots.Qualified`; `SystemPlaces.SystemDrive` = `
 never the current one, which the extension host and this server need not share: `/work` → `C:\work` for the
 existence decision, for every check, and as the root KEPT in `Roots`, so the grant, `--add-dir` and the prompt all
 name the drive. The extension qualifies the same way (`pathFamily.ts` `qualified`), so the page and the server decide
-alike; the `resolution` vectors hold the rule.
+alike; the `resolution` vectors hold the rule. **This is a deliberate compatibility change**: before it the server
+kept `Full(root)`, so a hand-written `/work` meant the SERVER's current drive (`D:\work` for a coai-mcp started from
+D:); now it means `%SystemDrive%\work`. Only a hand-written root-relative root is affected — Add a folder always
+writes a drive-qualified path — and `TheDeliberateChange_AHandWrittenRootRelativeRoot_NowMeansTheSystemDrive_…` pins
+it. An explicit WSL share (`\\wsl.localhost\<distro>\…`) is an ordinary Windows root: judged, kept, or refused by
+name when unreachable — never skipped; a bare `/home/…` with no folder here is skipped, since the setting names no distro.
 Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
 `QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
 no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
