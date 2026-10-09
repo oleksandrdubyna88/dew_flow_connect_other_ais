@@ -85,4 +85,4 @@ left behind the English.
 - [x] A person with phrases, or with an emptied list, sees no change (by the test of the removal rule and the design).
 - [x] Help in five languages; `module_extension.md`, `module_tests.md` updated; this plan promoted.
 - [x] Whole extension suite (5758 passed, 0 failed) and lint green; host scenarios 19/19; gate rounds resolved.
-- [ ] PR merged — the pull request that carries this record.
+- [x] PR merged — #710, 2026-10-08 17:10Z (`9f87dade`).

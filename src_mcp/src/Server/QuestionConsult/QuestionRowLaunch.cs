@@ -31,8 +31,10 @@ public sealed record RowLaunchInput(
 /// <summary>One turn of a row: the launches it made — one, or a launch and its follow-up — and what stopped a follow-up.</summary>
 /// <param name="Launches">Never empty; the last is the one the turn's answer stands on.</param>
 /// <param name="ChangesBeforeFollowUp">The watched roots' changes that stopped a follow-up; empty when none did.</param>
-/// <param name="Usage">The turn billed once (<see cref="ConsultantTurn.UsageOf"/>) — a cumulative vendor's two reports never summed.</param>
-internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnlyList<TreeChange> ChangesBeforeFollowUp, Usage Usage)
+/// <param name="Usage">This turn's SHARE of the row's bill — for a cumulative vendor its report less what earlier turns billed.</param>
+/// <param name="Handle">The vendor's conversation id the turn left — what a lookup continuation resumes.</param>
+/// <param name="Invocation">The invocation the turn launched — what a lookup continuation is built from.</param>
+internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnlyList<TreeChange> ChangesBeforeFollowUp, Usage Usage, string Handle, ReviewerInvocation Invocation)
 {
     public ReviewerLaunch Final => Launches[^1];
 
@@ -113,11 +115,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     {
         var memory = AnsweringMemory.Start(launch.Prompt);
         var usage = Usage.None;
+        var billed = new ConsultationBilled();
         var note = string.Empty;
+        ReviewerInvocation? ready = null;
         while (true)
         {
-            var turn = await TurnAsync(input, launch, ct);
-            usage = usage.Add(turn.Usage);
+            var turn = await TurnAsync(input, launch, ready, billed, ct);
+            (usage, billed) = (usage.Add(turn.Usage), billed.Plus(turn.Usage));
             if (Unanswered(input.Row.Runtime, turn) is { } ended)
             {
                 return Ended(start, ended.Status, ended.Reason, started.Elapsed, usage, note);
@@ -129,10 +133,14 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
                 return Answered(start, input.Row.Runtime.ReadAdvice(answer), started.Elapsed, usage, note);
             }
 
-            switch (await followUps.AfterAsync(launch, memory, answer, ct))
+            switch (await followUps.AfterAsync(launch, memory with { Handle = HandleOf(turn, memory), Last = turn.Invocation }, answer, ct))
             {
+                case AnsweringTurn.Next { Invocation: not null } when await StoppedBeforeContinuingAsync(input, ct) is { Length: > 0 } why:
+                    return Ended(start, RowOutcomes.Failed, why, started.Elapsed, usage, note);
                 case AnsweringTurn.Next next:
-                    (launch, memory, note) = (next.Launch, next.Memory, next.Note);
+                    // A runtime that continues its own conversation hands a ready invocation (an agy lookup); an api row's
+                    // next turn is its launch built again with the longer prompt.
+                    (launch, memory, note, ready) = (next.Launch, next.Memory, next.Note, next.Invocation);
                     continue;
                 case AnsweringTurn.Done done:
                     return Answered(start, done.Advice, started.Elapsed, usage, Joined(note, done.Note));
@@ -140,17 +148,34 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         }
     }
 
+    /// <summary>The conversation to continue: the one this turn named, or — when a continuation's stream named none — the one it continued.</summary>
+    /// <remarks>Code round 2 (gemini): an empty handle from turn 2 ended a row that asked a second time, "agy named no
+    /// conversation id"; <c>ConsultationLookups.Combined</c> already kept the earlier one.</remarks>
+    private static string HandleOf(RowTurn turn, AnsweringMemory memory) => turn.Handle.Length > 0 ? turn.Handle : memory.Handle;
+
+    /// <summary>
+    /// Why a ready continuation (an agy lookup) must not run — a watched root that changed since before the rows launched —
+    /// or empty. The consult loop asks the same before every continuation (<c>ConsultationLookups</c>); a model in plan mode
+    /// CAN write (research/RESULTS_agy_searches_through_coai.md §3), so a row after which a root changed gets no next turn.
+    /// </summary>
+    private static async Task<string> StoppedBeforeContinuingAsync(RowLaunchInput input, CancellationToken ct) =>
+        await input.ChangesSoFar(ct) is { Count: > 0 } changes
+            ? $"it asked coai to look and was not continued, because {FilesystemSnapshot.Sentence(changes)}"
+            : string.Empty;
+
     /// <summary>
     /// One turn through <see cref="ConsultantTurn"/>, on ONE ledger line written in <c>finally</c> over whatever launches
     /// landed — so a turn that throws (the caller's cancellation, the row's backstop) cannot drop the first launch's usage
     /// (plan round, gemini). Every runtime a row resolves to is a consultant runtime (<see cref="QuestionResolution.For"/>).
     /// </summary>
-    private async Task<RowTurn> TurnAsync(RowLaunchInput input, ConsultantLaunch launch, CancellationToken ct)
+    /// <param name="ready">A continuation the runtime built (an agy lookup), launched as is; null builds <paramref name="launch"/>.</param>
+    /// <param name="billed">What the row's earlier turns billed — a cumulative vendor's report is billed only past it.</param>
+    private async Task<RowTurn> TurnAsync(RowLaunchInput input, ConsultantLaunch launch, ReviewerInvocation? ready, ConsultationBilled billed, CancellationToken ct)
     {
         var consultant = input.Row.Runtime;
         // The row's system prompt is redacted from what the child says, as a reviewer's is (todo/PLAN_one_model_catalog.md, C2)
         // — on the follow-up too: an adapter continues `first with { … }`, which keeps it.
-        var invocation = consultant.Build(launch) with { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) };
+        var invocation = ready ?? (consultant.Build(launch) with { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) });
         var clock = Stopwatch.StartNew();
         var landed = new List<ReviewerLaunch>();
         var ended = false;
@@ -160,7 +185,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             ended = true;
             SaySilentFirst(input, consultant, turned);
 
-            return new RowTurn(turned.Launches, turned.ChangesBeforeFollowUp, turned.TurnUsage);
+            return new RowTurn(turned.Launches, turned.ChangesBeforeFollowUp, Share(consultant, turned.TurnUsage, billed), turned.SurvivingHandle, invocation);
         }
         finally
         {
@@ -168,10 +193,17 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             {
                 // A turn that THREW has only the launches that landed before it, and the last of those may have exited
                 // cleanly — its own outcome would read "ok" for a turn that never answered (code round, codex).
-                Record(input, ended ? Outcome(landed[^1]) : Interrupted, ConsultantTurn.UsageOf(consultant, landed), clock.Elapsed);
+                Record(input, ended ? Outcome(landed[^1]) : Interrupted, Share(consultant, ConsultantTurn.UsageOf(consultant, landed), billed), clock.Elapsed);
             }
         }
     }
+
+    /// <summary>
+    /// This turn's share of the bill: a cumulative vendor (agy) reports the whole conversation, so a continued turn is
+    /// billed only past what earlier turns billed — the consultation's own rule (<see cref="ConsultationUsage.Less"/>).
+    /// </summary>
+    private static Usage Share(IConsultantRuntime consultant, Usage reported, ConsultationBilled billed) =>
+        consultant.UsageIsCumulative ? ConsultationUsage.Less(reported, billed) : reported;
 
     /// <summary>Said in the log because the record keeps no launch count: the next "why did this row take two" is answered here.</summary>
     private void SaySilentFirst(RowLaunchInput input, IConsultantRuntime consultant, ConsultantTurnResult turned)

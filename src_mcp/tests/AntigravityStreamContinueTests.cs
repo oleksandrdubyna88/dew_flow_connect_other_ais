@@ -82,6 +82,22 @@ public sealed class AntigravityStreamContinueTests
     }
 
     [Fact]
+    public void ADeniedCommand_WhenCoaiMayLook_IsAlsoToldToAskCoai_AndTheMeasuredTextStaysWordForWord()
+    {
+        // research/PLAN_agy_searches_through_coai.md §3: a model refused the shell is the one that needs a listing.
+        var launched = Launched(Fixture("consult-denied.ndjson"), Fixture("consult-denied.stderr.txt"));
+        var plain = new AntigravityConsultant(new AntigravityRuntime());
+        var looking = plain.With(new CoaiMcp.Server.WorkspaceLookup([Repo]));
+
+        var told = looking.FollowUp(Resumed(), launched)!.Request.StdIn;
+
+        told.Should().Contain(System.Text.Json.JsonEncodedText.Encode(AntigravityFollowUps.NoCommands).ToString(), "the measured text is kept, then added to")
+            .And.Contain(CoaiMcp.Core.Consultation.LookupRequests.Fence);
+        plain.FollowUp(Resumed(), launched)!.Request.StdIn.Should().NotContain(CoaiMcp.Core.Consultation.LookupRequests.Fence, "without a reader nothing would serve the block");
+        looking.Toolbox.Should().NotContain(AntigravityFollowUps.StaysDenied, "the marker is how a follow-up is told from a first turn");
+    }
+
+    [Fact]
     public void TheDeniedActions_AreTheStreamsPermissionWords_ReadAsJson()
     {
         AntigravityStream.DeniedActions(Fixture("consult-denied.ndjson")).Should().Equal("command");
