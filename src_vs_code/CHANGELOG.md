@@ -14,6 +14,18 @@ way Models already did, at the same width. On Roles & prompts each role keeps th
 by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
 the Models cards.
 
+**The CLAUDE.md snippet's feature half is the shared rule, and says what the server does (snippet v16).**
+The feature-review instructions in the pasted block now come from the conventions rule
+`coai-feature-gate.md` (v3) instead of this product's own copy (v2). v2 still described a reopen the
+server refuses: v3 says one round is the budget, a second runs only on a reviewer failure, a `blocking`
+finding or the person's request, and `again: true` with a different `baseRef` starts a fresh review. It
+also asks for `callerModel` and never a secret in `lessons`.
+- A paste carrying `coai-feature v2` is reported as older on the feature gate — copy the snippet again.
+- A repository that mounts the conventions is now checked for all five rule files. A mount pinned before
+  the feature rule existed is told the feature gate is missing; move its pin.
+- The consultant half moved to v4 with the same conventions release (snippet v15): a cadence consultation
+  counts only after `close_consult` records its outcome.
+
 ## Extension 0.65.0 — 2026-10-09
 
 **One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this

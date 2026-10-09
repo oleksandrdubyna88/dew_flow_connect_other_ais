@@ -60,12 +60,8 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   fs.copyFileSync(path.join(sourceRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
-  // The consultant half is a MOUNTED rule since story 5.2 of research/PLAN_consult_on_a_cadence.md: the
-  // submodule above carries it. The FEATURE half is this product's own file (D11 of
-  // todo/PLAN_feature_review.md), so the fixture needs it too — the real one, which keeps the fixture
-  // honest about what the build reads.
-  fs.mkdirSync(path.dirname(path.join(root, FEATURE_SOURCE)), { recursive: true });
-  fs.copyFileSync(path.join(sourceRoot, FEATURE_SOURCE), path.join(root, FEATURE_SOURCE));
+  // Every half is a MOUNTED rule — the consultant since story 5.2 of research/PLAN_consult_on_a_cadence.md,
+  // the feature gate since S3.5 of todo/PLAN_feature_review.md: the submodule above carries all of them.
   git(root, 'add', 'AGENTS.md', 'CLAUDE.md', '.agents/PROJECT.md');
   commit(root);
   const output = path.join(root, OUTPUT);
@@ -88,18 +84,6 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   assert.equal(fs.existsSync(output + '.tmp'), false);
   // Generated artifacts are ignored in the product; keep this fixture equivalent.
   fs.writeFileSync(path.join(root, '.gitignore'), 'src_vs_code/src/generated/\n');
-  // A feature source that is not ours by its marker fails the build rather than shipping text nobody
-  // can recognise as the block — and leaves no constant from the previous build behind.
-  const featureSource = path.join(root, FEATURE_SOURCE);
-  const ourBlock = fs.readFileSync(featureSource);
-  fs.writeFileSync(featureSource, '## Something else entirely\n');
-  assert.throws(() => prepareGate(root), /coai-feature/);
-  assert.equal(fs.existsSync(featureOutput), false, 'a refused feature half leaves no generated constant behind');
-  // A missing one fails naming the file, never a bare ENOENT on a path.
-  fs.rmSync(featureSource);
-  assert.throws(() => prepareGate(root), (error) => error instanceof Error && error.message.includes(FEATURE_SOURCE));
-  fs.writeFileSync(featureSource, ourBlock);
-  prepareGate(root);
   const rule = path.join(mount, 'common/coai-review-gate.md');
   const original = fs.readFileSync(rule);
   fs.appendFileSync(rule, '\nUnreviewed edit.\n');
@@ -164,7 +148,28 @@ test('a consultant rule without its marker is refused, with and without delivery
  * or why.</p>
  */
 test('a pinned mount without the consultant rule fails naming it', async t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-gate-no-consultant-'));
+  const root = pinnedMountWithout(t, 'coai-consultant.md', 'common.coai-consultant');
+
+  assert.throws(() => prepareGate(root), (error) => error instanceof Error
+    && error.message.includes('.agents/conventions/common/coai-consultant.md') && /consultant/i.test(error.message));
+  assert.equal(fs.existsSync(path.join(root, CONSULTANT_OUTPUT)), false, 'no consultant constant is left from a previous build');
+});
+
+/** The same case for the feature rule, a shared rule since S3.5 of todo/PLAN_feature_review.md. */
+test('a pinned mount without the feature rule fails naming it, and says to move the pin', async t => {
+  const root = pinnedMountWithout(t, 'coai-feature-gate.md', 'common.coai-feature-gate');
+
+  assert.throws(() => prepareGate(root), (error) => error instanceof Error
+    && error.message.includes(FEATURE_SOURCE) && /feature/i.test(error.message) && /pin/.test(error.message));
+  assert.equal(fs.existsSync(path.join(root, FEATURE_OUTPUT)), false, 'no feature constant is left from a previous build');
+});
+
+/**
+ * A repository whose clean, correctly pinned mount lacks one rule — the case a consumer meets when its pin
+ * predates that rule: nothing is dirty and nothing mismatches, the file is simply not there.
+ */
+function pinnedMountWithout(t, file, id) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `coai-gate-no-${path.parse(file).name}-`));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const sourceMount = path.join(sourceRoot, '.agents/conventions');
@@ -178,36 +183,36 @@ test('a pinned mount without the consultant rule fails naming it', async t => {
   git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sourceMount, '.agents/conventions');
   const mount = path.join(root, '.agents/conventions');
   fs.cpSync(path.join(sourceMount, 'node_modules'), path.join(mount, 'node_modules'), { recursive: true });
-  // The rule and its body record leave together, as a conventions commit from before the move would.
-  git(mount, 'rm', '-q', 'common/coai-consultant.md');
+  // The rule and its body record leave together, as a conventions commit from before the rule would.
+  git(mount, 'rm', '-q', `common/${file}`);
   const bodies = path.join(mount, 'research/rule-bodies.json');
   const manifest = JSON.parse(fs.readFileSync(bodies, 'utf8'));
-  manifest.rules = manifest.rules.filter((rule) => rule.id !== 'common.coai-consultant');
+  manifest.rules = manifest.rules.filter((rule) => rule.id !== id);
   fs.writeFileSync(bodies, JSON.stringify(manifest, null, 2) + '\n');
   git(mount, 'add', 'research/rule-bodies.json');
-  commit(mount, 'a conventions pin from before the consultant rule');
+  commit(mount, `a conventions pin from before ${file}`);
   fs.copyFileSync(path.join(sourceRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
   git(root, 'add', 'AGENTS.md', 'CLAUDE.md', '.agents/PROJECT.md', '.agents/conventions');
   commit(root, 'fixture');
 
-  assert.throws(() => prepareGate(root), (error) => error instanceof Error
-    && error.message.includes('.agents/conventions/common/coai-consultant.md') && /consultant/i.test(error.message));
-  assert.equal(fs.existsSync(path.join(root, CONSULTANT_OUTPUT)), false, 'no consultant constant is left from a previous build');
-});
+  return root;
+}
 
 /**
- * The FEATURE half is this product's own file (D11 of todo/PLAN_feature_review.md), not a mounted
- * rule: it says when to call one tool of one product, which the operator ruled is not shared material.
- * So it carries no frontmatter to strip, and is held to its marker AND its heading the way the mounted
- * halves are — a truncated or foreign file fails the build instead of shipping unrecognisable text.
+ * The FEATURE half is a shared rule since S3.5 of todo/PLAN_feature_review.md: its frontmatter is
+ * stripped like every mounted half's, and it is held to its marker AND its heading — a truncated or
+ * foreign file fails the build instead of shipping unrecognisable text.
  */
-test('the feature half is taken verbatim, and refused without its marker or its heading', () => {
-  const body = '<!-- coai-feature v1 -->\n## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n\nFirst.\n';
+test('the feature half is the shared rule without its delivery metadata, refused without its marker or heading', () => {
+  const body = '<!-- coai-feature v3 -->\n## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n\n'
+    + "<!-- owns: coai — the MCP server's own name -->\nFirst.\n";
+  const front = '---\nid: "common.coai-feature-gate"\nload: "conditional"\n---\n';
 
-  assert.equal(featureBody(body), body);
-  assert.equal(featureBody(body.replaceAll('\n', '\r\n')), body, 'a CRLF checkout emits the same bytes as an LF one');
-  assert.throws(() => featureBody('## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n'), /coai-feature/);
-  assert.throws(() => featureBody('<!-- coai-feature v1 -->\n## Something else entirely\n'), /coai-feature/);
+  assert.equal(featureBody(front + body), body, 'an owns: line AFTER the heading is the author’s and stays');
+  assert.equal(featureBody((front + body).replaceAll('\n', '\r\n')), body, 'a CRLF checkout emits the same bytes as an LF one');
+  assert.throws(() => featureBody(body), /coai-feature/, 'a shared rule without its delivery metadata is not the mounted file');
+  assert.throws(() => featureBody(front + '## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n'), /coai-feature/);
+  assert.throws(() => featureBody(front + '<!-- coai-feature v3 -->\n## Something else entirely\n'), /coai-feature/);
 });

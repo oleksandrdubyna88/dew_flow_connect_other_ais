@@ -65,7 +65,7 @@ test('all candidate reads start together but a slower older root copy still wins
  * consultation, point 5).
  *
  * <p>The reader found the first file carrying the gate marker and read every half from it. A mount
- * holds the gate rule and its three siblings as four files, so a repository that pasted nothing and
+ * holds the gate rule and its siblings as separate files, so a repository that pasted nothing and
  * mounted everything was told it was behind on three halves it had. The fixtures above put the whole
  * snippet into the gate file, which no real mount does — these use the real mounted files.</p>
  */
@@ -86,7 +86,7 @@ test('a mount is read with its sibling rules, and an actual paste still takes pr
     }
   };
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
-  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-feature-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
   const mount = async (at: string, which: readonly string[] = rules): Promise<void> => {
     for (const name of which) {
       await write(`${at}/${name}`, await fs.readFile(path.join(real, name), 'utf8'));
@@ -95,7 +95,7 @@ test('a mount is read with its sibling rules, and an actual paste still takes pr
 
   await mount('.agents/conventions/common');
   assert.deepEqual(await readSnippetStatus(read), { kind: 'current', current: ARTEFACT_VERSION },
-    'four mounted rules and no paste are current — the siblings are the other three halves');
+    'five mounted rules and no paste are current — the siblings are the other four halves');
 
   await write('CLAUDE.md', claudeSnippet().replace(`coai-consultant v${CONSULTANT_VERSION}`, 'coai-consultant v2'));
   assert.deepEqual(await readSnippetStatus(read), { kind: 'older', behind: ['coai-consultant'], current: ARTEFACT_VERSION },
@@ -112,7 +112,7 @@ test('the legacy mount location is read with its siblings too', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-legacy-mount-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
-  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-feature-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
   const files = new Map<string, string>(await Promise.all(rules.map(async (name): Promise<[string, string]> =>
     [`.claude/rules/shared/common/${name}`, await fs.readFile(path.join(real, name), 'utf8')])));
 
@@ -125,7 +125,7 @@ test('a missing half is never filled from ANOTHER mount', async t => {
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
   const text = async (name: string): Promise<string> => fs.readFile(path.join(real, name), 'utf8');
   // The neutral mount carries only its gate rule; a legacy mount beside it carries the siblings.
-  const siblings = ['coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+  const siblings = ['coai-document-gate.md', 'coai-feature-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
   const files = new Map<string, string>([
     ['.agents/conventions/common/coai-review-gate.md', await text('coai-review-gate.md')],
     ...await Promise.all(siblings.map(async (name): Promise<[string, string]> => [`.claude/rules/shared/common/${name}`, await text(name)])),
@@ -133,6 +133,6 @@ test('a missing half is never filled from ANOTHER mount', async t => {
 
   const status = await readSnippetStatus(async (name) => files.get(name) ?? '');
 
-  assert.deepEqual(status, { kind: 'older', behind: ['coai-document', 'coai-caller', 'coai-consultant'], current: ARTEFACT_VERSION },
+  assert.deepEqual(status, { kind: 'older', behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant'], current: ARTEFACT_VERSION },
     'the halves are read from the mount whose gate rule was selected, and nowhere else');
 });
