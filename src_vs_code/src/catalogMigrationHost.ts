@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { CatalogLayer, LayerWrite, MigrationOptions, MigrationOutcome, restoreLayer, RestoreOutcome } from './catalogMigration';
-import { applyWrites, migrateOne, RunLayer } from './catalogMigrationRun';
+import { applyWrites, migrateOne, RunLayer, unknownKeysOf } from './catalogMigrationRun';
+import { MigrationWait } from './migrationWait';
 import { overlayKey } from './coaiInstall';
 import { thisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
@@ -41,10 +42,18 @@ let afterMigration: () => void = () => undefined;
  */
 let bugzByRuntime: () => Promise<boolean> = () => Promise.resolve(false);
 
+/**
+ * The one retry, then the one warning, of a move that met a key this window does not know yet
+ * (todo/PLAN_catalog_migration_waits_for_its_settings.md). Made on activation, disposed with the extension.
+ */
+let wait: MigrationWait | undefined;
+
 /** Called once on activation: remember what follows a migration and how to ask the binary, and run the first one. */
 export function startCatalogMigration(context: vscode.ExtensionContext, after: () => void, ranksByRuntime: () => Promise<boolean>): Promise<void> {
   afterMigration = after;
   bugzByRuntime = ranksByRuntime;
+  wait = waitFor(context);
+  context.subscriptions.push(wait);
 
   return scheduleCatalogMigration(context);
 }
@@ -66,10 +75,53 @@ async function migrateEveryLayer(context: vscode.ExtensionContext): Promise<void
   let wrote = false;
   const options: MigrationOptions = { bugzByRuntime: await bugzByRuntime().catch(() => false) };
   for (const layer of layersOf(context, vscode.workspace.getConfiguration('coai'))) {
-    wrote = (await migrateOne(layer, options, { stopped: migrationStopped, left: sayWhatWasLeft })) || wrote;
+    wrote = (await migrateOne(layer, options, { stopped: migrationStopped, left: sayWhatWasLeft, waiting: () => wait?.wait() })) || wrote;
   }
   if (wrote) {
     afterMigration();
+  }
+}
+
+/**
+ * The retry runs the move again through the queue, on the next `coai` settings change or after the timer; the warning
+ * is said once, and only a press of its button reloads.
+ */
+function waitFor(context: vscode.ExtensionContext): MigrationWait {
+  return new MigrationWait({
+    onSettingsChange: (fire) => vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('coai')) {
+        fire();
+      }
+    }),
+    after: (ms, fire) => {
+      const timer = setTimeout(fire, ms);
+
+      return { dispose: () => clearTimeout(timer) };
+    },
+    retry: () => {
+      void scheduleCatalogMigration(context);
+    },
+    warn: () => {
+      void reloadToMove();
+    },
+  });
+}
+
+const RELOAD = 'Reload Window';
+
+/** A window that will not learn the keys: nothing was moved, nothing is lost, and a reload is the cure. */
+async function reloadToMove(): Promise<void> {
+  const answer = await notifyAndAsk({
+    as: 'warning',
+    class: 'refusal',
+    source: 'catalogMigrationHost',
+    code: 'catalog-migration-waits-for-reload',
+    title: 'This window has not loaded the settings of the updated ConnectOtherAIs yet, so your models are moved into '
+      + 'the catalog after a reload. Nothing was changed in the meantime.',
+    action: RELOAD,
+  });
+  if (answer === RELOAD) {
+    await vscode.commands.executeCommand('workbench.action.reloadWindow');
   }
 }
 
@@ -148,6 +200,9 @@ const LAYER_KEYS: Readonly<Record<LayerWrite['key'], keyof CatalogLayer>> = {
   chatModelName: 'chatModelName',
 };
 
+/** Every key the move may write — what the `test:host` scenario asks the real registry about. */
+export const MIGRATION_KEYS: readonly string[] = Object.keys(LAYER_KEYS);
+
 /**
  * The chat model presets AS THE CHAT READS THEM (E4.6a): the user layer's, the shipped ones included when the person
  * never changed them — `modelKeys.userChatPresets`, the ONE reader `savedModels`, Chat's conflicts and a choice on Chat
@@ -166,6 +221,8 @@ function userLayerOf(config: vscode.WorkspaceConfiguration): Layer {
     write: async ({ key, value }) => {
       await config.update(key, value, vscode.ConfigurationTarget.Global);
     },
+    // settings.json is written through VS Code's registry, which may not hold an updated version's keys yet.
+    unknownKeys: (keys) => unknownKeysOf(keys, (key) => config.inspect(key)?.defaultValue),
   };
 }
 

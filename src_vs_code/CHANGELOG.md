@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Fixed: the first start after an update in place no longer shows an error.** When VS Code updated the extension before
+it had started, moving your models into the catalog could meet settings the window had not loaded yet and showed
+*"Moving the models in your settings into the catalog stopped part way"*. Nothing was written then, and nothing is now:
+the move waits for the window to load them and tries once more — on the next settings change, or ten seconds later. If
+the window still has not loaded them, a warning says so once, with **Reload Window**.
+
 ## Extension 0.65.0 — 2026-10-09
 
 **One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this

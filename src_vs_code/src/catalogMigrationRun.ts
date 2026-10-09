@@ -11,12 +11,39 @@ export interface RunLayer {
   readonly name: string;
   readonly read: () => CatalogLayer;
   readonly write: (write: LayerWrite) => Promise<void>;
+  /**
+   * The keys among `keys` this window cannot write yet, because its settings registry does not hold them — a layer in
+   * `settings.json` answers; one in the extension's own storage needs no registry and has no answer.
+   */
+  readonly unknownKeys?: (keys: readonly string[]) => readonly string[];
 }
 
 /** What a run says, through the host: a stop part way, and what the plan left where it was. */
 export interface RunReports {
   readonly stopped: (layer: RunLayer, error: unknown) => Promise<void>;
   readonly left: (layer: RunLayer, outcome: MigrationOutcome) => Promise<void>;
+  /** Nothing was written because the window does not know these keys yet; the host decides when to try again. */
+  readonly waiting: (layer: RunLayer, keys: readonly string[]) => void;
+}
+
+/**
+ * The keys a settings registry does not hold, read from what it says each key's default is: VS Code gives every
+ * registered key a default — the manifest's, or one made from its type when the manifest gives none — and an unknown key
+ * none. A `test:host` scenario holds the real editor to that (the plan round's finding).
+ */
+export function unknownKeysOf(keys: readonly string[], defaultOf: (key: string) => unknown): readonly string[] {
+  return keys.filter((key) => defaultOf(key) === undefined);
+}
+
+/**
+ * VS Code's refusal of a write to a key its settings registry does not hold — `Unable to write to User Settings because
+ * coai.migratedFrom is not a registered configuration.` The key it names, without the section; empty for any other error.
+ */
+export function unregisteredKeyIn(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const named = /\bcoai\.(\w+) is not a registered configuration\b/u.exec(message);
+
+  return named?.[1] ?? '';
 }
 
 /** Whether the layer was written to — a run that wrote anything is followed by the mirror of the server settings. */
@@ -28,11 +55,31 @@ export async function migrateOne(layer: RunLayer, options: MigrationOptions, rep
     return false;
   }
   await reports.left(layer, outcome);
-  if (outcome.kind !== 'migrate') {
+
+  return outcome.kind === 'migrate' ? writeUnlessWaiting(layer, outcome.writes, reports) : false;
+}
+
+/** The writes — unless the window does not know a key among them yet, which is asked BEFORE the first one is made. */
+async function writeUnlessWaiting(layer: RunLayer, writes: readonly LayerWrite[], reports: RunReports): Promise<boolean> {
+  const unknown = layer.unknownKeys?.(writes.map((write) => write.key)) ?? [];
+  if (unknown.length > 0) {
+    reports.waiting(layer, [...new Set(unknown)]);
+
     return false;
   }
 
-  return applyWrites(layer, outcome.writes, reports.stopped);
+  return applyWrites(layer, writes, (stoppedLayer, error) => stoppedOrWaiting(stoppedLayer, error, reports));
+}
+
+/** The belt: the check and the write are two calls, and the registry is VS Code's to change between them. */
+async function stoppedOrWaiting(layer: RunLayer, error: unknown, reports: RunReports): Promise<void> {
+  const key = unregisteredKeyIn(error);
+  if (key.length > 0) {
+    reports.waiting(layer, [key]);
+
+    return;
+  }
+  await reports.stopped(layer, error);
 }
 
 /**
