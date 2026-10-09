@@ -10667,9 +10667,10 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
-  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
-  (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
+  Display only; every write reads the rows afresh. The page was drawn AND priced from that one list: priced from every
+  row by MODEL, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card. Since
+  2026-10-09 the Models cards are priced per ROW from every row instead (`priceBook.cardPrices`, below the E5.3 section;
+  `theCardsArePricedFromEveryRow.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
 - `scripts/seam-catalog.mjs`, the seam's tenth leg: a multi-instance catalog (two `claude` rows, a consultant and a
@@ -11659,7 +11660,24 @@ Nothing a person sees changes: everything removed here was drawn by nothing sinc
   **＋ Add a model** was refused as "another caller's consultant". A consultant holds an endpoint only when its entry
   defines one; the row is the holder of its own URL.
 
-**Found on the way, not fixed here:** a Models card takes its catalog price from `state.modelPrices[model]`, which is
-priced from the reviewers only (`isReviewerRow`, to keep a hidden api consultant from overwriting a reviewer's rate
-for the same model). So a row that is not a reviewer — a consultant-only model — shows no catalog price on Models.
-It predates E5; recorded as a follow-up in the plan.
+**Found on the way, fixed after it** (todo/PLAN_models_card_prices_every_row.md, below): a Models card took its catalog
+price from `state.modelPrices[model]`, priced from the reviewers only, so a consultant-only model showed no price.
+
+## A Models card prices its own row (2026-10-09, todo/PLAN_models_card_prices_every_row.md)
+
+- `priceBook.cardPrices(rows, priceOf)` — the price service's one function for the cards: for EVERY catalog row, its own
+  model on its own route (`billedRoute`: an `api` row's `baseUrl`, `''` for every other runtime), keyed by the row's
+  `id`; a row the lists do not know, or with no model, has no entry. `PanelProvider.cardPrices` calls it with
+  `PRICE_BOOK.priceOf` over `vendors` (every row) after the same `refreshPriceTables()`; the state field is
+  `PanelState.cardPrices`, and `cardContextFor` reads `state.cardPrices[v.id]`.
+- Keyed by row, no row's route can land on another row's card — the guarantee the reviewers-only list protected now
+  holds by construction, so `shown` no longer decides prices. Two rows on one model and two endpoints each show their
+  own rate.
+- `billedRoute` is ALSO what the by-model `modelPrices(vendors)` of the spending and consultation tabs routes an api row
+  by, so a row's card and its runs are priced on one route. Those tabs are otherwise unchanged (every row and the chat
+  presets, by model).
+- Tests: `aModelsCardPricesItsOwnRow.test.ts` runs the Models tab (`pageTree` over `modelsTabHtml`) with the map
+  `cardPrices` builds — a consultant-only row's card shows its price (RED: `—`), a reviewer and an api consultant on one
+  model show 1.25 and 3 (RED: both 1.25), an unknown model keeps its dash; `theCardsArePricedFromEveryRow.test.ts` pins
+  the render's wiring (every row, the one price book, read by id). Break-it: reading by model, pricing only the reviewers,
+  routing an api row off its endpoint, and the render pricing `shown` each turn a test red.

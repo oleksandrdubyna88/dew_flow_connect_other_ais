@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Fixed: every Models card shows its catalog price.** A model used only as a consultant, a question consultant or for
+the chat showed a dash where the published lists price it, and an `api` model on a reviewer's model showed the
+reviewer's rate instead of its own endpoint's. Each card now shows the price of its own model on its own endpoint.
+
 ## Extension 0.65.0 — 2026-10-09
 
 **One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this

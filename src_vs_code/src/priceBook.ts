@@ -12,6 +12,7 @@
  */
 
 import { fetchTable, LITELLM_PRICES, liteLlmTable, ModelPrice, OPENROUTER_MODELS, openRouterTable, priceFor, PriceTable, routeOf } from './modelPrices';
+import { Vendor } from './vendors';
 
 /** One fetch of one list — `fetchTable`, or a test's stand-in. */
 export type FetchList = (url: string, parse: (body: unknown) => PriceTable) => Promise<PriceTable>;
@@ -79,3 +80,30 @@ export class PriceBook {
 
 /** The window's one book: the panel and the settings writer read the same tables. */
 export const PRICE_BOOK = new PriceBook();
+
+/** What a model costs on a route — {@link PriceBook.priceOf}, or a test's table. */
+export type PriceOf = (model: string, baseUrl?: string) => ModelPrice | undefined;
+
+/**
+ * The route a row is billed by: an `api` row by the endpoint it names (S3.7b — xAI's own rate for grok on api.x.ai, not
+ * OpenRouter's resale price), every other runtime by the published lists alone. ONE decision for the cards and for the
+ * spending and consultation tabs, so a row's card and its runs are never priced on two routes (the plan round).
+ */
+export function billedRoute(row: Pick<Vendor, 'runtime' | 'baseUrl'>): string {
+  return row.runtime === 'api' ? row.baseUrl : '';
+}
+
+/**
+ * The catalog price each Models card shows, keyed by ROW id (todo/PLAN_models_card_prices_every_row.md): every row's
+ * own model on its own route. Keyed by model and built from the reviewers only, a consultant-only row showed a dash and
+ * an `api` row on a reviewer's model showed the reviewer's rate — and pricing every row by model let a hidden api row
+ * put its endpoint's rate on the reviewer's card (PR #681). Keyed by row, no row's price can land on another's card.
+ * A row the lists do not know, or with no model, has no entry.
+ */
+export function cardPrices(rows: readonly Vendor[], priceOf: PriceOf): Readonly<Record<string, ModelPrice>> {
+  return Object.fromEntries(rows.flatMap((row) => {
+    const price = priceOf(row.model, billedRoute(row));
+
+    return price === undefined ? [] : [[row.id, price] as const];
+  }));
+}

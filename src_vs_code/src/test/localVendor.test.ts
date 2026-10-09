@@ -49,7 +49,7 @@ function html(vendors: readonly Vendor[], engine: LocalEngine): string {
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

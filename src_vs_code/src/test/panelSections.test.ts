@@ -30,7 +30,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   usageWindow: 'day',
   latestServerVersion: '',
   cliStatus: {},
-  modelPrices: {},
+  cardPrices: {},
   snippetStatus: { kind: 'absent', current: 0 },
   ...over,
 });

@@ -33,12 +33,14 @@ model — and do not read the state's field. So only the cards' map changes.
 1. **A pure function in the price service**, `cardPrices(rows, priceOf)` in `priceBook.ts`: for each row, the price of
    ITS model on ITS route — an `api` row's `baseUrl`, `''` for every other runtime, exactly as `modelPrices` routes
    today — keyed by the row's `id`. A row the lists do not know (or with no model) has no entry. The provider calls it
-   with `PRICE_BOOK.priceOf` over EVERY catalog row, after the same `refreshPriceTables()`.
+   with `PRICE_BOOK.priceOf` over EVERY configured row (the render's `vendors`, which it also hands the page as
+   `catalogRows`), after the same `refreshPriceTables()`.
 2. **The state field becomes `cardPrices`** (keyed by row id, documented so), and `cardContextFor` reads
    `state.cardPrices[v.id]`. Keyed by row, no row's route can land on another row's card — the guarantee the
    reviewers-only list was protecting holds by construction, so the list goes from the price call (it stays for
    `vendors: shown`).
-3. **The by-model `modelPrices(vendors)`** stays as it is for the two tabs.
+3. **The by-model `modelPrices(vendors)`** stays as it is for the two tabs, except that it routes an `api` row through
+   the same `billedRoute` helper as the cards (the plan round), so a row's card and its runs share one route.
 
 Rejected: keeping the field by model and pricing every row — two rows on one model and two endpoints would still share
 one rate, which is the bug's other half.
@@ -48,14 +50,17 @@ one rate, which is the bug's other half.
 1. RED: `cardPrices` lands with today's semantics (reviewer rows, by model) and a Models-card test that RUNS the page with a consultant-only row on a model no reviewer uses and asserts its
    price is drawn; and one with an api consultant and a reviewer on the same model, each card showing its own rate.
 2. The by-row price map and `cardContextFor` reading it.
-3. GREEN, then the break-it check (the old by-model read turns the first test red).
-4. Docs: `research/module_extension.md`; `theOldPagePricesWhatItShows.test.ts` updated to the new guarantee (was: the
+3. GREEN, then the break-it check (the plan round): reading by model turns the two-routes test red; pricing only the
+   reviewers turns the consultant-only test red; the render pricing `shown` turns the wiring test red.
+4. Docs: `research/module_extension.md`; `theOldPagePricesWhatItShows.test.ts` (renamed `theCardsArePricedFromEveryRow.test.ts`) updated to the new guarantee (was: the
    price call takes `shown`; now: it takes every row and the card reads by id); the ~30 test states that set
    `modelPrices: {}` renamed.
 
 ## Test plan
 
 - The two RED tests above, through `pageTree` + the page's own script.
+- The spending and consultation tabs: `pricesInPanel.test.ts` (`totalsByVendor` with listed prices) and the usage and
+  consultation tests keep passing unchanged — their map is `modelPrices(vendors)`, not the cards'.
 - `npm test`, eslint, the family checks.
 
 ## Definition of Done

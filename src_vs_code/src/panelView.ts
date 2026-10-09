@@ -318,13 +318,14 @@ export interface PanelState {
    */
   readonly snippetStatus: SnippetStatus;
   /**
-   * The published list price per MODEL id, for the models the vendors are set to.
+   * The published list price per catalog ROW id (`priceBook.cardPrices`): each row's own model on its own route — an
+   * `api` row's endpoint — so two rows on one model and two endpoints each carry their own rate.
    *
    * <p>Shown as the rate fields' placeholder and used for the money when they are empty. It is a
    * LIST price, not a bill: reviews here run on a subscription, so this is what the tokens would
    * have cost through an API. Anything typed wins over it.</p>
    */
-  readonly modelPrices: Readonly<Record<string, ModelPrice>>;
+  readonly cardPrices: Readonly<Record<string, ModelPrice>>;
   /**
    * Each vendor's installed and published CLI version, by vendor id.
    *
@@ -1084,7 +1085,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     claudeProbe: state.claudeProbe,
     askingClaude: state.askingClaude,
     cli: state.cliStatus[v.id] ?? UNKNOWN_CLI,
-    price: state.modelPrices[v.model],
+    price: state.cardPrices[v.id],
     localEngine: state.localEngines[v.id],
     endpointListing: state.endpointListings?.[v.id],
     askingEndpoint: (state.askingEndpoints ?? []).includes(v.id),
