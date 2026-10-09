@@ -15,6 +15,18 @@ it had started, moving your models into the catalog could meet settings the wind
 the move waits for the window to load them and tries once more — on the next settings change, or ten seconds later. If
 the window still has not loaded them, a warning says so once, with **Reload Window**.
 
+**The CLAUDE.md snippet's feature half is the shared rule, and says what the server does (snippet v16).**
+The feature-review instructions in the pasted block now come from the conventions rule
+`coai-feature-gate.md` (v3) instead of this product's own copy (v2). v2 still described a reopen the
+server refuses: v3 says one round is the budget, a second runs only on a reviewer failure, a `blocking`
+finding or the person's request, and `again: true` with a different `baseRef` starts a fresh review. It
+also asks for `callerModel` and never a secret in `lessons`.
+- A paste carrying `coai-feature v2` is reported as older on the feature gate — copy the snippet again.
+- A repository that mounts the conventions is now checked for all five rule files. A mount pinned before
+  the feature rule existed is told the feature gate is missing; move its pin.
+- The consultant half moved to v4 with the same conventions release (snippet v15): a cadence consultation
+  counts only after `close_consult` records its outcome.
+
 ## Extension 0.65.0 — 2026-10-09
 
 **One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this
@@ -68,8 +80,8 @@ question row — now carries two blocks, because each one alone fails open in a 
 - Both live in a folder coai owns in your own application-data folder (`coai-agy/`), owner-only on Linux and macOS.
   agy runs from there and reaches your checkout through `--add-dir`. Your own agy settings are not touched.
 - If that folder cannot be prepared, agy is not started, and the consultation says which folder to make writable.
-- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on each side, and reads
-  still work, 3 of 3 on each side.
+- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on
+  each side, and reads still work, 3 of 3 on each side.
 
 **An Antigravity consultant can list and search the checkout.** In `--mode plan` agy can only open a file by its
 exact path, so a question about the disk often got "run this command yourself". Now agy asks coai with a short
