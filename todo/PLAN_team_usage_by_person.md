@@ -11,6 +11,15 @@
 > Related docs: [module_team_server.md](../research/module_team_server.md),
 > [module_extension.md](../research/module_extension.md).
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| `rounds`, `runsWithoutRound`, `retries`, `repairs`, `followUps`, `cancelled`, `noBudget` in `vendors[]` and `people[].vendors[]` | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 5.1 | this plan renders them in each person's row when present; it needs nothing from them |
+| The per-person list, its search and its ordering | **this plan** | the round counter shows per-person rounds only through this list |
+
+Either may land first; the fields are additive and optional on the wire.
+
 ## The symptom
 
 An admin can already switch the spending tab to **Company** and see what the whole team spent on a
