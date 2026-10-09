@@ -1353,18 +1353,22 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
      and what only it reaches; `qconsultBody`'s `pickFrom` optional → required, `definitionFields` (the row's own vendor,
      model, endpoint, key name, CLI path) gone; `securityLaneSection(state, offered, allRows = offered)` /
      `securityLaneBody(…, allRows)` — `allRows` required, and the `offered === allRows` shortcut in `strandedNote`
-     goes with the page that passed the same list twice. Writes the old controls posted (`consultVendor`,
-     `consultModel`, `consultBaseUrl`, `consultExecutablePath`, `qconsultRowVendor` / `Model` / `BaseUrl` / `Key` /
-     `ExecutablePath`) are checked: a setting key no page posts any more is removed from `settingWrite` and its parser
-     only where nothing else (the migration, the server sync, an older settings file) reads it — otherwise kept and
-     said why.
+     goes with the page that passed the same list twice. Making a parameter required lets the compiler list every
+     caller (plan round finding 1) — today `catalogSections.ts` alone. The messages the old controls posted
+     (`consultVendor`, `consultModel`, `consultBaseUrl`, `consultExecutablePath`, `qconsultRowVendor` / `Model` /
+     `BaseUrl` / `Key` / `ExecutablePath`) are the PANEL's vocabulary, not keys of `settings.json`: each is enumerated
+     with every reference to it (finding 3) and its handler goes only where no page posts it and nothing else calls it.
+     The restore command does not go through them — it writes whole settings (`coai.vendors`, `coai.consultants`,
+     `coai.qconsultRows`) from `coai.migratedFrom` through `restoreLayer`, held by `catalogMigration.test.ts`.
    - **Comments that describe the current page as present** (`catalogSections`, `consultantPicks`, `consultantHealth*`,
      `modelCard*`, `modelsTab`, `panelProvider`, `panelView`, `qconsultView`, `rolesHost`, `rolesSwitch`,
      `securityLaneView`, `setupTab`, `chatTabEmbed`, …) are rewritten to say what is, or deleted where they only
      compared two pages.
    **Tests:** each test that holds a removed branch goes with it, its behaviour named against the Settings-page test
    that holds the same thing (the was → now table in `research/module_tests.md`, as E5.1c did); a behaviour with no
-   Settings-page test gains one before its old test goes. The dead-export and orphan-doc sweeps of E5.1c run before the
+   Settings-page test gains one before its old test goes — a test that RUNS the page (`pageTree` + the page's own script
+   through `runPanel` / `runPageHtml`, or the bundle) and names the observable it asserts, never a scan of the markup
+   (findings 2 and 4), and shown red with the behaviour taken out. The dead-export and orphan-doc sweeps of E5.1c run before the
    code round. Nothing a person sees changes, so there is no RED for the deletions themselves; any defect found on
    the way is red first. Docs: `research/module_extension.md`, `research/module_tests.md`, the plan's progress line.
    The restore command and `coai.migratedFrom` stay one more release (T5).
