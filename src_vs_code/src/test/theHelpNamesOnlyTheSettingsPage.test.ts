@@ -41,7 +41,9 @@ const EVERY_LANGUAGE: readonly Removed[] = [
   { pattern: /Chat other AIs/u, why: 'the old tab\'s name; the place is Chat', sample: 'in Settings → Chat other AIs' },
   { pattern: /Edit presets…/u, why: 'opened the Chat presets tab, which is gone; the prompt presets are drawn on Chat itself', sample: '**Edit presets…** beside it' },
   { pattern: /Which model answers/u, why: 'the old Chat tab\'s two-box model setting; Chat draws Which model a chat opens on', sample: '**Which model answers**' },
-  { pattern: /Settings → Reviewers/u, why: 'the old Reviewers tab; every model is a card on Models', sample: 'in Settings → Reviewers' },
+  // Either separator, any spacing, bold or not (PR #714, CodeRabbit): `in **Settings › Reviewers**` is the same old tab.
+  { pattern: /Settings\*{0,2}\s*[→›]\s*\*{0,2}Reviewers/iu, why: 'the old Reviewers tab; every model is a card on Models', sample: 'in **Settings › Reviewers**' },
+  { pattern: /Settings\*{0,2}\s*[→›]\s*\*{0,2}Reviewers/iu, why: 'the old Reviewers tab; every model is a card on Models', sample: 'in Settings → Reviewers' },
   // The three tabs E5.1 step 4 deleted, by their labels. Case-sensitive on purpose: the palette commands kept as redirects
   // are titled "Edit review roles" and "Edit chat presets", in lower case, and they are true (the code round, finding 5).
   // A question row that can read this machine is marked by a tick that is ON and cannot be taken off (D13, revised
