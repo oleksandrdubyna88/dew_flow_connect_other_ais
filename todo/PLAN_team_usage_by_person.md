@@ -91,7 +91,10 @@ Every surface story carries its docs and its help text in all five languages (`H
 
 - **1.1 The page owns its Team-server data** (Opus) — the Review rounds page asks for its Team-server usage itself
   while it is open (60 s freshness, as the sidebar), and a window press re-asks at once; both independent of the
-  sidebar. RED first: `ThePageRefreshesTeamUsage_WithTheSidebarClosed`, `AWindowPress_ReasksTheServer`.
+  sidebar. Every request carries the server, the window and a sequence number; an answer that no longer matches the
+  current selection is dropped, never rendered (an admin pressing Today then Year must not see Today's figures under
+  Year). RED first: `ThePageRefreshesTeamUsage_WithTheSidebarClosed`, `AWindowPress_ReasksTheServer`,
+  `AnAnswerForAnOldWindow_IsDropped` (the two answers complete out of order).
 - **1.2 The company answer, typed** (Opus) — `Usage.people?: PersonUsage[]` and `unreadableLines?`
   (`teamServerApi.ts:160-165`); for a server whose catalog says admin, the tab asks `scope=company` and the spending
   tab keeps asking `scope=me`; the dead *Company* toggle (`usageScopeControl`, its state and the sidebar case) goes
@@ -109,6 +112,11 @@ Every surface story carries its docs and its help text in all five languages (`H
   search narrows; *needs Team server ≥ …* shows where `models` / `daily` / people listing are absent and no zero
   does. Help: the `the-rounds-log` article (it lists the tabs by name) and `team-servers` (the toggle sentence) in all
   five languages. Docs: `module_extension.md` (the rounds-log page and the spending tab paragraphs).
+- **1.5 End to end, over a real server** (Opus) — a `*.contract.js` case in `npm run test:contract`, which starts the
+  built `coai-server` on a loopback port: an admin's company fetch through the real client, a window change re-asking,
+  a non-admin's `403`, and (after E2) `/api/people` and the `models` / `daily` fields; an older-server body for the
+  fallback. The flow gets its row in `research/module_tests.md`'s catalogue with what it does NOT prove (a host cannot
+  read a webview, so the page itself is the bundled harness's).
 
 ### E2 — the server says who and with what · `feat/team-tab-e2`
 
@@ -174,6 +182,12 @@ person; a `403` after the admin list changed; an older server shows *needs Team 
 and by email; a model with no list price is a dash and its person's total a floor; the chart's bars sum to the day's
 launches; `/api/people` returns exactly three fields and refuses a non-admin.
 
+## What the plan round changed (2026-10-09)
+
+Codex, `proceed`, three findings: stale window answers must be dropped (accepted — 1.1); no end-to-end flow was
+required (accepted — 1.5); the boundaries were said to be one-sided (rejected — they were written into all three
+neighbouring plans in the same commit, which the reviewer, reading the plan text alone, could not see).
+
 ## Definition of Done
 
 - [ ] An admin sees the Team server tab with people, vendors and launches against today's server; a non-admin sees no tab.
@@ -182,6 +196,7 @@ launches; `/api/people` returns exactly three fields and refuses a non-admin.
 - [ ] `/api/people` and the `models` / `daily` fields are live, admin-only where they must be, and contract-tested.
 - [ ] Names, last seen, the idle list, ~$ per model and the 30-day chart appear against the new server, and each says
       what is missing against an old one.
-- [ ] Every RED test went red with the real symptom first; all suites green.
+- [ ] Every RED test went red with the real symptom first; all suites green; the contract case runs the flow end to end
+      and `research/module_tests.md` catalogues it.
 - [ ] `module_extension.md`, `module_team_server.md`, the five help languages and the README rows match; this plan is
       promoted with its deviations.
