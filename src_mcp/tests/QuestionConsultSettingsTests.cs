@@ -481,6 +481,20 @@ public sealed class QuestionConsultSettingsTests : IDisposable
             .Which.Should().Contain("not a directory on this machine");
     }
 
+    [Fact]
+    public void EachRootOfTheOtherSidesSpelling_IsProbedOnce()
+    {
+        // The code round: the decision was taken twice per root — once to list it, once to filter it out — so every
+        // other-side root cost two disk probes. Two roots, two probes.
+        var probes = 0;
+
+        var verdict = QuestionRoots.Validate(["/home/a", "/home/b"], _data, Places with { Windows = true, SystemDrive = "C:" },
+            _ => { probes++; return false; });
+
+        verdict.OtherSide.Should().Equal(["/home/a", "/home/b"]);
+        probes.Should().Be(2, "one probe per root of the other side's spelling, its answer reused");
+    }
+
     private sealed record ResolutionVector(string Path, bool Windows, string SystemDrive, string Qualified, string Why);
 
     [Fact]

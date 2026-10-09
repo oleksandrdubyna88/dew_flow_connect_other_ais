@@ -224,12 +224,13 @@ public static class QuestionRoots
         // whatever drive this process stands on (the code round, 2026-10-09). The other side's list keeps the spelling.
         string Here(string root) => Qualified(root, places.Windows, places.SystemDrive);
         bool TheOtherSides(string root) => OtherSideHere(root, places.Windows, OtherSide(root, places.Windows) && isDirectory(Full(Here(root))));
-        var listed = roots.ToList();
-        var otherSide = listed.Where(TheOtherSides).Select(root => root.Trim()).Distinct(StringComparer.Ordinal).ToList();
+        // Decided ONCE per root: the decision may probe the disk, and its answer serves both lists (the code round).
+        var decided = roots.Select(root => (Root: root, OtherSide: TheOtherSides(root))).ToList();
+        var otherSide = decided.Where(one => one.OtherSide).Select(one => one.Root.Trim()).Distinct(StringComparer.Ordinal).ToList();
         var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
         var accepted = new List<string>();
         var refused = new List<string>();
-        foreach (var root in listed.Where(root => !TheOtherSides(root)).Select(Here))
+        foreach (var root in decided.Where(one => !one.OtherSide).Select(one => Here(one.Root)))
         {
             var why = WhyNot(root, seen, isDirectory);
             if (why.Length > 0)

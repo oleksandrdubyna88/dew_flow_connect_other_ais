@@ -1083,6 +1083,8 @@ D:); now it means `%SystemDrive%\work`. Only a hand-written root-relative root i
 writes a drive-qualified path — and `TheDeliberateChange_AHandWrittenRootRelativeRoot_NowMeansTheSystemDrive_…` pins
 it. An explicit WSL share (`\\wsl.localhost\<distro>\…`) is an ordinary Windows root: judged, kept, or refused by
 name when unreachable — never skipped; a bare `/home/…` with no folder here is skipped, since the setting names no distro.
+Each root is DECIDED ONCE in `Validate` (one disk probe per other-side root, its answer serving both lists). The two
+halves are checked against each other live by the seam leg `scripts/seam-qconsult-roots.mjs` ([module_tests.md](module_tests.md)).
 Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
 `QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
 no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
