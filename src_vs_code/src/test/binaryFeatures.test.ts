@@ -5,7 +5,7 @@ import type { Run } from '../roundsDbRead';
 
 /**
  * What the installed coai-mcp says it accepts (`--features`), read once per binary — so a catalog field or a flag is
- * sent only when the binary lists it (todo/PLAN_one_model_catalog.md, epic 2: "capability, not version numbers").
+ * sent only when the binary lists it (research/PLAN_one_model_catalog.md, epic 2: "capability, not version numbers").
  *
  * <p>Anything short of a clean answer is NO features: a field sent to a binary that ignores it is the silence the list
  * exists to end, and holding one back from a binary that would have taken it costs only the feature.</p>

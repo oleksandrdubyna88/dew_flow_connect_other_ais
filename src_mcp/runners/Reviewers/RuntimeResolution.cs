@@ -139,7 +139,7 @@ public static class RuntimeResolution
         // same runtime, different name — silently ran the Codex CLI. The vendor's own id travels
         // with the runtime; see ReviewerRuntimeSelector.Named for what happened when it did not.
         // The id answers only when the row names no runtime: a row that NAMES one this build lacks is refused, never run
-        // as whatever its id happens to spell (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+        // as whatever its id happens to spell (research/PLAN_one_model_catalog.md, epic 2, story 1).
         var name => ReviewerRuntimeSelector.Named(name, vendor.Provider)
                     ?? (vendor.Runtime.Length == 0 ? ReviewerRuntimeSelector.Default.Find(vendor.Provider) : null),
     };

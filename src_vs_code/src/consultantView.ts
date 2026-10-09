@@ -5,7 +5,7 @@
  * a unit test rather than something only a running window can show.</p>
  *
  * <p>Who each caller asks is not drawn here: the Settings page hands in its picks from the catalog
- * (`consultantPicks.ts`, todo/PLAN_one_model_catalog.md E4.2), and this body draws the switch, the caps and the
+ * (`consultantPicks.ts`, research/PLAN_one_model_catalog.md E4.2), and this body draws the switch, the caps and the
  * prompt around them.</p>
  */
 

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { webviewNonce } from '../webviewNonce';
 
 /**
- * Every webview's script nonce comes from ONE helper, and it is unguessable (todo/PLAN_one_model_catalog.md, E3.1).
+ * Every webview's script nonce comes from ONE helper, and it is unguessable (research/PLAN_one_model_catalog.md, E3.1).
  *
  * <p>The nonce is the whole of a page's content security policy: a predictable one is a policy an injected script can
  * satisfy. The Settings panel built its own from `Math.random()` — seeded per process, its sequence recoverable from a

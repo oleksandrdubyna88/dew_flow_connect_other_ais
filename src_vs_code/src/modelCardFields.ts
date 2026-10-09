@@ -7,7 +7,7 @@ import type { Runtime } from './models';
 import type { Vendor } from './vendors';
 
 /**
- * The fields of a Models card that the old page's reviewer card never had (todo/PLAN_one_model_catalog.md E3.2): what else a row is
+ * The fields of a Models card that the old page's reviewer card never had (research/PLAN_one_model_catalog.md E3.2): what else a row is
  * used for, its effort and thinking as its RUNTIME takes them (D4, D12), its own system prompt and its own time limit.
  * Each control writes the row through the panel's one vendor write (`data-setting` + `data-vendor`), where
  * `catalogWriteRules.ts` refuses what may not be stored.

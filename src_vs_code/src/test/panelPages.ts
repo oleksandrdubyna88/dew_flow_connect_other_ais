@@ -11,7 +11,7 @@ import { SURFACE_IDS, type SurfaceId } from '../panelSurface';
  * derived from `SURFACE_IDS`, and {@link pageOf} switches over the surface exhaustively — a surface
  * added without a page here is a compile error, not a page nobody scans.</p>
  *
- * <p><b>The Settings surface is the Settings page</b> (todo/PLAN_one_model_catalog.md) — the only one since E5.1 step 5
+ * <p><b>The Settings surface is the Settings page</b> (research/PLAN_one_model_catalog.md) — the only one since E5.1 step 5
  * removed the page it replaced, so every test that read a section through the old page reads it there. Its body
  * draws every place at once, each pane hidden until the script shows one, so the page opened on Models holds the
  * markup of every place.</p>

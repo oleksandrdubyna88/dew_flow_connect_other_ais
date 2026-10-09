@@ -4,7 +4,7 @@ import type { Vendor } from './vendors';
 
 /**
  * What a write of one catalog row may not do — decided BEFORE it is saved
- * (todo/PLAN_one_model_catalog.md E3.2). `''` when the write may go; otherwise the sentence the person is shown while
+ * (research/PLAN_one_model_catalog.md E3.2). `''` when the write may go; otherwise the sentence the person is shown while
  * the control snaps back.
  *
  * <p>The limits were written in epic 1 (`catalogRules.ts`, `featureAvailability.ts`) and called by the migration

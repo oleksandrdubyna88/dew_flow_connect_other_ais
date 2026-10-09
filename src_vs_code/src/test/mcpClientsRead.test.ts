@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { clientFilesFor, ClientReader } from '../mcpClientsRead';
 
 /**
- * E4.5 of todo/PLAN_one_model_catalog.md: whether each MCP client registers coai is READ from its real config file —
+ * E4.5 of research/PLAN_one_model_catalog.md: whether each MCP client registers coai is READ from its real config file —
  * never written — and only that answer comes back. Over real files in a temporary folder.
  */
 

@@ -189,7 +189,7 @@ type Read = (section: string) => unknown;
  * opening symptom of `PLAN_the_consultant_has_its_own_vendors` was a panel nobody had touched.
  * Resolving on read fixes it with no write at all, and identically on both halves once the server
  * applies the same rule (story B3); a pick on the Consultant tab writes a reference to a catalog row
- * (todo/PLAN_one_model_catalog.md E4.2). The rows it resolves against are the ones THIS reader sees through `vendorsFrom` — the
+ * (research/PLAN_one_model_catalog.md E4.2). The rows it resolves against are the ones THIS reader sees through `vendorsFrom` — the
  * same parse the Reviewers section draws — so a row a person can see is a row a legacy entry can
  * borrow from.</p>
  */

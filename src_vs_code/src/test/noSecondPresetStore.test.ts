@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { sourceFiles, sourceOf } from './sourceReading';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md: no dual store. Once a preset has moved into the catalog it is edited on its
+ * E4.6a of research/PLAN_one_model_catalog.md: no dual store. Once a preset has moved into the catalog it is edited on its
  * row, and `coai.chatModelPresets` is written only for what the move has not taken — a preset before the move, after a
  * refused one, in a restored layer (`chatModelEdits.onPreset`) — and to clear the dead rows no surface can show. The
  * move itself never writes the presets (they stay as they are until E5, for an older build), so its restore has none

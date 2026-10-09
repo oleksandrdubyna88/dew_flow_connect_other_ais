@@ -761,7 +761,7 @@ internal static class Program
         var flags = Flags(args);
         flags.TryGetValue("--model", out var model);
         // The runtime of the row the model names, resolved by the extension from the catalog — what the allowlist matches
-        // (todo/PLAN_one_model_catalog.md, epic 2, story 1). Absent, the row id stands in, as it always did.
+        // (research/PLAN_one_model_catalog.md, epic 2, story 1). Absent, the row id stands in, as it always did.
         flags.TryGetValue("--runtime", out var runtime);
 
         var summary = await run.RunAsync(

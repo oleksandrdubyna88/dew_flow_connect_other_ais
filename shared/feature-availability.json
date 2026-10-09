@@ -1,7 +1,7 @@
 {
   "why": [
     "Which runtime can serve which feature, and which reasoning efforts each runtime accepts",
-    "(todo/PLAN_one_model_catalog.md, D4). Neither half owns this file: the extension generates",
+    "(research/PLAN_one_model_catalog.md, D4). Neither half owns this file: the extension generates",
     "src/featureAvailability.generated.ts from it (node src_vs_code/scripts/generate-feature-availability.mjs) and",
     "coai-mcp embeds it (src_mcp/core/Catalog/FeatureAvailability.cs): ConsultantResolution.Consulting IS",
     "features.consultant, and a file whose lists name an undeclared runtime fails the server's start.",

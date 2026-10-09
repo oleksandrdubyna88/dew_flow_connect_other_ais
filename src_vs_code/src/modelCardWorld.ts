@@ -10,7 +10,7 @@ import type { TeamServerState } from './teamServerView';
 import type { Vendor } from './vendors';
 
 /**
- * The parts of a Models card that face the world (todo/PLAN_one_model_catalog.md E3.3) — each one what the current
+ * The parts of a Models card that face the world (research/PLAN_one_model_catalog.md E3.3) — each one what the current
  * card, the Consultant tab or the Setup tab already calls: the CLI's buttons and version, coai-mcp's verdict, the
  * ✓ Check's durable state, an endpoint off this machine, a Team server that cannot take what the row sets.
  */

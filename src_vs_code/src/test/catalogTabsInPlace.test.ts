@@ -8,7 +8,7 @@ import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
 
 /**
- * E4.1 of todo/PLAN_one_model_catalog.md: every old Settings section is drawn in the sub-tab that owns it on the new
+ * E4.1 of research/PLAN_one_model_catalog.md: every old Settings section is drawn in the sub-tab that owns it on the new
  * page — by its own builder, never a copy — and each feature tab names the rows ticked for it, with the way to change
  * them on Models. Read off the page as drawn (`pageTree.ts`), and run through its own script.
  */

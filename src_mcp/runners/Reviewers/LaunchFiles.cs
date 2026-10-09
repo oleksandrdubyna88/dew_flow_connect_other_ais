@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
 /// The files a launch wrote for its child (<see cref="ReviewerInvocation.TempFiles"/>) — deleted when the launch, or every
-/// retry of it, is over (todo/PLAN_one_model_catalog.md, epic 2).
+/// retry of it, is over (research/PLAN_one_model_catalog.md, epic 2).
 /// </summary>
 public static class LaunchFiles
 {

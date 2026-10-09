@@ -17,7 +17,7 @@ namespace CoaiMcp.Core.QuestionConsult;
 /// <param name="Prompt">The id of the ONE base prompt this row runs — the same prompt may sit on several rows.</param>
 /// <param name="Enabled">Whether the row runs. At most <see cref="QuestionRows.MaxActive"/> rows may be on.</param>
 /// <param name="Row">The catalog row this row refers to, as the extension wrote it — its options (effort, system prompt,
-/// timeout, price) for the launch (todo/PLAN_one_model_catalog.md, C2). Raw JSON, read where <c>ProviderSettings</c> is
+/// timeout, price) for the launch (research/PLAN_one_model_catalog.md, C2). Raw JSON, read where <c>ProviderSettings</c> is
 /// known; empty when the row carries none.</param>
 public sealed record QuestionRow(
     string Id,

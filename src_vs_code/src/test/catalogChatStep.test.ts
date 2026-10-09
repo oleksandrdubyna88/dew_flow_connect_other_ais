@@ -5,7 +5,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 import { recordsIn } from './settingsFileFixture';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md, wired into the epic 1 migration: the chat presets move in the same run, in
+ * E4.6a of research/PLAN_one_model_catalog.md, wired into the epic 1 migration: the chat presets move in the same run, in
  * the same safe order (backup, rows, the record, the chat's own keys, the marker), per layer — and never twice.
  */
 

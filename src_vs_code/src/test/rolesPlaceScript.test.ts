@@ -18,7 +18,7 @@ import { roleBlockIn, roleEditsOf, runRolesPlace, type RolesPlace, type RolesPla
  * supposed to contain and the page does nothing. "Remove this role" did nothing for a whole plan once, and no test on
  * this side could have told a message never sent from one sent and dropped.</p>
  *
- * <p>These pressed the Review roles tab's own script until E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted the
+ * <p>These pressed the Review roles tab's own script until E5.1 step 4 of research/PLAN_one_model_catalog.md deleted the
  * tab; each now presses the control the place DREW (`pageTree.ts`), so a selector that matches nothing drawn is red.</p>
  */
 

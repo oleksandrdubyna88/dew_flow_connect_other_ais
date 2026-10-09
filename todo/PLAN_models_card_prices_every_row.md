@@ -4,7 +4,7 @@
 > (`src_vs_code/src/panelProvider.ts`, `panelView.ts` `cardContextFor`, `modelPrices.ts`).
 >
 > Related docs: [module_extension.md](../research/module_extension.md) (*E5.3 — what the old page left behind*),
-> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md).
+> [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md).
 
 ## Symptom
 

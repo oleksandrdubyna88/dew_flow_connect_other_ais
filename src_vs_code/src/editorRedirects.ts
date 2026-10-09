@@ -1,6 +1,6 @@
 /**
  * The three commands that opened the Review roles, Gate commands and Chat presets tabs — tabs deleted by
- * todo/PLAN_one_model_catalog.md E5.1 step 4, whose editors are places of the Settings page now. Each command stays for
+ * research/PLAN_one_model_catalog.md E5.1 step 4, whose editors are places of the Settings page now. Each command stays for
  * one more release as a REDIRECT to its place, the way T5 keeps the restore command: a keybinding of somebody's own,
  * or a habit, still lands somewhere useful (the plan round's finding 0).
  *

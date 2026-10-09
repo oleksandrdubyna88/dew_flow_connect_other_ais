@@ -21,7 +21,7 @@ import { settledWrites } from './settledWrites';
 import { teamServersFrom } from './teamServers';
 
 /**
- * The editing core of the chat presets — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.6b):
+ * The editing core of the chat presets — what both pages that edited them called (research/PLAN_one_model_catalog.md E4.6b):
  * the Chat presets tab (`chatPresetsPanel.ts`, deleted in E5.1) and, on the Settings page, Chat. Moved here from
  * `chatPresetsPanel.ts`, never copied — the roles' and the commands' arrangement (`rolesHost.ts`, `commandsHost.ts`).
  *
@@ -202,7 +202,7 @@ function apply(command: PresetCommand): Promise<boolean> {
 }
 
 /**
- * An answer to a preset an older build edited after the move (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a),
+ * An answer to a preset an older build edited after the move (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a),
  * R7) — carried out by `chatPresetRevision.applyRevisionChoice`: read and written in ONE catalog turn, so no migration
  * reads the row changed and the record not yet. Through this side, where the record and the rows it names live; never
  * the presets, which stay as the older build left them. A refusal stops the writes: the row goes first, so a choice

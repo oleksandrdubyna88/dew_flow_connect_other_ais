@@ -4,7 +4,7 @@ import { USE_LABELS } from './modelCardFields';
 import type { Vendor } from './vendors';
 
 /**
- * A feature picking a catalog row on the Settings page (todo/PLAN_one_model_catalog.md E4.2) — the half the
+ * A feature picking a catalog row on the Settings page (research/PLAN_one_model_catalog.md E4.2) — the half the
  * consultant's callers, the question consultant's rows and the security lane's pairs share. Pure.
  *
  * <p>The list is the rows ticked for that use on Models. A pick of a row no longer ticked, or no longer there, stays

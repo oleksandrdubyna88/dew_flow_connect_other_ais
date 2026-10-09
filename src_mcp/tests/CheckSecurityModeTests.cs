@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>--check-security</c>: what the security lane would make of a piece of text — the signals it raises, the cards
-/// that would be due, the patterns it refuses (todo/PLAN_one_model_catalog.md, epic 2, story 4: what "Try it" calls).
+/// that would be due, the patterns it refuses (research/PLAN_one_model_catalog.md, epic 2, story 4: what "Try it" calls).
 /// </summary>
 /// <remarks>
 /// <para>Everything arrives on stdin, never argv: a sample can hold a token, and a command line is in process listings

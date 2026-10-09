@@ -497,7 +497,7 @@ configured once moved into a **Settings** editor tab, opened by a `$(gear)` besi
 keys, Team servers, This side, MCP server. Plan: [PLAN_settings_page.md](PLAN_settings_page.md).
 
 **Since catalog epic 5 the tab draws ONE page** (E5.1 removed the page above and the preview switch beside it; E5.2 made
-the help say so — [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md)). Its places are `CATALOG_TABS`
+the help say so — [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md)). Its places are `CATALOG_TABS`
 (`catalogPlaces.ts`): **Models** (every model once, one card each, ticked for what it is used for); **Reviews** ›
 Stages / Roles & prompts / Prompts per round / The gate / Commands / Limits; **Consultants** › Consultant / Question
 consultant; **Security lane**; **Chat**; **Setup** › Vendor keys / Team servers / MCP server / This side. An old place
@@ -1166,7 +1166,7 @@ hands the row its own snapshot comparison as the tree check `ConsultantTurn` ask
 conditions changes all three ([module_runners.md](module_runners.md), [module_server.md](module_server.md)). Nothing
 reaches the extension: the record, the reply and the ledger keep their shapes; a turn cut short is written `interrupted`.
 
-### The reviewer list becomes the model catalog, and the wire does not move (2026-10-04, E1 of `todo/PLAN_one_model_catalog.md`)
+### The reviewer list becomes the model catalog, and the wire does not move (2026-10-04, E1 of `research/PLAN_one_model_catalog.md`)
 
 `coai.vendors` is now the one list of model INSTANCES: a row gains `name`, `uses` (the non-review features it may
 serve), `systemPrompt`, `timeoutMinutes` and `chatStartingPrompt`, and a consultant entry or a question-consultant row

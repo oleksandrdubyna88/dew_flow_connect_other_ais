@@ -1,8 +1,14 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-07 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
-> the measured live calls wait on the operator); E3 merged (PR #687); E4 merged (PR #688, its consultations and code
-> gate passed); E5 open — R7 first, then extract-before-delete, with the rollout order as its own milestone.** The design is accepted: the clickable mockup in
+> Status: **IMPLEMENTED, 2026-10-09 — released in extension 0.65.0 (coai-mcp 0.44.x).** Five epics: E1 #681, E2 #686
+> (mcp 0.44.0), E3 #687, E4 #688, E5 #699, #707, #709, #711, #713, #714, #717. **Deviations:** E5.1 split in three
+> (a/b/c) when its premise proved wrong — the consultant health block was drawn only by the old page; `SURFACE_IDS` keeps
+> `settings` as the page census; the five-language help was rewritten in E5.2 rather than with each tab; E5.3 also
+> fixed a pick being read as an endpoint holder. **Open tail:** the feature review did not run (no model ticked for
+> features); a Models card prices non-reviewer rows from nothing ([todo](../todo/PLAN_models_card_prices_every_row.md));
+> what is kept for one release — the redirect commands, the restore command, `coai.migratedFrom`
+> ([todo](../todo/PLAN_catalog_after_one_release.md)); the operator's live checks of POST_DEPLOY item 12 (13 when it was written).
+> The design is accepted: the clickable mockup in
 > `new_design/` (it drove 61 checks with `node new_design/check.mjs`; deleted in E5.3 once the page it drew shipped —
 > git history keeps it). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -14,9 +20,9 @@
 > they changed is in *What the review changed* at the end. Every `file:line` was read at `origin/main` = `e193822a`
 > (extension 0.63.0, coai-mcp 0.43.0). Line numbers move; re-read before cutting.
 >
-> Related docs: [architecture.md](../research/architecture.md), [PLAN_settings_page.md](../research/PLAN_settings_page.md),
-> [PLAN_the_consultant_has_its_own_vendors.md](../research/PLAN_the_consultant_has_its_own_vendors.md),
-> [PLAN_the_security_tab_reads_at_a_glance.md](../research/PLAN_the_security_tab_reads_at_a_glance.md).
+> Related docs: [architecture.md](architecture.md), [PLAN_settings_page.md](PLAN_settings_page.md),
+> [PLAN_the_consultant_has_its_own_vendors.md](PLAN_the_consultant_has_its_own_vendors.md),
+> [PLAN_the_security_tab_reads_at_a_glance.md](PLAN_the_security_tab_reads_at_a_glance.md).
 
 ## The goal, as the operator asked it (2026-10-04)
 
@@ -859,7 +865,7 @@ row); the new page reads it. Done, RED first.
 
   **The owed consultations, 2026-10-06** — the consultant is back (codex `gpt-6-astra`). The cadence consultation for
   epics 1–3 and the risk consultation for epic 4 ran; every finding, and which test reproduced it, is in
-  [RESULTS_catalog_consultations_2026-10-06.md](../research/RESULTS_catalog_consultations_2026-10-06.md). Fixed on
+  [RESULTS_catalog_consultations_2026-10-06.md](RESULTS_catalog_consultations_2026-10-06.md). Fixed on
   this branch, each RED first: C1, C3, C4 (epics 1–3) and R1–R6 (epic 4). Still open:
   - *C2 — a row's options never reach a consultation* (effort, system prompt, timeout, key name): `COAI_CONSULTANTS`
     carries the launch fields only and `ConsultantResolver` rebuilds only those. **Built 2026-10-06 (C2a–C2c), each
@@ -1419,20 +1425,20 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
 
 | Item | This plan | The other plan's part |
 |---|---|---|
-| Splitting `panelProvider.ts` | Deletes the settings handlers in E5 instead of moving them | [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) keeps its sidebar clusters; its vendor, Team-server, local-engine and price clusters are superseded — **this plan goes first** |
-| Splitting `panelView.ts` / `roundsLog.ts` | Deletes the settings half of `panelView.ts` in E5 | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) keeps the sidebar half and `roundsLog.ts` |
-| Splitting `PanelSettings.cs` | E2 adds fields to `VendorDto` and its parsing | [PLAN_panel_settings_is_too_big.md](PLAN_panel_settings_is_too_big.md) moves the parsing — whichever lands second rebases onto the other; E2 adds no new section to the file |
-| Local effort in the panel | E2/E3 expose it per instance | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) keeps per-origin acknowledgement, vLLM keys, 401 reading, `num_ctx` refusal |
-| A model's liveness | E2.1 fixes the probe's program; E3 draws the verdict and ✓ Check | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) owns the three liveness states and their cache |
-| How a probe says it is working | E3 uses it | [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) owns it |
-| Arrow keys on tab strips | E3.1 consumes `tabKeys` | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) steps 2–4 |
+| Splitting `panelProvider.ts` | Deletes the settings handlers in E5 instead of moving them | [PLAN_the_panel_provider_is_too_big.md](../todo/PLAN_the_panel_provider_is_too_big.md) keeps its sidebar clusters; its vendor, Team-server, local-engine and price clusters are superseded — **this plan goes first** |
+| Splitting `panelView.ts` / `roundsLog.ts` | Deletes the settings half of `panelView.ts` in E5 | [PLAN_two_files_outgrew_the_rule.md](../todo/PLAN_two_files_outgrew_the_rule.md) keeps the sidebar half and `roundsLog.ts` |
+| Splitting `PanelSettings.cs` | E2 adds fields to `VendorDto` and its parsing | [PLAN_panel_settings_is_too_big.md](../todo/PLAN_panel_settings_is_too_big.md) moves the parsing — whichever lands second rebases onto the other; E2 adds no new section to the file |
+| Local effort in the panel | E2/E3 expose it per instance | [PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md) keeps per-origin acknowledgement, vLLM keys, 401 reading, `num_ctx` refusal |
+| A model's liveness | E2.1 fixes the probe's program; E3 draws the verdict and ✓ Check | [PLAN_provider_liveness.md](../todo/PLAN_provider_liveness.md) owns the three liveness states and their cache |
+| How a probe says it is working | E3 uses it | [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md) owns it |
+| Arrow keys on tab strips | E3.1 consumes `tabKeys` | [PLAN_the_tabs_announce_themselves.md](../todo/PLAN_the_tabs_announce_themselves.md) steps 2–4 |
 | The chat presets page writing on every keystroke | E4.3 replaces the page | [PLAN_chat_presets_write_every_keystroke.md](PLAN_chat_presets_write_every_keystroke.md) is superseded once E4.3 lands |
-| Which vendor answers which caller by default | E4.2 keeps the shipped map (absent = shipped) | [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md) owns the measurement |
-| Checking a WSL consultant from Windows | D10 generalises the check record | [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md) keeps the cross-side launch |
-| The question consultant's API and web tails | E2.3 adds the API consultant; D4 the shared file | [PLAN_question_consultant_tails.md](PLAN_question_consultant_tails.md) keeps agy web and api web |
-| Translations that go stale | D11 moves help with the tabs | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns detecting staleness |
-| Page tests that run the page | E3–E4 write only run-the-page tests | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the existing source-assertion backlog |
-| The Security lane's calibration | none | [PLAN_security_lane_calibration_tail.md](PLAN_security_lane_calibration_tail.md) |
+| Which vendor answers which caller by default | E4.2 keeps the shipped map (absent = shipped) | [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) owns the measurement |
+| Checking a WSL consultant from Windows | D10 generalises the check record | [PLAN_a_wsl_consultant_is_checked_from_windows.md](../todo/PLAN_a_wsl_consultant_is_checked_from_windows.md) keeps the cross-side launch |
+| The question consultant's API and web tails | E2.3 adds the API consultant; D4 the shared file | [PLAN_question_consultant_tails.md](../todo/PLAN_question_consultant_tails.md) keeps agy web and api web |
+| Translations that go stale | D11 moves help with the tabs | [PLAN_a_stale_translation_is_invisible.md](../todo/PLAN_a_stale_translation_is_invisible.md) owns detecting staleness |
+| Page tests that run the page | E3–E4 write only run-the-page tests | [PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md) owns the existing source-assertion backlog |
+| The Security lane's calibration | none | [PLAN_security_lane_calibration_tail.md](../todo/PLAN_security_lane_calibration_tail.md) |
 
 Disjoint from the rest of `todo/`. Each plan in the table gets the same row, pointing back here.
 

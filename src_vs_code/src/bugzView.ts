@@ -131,7 +131,7 @@ const NONE_TICKED = '<div class="hint">No model is ticked for Bugz. Tick one und
   + ' reads findings that are not anonymised, so it runs on a model on this machine or not at all.</div>';
 
 /**
- * The ranking picker (todo/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked Bugz on Models (`bugzPick.ts`), a
+ * The ranking picker (research/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked Bugz on Models (`bugzPick.ts`), a
  * stranded pick drawn as what it is, and — while nothing is ticked — the sentence that says so and where to tick one.
  * A picker only when there is a row to offer: a stranded pick with nothing beside it is SAID, never drawn as a select
  * that holds one disabled option and offers nothing (E5.1's code round, finding 5).

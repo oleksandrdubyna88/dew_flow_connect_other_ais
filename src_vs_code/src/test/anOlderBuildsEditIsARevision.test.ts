@@ -14,7 +14,7 @@ import { afterWrites, readerOf, type SettingsFile } from './settingsFileFixture'
 import { sourceOf } from './sourceReading';
 
 /**
- * Epic 5 prerequisite (a) of todo/PLAN_one_model_catalog.md, R7: a chat preset an OLDER build edits after the move is a
+ * Epic 5 prerequisite (a) of research/PLAN_one_model_catalog.md, R7: a chat preset an OLDER build edits after the move is a
  * conflicting revision of the same preset — never a second row, never silently lost. The record keeps a snapshot of
  * everything the move copied; a preset that differs from it is raised on Chat with two choices, and the choice is
  * written to the record, so it holds across a reload.

@@ -5,7 +5,7 @@ import type { ModelPreset } from '../chatPresets';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md, the move's pure core: each chat model preset becomes a catalog row of its
+ * E4.6a of research/PLAN_one_model_catalog.md, the move's pure core: each chat model preset becomes a catalog row of its
  * own, recorded by its fingerprint — the record, never the row's key name, is what a later run skips by (the design
  * review of 2026-10-06).
  */

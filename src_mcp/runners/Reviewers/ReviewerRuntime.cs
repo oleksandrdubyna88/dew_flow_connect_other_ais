@@ -226,7 +226,7 @@ public sealed record ReviewerInvocation(
 
     /// <summary>
     /// Files this launch wrote for its child to read — an api, local or Team server reviewer's <c>.prompt</c> — which the
-    /// scheduler deletes when the launch's turn ends, however it ended (todo/PLAN_one_model_catalog.md, epic 2).
+    /// scheduler deletes when the launch's turn ends, however it ended (research/PLAN_one_model_catalog.md, epic 2).
     /// </summary>
     /// <remarks>
     /// A prompt holds the change under review and, from epic 2, the person's system prompt for the row; left in the
@@ -236,7 +236,7 @@ public sealed record ReviewerInvocation(
 
     /// <summary>
     /// Texts this launch was given that must not come back out of it into a record — a catalog row's system prompt
-    /// (todo/PLAN_one_model_catalog.md, epic 2, story 2). Replaced in the child's stdout and stderr the moment it exits,
+    /// (research/PLAN_one_model_catalog.md, epic 2, story 2). Replaced in the child's stdout and stderr the moment it exits,
     /// before a tail, a transcript or a failure reason is cut from them.
     /// </summary>
     /// <remarks>A CLI echoes its input — <c>codex exec</c> prints the prompt on stderr — and a failing one quotes it in its
@@ -292,14 +292,14 @@ public interface IReviewerRuntime
     /// </summary>
     /// <remarks>
     /// An api row, a local model and a Team server get the change inside their prompt and nothing else; telling them a
-    /// checkout is there sends them looking for files they can never open (todo/PLAN_one_model_catalog.md, epic 2,
+    /// checkout is there sends them looking for files they can never open (research/PLAN_one_model_catalog.md, epic 2,
     /// story 1). True by default, because every CLI adapter runs in the worktree; the three that cannot override it.
     /// </remarks>
     bool ReadsTheCheckout => true;
 
     /// <summary>
     /// Whether a catalog row's system prompt is delivered to this reviewer inside its prompt body
-    /// (todo/PLAN_one_model_catalog.md, epic 2, story 2). True for every runtime but a Team server's, whose operator decides
+    /// (research/PLAN_one_model_catalog.md, epic 2, story 2). True for every runtime but a Team server's, whose operator decides
     /// whether a client's prompt is taken (story 5): putting it in the body would go around that decision.
     /// </summary>
     bool CarriesTheRowsPrompt => true;
@@ -419,7 +419,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     /// <summary>The codex CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
     /// <remarks>
     /// Not the row id, which the interface's default would have been: a second codex row (`codex-2`) made the probe start
-    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// a program of that name and report a working reviewer as missing (research/PLAN_one_model_catalog.md, epic 2, story 1).
     /// </remarks>
     public string DefaultExecutable => "codex";
 
@@ -649,7 +649,7 @@ public sealed class GeminiRuntime(string id = "gemini") : IReviewerRuntime
     /// <summary>The gemini CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
     /// <remarks>
     /// Not the row id, which the interface's default would have been: a second gemini row (`gemini-2`) made the probe start
-    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// a program of that name and report a working reviewer as missing (research/PLAN_one_model_catalog.md, epic 2, story 1).
     /// </remarks>
     public string DefaultExecutable => "gemini";
 

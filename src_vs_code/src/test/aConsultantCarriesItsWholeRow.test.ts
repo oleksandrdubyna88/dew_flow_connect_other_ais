@@ -7,7 +7,7 @@ import { vendorsFrom } from '../vendors';
 
 /**
  * A consultant carries its WHOLE catalog row to coai-mcp — effort, system prompt, timeout, key name — not only the five
- * launch fields (the cadence consultation for epics 1–3 of todo/PLAN_one_model_catalog.md, finding C2).
+ * launch fields (the cadence consultation for epics 1–3 of research/PLAN_one_model_catalog.md, finding C2).
  *
  * <p>The row crosses beside the entry as `row`, exactly as `COAI_VENDORS` would write it, and only to a binary whose
  * `--features` lists `consultantRow` — an older one would skip the member without a word. The entry's `vendor` does

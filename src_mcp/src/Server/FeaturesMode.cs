@@ -7,7 +7,7 @@ namespace CoaiMcp.Server;
 /// </summary>
 /// <remarks>
 /// <para>The extension writes a catalog field, or passes a flag, only when the installed binary lists it
-/// (todo/PLAN_one_model_catalog.md, epic 2 as revised by its plan round): the binary is the one thing that knows what
+/// (research/PLAN_one_model_catalog.md, epic 2 as revised by its plan round): the binary is the one thing that knows what
 /// it does, where a <c>*_SINCE</c> constant would guess a release number nobody has cut yet. An older binary exits 64
 /// for this mode, which the extension reads as an empty list.</para>
 /// <para><b>An entry is added in the commit that makes it true, never ahead of it</b> — a listed capability the build

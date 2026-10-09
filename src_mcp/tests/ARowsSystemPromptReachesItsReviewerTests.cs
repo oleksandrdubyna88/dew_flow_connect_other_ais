@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A catalog row's system prompt reaches that row's reviewer — inside the prompt body, after the product's own reviewer
-/// instruction and before the finding contract, never on a command line (todo/PLAN_one_model_catalog.md, epic 2, story
+/// instruction and before the finding contract, never on a command line (research/PLAN_one_model_catalog.md, epic 2, story
 /// 2 as revised: "the system prompt's leak paths").
 /// </summary>
 /// <remarks>

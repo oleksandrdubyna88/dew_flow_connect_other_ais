@@ -15,7 +15,7 @@ import { afterWrites, readerOf, type SettingsFile } from './settingsFileFixture'
 import { sourceOf } from './sourceReading';
 
 /**
- * Epic 5 prerequisite (a) of todo/PLAN_one_model_catalog.md, R7, on the page: a chat preset an older build edited after
+ * Epic 5 prerequisite (a) of research/PLAN_one_model_catalog.md, R7, on the page: a chat preset an older build edited after
  * the move is raised on Chat — the Settings page's Chat tab, beside the stranded pick — with the row as it is, the edited
  * values, and two choices, each of which posts exactly its own message into the presets' editing core. The page is
  * RUN against the DOM shim, drawn from a settings file through the same reader the panel uses, and the message it posts

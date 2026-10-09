@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { groupOf, grouped } from '../addModelGroups';
 
-/** "Add a model" grouped by where a model runs (todo/PLAN_one_model_catalog.md E3.2). */
+/** "Add a model" grouped by where a model runs (research/PLAN_one_model_catalog.md E3.2). */
 
 test('a runtime is in the group of where it runs', () => {
   assert.deepEqual(['codex', 'claude', 'antigravity', 'api', 'local', 'remote'].map(groupOf), ['cli', 'cli', 'cli', 'api', 'gpu', 'remote']);
