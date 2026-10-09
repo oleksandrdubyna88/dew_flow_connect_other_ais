@@ -1261,7 +1261,15 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
       or `resolve` argument can set it; `again: true` alone never admits a round 2 on this ground. RED
       test: a caller passing every argument it has cannot open round 2 without the person's field.
 
-- [ ] **S3.5 — the snippet's feature half comes from conventions (D24).**
+- [x] **S3.5 — the snippet's feature half comes from conventions (D24).**
+  - **Built 2026-10-09** (`feat/feature-half-from-conventions`), after conventions #58 was promoted and the
+    six-consumer cascade ran (coai #726, which already carried `CONSULTANT_VERSION` 3 → 4). Deviations: the
+    consultant and feature halves share one `prepareMountedHalf` in `prepare-gate.mjs` instead of two copies of
+    invalidate → verify → write; `KNOWN_HALVES` loses its `mounted` field and `snippetStatus` its `judged`
+    parameter rather than keeping a flag nothing varies; `ARTEFACT_VERSION` 15 → 16 (the menu says `(v16)`);
+    `canonical-markers.test.mjs` already pinned the feature marker in #58, so no conventions change was owed.
+    Plan round: `proceed` (codex; gemini quota-limited), its one finding — a host scenario for the mount
+    status — rejected: the panel calls `readSnippetStatus`, which the new test drives with real mounted files.
   Goal: one text of the feature rule, owned by conventions, pasted and mounted alike.
   - Deliverables: `prepare-gate.mjs` generates the feature half from the mounted
     `common/coai-feature-gate.md` exactly as it does the consultant half; S3.3a's product-owned
