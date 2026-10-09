@@ -4,7 +4,7 @@ import { entryOf, movedRecordFrom, wasMoved, type MovedPreset } from './chatPres
 import { vendorsFrom, type Vendor } from './vendors';
 
 /**
- * What the chat lists as its models, once its presets have moved into the catalog (todo/PLAN_one_model_catalog.md
+ * What the chat lists as its models, once its presets have moved into the catalog (research/PLAN_one_model_catalog.md
  * E4.6a): the catalog rows ticked Chat — a moved preset's own row, or any model a person ticked Chat on Models — under
  * their row ids, in the shape every chat path already takes. Pure.
  *

@@ -171,7 +171,7 @@ public static class ConsultantResolver
         : new ResolvedConsultant.Definition(WithOptions(AsProvider(choice with { Runtime = runtime }), options));
 
     /// <summary>
-    /// The entry's catalog row, read by the reviewer row's own parser (todo/PLAN_one_model_catalog.md, C2): a row with no
+    /// The entry's catalog row, read by the reviewer row's own parser (research/PLAN_one_model_catalog.md, C2): a row with no
     /// options when the entry carries none; null when it carries one that does not read — refused by name, never a quiet
     /// fall back to the five fields.
     /// </summary>

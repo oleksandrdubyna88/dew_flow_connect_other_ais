@@ -9,7 +9,7 @@
 >
 > Related docs: [RESULTS_fast_mode_vendors.md](RESULTS_fast_mode_vendors.md) (what each vendor offers, the
 > owner's decision), [PLAN_api_streaming.md](PLAN_api_streaming.md) (the row field this follows, end to end),
-> [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) (the catalog and its new page).
+> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (the catalog and its new page).
 
 ## Goal
 

@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A CLI row's effort means what <c>shared/feature-availability.json</c> says it means for its runtime
-/// (todo/PLAN_one_model_catalog.md, epic 2, story 2 as revised: "Effort").
+/// (research/PLAN_one_model_catalog.md, epic 2, story 2 as revised: "Effort").
 /// </summary>
 /// <remarks>
 /// <para>claude's levels were read off the installed CLI (2.1.289: <c>--effort &lt;level&gt;</c>, low medium high xhigh

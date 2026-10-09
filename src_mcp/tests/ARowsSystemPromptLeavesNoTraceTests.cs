@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// The canary: a row's system prompt leaves no trace anywhere but the reviewer's own input — not in the server's
 /// stderr, not in a log line or its properties, not in any file of the data directory (the rounds database, the usage
-/// ledger, the session records) and not in the reply the calling AI reads (todo/PLAN_one_model_catalog.md, epic 2,
+/// ledger, the session records) and not in the reply the calling AI reads (research/PLAN_one_model_catalog.md, epic 2,
 /// story 2 as revised: "only length and hash are recorded").
 /// </summary>
 /// <remarks>

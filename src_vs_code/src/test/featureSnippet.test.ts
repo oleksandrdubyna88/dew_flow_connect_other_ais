@@ -31,7 +31,9 @@ test('the feature half is a row of the table, at v2, and travels in the paste', 
   assert.equal(half.version, 2);
   assert.ok(HALF_IDS.includes(FEATURE_ID));
   assert.ok(claudeSnippet().includes('<!-- coai-feature v2 -->'));
-  assert.equal(ARTEFACT_VERSION, 14, 'the clipboard changed, so the artefact moved one — from the 13 the feature half arrived at');
+  // The feature half's v2 moved the artefact from 13 to 14; any later change to the paste only raises it
+  // (15: the consultant half's v4, conventions #58). An exact pin here broke on every unrelated half.
+  assert.ok(ARTEFACT_VERSION >= 14, `the clipboard changed, so the artefact moved past 13 — it is ${ARTEFACT_VERSION}`);
 });
 
 test('the half is this product’s own file, byte for byte — never a copy in a mount', () => {

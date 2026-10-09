@@ -11,7 +11,7 @@ import { Node, runPageHtml } from './pageScriptHarness';
 import { pageTree } from './pageTree';
 
 /**
- * The Models tab, RUN (todo/PLAN_one_model_catalog.md E3.2): one card per catalog row, every control writing that row
+ * The Models tab, RUN (research/PLAN_one_model_catalog.md E3.2): one card per catalog row, every control writing that row
  * through the panel's one vendor write, the uses ticked by command, remove asked first and locked for the last model of
  * a review stage, the filters narrowing the cards in the page, and each runtime's effort and thinking said as the shared
  * file decides (D4, D12).
@@ -68,7 +68,7 @@ test('a use is ticked by command; one the runtime cannot take is drawn off and s
 
 test('a row that cannot hold a consultation — a Team server — cannot be ticked consultant, and its card names the runtimes that can', () => {
   // What the old Consultant tab said under its vendor picker ("cannot consult — it runs on …"), said where a consultant
-  // is chosen now: the card's consultant tick (todo/PLAN_one_model_catalog.md E5.3). A Team server is the case the
+  // is chosen now: the card's consultant tick (research/PLAN_one_model_catalog.md E5.3). A Team server is the case the
   // ruling forbids outright.
   const team = codex({ id: 'acme-codex', runtime: 'remote', baseUrl: 'https://coai.acme.example' });
   const page = run(stateWith([codex(), team]));

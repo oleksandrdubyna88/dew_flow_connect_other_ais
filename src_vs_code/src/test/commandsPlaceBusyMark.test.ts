@@ -11,7 +11,7 @@ import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
 /**
  * The gate's commands show that a structural change is working (research/PLAN_busy_marks_on_every_webview.md, E3) —
  * Reviews › Commands on the Settings page, which held these for the Gate commands tab until E5.1 step 4 of
- * todo/PLAN_one_model_catalog.md deleted it.
+ * research/PLAN_one_model_catalog.md deleted it.
  *
  * <p>Adding, removing, switching or restaging a command — and restoring a shipped text — re-reads every command file
  * (`texts()`) and redraws. Typing a text or a title is not marked: both settle on their own for 300 ms, and a bar over

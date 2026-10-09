@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { CATALOG_TABS, OLD_TAB_PLACES, placeOf } from '../catalogPlaces';
 
 /**
- * Where the new Settings page opens (todo/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
+ * Where the new Settings page opens (research/PLAN_one_model_catalog.md, E3.1; D11): six tabs, their sub-tabs, and a place
  * for every id the OLD page answered to — `coai.openSettings('gate')` from a help article, a notification or another
  * extension must land on the gate, not on the first tab.
  */

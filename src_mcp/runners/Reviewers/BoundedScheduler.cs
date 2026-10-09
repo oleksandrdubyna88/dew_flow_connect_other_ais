@@ -560,7 +560,7 @@ public sealed class BoundedScheduler(
         CancellationToken ct)
     {
         // Every attempt of this turn reads the same prompt file, so it goes when the turn does — however it ended
-        // (todo/PLAN_one_model_catalog.md, epic 2). A later turn of a conversation builds files of its own.
+        // (research/PLAN_one_model_catalog.md, epic 2). A later turn of a conversation builds files of its own.
         try
         {
             return await LadderAsync(w, executor, onProgress, ct);

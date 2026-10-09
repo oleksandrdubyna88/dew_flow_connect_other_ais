@@ -1,7 +1,7 @@
 # RESULTS — the catalog plan's owed consultations (2026-10-06)
 
 > Status: **record, 2026-10-06; verification in progress on `feat/catalog-e4` (PR #688).** Two of the three
-> consultations the cadence of [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) owed, run once the
+> consultations the cadence of [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) owed, run once the
 > consultant was available again (codex `gpt-6-astra`, read-only over the checkout and its uncommitted diff). Every
 > finding is advice until a test reproduces it; the column says which are verified.
 

@@ -4,7 +4,7 @@ import { commandsSkewNote, customBlock, shippedBlock, type CommandAttrs } from '
 import { escapeHtml } from './escapeHtml';
 
 /**
- * Reviews › Commands on the Settings page (todo/PLAN_one_model_catalog.md E4.4): the Gate commands tab's own blocks
+ * Reviews › Commands on the Settings page (research/PLAN_one_model_catalog.md E4.4): the Gate commands tab's own blocks
  * (`commandsBlocks.customBlock`, `shippedBlock` — never a copy), drawn in the panel's document and edited through the one
  * editing core (`commandsHost.ts`) by `commands` messages.
  *

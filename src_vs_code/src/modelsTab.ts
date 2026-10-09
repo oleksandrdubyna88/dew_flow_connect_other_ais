@@ -10,7 +10,7 @@ import { cardContextFor, type PanelState } from './panelView';
 import type { Vendor } from './vendors';
 
 /**
- * The Models tab of the Settings page (todo/PLAN_one_model_catalog.md E3.2): every model this side can use, added
+ * The Models tab of the Settings page (research/PLAN_one_model_catalog.md E3.2): every model this side can use, added
  * once — the toolbar, the three filter rows, and one card per catalog row.
  *
  * <p>The filters live in the page (`catalogPageScript.ts` reads the cards' `data-*` and keeps the choice in the webview's

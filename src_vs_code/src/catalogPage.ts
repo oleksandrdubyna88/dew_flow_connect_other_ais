@@ -11,7 +11,7 @@ import { tabStrip } from './tabStrip';
 import { textControlsHtml, textOf } from './textControls';
 
 /**
- * The Settings page (todo/PLAN_one_model_catalog.md, E3) — painted in the ONE Settings slot, the only page there since
+ * The Settings page (research/PLAN_one_model_catalog.md, E3) — painted in the ONE Settings slot, the only page there since
  * E5.1 step 5 removed the page it replaced and the preview switch between them. It is drawn into the panel's document
  * (`pageDocument`: its policy, its writes, its commands, its busy marks and focus restore) with its own body, sheet and
  * script.

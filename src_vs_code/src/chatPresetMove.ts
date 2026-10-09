@@ -3,7 +3,7 @@ import { serverVendorOf } from './teamServers';
 import { freeVendorId, normaliseId } from './vendors';
 
 /**
- * The move of chat model presets into the catalog — its pure core (todo/PLAN_one_model_catalog.md E4.6a, as revised by
+ * The move of chat model presets into the catalog — its pure core (research/PLAN_one_model_catalog.md E4.6a, as revised by
  * the design review of 2026-10-06).
  *
  * <p>Each preset the chat sees becomes a catalog row of its OWN, ticked Chat: never joined to an existing row, because
@@ -20,7 +20,7 @@ import { freeVendorId, normaliseId } from './vendors';
 
 /**
  * Every field a moved row takes from its preset — what {@link rowOf} copies, under the row's own names — and so every
- * field an entry's snapshot holds (todo/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7).
+ * field an entry's snapshot holds (research/PLAN_one_model_catalog.md, epic 5 prerequisite (a), R7).
  *
  * <p>ONE list, which `rowOf` is built from ({@link copiedOf}), so a field the move learns to copy is a field the snapshot
  * compares the day it is added. The record used to fingerprint on three of these and nothing else, and an older build's

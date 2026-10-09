@@ -1,7 +1,7 @@
 import { SETTINGS_CSS } from './settingsPage';
 
 /**
- * The Settings page's stylesheet (todo/PLAN_one_model_catalog.md, E3), from the accepted mockup (`new_design/`).
+ * The Settings page's stylesheet (research/PLAN_one_model_catalog.md, E3), from the accepted mockup (`new_design/`).
  *
  * <p>The mockup named its own colours with Dark Modern and Light Modern values; here every token is the editor's own
  * theme variable, so a light, dark or high-contrast theme needs nothing of this sheet. It extends `SETTINGS_CSS`

@@ -1023,7 +1023,7 @@ test('the review page bundles without dragging the host into it', () => {
 });
 
 test('the Settings page bundles without the host, and the shipped page switches a tab on a press', async () => {
-  // The Settings page is the catalog page (todo/PLAN_one_model_catalog.md; the only one since E5.1 step 5).
+  // The Settings page is the catalog page (research/PLAN_one_model_catalog.md; the only one since E5.1 step 5).
   const bundle = bundleOf('catalogPage.ts', 'catalogHtml');
 
   assert.doesNotMatch(bundle, /require\("vscode"\)/u, 'the Settings page imports the vscode API, which a webview does not have');

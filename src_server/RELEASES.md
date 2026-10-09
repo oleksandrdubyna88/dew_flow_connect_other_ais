@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.9.0...server-v0.10.0) (2026-10-09)
+
+
+### Features
+
+* model catalog epic 2, part 1 — runtime-true resolution, --features, Bugz by runtime ([#686](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/686)) ([ef2a391](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ef2a39199c558cdcf67e8bd2031d8436c04b8eec))
+
+
+### Bug Fixes
+
+* a port somebody else holds ends both HTTP hosts with exit 75 and one line, never a crash ([8cc4f49](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8cc4f49216f8e33da5b1fc4e8f5744ce36d524a5))
+* an agy launch cannot write inside its roots — a reader agent and an allowlist hook ([#716](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/716)) ([ec1c912](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ec1c9122b00b85782e803278da108b008622c652))
+* **mcp,server:** messages name ConnectOtherAIs &gt; Team servers / Consultant / MCP server (S4, part 1) ([7310aff](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7310affe3f45749e1def7d03a20c8d18611cf7b3))
+* the bind-failure line is one ASCII line on stderr, with no stack and no dropped log call ([e21d4bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e21d4bc57d0515c82e706e9d769e81f265631b00))
+
 ## [0.9.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.8.0...server-v0.9.0) (2026-09-26)
 
 

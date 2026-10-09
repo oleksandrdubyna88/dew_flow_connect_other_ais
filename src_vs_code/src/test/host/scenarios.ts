@@ -12,6 +12,7 @@ import { backToSource } from '../../chatReturnCommand';
 import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
+import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -885,7 +886,13 @@ const SCENARIOS: readonly Scenario[] = [
     run: theDefaultPhrasesInARealEditor,
   },
   {
-    // R7 of todo/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration
+    // research/PLAN_catalog_migration_waits_for_its_settings.md, its plan round's findings 1 and 2: the registry signal the
+    // migration waits on, read from the real editor. What it does and does not drive is in `migrationKeysScenario.ts`.
+    name: 'every key the catalog migration writes is known to the real settings registry, and an undeclared one is not',
+    run: theMigrationKeysAreKnownInARealEditor,
+  },
+  {
+    // R7 of research/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration
     // moving a preset and NOT moving an older build's edit of it, and each choice on the conflict landing in the real
     // settings. What it does and does not drive is in `revisionScenario.ts`. Last, because it rewrites the catalog's keys.
     name: 'an older build\'s edit after the move is raised once, and each choice on it lands in the real settings',

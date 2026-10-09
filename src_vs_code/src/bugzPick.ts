@@ -42,7 +42,7 @@ const rowIdOf = (model: string): string => model.split('/')[0]?.toLowerCase() ??
 export const mayRank = (model: string): boolean => allowedBy({ id: model, label: model }, RANKING_VENDORS, false);
 
 /**
- * Which model Bugz ranks with, read from the catalog (todo/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked
+ * Which model Bugz ranks with, read from the catalog (research/PLAN_one_model_catalog.md, E5.1 step 2): the rows ticked
  * Bugz on Models, and what `coai.bugzModel` holds. Pure — the sidebar's picker draws from it and the collect refuses
  * by it, so the two can never disagree about whether a pick holds.
  *

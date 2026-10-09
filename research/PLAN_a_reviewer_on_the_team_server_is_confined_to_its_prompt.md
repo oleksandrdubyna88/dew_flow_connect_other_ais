@@ -28,7 +28,7 @@
 
 The deny list is a REQUEST, not an observed protection. Whether `claude -p --permission-mode plan` would
 have run `Bash` at all is still unmeasured, and whether the INSTALLED CLI accepts these eight names is
-observable only on the box — `POST_DEPLOY.md` item 12 is what observes it. The OS half (a service user,
+observable only on the box — `POST_DEPLOY.md` item 11 (12 before 2026-10-09) is what observes it. The OS half (a service user,
 per-job isolation, root) stays with [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md).
 
 ## The symptom
@@ -149,8 +149,8 @@ accepted against a story that had already shipped its own half.
 - [x] The three server-launched CLIs receive an allowlisted environment; the local `coai-mcp` is unchanged.
 - [ ] **Not done, and it cannot be done here** — the tool names were checked against this repository's
       own knowledge of the CLI, never against the INSTALLED `--help` on the box, which is the only
-      copy whose answer counts. That observation is `POST_DEPLOY.md` item 12, which runs one real
+      copy whose answer counts. That observation is `POST_DEPLOY.md` item 11, which runs one real
       review per vendor after the release and names the way back when it fails. Reopens on the first
-      release whose item 12 is skipped.
+      release whose item 11 is skipped.
 - [x] The boundary table above is mirrored into `PLAN_team_server_unprivileged.md`.
 - [x] `module_team_server.md`, `module_runners.md` and `architecture.md` updated; whole suites green.

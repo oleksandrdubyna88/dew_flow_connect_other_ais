@@ -1375,7 +1375,7 @@ public sealed record PanelSettings
         // An unknown runtime is KEPT, not turned into codex. It used to be, so that "a name from a newer panel still
         // launches something" — and what it launched was the Codex CLI on the person's own account, for a row set to
         // something else: the shape `api` was once the example of. Kept, it reaches RuntimeResolution, which has no
-        // adapter for it and refuses the row by that name (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+        // adapter for it and refuses the row by that name (research/PLAN_one_model_catalog.md, epic 2, story 1).
         return runtime?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 

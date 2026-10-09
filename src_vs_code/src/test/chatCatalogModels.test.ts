@@ -7,7 +7,7 @@ import { vaultKeyOf } from '../vaultKey';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 
 /**
- * E4.6a of todo/PLAN_one_model_catalog.md, the read: the chat lists the catalog rows ticked Chat — and, only for a
+ * E4.6a of research/PLAN_one_model_catalog.md, the read: the chat lists the catalog rows ticked Chat — and, only for a
  * preset the record does not hold (before a layer's first move, after a refused one, in a restored layer), the preset
  * itself, so nothing the chat offered disappears while the move has not happened.
  */

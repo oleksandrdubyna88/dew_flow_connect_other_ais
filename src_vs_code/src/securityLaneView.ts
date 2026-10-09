@@ -41,7 +41,7 @@ const legend = (): string => '<ul class="seclane-tags">' + SECURITY_SEED.signals
 /**
  * @param vendors the rows a pair may name — the rows ticked Security lane on Models
  * @param allRows every catalog row: the ordinary gate is judged on them, and a pair's row that is not in `vendors` is
- *   named from them (todo/PLAN_one_model_catalog.md E4.2)
+ *   named from them (research/PLAN_one_model_catalog.md E4.2)
  */
 export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string, files: SecurityLaneFiles, allRows: readonly Vendor[]): string {
   if ('invalidConfiguration' in lane) return malformedNote(lane.invalidConfiguration);
@@ -135,7 +135,7 @@ const defaultContext = (v: Vendor | undefined): string => v?.runtime === 'local'
 const securityOnly = (v: Vendor | undefined): boolean => v !== undefined && ![v.code, v.plan, v.document, v.feature].some(Boolean);
 
 /**
- * A pair's row the page does not offer, named (todo/PLAN_one_model_catalog.md E4.2, D3): a row that is gone or not
+ * A pair's row the page does not offer, named (research/PLAN_one_model_catalog.md E4.2, D3): a row that is gone or not
  * ticked Security lane — '' when the page offers it.
  */
 function strandedNote(vendor: string, offered: readonly Vendor[], allRows: readonly Vendor[]): string {

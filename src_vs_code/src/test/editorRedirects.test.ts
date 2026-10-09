@@ -4,7 +4,7 @@ import { editorRedirects } from '../editorRedirects';
 import { sourceOf } from './sourceReading';
 
 /**
- * E5.1 step 4 of todo/PLAN_one_model_catalog.md: the Review roles, Gate commands and Chat presets tabs are deleted, and
+ * E5.1 step 4 of research/PLAN_one_model_catalog.md: the Review roles, Gate commands and Chat presets tabs are deleted, and
  * the three commands that opened them stay for one more release as REDIRECTS — each opens the Settings page at the
  * place that holds its editor now, so a keybinding or a habit of somebody's still lands somewhere useful (the plan
  * round's finding 0).

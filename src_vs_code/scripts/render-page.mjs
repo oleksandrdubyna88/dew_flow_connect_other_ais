@@ -69,7 +69,7 @@ const THEME = {
 };
 
 /**
- * Light Modern, for `--theme light` (todo/PLAN_one_model_catalog.md E3.1): the same names as {@link THEME}, so a page
+ * Light Modern, for `--theme light` (research/PLAN_one_model_catalog.md E3.1): the same names as {@link THEME}, so a page
  * drawn on the editor's own variables can be seen in both before it ships.
  */
 const LIGHT = {
@@ -173,7 +173,7 @@ function page(name, size) {
       return from('panelView.js').panelHtml({ ...panelState(''), ...text, questions }, NONCE);
     }
     case 'catalog':
-      // The new Settings page, on a place: `catalog`, `catalog:setup/team` (todo/PLAN_one_model_catalog.md E3).
+      // The new Settings page, on a place: `catalog`, `catalog:setup/team` (research/PLAN_one_model_catalog.md E3).
       // The shipped roles and commands, as the host reads them (E4.3, E4.4) — one command of your own, nothing rewritten.
       return from('catalogPage.js').catalogHtml({
         ...panelState(''), ...text,
@@ -192,7 +192,7 @@ function page(name, size) {
         },
       }, NONCE, tab ?? 'models');
     case 'settings':
-      // An old tab id, drawn where the new page holds it now (`OLD_TAB_PLACES`; todo/PLAN_one_model_catalog.md E5.1 step
+      // An old tab id, drawn where the new page holds it now (`OLD_TAB_PLACES`; research/PLAN_one_model_catalog.md E5.1 step
       // 3): `settings:gate` is `catalog:reviews/gate`, so a screenshot shows the page a person sees.
       return page(`catalog:${from('catalogPlaces.js').OLD_TAB_PLACES[tab ?? 'reviewers'] ?? tab}`, size);
     case 'security':

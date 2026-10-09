@@ -21,7 +21,7 @@ import { pageTree, type PageNode } from './pageTree';
  * is not disabled, a button where there must be none.</p>
  *
  * <p><b>Why every case runs twice.</b> The current page draws the block under each caller's own definition; the new
- * page's Consultants › Consultant tab (todo/PLAN_one_model_catalog.md E4.2) drew picks only, so a person on the new page
+ * page's Consultants › Consultant tab (research/PLAN_one_model_catalog.md E4.2) drew picks only, so a person on the new page
  * had no Check, no health and no allow rule — and E5.1 step 5, which deletes the current page, would have deleted the
  * feature with it. E5.1b put the same block under each pick. Run against one page only, a case is a promise about that
  * page; run from {@link PAGES}, it is a promise about the block, wherever a person meets it.</p>

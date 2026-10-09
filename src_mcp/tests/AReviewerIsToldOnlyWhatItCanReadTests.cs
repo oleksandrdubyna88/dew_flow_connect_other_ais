@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A reviewer is told it has the checkout only when it can READ one (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+/// A reviewer is told it has the checkout only when it can READ one (research/PLAN_one_model_catalog.md, epic 2, story 1).
 /// </summary>
 /// <remarks>
 /// The material was decided once per round: a code round with a mounted worktree told EVERY reviewer "you have the

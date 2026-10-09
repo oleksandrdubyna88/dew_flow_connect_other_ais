@@ -193,6 +193,6 @@ Reciprocal of the *Boundaries* table in [PLAN_every_page_reads_alike.md](../rese
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | page tests | as written above | writes only run-the-page tests for the new page; this plan owns the existing source-assertion backlog |
