@@ -1,10 +1,12 @@
 # PLAN — a Models card shows the catalog price of every row, not only of a reviewer
 
-> Status: **plan only, nothing implemented yet (2026-10-09).** Scope: the extension's price map for the Settings page
-> (`src_vs_code/src/panelProvider.ts`, `panelView.ts` `cardContextFor`, `modelPrices.ts`).
+> Status: **IMPLEMENTED, 2026-10-09 — to ship in the next extension release.** **Deviations:** the function lives in the
+> price service (`priceBook.ts`, `cardPrices` and `billedRoute`), not `modelPrices.ts`; the guard test was renamed
+> `theCardsArePricedFromEveryRow.test.ts`; the tabs' by-model map now shares `billedRoute` (the plan round). Scope was:
+> the extension's price map for the Settings page (`panelProvider.ts`, `panelView.ts` `cardContextFor`, `priceBook.ts`).
 >
-> Related docs: [module_extension.md](../research/module_extension.md) (*E5.3 — what the old page left behind*),
-> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md).
+> Related docs: [module_extension.md](module_extension.md) (*E5.3 — what the old page left behind*),
+> [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md).
 
 ## Symptom
 

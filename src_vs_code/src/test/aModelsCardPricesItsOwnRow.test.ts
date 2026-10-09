@@ -8,7 +8,7 @@ import { panelState } from './panelPageHarness';
 import { pageTree } from './pageTree';
 
 /**
- * Every Models card shows the catalog price of ITS OWN row (todo/PLAN_models_card_prices_every_row.md).
+ * Every Models card shows the catalog price of ITS OWN row (research/PLAN_models_card_prices_every_row.md).
  *
  * <p>Found during catalog E5.3, 2026-10-09: the map the cards read was built from the reviewers only and keyed by model,
  * so a consultant-only row on a model no reviewer uses showed a dash where the published list prices it, and an `api`
@@ -22,8 +22,8 @@ const GLM: ModelPrice = { inPerMillion: 0.6, outPerMillion: 2.2, source: 'litell
 const ENDPOINT = 'https://api.example.test/v1';
 
 /** The published lists as the book answers them: a model on a route. */
-const priceOf: PriceOf = (model, baseUrl = '') =>
-  ({ 'gpt-5.6|': LIST, [`gpt-5.6|${ENDPOINT}`]: ROUTED, 'glm-5.3|': GLM } as Record<string, ModelPrice>)[`${model}|${baseUrl}`];
+const LISTED: Partial<Record<string, ModelPrice>> = { 'gpt-5.6|': LIST, [`gpt-5.6|${ENDPOINT}`]: ROUTED, 'glm-5.3|': GLM };
+const priceOf: PriceOf = (model, baseUrl = '') => LISTED[`${model}|${baseUrl}`];
 
 const BASE = DEFAULT_VENDORS[0]!;
 const REVIEWER: Vendor = { ...BASE, id: 'codex', runtime: 'codex', model: 'gpt-5.6', baseUrl: '', plan: true, code: true };

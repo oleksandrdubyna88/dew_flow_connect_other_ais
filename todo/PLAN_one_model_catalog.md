@@ -1383,7 +1383,7 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    that hold their behaviour: `research/module_tests.md`, *E5.3*; four gained ones (own vendor, unplaceable caller,
    Team server not a consultant, caller names). Sweeps: no new dead export, no orphaned doc block. **Found, not fixed:**
    a Models card prices from `modelPrices[model]`, built from the reviewers only, so a consultant-only row shows no
-   catalog price — it predates E5; follow-up `todo/PLAN_models_card_prices_every_row.md`. **Code round:** the first saw
+   catalog price — it predates E5; follow-up `research/PLAN_models_card_prices_every_row.md`. **Code round:** the first saw
    only the mockup's deletion (the diff budget), so it was split into its own commit and the code reviewed again over the
    rest: four findings, one defect — `endpointConflict` read a caller's PICK as an endpoint holder with none, refusing a
    picked row at its own URL (RED: "the row's own endpoint was refused because a caller picked the row"; fixed, teeth

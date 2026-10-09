@@ -11660,10 +11660,10 @@ Nothing a person sees changes: everything removed here was drawn by nothing sinc
   **＋ Add a model** was refused as "another caller's consultant". A consultant holds an endpoint only when its entry
   defines one; the row is the holder of its own URL.
 
-**Found on the way, fixed after it** (todo/PLAN_models_card_prices_every_row.md, below): a Models card took its catalog
+**Found on the way, fixed after it** (research/PLAN_models_card_prices_every_row.md, below): a Models card took its catalog
 price from `state.modelPrices[model]`, priced from the reviewers only, so a consultant-only model showed no price.
 
-## A Models card prices its own row (2026-10-09, todo/PLAN_models_card_prices_every_row.md)
+## A Models card prices its own row (2026-10-09, research/PLAN_models_card_prices_every_row.md)
 
 - `priceBook.cardPrices(rows, priceOf)` — the price service's one function for the cards: for EVERY catalog row, its own
   model on its own route (`billedRoute`: an `api` row's `baseUrl`, `''` for every other runtime), keyed by the row's

@@ -94,7 +94,7 @@ export function billedRoute(row: Pick<Vendor, 'runtime' | 'baseUrl'>): string {
 }
 
 /**
- * The catalog price each Models card shows, keyed by ROW id (todo/PLAN_models_card_prices_every_row.md): every row's
+ * The catalog price each Models card shows, keyed by ROW id (research/PLAN_models_card_prices_every_row.md): every row's
  * own model on its own route. Keyed by model and built from the reviewers only, a consultant-only row showed a dash and
  * an `api` row on a reviewer's model showed the reviewer's rate — and pricing every row by model let a hidden api row
  * put its endpoint's rate on the reviewer's card (PR #681). Keyed by row, no row's price can land on another's card.

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 
 /**
- * The Models cards are priced from EVERY catalog row, each row by its own id (todo/PLAN_models_card_prices_every_row.md).
+ * The Models cards are priced from EVERY catalog row, each row by its own id (research/PLAN_models_card_prices_every_row.md).
  *
  * <p>Was (PLAN_one_model_catalog.md E1.4; PR #681's review): the page priced only the rows it showed as reviewers,
  * because the map was keyed by MODEL and an `api` row's routed price was spread last — priced from every row, a hidden

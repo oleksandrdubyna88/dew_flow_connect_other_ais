@@ -1194,7 +1194,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const sessions = await this.readSessions();
     // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer. Every
     // write reads the rows afresh, so a hidden row is never dropped by one. The Models cards are priced per ROW from every
-    // row (`cardPrices`), so this list no longer decides prices (todo/PLAN_models_card_prices_every_row.md).
+    // row (`cardPrices`), so this list no longer decides prices (research/PLAN_models_card_prices_every_row.md).
     const shown = vendors.filter(isReviewerRow);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
