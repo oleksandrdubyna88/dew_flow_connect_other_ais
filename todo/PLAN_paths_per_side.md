@@ -13,6 +13,9 @@
 > `qconsultHost.ts`/`qconsultView.ts`/`qconsultWrite.ts` and fix-branch `QuestionConsultSettings.cs` line below is cited **on that branch**;
 > every other line is `origin/main` at `ba462264`.
 >
+> **Its four open questions were decided with the operator on 2026-10-09** — see *Decided with the operator* (D1–D4);
+> D3 (a missing data directory is always red) went against the recommendation and reshaped E5.
+>
 > Related docs: [module_extension.md](../research/module_extension.md) (*Settings a side keeps to itself*, *A Team-server
 > sign-in belongs to a SIDE*), [module_server.md](../research/module_server.md),
 > [architecture.md](../research/architecture.md), [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md).
@@ -66,7 +69,7 @@ their words:
 
 | Setting | Declared | Read | Written / drawn | Shared or per side today | On the wrong side today |
 |---|---|---|---|---|---|
-| `coai.qconsultRoots` (folders a disk row may read) | `package.json:1084` | `qconsultSettings.ts:88-91` → `COAI_QCONSULT_ROOTS` (`:288`); server `QuestionConsultSettings.cs` | Consultants › Question consultant, `qconsultView.ts:254-262` (fix branch) | Shared unless `perSideSettings` (it is in `QCONSULT_SETTINGS`, spread into `OVERLAID_SETTINGS`, `settingsShape.ts:331`) | **Fixed on the branch**: other-OS root skipped. A missing root of THIS OS: generic toast, no page mark (above). **Exported** by *Export settings* (`configTransfer.ts:29-40` does not list it), though it is a path on this machine |
+| `coai.qconsultRoots` (folders a disk row may read) | `package.json:1084` | `qconsultSettings.ts:88-91` → `COAI_QCONSULT_ROOTS` (`:288`); server `QuestionConsultSettings.cs` | Consultants › Question consultant, `qconsultView.ts:254-262` (fix branch) | Shared unless `perSideSettings` (it is in `QCONSULT_SETTINGS`, spread into `OVERLAID_SETTINGS`, `settingsShape.ts:331`) | **Fixed on the branch**: other-OS root skipped. A missing root of THIS OS: generic toast, no page mark (above). **Exported** by *Export settings* (`configTransfer.ts:29-40` does not list it), though it is a path on this machine — removed by E1.6 (D4) |
 | `coai.vendors[].executablePath` (a reviewer's CLI) | `package.json:411-440` (defaults only; not in the item schema) | `vendors.ts:386`; to the server in `COAI_VENDORS` (`vendorsWire.ts:115`, `settingsShape.ts:457`); server `PanelSettings.cs:1270`, probed `PanelService.cs:268-285` | Models card field, `panelView.ts:1257-1262` via `modelCard.ts:225`; Setup › Vendor keys table, `setupTab.ts:51` | Shared unless `perSideSettings` (`vendors` is overlaid) | A Windows `C:\…\codex.cmd` reaches WSL: the probe answers `CliFound=false`, the card shows the red **cannot review** badge (`panelView.ts:1132-1149`) and every round on that side loses the vendor. No notice, no hint that the path is the other side's |
 | `coai.consultants.*.executablePath`, `coai.qconsultRows[].executablePath`, `coai.chatModelPresets[].executablePath` | `package.json:985`, `:1068`, `:747` | `consultSettings.ts:622`, `qconsultSettings.ts:205`, `chatPresets.ts:201` → launch `chatPresets.ts:470` | Not drawn on the Settings page: the catalog migration moved these definitions into catalog rows (`catalogMigration.ts:207-208`, `:289`) | Consultants/qconsult rows overlaid with the switch; chat presets **never** (`sideConfig.ts:43-46`) | Legacy definitions only, but still launched from when unmigrated: the same failure as a vendor row, with no card to show it |
 | `coai.alsoWatchDataDirectories` (another installation's data folder) | `package.json:602` | `escalationWatcher.ts:27`, rules `escalationDirs.ts:71-101` | Setup › MCP server, `panelView.ts:1838-1851` (`.stale` line) | **Always shared** (not overlaid; a raw `getConfiguration().get`) | Windows: a `/…` path is REFUSED (`escalationDirs.ts:84`, `POSIX_ON_WINDOWS`). WSL: a `\\wsl.localhost\…` path written from Windows is not refused at all — it is read as a relative name and fails as *"could not be read"*. Each side's correct value is the other side's wrong one; one list cannot hold both today without a refusal on one side |
@@ -130,9 +133,9 @@ eighth path field and must join the registry E1.1 builds.
 last-seen date and a **Forget** per side (a side gone for good stops forcing two fields). D is not used to decide; it is
 used to *say* (E1's "the other side's" note), which needs no record.
 
-Granularity: two **families**, `windows` and `posix` — what the operator asked for (*"a Windows path, a WSL path"*).
-Two WSL distros share the POSIX field; a folder present in one and not the other is marked missing in the other, which
-is the honest answer. An SSH remote counts as `posix` (open question 1). Full per-side separation remains
+Granularity — **decided with the operator (D1)**: two **families** only, `windows` and `posix`, labelled **Windows** and
+**WSL / Linux**. A second WSL distro and an SSH remote use the same *WSL / Linux* field; a folder present in one distro
+and not the other is marked missing in the other, which is the honest answer. Full per-side separation remains
 `coai.perSideSettings`.
 
 ### (b) How a path setting stores a Windows and a WSL value
@@ -176,16 +179,17 @@ sends the legacy value): an `ExecutablePath` spelled for the other OS is treated
 - **One side known** (or `coai.pathFieldsPerSide = never`): every place looks as it does today, plus E1's quiet
   *"the other side's — skipped here"* note beside any value spelled for the other OS.
 - **Both known** (or `always`): each path setting draws two labelled fields, **this side's first**:
-  - *This side — Windows* / *This side — WSL: Ubuntu* (`thisSideLabel`), editable, with **Browse…** where the setting
-    has a picker (Add a folder for roots, a file pick for a CLI);
-  - *The other side — WSL (Ubuntu, last seen 2026-10-09)* in a bordered `fieldset` with a `legend`, a muted caption
-    *"Used by the server on that side. This window does not check it."*, editable as **text only** (no picker — this
-    host cannot browse that disk), refused on save when spelled for the wrong OS. **Never `stat`ed from here**: a `stat`
-    of `\\wsl.localhost\…` starts a stopped distro, and `/mnt/<drive>` may not be mounted; the other side's own window
-    marks it.
-  - Lists draw two groups (*Folders on Windows* / *Folders on WSL*); Remove works in both; Add a folder adds to this
-    side's group.
-  - `dataDirectory`: this side's choice as today; the other side's value read-only, from its overlay.
+  - *This side — Windows* / *This side — WSL / Linux (WSL: Ubuntu)* (`thisSideLabel` in brackets), editable, with
+    **Browse…** where the setting has a picker (Add a folder for roots, a file pick for a CLI);
+  - *The other side — WSL / Linux (last seen 2026-10-09)* in a bordered `fieldset` with a `legend`, a muted caption
+    *"Used by the server on that side. This window does not check it."*, **editable as text only** for CLI paths and
+    list roots (decided with the operator, D2) — no picker, since this host cannot browse that disk — refused on save
+    when spelled for the wrong OS. **Never `stat`ed from here**: a `stat` of `\\wsl.localhost\…` starts a stopped
+    distro, and `/mnt/<drive>` may not be mounted; the other side's own window marks it.
+  - Lists draw two groups (*Folders on Windows* / *Folders on WSL / Linux*); Remove works in both; Add a folder adds to
+    this side's group; the other group takes typed text.
+  - `dataDirectory`: this side's choice as today; the other side's value **read-only** (D2), from its overlay, with
+    *"Change it from a window on that side."*
 - Accessibility: each field has a `label`; the other side's group is a `fieldset`/`legend`; buttons `type="button"`.
 
 ### (e) The missing-folder notice, and the bright mark — one rule, two surfaces
@@ -203,7 +207,7 @@ forgotten on a configuration change (the `RootExistence` pattern, `pathFamily.ts
 | `qconsultRoots` | coai-mcp (it refuses the root) | the extension, from the server's **structured** answer | the server's answer; the page's own `stat` only while the server has not answered or is older |
 | `vendors[].executablePath` (this side's) | coai-mcp's probe (`CliFound`) | the extension's `stat` of an explicit path (a missing file is precise; *not on PATH* is the probe's) | the extension's `stat`, beside the existing **cannot review** badge |
 | `alsoWatchDataDirectories` | the extension (it reads them) | the extension | the extension |
-| `dataDirectory` | coai-mcp creates it | no notice (it is created — today's note stays) unless its ROOT is missing (open question 3) | the same rule |
+| `dataDirectory` | the extension (it reads and writes there before any server runs) | the extension — **always** when a NAMED directory is missing (D3; see below) | the extension |
 
 **The server's structured answer.** `ProvidersAnswer` gains an additive `SettingProblems: [{key, kind, value}]`
 (`kind`: `missing-folder` / `unreadable-folder`), filled from the refusals it already makes; `UnrecognisedSetting`
@@ -217,6 +221,31 @@ start of every window on the side where it is missing, and never on the other si
 folder D:\old-project does not exist on this machine (Windows) — a disk row skips it."* Cure: *"Create the folder, or
 remove it from the list."* Action: **Open in Settings**, which runs `coai.openSettings` with the place
 (`catalogPlaces.ts:94-102`) and the value to highlight.
+
+**The data directory — always red when a NAMED one is missing (decided with the operator, D3).** Not only when its
+drive or root is missing: a data directory that does not exist gets the bright mark on Setup › MCP server AND the
+notice at every start, like any other missing folder; today's quiet *"is not there yet"* note (`dataDir.ts:359-362`)
+is replaced by it for that case. What counts, decided here so the first start is never red:
+
+- **Only a directory somebody NAMED is checked** — `chooseStorage`'s `source` is `environment`, `this side` or
+  `shared setting` (`dataDir.ts:165-191`). The **default location** (`source: 'default'`, `%LOCALAPPDATA%\coai-mcp` or
+  `~/.local/share/coai-mcp`) is created lazily by whichever half writes first and is **never** checked, so a fresh
+  install's first start — before anything has created it — raises no mark and no notice.
+- **The named root is what must exist.** With `dataSide`, the side folder `<root>/<side>` inside an existing root is
+  created lazily (the server's `ResolveDataDir`, the move flow's `createDirectory(landing)`, `dataCommands.ts:528`), so
+  its absence keeps the quiet note; a missing ROOT is red.
+- **The check runs before anything creates it, and nothing creates a missing named root.** Today the extension's own
+  settings-file write creates the resolved directory unconditionally at activation (`writeSettingsFile` and
+  `underSettingsLock`, `extension.ts:948`, `:992`), which would both hide the condition and — on WSL with a
+  `/mnt/z/coai` whose drive is not mounted — write into the bare mount point. Those two keep creating the default
+  location and a side folder inside an existing named root, and **refuse** a missing named root instead, reported as
+  the finding: the server is not handed a new settings file until the folder exists, and the notice says so (*"…does
+  not exist on this machine (WSL / Linux). Nothing is written there until it does — connect the drive, create the
+  folder, or choose another in Settings."*).
+- **A folder chosen through *Where this window keeps its data* exists from the moment it is chosen** — the choice flow
+  (`askWhereDataLives`, `dataCommands.ts:48`) creates it, or refuses the choice when it cannot, so choosing a new folder
+  never makes the next start red.
+- The other side's data directory is never checked from here (D2: it is read-only and never `stat`ed).
 
 **The mark — bright, and seen from any tab.**
 
@@ -267,6 +296,10 @@ RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/p
 - **1.5** The page names every such value *"the other side's — skipped here"* in the quiet hint tone, through the one
   `otherSideNote` (`pathFamily.ts:154-158`), generalised by setting. Page test: the Models card of a row with a POSIX path
   on a Windows page shows the note, and no **cannot review** badge is blamed on it.
+- **1.6 *Export settings* leaves `qconsultRoots` out** (decided with the operator, D4) — added to `NEVER_TRANSFERRED`
+  (`configTransfer.ts:29-40`) as *"paths on this machine"*, like `alsoWatchDataDirectories`; an import that carries it
+  (an older export) refuses that entry by name and keeps the importer's own roots. RED: `exportedSettings` of a profile
+  with roots set contains `qconsultRoots` today; an import of a v2 file holding it overwrites the importer's roots today.
 
 ### E5 — a missing path of this OS: a notice at every start and a bright mark · `feat/paths-per-side-e5-missing`
 
@@ -296,6 +329,18 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   only fills in while the server has not answered or is older (capability via `--features`). Seam leg
   `scripts/seam-path-missing.mjs` in `test:seam`: the real coai-mcp, a settings file with one existing and one deleted
   root, the page's findings against `--providers`' `settingProblems` — the same `(key, value, kind)` set.
+- **5.7 A named data directory that is missing is always red (D3).** `dataDirFinding(chosen, exists)` (pure, beside
+  `whereData`): `missing` when a named ROOT is absent; nothing for `source: 'default'`; nothing (the quiet note) for an
+  absent side folder inside an existing root. The activation order puts the check before the settings-file write, and
+  `writeSettingsFile`/`underSettingsLock` stop creating a missing named root (they still create the default location
+  and a side folder). The choice flow creates the folder it was given or refuses the choice. REDs, each recorded:
+  (1) unit — a named `Z:\coai` that does not exist yields no finding today, only the *"not there yet"* note;
+  (2) unit, injected `createDirectory` — activation with a missing named root creates it today (the write that hides
+  the condition); (3) page, RUN through `runPanel` — Setup › MCP server draws the missing root with `.path-missing` and
+  *missing*, and a default location that does not exist yet draws **no** mark; (4) `test:host` — a fresh profile with no
+  data directory anywhere starts with **no** `setting-path-missing` in the ledger (the first-start guarantee), and a
+  profile whose overlay names a deleted folder gets exactly one per window start, and the folder is still absent after
+  activation. Break-it: drop the `source` guard — (4)'s first half must go red.
 
 ### E2 — the sides this profile has been used on · `feat/paths-per-side-e2-sides-seen`
 
@@ -317,7 +362,7 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
 - **3.2** `pathForThisSide` rule 1, with the write rules of (c): two fields write `BySide`, one field writes the legacy
   value. RED: a two-field save on Windows today overwrites the legacy value the WSL side reads.
 - **3.3** Lists grouped by family through `otherSideHere` (O1). Unit: `/work` that exists on Windows groups as
-  Windows'; `/home/jinx/git` groups as WSL's.
+  Windows'; `/home/jinx/git` groups as WSL / Linux's.
 - **3.4** `dataDirectory`: the other side's value read from its overlay via the registry, never written from here.
 - **3.5** Compatibility pinned: a settings file written by an older extension (legacy only) resolves identically; a
   server settings file written by the new extension parses in the oldest supported coai-mcp (the existing
@@ -327,10 +372,11 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
 
 - **4.1** The Models card: two CLI-path fields when both are known, this side's first, the other in a
   `fieldset`/`legend` with its caption; one field otherwise. Page test, RUN: with two families known the card holds two
-  inputs whose labels name *Windows* and *WSL: Ubuntu*; the other side's input has no Browse; with one family, one input.
+  inputs whose labels name *Windows* and *WSL / Linux*; the other side's input has no Browse; with one family, one input.
 - **4.2** Question consultant: two folder groups; Add a folder adds to this side's; the other group accepts typed text,
   refused when spelled for the wrong OS (the refusal shown beside the box, not as a toast).
-- **4.3** MCP server: watched folders in two groups; the data directory with the other side's value read-only.
+- **4.3** MCP server: watched folders in two groups; the data directory with the other side's value read-only (D2) —
+  page test: the other side's data directory is text, not an input, and offers no save.
 - **4.4** `coai.pathFieldsPerSide = never` restores one field everywhere; `always` draws two with a single side seen
   (the other labelled *"the other side (not seen yet)"*).
 - **4.5** `test:host` scenario: seed a WSL side record, open Settings › Models in the real editor, see two CLI-path
@@ -349,18 +395,20 @@ Each epic is one branch and one pull request, gated per epic.
 ## Test plan
 
 - **Unit (TS, `npm test`)**: `pathFamily` (`pathForThisSide`, findings, the new vector sets), `pathSettings` census,
-  `sidesSeen`, `escalationDirs`, `dataDir.chooseStorage`, `configTransfer`, the notice dedupe.
+  `sidesSeen`, `escalationDirs`, `dataDir.chooseStorage` and `dataDirFinding`, `configTransfer` (`qconsultRoots` never
+  exported), the notice dedupe.
 - **Unit (C#, the MCP test executable)**: the vendor read's skip, `SettingProblems` from every refusal kind,
   `StartupNotices`, the vectors read checked (`PathFamilyVectorsTests`).
 - **Page (RUN, `runPanel` + `pageTree`)**: the mark's class and `aria-invalid`, the tab count, two fields vs one, the
   other side's group without Browse, the This side list.
 - **`test:host` (real editor, `src/test/host/scenarios.ts`)**: the side stamp at activation; two fields with a seeded
-  other side; the notice with **Open in Settings** landing on the place.
+  other side; the notice with **Open in Settings** landing on the place; the data directory's first start (no
+  notice for the default location) and a deleted named one (one notice per start, not re-created) — E5.7.
 - **`test:seam` (real coai-mcp)**: `seam-path-missing.mjs` (5.6) and a leg for 1.2 — a Windows-spelled CLI path on a
   POSIX server is probed as a PATH name, page note and server answer agreeing.
 - **Contract (`test:contract`)**: `settingProblems` shape.
 - Full C# suite, `npm test`, eslint, the family checks; break-it on every decision line (the family, the skip, the
-  dedupe key, the mark's class, the 90-day window).
+  dedupe key, the mark's class, the 90-day window, the data directory's `source` guard).
 
 ## Growth
 
@@ -384,17 +432,25 @@ Each epic is one branch and one pull request, gated per epic.
 6. **Double toasts with an older server**: the generic toast stays the only one until the server sends
    `settingProblems` — never two for one folder.
 
-## Open questions for the operator
+7. **A missing named data directory now stops the settings-file write** (D3, E5.7): until the folder is there the
+   server keeps reading its previous settings file, or none. Said in the notice; the alternative — creating it — is
+   what wrote into a bare `/mnt/z` mount point and hid the condition.
 
-1. **Two families or one field per side?** A second WSL distro, or an SSH remote, shares the "WSL" field under this
-   plan (and a folder that exists in only one distro is marked missing in the other). Recommended: two families —
-   Windows and WSL — as asked; `perSideSettings` remains for a full split.
-2. **May the Windows window edit the WSL value?** Recommended: yes for lists and CLI paths (typed text, checked for
-   spelling only, never `stat`ed from here); read-only for the data directory.
-3. **A data directory that is not there yet**: the server creates it, so today it is a quiet note. Recommended: mark it
-   red only when its ROOT is missing (`Z:\` not mounted), keep the note when only the folder itself is new.
-4. **Export settings** currently carries `qconsultRoots` to another machine. Recommended: leave it out, like
-   `alsoWatchDataDirectories` (*"paths on this machine"*).
+## Decided with the operator (2026-10-09)
+
+The four questions this plan asked were answered the same day; the design above is written to these answers.
+
+- **D1 — Two families only: Windows | WSL / Linux.** A second WSL distro and an SSH remote use the same *WSL / Linux*
+  field; `coai.perSideSettings` remains for a full split. (As recommended.) → Design (a), (d); E4.
+- **D2 — The other side's value is editable from this window as TEXT** — never `stat`ed from here — for CLI paths and
+  list roots; the other side's **data directory is read-only**. (As recommended.) → Design (d); E3.4, E4.2, E4.3.
+- **D3 — A data directory that does not exist is ALWAYS red** — the bright mark on the page and the notice at every
+  start — not only when its drive or root is missing. (**Not** the recommendation, which was to keep the quiet note
+  unless the root was gone.) What this plan decided to make it safe on a first start: only a directory somebody NAMED is
+  checked — the default location, created lazily, is never red; a side folder inside an existing named root is created
+  lazily too; nothing creates a missing named root, and the choice flow creates the folder it is given. → Design (e)
+  *The data directory*; E5.7; risk 7.
+- **D4 — `coai.qconsultRoots` leaves *Export settings*.** (As recommended.) → E1.6.
 
 ## Definition of Done
 
@@ -406,6 +462,9 @@ Each epic is one branch and one pull request, gated per epic.
 - [ ] The Settings page marks it with `.path-missing` in `--err`, `aria-invalid`, and a count on its tab — page tests
       RUN the page.
 - [ ] The page and coai-mcp agree on which paths are missing — the seam leg green against the real binary.
+- [ ] A NAMED data directory that does not exist is red on the page and said at every start (D3); the default location
+      on a first start is never red; nothing creates a missing named root (E5.7, `test:host` both halves).
+- [ ] *Export settings* never carries `qconsultRoots` (D4).
 - [ ] Sides seen are recorded, listed and forgettable; `coai.pathFieldsPerSide` declared and documented in five
       languages.
 - [ ] Two labelled fields per path when both sides are known, one otherwise; older extensions and servers unaffected
