@@ -142,4 +142,4 @@ by name, not through a handle bound to the check; see module_server.md, Threat m
       `module_server.md`, `module_tests.md` (both flows, what the scenarios do not prove), `research/README.md` updated;
       plan promoted; `todo/README.md` row removed.
 - [x] Whole suites green; gate rounds resolved.
-- [ ] PR merged — the pull request that carries this record.
+- [x] PR merged — #712, 2026-10-08 20:52Z (`6c8bdefa`).
