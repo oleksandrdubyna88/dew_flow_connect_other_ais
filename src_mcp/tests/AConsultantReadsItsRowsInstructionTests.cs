@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A consultant reads its catalog row's system prompt — the person's own instruction for that model — as a reviewer does
-/// (the cadence consultation for epics 1–3 of todo/PLAN_one_model_catalog.md, finding C2, step C2c).
+/// (the cadence consultation for epics 1–3 of research/PLAN_one_model_catalog.md, finding C2, step C2c).
 /// </summary>
 /// <remarks>
 /// It goes after the product's consultant instruction and before what the consultant is shown, so the rules of the turn

@@ -7,7 +7,7 @@ import { settingsFrom } from '../../settingsShape';
 import { vendorsFrom } from '../../vendors';
 
 /**
- * The Bugz collect's refusal in a REAL editor (todo/PLAN_one_model_catalog.md E5.1; its code round, finding 6).
+ * The Bugz collect's refusal in a REAL editor (research/PLAN_one_model_catalog.md E5.1; its code round, finding 6).
  *
  * <p><b>What it drives for real.</b> The shipped extension, activated, and `coai.bugzModel` written to the real user
  * settings — a stranded pick, then none — read back through VS Code's configuration layers by the readers the provider

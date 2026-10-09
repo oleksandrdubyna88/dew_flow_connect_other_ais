@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A consultation launch carries the row's vault key exactly when the row authenticates with one — an api row, or a
-/// codex row on somebody else's endpoint (todo/PLAN_one_model_catalog.md, epic 2, story 3).
+/// codex row on somebody else's endpoint (research/PLAN_one_model_catalog.md, epic 2, story 3).
 /// </summary>
 /// <remarks>
 /// A claude or plain codex consultant keeps its CLI's own sign-in, as it always has: handing it a key from the vault

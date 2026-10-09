@@ -1,7 +1,7 @@
 import { bugzCollectRefusal, bugzPickFrom, type BugzInputs } from './bugzPick';
 
 /**
- * Starting a Bugz collect (todo/PLAN_one_model_catalog.md, E5.1; its code round, finding 6): the decision the provider's
+ * Starting a Bugz collect (research/PLAN_one_model_catalog.md, E5.1; its code round, finding 6): the decision the provider's
  * `collectBugs` makes, with its reads and its two effects handed in as ports — so a stranded pick, no pick and a pick
  * that holds are each RUN by a test with in-memory ports, where the provider itself is only ever built by an extension
  * host. The provider's part is to build the ports: the inputs the sidebar's picker is drawn from, the `no-ranking-model`

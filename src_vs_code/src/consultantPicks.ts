@@ -7,7 +7,7 @@ import { help } from './panelControls';
 import type { Vendor } from './vendors';
 
 /**
- * The Settings page's consultant picks (todo/PLAN_one_model_catalog.md E4.2): a caller's consultant is CHOSEN from
+ * The Settings page's consultant picks (research/PLAN_one_model_catalog.md E4.2): a caller's consultant is CHOSEN from
  * the rows ticked Consultant on Models, where the model itself is edited — and stored as a reference to that row.
  * Pure: the page draws the view, the host applies the writes.
  *
@@ -127,7 +127,7 @@ ${pickHealth(caller.id, consult, health)}
 
 /**
  * The caller's health block under its pick (each side's facts, this side's paid Check, agy's allow rule and its Copy),
- * decided by `callerHealth` and drawn by `healthBlock` (todo/PLAN_one_model_catalog.md E5.1b). Empty while the panel has
+ * decided by `callerHealth` and drawn by `healthBlock` (research/PLAN_one_model_catalog.md E5.1b). Empty while the panel has
  * no health to give.
  */
 function pickHealth(kind: string, consult: ConsultSettings, health: ConsultantHealthState | undefined): string {

@@ -24,7 +24,7 @@ let panel: vscode.WebviewPanel | undefined;
  * document; a module variable, not a setting, so closing and reopening the tab in this window keeps it and nothing on
  * disk needs validating. Empty means the first tab.
  *
- * <p>One place, since E5.1 step 5 of todo/PLAN_one_model_catalog.md removed the old page and the preview switch that
+ * <p>One place, since E5.1 step 5 of research/PLAN_one_model_catalog.md removed the old page and the preview switch that
  * chose between the two: an old tab id (`coai.openSettings('gate')`, a keybinding, a notification's link) is taken to its
  * place by `placeOf` through `OLD_TAB_PLACES`.</p>
  */

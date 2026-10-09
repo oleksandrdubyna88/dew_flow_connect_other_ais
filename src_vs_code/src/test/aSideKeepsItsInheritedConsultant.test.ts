@@ -5,7 +5,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 
 /**
  * A side that keeps its own model list but inherits the shared consultants keeps its consultant through the migration
- * (the cadence consultation for epics 1–3 of todo/PLAN_one_model_catalog.md, finding C1).
+ * (the cadence consultation for epics 1–3 of research/PLAN_one_model_catalog.md, finding C1).
  *
  * <p>The user layer's migration turns a consultant definition into a row in ITS list and the definition into a reference
  * to that row. A side whose overlay holds `vendors` but not `consultants` inherits the reference — and its own list had no

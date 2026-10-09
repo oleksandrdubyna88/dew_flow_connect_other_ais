@@ -145,6 +145,6 @@ When this plan ships, the notification text becomes part of what it covers.
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | help texts that name Settings tabs | as written above | moves every help article with the tabs in five languages; this plan owns detecting staleness |

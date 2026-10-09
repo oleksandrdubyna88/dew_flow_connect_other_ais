@@ -17,7 +17,7 @@ import { applyTextControl } from './textControlsHost';
 import type { RolesEmbedState } from './rolesEmbed';
 
 /**
- * The editing core of the review roles — what both pages that edited them called (todo/PLAN_one_model_catalog.md E4.3): the
+ * The editing core of the review roles — what both pages that edited them called (research/PLAN_one_model_catalog.md E4.3): the
  * Review roles tab (`rolesPanel.ts`, deleted in E5.1) and, on the Settings page, Reviews › Roles & prompts. Moved here from
  * `rolesPanel.ts`, never copied: two copies of "which layer is written, in what order, with which refusals" is the
  * defect the reuse rule exists for.
@@ -119,7 +119,7 @@ async function redrawAll(): Promise<void> {
 /**
  * The panel's own switch per role (`roleEnabled`), read when an edit is APPLIED rather than when it was queued — the
  * edit before it in the queue may have moved it. What the last-role guard counts with the catalog's `active`
- * (`rolesSwitch.lastOn`, todo/PLAN_one_model_catalog.md E5.1b).
+ * (`rolesSwitch.lastOn`, research/PLAN_one_model_catalog.md E5.1b).
  */
 export type SwitchesNow = () => Readonly<Record<string, boolean>>;
 

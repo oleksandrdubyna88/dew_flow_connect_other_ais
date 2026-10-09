@@ -9,7 +9,7 @@
 > was: `src_vs_code/src/catalogMigrationHost.ts`, a new vscode-free `catalogMigrationRun.ts`, tests.
 >
 > Related docs: [module_extension.md](module_extension.md),
-> [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) (E1.3, the host half of the move).
+> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (E1.3, the host half of the move).
 
 ## Symptom
 

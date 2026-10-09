@@ -15,7 +15,7 @@ namespace CoaiMcp.Core.Consultation;
 /// </param>
 /// <param name="RowInstruction">
 /// The consultant's catalog row's system prompt — the person's own instruction for that model
-/// (todo/PLAN_one_model_catalog.md, C2). Empty for none.
+/// (research/PLAN_one_model_catalog.md, C2). Empty for none.
 /// </param>
 /// <param name="Checkout">
 /// The checkout's absolute path, said in the prompt — an antigravity consultant runs from coai's read-only folder, not

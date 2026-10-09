@@ -114,7 +114,7 @@ internal sealed record ConsultantDto(
     string? BaseUrl = null,
     string? ExecutablePath = null,
     /// <summary>
-    /// The consultant's WHOLE catalog row, as the extension writes a reviewer's (todo/PLAN_one_model_catalog.md, C2) —
+    /// The consultant's WHOLE catalog row, as the extension writes a reviewer's (research/PLAN_one_model_catalog.md, C2) —
     /// written only to a binary that lists <c>consultantRow</c>. Absent is the five fields above and nothing more.
     /// </summary>
     System.Text.Json.JsonElement? Row = null);

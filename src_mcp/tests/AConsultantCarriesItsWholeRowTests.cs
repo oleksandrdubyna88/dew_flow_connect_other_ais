@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A consultant carries its WHOLE catalog row — key name, price, api settings, system prompt, timeout, CLI effort — not
-/// only the five launch fields (the cadence consultation for epics 1–3 of todo/PLAN_one_model_catalog.md, finding C2).
+/// only the five launch fields (the cadence consultation for epics 1–3 of research/PLAN_one_model_catalog.md, finding C2).
 /// </summary>
 /// <remarks>
 /// The extension writes the row, exactly as it writes a reviewer's, beside the entry's <c>vendor</c> as <c>row</c> — only to

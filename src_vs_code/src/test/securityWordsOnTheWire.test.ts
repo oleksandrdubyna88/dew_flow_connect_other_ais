@@ -4,7 +4,7 @@ import { securityEnv, securityLaneFrom } from '../securityLane';
 
 /**
  * A signal's words (`signals`) and a card's own words (a prompt's `words`) cross to coai-mcp only when the installed
- * binary lists `securityWords` (todo/PLAN_one_model_catalog.md, epic 2, story 4).
+ * binary lists `securityWords` (research/PLAN_one_model_catalog.md, epic 2, story 4).
  *
  * <p>Not a nicety: an older binary refuses an unknown member of the lane's root — the WHOLE lane goes off — and an unknown
  * member of a prompt refuses that prompt. Held back, the older binary runs the lane on its shipped words, as it always did.</p>

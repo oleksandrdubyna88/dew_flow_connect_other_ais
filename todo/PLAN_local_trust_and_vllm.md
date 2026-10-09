@@ -176,6 +176,6 @@ is addressed at `.../v1`), and only the model-list PROBE is not, which is what i
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | exposing the local reasoning effort | as written above | exposes it per instance (its E2/E3); this plan keeps per-origin acknowledgement, vLLM keys, 401 reading and the `num_ctx` refusal |

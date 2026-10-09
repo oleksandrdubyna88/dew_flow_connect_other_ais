@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A consultant's row options reach its LAUNCH, not only its settings (the cadence consultation for epics 1–3 of
-/// todo/PLAN_one_model_catalog.md, finding C2, step C2b): the row's CLI effort, by the reviewers' own rule
+/// research/PLAN_one_model_catalog.md, finding C2, step C2b): the row's CLI effort, by the reviewers' own rule
 /// (<c>RosterBuilder.EffortFor</c>), and the row's own timeout where its runtime takes one.
 /// </summary>
 public sealed class AConsultantRunsWithItsRowsOptionsTests

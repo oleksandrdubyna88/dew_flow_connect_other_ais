@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import type { Run } from './roundsDbRead';
 
 /**
- * What the installed coai-mcp says it accepts — its `--features` answer (todo/PLAN_one_model_catalog.md, epic 2, as
+ * What the installed coai-mcp says it accepts — its `--features` answer (research/PLAN_one_model_catalog.md, epic 2, as
  * revised by its plan round: "capability, not version numbers").
  *
  * <p>The extension sends a catalog field, or passes a flag, only when the binary lists it. A `*_SINCE` constant would

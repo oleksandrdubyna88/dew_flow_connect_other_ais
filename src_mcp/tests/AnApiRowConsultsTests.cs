@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// An api row consults (todo/PLAN_one_model_catalog.md D9, epic 2 story 3): one completion per turn through the
+/// An api row consults (research/PLAN_one_model_catalog.md D9, epic 2 story 3): one completion per turn through the
 /// <c>--ask-api</c> shim, and — the vendor keeping no conversation — the earlier turns carried in the prompt, as the
 /// local consultant has carried them since it shipped.
 /// </summary>

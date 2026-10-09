@@ -12,7 +12,7 @@ import { rolesPanelState, rolesPlaceHtml, type RolesPlaceState } from './rolesPl
 /**
  * The roles' editor — Reviews › Roles & prompts on the Settings page: what it draws, and what it refuses to offer.
  *
- * <p>These held the Review roles tab until E5.1 step 4 of todo/PLAN_one_model_catalog.md deleted it; the tab and the
+ * <p>These held the Review roles tab until E5.1 step 4 of research/PLAN_one_model_catalog.md deleted it; the tab and the
  * place drew the same blocks (`rolesBlocks.roleBlock`), so each is asked of the place now (`rolesPlaceHarness.ts`).
  * Assertions are on the MARKUP and on the pure parser; pressing the controls is `rolesPlaceScript.test.ts`.</p>
  */

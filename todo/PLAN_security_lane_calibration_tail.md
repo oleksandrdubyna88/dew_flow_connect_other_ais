@@ -91,6 +91,6 @@ Nothing in the repository grows.
 
 ## Boundary with the model catalog (2026-10-04)
 
-| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+| Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | the Security lane tab | as written above | rebuilds the tab and adds editable signal words and a card's own words; this plan's calibration is untouched |

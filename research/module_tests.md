@@ -1375,7 +1375,7 @@ would let a broken switch look exactly like a working one.
 
 Since 2026-10-07 the shim itself (`Node`, `runPageHtml`, `presses`, `Page`) is `pageScriptHarness.ts`, and every page
 test imports it from there; `rolesPageHarness.ts` keeps `runRolesPage` alone, so E5.1 can delete it with the roles
-page (todo/PLAN_one_model_catalog.md, E5 prerequisite (b)).
+page (research/PLAN_one_model_catalog.md, E5 prerequisite (b)).
 
 `editRolesInTabs.test.ts` covers issue #293 and executes what it can: the page's own click handler
 for the tab switch, and `nextTab` for the transition the host applies. The two assertions that are
@@ -2921,7 +2921,7 @@ outside that range is told `default` exactly as before. Each path is driven agai
 **What it does NOT prove.** A real codex 0.110–0.130 completing a review: none can use this account's model with a
 ChatGPT login (the measurement's every run ended in a 400 after config load), so the fake CLI stands in for the release.
 
-## An older build's edit after the move is a revision (2026-10-07, R7 of `todo/PLAN_one_model_catalog.md` epic 5)
+## An older build's edit after the move is a revision (2026-10-07, R7 of `research/PLAN_one_model_catalog.md` epic 5)
 
 The flow: a chat preset moves into the catalog → an older build edits the preset → this build reads it → Chat (the
 new Settings page) shows the row as it is and the edited values → the person presses *Use the edited values* or *Keep
@@ -2971,7 +2971,7 @@ the scenario hands the same reads and a Global `update` (what `saveSetting` does
 settings) and its catalog turn is the compiled copy's, not the bundle's (it waits for the bundle's migration to go quiet
 instead); a per-side overlay write; the refusal notice's wording; and a real older build writing the file.
 
-## The switch-over, steps 1–3 (2026-10-08, E5.1 of `todo/PLAN_one_model_catalog.md`)
+## The switch-over, steps 1–3 (2026-10-08, E5.1 of `research/PLAN_one_model_catalog.md`)
 
 The flows and the tests holding them, as shipped (steps 4–5 stopped — `research/module_extension.md` says why):
 
@@ -3028,7 +3028,7 @@ A collect that does start (it spawns coai-mcp against the window's database). Th
 host cannot reach a webview's DOM). Step 5's prerequisite — every place of the new page held by a test that runs the page
 and works one of its controls — was mapped (the plan's progress line) but not completed; it is E5.1b/E5.1c's.
 
-## E5.1b — the health block on the new page, one ON rule, the owed Setup tests (2026-10-08, `todo/PLAN_one_model_catalog.md`)
+## E5.1b — the health block on the new page, one ON rule, the owed Setup tests (2026-10-08, `research/PLAN_one_model_catalog.md`)
 
 - **The consultant health block, on both pages** — `consultantHealthPage.test.ts` runs EVERY case from one table
   (`PAGES`: the current page's `settingsHtml(…, 'consultant')`, the new page's `catalogHtml(…, 'consultants/consultant')`),

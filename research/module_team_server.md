@@ -470,7 +470,7 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   bullet) — and the server's own retry is the runner requeueing onto another account, which re-enters
   the same step. What the suite asserts is what is SENT — `ReviewLauncherTests` reads both halves off the
   launched request, `ConfinementTests` holds the derivation — and whether the installed CLI accepts
-  that argv is observable only on the box, which is `POST_DEPLOY.md` item 12. Codex and antigravity
+  that argv is observable only on the box, which is `POST_DEPLOY.md` item 11. Codex and antigravity
   take no new flag; what their sandboxes leave open, reads, is
   [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md)'s to close.
 - **An agy reviewer whose shell command was auto-denied is asked again, HERE** (issue #515,

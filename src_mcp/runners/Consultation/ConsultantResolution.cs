@@ -16,7 +16,7 @@ public static class ConsultantResolution
 {
     /// <summary>
     /// The runtimes this build can hold a consultation with — the shared file's list itself, not a copy of it
-    /// (todo/PLAN_one_model_catalog.md D4), so the panel offers exactly what this answers.
+    /// (research/PLAN_one_model_catalog.md D4), so the panel offers exactly what this answers.
     /// </summary>
     public static IReadOnlyList<string> Consulting => FeatureAvailability.Builtin.Consultant;
 

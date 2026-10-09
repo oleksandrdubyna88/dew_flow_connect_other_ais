@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { confirmButton, NEW_FOR_MS, newTag, skew } from '../catalogShell';
 
 /**
- * The new page's shared pieces (todo/PLAN_one_model_catalog.md, E3.1): `skew` by capability, `newTag` by control, and
+ * The new page's shared pieces (research/PLAN_one_model_catalog.md, E3.1): `skew` by capability, `newTag` by control, and
  * the confirmed button every paid or destructive action draws.
  */
 

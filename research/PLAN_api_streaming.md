@@ -8,7 +8,7 @@
 > new catalog row field, and one control on the new Settings page's model card.
 >
 > Related docs: [RESULTS_api_streaming_vendors.md](RESULTS_api_streaming_vendors.md) (what each vendor
-> does), [PLAN_one_model_catalog.md](../todo/PLAN_one_model_catalog.md) (the catalog and its new page),
+> does), [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (the catalog and its new page),
 > [PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md) §3 (streaming for `--ask-local`, not this plan).
 
 ## Goal, and what the evidence says

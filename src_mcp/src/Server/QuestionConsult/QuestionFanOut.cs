@@ -318,7 +318,7 @@ public sealed class QuestionFanOut(
             // The question consultant's own per-row budget, not the catalog row's timeout: the store's sweep and the fan-out's
             // deadline are both derived from it, so a row that outlived it would be swept as stale while it still ran.
             Timeout = panel.QuestionConsult.RowBudget,
-            // The row's CLI effort by the reviewers' own rule (todo/PLAN_one_model_catalog.md, C2); an api row's is its module's.
+            // The row's CLI effort by the reviewers' own rule (research/PLAN_one_model_catalog.md, C2); an api row's is its module's.
             ReasoningEffort = RosterBuilder.EffortFor(provider, string.Empty),
             DataDir = panel.DataDir,
             // A question row starts no MCP server either (issue #514).

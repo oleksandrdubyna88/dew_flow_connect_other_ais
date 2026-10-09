@@ -5,7 +5,7 @@ import { addRefusal, rowWriteRefusal } from '../catalogWriteRules';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 
 /**
- * What a write of one catalog row may not do, decided BEFORE it is saved (todo/PLAN_one_model_catalog.md E3.2): the
+ * What a write of one catalog row may not do, decided BEFORE it is saved (research/PLAN_one_model_catalog.md E3.2): the
  * row limits (`catalogRefusal`, `effortRefusal`) were called by the migration alone, so a page could store an 9 KB
  * prompt or an effort its runtime refuses. Epic 3's plan round: the 64-row cap is checked only where a row is ADDED,
  * so a catalog already past it (a hand-edited file) can always be edited back under it.

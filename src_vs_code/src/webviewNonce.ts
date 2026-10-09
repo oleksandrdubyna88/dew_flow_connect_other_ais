@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 /**
  * The nonce a webview's content security policy admits its one script by — for every panel this extension opens
- * (todo/PLAN_one_model_catalog.md, E3.1).
+ * (research/PLAN_one_model_catalog.md, E3.1).
  *
  * <p><b>128 bits from the operating system's generator</b>, never `Math.random()`: the nonce is the whole of the policy,
  * and a predictable one is a policy an injected script can satisfy. <b>base64url</b>, so it is exactly what CSP's

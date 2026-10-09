@@ -173,7 +173,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private async Task<RowTurn> TurnAsync(RowLaunchInput input, ConsultantLaunch launch, ReviewerInvocation? ready, ConsultationBilled billed, CancellationToken ct)
     {
         var consultant = input.Row.Runtime;
-        // The row's system prompt is redacted from what the child says, as a reviewer's is (todo/PLAN_one_model_catalog.md, C2)
+        // The row's system prompt is redacted from what the child says, as a reviewer's is (research/PLAN_one_model_catalog.md, C2)
         // — on the follow-up too: an adapter continues `first with { … }`, which keeps it.
         var invocation = ready ?? (consultant.Build(launch) with { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) });
         var clock = Stopwatch.StartNew();

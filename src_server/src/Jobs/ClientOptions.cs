@@ -4,7 +4,7 @@ using CoaiMcp.Core.Catalog;
 
 namespace CoaiServer;
 
-/// <summary>The operator's say over a request's contract-2 fields (todo/PLAN_one_model_catalog.md E2.5).</summary>
+/// <summary>The operator's say over a request's contract-2 fields (research/PLAN_one_model_catalog.md E2.5).</summary>
 /// <param name="AcceptSystemPrompt">
 /// <c>Coai:AcceptClientSystemPrompt</c>, off by default: a client's text in a prompt that runs on the company's accounts is
 /// the operator's decision, not the client's.
