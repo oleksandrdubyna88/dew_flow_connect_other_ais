@@ -39,7 +39,7 @@ import { FEATURE_RULE } from './generated/featureRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '9b34f5549e806f60';
+export const SNIPPET_BODY_SHA = 'c9193e5df422630c';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -64,7 +64,7 @@ export const SNIPPET_BODY_SHA = '9b34f5549e806f60';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 14;
+export const ARTEFACT_VERSION = 15;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -148,13 +148,14 @@ export const CALLER_VERSION = 2;
  * 2026-09-13 that a rule about when to call one tool of one server is not shared. The ruling was
  * reversed on 2026-09-25 — this server gates every repository in the family, so a rule about when to
  * call its consultant is as shared as the gate rule — and v3, which added the cadence trigger, is the
- * first read from <c>.agents/conventions/common/coai-consultant.md</c>.</p>
+ * first read from <c>.agents/conventions/common/coai-consultant.md</c>. v4 (conventions #58): a
+ * cadence consultation counts only after `close_consult` records its outcome.</p>
  *
  * <p>It is not cosmetic, for the same reason theirs are not: a copy pasted before the consultant
  * existed carries no consultant marker, and the AI obeying it never calls `consult` — it goes on
  * trying the same fix a third time, which is the whole thing this feature exists to interrupt.</p>
  */
-export const CONSULTANT_VERSION = 3;
+export const CONSULTANT_VERSION = 4;
 
 /**
  * The FEATURE half's version — when to call `review_feature`, what to pass it, and what its verdicts
