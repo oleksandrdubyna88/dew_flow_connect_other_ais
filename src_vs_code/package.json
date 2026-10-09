@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.64.0",
+  "version": "0.65.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -917,7 +917,10 @@
         },
         "coai.catalogMigration": {
           "type": "string",
-          "enum": ["migrated", "restored"],
+          "enum": [
+            "migrated",
+            "restored"
+          ],
           "markdownDescription": "Written by ConnectOtherAIs, not by hand. `migrated`: the consultant and question-consultant models in these settings were moved into the reviewer list (the model catalog). `restored`: they were put back with **ConnectOtherAIs: Restore settings from before the catalog**, and are not moved again by themselves."
         },
         "coai.chatPresetsMoved": {

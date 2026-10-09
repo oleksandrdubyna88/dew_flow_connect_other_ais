@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.65.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.64.0...extension-v0.65.0) (2026-10-09)
+
+
+### Features
+
+* a fresh install starts with seven useful phrases ([#710](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/710)) ([9f87dad](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9f87dade8cdf405c88ff263aeb62e1bde437caf0))
+* **api:** api rows can stream their answer, switched per row on the new model card ([#689](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/689)) ([0f4efc7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0f4efc754eab1e334601ac17cff5775b62c3f8c8))
+* **extension:** an older build’s edit after the catalog move is a conflict shown on Chat, never a second row (R7) ([#707](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/707)) ([4d4b0c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4d4b0c6ea5d19f0e7fd19d486bfac926ba569fd6))
+* **extension:** catalog E5.1a — the new page jumps, the Bugz picker reads the ticked rows, tests read the new page ([#709](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/709)) ([82b9bc4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/82b9bc413bed48fa2453b898caaf6f437296c482))
+* **extension:** catalog E5.1b — consultant health on the new tab, one ON rule for roles, Setup page tests ([#711](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/711)) ([8dca6ec](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8dca6ec75205703ed47b7670540a0707f3f92dd9))
+* **extension:** catalog E5.1c — the three editing tabs and the old Settings page are gone ([#713](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/713)) ([efb6cf2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/efb6cf266ff714ec91ae5a00e428b68c0cf4c4b8))
+* **extension:** catalog E5.2 — the help, tooltips and docs say the one Settings page ([#714](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/714)) ([7541155](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7541155251f4cd12491680d3810b27e26af643aa))
+* **extension:** the reviewer list grows into the model catalog (epic 1 of 5) ([#681](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/681)) ([cb465a0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb465a0ef4d1b2a39e499c0d41139e39ed6b6548))
+* model catalog epic 2, part 1 — runtime-true resolution, --features, Bugz by runtime ([#686](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/686)) ([ef2a391](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ef2a39199c558cdcf67e8bd2031d8436c04b8eec))
+* model catalog epic 3 — the new Settings page (preview): shell and Models ([#687](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/687)) ([a3ac5b0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a3ac5b01bb150a9605d84dcc6c2fc3b4b6ef2b37))
+* model catalog epic 4 — the feature tabs and the chat use the catalog ([#688](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/688)) ([c3c0d52](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c3c0d52236f1c716aaeee442cae887ffc1217cc0))
+* per-model fast mode — Off by default, On, or as the CLI is set (new Settings page) ([#693](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/693)) ([bfcc1ba](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bfcc1ba05bd1daa3c7715b9e65ded5bd8541a805))
+
+
+### Bug Fixes
+
+* **extension:** a Bugz key is filed under the server that issued it ([#683](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/683)) ([322c85a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/322c85ab28d701c004584b6cbbd5227984853799))
+* **extension:** the sidebar reads and writes this side's settings ([#682](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/682)) ([031cdbb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/031cdbb9f29aa217f4bd636c57df45b129ad0673))
+* **fast-mode:** codex 0.110–0.130 are never told the standard tier they refuse ([#702](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/702)) ([652b127](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/652b127016f499e3f349b7a8f1d330a9ed5d4195))
+* the Question consultant section resolved its rows against the current ([c3c0d52](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c3c0d52236f1c716aaeee442cae887ffc1217cc0))
+
 ## [0.64.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.63.0...extension-v0.64.0) (2026-10-04)
 
 
