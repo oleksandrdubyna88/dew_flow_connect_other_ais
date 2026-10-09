@@ -14,6 +14,13 @@
 >
 > Related docs: [module_team_server.md](../research/module_team_server.md) — story 2.4.
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| `5h` / `24h` windows, several windows from ONE scan, ~+200 bytes per ledger line | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 5.1 | this plan's reopen condition (≈ 50 000 lines) is unchanged; the wider lines move it by bytes, not by lines |
+| Reading from the end of the file | **this plan** (deferred) | — |
+
 ## The symptom
 
 `UsageReader.Read` (`UsageReader.cs:65-90`) reads `usage.jsonl` from its first byte, parses every line

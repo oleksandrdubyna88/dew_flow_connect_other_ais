@@ -17,6 +17,13 @@
 > [PLAN_team_server_submission_order.md](../research/PLAN_team_server_submission_order.md) — the neighbouring queue
 > question, which stays as it is.
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| Ending a queued job whose caller has too little time left, and moving the claim on to the next job | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 4.3 | removes the waste the serial queue causes; adds no parallelism |
+| More than one account running at once | **this plan** (deferred) | when it reopens, it changes `TryClaim`'s candidate loop beside that plan's budget check |
+
 ## The symptom
 
 A vendor with two signed-in accounts runs **one** review at a time.

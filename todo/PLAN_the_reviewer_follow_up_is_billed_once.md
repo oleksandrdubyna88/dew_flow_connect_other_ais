@@ -6,6 +6,15 @@
 > Related docs: [module_runners.md](../research/module_runners.md),
 > [PLAN_the_consultant_works_on_every_vendor.md](../research/PLAN_the_consultant_works_on_every_vendor.md) (where it was found).
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| The SUM of a first launch's and its follow-up's usage | **this plan** | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) 3.1 carries whatever sum this plan produces onto the server line, and labels the line `attempt: followUp` |
+| `attempt`, round id, cached/reasoning on the server line | that plan (3.1, 4.1) | — |
+
+Disjoint; either may land first.
+
 ## The suspicion (not yet measured)
 
 When a reviewer's shell command is auto-denied, issue #504 continues the SAME antigravity conversation
