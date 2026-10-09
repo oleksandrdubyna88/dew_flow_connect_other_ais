@@ -94,21 +94,96 @@ public sealed class PeopleTests
         await SignInAsync(server, Dev, "A Developer");
         var store = new SessionStore(server.DataDir, TimeSpan.FromDays(7));
         var now = DateTimeOffset.UtcNow;
-        // Two casings from the identity provider, three sessions, and the newest of them carries no
-        // name at all — which must not blank the person.
-        store.Issue($"Alice@{TeamServer.Domain}", "Alice Old", now.AddHours(-3));
+        // Three casings from the identity provider, three sessions. The OLDEST was used most
+        // recently — a laptop that never signs out — and the newest carries no name at all.
+        // Issue stamps last-used = created, so without the Validate below "newest" and "latest
+        // used" would be the same session and the max could not be told from the newest.
+        var (oldest, _) = store.Issue($"Alice@{TeamServer.Domain}", "Alice Old", now.AddHours(-3));
         store.Issue($"alice@{TeamServer.Domain}", "Alice New", now.AddHours(-2));
         store.Issue($"ALICE@{TeamServer.Domain}", "", now.AddHours(-1));
+        var usedLast = now.AddMinutes(-30);
+        store.Validate(oldest, usedLast)!.LastUsedUtc.Should().Be(usedLast, "the fixture must have moved the stamp it relies on");
 
         var people = await ListAsync(server);
 
         var alice = people.EnumerateArray()
-            .Should().ContainSingle(p => p.GetProperty("email").GetString()!.Equals($"alice@{TeamServer.Domain}", StringComparison.OrdinalIgnoreCase),
+            .Should().ContainSingle(p => p.GetProperty("email").GetString()!.EndsWith($"@{TeamServer.Domain}", StringComparison.Ordinal)
+                                         && p.GetProperty("email").GetString()!.StartsWith("alice", StringComparison.OrdinalIgnoreCase),
                 "two casings of one email are one person, not two")
             .Subject;
+        alice.GetProperty("email").GetString().Should().Be($"ALICE@{TeamServer.Domain}", "the newest session's casing, exactly");
         alice.GetProperty("displayName").GetString().Should().Be("Alice New", "the latest NON-EMPTY name wins");
-        alice.GetProperty("lastUsedUtc").GetDateTimeOffset().Should().BeCloseTo(now.AddHours(-1), TimeSpan.FromSeconds(1),
-            "last used is the latest over the person's unexpired sessions");
+        alice.GetProperty("lastUsedUtc").GetDateTimeOffset().Should().Be(usedLast,
+            "last used is the latest over the person's unexpired sessions — here the OLDEST session's");
+    }
+
+    /// <summary>
+    /// A positional record's omitted or null field arrives null whatever the type says (doctrine
+    /// §4a). <c>Issue</c> normalises the name at mint; a file written by hand or by an older build
+    /// need not have been, and one such file must not turn the whole roster into a 500.
+    /// </summary>
+    [Fact]
+    public async Task ASessionFileWithANullName_IsListedWithAnEmptyName()
+    {
+        using var server = new TeamServer();
+        await SignInAsync(server, Dev, "A Developer");
+        var expires = DateTimeOffset.UtcNow.AddDays(3).ToString("O");
+        var used = DateTimeOffset.UtcNow.AddHours(-1).ToString("O");
+        await File.WriteAllTextAsync(
+            Path.Combine(server.DataDir, "sessions", "handwritten.json"),
+            $$"""{"email":"nameless@{{TeamServer.Domain}}","name":null,"createdUtc":"{{used}}","expiresUtc":"{{expires}}","lastUsedUtc":"{{used}}"}""",
+            Ct);
+
+        var people = await ListAsync(server);
+
+        people.EnumerateArray().Single(p => p.GetProperty("email").GetString() == $"nameless@{TeamServer.Domain}")
+            .GetProperty("displayName").GetString().Should().BeEmpty();
+    }
+
+    /// <summary>A field this build does not know, written by a newer one, is not a reason to drop the person.</summary>
+    [Fact]
+    public async Task ASessionFileWithAnUnknownField_IsStillListed()
+    {
+        using var server = new TeamServer();
+        await SignInAsync(server, Dev, "A Developer");
+        var stamp = DateTimeOffset.UtcNow.ToString("O");
+        var expires = DateTimeOffset.UtcNow.AddDays(3).ToString("O");
+        await File.WriteAllTextAsync(
+            Path.Combine(server.DataDir, "sessions", "newer.json"),
+            $$"""{"email":"newer@{{TeamServer.Domain}}","name":"From A Newer Build","createdUtc":"{{stamp}}","expiresUtc":"{{expires}}","lastUsedUtc":"{{stamp}}","device":"laptop"}""",
+            Ct);
+
+        Emails(await ListAsync(server)).Should().Contain($"newer@{TeamServer.Domain}");
+    }
+
+    /// <summary>
+    /// A domain removed from the allow-list stops a live session (<c>SessionTests</c>), so a roster
+    /// that still listed it would show an admin somebody the server refuses on every request.
+    /// </summary>
+    [Fact]
+    public async Task ASessionWhoseDomainIsNoLongerAllowed_IsNotListed()
+    {
+        var data = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        using (var before = new TeamServer(new Dictionary<string, string?> { ["Coai__DataDir"] = data }))
+        {
+            await SignInAsync(before, $"leaver@{TeamServer.Domain}", "A Leaver");
+        }
+
+        // The same data directory, the same live session file — and a company that no longer
+        // includes that domain, administered from the one that does.
+        using var after = new TeamServer(new Dictionary<string, string?>
+        {
+            ["Coai__DataDir"] = data,
+            ["Coai__AllowedDomains"] = "another.example",
+            ["Coai__Admins"] = "boss@another.example",
+        });
+        await SignInAsync(after, "stayer@another.example", "A Stayer");
+        using var admin = after.ClientFor("boss@another.example");
+        var response = await admin.GetAsync(Route, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var people = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement;
+        Emails(people).Should().BeEquivalentTo(["stayer@another.example"], "a session the gate would refuse is not somebody who is signed in");
     }
 
     [Fact]

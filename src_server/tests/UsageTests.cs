@@ -350,6 +350,16 @@ public sealed class UsageReaderTests : IDisposable
     }
 
     [Fact]
+    public void AVendorIsReadInItsCanonicalCasing()
+    {
+        // Canonicalised once, on the way in, so the summary and the chart — which group different
+        // subsets of the same scan — cannot each keep a different first-seen casing of one vendor.
+        WriteLedger("""{"utc":"2026-09-06T12:00:00.000Z","provider":"Codex","model":"m","role":"Architecture","stage":"CodeReview","seconds":5,"tokensIn":1,"tokensOut":2,"costUsd":null,"outcome":"ok"}""");
+
+        new UsageReader(_dir).Read(Everything).Lines.Should().ContainSingle().Which.Vendor.Should().Be("codex");
+    }
+
+    [Fact]
     public void BlankLinesAreNotDamage()
     {
         WriteLedger(Entry("dev@example.com"), "", "   ");

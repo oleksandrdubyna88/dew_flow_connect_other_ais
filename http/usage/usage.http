@@ -1,4 +1,8 @@
-# What the team is spending. A read, so every request here is prod-safe.
+# What the team is spending. A read, so every request here is prod-safe — except where a request's
+# assertion depends on the ONE ledger line the runner seeds (`run-contracts.mjs`), which a live server
+# does not have: those are untagged, and their `@prod` twins assert only the shape of whatever rows
+# the live server has. The seeded requests ask for `window=year`, which cannot miss a line stamped
+# seconds ago even when the run straddles UTC midnight; the default `today` window could.
 
 # @name usage_returns_my_own_spending_and_the_range_it_used
 # @prod
@@ -19,8 +23,7 @@ Authorization: Bearer {{token}}
   test('a torn line is an operator problem and is not reported to a person', () => {
     assert.strictEqual(response.parsedBody.unreadableLines, null);
   });
-  test('every vendor row carries its models — the runner seeds one line, so there IS a row to check', () => {
-    assert.ok(response.parsedBody.vendors.length >= 1, 'no vendor row, so the model breakdown was never checked');
+  test('every vendor row — however many there are — carries its models, and they sum to the vendor', () => {
     for (const vendor of response.parsedBody.vendors) {
       assert.ok(Array.isArray(vendor.models));
       for (const model of vendor.models) {
@@ -33,6 +36,29 @@ Authorization: Bearer {{token}}
   });
   test('the personal answer has no chart — absent, not null, so a client reads absence as "not the company answer"', () => {
     assert.ok(!('daily' in response.parsedBody));
+  });
+}}
+
+###
+
+# The seeded line, seen through the personal answer: this is what makes the model shape above a
+# checked thing rather than a loop over nothing.
+
+# @name usage_over_a_year_shows_the_seeded_launch_under_its_vendor_and_model
+GET {{baseUrl}}/api/usage?window=year
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the developer has the one vendor the runner seeded, with the one model under it', () => {
+    assert.ok(response.parsedBody.vendors.length >= 1, 'no vendor row: the seeded ledger line was not read');
+    const codex = response.parsedBody.vendors.find((v) => v.vendor === 'codex');
+    assert.ok(codex, 'the seeded vendor is "codex", in the canonical lower-case spelling');
+    assert.ok(codex.models.length >= 1, 'the vendor row has no model breakdown');
+    assert.ok(codex.models.some((m) => m.model === 'gpt-5.6-luna'), 'the seeded model is not under its vendor');
+    assert.strictEqual(codex.models.reduce((sum, m) => sum + m.runs, 0), codex.runs);
   });
 }}
 
@@ -106,15 +132,15 @@ Authorization: Bearer {{adminToken}}
   test('an admin IS told how many lines could not be read', () => {
     assert.strictEqual(typeof response.parsedBody.unreadableLines, 'number');
   });
-  test('each vendor is broken down by model, with the cost trio its vendor row carries', () => {
-    assert.ok(response.parsedBody.vendors.length >= 1, 'no vendor row, so the model breakdown was never checked');
+  test('each vendor row — however many there are — is broken down by model, with the cost trio its vendor row carries', () => {
     for (const vendor of response.parsedBody.vendors) {
-      assert.ok(vendor.models.length >= 1);
+      assert.ok(Array.isArray(vendor.models));
       for (const model of vendor.models) {
         assert.strictEqual(typeof model.model, 'string');
         assert.strictEqual(typeof model.costIsFloor, 'boolean');
         assert.strictEqual(typeof model.unpricedRuns, 'number');
       }
+      assert.strictEqual(vendor.models.reduce((sum, m) => sum + m.runs, 0), vendor.runs, 'the models sum to their vendor');
     }
   });
   test('the chart is thirty dense UTC calendar days, each a yyyy-MM-dd string with a row per vendor', () => {
@@ -130,10 +156,37 @@ Authorization: Bearer {{adminToken}}
         assert.strictEqual(typeof bar.runs, 'number');
       }
     }
-    const today = new Date().toISOString().slice(0, 10);
-    assert.strictEqual(daily.days[29].day, today, 'the last bucket is today, in UTC');
-    const launches = daily.days.flatMap((d) => d.vendors).reduce((sum, bar) => sum + bar.runs, 0);
+    // The last bucket is the day before the range's exclusive end — read off the answer itself, so a
+    // run that crosses UTC midnight between the server's clock and this one cannot disagree with it.
+    const lastDay = new Date(Date.parse(daily.toUtc) - 86400000).toISOString().slice(0, 10);
+    assert.strictEqual(daily.days[29].day, lastDay, 'the last bucket is today in UTC: the day before toUtc');
+  });
+}}
+
+###
+
+# The seeded line, counted by the company summary AND by the chart: the two are aggregated separately
+# from one scan, and this is the request that would notice one of them losing it.
+
+# @name company_scope_over_a_year_counts_the_seeded_launch_in_the_summary_and_in_the_chart
+GET {{baseUrl}}/api/usage?scope=company&window=year
+Authorization: Bearer {{adminToken}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the summary has the seeded vendor with its model', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.vendor === 'codex');
+    assert.ok(codex, 'the seeded ledger line was not read into the summary');
+    assert.ok(codex.models.some((m) => m.model === 'gpt-5.6-luna'));
+    assert.ok(response.parsedBody.people.some((p) => p.email === 'dev@example.com'), 'the seeded line is the developer\'s');
+  });
+  test('the chart counts the seeded launch — stamped seconds ago, so inside its thirty days whatever the window', () => {
+    const launches = response.parsedBody.daily.days.flatMap((d) => d.vendors).reduce((sum, bar) => sum + bar.runs, 0);
     assert.ok(launches >= 1, 'the runner seeds one launch today, and the chart does not show it');
+    const vendors = new Set(response.parsedBody.daily.days.flatMap((d) => d.vendors).map((bar) => bar.vendor));
+    assert.ok(vendors.has('codex'), 'the chart names the vendor exactly as the summary does');
   });
 }}
 

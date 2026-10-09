@@ -71,6 +71,19 @@ public sealed class UsageDailyTests
 
         daily.Days.Sum(d => d.Vendors.Sum(v => v.Runs)).Should().Be(1);
     }
+
+    [Fact]
+    public void ALaunchExactlyAtTheRangeStart_IsInTheFirstDay_AndOneAtTheEnd_IsOut()
+    {
+        // Half-open, like every range here: the first midnight belongs to the chart, the last does
+        // not — otherwise a launch on the boundary is in two charts or in none.
+        var range = UsageDaily.Range(Now);
+
+        var daily = UsageDaily.Over([Line(range.FromUtc), Line(range.ToUtc)], range);
+
+        daily.Days[0].Vendors.Should().ContainSingle().Which.Runs.Should().Be(1, "the first midnight is the first bucket's");
+        daily.Days.Sum(d => d.Vendors.Sum(v => v.Runs)).Should().Be(1, "tomorrow's midnight is not in it");
+    }
 }
 
 /// <summary>
@@ -197,6 +210,29 @@ public sealed class UsageByModelAndDayEndpointTests
             model.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(
                 ["model", "runs", "failed", "tokensIn", "tokensOut", "costUsd", "costIsFloor", "unpricedRuns"]);
         }
+    }
+
+    [Fact]
+    public async Task TheSummaryAndTheChart_NameAVendorTheSameWay()
+    {
+        // Both group vendors case-insensitively, but each used to keep the FIRST casing it met — and
+        // they meet different lines (the window's against the chart's), so "Codex" could head the
+        // chart while "codex" headed the summary, and a client joining the two by id would find
+        // nothing. The reader now canonicalises the vendor once, on the way in.
+        using var server = new TeamServer();
+        var now = DateTimeOffset.UtcNow;
+        Ledger(server, LedgerLine(Dev, now.AddHours(-24), vendor: "Codex"), LedgerLine(Dev, now, vendor: "codex"));
+
+        var answer = await AnswerFor(server, Admin, "?scope=company&window=today");
+
+        var summary = answer.GetProperty("vendors").EnumerateArray().Single().GetProperty("vendor").GetString();
+        var chart = answer.GetProperty("daily").GetProperty("days").EnumerateArray()
+            .SelectMany(d => d.GetProperty("vendors").EnumerateArray())
+            .Select(v => v.GetProperty("vendor").GetString())
+            .Distinct()
+            .Should().ContainSingle("one vendor, however it was spelled").Subject;
+        chart.Should().Be(summary);
+        summary.Should().Be("codex", "the canonical spelling is the lower-case id the catalog and the palette know");
     }
 
     [Fact]

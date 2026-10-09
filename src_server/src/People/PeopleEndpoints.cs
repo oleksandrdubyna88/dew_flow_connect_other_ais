@@ -9,9 +9,11 @@ namespace CoaiServer;
 /// <see cref="UsageEndpoints"/>: the route exists and the caller is authenticated, so the honest answer
 /// names the setting that would open it. A wrong check here hands every colleague's email and activity
 /// to any caller, which is the risk the plan names first; the 403 is the first test.</para>
-/// <para><b>"People with an unexpired session"</b>, which the page says in those words: a caller on a raw
-/// identity-provider token has no session file and is not here. Read from the files directly — never
-/// through <see cref="SessionStore.Validate"/>, which writes and deletes.</para>
+/// <para><b>"People with an unexpired session this server still serves"</b>, which the page says in those
+/// words: a caller on a raw identity-provider token has no session file and is not here, and a session
+/// whose domain has since left <c>Coai:AllowedDomains</c> is refused on every request, so it is not
+/// here either (<see cref="CallerFilter.Admits"/>). Read from the files directly — never through
+/// <see cref="SessionStore.Validate"/>, which writes and deletes.</para>
 /// </remarks>
 public static class PeopleEndpoints
 {
@@ -27,7 +29,7 @@ public static class PeopleEndpoints
             }
 
             return Results.Json(
-                People.From(sessions.Active(DateTimeOffset.UtcNow)),
+                People.From(sessions.Active(DateTimeOffset.UtcNow).Where(s => gate.Admits(s.Email))),
                 ServerJsonContext.Default.IReadOnlyListPersonDto);
         }).RequireCaller(gate);
     }
@@ -50,10 +52,15 @@ public static class People
 
     /// <summary>The person one group of sessions describes.</summary>
     /// <remarks>
-    /// "Latest" is by issue: a person who was renamed signs in again and the NEWEST session carries the
-    /// new name, while an older one still in use carries the old. The newest session's casing of the
-    /// email is used for the same reason. Last used is the maximum over every session, because whichever
-    /// window they used last is when they were last here.
+    /// <para>"Latest" is by issue: a person who was renamed signs in again and the NEWEST session carries
+    /// the new name, while an older one still in use carries the old. The newest session's casing of
+    /// the email is used for the same reason. Last used is the maximum over every session — not the
+    /// newest session's — because whichever window they used last is when they were last here, and a
+    /// laptop that never signs out is older than the phone that signed in yesterday.</para>
+    /// <para>The name is tested with <see cref="string.IsNullOrEmpty"/>, not <c>Length</c>: the record
+    /// declares it non-null and <see cref="SessionStore.Issue"/> writes it so, but a file written by hand
+    /// or by an older build deserialises <c>"name": null</c> as exactly that (doctrine §4a), and one such
+    /// file must not turn the whole roster into a 500.</para>
     /// </remarks>
     private static PersonDto Person(IGrouping<string, SessionRecord> sessions)
     {
@@ -61,7 +68,7 @@ public static class People
 
         return new PersonDto(
             newestFirst[0].Email,
-            newestFirst.Select(s => s.Name).FirstOrDefault(name => name.Length > 0, string.Empty),
+            newestFirst.Select(s => s.Name).FirstOrDefault(name => !string.IsNullOrEmpty(name), string.Empty),
             newestFirst.Max(s => s.LastUsedUtc));
     }
 }

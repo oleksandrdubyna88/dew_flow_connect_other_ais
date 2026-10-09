@@ -1,7 +1,9 @@
 # Who has signed in — the admin's roster behind the Team server tab: email, display name, last used,
-# and nothing else. "People" means people with an unexpired SESSION: the three personas of this suite
-# are raw identity tokens with no session file, so the list would be empty and a shape check would pass
-# over nothing. The first request mints a session so that there is at least one row to look at.
+# and nothing else. "People" means people with an unexpired SESSION this server still serves: the three
+# personas of this suite are raw identity tokens with no session file, so against a cold stack the list
+# would be empty and a shape check would pass over nothing. The first request mints a session so that
+# the second has a row to look at; the prod-safe request after them asserts only the SHAPE of whatever
+# rows the live server has, because a `@prod` request may depend on nothing this suite created.
 
 # @name a_session_is_minted_so_that_the_roster_has_somebody_in_it
 POST {{baseUrl}}/api/session
@@ -19,7 +21,27 @@ Authorization: Bearer {{token}}
 
 ###
 
-# @name people_answers_an_admin_with_exactly_three_fields_per_person
+# @name people_lists_the_session_minted_above
+GET {{baseUrl}}/api/people
+Authorization: Bearer {{adminToken}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the developer who just signed in is on the roster', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+    assert.ok(response.parsedBody.length >= 1, 'the roster is empty, so the shape below was never checked');
+    const dev = response.parsedBody.find((p) => p.email === 'dev@example.com');
+    assert.ok(dev, 'the session minted above is not on the roster');
+    assert.deepStrictEqual(Object.keys(dev).sort(), ['displayName', 'email', 'lastUsedUtc']);
+    assert.ok(Date.now() - Date.parse(dev.lastUsedUtc) < 10 * 60 * 1000, 'last used is when the session was minted, moments ago');
+  });
+}}
+
+###
+
+# @name people_answers_an_admin_with_three_fields_per_person_whatever_rows_exist
 # @prod
 GET {{baseUrl}}/api/people
 Authorization: Bearer {{adminToken}}
@@ -28,10 +50,8 @@ Authorization: Bearer {{adminToken}}
 
 {{
   const assert = require('node:assert');
-  test('a list with at least the session minted above in it', () => {
+  test('a list, never null, however many people are signed in', () => {
     assert.ok(Array.isArray(response.parsedBody));
-    assert.ok(response.parsedBody.length >= 1, 'the roster is empty, so the shape below was never checked');
-    assert.ok(response.parsedBody.some((p) => p.email === 'dev@example.com'));
   });
   test('every row is exactly email, displayName and lastUsedUtc — never a token, a session id, a creation or an expiry', () => {
     for (const person of response.parsedBody) {
@@ -41,8 +61,8 @@ Authorization: Bearer {{adminToken}}
       assert.ok(Number.isFinite(Date.parse(person.lastUsedUtc)), `lastUsedUtc is not a date: ${person.lastUsedUtc}`);
     }
   });
-  test('sorted by email', () => {
-    const emails = response.parsedBody.map((p) => p.email.toLowerCase());
+  test('sorted by email, case-insensitively (the server orders OrdinalIgnoreCase, which upper-cases)', () => {
+    const emails = response.parsedBody.map((p) => p.email.toUpperCase());
     assert.deepStrictEqual(emails, [...emails].sort());
   });
 }}

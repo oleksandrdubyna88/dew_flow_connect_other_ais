@@ -102,10 +102,33 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
         var used = record with { LastUsedUtc = nowUtc };
         if (nowUtc - record.LastUsedUtc >= LastUsedResolution)
         {
-            Write(name, used);
+            Stamp(name, used);
         }
 
         return used;
+    }
+
+    /// <summary>The lazy last-used write: reported when it cannot land, never a refused request.</summary>
+    /// <remarks>
+    /// The stamp decides nothing — <see cref="SessionRecord.LastUsedUtc"/> is informational — so a
+    /// filesystem that refuses it (on Windows, a reader holding the file without the delete share:
+    /// a backup, an editor, an older build's listing) must not log a person out for a timestamp
+    /// nobody reads. <see cref="Issue"/> keeps throwing on a failed write, because a token the server
+    /// never stored is a credential that can only ever be refused; this write has no such stake.
+    /// Caught here and only here, because this is the layer that knows the write was optional.
+    /// </remarks>
+    private void Stamp(string fileName, SessionRecord used)
+    {
+        try
+        {
+            Write(fileName, used);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            onFailure?.Invoke(
+                $"'{Path.Combine(_dir, fileName)}' last-used stamp could not be written; the session is still served",
+                e);
+        }
     }
 
     /// <summary>
@@ -158,10 +181,13 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     /// between the directory listing and the read; a torn one is a write a killed process left for the
     /// sweep. Both are expected, and a log line about either sixty times an hour would bury the failures
     /// that matter — so this reads through a store with no reporter, and the shared read path answers
-    /// null and says nothing. The sweep still removes the litter, and still says so.</item>
+    /// null and says nothing. <see cref="SessionSweeper"/> removes the litter at boot and every hour,
+    /// and says so — which is also what keeps this read from walking a week of dead files.</item>
     /// </list>
     /// <para>Expiry is judged here exactly as <see cref="Validate"/> judges it, so a session this lists is
-    /// one that would still be served.</para>
+    /// one the STORE would still accept. Whether the server would then serve the caller is the gate's
+    /// decision — a domain removed from the allow-list refuses a live session — and the endpoint applies
+    /// that test on top; the store knows nothing of domains.</para>
     /// </remarks>
     public IReadOnlyList<SessionRecord> Active(DateTimeOffset nowUtc)
     {
