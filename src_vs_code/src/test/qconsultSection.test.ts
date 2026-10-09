@@ -169,10 +169,10 @@ test('the tab carries a banner for a server known to be older than QCONSULT_SINC
 // ---------- a root of the other operating system (operator, 2026-10-09) ----------
 
 const WINDOWS_PLACES: RootPlaces = {
-  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true, existingHere: [], systemDrive: 'C:',
+  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true, existingHere: [], unknownHere: [], systemDrive: 'C:',
 };
 
-const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false, existingHere: [], systemDrive: 'C:' };
+const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false, existingHere: [], unknownHere: [], systemDrive: 'C:' };
 
 /** The page RUN with these roots stored and this side's places, read back as the tree it drew. */
 function rootsOn(roots: readonly string[], places: RootPlaces): PageNode {
@@ -208,6 +208,16 @@ test('in a Windows window a root-relative folder that EXISTS here (/work) is nev
   assert.doesNotMatch(rootLine(tree, '/work').text(), /other side/, 'an existing folder of this machine is called the other side\'s');
   assert.match(rootLine(tree, '/home/jinx/git').text(), /the other side's folder/, 'the WSL root that is no folder here still is');
   assert.doesNotMatch(tree.text(), /not asked on this side/, '/work is a folder of this machine, so a disk row runs here');
+});
+
+test('a root the disk could not answer for is never called the other side\'s, and the page says it could not tell', () => {
+  // EACCES / EBUSY on the stat: not "absent here", so not the other side's (the code round, 2026-10-09).
+  const tree = rootsOn(['/home/jinx/git'], { ...WINDOWS_PLACES, unknownHere: ['/home/jinx/git'] });
+
+  const line = rootLine(tree, '/home/jinx/git').text();
+  assert.doesNotMatch(line, /other side's folder/, 'a root of unknown existence is called the other side\'s');
+  assert.match(line, /could not tell whether this folder exists/, 'the page does not say why it makes no claim');
+  assert.doesNotMatch(tree.text(), /not asked on this side/, 'and the block does not say a disk row is inactive on a guess');
 });
 
 test('in a Windows window a root-relative root is judged at its system-drive path: /Windows, the profile and the data folder are refused as the server refuses them', () => {

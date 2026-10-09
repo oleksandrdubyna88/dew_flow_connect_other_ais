@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
 import { notify } from './notify';
-import { RootExistence, systemDriveOf } from './pathFamily';
+import { RootExistence, directoryAt, systemDriveOf } from './pathFamily';
 import { askPerson } from './personWait';
 import { type QconsultSettings, qconsultSettingsFrom } from './qconsultSettings';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
@@ -84,9 +84,15 @@ export class QconsultHost {
       systemDirs: system.filter((one): one is string => typeof one === 'string' && one.length > 0),
       caseless: windows,
       windows,
-      existingHere: await this.rootAnswers.of(roots, windows, systemDrive),
+      ...await this.existence(roots, windows, systemDrive),
       systemDrive,
     };
+  }
+
+  private async existence(roots: readonly string[], windows: boolean, systemDrive: string): Promise<Pick<RootPlaces, 'existingHere' | 'unknownHere'>> {
+    const { existing, unknown } = await this.rootAnswers.of(roots, windows, systemDrive);
+
+    return { existingHere: existing, unknownHere: unknown };
   }
 
   /** The roots setting changed: the next paint asks the disk again (a folder created since is then found). */
@@ -95,7 +101,7 @@ export class QconsultHost {
   }
 
   /** What the disk said about the stored roots spelled for the other OS — asked one root at a time, and kept. */
-  private readonly rootAnswers = new RootExistence(async (root) => (await fs.promises.stat(root)).isDirectory());
+  private readonly rootAnswers = new RootExistence(directoryAt((root) => fs.promises.stat(root)));
 
   /** One control of a row, or one prompt's box, changed. A refused edit snaps back rather than storing what the server would refuse. */
   async write(key: string, id: string, value: unknown, hooks: QconsultWriteHooks): Promise<void> {

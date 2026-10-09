@@ -76,6 +76,8 @@ const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
 const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
 const { featuresSeam } = await import('./seam-features.mjs');
+// The question consultant's roots of the other OS: the page's decision against the server's, one root at a time.
+const { qconsultRootsSeam } = await import('./seam-qconsult-roots.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -821,6 +823,14 @@ if (!String(throughDefinition.advice).includes('The definition crossed')) {
   await consultFail(`the consultation opened, but not through the definition's own CLI path: ${JSON.stringify(throughDefinition).slice(0, 400)}`);
 }
 
+// The question consultant's roots (research/PLAN_qconsult_roots_of_the_other_os.md): a root of the OTHER OS is skipped by
+// the server without a complaint, this machine's root is kept qualified, and the page decides every root as the server did.
+const qroots = await qconsultRootsSeam({
+  providersIn, sessionsFor, answerOf, binary, fakeCli: cli, repoPath, timeoutMs: TIMEOUT_MS,
+  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
+});
+console.log('  ok  a question-consultant root of the other OS is skipped without a complaint, and the page agrees with the server on every root');
+
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
@@ -830,4 +840,5 @@ console.log(`seam: and the switch — "${String(switched.error).slice(0, 120)}�
 console.log(`seam: and a consultation the binary RAN was read back out of --log — "${String(consulted.advice).slice(0, 60)}…"`);
 console.log(`seam: and a consultant DEFINED with no reviewer row answered through its own CLI path — "${String(throughDefinition.advice).slice(0, 60)}…"`);
 console.log(`seam: and a REAL refusal carrying a secret was written with it taken out, read back by the extension's own reader, and survived its parser byte for byte — "${refusal.title.slice(0, 90)}…" (${refusal.logs} log file(s) checked too)`);
+console.log(`seam: and the question consultant's roots — kept ${qroots.kept}, skipped ${qroots.skipped}, the page agreeing on both`);
 console.log(`seam: asked ${binary}`);

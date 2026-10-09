@@ -315,6 +315,11 @@ export interface RootPlaces {
    */
   readonly existingHere: readonly string[];
   /**
+   * The stored roots spelled for the other OS the disk could NOT answer for (EACCES, EBUSY — anything but ENOENT or
+   * ENOTDIR): neither this side's nor the other side's, so the page makes no claim about them and says it could not tell.
+   */
+  readonly unknownHere: readonly string[];
+  /**
    * The drive a root-relative Windows root is looked for on — `%SystemDrive%`, or `C:` (`systemDriveOf`): never the
    * current drive, which this window's host and the server need not share. The server's `SystemPlaces.SystemDrive`.
    */

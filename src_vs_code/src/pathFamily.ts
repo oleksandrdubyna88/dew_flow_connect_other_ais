@@ -38,9 +38,12 @@ export function spelledForTheOtherOs(path: string, windows: boolean): boolean {
  * The DECISION, as the server's `QuestionRoots.OtherSideHere` makes it: spelled for the other OS AND no directory here.
  * The spelling alone is not enough (the plan round, 2026-10-09): on Windows `/work` is a legal root-relative path to the
  * folder `work` (on the system drive, `qualified`), and such a folder is this side's. Answered by the `existence` vectors.
+ *
+ * <p>`unknownHere` is the page's alone: a root the disk could not answer for (EACCES, EBUSY) is never classified as the
+ * other side's on a guess (the code round, 2026-10-09).</p>
  */
-export function otherSideHere(path: string, windows: boolean, existsHere: boolean): boolean {
-  return !existsHere && spelledForTheOtherOs(path, windows);
+export function otherSideHere(path: string, windows: boolean, existsHere: boolean, unknownHere = false): boolean {
+  return !existsHere && !unknownHere && spelledForTheOtherOs(path, windows);
 }
 
 /**
@@ -56,16 +59,47 @@ export async function existingHere(
   windows: boolean,
   systemDrive: string,
   isDirectory: (path: string) => Promise<boolean>,
-): Promise<readonly string[]> {
-  const found: string[] = [];
+): Promise<Existence> {
+  const existing: string[] = [];
+  const unknown: string[] = [];
   for (const root of roots.filter((one) => spelledForTheOtherOs(one, windows))) {
-    if (await isDirectory(qualified(root, windows, systemDrive)).catch(() => false)) {
-      found.push(root);
+    const answer = await isDirectory(qualified(root, windows, systemDrive)).then((is) => (is ? 'here' : 'absent'), () => 'unknown');
+    if (answer === 'here') {
+      existing.push(root);
+    } else if (answer === 'unknown') {
+      unknown.push(root);
     }
   }
 
-  return found;
+  return { existing, unknown };
 }
+
+/** What the disk said about the roots it was asked about: folders here, and roots it could not answer for. */
+export interface Existence {
+  readonly existing: readonly string[];
+  readonly unknown: readonly string[];
+}
+
+/**
+ * Whether a path is a directory, by a `stat`: true or false when the disk SAID so — a file, or ENOENT / ENOTDIR, is
+ * "no folder here" — and a rejection for anything it could not tell (EACCES, EBUSY, EPERM, EIO…), which
+ * {@link existingHere} keeps apart as unknown rather than reading as absent (the code round, 2026-10-09).
+ */
+export function directoryAt(stat: (path: string) => Promise<{ isDirectory(): boolean }>): (path: string) => Promise<boolean> {
+  return async (path) => {
+    try {
+      return (await stat(path)).isDirectory();
+    } catch (failure) {
+      if (ABSENT.has(String((failure as { code?: unknown }).code ?? ''))) {
+        return false;
+      }
+      throw failure;
+    }
+  };
+}
+
+/** The two stat errors that mean there is no folder at that path — every other one means the disk did not say. */
+const ABSENT: ReadonlySet<string> = new Set(['ENOENT', 'ENOTDIR']);
 
 /**
  * The root as this side looks for it — the server's `QuestionRoots.Qualified`: on Windows a root-relative root (one
@@ -91,14 +125,21 @@ export function systemDriveOf(value: string | undefined): string {
  * drops it when the roots setting changes, so a folder created since is found on the next paint.
  */
 export class RootExistence {
-  private kept: { readonly key: string; readonly answer: Promise<readonly string[]> } | undefined;
+  private kept: { readonly key: string; readonly answer: Promise<Existence> } | undefined;
 
   constructor(private readonly isDirectory: (path: string) => Promise<boolean>) {}
 
-  of(roots: readonly string[], windows: boolean, systemDrive: string): Promise<readonly string[]> {
+  of(roots: readonly string[], windows: boolean, systemDrive: string): Promise<Existence> {
     const key = JSON.stringify([windows, systemDrive, roots]);
     if (this.kept?.key !== key) {
-      this.kept = { key, answer: existingHere(roots, windows, systemDrive, this.isDirectory) };
+      const kept = { key, answer: existingHere(roots, windows, systemDrive, this.isDirectory) };
+      this.kept = kept;
+      // An answer holding an UNKNOWN root is not kept: the next render asks the disk again.
+      void kept.answer.then((answer) => {
+        if (answer.unknown.length > 0 && this.kept === kept) {
+          this.kept = undefined;
+        }
+      });
     }
 
     return this.kept.answer;

@@ -10350,7 +10350,9 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   current one; the answers are KEPT in `RootExistence`, keyed by platform, drive and root list, asked one root at a
   time, and dropped when `coai.qconsultRoots` changes or a root is added or removed, so a repaint stats nothing;
   `rootRefusal` and Add a folder's duplicate check judge the QUALIFIED path too, so `/Windows` is refused on the page
-  as the server refuses `C:\Windows`, and a picked `C:\work` is the stored `/work`) — is
+  as the server refuses `C:\Windows`, and a picked `C:\work` is the stored `/work`; a `stat` that fails with anything
+  but ENOENT/ENOTDIR is UNKNOWN — `directoryAt`, `RootPlaces.unknownHere` — never called the other side's, said on the
+  page as "could not tell", and never cached) — is
   said to be *the other side's folder* (a plain hint, never the `stale` refusal), because the server on this side
   skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
   `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window

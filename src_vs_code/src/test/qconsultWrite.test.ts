@@ -119,6 +119,7 @@ const windows: RootPlaces = {
   caseless: true,
   windows: true,
   existingHere: [],
+  unknownHere: [],
   systemDrive: 'C:',
 };
 

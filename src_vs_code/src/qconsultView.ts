@@ -271,12 +271,19 @@ function rootHtml(root: string, places: RootPlaces | undefined): string {
 }
 
 function rootNote(root: string, places: RootPlaces | undefined): string {
-  if (places === undefined) {
-    return '';
+  return places === undefined ? '' : sideNote(root, places) || refusalNote(root, places);
+}
+
+/** Which side a root is — said only when the page KNOWS: an unknown answer from the disk is said as one, never guessed. */
+function sideNote(root: string, places: RootPlaces): string {
+  if (places.unknownHere.includes(root)) {
+    return '<div class="hint">This window could not tell whether this folder exists on this machine, so it calls it neither this side\'s nor the other side\'s.</div>';
   }
-  if (theOtherSides(root, places)) {
-    return `<div class="hint">${escapeHtml(otherSideNote(places.windows))}</div>`;
-  }
+
+  return theOtherSides(root, places) ? `<div class="hint">${escapeHtml(otherSideNote(places.windows))}</div>` : '';
+}
+
+function refusalNote(root: string, places: RootPlaces): string {
   const refusal = rootRefusal(root, places);
 
   return refusal.length === 0 ? '' : `<div class="hint stale">${escapeHtml(refusal)}</div>`;
@@ -284,7 +291,7 @@ function rootNote(root: string, places: RootPlaces | undefined): string {
 
 /** The server's decision: spelled for the other OS and no folder here — `/work` that exists on a Windows drive is this side's. */
 function theOtherSides(root: string, places: RootPlaces): boolean {
-  return otherSideHere(root, places.windows, places.existingHere.includes(root));
+  return otherSideHere(root, places.windows, places.existingHere.includes(root), places.unknownHere.includes(root));
 }
 
 /** Every stored folder is the other side's: on this side a disk row has nothing to read, and the server does not ask it. */

@@ -13,6 +13,9 @@
 > now means `%SystemDrive%\work` on both sides. Kept deliberately — one base for the page and the server — and pinned by
 > `TheDeliberateChange_AHandWrittenRootRelativeRoot_NowMeansTheSystemDrive_NotTheServersCurrentDrive`; only a
 > hand-written root-relative root is affected, because Add a folder always writes a drive-qualified path.
+> The second code round added the live seam leg `scripts/seam-qconsult-roots.mjs` (the page's decision against the real
+> binary's, through `--providers` and `ask_consultants` — no new CLI flag), an UNKNOWN state for a `stat` that fails with
+> anything but ENOENT/ENOTDIR (never called the other side's, never cached), and one disk probe per other-side root.
 > The plan was written down after the work, when the gate asked for the file; the gate's plan round ran before the code
 > round on the same text.
 >
