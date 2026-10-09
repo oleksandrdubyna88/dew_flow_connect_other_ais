@@ -286,7 +286,7 @@ public sealed class ReviewLauncherTests
 
     /// <summary>
     /// The job's own directory, read off the request: the folder of the schema the CLI is pointed at — an agy reviewer
-    /// no longer RUNS from it (it runs from coai's read-only folder; todo/PLAN_agy_cannot_write_its_roots.md) — else the
+    /// no longer RUNS from it (it runs from coai's read-only folder; research/PLAN_agy_cannot_write_its_roots.md) — else the
     /// working directory, which it still is for every other vendor.
     /// </summary>
     internal static string JobDirectory(ProcessRequest request)

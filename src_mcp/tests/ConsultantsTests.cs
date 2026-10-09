@@ -307,7 +307,7 @@ public sealed class ConsultantsTests : IDisposable
         }
 
         // agy runs from coai's read-only folder — its reader agent and hook are found from the cwd — and reaches the
-        // checkout through --add-dir (todo/PLAN_agy_cannot_write_its_roots.md: plan mode alone let it write there).
+        // checkout through --add-dir (research/PLAN_agy_cannot_write_its_roots.md: plan mode alone let it write there).
         var agy = Agy().Build(Launch()).Request;
         agy.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
         agy.Arguments.Should().ContainInConsecutiveOrder("--add-dir", Repo);

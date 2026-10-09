@@ -1,14 +1,31 @@
 # PLAN — an antigravity launch cannot write inside the roots it is given
 
-> Status: **plan only, nothing implemented yet, 2026-10-08; plan round passed 2026-10-09 with its six findings folded
-> in.** Scope: every place coai builds an agy argv — the question rows' fragments
+> Status: **IMPLEMENTED, 2026-10-09** (branch `fix/agy-cannot-write-its-roots`; no release — a release needs the
+> operator's OK). Measurement and live record: [RESULTS_agy_write_block.md](RESULTS_agy_write_block.md) — the branch build
+> blocked every write (coai's own hook alone 0 of 3 per side; the product 0 of 3 per side) while reads answered 3 of 3.
+>
+> Deviations: (1) **both** candidates, not the first that held — the agent and the hook each fail OPEN alone (an agent
+> not found falls back to agy's default; a handler that answers nothing let a write through on Windows), so every launch
+> carries both; (2) the folder is one per handler binary under the person's own `LocalApplicationData/coai-agy` (owner-only
+> on Unix) — not per launch, so there is nothing to sweep, and not the temp folder (a security review: `/tmp` is shared);
+> (3) agy no longer runs from the checkout or root, so the consult prompt, the consultant check and the agy reviewer
+> name the checkout by its path; (4) three defects found live on the branch build and fixed before the PR: the hook
+> script was not found under `NoDefaultCurrentDirectoryInExePath` (Claude Code sets it; it is named relatively now), the
+> `/tmp` folder, and folders created 0755 in WSL; (5) a consult whose folder cannot be prepared is refused as
+> `vendor-refused` with the folder named — not a new failure kind; (6) the hook runs through agy's own `cmd /c` /
+> `sh -c` (agy offers no exe+argv form), recorded as the one such exception in `.agents/PROJECT.md`.
+> Open tail: none in this plan; the Team server's container must have `sh` for the reviewer's hook (unverified — a
+> server deploy is the operator's), and the extension's own agy CHAT runs in an empty directory with no root, outside
+> this plan.
+>
+> Scope: every place coai builds an agy argv — the question rows' fragments
 > (`src_mcp/core/QuestionConsult/ConfinementPlanner.cs:161-163`), the consultant
 > (`src_mcp/runners/Consultation/AntigravityConsultant.cs:173-176`, `Build`) and the reviewer
 > (`src_mcp/runners/Reviewers/AntigravityRuntime.cs:56`) — plus a measurement script and tests.
 >
-> Related docs: [RESULTS_agy_searches_through_coai.md](../research/RESULTS_agy_searches_through_coai.md) (the write check
-> that found this), [PLAN_agy_searches_through_coai.md](../research/PLAN_agy_searches_through_coai.md),
-> [module_runners.md](../research/module_runners.md), [module_server.md](../research/module_server.md).
+> Related docs: [RESULTS_agy_searches_through_coai.md](RESULTS_agy_searches_through_coai.md) (the write check
+> that found this), [PLAN_agy_searches_through_coai.md](PLAN_agy_searches_through_coai.md),
+> [module_runners.md](module_runners.md), [module_server.md](module_server.md).
 
 ## 1. The symptom
 
@@ -109,8 +126,9 @@ The block goes into all three through ONE helper both runners call, and a test e
 
 ## 6. Definition of Done
 
-- [ ] M1 recorded in `research/` with ≥ 3 runs per side per candidate.
-- [ ] Every agy launch carries the proven block; RED → GREEN with a teeth check.
-- [ ] The live write check passes 3 of 3 per side; lookups still answer.
-- [ ] `module_runners.md`, `module_server.md`, `module_tests.md` updated; this plan promoted.
-- [ ] Whole suites green; gate rounds resolved; PR merged.
+- [x] M1 recorded in `research/` with ≥ 3 runs per side per candidate.
+- [x] Every agy launch carries the proven block; RED → GREEN with a teeth check.
+- [x] The live write check passes 3 of 3 per side; lookups still answer.
+- [x] `module_runners.md`, `module_server.md`, `module_tests.md` updated; this plan promoted.
+- [x] Whole suites green; gate rounds resolved.
+- [ ] PR merged — the pull request that carries this record.

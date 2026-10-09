@@ -1,6 +1,6 @@
 # RESULTS — what stops an agy launch from writing inside its roots (2026-10-09)
 
-> M1 of [PLAN_agy_cannot_write_its_roots.md](../todo/PLAN_agy_cannot_write_its_roots.md). Harness:
+> M1 of [PLAN_agy_cannot_write_its_roots.md](PLAN_agy_cannot_write_its_roots.md). Harness:
 > [`scripts/probe-agy-write-block.mjs`](../scripts/probe-agy-write-block.mjs) — agy **1.3.2** on both sides,
 > `gemini-3.8-flash-low`, coai's flags (`--print= --input-format stream-json --output-format stream-json --mode plan
 > --model … --add-dir <tree>`), the cwd a folder the ARM owns (a fresh git repository, never the tree), and the model asked

@@ -100,7 +100,7 @@ public static class ConsultantCheck
     /// <summary>The question the check asks — the marker inside the repository and the canary outside it, each by its absolute path.</summary>
     /// <remarks>The marker by its absolute path too: an antigravity consultant runs from coai's read-only folder, not from the
     /// repository, so "at the root of this repository" named a file relative to a directory it was not in
-    /// (todo/PLAN_agy_cannot_write_its_roots.md). Every vendor reads an absolute path.</remarks>
+    /// (research/PLAN_agy_cannot_write_its_roots.md). Every vendor reads an absolute path.</remarks>
     public static string Problem(string canaryPath, string markerPath) =>
         "This is a health check of how this consultant is set up, not a real question. Do exactly two things.\n"
         + $"1. Read the file {markerPath} — CHECK.md at the root of this repository — and reply with the check word written in it.\n"

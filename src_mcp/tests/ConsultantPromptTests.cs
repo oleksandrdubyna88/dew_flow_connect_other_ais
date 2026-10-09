@@ -35,7 +35,7 @@ public sealed class ConsultantPromptTests
     public void TheCheckout_IsNamedByItsPath_NotByTheWorkingDirectory()
     {
         // An antigravity consultant runs from coai's read-only folder, not from the checkout
-        // (todo/PLAN_agy_cannot_write_its_roots.md): "in your working directory" would send it to the wrong place.
+        // (research/PLAN_agy_cannot_write_its_roots.md): "in your working directory" would send it to the wrong place.
         var prompt = ConsultantPrompt.Compose(Turn() with { Checkout = "/home/x/repo" });
 
         prompt.Should().Contain("A READ-ONLY checkout at /home/x/repo").And.NotContain("in your working directory");

@@ -7,7 +7,7 @@
 >
 > Deviations: (1) **the plan's premise "agy keeps `--mode plan` — it can write nothing" is FALSE** — the live write check
 > found agy writes inside its `--add-dir` root on both sides; this branch does not change what agy may write, and the
-> defect is open as [PLAN_agy_cannot_write_its_roots.md](../todo/PLAN_agy_cannot_write_its_roots.md); (2) a fence agy
+> defect is open as [PLAN_agy_cannot_write_its_roots.md](PLAN_agy_cannot_write_its_roots.md); (2) a fence agy
 > glued to a sentence was read as no block — found live, fixed before the PR; (3) the code round added a 20 s per-block
 > time limit, a turn that cannot hold a result reads nothing, a path the file system cannot hold is refused by name,
 > lock files are hidden when named directly, and the caps no longer follow `SourceBudget`; (4) the refused-shell

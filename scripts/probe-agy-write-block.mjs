@@ -1,5 +1,5 @@
 // Probe: can coai stop an agy launch from WRITING inside the roots it is given? PAID: every run is a real agy turn.
-// Plan: todo/PLAN_agy_cannot_write_its_roots.md (M1). Results: research/RESULTS_agy_write_block.md.
+// Plan: research/PLAN_agy_cannot_write_its_roots.md (M1). Results: research/RESULTS_agy_write_block.md.
 // The person's agy settings are never touched and nothing is deleted: every arm builds its own folders under <scratch>.
 //
 //   node scripts/probe-agy-write-block.mjs <agy> <scratch dir> <model> <out.json> <repeats> [arm,arm,...]

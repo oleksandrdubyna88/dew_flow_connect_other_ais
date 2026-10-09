@@ -549,7 +549,7 @@ static class Placeholders
             {
                 "cwd-file" => Read(Path.Combine(Environment.CurrentDirectory, match.Groups[2].Value)),
                 // A file in the folder this launch was given with --add-dir: how agy reaches a checkout it does not run
-                // from (todo/PLAN_agy_cannot_write_its_roots.md — agy runs from coai's read-only folder).
+                // from (research/PLAN_agy_cannot_write_its_roots.md — agy runs from coai's read-only folder).
                 "adddir-file" => Read(AddedDir() is { Length: > 0 } added ? Path.Combine(added, match.Groups[2].Value) : string.Empty),
                 "prompt-path" => Read(NamedIn(prompt, match.Groups[2].Value)),
                 // The PATH itself, with forward slashes, so it sits in a JSON string unescaped on any platform.

@@ -44,14 +44,14 @@ public sealed class AntigravityConsultant(
     public AntigravityConsultant With(IWorkspaceLookup withLookup) => new(inner, vendor, withLookup, prepare);
 
     /// <summary>
-    /// The read-only folder first (todo/PLAN_agy_cannot_write_its_roots.md): a consultation whose folder cannot be
+    /// The read-only folder first (research/PLAN_agy_cannot_write_its_roots.md): a consultation whose folder cannot be
     /// prepared is REFUSED here, with the reason, before anything is launched — never launched without its block.
     /// </summary>
     public Task<ConsultantPreparation> PrepareAsync(ConsultantLaunch launch, IProcessLauncher launcher, CancellationToken ct) =>
         Task.FromResult<ConsultantPreparation>((prepare ?? DefaultPrepare)() switch
         {
             AntigravityReadOnly.Prepared.Failed failed => new ConsultantPreparation.Refused(
-                new ConsultFailure.VendorRefused(failed.Reason, "make the system's temporary folder writable for this user, then ask again")),
+                new ConsultFailure.VendorRefused(failed.Reason, $"make {AntigravityReadOnly.DefaultBase} writable for this user, then ask again")),
             _ => new ConsultantPreparation.Ready(launch, string.Empty, string.Empty),
         });
 

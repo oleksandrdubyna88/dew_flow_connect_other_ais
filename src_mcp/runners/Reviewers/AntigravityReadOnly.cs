@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
-/// What keeps an antigravity launch from WRITING inside the roots it is given (todo/PLAN_agy_cannot_write_its_roots.md):
+/// What keeps an antigravity launch from WRITING inside the roots it is given (research/PLAN_agy_cannot_write_its_roots.md):
 /// <c>--mode plan</c> does not — agy 1.3.1 wrote a file inside its <c>--add-dir</c> root on both sides
 /// (research/RESULTS_agy_searches_through_coai.md §3).
 /// </summary>
@@ -92,12 +92,19 @@ public static class AntigravityReadOnly
         var folder = Path.Combine(baseDir, handler.Key());
         try
         {
+            // The folders first, owner-only, and only then the files: written into a folder another account could still
+            // enter, the hook script could be swapped before agy runs it (code round, codex — a permissive umask).
+            string[] folders = [baseDir, folder, Path.Combine(folder, AgentsDir), Path.Combine(folder, AgentsDir, "agents")];
+            foreach (var directory in folders)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            OwnerOnly(folders);
             foreach (var (relative, content) in Files(handler))
             {
                 Ensure(Path.Combine(folder, relative), content);
             }
-
-            OwnerOnly([baseDir, folder, Path.Combine(folder, AgentsDir), Path.Combine(folder, AgentsDir, "agents")]);
 
             return new Prepared.Ready(folder);
         }
@@ -124,13 +131,11 @@ public static class AntigravityReadOnly
             return;
         }
 
-        CreatePrivate(Path.GetDirectoryName(path)!);
+        // The folder exists, owner-only, before any file is written (Prepare).
         var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
         File.WriteAllText(temporary, content);
         File.Move(temporary, path, overwrite: true);
     }
-
-    private static void CreatePrivate(string directory) => Directory.CreateDirectory(directory);
 
     private const UnixFileMode Owner = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 

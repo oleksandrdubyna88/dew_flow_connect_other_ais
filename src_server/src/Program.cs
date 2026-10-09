@@ -21,7 +21,7 @@ using Serilog;
 // proxy's address — which once throttled an entire company as a single client.
 
 // --agy-hook answers one agy PreToolUse call: an agy reviewer started by this server runs from the read-only folder
-// whose hook starts THIS binary (AntigravityReadOnly; todo/PLAN_agy_cannot_write_its_roots.md). Before anything else:
+// whose hook starts THIS binary (AntigravityReadOnly; research/PLAN_agy_cannot_write_its_roots.md). Before anything else:
 // it must answer in milliseconds and never start the web host.
 if (args is [AntigravityReadOnly.HookArgument])
 {

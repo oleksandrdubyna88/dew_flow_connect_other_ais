@@ -53,7 +53,7 @@ node .agents/conventions/tools/pin-check.mjs
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
   `--ask-remote`, `--ask-api`, `--probe-api`, `--providers`, `--bugs-json`, `--normalize`, `--outline`, `--collect-bugs`, `--pairs-json`,
-  `--pairs-keep`, `--pairs-decide`, `--real-method`, `--file-at`, `--tree-at`, `--trees`, `--tree-remove`, `--upload-pairs`, `--requeue-refused`, `--close-consult`, `--cadence`, `--consultants`, `--check-consultant`, `--security-prompt-text`, `--features`, `--check-security` and `--check-model`,
+  `--pairs-keep`, `--pairs-decide`, `--real-method`, `--file-at`, `--tree-at`, `--trees`, `--tree-remove`, `--upload-pairs`, `--requeue-refused`, `--close-consult`, `--cadence`, `--consultants`, `--check-consultant`, `--security-prompt-text`, `--features`, `--check-security`, `--check-model` and `--agy-hook`,
   and their stdout is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
   stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
@@ -68,6 +68,11 @@ node .agents/conventions/tools/pin-check.mjs
   been right to (2026-09-07, 2026-09-15).
   **Adding a one-shot mode means adding it here — in THIS file.** Inside `ServeAsync`
   the rule is unchanged and absolute.
+  `--agy-hook` is the one mode a CLI starts rather than a person or the extension: every agy launch runs as the
+  `coai-reader` agent behind a `PreToolUse` hook, and agy starts this binary (`coai-mcp`, and `coai-server` for its
+  reviewers) once per tool call — the payload on stdin, `allow` / `deny` on stdout. agy runs it through its own
+  `cmd /c` / `sh -c`, a fixed script coai writes into the read-only folder: coai's own launches stay exe + argv
+  (`AntigravityReadOnly`, research/RESULTS_agy_write_block.md).
 
   The rule names **64 and only 64**: a mode whose ARGUMENTS are wrong answers another non-zero
   code (`--upload-pairs` answers 65 for a missing `--server`), because 64 means *never heard of

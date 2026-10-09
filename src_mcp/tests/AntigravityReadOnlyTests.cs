@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// An agy launch cannot write inside its roots (todo/PLAN_agy_cannot_write_its_roots.md): every launch runs from a folder
+/// An agy launch cannot write inside its roots (research/PLAN_agy_cannot_write_its_roots.md): every launch runs from a folder
 /// coai owns, as an agent whose only tool is <c>view_file</c>, behind a hook that allows nothing else
 /// (research/RESULTS_agy_write_block.md). What CI cannot prove — that agy honours them — is the live probe's job.
 /// </summary>
@@ -246,8 +246,11 @@ public sealed class AntigravityReadOnlyTests : IDisposable
         var refused = await failing.PrepareAsync(launch, new ProcessLauncher(), TestContext.Current.CancellationToken);
         var ready = await new AntigravityConsultant(new AntigravityRuntime()).PrepareAsync(launch, new ProcessLauncher(), TestContext.Current.CancellationToken);
 
-        refused.Should().BeOfType<ConsultantPreparation.Refused>()
-            .Which.Failure.Should().BeOfType<ConsultFailure.VendorRefused>().Which.Said.Should().Contain("the disk is full");
+        var failure = refused.Should().BeOfType<ConsultantPreparation.Refused>()
+            .Which.Failure.Should().BeOfType<ConsultFailure.VendorRefused>().Subject;
+        failure.Said.Should().Contain("the disk is full");
+        // The cure names the folder that failed — not the temporary folder, which it no longer is (code round, gemini + codex).
+        failure.Remedy.Should().Contain(AntigravityReadOnly.DefaultBase).And.NotContain("temporary");
         ready.Should().BeOfType<ConsultantPreparation.Ready>();
     }
 

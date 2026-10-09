@@ -19,7 +19,7 @@ namespace CoaiMcp.Core.Consultation;
 /// </param>
 /// <param name="Checkout">
 /// The checkout's absolute path, said in the prompt — an antigravity consultant runs from coai's read-only folder, not
-/// from the checkout (todo/PLAN_agy_cannot_write_its_roots.md). Empty says "your working directory", as before.
+/// from the checkout (research/PLAN_agy_cannot_write_its_roots.md). Empty says "your working directory", as before.
 /// </param>
 public sealed record ConsultantPromptInput(
     string Instruction,

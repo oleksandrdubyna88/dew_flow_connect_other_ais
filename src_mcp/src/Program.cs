@@ -60,7 +60,7 @@ internal static class Program
         /// Answers one agy <c>PreToolUse</c> hook call: the payload on stdin, allow <c>view_file</c> or deny, on stdout.
         /// </summary>
         /// <remarks>agy starts it, through the read-only folder's script, for every tool call an agy launch makes — so it
-        /// reads no settings, opens no vault and writes no log (todo/PLAN_agy_cannot_write_its_roots.md).</remarks>
+        /// reads no settings, opens no vault and writes no log (research/PLAN_agy_cannot_write_its_roots.md).</remarks>
         AgyHook,
 
         /// <summary>Sends the pairs a person kept. The only mode that leaves this machine.</summary>
