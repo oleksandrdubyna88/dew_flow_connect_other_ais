@@ -51,6 +51,7 @@ wait is longer than the time left, which today is waited out and lost anyway.
 | The `Spent` vocabulary, `Hopeless`, the two-pass `Reason` | [PLAN_a_spent_allowance_is_not_a_throttle.md](../research/PLAN_a_spent_allowance_is_not_a_throttle.md) | this plan keeps all three | shipped first |
 | Reading a STATED wait and comparing it to the remaining deadline | **this plan** | recorded it as an open tail | blocked, see below |
 | Deciding an answer that states no wait at all | the parent's vocabulary, unchanged | this plan falls back to it | frozen |
+| A DURATION form (`Resets in 110h25m`) read into a Team-server slot's park time, `CooldownParser` moved to the shared runners library | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), stories 1.1 and 5.3 | this plan still owns comparing a stated wait with the REVIEWER's remaining deadline in `Hopeless`; 1.1's verbatim agy line is offered as the first row of the gate table below — a second vendor's is still needed | that plan's 1.1 first; this one stays blocked until two rows exist |
 
 **Disjoint**: the vocabulary is not replaced by this plan and is not deleted by it. It becomes the
 answer for the case where nothing was stated, which is most of them.

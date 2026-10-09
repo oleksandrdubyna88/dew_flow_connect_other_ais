@@ -6,6 +6,15 @@
 > Related: [RESULTS_haiku_is_not_slow_it_is_verbose.md](../research/RESULTS_haiku_is_not_slow_it_is_verbose.md)
 > — the measurement that found this, and the wrong conclusion it produced first.
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| The Team server writes cached + reasoning tokens and `usage not captured` (today: 0 on every server line) | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 3.1 | this plan then has the server's cache term to define, not only the client's |
+| What a token COLUMN means per vendor, and how cache is shown | **this plan** | the round counter shows medians per launch per row and never compares rows' token counts |
+
+[PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) goes first: it lands the fields this plan defines.
+
 ## The symptom
 
 `usage.jsonl` and the spending view put three vendors' token counts in one column, and the column is

@@ -16,6 +16,12 @@
 >
 > Related docs: the ten plans listed below; [architecture.md](../research/architecture.md).
 
+## The boundary with PLAN_every_round_is_counted
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| Edits to `JobRunner`, `JobStore` and `ProcessLauncher`'s callers (outcome classes, usage, claim) | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), stories 3.1, 3.2 and 4.3 | this plan's open stories are cut; whichever reopens second rebases on the other |
+
 ## Where this came from
 
 The audit produced ten findings; each has a plan of its own in `todo/`. Those ten went to the review
