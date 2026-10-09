@@ -20,10 +20,26 @@
     "drive-relative) is the same side's, and is refused there by name as before.",
     "",
     "`existence` is the DECISION, and the spelling is not enough for it (the plan round, 2026-10-09): on Windows",
-    "`/work` is a legal root-relative path to the folder `work` on the current drive. So a root spelled for the",
-    "other OS is the other side's only when it is NOT an existing directory on this machine; one that exists here",
-    "is this side's and goes through the ordinary checks. Answered by `QuestionRoots.OtherSideHere` and the",
-    "extension's `otherSideHere`."
+    "`/work` is a legal root-relative path to the folder `work`. So a root spelled for the other OS is the other",
+    "side's only when it is NOT an existing directory on this machine; one that exists here is this side's and goes",
+    "through the ordinary checks. Answered by `QuestionRoots.OtherSideHere` and the extension's `otherSideHere`.",
+    "",
+    "`resolution` is WHERE such a root is looked for (the code round, 2026-10-09). A root-relative Windows path names",
+    "the current drive, and the extension host and coai-mcp need not stand on the same one — so both halves qualify",
+    "it with the SYSTEM drive (`%SystemDrive%`, `C:` when unset): on Windows a root with one leading `/`, or a `\\`",
+    "not followed by another, becomes `<drive>` + the path with backslashes, for the existence decision AND, on the",
+    "server, for the root it keeps. Everything else, and every root elsewhere, is unchanged (trimmed). Answered by",
+    "`QuestionRoots.Qualified` and the extension's `qualified`."
+  ],
+  "resolution": [
+    { "path": "/work", "windows": true, "systemDrive": "D:", "qualified": "D:\\work", "why": "the operator's case: the system drive, never the current one" },
+    { "path": "\\tools\\bin", "windows": true, "systemDrive": "C:", "qualified": "C:\\tools\\bin", "why": "a single leading backslash is root-relative too" },
+    { "path": "/home/jinx/git", "windows": true, "systemDrive": "C:", "qualified": "C:\\home\\jinx\\git", "why": "where a WSL spelling is looked for on Windows — it is the other side's when nothing is there" },
+    { "path": "  /work  ", "windows": true, "systemDrive": "E:", "qualified": "E:\\work", "why": "trimmed first, as the server reads the list" },
+    { "path": "\\\\server\\share\\proj", "windows": true, "systemDrive": "C:", "qualified": "\\\\server\\share\\proj", "why": "a UNC share names its own machine — unchanged" },
+    { "path": "//server/share/proj", "windows": true, "systemDrive": "C:", "qualified": "//server/share/proj", "why": "a UNC share with forward slashes — unchanged" },
+    { "path": "C:\\Users\\jinx\\git", "windows": true, "systemDrive": "D:", "qualified": "C:\\Users\\jinx\\git", "why": "already names its drive — unchanged" },
+    { "path": "/work", "windows": false, "systemDrive": "C:", "qualified": "/work", "why": "on Linux, WSL or macOS a POSIX root is already complete" }
   ],
   "existence": [
     { "path": "/work", "windows": true, "existsHere": true, "otherSide": false, "why": "a root-relative Windows folder that exists — this side's, never skipped" },

@@ -412,17 +412,67 @@ public sealed class QuestionConsultSettingsTests : IDisposable
     [Fact]
     public void OnWindows_ARootRelativeFolderThatExists_IsThisSides_AndOnlyAMissingOneIsTheOtherSides()
     {
-        // `/work` is a legal Windows path — the folder `work` at the root of the current drive. A person who typed an existing
-        // folder that way must not lose it to the WSL rule: only a POSIX spelling that is NOT a folder here is the other side's.
-        // The disk is injected, so this is the same test on any machine.
-        static bool OnlyWorkExists(string full) => Path.GetFileName(full) == "work";
+        // `/work` is a legal Windows path — the folder `work` at the root of the SYSTEM drive (the one base both halves use).
+        // A person who typed an existing folder that way must not lose it to the WSL rule: only a POSIX spelling that is NOT
+        // a folder here is the other side's. The disk and the drive are injected, so this is the same test on any machine.
+        var work = Path.TrimEndingDirectorySeparator(Path.GetFullPath(@"D:\work"));
 
-        var verdict = QuestionRoots.Validate(["/work", "/home/jinx/git"], _data, Places with { Windows = true }, OnlyWorkExists);
+        var verdict = QuestionRoots.Validate(
+            ["/work", "/home/jinx/git"], _data, Places with { Windows = true, SystemDrive = "D:" }, full => full == work);
 
-        verdict.Accepted.Should().ContainSingle("an existing folder of this machine goes through the ordinary checks")
-            .Which.Should().Be(Path.TrimEndingDirectorySeparator(Path.GetFullPath("/work")));
+        verdict.Accepted.Should().ContainSingle("an existing folder of this machine goes through the ordinary checks").Which.Should().Be(work);
         verdict.OtherSide.Should().Equal(["/home/jinx/git"], "the one that is not a folder here is the WSL side's");
         verdict.Refused.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void OnWindows_ARootRelativeRoot_IsJudgedAndKeptOnTheSystemDrive_NeverOnWhateverDriveIsCurrent()
+    {
+        // The extension host and coai-mcp can have different CURRENT drives, so `/work` against the current one could be
+        // checked on one drive and read on another. One explicit base on both sides: the system drive — for the existence
+        // decision AND for the root the server keeps, so every later use (the grant, --add-dir, the prompt) is unambiguous.
+        // Q: is a drive no test machine stands on, so a root resolved against the CURRENT drive cannot pass by accident.
+        var asked = new List<string>();
+        var onQ = Path.TrimEndingDirectorySeparator(Path.GetFullPath(@"Q:\work"));
+
+        var verdict = QuestionRoots.Validate(["/work", @"\tools"], _data, Places with { Windows = true, SystemDrive = "Q:" },
+            full => { asked.Add(full); return true; });
+
+        verdict.Accepted.Should().Equal([onQ, Path.TrimEndingDirectorySeparator(Path.GetFullPath(@"Q:\tools"))],
+            "a root-relative root is kept qualified with the system drive, whichever drive this process stands on");
+        asked.Should().Contain(onQ, "the existence was asked on the system drive")
+            .And.NotContain(Path.TrimEndingDirectorySeparator(Path.GetFullPath("/work")), "and never on whatever drive is current");
+    }
+
+    private sealed record ResolutionVector(string Path, bool Windows, string SystemDrive, string Qualified, string Why);
+
+    [Fact]
+    public void TheQualification_AnswersTheSharedResolutionVectors_AsTheExtensionDoes()
+    {
+        using var file = File.OpenRead(System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "path-family-vectors.json")));
+        using var parsed = System.Text.Json.JsonDocument.Parse(file);
+        var vectors = parsed.RootElement.GetProperty("resolution").EnumerateArray().Select(v => new ResolutionVector(
+            v.GetProperty("path").GetString() ?? "",
+            v.GetProperty("windows").GetBoolean(),
+            v.GetProperty("systemDrive").GetString() ?? "",
+            v.GetProperty("qualified").GetString() ?? "",
+            v.GetProperty("why").GetString() ?? "")).ToList();
+
+        vectors.Should().HaveCountGreaterThan(4, "the file is read, not an empty array");
+        foreach (var vector in vectors)
+        {
+            QuestionRoots.Qualified(vector.Path, vector.Windows, vector.SystemDrive)
+                .Should().Be(vector.Qualified, $"{vector.Path} (windows: {vector.Windows}, drive: {vector.SystemDrive}) — {vector.Why}");
+        }
+    }
+
+    [Fact]
+    public void TheSystemDrive_IsTheEnvironmentsOrC()
+    {
+        SystemPlaces.SystemDriveOf("E:").Should().Be("E:");
+        SystemPlaces.SystemDriveOf(null).Should().Be("C:", "unset falls back to C:");
+        SystemPlaces.SystemDriveOf("  ").Should().Be("C:");
     }
 
     private sealed record ExistenceVector(string Path, bool Windows, bool ExistsHere, bool OtherSide, string Why);

@@ -91,6 +91,16 @@ public sealed record SystemPlaces(string UserProfile, IReadOnlyList<string> Syst
     /// <summary>Whether this machine spells paths the Windows way — what decides which roots are the OTHER side's.</summary>
     public bool Windows { get; init; } = OperatingSystem.IsWindows();
 
+    /// <summary>
+    /// The drive a root-relative Windows root (<c>/work</c>, <c>\tools</c>) is qualified with — <c>%SystemDrive%</c>, or
+    /// <c>C:</c> when it is unset. Never the CURRENT drive, which the extension host and this server need not share
+    /// (<see cref="QuestionRoots.Qualified"/>).
+    /// </summary>
+    public string SystemDrive { get; init; } = SystemDriveOf(Environment.GetEnvironmentVariable("SystemDrive"));
+
+    /// <summary>The environment's system drive, or <c>C:</c> when it says none.</summary>
+    public static string SystemDriveOf(string? value) => string.IsNullOrWhiteSpace(value) ? "C:" : value.Trim();
+
     public static SystemPlaces Current { get; } = new(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         [.. new[]
@@ -210,13 +220,16 @@ public static class QuestionRoots
     public static Verdict Validate(
         IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null)
     {
-        bool TheOtherSides(string root) => OtherSideHere(root, places.Windows, OtherSide(root, places.Windows) && isDirectory(Full(root)));
+        // Every root is looked for, judged and kept QUALIFIED: a root-relative Windows root on the system drive, never on
+        // whatever drive this process stands on (the code round, 2026-10-09). The other side's list keeps the spelling.
+        string Here(string root) => Qualified(root, places.Windows, places.SystemDrive);
+        bool TheOtherSides(string root) => OtherSideHere(root, places.Windows, OtherSide(root, places.Windows) && isDirectory(Full(Here(root))));
         var listed = roots.ToList();
         var otherSide = listed.Where(TheOtherSides).Select(root => root.Trim()).Distinct(StringComparer.Ordinal).ToList();
         var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
         var accepted = new List<string>();
         var refused = new List<string>();
-        foreach (var root in listed.Where(root => !TheOtherSides(root)))
+        foreach (var root in listed.Where(root => !TheOtherSides(root)).Select(Here))
         {
             var why = WhyNot(root, seen, isDirectory);
             if (why.Length > 0)
@@ -257,11 +270,33 @@ public static class QuestionRoots
     /// <summary>
     /// The DECISION: a root is the other side's when it is spelled for the other operating system AND is no directory on
     /// this machine. The spelling alone is not enough (the plan round, 2026-10-09): on Windows <c>/work</c> is a legal
-    /// root-relative path to the folder <c>work</c> on the current drive, and a person who typed an existing folder that
+    /// root-relative path to the folder <c>work</c> (looked for on the system drive, <see cref="Qualified"/>), and a person who typed an existing folder that
     /// way must not lose it — an existing one is this side's and goes through the ordinary checks. Answered by
     /// <c>shared/path-family-vectors.json</c>'s <c>existence</c> vectors, as the extension's <c>otherSideHere</c> is.
     /// </summary>
     public static bool OtherSideHere(string root, bool windows, bool existsHere) => !existsHere && OtherSide(root, windows);
+
+    /// <summary>
+    /// The root as this side looks for it and keeps it: on Windows a root-relative root — one leading <c>/</c>, or a
+    /// <c>\</c> not followed by another — is qualified with the SYSTEM drive (<c>/work</c> on <c>D:</c> → <c>D:\work</c>);
+    /// everything else, and every root elsewhere, is the root trimmed.
+    /// </summary>
+    /// <remarks>
+    /// The code round, 2026-10-09: resolved against the CURRENT drive, the extension host and this server — which need
+    /// not stand on the same drive — could decide differently, and the server could check one drive and read another.
+    /// One explicit base on both sides, for the existence decision and for the root kept, so every later use (the grant,
+    /// <c>--add-dir</c>, the prompt) names its drive. Answered by <c>shared/path-family-vectors.json</c>'s
+    /// <c>resolution</c> vectors, as the extension's <c>qualified</c> is.
+    /// </remarks>
+    public static string Qualified(string root, bool windows, string systemDrive)
+    {
+        var text = root.Trim();
+
+        return windows && IsRootRelative(text) ? systemDrive + text.Replace('/', '\\') : text;
+    }
+
+    private static bool IsRootRelative(string text) =>
+        text.Length > 0 && text[0] is '/' or '\\' && !(text.Length > 1 && text[1] is '/' or '\\');
 
     /// <summary>What a server says about a root it skipped — the Information line its log carries (<c>StartupNotices</c>).</summary>
     public static string SkippedSentence(string root, bool windows) => windows

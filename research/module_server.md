@@ -1069,9 +1069,15 @@ cure said *"running without those settings"* every time, for a configuration tha
 a POSIX absolute path (one leading `/`) on a Windows server, a Windows one (`X:\`, `X:/`, a leading `\` — UNC included)
 on Linux, WSL or macOS; `//server/share` is neither side's alone, and a relative or drive-relative root stays this side's.
 **The spelling is not the whole decision** (the plan round, same day): on Windows `/work` is a legal root-relative path
-to the folder `work` on the current drive, so `QuestionRoots.OtherSideHere(root, windows, existsHere)` skips a root only
-when it is spelled for the other OS AND is no directory here — `Validate` asks its injected `isDirectory` about those
-roots alone, and an existing one is this side's and goes through every check below.
+to the folder `work`, so `QuestionRoots.OtherSideHere(root, windows, existsHere)` skips a root only when it is spelled
+for the other OS AND is no directory here — `Validate` asks its injected `isDirectory` about those roots alone, and an
+existing one is this side's and goes through every check below. **Where it is looked for is one explicit base**
+(the code round): a root-relative Windows root — one leading `/`, or a `\` not followed by another — is qualified
+with the SYSTEM drive (`QuestionRoots.Qualified`; `SystemPlaces.SystemDrive` = `%SystemDrive%`, `C:` when unset),
+never the current one, which the extension host and this server need not share: `/work` → `C:\work` for the
+existence decision, for every check, and as the root KEPT in `Roots`, so the grant, `--add-dir` and the prompt all
+name the drive. The extension qualifies the same way (`pathFamily.ts` `qualified`), so the page and the server decide
+alike; the `resolution` vectors hold the rule.
 Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
 `QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
 no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
