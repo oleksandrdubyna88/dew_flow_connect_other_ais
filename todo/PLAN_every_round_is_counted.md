@@ -175,6 +175,10 @@ Answers the operator's question for this machine's work from the whole history, 
     input, `UsageAccountingTests`), a long-context tier applied per LINE (it is a per-request threshold), and a line
     with no price or with usage not captured making its total a floor (`≥ ~$…`);
   - **~$ per round and per consultation**, so 66.8 M tokens of `gpt-6-astra` consultations in a week read as money.
+    The denominator is EVERY round (or consultation) in the window, not only the priced ones; when any line inside
+    them is unpriced or not captured, the per-round figure carries the same floor mark as the total (`≥ ~$0.31 per
+    round`) and the tooltip says how many of the N rounds were fully priced; when none was, it is a dash, never an
+    average of the priced few.
   Two defects in today's spending tab are fixed on the way, each RED first: `totalsByVendor` prices a row's whole
   history at the row's CURRENT model (`priceOf(provider, …)`, `src_vs_code/src/usage.ts:174`) — after the Gemini row
   moved to `flash-medium`, every earlier `flash-low` line is priced as `flash-medium` (`APastLine_IsPricedAtItsOwnModel`);
@@ -292,7 +296,8 @@ Answers the operator's question for this machine's work from the whole history, 
   consumer cannot be counted, the number is hidden and the tab says which consumer is missing. Tests: a reset boundary,
   a missing reading, an unchanged reading, a missing consumer.
   **A subscription's share** (the operator's "price" for a flat plan): an optional `planPricePerMonth` the person types
-  on the model card — never looked up — turns the gauge into money: *≈ $0.42 of your plan per round* = monthly price ×
+  on the model card — never looked up; a finite number ≥ 0, anything else refused at the card with the reason and
+  never saved (0 means "no price", not free) — turns the gauge into money: *≈ $0.42 of your plan per round* = monthly price ×
   weekly-% per round ÷ 100 ÷ (weeks in the month). Shown only beside a gauge reading and labelled as a share, never
   summed with a list-price estimate; without a gauge it is not shown at all.
 - **6.3 The record** (Opus) — the status line says what was not possible; README rows; the plan promoted with its
@@ -345,7 +350,8 @@ records that failure).
 | `ConsultationsAndQuestions_AreCountedBesideRounds` | 2.1 |
 | `roundsBlock` renderer cases, and the bundled-page run of the Review rounds page (counts shown; unavailable ≠ 0; the store sentence) | 2.3 |
 | `APastLine_IsPricedAtItsOwnModel`, `CachedInput_IsPricedAtTheCachedRate`, `TheParser_KeepsCachedReasoningAndKind`, `AReportedCost_IsNeverReEstimated`, `AnUnpricedLine_MakesTheTotalAFloor`, `ALongContextTier_AppliesPerLine` | 2.5 |
-| `ASubscriptionShare_NeedsAGaugeReading`, `ASubscriptionShare_IsNeverSummedWithAnEstimate` | 6.2 |
+| `APerRoundFigure_CountsEveryRound_AndCarriesTheFloor` | 2.5 |
+| `ASubscriptionShare_NeedsAGaugeReading`, `ASubscriptionShare_IsNeverSummedWithAnEstimate`, `ANegativeOrNonFinitePlanPrice_IsRefusedAtTheCard` | 6.2 |
 | `TheCardLine_DoesNotSpawnPerRender`, `AConsultationOnlySession_RefreshesTheCount`, `AnIdleWindow_FallsOnAFakeClock`, `TheOtherSidesStore_IsNamedNotOpened` | 2.2 / 2.4 |
 | `TheServerLedger_KeepsCachedAndReasoningTokens` — real `ReviewLauncher`, fake `IProcessLauncher` with a codex `turn.completed` carrying `cached_input_tokens` | 3.1 |
 | `ANonZeroExit_KeepsItsUsage`, `AContinuationThatEndsBadly_KeepsTheFirstLaunchsUsage` | 3.1 |
