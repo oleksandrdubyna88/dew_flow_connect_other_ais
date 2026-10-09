@@ -168,9 +168,13 @@ C# reads the same table:
 2. else the legacy `executablePath`, unless it is spelled for the other OS;
 3. else empty — a PATH lookup — **and** a finding `otherSide` naming the skipped value.
 
-Writes: with two fields shown, a field writes `executablePathBySide[<its family>]` and never touches the legacy value
-(an older extension on the other side keeps reading what it read); with one field (one side known), the field writes
-the legacy value exactly as today. The server applies rule 3 itself as defence in depth (an older extension still
+Writes: with two fields shown, a field writes `executablePathBySide[<its family>]` **and, when it is THIS side's field,
+mirrors the same value into the legacy `executablePath`** (the plan round, finding 0): an older extension reads the
+legacy value only, so it keeps launching what this side last saved — exactly what it does today, never a stale or
+empty value invented by the new storage. Editing the OTHER side's field writes only `BySide` (the other side's newer
+extension reads it first; an older one there keeps today's behaviour). With one field (one side known), the field writes
+the legacy value exactly as today. Two-field mode therefore never makes an older reader worse than today; it makes a
+newer reader on each side right. The server applies rule 3 itself as defence in depth (an older extension still
 sends the legacy value): an `ExecutablePath` spelled for the other OS is treated as empty, with an Information log line
 — never a refusal.
 
@@ -269,9 +273,17 @@ RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/p
 
 - **0.1** On the operator's machine, a `test:host`-style probe: a stamp written to `globalState` in a WSL window — is it
   visible to an already-open Windows window through `Memento.keys()`/`get`, and how soon (reload / focus / live)?
-  Recorded in `research/RESULTS_side_registry_reaches_the_other_window.md`. **Decides** whether "both known" can flip
-  live or needs the next window start (either is acceptable; the plan says which).
-- **0.2** The VS Code floor (`engines.vscode ^1.85.0`) has `Memento.keys()` — confirm against `@types/vscode`; if not,
+  Recorded in `research/RESULTS_side_registry_reaches_the_other_window.md`. It needs both kinds of window on the
+  operator's machine, so it runs when the operator is present; **nothing in E1–E5 waits on it**.
+- **0.2 The design does not depend on 0.1** (the plan round, finding 1). "Both known" is evaluated on every render and at
+  every activation from `globalState`, which every window of the profile reads at start (measured, *What already exists
+  for "sides"*); so in the worst case two fields appear at the next window start. If 0.1 shows a stamp does NOT reach
+  another window even at its start (globalState not shared after all), the fallback is already in the design and becomes
+  the default: `coai.pathFieldsPerSide` (`application` scope, shared by both windows) is set to `always` by the first
+  window that sees a path spelled for the other OS in the shared settings (option D used to SWITCH, not to guess — a
+  person can turn it back to `never`), and the This side page says which signal turned two fields on. Release
+  requirement for E2: one of the two signals is proven by a `test:host` scenario.
+- **0.3** The VS Code floor (`engines.vscode ^1.85.0`) has `Memento.keys()` — confirm against `@types/vscode`; if not,
   the registry is one record under one key with per-side entries (races lose at most a `lastSeen`).
 
 ### E1 — one rule for every path setting · `feat/paths-per-side-e1-one-rule`
@@ -359,8 +371,9 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
 - **3.1** `executablePathBySide` read and written (`vendors.ts:386`, `catalogEdit.ts`), carried by the catalog
   migration and by *Export settings* **without** its values (`configTransfer.ts:44`'s `MACHINE_PATH_FIELD` widened to
   both names). RED: a row with `executablePathBySide.posix` set still sends the legacy value to a WSL server today.
-- **3.2** `pathForThisSide` rule 1, with the write rules of (c): two fields write `BySide`, one field writes the legacy
-  value. RED: a two-field save on Windows today overwrites the legacy value the WSL side reads.
+- **3.2** `pathForThisSide` rule 1, with the write rules of (c): two fields write `BySide` and this side's field also
+  mirrors into the legacy value; one field writes the legacy value. REDs: a two-field save of THIS side's field leaves the
+  legacy value stale for an older reader; a save of the OTHER side's field must not touch the legacy value.
 - **3.3** Lists grouped by family through `otherSideHere` (O1). Unit: `/work` that exists on Windows groups as
   Windows'; `/home/jinx/git` groups as WSL / Linux's.
 - **3.4** `dataDirectory`: the other side's value read from its overlay via the registry, never written from here.
@@ -421,9 +434,12 @@ Each epic is one branch and one pull request, gated per epic.
 ## Risks
 
 1. **`globalState` across open windows** — if a stamp reaches the other window only on its next start, "two fields"
-   appears one restart late. E0 measures it; acceptable either way, said on the This side page.
+   appears one restart late; if it never does, the fallback of E0.2 turns two fields on from the first other-OS path
+   seen. Said on the This side page either way.
 2. **Two extension versions on two sides** (a WSL remote installs its own copy): an older one keeps writing the legacy
-   `executablePath`; the newer one reads `BySide` first, so it is not affected, and the older reads what it always read.
+   `executablePath`; the newer one reads `BySide` first, so it is not affected, and the older reads what it always read
+   — and a two-field save mirrors this side's value into the legacy field, so the older reader on this side is never
+   left with a stale value (E3.2's RED covers it).
 3. **Settings Sync** carries `executablePathBySide` to another machine like it carries `executablePath` today — no worse;
    the paths are skipped or marked missing there.
 4. **A slow or offline share** (`Z:\` not mounted): one `stat` at a time, never awaited by a render, `unknown` never
