@@ -4,7 +4,7 @@
 > vscode-free `catalogMigrationRun.ts`, tests. A patch release of the extension (0.65.1).
 >
 > Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) (E1.3, the host half of the move).
+> [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) (E1.3, the host half of the move).
 
 ## Symptom
 
