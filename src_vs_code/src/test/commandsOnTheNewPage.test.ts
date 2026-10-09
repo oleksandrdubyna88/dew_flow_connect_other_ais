@@ -144,15 +144,19 @@ test('Remove posts the removal of THAT command, and a tick or a stage posts once
 });
 
 test('each shipped text shows its marker, its shipped words faintly, and Restore only when overridden', () => {
-  const plain = paneHtml(withTexts({}));
-  const rewritten = paneHtml(withTexts({ 'command-autonomy': 'Mine.', 'command-preamble': '  \n' }));
+  // Read off the RUNNING page's nodes (PR #713, CodeRabbit), not its markup.
+  const plain = commandsPage(withTexts({})).pane;
+  const rewritten = commandsPage(withTexts({ 'command-autonomy': 'Mine.', 'command-preamble': '  \n' })).pane;
+  const restores = (pane: PageNode): readonly (string | undefined)[] =>
+    pane.find((node) => node.dataset.cmdRestore !== undefined).map((node) => node.dataset.cmdRestore);
+  const autonomy = plain.one((node) => node.dataset.cmdText === 'command-autonomy', 'the autonomy text');
 
-  assert.match(plain, /<b>Work AUTONOMOUSLY\. <\/b>/u);
-  assert.match(plain, /placeholder="Say that you are working autonomously/u);
-  assert.match(plain, /The server fills in <code>\{scope\}<\/code>/u);
-  assert.doesNotMatch(plain, /data-cmd-restore=/u, 'a Restore is offered with nothing to restore');
-  assert.match(rewritten, /data-cmd-restore="command-autonomy"/u);
-  assert.doesNotMatch(rewritten, /data-cmd-restore="command-preamble"/u, 'a blank file is no override, as the server reads it');
+  assert.ok(plain.find((node) => node.tagName === 'B' && node.text() === 'Work AUTONOMOUSLY. ').length > 0, 'the marker is not drawn');
+  assert.match(autonomy.attrs['placeholder'] ?? '', /^Say that you are working autonomously/u, 'the shipped words are not drawn faintly');
+  assert.ok(plain.find((node) => node.className === 'note' && node.text().includes('The server fills in {scope}')).length > 0,
+    'the placeholder the server fills is not named');
+  assert.deepEqual(restores(plain), [], 'a Restore is offered with nothing to restore');
+  assert.deepEqual(restores(rewritten), ['command-autonomy'], 'a blank file is no override, as the server reads it');
 });
 
 test('a title or a text holding markup is drawn as text', () => {

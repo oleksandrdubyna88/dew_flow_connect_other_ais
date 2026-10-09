@@ -4,6 +4,7 @@ import { catalogBody, catalogHtml } from '../catalogPage';
 import { CATALOG_TABS } from '../catalogPlaces';
 import { panelState, withoutSeq } from './panelPageHarness';
 import { Node, runPageHtml } from './pageScriptHarness';
+import { bubbled, pageTree, selectorsOf } from './pageTree';
 
 /**
  * The Settings page, RUN (todo/PLAN_one_model_catalog.md, E3.1): six tabs and their sub-tabs, one place held by
@@ -208,9 +209,21 @@ test('Keep it closes the dialog and sends nothing', () => {
 });
 
 test('the Settings page is the only one: it offers no way to another page and calls itself no preview', () => {
-  // E5.1 step 5 of todo/PLAN_one_model_catalog.md removed the page this one replaced and the switch between them.
+  // E5.1 step 5 of todo/PLAN_one_model_catalog.md removed the page this one replaced and the switch between them. RUN,
+  // over the drawn tree (PR #713, CodeRabbit): every button the page binds, and everything it posts once loaded.
   const html = catalogHtml(state(), 'test-nonce', 'models');
+  const tree = pageTree(html);
+  const commands = tree.find((node) => node.dataset.command !== undefined);
+  const page = runPageHtml(html, selectorsOf(tree, ['[data-tab]', '[data-pane]', '[data-command]']));
+  for (const button of commands) {
+    bubbled(page, 'click', button);
+  }
 
-  assert.doesNotMatch(html, /data-command="settingsPreview"/u, 'a button still switches to a page that is gone');
-  assert.doesNotMatch(html, /preview-badge|Use the current page|still on the current Settings page/u, 'the page still calls itself a preview');
+  assert.ok(commands.length > 0, 'the page bound no command button, so this pressed nothing');
+  assert.deepEqual(commands.filter((node) => node.dataset.command === 'settingsPreview').map((node) => node.text()), [],
+    'a button still switches to a page that is gone');
+  assert.deepEqual(page.posted.filter((m) => m['command'] === 'settingsPreview'), [], 'a press asked for a page that is gone');
+  assert.equal(tree.one((node) => node.tagName === 'H1', 'the page heading').text(), 'Settings', 'the page still calls itself a preview');
+  assert.deepEqual(tree.find((node) => /Use the current page|still on the current Settings page/u.test(node.own)).map((node) => node.own), [],
+    'the page still points at the page it replaced');
 });
