@@ -154,7 +154,8 @@ const MODELS = `
   .catalog .badge.health.busy::before { content: "◌ "; color: var(--link); }
   .catalog .world { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
   .catalog .world button { margin: 0; width: auto; }
-  .catalog .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+  /* A model CARD's block: Chat draws its models as .block too, and a page-wide .block gave them this line and space. */
+  .catalog .card .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
   .catalog .block-title { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; opacity: 1; }
   .catalog .boxes { display: flex; flex-wrap: wrap; gap: 4px 14px; }
   .catalog .feat { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }

@@ -5,7 +5,8 @@
 **Settings uses the width of a wide editor.** Reviews (Stages, Roles & prompts, Prompts per round, The gate, Commands),
 Security lane and Chat lay their cards out in two columns when the editor is wide and in one when it is narrow — the
 way Models already did, at the same width. On Roles & prompts each role keeps the whole width and its prompts sit side
-by side. Limits, Consultants and Setup are unchanged.
+by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
+the Models cards.
 
 ## Extension 0.65.0 — 2026-10-09
 

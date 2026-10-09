@@ -11685,7 +11685,12 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   models a chat can open on, the three sending fields, the prompt presets; a stranded choice and a conflict's table span.
 - **Not touched:** Limits (five numbers, one a row), Consultants (a form of single settings with no repeated card),
   Setup.
-- **Tests:** `theSettingsTabsFlowInTwoColumns.test.ts` runs the page on each place and asserts every repeated card's
-  PARENT is the shared class (a class written beside the cards instead of around them reads the same to a search),
-  that Limits draws none, that Models' cards sit in it, and on the sheet that exactly one two-column rule exists — on
-  the shared class, at 1100 px — with the cap lifted there.
+- **Models' card-block rule is the card's.** It was the page-wide `.catalog .block`, and Chat draws its models as
+  `.block` too, so they wore a card block's top line and padding; it is `.catalog .card .block` now.
+- **Tests:** `theSettingsTabsFlowInTwoColumns.test.ts` runs the page on each place. Every card family is drawn exactly
+  as many times as its source of truth says (the state, the shipped catalogue, or the builder's own output — a family
+  drawing nothing would otherwise pass) and each card's PARENT is the shared class (a class written beside the cards
+  instead of around them reads the same to a search); Limits draws none; Models' cards sit in it; the sheet holds
+  exactly one two-column rule — on the shared class, at 1100 px — with the cap lifted there; and no top-border rule
+  reaches a Chat model block while one still reaches a Models card block. Design record:
+  [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).

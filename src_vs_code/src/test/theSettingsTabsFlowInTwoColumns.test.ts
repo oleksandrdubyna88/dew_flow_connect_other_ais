@@ -5,9 +5,10 @@ import { catalogHtml } from '../catalogPage';
 import type { ModelPreset, PromptPreset } from '../chatPresets';
 import type { ChatSettings } from '../chatSettings';
 import { SHIPPED_COMMANDS, type CommandRow } from '../commands';
-import { type PanelState } from '../panelView';
-import { composed } from '../roles';
+import { chatProviderListFor, chatSendingFields, gateBody, type PanelState } from '../panelView';
+import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed } from '../roles';
 import { DEFAULT_SECURITY } from '../securityLane';
+import { promptsInOrder } from '../securityLaneState';
 import { panelState } from './panelPageHarness';
 import { pageTree, selectorsOf, type PageNode } from './pageTree';
 import { runPageHtml } from './pageScriptHarness';
@@ -51,9 +52,6 @@ const CHAT: ChatSettings = {
 
 const MINE: CommandRow = { id: 'cmd-ab12', title: 'Run the linter', stage: 'code', enabled: true };
 
-/** Every prompt the shipped roles carry — what Roles & prompts draws with no role of the person's own. */
-const PROMPTS = composed([]).reduce((sum, role) => sum + (role.prompts ?? []).length, 0);
-
 /** Every place with something to repeat: the roles and commands read, two chat models, two prompt presets, two pairs. */
 function fullState(): PanelState {
   const base = panelState('reviewers');
@@ -83,45 +81,87 @@ function paneOn(place: string): PageNode {
   return pane;
 }
 
-/** What repeats on each place the operator named — the things that flow into the columns. */
-const CARDS: readonly { readonly place: string; readonly what: string; readonly least: number; readonly card: (node: PageNode, pane: PageNode) => boolean }[] = [
-  { place: 'reviews/stages', what: 'role box', least: 8, card: (node) => node.tagName === 'DIV' && has(node, 'role') },
+/** The top-level fields a builder draws, read off its own output — the count a place that wraps it must show. */
+const fieldsOf = (html: string): number => pageTree(html).children.filter((node) => has(node, 'field')).length;
+
+/** The role boxes Stages and Prompts per round draw: one per role in the four buckets `promptsBody` groups. */
+const STAGED = [PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, FEATURE_CODE];
+const roleBoxes = (state: PanelState): number => composed(state.settings.roles).filter((role) => STAGED.includes(bucketOf(role))).length;
+
+/** The lane's two numbers, by the field each writes. */
+const LANE_NUMBERS = ['threshold', 'maxRounds'];
+
+/** A model's block or a preset: it carries its id. A stranded choice or a conflict is a warning, and spans both columns. */
+const chatCard = (node: PageNode, kind: string): boolean => node.tagName === 'DIV' && node.dataset.chpId !== undefined && has(node, kind);
+
+/**
+ * Every family of repeated cards the operator's places draw, each counted against its OWN source of truth — the state,
+ * the shipped catalogue or the builder's own output — so a family that draws nothing is a red test by name, not a loop
+ * over nothing that a "every card has the right parent" assertion would pass.
+ */
+const FAMILIES: readonly {
+  readonly place: string;
+  readonly family: string;
+  readonly expected: (state: PanelState) => number;
+  readonly card: (node: PageNode, pane: PageNode) => boolean;
+}[] = [
+  { place: 'reviews/stages', family: 'Stages role boxes', expected: roleBoxes, card: (node) => node.tagName === 'DIV' && has(node, 'role') },
+  { place: 'reviews/prompts', family: 'Prompts per round role boxes', expected: roleBoxes, card: (node) => node.tagName === 'DIV' && has(node, 'role') },
   // A role spans the page and its PROMPTS flow: a stage often holds one role, which two columns of roles would leave
-  // as narrow as before. Every prompt of every role the page draws.
-  { place: 'reviews/roles', what: 'role\'s prompt', least: PROMPTS, card: (node) => node.tagName === 'DIV' && node.dataset.rolePrompt !== undefined },
-  { place: 'reviews/prompts', what: 'role box', least: 8, card: (node) => node.tagName === 'DIV' && has(node, 'role') },
+  // as narrow as before.
+  {
+    place: 'reviews/roles',
+    family: 'Roles & prompts prompt cards',
+    expected: (state) => composed(state.roles?.rows ?? []).reduce((sum, role) => sum + (role.prompts ?? []).length, 0),
+    card: (node) => node.tagName === 'DIV' && node.dataset.rolePrompt !== undefined,
+  },
   // The gate is one decision per field, and nothing repeats but the fields themselves.
-  { place: 'reviews/gate', what: 'setting', least: 4, card: (node, pane) => has(node, 'field') && !insideA(node, 'field', pane) },
-  { place: 'reviews/commands', what: 'command', least: 1 + SHIPPED_COMMANDS.length, card: (node) => node.tagName === 'SECTION' && has(node, 'command') },
-  // The two numbers, thirteen shipped prompt cards and the two pairs.
+  { place: 'reviews/gate', family: 'The gate fields', expected: (state) => fieldsOf(gateBody(state)), card: (node, pane) => has(node, 'field') && !insideA(node, 'field', pane) },
   {
-    place: 'security',
-    what: 'number, prompt card or pair',
-    least: 2 + DEFAULT_SECURITY.prompts.length + 2,
-    card: (node) => node.tagName === 'FIELDSET'
-      || (node.tagName === 'LABEL' && node.find((one) => one.dataset.securityField === 'threshold' || one.dataset.securityField === 'maxRounds').length > 0),
+    place: 'reviews/commands', family: 'Commands — Yours', expected: (state) => state.commands?.rows.length ?? 0,
+    card: (node) => node.tagName === 'SECTION' && node.dataset.cmdId !== undefined,
   },
   {
-    place: 'chat',
-    what: 'model, sending field or prompt preset',
-    // Two models, the three sending fields, two presets.
-    least: 7,
-    // A model's block and a preset carry their id; a stranded choice or a conflict is a warning, and spans both columns.
-    card: (node, pane) => (node.tagName === 'DIV' && node.dataset.chpId !== undefined && (has(node, 'block') || has(node, 'preset')))
-      || (has(node, 'field') && !insideA(node, 'block', pane) && !insideA(node, 'preset', pane) && !insideA(node, 'field', pane)),
+    place: 'reviews/commands', family: 'Commands — Shipped', expected: () => SHIPPED_COMMANDS.length,
+    card: (node) => node.tagName === 'SECTION' && node.dataset.cmdFile !== undefined,
   },
+  {
+    place: 'security', family: 'Security lane numbers', expected: () => LANE_NUMBERS.length,
+    card: (node) => node.tagName === 'LABEL' && node.find((one) => LANE_NUMBERS.includes(one.dataset.securityField ?? '')).length > 0,
+  },
+  {
+    place: 'security', family: 'Security lane prompt cards', expected: (state) => promptsInOrder(state.settings.securityLane).length,
+    card: (node) => node.tagName === 'FIELDSET' && has(node, 'seclane-prompt'),
+  },
+  {
+    place: 'security', family: 'Security lane pairs', expected: (state) => state.settings.securityLane.runs.length,
+    card: (node) => node.tagName === 'FIELDSET' && !has(node, 'seclane-prompt'),
+  },
+  {
+    place: 'chat', family: 'Chat models a chat opens on',
+    expected: (state) => chatProviderListFor(CHAT, state).providers.filter((one) => CHAT.models.some((model) => model.id === one.id)).length,
+    card: (node) => chatCard(node, 'block'),
+  },
+  {
+    place: 'chat', family: 'Chat sending fields', expected: () => fieldsOf(chatSendingFields(CHAT)),
+    card: (node, pane) => has(node, 'field') && !insideA(node, 'block', pane) && !insideA(node, 'preset', pane) && !insideA(node, 'field', pane),
+  },
+  { place: 'chat', family: 'Chat prompt presets', expected: () => CHAT.prompts.length, card: (node) => chatCard(node, 'preset') },
 ];
 
-test('each named tab lays its repeated cards out in the columns Models uses', () => {
-  for (const spec of CARDS) {
+test('each named tab draws every family of its repeated cards, all of it, in the columns Models uses', () => {
+  const state = fullState();
+  for (const spec of FAMILIES) {
     const pane = paneOn(spec.place);
     const cards = pane.find((node) => spec.card(node, pane));
-    // The count first, so a fixture that draws nothing fails here rather than passing a loop over nothing.
-    assert.ok(spec.least > 0, `the fixture: ${spec.place} expects no ${spec.what}s at all`);
-    assert.ok(cards.length >= spec.least, `${spec.place} draws ${cards.length} ${spec.what}s, the fixture expects ${spec.least} or more`);
+    const expected = spec.expected(state);
+    // The count first — against the family's own source — so a family that draws nothing, or loses one, fails here by
+    // name rather than passing the parent check below over fewer cards.
+    assert.ok(expected > 0, `the fixture: ${spec.family} has nothing to draw`);
+    assert.equal(cards.length, expected, `${spec.family} on ${spec.place}: the page drew ${cards.length}, its source has ${expected}`);
     for (const card of cards) {
       const parent = card.parent as PageNode;
-      assert.ok(has(parent, COLUMNS), `a ${spec.what} on ${spec.place} sits in <${parent.tagName.toLowerCase()} class="${parent.className}">, not in the columns`);
+      assert.ok(has(parent, COLUMNS), `one of the ${spec.family} on ${spec.place} sits in <${parent.tagName.toLowerCase()} class="${parent.className}">, not in the columns`);
     }
   }
 });
@@ -169,4 +209,43 @@ test('the stylesheet has ONE two-column rule, on the shared class, at Models\' b
   // The sections were written for 760 px; on a wide editor a place that has columns may use the width they need.
   assert.ok(rules.some((rule) => rule.media === '(min-width: 1100px)' && rule.selector === `.catalog .moved:has(.${COLUMNS})` && /max-width:\s*none/u.test(rule.body)),
     'the narrow column is not lifted where a place lays out in columns');
+});
+
+/**
+ * Whether a selector of class compounds joined by descendant spaces (`.catalog .card .block`) matches `node` — the shape
+ * every rule this check reads has. Anything else (a tag, a combinator, an attribute, a pseudo-class) is not this
+ * matcher's to judge and answers no.
+ */
+function matches(node: PageNode, selector: string): boolean {
+  const parts = selector.trim().split(/\s+/u);
+  if (!parts.every((part) => /^(\.[\w-]+)+$/u.test(part))) {
+    return false;
+  }
+  const fits = (at: PageNode, part: string): boolean => part.split('.').filter((one) => one.length > 0).every((name) => has(at, name));
+  if (!fits(node, parts[parts.length - 1]!)) {
+    return false;
+  }
+  let wanted = parts.length - 2;
+  for (let at = node.parent as PageNode | undefined; at !== undefined && wanted >= 0; at = at.parent as PageNode | undefined) {
+    wanted = fits(at, parts[wanted]!) ? wanted - 1 : wanted;
+  }
+
+  return wanted < 0;
+}
+
+/** The top-level rules that draw a top border, one entry per selector of a selector list. */
+const borderTopRules = (): readonly string[] => rulesOf(CATALOG_CSS)
+  .filter((rule) => rule.media === '' && /border-top:/u.test(rule.body))
+  .flatMap((rule) => rule.selector.split(','))
+  .map((selector) => selector.trim());
+
+test('a Chat model block wears no Models card rule — the top border is a Models card block\'s alone', () => {
+  const chat = paneOn('chat');
+  const block = chat.one((node) => chatCard(node, 'block'), 'a model block on Chat');
+  const models = paneOn('models');
+  const cardBlock = models.one((node) => has(node, 'block') && insideA(node, 'card', models), 'a block inside a Models card');
+
+  // The positive half first: the rule is alive and still dresses the card block it was written for.
+  assert.ok(borderTopRules().some((selector) => matches(cardBlock, selector)), 'no top-border rule reaches a Models card block any more');
+  assert.deepEqual(borderTopRules().filter((selector) => matches(block, selector)), [], 'a Models card rule reaches the Chat tab\'s model block');
 });
