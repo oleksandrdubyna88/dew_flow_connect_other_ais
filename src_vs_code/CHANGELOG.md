@@ -1,5 +1,38 @@
 # Changelog
 
+## Extension — unreleased (catalog epic 5)
+
+**One Settings page, and it opens on Models.** The gear opens a single page with six tabs: **Models** — every model this
+side can use, added once with **＋ Add a model**, one card each, ticked for what it is used for (reviews plans, code,
+documents, features; security lane, consultant, question consultant, chat, Bugz ranking) — then **Reviews** (Stages,
+Roles & prompts, Prompts per round, The gate, Commands, Limits), **Consultants** (Consultant, Question consultant),
+**Security lane**, **Chat** and **Setup** (Vendor keys, Team servers, MCP server, This side).
+- A consultant, a question-consultant row, a security pair, the chat and Bugz each pick a model on Models instead of
+  holding a copy of its settings. A feature's place says which models are ticked for it, with **Change on Models**.
+- The roles editor is **Reviews › Roles & prompts**, the gate's commands are **Reviews › Commands**, and the chat's
+  prompt presets are on **Chat**. **Edit roles…** and **Edit commands…** jump there.
+- A link to an old tab (`coai.openSettings('gate')`, a keybinding, a notification) opens the place that holds it now.
+
+**Removed: the old Settings page and the preview switch.** The Reviewers tab and its cards, **Add a reviewer**, the
+Review roles, Gate commands and Chat presets tabs, **Chat other AIs**, and `coai.settingsPreview` with **Try the new
+Settings page** / **Use the current page** are gone.
+- Three palette commands are kept for one more release as redirects: **Edit review roles**, **Edit the gate's
+  commands** and **Edit chat presets** open the Settings page at Reviews › Roles & prompts, Reviews › Commands and Chat.
+
+**Chat names a saved model it cannot run.** A model preset saved before presets carried their own vendor is named on
+Chat, with what to do: add it again on Models, ticked chat — and where the old row is kept (`coai.chatModelPresets`),
+since no page edits it any more. It used to be passed over in silence. A chat with no model chosen now says to pick one
+on **Settings › Chat** or tick one Chat on Models.
+
+**What a migrated install sees.** On first start the extension moves every model you defined into the catalog — your
+reviewers, your consultant and question-consultant models, and your saved chat models — and Settings opens on Models with
+all of them there, each ticked for what it did before. Rounds run the same models as before. **ConnectOtherAIs: Restore
+settings from before the catalog** puts the old settings back. Going back to an older extension is not a way back: it
+will not overwrite the settings file this one stamped, so its edits never reach coai-mcp — the way back is this version.
+
+**The help says the page as it is**, in all five languages: every place is named `Tab › Sub-tab` with the page's own
+labels, and a test fails if an article or a tooltip names a control the page no longer draws.
+
 ## Server 0.44.2 — 2026-10-07
 
 **codex 0.110–0.130 are never told the standard tier they refuse.** Since 0.44.0 every codex launch whose row's fast

@@ -436,7 +436,7 @@
               "pricePerMillionOut": 0
             }
           ],
-          "markdownDescription": "The reviewers. Edit them in **ConnectOtherAIs: Settings** → *Reviewers* — add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
+          "markdownDescription": "Every model this side can use — the catalog. Edit them in **ConnectOtherAIs: Settings** → *Models* — add a model, remove one, or tick what it is used for. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
           "items": {
             "type": "object",
             "required": [
@@ -725,7 +725,7 @@
         "coai.chatPromptPresets": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Your saved prompts, each with a name. One is the MAIN one — the one used when a capture sends by itself (see `#coai.chatAutoSend#`). Edit them in **ConnectOtherAIs: Edit chat presets**, which is easier than editing this. A row needs a `name` and a `text`; anything else in it is ignored, and a row missing either is dropped rather than taking the list with it.",
+          "markdownDescription": "Your saved prompts, each with a name. One is the MAIN one — the one used when a capture sends by itself (see `#coai.chatAutoSend#`). Edit them in **ConnectOtherAIs: Settings** → *Chat*, which is easier than editing this. A row needs a `name` and a `text`; anything else in it is ignored, and a row missing either is dropped rather than taking the list with it.",
           "items": {
             "type": "object",
             "properties": {
@@ -747,7 +747,7 @@
         "coai.chatModelPresets": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Your saved models, each with a name and optionally a prompt the composer opens with. `provider` is the reviewer ROW that answers — the same identity the picker stores — and `model` is which of its models, or empty for whatever that row is set to. Edit them in **ConnectOtherAIs: Edit chat presets**.",
+          "markdownDescription": "Your saved models, each with a name and optionally a prompt the composer opens with. `provider` is the row that answers and `model` is which of its models. Since the catalog these moved to **Models** as rows ticked Chat; this key is kept as it was, never rewritten, so an older extension still reads it.",
           "items": {
             "type": "object",
             "properties": {
@@ -806,17 +806,17 @@
         "coai.chatModel": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Which configured reviewer answers a chat, by its id. Empty means the first one that can — today that is any row on the `antigravity` runtime."
+          "markdownDescription": "Which model answers a chat, by its row id — chosen in **ConnectOtherAIs: Settings** → *Chat* from the models ticked Chat. Empty means the one ticked main, else the first that can."
         },
         "coai.chatPromptChoice": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Which of your saved prompts a chat opens with, by its id. Empty means the main one. The words themselves live in `coai.chatPromptPresets` and are edited in the presets tab, so this holds the CHOICE rather than a copy of it."
+          "markdownDescription": "Which of your saved prompts a chat opens with, by its id. Empty means the main one. The words themselves live in `coai.chatPromptPresets` and are edited in **ConnectOtherAIs: Settings** → *Chat*, so this holds the CHOICE rather than a copy of it."
         },
         "coai.chatModelName": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Which of that provider's models answers. Empty means the model the reviewer row itself is set to, which is what every chat used before the pair existed."
+          "markdownDescription": "Which of that provider's models answers. Empty means the model the row itself is set to, which is what every chat used before the pair existed."
         },
         "coai.roles": {
           "type": "array",

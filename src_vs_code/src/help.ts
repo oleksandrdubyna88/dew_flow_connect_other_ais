@@ -29,7 +29,7 @@ export const HELP = {
   consultEnabled:
     'Lets an AI working with this gate ask ANOTHER vendor’s model for a second opinion — a consultant that reads this checkout read-only, with the uncommitted change, and answers advice the AI must verify. Three kinds exist: STUCK, when the AI itself is not getting out; CADENCE, when the gate orders one for a group of epics; RISK, when it orders one for a piece the AI named as risky. Off switches off all three: the AI is told no consultant can be had, and a cadence set to Require stands its refusal down, with the reason written on the round.',
   consultCaller:
-    'Which vendor answers when THIS kind of AI consults, and on which model. A different vendor from the caller is the point: a model cannot see its own blind spot. Empty model is the vendor’s own default. These are the consultant’s settings alone — a reviewer row of the same vendor shares only its name and its key in the vault.',
+    'Which vendor answers when THIS kind of AI consults, and on which model. A different vendor from the caller is the point: a model cannot see its own blind spot. Empty model is the vendor’s own default. The model is a card on Models, ticked consultant: its model, effort and prompt are edited there, and the same card may review as well.',
   consultBaseUrl:
     'The address of the vendor’s API, for a vendor this build talks to over HTTP rather than through its CLI. Empty uses the vendor’s own public endpoint.',
   consultExecutablePath:
@@ -146,7 +146,7 @@ export const HELP = {
     'Install this vendor’s CLI. It opens a terminal with the exact command typed and waiting, picked for the OS the terminal will actually run in — PowerShell on Windows, the shell in your distribution when VS Code is attached to WSL — plus how to get node first if this machine has none. Only the vendors’ own published sources: npm for Codex, Google’s own script for Antigravity. A fresh WSL box has none of these CLIs, and the answer being on somebody else’s docs page is why a reviewer never gets added.',
 
   addVendor:
-    'Add another independent reviewer: a preset, or any OpenAI-compatible endpoint by name and URL. More vendors means more independent eyes — and more cost per round.',
+    'Add a model to this side’s catalog: a CLI here, an API key, this machine’s GPU or a Team server — a preset, or any OpenAI-compatible endpoint by name and URL. Then tick on its card what it is used for. More reviewing vendors means more independent eyes — and more cost per round.',
 
   maxRounds:
     'How many times THIS ROLE may be asked before the policy below takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',

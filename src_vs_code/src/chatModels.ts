@@ -364,8 +364,8 @@ export function resolveChatPick(
       return {
         ok: false,
         refusal: list.providers.length === 0
-          ? 'There is no saved model to send this to yet — add one with Edit chat presets.'
-          : 'No saved model is chosen — pick one in Settings → Chat other AIs, or add one with Edit chat presets.',
+          ? 'There is no saved model to send this to yet — tick one Chat on Models, in ConnectOtherAIs: Settings.'
+          : 'No saved model is chosen — pick one in Settings › Chat, or tick one Chat on Models.',
       };
     }
 

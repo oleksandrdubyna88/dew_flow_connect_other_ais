@@ -3944,7 +3944,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
     const picked = await askPerson(() => vscode.window.showQuickPick(
       offered.map((v) => ({ label: v.id, detail: slotSentence(v), vendor: v })),
-      { title: `Add a reviewer from ${server.name}`, placeHolder: 'Which vendor should review?' },
+      { title: `Add a model from ${server.name}`, placeHolder: 'Which vendor should it run on?' },
     ));
     if (picked === undefined) {
       return undefined;
@@ -4045,7 +4045,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // still asks for a name and a URL rather than writing a row nobody named.
     let vendor: Vendor = { ...chosen.preset, id: chosen.id };
     if (vendor.id.length === 0) {
-      const own = await this.askCustomEndpoint('Add a reviewer');
+      const own = await this.askCustomEndpoint('Add a model');
       if (own === undefined) {
         return;
       }
@@ -4109,7 +4109,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The base URL for a key whose name has no preset — empty when the box is dismissed. */
   private async askVaultEndpoint(keyName: string): Promise<string> {
     const typed = await askPerson(() => vscode.window.showInputBox({
-      title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
+      title: `Add a model: ${VAULT_KEY_MARK}${keyName}`,
       prompt: `The OpenAI-compatible base URL the key “${keyName}” is for`,
       placeHolder: 'https://api.example.com/v1',
       validateInput: (text) => badEndpoint(text),
@@ -4127,7 +4127,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
     return listed.ids.length > 0
       ? askPerson(() => vscode.window.showQuickPick([...listed.ids], {
-        title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
+        title: `Add a model: ${VAULT_KEY_MARK}${keyName}`,
         placeHolder: 'Which model should review? — the endpoint’s own list',
       }))
       : this.typeVaultModel(keyName, listed.reason);
@@ -4182,7 +4182,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** A model id typed by hand, when the endpoint would not list its models — with the reason it would not. */
   private async typeVaultModel(keyName: string, reason: string): Promise<string | undefined> {
     const typed = await askPerson(() => vscode.window.showInputBox({
-      title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
+      title: `Add a model: ${VAULT_KEY_MARK}${keyName}`,
       prompt: `The endpoint did not list its models (${reason}). Type the model id exactly as the endpoint names it.`,
       validateInput: (text) => (text.trim().length === 0 ? 'A model id is needed' : undefined),
     }));

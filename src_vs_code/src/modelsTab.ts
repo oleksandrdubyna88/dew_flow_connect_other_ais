@@ -1,6 +1,7 @@
 import { CATALOG_USES } from './catalogFields';
 import { lastStagesOf } from './catalogWriteRules';
 import { escapeHtml } from './escapeHtml';
+import { HELP } from './help';
 import { accessOf, modelCard, usedFor } from './modelCard';
 import { USE_LABELS } from './modelCardFields';
 import { checkFactsOf } from './modelCardWorld';
@@ -70,7 +71,7 @@ const ACCESS_CHOICES: readonly (readonly [string, string])[] = [['', 'Any'], ['c
 function toolbar(rows: readonly Vendor[]): string {
   const on = rows.filter((row) => row.enabled).length;
 
-  return `<div class="toolbar"><button type="button" class="primary" data-command="addVendor">＋ Add a model</button>`
+  return `<div class="toolbar"><button type="button" class="primary" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋ Add a model</button>`
     + `<input type="search" id="model-search" placeholder="Find a model" aria-label="Find a model">`
     + `<label>Runs on <select id="model-access">${ACCESS_CHOICES.map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join('')}</select></label>`
     + `<label><input type="checkbox" id="model-show-off"> Show switched-off models</label>`

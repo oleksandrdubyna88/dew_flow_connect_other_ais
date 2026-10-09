@@ -10,12 +10,11 @@ import { CATALOG_TABS } from '../catalogPlaces';
  * from — so a tab added there is a tab this test asks the help about, rather than one a hand-kept
  * copy of the list never heard of. (The Security lane tab shipped without a word here.)
  *
- * <p>A TODO until E5.2 of todo/PLAN_one_model_catalog.md: the article still tours the page E5.1 step 5 removed, and E5.2
- * rewrites the help in five languages around this page's tabs. Recorded as todo rather than deleted, so the check is
- * already waiting when that article lands.</p>
+ * <p>It waited as a TODO through E5.1, whose step 5 removed the page the article toured; E5.2 of
+ * todo/PLAN_one_model_catalog.md rewrote the article in five languages around `CATALOG_TABS`, and it holds again.</p>
  */
 for (const language of HELP_LANGUAGES) {
-  test(`the ${language} Settings tab article names every Settings tab, in the order the page draws them`, { todo: 'E5.2 rewrites the article around the Settings page' }, () => {
+  test(`the ${language} Settings tab article names every Settings tab, in the order the page draws them`, () => {
     const article = HELP_ARTICLES.find((one) => one.id === 'the-settings-tab');
     assert.ok(article, 'there is no the-settings-tab article');
     const text = bodyFor(article, language).body.whatItIs;

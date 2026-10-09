@@ -3937,7 +3937,8 @@ any summary exists, so it would otherwise be refused with a sentence about vendo
 to check a configuration that is perfectly correct. Raised twice on the code round.
 
 **`COAI_ROLES` is how a person's own roles arrive, and since 2026-09-12 the PANEL writes it.** The
-roles page (`rolesPage.ts`, see [module_extension.md](module_extension.md)) stores exactly the rows
+roles editor — the Settings page's **Reviews › Roles & prompts** since catalog epic 5, which retired the roles page of its
+own (`rolesEmbed.ts` / `rolesHost.ts`, see [module_extension.md](module_extension.md)) — stores exactly the rows
 this key carries, so nothing translates between the halves, and a prompt's text goes to
 `<dataDir>/prompts/<id>.md` — the override layer `RolePrompts` has read since before roles were data.
 A JSON array of rows — id, name, stage,
@@ -4639,8 +4640,9 @@ epic 3 sets `CommandContext.Cadence` — its default is `CadenceFacts.Off`, and
 | **`Massive`, a sixth size: 6–14 epics.** A plan that names its epics is sized by them (1 → Small, 2–3 → Medium, 4 → Large, 5 → Huge, 6+ → Massive); story headings count as steps when there are no epics; the #131 table is untouched for a plan with neither. Measured on private repo A: the 10-epic plan has 5 numbered steps and the 4-epic plan 31, and the longer file is the smaller plan — steps and length both invert. `Numbers` names the headings only when there are some. The order: "6-14 EPICS … never more than 14 — past that, split the PLAN into two plans". | `core/Commands/PlanShape.cs` (`ByEpics`), `shared/commands/command-split-massive.md` |
 
 There are twenty shipped command texts now — twenty-one since 2026-10-02, with `command-question-consult`
-(S3 of the question consultant); the extension's Edit commands page lists them with their markers and
-placeholders (`src_vs_code/src/commands.ts`).
+(S3 of the question consultant); the extension lists them with their markers and placeholders under **Shipped** in the
+Settings page's **Reviews › Commands** (`src_vs_code/src/commands.ts`, drawn by `commandsEmbed.ts`; the Edit commands
+page of its own went in catalog epic 5).
 
 ### The consultant on a cadence — epic 2: what a consultation is for, the record and the gate (2026-09-25)
 

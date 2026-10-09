@@ -1312,6 +1312,22 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
      chat preset key stays frozen, so an older extension still reads it, and the restore command puts the old settings
      back (T5).
    Built after PR #713 merges, on a branch carrying it.
+   **Progress (2026-10-09, branch `feat/catalog-e5-help`): E5.2 built.** `theHelpNamesOnlyTheSettingsPage.test.ts` —
+   per-language lists (labels in every language, each language's own words around them, each with why), tooltips
+   scanned with the English list, a canary per language that every pattern flags its sample, and one that the page as
+   it is and the sidebar's "section" are not flagged. RED first: 6 of 12 failing, 148 hits (en 31, ru 30, uk 30, es 30,
+   de 27, one tooltip) across sixteen articles — the fourteen of the design plus `vendor-keys` and `security-lane.usage`.
+   The canary caught a defect in the guard itself (a capitalised ru «Вкладка» slipped past) before it was trusted.
+   Rewritten in all five languages (English first, then one translator per language); `the-gate` too, whose tick had
+   moved to Roles & prompts though no pattern named it. `theSettingsHelpNamesEveryTab.test.ts` is no longer `todo`.
+   Tooltips: `consultCaller` rewritten, `addVendor` now says **＋ Add a model** and is the button's real title on Models.
+   Beyond the help (the guard cannot see them): the chat's no-model refusal (RED: "nobody is told where to add one"),
+   the Stages feature hint, the Team server / vault-key quick-pick titles, and six setting descriptions in the
+   manifest. `models-move-into-the-catalog.setup` gained, in ru/uk/de/es, the chat-presets sentence the English had
+   and the translations never did. Docs: CHANGELOG (`## Extension — unreleased (catalog epic 5)`), POST_DEPLOY item 13
+   and "Going back from catalog epic 5", `module_extension.md`, `module_server.md`, `architecture.md`. **Deviation:** the
+   automated half of item 13 is `catalogMigration.test.ts` for reviewers and consultants and `chatPresetMove.test.ts` /
+   `catalogChatStep.test.ts` for chat models — the design named only the first.
 3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5). Also
    (E5.1c's own review, 2026-10-08) the current-page branches the shared builders still carry, each drawn by nothing
    since step 5 but held by tests of their own: `consultantView`'s caller definitions (`callerRows = ''`,

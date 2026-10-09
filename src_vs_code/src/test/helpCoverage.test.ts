@@ -93,9 +93,8 @@ function asProse(title: string): string {
  * the phrase, and this goes red rather than quietly losing the coverage.
  */
 const ALIAS: Record<string, string> = {
-  'coai.editChatPresets': 'edit chat presets',
-  'coai.editRoles': 'opens the roles page',
-  'coai.editCommands': 'opens the commands page',
+  // `coai.editRoles`, `coai.editCommands` and `coai.editChatPresets` need no alias since E5.2: the pages they opened are
+  // gone, and the Settings tab's article names the three by their titles as the redirects they are for one release.
   'coai.copyConfigBlock': 'copy the mcp config block',
   'coai.copyClaudeSnippet': 'copy the claude.md snippet',
   'coai.answerQuestion': 'answer it in the panel',
@@ -132,8 +131,8 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.chatModelPresets': 'your saved models, each with a name',
   'coai.chatLanguage': 'the language the other ai answers in',
   'coai.chatAutoSend': 'whether it sends at once or waits',
-  'coai.chatModel': 'which reviewer answers a chat',
-  'coai.vendors': 'each row is one vendor',
+  'coai.chatModel': 'which model a chat opens on',
+  'coai.vendors': 'every model this side can use',
   'coai.teamServers': 'a team server is the other way to get a reviewer',
   'coai.onExhausted': 'when the rounds run out',
   'coai.maxConcurrency': 'reviewers at once',
@@ -143,7 +142,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.escalationMinutes': 'wait for you',
   'coai.rounds': 'rounds',
   'coai.thresholds': 'passes at or under',
-  'coai.roleEnabled': 'tick box on its own heading',
+  'coai.roleEnabled': 'its **active** tick in **reviews › roles & prompts**',
   'coai.dealPlanLenses': 'deal the lenses across vendors',
   'coai.dealCodeLenses': 'deal the lenses across vendors',
   'coai.codeWorkspace': 'what a reviewer gets',

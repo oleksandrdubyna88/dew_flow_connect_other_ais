@@ -110,7 +110,7 @@ const OTHER_CALLER = 'other';
 /**
  * One option in a row's vendor picker: what is stored, and what a person reads.
  *
- * <p>The `hint` is the catalogue's own sentence — the one *Add a reviewer* shows under each vendor,
+ * <p>The `hint` is the catalogue's own sentence — the one *Add a model* shows under each vendor,
  * saying what it IS and how it runs. One catalogue read the same way twice means both halves of the
  * entry travel, not just the name; a picker showing bare names leaves a person choosing between
  * `DeepSeek` and `OpenRouter` with nothing to choose ON. Empty for a row's own stored entry, whose
@@ -369,7 +369,7 @@ function unplaceable(
   };
 }
 
-/** The catalogue as a person reads it — the labels *Add a reviewer* offers, not internal ids. */
+/** The catalogue as a person reads it — the labels *Add a model* offers, not internal ids. */
 function offeredOptions(picker: Picker): readonly VendorOption[] {
   return [...catalogueOptions(picker), ...customOption(picker.custom)];
 }

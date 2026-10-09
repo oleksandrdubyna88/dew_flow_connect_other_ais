@@ -92,7 +92,7 @@ export function consultantRecordUpdate(
  * callers may hold the same id at the same URL, and that is one vault key used twice — the point of
  * having a name. (gemini, C6's plan round, on where the definition lands.)</p>
  *
- * <p>The id is normalised the way *Add a reviewer* normalises it, because the two flows must mint the
+ * <p>The id is normalised the way *Add a model* normalises it, because the two flows must mint the
  * SAME id from the same words or one credential ends up under two keys. A name that normalises to
  * nothing writes nothing: there is no vault entry to key and nothing to show, so refusing is the only
  * honest outcome. So does a caller kind this build does not have — the same guard, and the same

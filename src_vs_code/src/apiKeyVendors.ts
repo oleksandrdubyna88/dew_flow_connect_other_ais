@@ -1,5 +1,5 @@
 /**
- * The vault's API keys as vendors in "Add a reviewer" (PLAN_feature_review.md, story S3.6).
+ * The vault's API keys as vendors in "Add a model" (PLAN_feature_review.md, story S3.6).
  *
  * <p>The operator's words, 2026-09-26: list every provider that is available, plus one entry per key
  * NAME in the vault's config entry, shown with a leading `!` because it is an API key — `!grok`,

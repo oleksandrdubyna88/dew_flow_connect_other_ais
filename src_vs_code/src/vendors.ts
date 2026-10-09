@@ -173,7 +173,7 @@ export const DEFAULT_VENDORS: readonly Vendor[] = [
 ];
 
 /**
- * Offered by "Add a reviewer…" — presets, not a closed set; the last is a blank to fill in.
+ * Offered by "Add a model" — presets, not a closed set; the last is a blank to fill in.
  *
  * <p><b>Every default vendor is listed here too</b>, which is not redundancy: remove gemini and
  * the list it came from was the only place it existed, so it could never be added back. A default

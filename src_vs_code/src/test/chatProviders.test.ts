@@ -536,7 +536,18 @@ test('with no saved models at all the chat says so, rather than refusing a blank
   const answer = resolveChatPick([], { providers: [], refused: [] }, '', '');
 
   assert.strictEqual(answer.ok, false);
-  assert.match(answer.ok === false ? answer.refusal : '', /Edit chat presets/i, 'nobody is told where to add one');
+  // Where a model is added is Models, ticked Chat, since E5.1 deleted the Chat presets tab (E5.2).
+  assert.match(answer.ok === false ? answer.refusal : '', /tick one Chat on Models/u, 'nobody is told where to add one');
+  assert.doesNotMatch(answer.ok === false ? answer.refusal : '', /Edit chat presets|Chat other AIs/u, 'the refusal sends the person to a tab that is gone');
+});
+
+test('a saved model that is not chosen is refused with where to choose it — Chat — and where to add one', () => {
+  const presets = [{ id: 'p1', name: 'Terra', main: false, runtime: 'codex' as const, model: 'gpt-5.6-terra', executablePath: '', baseUrl: '' }];
+  const answer = resolveChatPick(presets.map(chatRunSpec), chatProvidersFromPresets(presets, CATALOG), '', '');
+  const said = answer.ok === false ? answer.refusal : '';
+
+  assert.match(said, /Settings › Chat/u, 'the refusal does not say where to choose one');
+  assert.doesNotMatch(said, /Edit chat presets|Chat other AIs/u, 'the refusal sends the person to a tab that is gone');
 });
 
 /**
