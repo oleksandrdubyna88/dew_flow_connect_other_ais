@@ -254,5 +254,115 @@ public sealed class SessionTests
         later.Should().NotBeNull("the stamp decides nothing, so failing to write it must refuse nothing");
         later!.LastUsedUtc.Should().Be(start.AddHours(2), "the caller still sees the session as it now is");
         reported.Should().ContainSingle().Which.Should().Contain("could not be written");
+        Directory.GetFiles(Path.Combine(data, "sessions"), "*.tmp").Should().BeEmpty(
+            "a refused rename must not leave its temporary behind — this happens once an hour, for ever");
+    }
+
+    /// <summary>
+    /// The sweep deletes only what it has READ and judged. A file it could not read this time — held
+    /// by a backup, an editor, or this server's own rename under a last-used stamp — is a file it
+    /// knows nothing about, and deleting it deleted a live session once an hour on Windows.
+    /// </summary>
+    /// <remarks>Risk consultation on story 2.1, 2026-10-10 (HIGH). Windows-only: only Windows lets a holder deny other readers.</remarks>
+    [Fact]
+    public void TheSweep_KeepsASessionItCouldNotReadThisTime()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows lets a holder deny other readers");
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var reported = new List<string>();
+        var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
+        var now = DateTimeOffset.UtcNow;
+        var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "", now);
+        int swept;
+        using (new FileStream(
+            Path.Combine(data, "sessions", SessionStore.FileNameFor(token)), FileMode.Open, FileAccess.Read, FileShare.Delete))
+        {
+            // Every other READ is refused while this is held; a delete would go through.
+            swept = store.Sweep(now);
+        }
+
+        store.Validate(token, now).Should().NotBeNull("a file the sweep could not read is not provably litter");
+        swept.Should().Be(0);
+        reported.Should().ContainSingle().Which.Should().Contain("kept");
+    }
+
+    [Fact]
+    public void TheSweep_RemovesATornFile_AndSaysSo()
+    {
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var reported = new List<string>();
+        var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
+        var now = DateTimeOffset.UtcNow;
+        var (live, _) = store.Issue($"dev@{TeamServer.Domain}", "", now);
+        var torn = Path.Combine(data, "sessions", "torn.json");
+        File.WriteAllText(torn, "{ this is not json");
+
+        store.Sweep(now).Should().Be(1, "a torn write is litter, read whole and judged");
+
+        File.Exists(torn).Should().BeFalse();
+        store.Validate(live, now).Should().NotBeNull();
+        reported.Should().ContainSingle().Which.Should().Contain("torn.json");
+    }
+
+    /// <summary>
+    /// Valid JSON, a future deadline, and no email: nobody can present it, the roster cannot name it,
+    /// and the gate would throw on it. Litter — removed by the sweep, and said once, there.
+    /// </summary>
+    [Fact]
+    public void TheSweep_RemovesASessionNobodyCanBeAuthorisedAs()
+    {
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var reported = new List<string>();
+        var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
+        var now = DateTimeOffset.UtcNow;
+        store.Issue($"dev@{TeamServer.Domain}", "", now);
+        var nobody = Path.Combine(data, "sessions", "nobody.json");
+        File.WriteAllText(nobody, $$"""{"email":null,"name":"Nobody","createdUtc":"{{now:O}}","expiresUtc":"{{now.AddDays(3):O}}","lastUsedUtc":"{{now:O}}"}""");
+
+        store.Sweep(now).Should().Be(1, "a record with no email is a session nobody can present");
+
+        File.Exists(nobody).Should().BeFalse();
+        reported.Should().ContainSingle().Which.Should().Contain("nobody.json");
+    }
+
+    [Fact]
+    public void Validate_RefusesARecordWithNoEmail()
+    {
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var store = new SessionStore(data, TimeSpan.FromDays(7));
+        var now = DateTimeOffset.UtcNow;
+        const string token = "a-token-somebody-wrote-a-file-for";
+        Directory.CreateDirectory(Path.Combine(data, "sessions"));
+        File.WriteAllText(
+            Path.Combine(data, "sessions", SessionStore.FileNameFor(token)),
+            $$"""{"email":null,"name":"Nobody","createdUtc":"{{now:O}}","expiresUtc":"{{now.AddDays(3):O}}","lastUsedUtc":"{{now:O}}"}""");
+
+        store.Validate(token, now).Should().BeNull("a record with no email cannot name a caller, and the claims built from it would throw");
+    }
+
+    /// <summary>
+    /// The sweep's decision, without a filesystem: only what was READ and JUDGED is litter.
+    /// </summary>
+    [Fact]
+    public void TheSweepsVerdict_RemovesOnlyWhatItHasReadAndJudged()
+    {
+        var now = DateTimeOffset.UtcNow;
+        SessionRecord Record(string email, DateTimeOffset expires) => new(email, "", now.AddDays(-1), expires, now.AddDays(-1));
+
+        using var scope = new FluentAssertions.Execution.AssertionScope();
+        SessionStore.Classify(new FileRead<SessionRecord>.Unreadable(new IOException("held by somebody")), now)
+            .Should().Be(SessionStore.Litter.None, "could not be read THIS time says nothing about the file — keep it");
+        SessionStore.Classify(new FileRead<SessionRecord>.Absent(), now)
+            .Should().Be(SessionStore.Litter.None, "gone already; nothing to decide");
+        SessionStore.Classify(new FileRead<SessionRecord>.Found(Record($"dev@{TeamServer.Domain}", now.AddDays(3))), now)
+            .Should().Be(SessionStore.Litter.None);
+        SessionStore.Classify(new FileRead<SessionRecord>.Found(Record($"dev@{TeamServer.Domain}", now.AddSeconds(-1))), now)
+            .Should().Be(SessionStore.Litter.Expired);
+        SessionStore.Classify(new FileRead<SessionRecord>.Corrupt(new System.Text.Json.JsonException("torn")), now)
+            .Should().Be(SessionStore.Litter.Corrupt);
+        SessionStore.Classify(new FileRead<SessionRecord>.Found(Record(null!, now.AddDays(3))), now)
+            .Should().Be(SessionStore.Litter.Unusable, "no email: nobody can present it and the gate would throw on it");
+        SessionStore.Classify(new FileRead<SessionRecord>.Found(Record("", now.AddDays(3))), now)
+            .Should().Be(SessionStore.Litter.Unusable);
     }
 }

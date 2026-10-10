@@ -140,6 +140,29 @@ public sealed class PeopleTests
             .GetProperty("displayName").GetString().Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Valid JSON, a future deadline, and <c>"email": null</c>: a record nobody can be authorised as.
+    /// It answered 500 to every admin — the gate's domain check dereferenced the email — so one bad
+    /// file took the whole roster down until the hourly sweep. Skipped here; the sweep removes it.
+    /// </summary>
+    /// <remarks>Risk consultation on story 2.1, 2026-10-10.</remarks>
+    [Fact]
+    public async Task ASessionFileWithANullEmail_IsSkipped_AndTheRosterStillAnswers()
+    {
+        using var server = new TeamServer();
+        await SignInAsync(server, Dev, "A Developer");
+        var stamp = DateTimeOffset.UtcNow.ToString("O");
+        var expires = DateTimeOffset.UtcNow.AddDays(3).ToString("O");
+        await File.WriteAllTextAsync(
+            Path.Combine(server.DataDir, "sessions", "nobody.json"),
+            $$"""{"email":null,"name":"Nobody","createdUtc":"{{stamp}}","expiresUtc":"{{expires}}","lastUsedUtc":"{{stamp}}"}""",
+            Ct);
+
+        var people = await ListAsync(server);
+
+        Emails(people).Should().BeEquivalentTo([Dev], "the record with no email is not a person; the one with one still is");
+    }
+
     /// <summary>A field this build does not know, written by a newer one, is not a reason to drop the person.</summary>
     [Fact]
     public async Task ASessionFileWithAnUnknownField_IsStillListed()

@@ -23,6 +23,42 @@ namespace CoaiServer;
 /// the same "nothing here" to a caller and completely different things to an operator, and only the
 /// log can tell them apart.</para>
 /// </remarks>
+/// <summary>
+/// What reading one file produced — four facts that used to be two values, a record or null.
+/// </summary>
+/// <remarks>
+/// <para>The null stood for "absent", "could not be opened" and "not JSON" alike, and
+/// <see cref="SessionStore.Sweep"/> read every null as litter and deleted the file. On Windows a file
+/// is unreadable for exactly as long as another process holds it — a backup, an editor, this server's
+/// own rename of it under a last-used stamp — so a sweep that met one at that moment deleted a LIVE
+/// session, and an hourly sweep made that an hourly exposure. Found by the risk consultation on story
+/// 2.1 of <c>PLAN_team_usage_by_person.md</c>, 2026-10-10.</para>
+/// <para>A closed hierarchy, so a caller that decides anything on the outcome has to say what it does
+/// with each case; the one that must never be confused with the others is <see cref="Unreadable"/>,
+/// which is a statement about THIS attempt and nothing about the file.</para>
+/// </remarks>
+public abstract record FileRead<T>
+    where T : class
+{
+    private FileRead()
+    {
+    }
+
+    /// <summary>No such file — never was, or gone before the open. Not a finding.</summary>
+    public sealed record Absent : FileRead<T>;
+
+    /// <summary>
+    /// The file is there and could not be read THIS time: held by another process, a permission, a
+    /// disk. Not litter — the next attempt may read it whole. Never deleted on this answer.
+    /// </summary>
+    public sealed record Unreadable(Exception Reason) : FileRead<T>;
+
+    /// <summary>Read whole, and not JSON of this shape — a torn write a killed process left, or not ours. Litter.</summary>
+    public sealed record Corrupt(Exception Reason) : FileRead<T>;
+
+    public sealed record Found(T Value) : FileRead<T>;
+}
+
 public sealed class JsonFileStore(Action<string, Exception>? onFailure = null)
 {
     /// <summary>What a read lets OTHERS do to the file while it holds it.</summary>
@@ -40,33 +76,67 @@ public sealed class JsonFileStore(Action<string, Exception>? onFailure = null)
     /// </remarks>
     internal const FileShare ReadShare = FileShare.Read;
 
-    /// <summary>The record in <paramref name="path"/>, or null — absent, unreadable, or not JSON.</summary>
+    /// <summary>The record in <paramref name="path"/>, or null — absent, unreadable, or not JSON. Reports the last two.</summary>
+    /// <remarks>
+    /// The convenience over <see cref="TryRead"/> for a caller that only wants a record and does not
+    /// DECIDE anything on the difference between the other three. A caller that deletes, or keeps, on
+    /// the outcome reads through <see cref="TryRead"/> — see <see cref="FileRead{T}"/> for why.
+    /// </remarks>
     public T? Read<T>(string path, JsonTypeInfo<T> shape)
+        where T : class =>
+        TryRead(path, shape) switch
+        {
+            FileRead<T>.Found found => found.Value,
+            FileRead<T>.Unreadable { Reason: var why } => Reported<T>(path, why),
+            FileRead<T>.Corrupt { Reason: var why } => Reported<T>(path, why),
+            _ => null,
+        };
+
+    /// <summary>What reading <paramref name="path"/> produced — one of four facts, never a null that means three.</summary>
+    public FileRead<T> TryRead<T>(string path, JsonTypeInfo<T> shape)
         where T : class
     {
         try
         {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
-
-            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, ReadShare);
-
-            return JsonSerializer.Deserialize(file, shape);
+            return Open(path, shape);
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
             // Gone between the existence check and the open: revoked or swept by somebody else a
             // moment ago. Absent is absent, and absent was never reported.
-            return null;
+            return new FileRead<T>.Absent();
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        catch (JsonException e)
         {
-            onFailure?.Invoke($"'{path}' could not be read", e);
-
-            return null;
+            return new FileRead<T>.Corrupt(e);
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new FileRead<T>.Unreadable(e);
+        }
+    }
+
+    private static FileRead<T> Open<T>(string path, JsonTypeInfo<T> shape)
+        where T : class
+    {
+        if (!File.Exists(path))
+        {
+            return new FileRead<T>.Absent();
+        }
+
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, ReadShare);
+
+        return JsonSerializer.Deserialize(file, shape) is { } value
+            ? new FileRead<T>.Found(value)
+            : new FileRead<T>.Corrupt(new JsonException("the file holds the JSON literal null, which is not a record"));
+    }
+
+    private T? Reported<T>(string path, Exception why)
+        where T : class
+    {
+        onFailure?.Invoke($"'{path}' could not be read", why);
+
+        return null;
     }
 
     /// <summary>Replace <paramref name="path"/> with <paramref name="value"/>, all or nothing.</summary>
@@ -76,8 +146,31 @@ public sealed class JsonFileStore(Action<string, Exception>? onFailure = null)
         Directory.CreateDirectory(directory);
         var temporary = Path.Combine(directory, $"{Path.GetFileName(path)}.{Path.GetRandomFileName()}.tmp");
         File.WriteAllText(temporary, JsonSerializer.Serialize(value, shape));
-        // Move, not copy-then-delete: a reader sees the old file or the new one, never half of one.
-        File.Move(temporary, path, overwrite: true);
+        try
+        {
+            // Move, not copy-then-delete: a reader sees the old file or the new one, never half of one.
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            // The rename's exception is the one that travels; the temporary does not stay behind for it.
+            // A stamp refused every hour (a reader holding the file, on Windows) would otherwise leave one
+            // orphan per attempt beside the sessions, for ever. (Risk consultation on story 2.1.)
+            Discard(temporary);
+            throw;
+        }
+    }
+
+    private void Discard(string temporary)
+    {
+        try
+        {
+            File.Delete(temporary);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            onFailure?.Invoke($"'{temporary}' could not be removed after its rename failed", e);
+        }
     }
 
     /// <summary>True when the file is gone — including when it was never there.</summary>

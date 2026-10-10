@@ -738,6 +738,25 @@ model and a month of bars. Nothing here changes what an older client reads.
   refused. The obvious alternative — the reader granting `ReadWrite | Delete` — was measured and does
   not let `File.Move(overwrite)` through (`MoveFileEx` has no POSIX rename); `JsonFileStoreTests`
   keeps that measurement as a test so the share-side fix is not tried a second time.
+- **The sweep deletes only what it has READ and judged** (risk consultation on story 2.1, 2026-10-10,
+  HIGH). `JsonFileStore.Read` answered one null for three facts — absent, could not be opened, not
+  JSON — and `Sweep` deleted every null. On Windows a session file is unreadable for exactly as long as
+  another hand holds it, including this server's own rename of it under a last-used stamp, so the
+  hourly sweep could delete a LIVE session; the concurrency test below lost one before the fix.
+  `JsonFileStore.TryRead` now answers a closed `FileRead<T>` — `Absent`, `Unreadable(reason)`,
+  `Corrupt(reason)`, `Found(value)` — and `SessionStore.Classify`, a pure function with its own test,
+  judges only `Found` and `Corrupt`: expired, torn, or naming nobody is litter; `Unreadable` is kept
+  and said once in the log ("kept — the sweep deletes only what it has read and judged"). `Read` stays
+  as the convenience for callers that decide nothing on the difference (`Validate`, the slot state).
+  Two more from the same consultation: a record with `"email": null` — valid JSON, future deadline —
+  took every admin's roster down with a 500 through the gate's domain check; the store now judges a
+  record *usable* by its email in one place (`Validate` refuses it, `Active` skips it, `Sweep` removes
+  it and says so once), and `Write` no longer leaves its `*.tmp` behind when the rename is refused,
+  which the hourly stamp did once an hour for ever. Pinned by `PeopleAndUsageAgreeTests` (the roster
+  and the company spending answer a raw-token caller and a session caller alike — a mixed-case
+  configured admin, a non-admin, an anonymous caller, and an admin a restart removed) and
+  `SessionStoreConcurrencyTests` (six workers issuing, stamping, sweeping and listing over one
+  directory: every live token still validates, the listing never throws, no `*.tmp` remains).
 - **A vendor id is canonicalised once, in the reader**, to lower case — the form the catalog groups
   by (case-insensitively) and the palette knows. The summary, the people, the kinds and the chart each
   group case-insensitively but each kept the FIRST casing it met, and the summary and the chart meet

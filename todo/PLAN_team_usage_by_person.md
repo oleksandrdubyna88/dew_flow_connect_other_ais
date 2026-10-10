@@ -273,7 +273,9 @@ launches; `/api/people` returns exactly three fields and refuses a non-admin.
 | sessions retired by `Sweep` | `Sweep` runs at boot AND hourly (`SessionSweeper`, a hosted service) | it ran at startup only, so the people listing would read every expired file until a restart (own review) |
 | `/api/people` lists every unexpired session | it also drops a session whose domain left `Coai:AllowedDomains` | a listed person must be one the gate would serve (own review) |
 | a vendor id as the ledger wrote it | lower-cased once in `UsageReader.Parse` | the summary and the chart could otherwise name one vendor two ways (own review) |
-| a held session file is a read hazard | the lazy last-used stamp in `Validate` is non-fatal | on Windows `File.Move(overwrite)` fails while any reader holds the file, whatever share it asks — measured, and pinned by a test |
+| a held session file is a read hazard | the lazy last-used stamp in `Validate` is non-fatal, and a refused rename removes its `*.tmp` | on Windows `File.Move(overwrite)` fails while any reader holds the file, whatever share it asks — measured, and pinned by a test |
+| `Sweep` deletes unreadable files (`Sessions.cs:132-137`) | `Sweep` deletes only what it has READ and judged: expired, torn, or naming nobody; a file it could not read this time is kept and said once (`JsonFileStore.TryRead` → `FileRead<T>`, `SessionStore.Classify`) | a null meant absent, held and torn alike, and the hourly sweep deleted a live session whose own stamp was renaming it — the concurrency test lost one before the fix (risk consultation on 2.1, 2026-10-10) |
+| every unexpired session is a person | a record with `"email": null` is refused by `Validate`, skipped by `Active`, removed by `Sweep` | it took every admin's roster down with a 500 through the gate's domain check (risk consultation on 2.1) |
 
 ## What the plan round changed (2026-10-09)
 

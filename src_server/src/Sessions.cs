@@ -48,9 +48,6 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     private readonly string _dir = Path.Combine(dataDir, "sessions");
     private readonly JsonFileStore _files = new(onFailure);
 
-    /// <summary>The same store with NO reporter — what <see cref="Active"/> reads through. See it for why.</summary>
-    private readonly JsonFileStore _quiet = new();
-
     /// <summary>The file a token lives in: its hash, never itself.</summary>
     public static string FileNameFor(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant() + ".json";
@@ -85,8 +82,10 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     {
         var name = FileNameFor(token);
         var record = Read(name);
-        if (record is null)
+        if (record is null || !Usable(record))
         {
+            // A record with no email names nobody: the claims built from it would throw, and the sweep
+            // removes it as litter. Refused here, deleted there.
             return null;
         }
 
@@ -142,7 +141,44 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     /// </remarks>
     public bool Revoke(string token) => Delete(FileNameFor(token));
 
-    /// <summary>Every session whose deadline has passed, gone.</summary>
+    /// <summary>What the sweep found a file to be.</summary>
+    internal enum Litter
+    {
+        /// <summary>Kept: alive, absent, or not readable this time.</summary>
+        None,
+        Expired,
+        /// <summary>A torn write, or not a session at all.</summary>
+        Corrupt,
+        /// <summary>A record nobody can be authorised as — no email.</summary>
+        Unusable,
+    }
+
+    /// <summary>The sweep's one decision, as a pure function so it can be tested without a filesystem.</summary>
+    /// <remarks>
+    /// <b>Only what was READ and JUDGED is litter.</b> A file that could not be read this time is kept:
+    /// it is a statement about this attempt — another process holds it, a permission, a disk — and
+    /// nothing about the file. Until 2026-10-10 a null stood for that case and for a torn write
+    /// alike, and the sweep deleted both; on Windows a session file is unreadable for exactly as long as
+    /// its own last-used stamp is renaming it, so the hourly sweep deleted live sessions. (Risk
+    /// consultation on story 2.1.)
+    /// </remarks>
+    internal static Litter Classify(FileRead<SessionRecord> read, DateTimeOffset nowUtc) => read switch
+    {
+        FileRead<SessionRecord>.Corrupt => Litter.Corrupt,
+        FileRead<SessionRecord>.Found { Value: var record } when record.ExpiresUtc <= nowUtc => Litter.Expired,
+        FileRead<SessionRecord>.Found { Value: var record } when !Usable(record) => Litter.Unusable,
+        _ => Litter.None,
+    };
+
+    /// <summary>A record somebody can actually be authorised as: it names an email.</summary>
+    /// <remarks>
+    /// <see cref="Issue"/> never writes one without, but a file written by hand or by another build
+    /// deserialises <c>"email": null</c> as exactly that (doctrine §4a), and it took the whole roster
+    /// down with a 500 and would throw in the claims built for its bearer. Judged in one place.
+    /// </remarks>
+    private static bool Usable(SessionRecord record) => !string.IsNullOrEmpty(record.Email);
+
+    /// <summary>Every file that is provably litter — expired, torn, or naming nobody — gone.</summary>
     /// <returns>How many were removed.</returns>
     public int Sweep(DateTimeOffset nowUtc)
     {
@@ -154,17 +190,48 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
         var swept = 0;
         foreach (var file in Directory.EnumerateFiles(_dir, "*.json"))
         {
-            var record = Read(Path.GetFileName(file));
-            if (record is null || record.ExpiresUtc <= nowUtc)
-            {
-                // A file that will not parse is swept too: it is either a torn write from a killed
-                // process or something nobody can authenticate with, and both are litter.
-                Delete(Path.GetFileName(file));
-                swept += 1;
-            }
+            swept += SweepOne(file, nowUtc) ? 1 : 0;
         }
 
         return swept;
+    }
+
+    /// <summary>True when the file was litter and is now gone.</summary>
+    private bool SweepOne(string file, DateTimeOffset nowUtc)
+    {
+        var read = _files.TryRead(file, ServerJsonContext.Default.SessionRecord);
+        if (read is FileRead<SessionRecord>.Unreadable unreadable)
+        {
+            onFailure?.Invoke(
+                $"'{file}' could not be read this time and was kept — the sweep deletes only what it has read and judged",
+                unreadable.Reason);
+
+            return false;
+        }
+
+        var litter = Classify(read, nowUtc);
+        if (litter == Litter.None)
+        {
+            return false;
+        }
+
+        Explain(file, read, litter);
+
+        return _files.Delete(file);
+    }
+
+    /// <summary>Say why a file goes — once, here, because it is gone afterwards. An expired one is the normal case and says nothing.</summary>
+    private void Explain(string file, FileRead<SessionRecord> read, Litter litter)
+    {
+        switch (litter)
+        {
+            case Litter.Corrupt when read is FileRead<SessionRecord>.Corrupt corrupt:
+                onFailure?.Invoke($"'{file}' is not a session — a torn write, or not ours; removed", corrupt.Reason);
+                break;
+            case Litter.Unusable:
+                onFailure?.Invoke($"'{file}' names nobody (no email) and nobody can present it; removed", new InvalidDataException("the record has no email"));
+                break;
+        }
     }
 
     /// <summary>Every session that has not reached its deadline, read from the files — nothing written back.</summary>
@@ -179,15 +246,17 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     /// not anybody using their session.</item>
     /// <item><b>It never reports a file it could not read.</b> A vanished file is a session revoked or swept
     /// between the directory listing and the read; a torn one is a write a killed process left for the
-    /// sweep. Both are expected, and a log line about either sixty times an hour would bury the failures
-    /// that matter — so this reads through a store with no reporter, and the shared read path answers
-    /// null and says nothing. <see cref="SessionSweeper"/> removes the litter at boot and every hour,
-    /// and says so — which is also what keeps this read from walking a week of dead files.</item>
+    /// sweep; one held by another process reads whole next time. All are expected, and a log line about
+    /// any of them sixty times an hour would bury the failures that matter — so this reads through
+    /// <see cref="JsonFileStore.TryRead"/>, which reports nothing, and keeps only what it
+    /// <see cref="FileRead{T}.Found"/>. <see cref="SessionSweeper"/> removes the litter at boot and every
+    /// hour, and says so — which is also what keeps this read from walking a week of dead files.</item>
     /// </list>
-    /// <para>Expiry is judged here exactly as <see cref="Validate"/> judges it, so a session this lists is
-    /// one the STORE would still accept. Whether the server would then serve the caller is the gate's
-    /// decision — a domain removed from the allow-list refuses a live session — and the endpoint applies
-    /// that test on top; the store knows nothing of domains.</para>
+    /// <para>Every record listed names an email (<see cref="Usable"/>) and is judged for expiry exactly as
+    /// <see cref="Validate"/> judges it, so a session this lists is one the STORE would still accept.
+    /// Whether the server would then serve the caller is the gate's decision — a domain removed from the
+    /// allow-list refuses a live session — and the endpoint applies that test on top; the store knows
+    /// nothing of domains.</para>
     /// </remarks>
     public IReadOnlyList<SessionRecord> Active(DateTimeOffset nowUtc)
     {
@@ -197,9 +266,10 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
         }
 
         return [.. Directory.EnumerateFiles(_dir, "*.json")
-            .Select(file => _quiet.Read(file, ServerJsonContext.Default.SessionRecord))
-            .OfType<SessionRecord>()
-            .Where(record => record.ExpiresUtc > nowUtc)];
+            .Select(file => _files.TryRead(file, ServerJsonContext.Default.SessionRecord))
+            .OfType<FileRead<SessionRecord>.Found>()
+            .Select(found => found.Value)
+            .Where(record => Usable(record) && record.ExpiresUtc > nowUtc)];
     }
 
     // The three below are the shared store with this class's naming applied. They were this class's
