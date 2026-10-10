@@ -45,6 +45,14 @@ behaviour changes hide. So:
 - **The class keeps a field holding the extracted unit**, and its former methods become one-line
   delegations, or disappear if nothing outside the cluster called them.
 
+## The boundary with PLAN_team_usage_by_person
+
+| Item | Which plan builds it | The other plan's part |
+|---|---|---|
+| The Team-server usage cache and its refresher, out of `PanelProvider` into a `vscode`-free `teamUsageCache.ts`; `usageScope` deleted | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md), stories 1.1 and 1.2 | cluster 3 here moves the REST of the Team-server state (catalogs, sign-in, add/remove) and cluster 6 is one field smaller |
+
+That plan goes first; this one re-reads the line numbers, as its table already says it must.
+
 ## The seams, measured rather than guessed
 
 Read off the file on 2026-09-18. Line numbers are where each cluster sits **today** and will move as

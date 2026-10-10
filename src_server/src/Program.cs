@@ -187,6 +187,9 @@ var jobRunner = new JobRunner(
 builder.Services.AddSingleton(jobs);
 builder.Services.AddHostedService(sp => new JobPump(
     jobs, catalog, jobRunner, sp.GetRequiredService<ILogger<JobPump>>()));
+// Expired session files go at boot and every hour after. The boot sweep used to be a line here and
+// the only sweep there was, which on a server that is never restarted meant never — see SessionSweeper.
+builder.Services.AddHostedService(sp => new SessionSweeper(sessions, sp.GetRequiredService<ILogger<SessionSweeper>>()));
 
 var app = builder.Build();
 var log = app.Logger;
@@ -194,12 +197,6 @@ var log = app.Logger;
 // failure that happens before this point simply has nowhere to go — and nothing runs before it.
 reportSessionFailure = (message, error) => log.LogWarning(error, "{Message}", message);
 reportCatalog = message => log.LogInformation("{Message}", message);
-
-var swept = sessions.Sweep(DateTimeOffset.UtcNow);
-if (swept > 0)
-{
-    log.LogInformation("swept {Count} expired session(s) at startup", swept);
-}
 
 // The catalog was built before the logger existed, so its first load had nowhere to report. Say
 // what it holds now — a server whose vendors.json was refused at boot must not look identical in
@@ -313,6 +310,7 @@ var gate = new CallerFilter(allowedDomains, allowAnyDomain, admins);
 app.MapSessionEndpoints(sessions, gate);
 app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate, acceptedRoles);
 app.MapUsageEndpoints(new UsageReader(dataDir), gate);
+app.MapPeopleEndpoints(sessions, gate);
 app.MapReviewEndpoints(
     jobs,
     catalog,

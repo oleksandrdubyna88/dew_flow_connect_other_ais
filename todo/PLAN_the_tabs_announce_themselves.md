@@ -145,6 +145,7 @@ Settings tab is a third tablist.
 |---|---|---|---|
 | Step 1 of the build order below — `tabKeys.ts` and its tests — plus an opt-in `roving` flag on `tabStrip` (absent = every existing page byte-identical) | the Settings-page plan (story S3), to the design in § *What ships* B — **shipped 2026-09-28** | this plan consumes it unchanged | Settings-page plan first |
 | Steps 2–4: the roles page, the rounds log's strip, the window filter | **this plan** | none | after |
+| A new **Team server** tab button on the rounds log's strip (admin-only) | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md), story 1.3 | this plan's step 3 gives it the same ARIA as its neighbours; the tab plan follows the strip as this one leaves it | either |
 
 **Disjoint** beyond that: the Settings page is the first CONSUMER of `tabKeys.ts`, not a rewrite of
 either page this plan converts.

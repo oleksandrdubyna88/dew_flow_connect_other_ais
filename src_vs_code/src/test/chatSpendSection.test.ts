@@ -55,7 +55,7 @@ const DOORS: readonly ChatDoorRecord[] = [
 const PRICES = { 'gemini-3.8-flash': { inPerMillion: 1, outPerMillion: 10, source: 'openrouter' as const } };
 
 function page(): string {
-  return usageTabHtml([REVIEW], 'day', [], PRICES, [], 'me', { turns: [TURN], doors: DOORS });
+  return usageTabHtml([REVIEW], 'day', [], PRICES, { chat: { turns: [TURN], doors: DOORS } });
 }
 
 test('the tab names both ledgers and draws a line between them', () => {
@@ -97,7 +97,7 @@ test('a chat card is the shape of a reviewer card, with what a reviewer has no e
 });
 
 test('a model nobody prices says so, rather than drawing three dashes', () => {
-  const html = usageTabHtml([REVIEW], 'day', [], {}, [], 'me', { turns: [TURN], doors: DOORS });
+  const html = usageTabHtml([REVIEW], 'day', [], {}, { chat: { turns: [TURN], doors: DOORS } });
 
   assert.match(html, /no rate set for this model/, 'a card with no rate said nothing a reader can act on');
 });
@@ -106,11 +106,11 @@ test('the vendor named is the VENDOR, not the preset the chat recorded', () => {
   // A chat records the id of the model preset in force, which is a generated string nobody
   // recognises - and the section above this one is per vendor, so the page named the same vendors
   // two different ways until this resolved one to the other.
-  const html = usageTabHtml([REVIEW], 'day', [], PRICES, [], 'me', {
+  const html = usageTabHtml([REVIEW], 'day', [], PRICES, { chat: {
     turns: [{ ...TURN, provider: 'preset-mtwxbymp-4' }],
     doors: [],
     vendorOf: (provider) => (provider === 'preset-mtwxbymp-4' ? 'antigravity' : provider),
-  });
+  } });
 
   assert.match(html, /<span class="name"[^>]*>antigravity<\/span>/, 'the preset id was not resolved to its vendor');
   assert.doesNotMatch(html, /preset-mtwxbymp-4/, 'the generated preset id reached the page');
@@ -128,7 +128,7 @@ test('one line under BOTH ledgers adds them up', () => {
 });
 
 test('a tab with no conversations still shows the chat section, and says why it is empty', () => {
-  const html = usageTabHtml([REVIEW], 'day', [], PRICES, [], 'me', { turns: [], doors: [] });
+  const html = usageTabHtml([REVIEW], 'day', [], PRICES, { chat: { turns: [], doors: [] } });
 
   assert.match(html, /<h3 class="ledger">Chat<\/h3>/, 'the section vanished rather than saying it was empty');
   assert.match(html, /No conversations in this window/, 'an empty chat ledger says nothing at all');

@@ -9,6 +9,7 @@ import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 import { webviewNonce } from './webviewNonce';
+import { NO_TEAM_PUSH, TeamPush } from './teamServerTab';
 
 /** What the page can ask the extension to do. Everything else is page state and never comes back. */
 
@@ -57,7 +58,11 @@ export class RoundsLogPanel {
     totals: DbTotals;
     consultations: string;
     qconsults: string;
-  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '', qconsults: '' };
+    team: TeamPush;
+  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '', qconsults: '', team: NO_TEAM_PUSH };
+
+  /** What stops this page's own clock (`teamUsagePoll.ts`), while it runs. */
+  private stopClock: (() => void) | undefined;
 
   /**
    * The belt to the handshake's braces.
@@ -111,18 +116,40 @@ export class RoundsLogPanel {
     panel.webview.html = roundsLogHtml(
       rows, questions, webviewNonce(), usageHtml, spotsHtml, totals,
       { consultations: consultationsHtml, qconsults: qconsultsHtml, text: { size: currentUiScale(), tone: currentTextTone() } });
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml };
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml, team: this.latest.team };
     this.rebuilt();
 
     const text = pushTextControlsTo(panel.webview);
     const busy = this.listen(panel);
+    const seen = panel.onDidChangeViewState((event) => { this.hooks.onVisible(event.webviewPanel.visible); });
     panel.onDidDispose(() => {
       busy.dispose();
       text.dispose();
-      this.panel = undefined;
-      this.clearAssumption();
-      this.ledger.rebuilt();
+      seen.dispose();
+      this.closed();
     });
+  }
+
+  /** The page went away: nothing it was told still holds, and what ran while it was open stops. */
+  private closed(): void {
+    this.panel = undefined;
+    this.clearAssumption();
+    this.ledger.rebuilt();
+    this.stopClock?.();
+    this.stopClock = undefined;
+    // What the closed page was told about the company goes with it: a page opened later learns admin status from the
+    // next push, never from the last one somebody saw (the own review of epic 1).
+    this.latest = { ...this.latest, team: NO_TEAM_PUSH };
+  }
+
+  /**
+   * Start something that runs for as long as this page is open — its own clock — once per page, stopped when it closes.
+   * `start` returns the function that stops it. Nothing starts while no page is open.
+   */
+  whileOpen(start: () => () => void): void {
+    if (this.panel !== undefined && this.stopClock === undefined) {
+      this.stopClock = start();
+    }
   }
 
   /**
@@ -153,11 +180,12 @@ export class RoundsLogPanel {
     totals: DbTotals = EMPTY_TOTALS,
     consultationsHtml = '',
     qconsultsHtml = '',
+    team: TeamPush = this.latest.team,
   ): void {
     if (this.panel === undefined) {
       return;
     }
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml };
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml, team };
     void this.pushAll(force);
   }
 
@@ -255,7 +283,7 @@ export class RoundsLogPanel {
   }
 
   private async pushEach(force: boolean): Promise<void> {
-    const { rows, questions, usage, spots, totals, consultations, qconsults } = this.latest;
+    const { rows, questions, usage, spots, totals, consultations, qconsults, team } = this.latest;
     // A RECORD over `Region` rather than a list: adding a region to the union without giving it a
     // push here is then a compile error rather than a region that silently never updates.
     // (gemini, the code round.)
@@ -272,6 +300,8 @@ export class RoundsLogPanel {
       },
       // The Questions tab (todo/PLAN_question_consultant.md, S4).
       qconsults: { content: qconsults, message: () => ({ type: 'qconsults', html: qconsults }) },
+      // The Team server tab (todo/PLAN_team_usage_by_person.md, 1.3): its admin flag, its toolbar's state and its pieces.
+      team: { content: JSON.stringify(team), message: () => ({ type: 'team', ...team }) },
       // The page is painted before the database is read, so the line under the table opens on
       // nothing. This is what fills it in. It used to be recorded in `latest` and pushed nowhere,
       // which left the whole SQL-totals line permanently empty. (Code round, CodeRabbit.)

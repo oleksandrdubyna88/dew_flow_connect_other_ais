@@ -68,6 +68,7 @@ import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
+import { NO_TEAM_PUSH, TeamPush } from './teamServerTab';
 import { regionOr } from './logRegions';
 import { PRICE_BOOK } from './priceBook';
 import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsSync';
@@ -140,9 +141,11 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     // The spending tab's two commands go to the sidebar's provider, which owns the window choice,
     // the price cache and the "forget" marks — one owner, whichever surface shows the numbers.
+    // A window press re-asks the Team servers too: their figures are cached per window, and the new one's are not
+    // fresh (todo/PLAN_team_usage_by_person.md, 1.1).
     onUsageWindow: async (window) => {
       panelRef.setUsageWindow(window);
-      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+      await askTheTeamServers(roundsLog, watcher, panelRef);
     },
     // *What it keeps missing*'s period: the server counts it, so the log is read again over it.
     onSpotsPeriod: async (period) => {
@@ -230,6 +233,32 @@ export function activate(context: vscode.ExtensionContext): void {
         await roundsLog.tell(key, 'failed', []);
       }
     },
+    // The Team server tab (todo/PLAN_team_usage_by_person.md, 1.3): each of these changes what the host asks for,
+    // pushes the tab at once — "Asking <server>…" — and asks; the answer pushes it again when it lands.
+    onTeamWindow: async (id) => {
+      panelRef.setTeamWindow(id);
+      await askTheTeamServers(roundsLog, watcher, panelRef);
+    },
+    onTeamRefresh: async (server) => {
+      await askTheTeamServers(roundsLog, watcher, panelRef, server);
+    },
+    onTeamServer: async (server) => {
+      panelRef.setTeamServer(server);
+      await askTheTeamServers(roundsLog, watcher, panelRef);
+    },
+    // In front again: whatever went stale while it was behind is asked now rather than on the next minute.
+    onVisible: (visible) => {
+      panelRef.teamPageVisible(visible);
+      if (visible) {
+        void panelRef.refreshTeamUsage();
+      }
+    },
+    onTeamTab: async (shown) => {
+      panelRef.setTeamTabShown(shown);
+      if (shown) {
+        await askTheTeamServers(roundsLog, watcher, panelRef);
+      }
+    },
   });
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
@@ -260,6 +289,9 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
   context.subscriptions.push({ dispose: () => { panel.dispose(); } });
+  // A Team-server answer landing repaints the rounds log too, not only the sidebar — the page is where the company
+  // figures are, and it may be open with the sidebar closed (todo/PLAN_team_usage_by_person.md, 1.1).
+  panel.onTeamUsageChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
@@ -1344,7 +1376,23 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
     await logRows(panel, undefined),
     watcher.openQuestions,
     await regionOr('spending', () => panel.usageTab()));
+  // The page's own clock for the Team-server figures: every minute while it is open, whether or not the sidebar is,
+  // and stopped when it closes. Company figures only while the Team server tab is the one showing (teamTabSelection.ts).
+  // The page's closing is what ends both — and tells the host the Team server tab is no longer showing, which no
+  // message from a closing page ever could (teamTabHost.ts).
+  log.whileOpen(() => panel.teamPageOpened());
   await refreshRoundsLog(log, watcher, panel, true);
+}
+
+/**
+ * Push the page at once — the new window or server says "Asking <server>…" rather than showing the old answer — and
+ * ask; the answer pushes again when it lands, through `onTeamUsageChanged`. `force` is a server whose figures are asked
+ * again whatever is fresh: the Refresh button.
+ */
+async function askTheTeamServers(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider, force = ''): Promise<void> {
+  const asking = panel.refreshTeamUsage(force);
+  await refreshRoundsLog(log, watcher, panel, true);
+  await asking;
 }
 
 /** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
@@ -1361,6 +1409,7 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   const consultations = await regionOr('consultations', () => panel.consultationsTab(fresh));
   // The Questions tab: what `--log` carried of question_consults — none from an older server, which is an empty tab.
   const qconsults = await regionOr('questions', async () => qconsultLogHtml(fresh.questions ?? []));
+  const team = teamRegion(panel);
   log.update(
     await logRows(panel, fresh),
     watcher.openQuestions,
@@ -1369,7 +1418,19 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
     spots,
     fresh.totals,
     consultations,
-    qconsults);
+    qconsults,
+    team);
+}
+
+/** The Team server tab's push, or — when it cannot be built — no tab at all, said where errors are found. */
+function teamRegion(panel: PanelProvider): TeamPush {
+  try {
+    return panel.teamTabPush();
+  } catch (reason: unknown) {
+    console.error('ConnectOtherAIs: the rounds log could not build its Team server tab', reason);
+
+    return NO_TEAM_PUSH;
+  }
 }
 
 /**

@@ -15,6 +15,24 @@ public sealed record SessionDto(string Token, DateTimeOffset ExpiresUtc, string 
 
 public sealed record WhoAmIDto(string Email, string Name, bool IsAdmin);
 
+/// <summary>One person who is signed in, as an admin's roster shows them — and nothing more.</summary>
+/// <remarks>
+/// Three fields, and the number is the privacy boundary rather than a convenience: a session record
+/// also holds its creation, its deadline and is named by its token's hash, and none of that is any
+/// caller's business. The shape follows the vault's member roster (D5 of
+/// <c>PLAN_team_usage_by_person.md</c>); a test pins that nothing beyond these three is on the wire.
+/// </remarks>
+/// <param name="Email">The identity every request is authorised as, in the casing of the latest session.</param>
+/// <param name="DisplayName">
+/// The latest non-empty name the identity provider handed over, or empty when no session carried one.
+/// Identity-provider TEXT: the server answers it as it is, and escaping it is the page's job.
+/// </param>
+/// <param name="LastUsedUtc">
+/// The latest use over the person's unexpired sessions. One-hour resolution — see
+/// <see cref="SessionStore.LastUsedResolution"/> — so a page says "within the hour", never a minute.
+/// </param>
+public sealed record PersonDto(string Email, string DisplayName, DateTimeOffset LastUsedUtc);
+
 public sealed record ErrorDto(string Error);
 
 /// <summary>What the catalog says about one vendor's CLI. Presence and version only.</summary>
@@ -166,7 +184,16 @@ public sealed record UsageDto(
     /// the reason bites here: a consumer could not otherwise tell "this server sent no kinds" from
     /// "this window had none", and those are different facts. (codex and gemini, code round.)
     /// </remarks>
-    IReadOnlyList<KindTotal> Kinds = null!)
+    IReadOnlyList<KindTotal> Kinds = null!,
+    /// <summary>The thirty-day launches-per-day chart. Company scope only — see <see cref="UsageDaily"/>.</summary>
+    /// <remarks>
+    /// Nullable AND omitted when null, which is the one place this file does that on purpose: the
+    /// personal answer carries no chart, and a client reads the ABSENCE of <c>daily</c> as "not the
+    /// company answer, or a server older than the chart" (D8 — every missing piece says
+    /// <i>needs Team server ≥ …</i>, never a zero). A <c>"daily": null</c> on every personal answer
+    /// would have been a third meaning for the same key.
+    /// </remarks>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DailyDto? Daily = null)
 {
     /// <summary>Never null, whatever a deserialiser did with the property.</summary>
     /// <remarks>
@@ -201,6 +228,7 @@ public sealed record SlotStateDto(
 [JsonSerializable(typeof(ClientConfigDto))]
 [JsonSerializable(typeof(SessionDto))]
 [JsonSerializable(typeof(WhoAmIDto))]
+[JsonSerializable(typeof(IReadOnlyList<PersonDto>))]
 [JsonSerializable(typeof(ErrorDto))]
 [JsonSerializable(typeof(SessionRecord))]
 [JsonSerializable(typeof(VendorConfig[]))]

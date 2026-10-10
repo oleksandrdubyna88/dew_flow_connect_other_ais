@@ -52,6 +52,7 @@ C4Container
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
+  Rel(ext, srv, "an admin's company usage per window, and who has signed in — only while the Team server tab is in front")
   Rel(srv, codex, "spawn, one signed-in account per slot")
   Rel(gem, srv, "--agy-hook child, for an agy reviewer the server started")
 ```
@@ -75,6 +76,31 @@ accepts at least five, so `[]` can only be a bug.
 **coai-mcp asks before it assembles a round**, because assembling one is synchronous and cannot. The
 panel probes constantly while it is open, but the panel is the EXTENSION and coai-mcp is a separate
 process with a separate cache — nothing guarantees the one building the round has ever asked.
+
+### An admin sees who spent what (2026-10-10, [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md))
+
+Two crossings changed between the extension and the Team server, both read-only and both admin-only:
+
+- `GET /api/usage?scope=company` was already on the wire and nothing asked for it (the spending tab's
+  *Company* toggle was dead). The Review rounds page's **Team server** tab now asks for it per window,
+  and the answer gained two additive fields — `models[]` under every vendor total (both scopes) and,
+  for company only, a dense 30-day `daily` series read in the same ledger scan. An older client ignores
+  both; an older server lacks `daily`, which is how the tab knows to say *needs Team server ≥ 0.11.0*.
+- `GET /api/people` is new: email, display name and last-used time of everyone with an unexpired
+  session in an allowed domain — three fields, never a token or an expiry. The admin decision is the
+  same one `/api/usage` makes for company scope.
+
+**Who asks, and when, is the extension's decision and it is deliberately narrow.** One host-side cache
+(`teamUsageCache.ts`, keyed by server, scope and window) is the only requester; a page model
+(`teamTabHost.ts`) lets it ask for company figures only while a Review rounds page is in FRONT and
+showing that server's tab — a closed or hidden page stops it — because every company request makes the
+server parse its whole ledger. A refusal (401/403), a demotion, a sign-out or a removal evicts that
+server's company figures and repaints the page, so an ex-admin keeps no colleague's spending on screen.
+
+On the server, sessions became a listed thing, so the hourly `SessionSweeper` now retires expired
+session files — and deletes only what it has READ and judged, keeping a file it could not read this
+time, because a stress test showed the old startup-only sweep's logic deleting a live session on a
+transient read failure.
 
 ## A reviewer with no CLI, and an outline of code nobody sends (2026-09-25)
 
@@ -324,7 +350,7 @@ answers `initialize` at once*.
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
 | The panel ASKS which models exist | [module_extension.md](module_extension.md) · [PLAN_the_models_are_asked_rather_than_listed.md](PLAN_the_models_are_asked_rather_than_listed.md) | **shipped 2026-09-16** (issue #301). The panel now has a fifth discovery, and the first one whose peer is a CLI rather than a file or an HTTP catalogue: `panelProvider` → `claudeCli` (which binary, from reviewer rows AND consultant definitions) → `claudeProbe` → `versionProbe.capture` → the Claude CLI, with the answer kept in `<dataDir>/claude-models.json` for a week and keyed to that CLI's `--version`. It crosses into the CHAT as well: the discovery snapshot under `coai.chatDiscoveredModels` carries the probe, so a conversation's Claude list says what the panel's says. **The boundary is two-sided and the CLI ships on its own clock** — a family this build does not list is not offered, a candidate the CLI has never heard of stays UNVERIFIED rather than absent, and a version it no longer matches is withheld rather than presented as confirmed. The table is in the plan |
-| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the *Team servers* settings (a tab of the Settings editor tab since 2026-09-28), add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *MCP server* tab shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the *Team servers* settings (a tab of the Settings editor tab since 2026-09-28), add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *MCP server* tab shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view — the admin-only **Team server** tab, `GET /api/people`, `models[]` and `daily` — is being built by [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) (epics 1–2 done, 2026-10-10) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 | One migration runner for both databases (`CoaiMcp.Storage`) | [module_server.md](module_server.md) · [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) | **story 1 shipped 2026-09-17.** `SqliteMigrator` — ordered steps, `user_version`, one transaction per step, WAL and a busy timeout — moved out of `RoundsDb` into a project BOTH binaries reference, because `coai-bugs.db` reached a host at `user_version = 0` and the gate ruled against a second copy. Deliberately not in `CoaiMcp.Core`, which is declared pure and holds no filesystem. `coai-bugs` gained `CorpusSchema.Steps` with step 1 frozen against the released SQL, `last_seen_month` and `admin_audit`, a per-KEY rate limit that is a setting, and one-server-per-directory enforced by a lock file; the promise it makes about contributors is now scoped and rewritten in `module_server.md` and `deploy/bugs/README.md` |

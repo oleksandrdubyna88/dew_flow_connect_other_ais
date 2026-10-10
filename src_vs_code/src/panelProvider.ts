@@ -160,7 +160,12 @@ import {
   VENDOR_PRESETS,
   vendorsFrom,
 } from './vendors';
-import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
+import { Catalog, fetchClientConfig, fetchPeople, fetchUsage } from './teamServerApi';
+import { Prepared, TeamUsageCache, USAGE_FRESH_MS, UsageTarget } from './teamUsageCache';
+import { TeamTabHost } from './teamTabHost';
+import { listPriceFrom } from './teamCost';
+import { TeamPush, teamTabPush } from './teamServerTab';
+import { vendorPalette } from './vendorColour';
 import { webviewNonce } from './webviewNonce';
 import { addRefusal, rowWriteRefusal } from './catalogWriteRules';
 import { duplicated, removedRow, type RowsChange, savedInOrder, toggledUse } from './catalogCommands';
@@ -237,8 +242,6 @@ import { askPerson } from './personWait';
  * prefers the Settings UI gets the same values, and this panel is a face on them rather than a
  * second source of truth.</p>
  */
-/** How long a Team server's catalog stands before it is asked again. */
-const TEAM_SERVER_FRESH_MS = 60 * 1000;
 
 /**
  * How long a FAILED silent sign-in is left alone before it is tried again.
@@ -375,14 +378,38 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
   private usageWindow: Window = 'day';
 
-  private usageScope: 'me' | 'company' = 'me';
+  /**
+   * What each Team server says has been spent on it — `vscode`-free, in `teamUsageCache.ts`, so the rules about when it
+   * is asked and what an answer may overwrite are tests rather than hopes (todo/PLAN_team_usage_by_person.md, 1.1).
+   */
+  private readonly teamUsage = new TeamUsageCache({
+    now: () => Date.now(),
+    fetchUsage: (url, token, window, scope) => fetchUsage(url, token, window, scope),
+    fetchPeople: (url, token) => fetchPeople(url, token),
+    // EVERY surface showing the figures is told, not only the sidebar: a refresh used to end with `this.render()`,
+    // which repaints the sidebar alone and returns early when none is held, so the page never heard (1.1).
+    changed: () => {
+      void this.render();
+      this.onTeamUsageChanged();
+    },
+  });
 
-  /** The last catalog each server managed to answer with, and what has gone wrong since. */
-  /** When each server was last asked what it offers. */
-  private teamCheckedAt = 0;
+  /** Told when a Team-server answer lands. The Review rounds page wires its repaint here. */
+  onTeamUsageChanged: () => void = () => undefined;
 
-  /** One refresh at a time: a second would race the first for the same `catalogs` entries. */
-  private refreshing = false;
+  /**
+   * The Review rounds page as the usage cache sees it — open, in front, showing the Team server tab — and its clock
+   * (teamTabHost.ts): what the host asks the servers for, whoever triggers the refresh.
+   */
+  private readonly teamPage = new TeamTabHost({ refresh: () => this.refreshTeamUsage() });
+
+  /**
+   * What each server's last catalog refresh learned, and when — so a refresh that only wants a usage figure does not
+   * renew, re-read the token and re-ask the catalog more than once a minute — and the refresh in flight per server, so
+   * two surfaces asking at once share one.
+   */
+  private prepared: Readonly<Record<string, { readonly at: number; readonly value: Prepared }>> = {};
+  private readonly catalogFlight = new Map<string, Promise<Prepared>>();
 
   /** What each server is in the middle of, so the row can say so and its buttons can stop. */
   private busy: Readonly<Record<string, string>> = {};
@@ -395,9 +422,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private mintFailure: Readonly<Record<string, { readonly at: number; readonly message: string }>> = {};
 
+  /** The last catalog each server managed to answer with, and what has gone wrong since. */
   private catalogs: Record<string, {
     catalog?: Catalog | undefined;
-    usage?: Usage | undefined;
     problem: string;
     stale: boolean;
     contract?: number | undefined;
@@ -698,6 +725,48 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
   }
 
+  /** The Team server tab's window chip: `<serverId>|<window>`. */
+  setTeamWindow(id: string): void {
+    this.teamPage.chooseWindow(id);
+  }
+
+  /** The Team server tab's server picker. */
+  setTeamServer(id: string): void {
+    this.teamPage.chooseServer(id);
+  }
+
+  /** Whether the Team server tab is the one showing — company figures are asked only meanwhile. */
+  setTeamTabShown(shown: boolean): void {
+    this.teamPage.tabShown(shown);
+  }
+
+  /** The Review rounds page opened: its clock starts. Returns what the page's closing calls. */
+  teamPageOpened(): () => void {
+    return this.teamPage.opened();
+  }
+
+  /** The Review rounds page came to the front, or went behind another editor tab. */
+  teamPageVisible(visible: boolean): void {
+    this.teamPage.visible(visible);
+  }
+
+  /** What the Team server tab is told: the admin flag, the toolbar's state and the figures held (teamServerTab.ts). */
+  teamTabPush(): TeamPush {
+    return teamTabPush({
+      states: this.teamServerStates(vscode.workspace.getConfiguration('coai')),
+      selection: this.teamPage.selection,
+      cell: (serverId, window) => this.teamUsage.cell(serverId, 'company', window),
+      asking: (serverId, window) => this.teamUsage.isAsking(serverId, 'company', window),
+      palette: vendorPalette(this.vendorIds()),
+      // Who is signed in (`GET /api/people`, 3.1), asked by the same cache while the tab is in front.
+      people: (serverId) => this.teamUsage.cell(serverId, 'people', ''),
+      peopleAsking: (serverId) => this.teamUsage.isAsking(serverId, 'people', ''),
+      // Each model at ITS public list price (3.2, D4) — the window's price book; never this person's typed row rates.
+      price: listPriceFrom(PRICE_BOOK),
+      now: Date.now(),
+    });
+  }
+
   /** The spending window the page shows. Today by default — since midnight, by the operator's ruling. */
   setUsageWindow(window: string): void {
     if ((['day', 'week', 'month', 'year'] as readonly string[]).includes(window)) {
@@ -733,18 +802,19 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.usageWindow,
       vendors,
       await this.modelPrices(vendors),
+      {
       // What each Team server says was spent ON IT. This machine's ledger has no line for a
       // review that ran there, so the two are shown beside each other rather than summed into
       // a number neither of them holds.
-      this.teamServerStates(vscode.workspace.getConfiguration('coai')),
-      this.usageScope,
+      teamServers: this.teamServerStates(vscode.workspace.getConfiguration('coai')),
       // THE SECOND LEDGER, which this page has never counted: what the chat cost, and how often it
       // was reached for. Read on the same stamped caches as everything else here.
       //
       // `vendorOf` turns the id a chat recorded - the model PRESET in force - into the vendor whose
       // row it belongs in, so both halves of the page name the same three vendors the same way.
       // Resolved on the way OUT rather than on the way in, which names every line already on disk.
-      await this.chatLedgers(),
+      chat: await this.chatLedgers(),
+      },
     );
   }
 
@@ -1274,7 +1344,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       bugz: await this.bugz(),
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
-      usageScope: this.usageScope,
       // From the person's own settings, exactly as the COMMAND reads it — not through the per-side
       // reader beside it. These are person-level by design (`chatSettings.ts` says so, and none of
       // them is in `OVERLAID_SETTINGS`), so routing them through an overlay that will never hold them
@@ -2336,9 +2405,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         await this.consultPrompt.saveConsultPrompt('');
         break;
       case 'usageWindow':
-        // The cached Team-server totals are the OTHER window's — the same staleness the scope toggle
-        // had, one control along. Caught on the code round.
-        this.teamCheckedAt = 0;
+        // The Team-server totals are cached per window (teamUsageCache.ts), so the new window's are simply not fresh yet
+        // and the next refresh asks for them — nothing to expire.
         if (id !== undefined) {
           this.usageWindow = id as Window;
         }
@@ -2494,16 +2562,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       case 'trySecurity':
         await this.trySecurity(id ?? '');
-        break;
-      case 'teamUsageScope':
-        // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
-        // else — so this is a display preference, not a permission.
-        this.usageScope = this.usageScope === 'me' ? 'company' : 'me';
-        // The cached totals are the OTHER scope's. Without this the button flips, the label says
-        // "the whole company", and the figures underneath are still that one person's — for up to a
-        // minute, with nothing saying so. Caught on the code round.
-        this.teamCheckedAt = 0;
-        await this.render();
         break;
       case 'closeConsultation':
         await this.closeConsultation(id ?? '');
@@ -2783,20 +2841,25 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       const here = this.context.globalState.get<TokenFact>(tokenFactKey(server.id, side));
       const intent = this.context.globalState.get<SignedIn>(signedInKey(server.id, scope));
       const failed = this.mintFailure[server.id];
+      const spent = this.teamUsage.cell(server.id, 'me', WINDOW_ON_THE_WIRE[this.usageWindow]);
+      // A usage call that failed is not silence either — it would otherwise render as "nothing recorded on this
+      // server", which is a measurement, not an absence of one. The catalog's own problem is said first.
+      const problem = known === undefined ? undefined : (known.problem.length > 0 ? known.problem : (spent?.problem ?? ''));
 
       return {
         server,
         email: here?.email ?? '',
         elsewhere: here === undefined ? (intent?.email ?? '') : '',
         catalog: known?.catalog,
-        usage: known?.usage,
+        usage: spent?.usage,
         // A failed silent sign-in is shown whether or not this side still holds SOMETHING. It used
         // to be suppressed while a token was present, which is the one case where it matters most:
         // the token belongs to an account the intent no longer names, so the row read "signed in as
         // <the wrong person>" with no sign that anything had gone wrong. Caught on the code round.
-        problem: known?.problem ?? (failed?.message ?? ''),
+        problem: problem ?? (failed?.message ?? ''),
         stale: known?.stale ?? false,
-        contract: known?.contract,
+        // From WHICHEVER call reached the server: the header rides every response.
+        contract: known?.contract ?? spent?.contract,
         busy: this.busy[server.id] ?? '',
       };
     });
@@ -3638,7 +3701,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async signInAndTell(server: TeamServer): Promise<void> {
     const result = await signIn(server, this.authHost());
     if (result.ok) {
-      await this.refreshCatalog(server);
+      await this.teamUsage.refresh(this.usageTargets([server], false, true), true);
     } else {
       void notify({
         as: 'warning',
@@ -3669,7 +3732,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       });
     }
 
-    delete this.catalogs[server.id];
+    this.forgetTeamServer(server.id);
     await this.render();
   }
 
@@ -3728,7 +3791,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       });
     }
 
-    delete this.catalogs[server.id];
+    this.forgetTeamServer(server.id);
 
     await config.update(
       'teamServers',
@@ -3744,82 +3807,124 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     await this.render();
   }
 
-  /** Ask one server what it offers and what has been spent on it, and remember both. */
-  private async refreshCatalog(server: TeamServer, renewalProblem = ''): Promise<void> {
+  /**
+   * Ask one server what it offers, and remember it — the half of a Team-server refresh that is NOT usage.
+   *
+   * <p>Returns what the usage half needs from it: the token, and whether the caller is an admin there.</p>
+   */
+  private async refreshCatalog(server: TeamServer, renewalProblem = ''): Promise<Prepared> {
     const token = await readToken(coaiDataDir(), server.url);
     if (token.length === 0) {
-      return;
+      return { token: '', admin: false, account: '' };
     }
 
     const answer = await catalogOf(server, token);
     const known = this.catalogs[server.id];
-    // `company` is asked for ONLY where THIS server's catalog said this account is an admin. The
-    // control is global but the permission is not: an admin on one server and an ordinary user on
-    // another would otherwise have the second refuse every request and go stale. Caught on the code
-    // round.
-    const scope = this.usageScope === 'company' && (known?.catalog?.isAdmin === true) ? 'company' : 'me';
-    const spent = await fetchUsage(
-      server.url,
-      token,
-      WINDOW_ON_THE_WIRE[this.usageWindow],
-      scope,
-    );
     // A renewal that failed is reported even when the catalog call SUCCEEDED, because the old token
     // stays valid for up to two days: without this the panel looked healthy right until reviews
     // started failing with a 401 nobody had been warned about. Caught on the code round.
     const problem = answer.ok ? renewalProblem : answer.message;
     this.catalogs[server.id] = {
       catalog: answer.ok ? answer.value : known?.catalog,
-      usage: spent.ok ? spent.value : known?.usage,
-      // A usage call that failed is not silence either — it would otherwise render as "nothing
-      // recorded on this server", which is a measurement, not an absence of one.
-      problem: problem.length > 0 ? problem : (spent.ok ? '' : spent.message),
+      problem,
       stale: answer.ok ? false : known?.catalog !== undefined,
-      // From WHICHEVER call reached the server: the header rides every response, so a catalog call
-      // that failed to connect while the usage call got through still leaves the row knowing what it
-      // is talking to. Only when an HTTP response actually arrived — `undefined` means the call never
-      // reached a server (a timeout, a refused connection, a URL that is not https), and recording
-      // that as "this server named nothing" would report every network blip as a server too old.
-      contract: answer.contract ?? spent.contract ?? known?.contract,
+      // Only when an HTTP response actually arrived — `undefined` means the call never reached a server (a timeout,
+      // a refused connection, a URL that is not https), and recording that as "this server named nothing" would
+      // report every network blip as a server too old.
+      contract: answer.contract ?? known?.contract,
     };
+    const admin = (answer.ok ? answer.value : known?.catalog)?.isAdmin === true;
+
+    return { token, admin, account: this.accountHere(server) };
+  }
+
+  /** Whose token this side holds for a server — the fact, never the shared intent. */
+  private accountHere(server: TeamServer): string {
+    return this.context.globalState.get<TokenFact>(tokenFactKey(server.id, this.sideKeyHere()))?.email ?? '';
+  }
+
+  /** What the surfaces showing a server's spending want of it, and how to bring the server up to date first. */
+  private usageTargets(servers: readonly TeamServer[], renew: boolean, force = false): UsageTarget[] {
+    const admins = this.adminServerIds();
+
+    return servers.map((server) => ({
+      server: { id: server.id, url: server.url },
+      wants: this.teamPage.wants(server.id, WINDOW_ON_THE_WIRE[this.usageWindow], admins),
+      prepare: () => this.catalogFor(server, renew, force),
+    }));
+  }
+
+  /** The servers whose held catalog says this side's account is an admin there — the ones the Team server tab lists. */
+  private adminServerIds(): string[] {
+    return Object.entries(this.catalogs).filter(([, known]) => known.catalog?.isAdmin === true).map(([id]) => id);
+  }
+
+  /** The server's catalog and token: held while fresh, shared while in flight, asked again otherwise. */
+  private catalogFor(server: TeamServer, renew: boolean, force: boolean): Promise<Prepared> {
+    const flying = this.catalogFlight.get(server.id);
+    if (flying !== undefined) {
+      return flying;
+    }
+    const held = force ? undefined : this.freshPrepared(server.id);
+    if (held !== undefined) {
+      return Promise.resolve(held);
+    }
+    const asking = this.askCatalog(server, renew).finally(() => { this.catalogFlight.delete(server.id); });
+    this.catalogFlight.set(server.id, asking);
+
+    return asking;
+  }
+
+  /** What the last catalog refresh learned about a server, while it is still fresh. */
+  private freshPrepared(serverId: string): Prepared | undefined {
+    const held = this.prepared[serverId];
+
+    return held !== undefined && Date.now() - held.at < USAGE_FRESH_MS ? held.value : undefined;
+  }
+
+  /** Renew quietly when asked to, then ask the catalog — stamped when it FINISHED, never when it started. */
+  private async askCatalog(server: TeamServer, renew: boolean): Promise<Prepared> {
+    const value = await this.refreshCatalog(server, renew ? await this.reconcileHere(server) : '');
+    this.prepared = { ...this.prepared, [server.id]: { at: Date.now(), value } };
+
+    return value;
+  }
+
+  /** Everything this side remembers about one server, gone: signed out of, or removed. */
+  private forgetTeamServer(serverId: string): void {
+    delete this.catalogs[serverId];
+    this.prepared = PanelProvider.without(this.prepared, serverId);
+    this.teamUsage.evictServer(serverId);
   }
 
 /**
-   * Renew quietly, then re-ask, for every server this machine is signed into.
+   * Renew quietly, then re-ask, for every server this machine knows — whatever is due, and nothing that is not.
    *
    * <p>Started by a render and never awaited by one — the panel draws from what is already known and
-   * this repaints when it lands. The freshness check is what stops a repaint loop: a render kicks
-   * this off, it renders once at the end, and that render finds the answer fresh and starts
-   * nothing.</p>
+   * this repaints when it lands. Freshness is per server and per figure (teamUsageCache.ts), and is what stops a
+   * repaint loop: a render kicks this off, each answer repaints, and that render finds everything fresh.</p>
+   *
+   * <p>Servers are independent, and asked CONCURRENTLY. Serially, one unreachable server spent its
+   * full deadline before the next was even tried, so five of them could keep every healthy one
+   * showing "asking what it offers…" for a minute.</p>
    */
   private async refreshTeamServers(): Promise<void> {
-    if (Date.now() - this.teamCheckedAt < TEAM_SERVER_FRESH_MS) {
-      return;
-    }
+    await this.teamUsage.refresh(this.usageTargets(this.teamServers(vscode.workspace.getConfiguration('coai')), true));
+  }
 
+  /**
+   * The Review rounds page asking — on its own minute, on a press, and with Refresh (`force`, for one server).
+   *
+   * <p>The page's clock is its own, so the figures move with the sidebar closed. The SAME owner fetches either way:
+   * one cache, one request per figure in flight, whoever asked.</p>
+   */
+  async refreshTeamUsage(forceServer = ''): Promise<void> {
     const servers = this.teamServers(vscode.workspace.getConfiguration('coai'));
-    if (servers.length === 0 || this.refreshing) {
-      return;
-    }
-
-    // Servers are independent, and asked CONCURRENTLY. Serially, one unreachable server spent its
-    // full deadline before the next was even tried, so five of them could keep every healthy one
-    // showing "asking what it offers…" for a minute. `allSettled`, because one server failing is
-    // that server's problem and not the others'.
-    this.refreshing = true;
-    try {
-      await Promise.allSettled(servers.map(async (server) => {
-        await this.refreshCatalog(server, await this.reconcileHere(server));
-      }));
-    } finally {
-      // Stamped when the work FINISHED, not when it started. Stamping at entry meant a run that
-      // took longer than the freshness window was immediately fresh-expired by its own closing
-      // render — a refresh loop that never idles. Caught on the code round.
-      this.teamCheckedAt = Date.now();
-      this.refreshing = false;
-    }
-
-    await this.render();
+    const forced = servers.filter((server) => server.id === forceServer);
+    await Promise.all([
+      this.teamUsage.refresh(this.usageTargets(servers.filter((server) => server.id !== forceServer), true)),
+      this.teamUsage.refresh(this.usageTargets(forced, true, true), true),
+    ]);
   }
 
   /**

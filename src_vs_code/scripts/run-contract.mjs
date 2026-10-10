@@ -31,12 +31,15 @@
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const DOMAIN = process.env.COAI_CONTRACT_DOMAIN ?? 'contract.test';
+// The admin persona the Team server tab's contract needs (teamUsage.contract.ts): an email in Coai:Admins. Pointed at
+// a server you already run, set COAI_CONTRACT_ADMIN to one in ITS list.
+const ADMIN = process.env.COAI_CONTRACT_ADMIN ?? `admin@${DOMAIN}`;
 // Startup is a build this job just compiled, not a download: 30s is generous, and a shorter
 // deadline is what turns a hang into a diagnosis instead of a coffee break.
 const READY_TIMEOUT_MS = 30_000;
@@ -107,6 +110,30 @@ function contractTests() {
 }
 
 /**
+ * Spending for the Team server tab's contract to read (todo/PLAN_team_usage_by_person.md, 3.4).
+ *
+ * <p>A fresh server's ledger is empty, so a company answer has no vendors, no models and thirty empty days, and every
+ * assertion about them would pass vacuously. Three lines, in the shape the server's own ledger writer uses: two people,
+ * one named model and one the line left empty ("" — unknown), one vendor id written with a capital the server must
+ * lower-case, today and yesterday so the 30-day series has two days to show. `COAI_CONTRACT_SEEDED` tells the tests
+ * the lines are there; pointed at a server you run, they are not, and the tests that need them say so and skip.</p>
+ */
+const SEEDED = [
+  { email: `alice@${DOMAIN}`, provider: 'Codex', model: 'gpt-5.6-sol', daysAgo: 0, tokensIn: 1000, tokensOut: 100 },
+  { email: `bob@${DOMAIN}`, provider: 'codex', model: 'gpt-5.6-sol', daysAgo: 1, tokensIn: 2000, tokensOut: 200 },
+  { email: `bob@${DOMAIN}`, provider: 'gemini', model: '', daysAgo: 0, tokensIn: 50, tokensOut: 5 },
+];
+
+function seedLedger(dir) {
+  const lines = SEEDED.map((one) => JSON.stringify({
+    utc: new Date(Date.now() - one.daysAgo * 24 * 3600 * 1000 - 60_000).toISOString(),
+    provider: one.provider, model: one.model, role: 'Architecture', stage: 'CodeReview', seconds: 3,
+    tokensIn: one.tokensIn, tokensOut: one.tokensOut, costUsd: null, outcome: 'ok', email: one.email, kind: 'review',
+  }));
+  writeFileSync(join(dir, 'usage.jsonl'), `${lines.join('\n')}\n`, 'utf8');
+}
+
+/**
  * The server this repository just built. Release first: that is what CI compiles.
  *
  * <p>coai-server.dll, not CoaiServer.dll — the project sets AssemblyName, and the file is named
@@ -168,6 +195,7 @@ async function startServer() {
   // 48 because a key that costs nothing to make may as well be well over the floor.
   const key = randomBytes(48).toString('base64');
   const data = mkdtempSync(join(tmpdir(), 'coai-contract-'));
+  seedLedger(data);
 
   const child = spawn('dotnet', [serverAssembly()], {
     // Inherited rather than captured: when startup fails, its own log lines are the diagnosis, and
@@ -194,6 +222,9 @@ async function startServer() {
       // inherits whatever the shell has — so both are cleared for the child rather than trusted.
       Auth__Microsoft__Tenant: '',
       Auth__Google__Enabled: 'false',
+      // One admin, named, so the company view has a caller it answers and a member (anyone else) it refuses. Pinned like
+      // the domain above: an inherited list could make every persona an admin and the 403 case pass as a 200.
+      Coai__Admins: ADMIN,
     },
   });
 
@@ -308,7 +339,7 @@ if (given.length > 0) {
       + 'COAI_CONTRACT_ALLOW_REMOTE=1 if that is genuinely what you want.');
   }
   console.log(`run-contract: using the server at ${safeToPrint(given)}`);
-  process.exit(await runTests({ COAI_CONTRACT_DOMAIN: DOMAIN }));
+  process.exit(await runTests({ COAI_CONTRACT_DOMAIN: DOMAIN, COAI_CONTRACT_ADMIN: ADMIN }));
 }
 
 const server = await startServer();
@@ -319,6 +350,8 @@ try {
     COAI_CONTRACT_URL: server.url,
     COAI_CONTRACT_KEY: server.key,
     COAI_CONTRACT_DOMAIN: DOMAIN,
+    COAI_CONTRACT_ADMIN: ADMIN,
+    COAI_CONTRACT_SEEDED: '1',
   });
 } finally {
   runCleanUp();

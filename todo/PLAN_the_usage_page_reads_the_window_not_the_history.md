@@ -20,6 +20,7 @@
 |---|---|---|
 | `5h` / `24h` windows, several windows from ONE scan, ~+200 bytes per ledger line | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md), story 5.1 | this plan's reopen condition (≈ 50 000 lines) is unchanged; the wider lines move it by bytes, not by lines |
 | Reading from the end of the file | **this plan** (deferred) | — |
+| A read covering the UNION of the selected window and the 30-day chart range, in one scan | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md), story 2.2 | when this plan reopens, its stop condition is the OLDER start of the two ranges |
 
 ## The symptom
 
