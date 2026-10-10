@@ -101,7 +101,7 @@ function isAnswerShape(value: unknown): value is Shaped {
 function answerOf(value: Shaped): RoundCountsAnswer | undefined {
   const windows = value.windows.map(windowOf);
 
-  return windows.some((one) => one === undefined) ? undefined
+  return windows.includes(undefined) ? undefined
     : { nowUtc: value.nowUtc, windows: windows as RoundsWindow[], modelsKnownSince: textOrNull(value['modelsKnownSince']) };
 }
 
@@ -137,7 +137,7 @@ function windowOf(raw: unknown): RoundsWindow | undefined {
 function windowFrom(raw: ShapedWindow): RoundsWindow | undefined {
   const rows = raw.rows.map(rowOf);
 
-  return rows.some((one) => one === undefined) ? undefined
+  return rows.includes(undefined) ? undefined
     : { name: raw.name, fromUtc: text(raw['fromUtc']), toUtc: text(raw['toUtc']), rows: rows as RoundsRow[] };
 }
 

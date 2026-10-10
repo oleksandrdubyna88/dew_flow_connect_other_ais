@@ -125,14 +125,21 @@ function body(input: RoundsBlockInput, snapshot: RoundsSnapshot): string {
     return '<p class="hint">No rounds, consultations, questions or chat in the last 7 days.</p>';
   }
 
-  return `<div class="table-scroll"><table class="rounds"><thead><tr>${HEADERS.map((one) => `<th scope="col">${one}</th>`).join('')}</tr></thead>`
-    + `<tbody>${facts.providers.map((provider) => rowBlock(facts, provider)).join('')}</tbody></table></div>`;
+  const rows = facts.providers.map((provider) => rowBlock(facts, provider)).join('');
+
+  return `<div class="table-scroll"><table class="rounds"><thead><tr>${HEADER_CELLS}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const HEADERS: readonly string[] = [
   'Vendor row / model', ...WINDOW_NAMES.map((name) => WINDOW_LABEL[name]), 'By stage (7 d)', 'Beside (7 d)',
   'Reviewers per round', escapeHtml(MEDIAN_OUTPUT_LABEL), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
 ];
+
+const HEADER_CELLS = HEADERS.map(headerCell).join('');
+
+function headerCell(label: string): string {
+  return `<th scope="col">${label}</th>`;
+}
 
 function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
   const end = windowEndMs(snapshot.read, snapshot.atMs);
@@ -159,7 +166,7 @@ function rowBlock(facts: Facts, provider: string): string {
 
 function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): string {
   const ranOn = facts.input.ranOn(provider);
-  const name = `<b>${escapeHtml(provider)}</b>${ranOn.length > 0 ? ` <span class="hint">ran on ${escapeHtml(ranOn)}</span>` : ''}`;
+  const name = `<b>${escapeHtml(provider)}</b>${ranOnHint(ranOn)}`;
   const all = rollUp(mine);
 
   return tr('row', [
@@ -169,8 +176,17 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
   ]);
 }
 
+/** *ran on &lt;server&gt;* beside a Team-server row's name; nothing for a row that runs here. */
+function ranOnHint(ranOn: string): string {
+  return ranOn.length > 0 ? ` <span class="hint">ran on ${escapeHtml(ranOn)}</span>` : '';
+}
+
 function tr(kind: string, cells: readonly string[]): string {
-  return `<tr class="${kind}">${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr>`;
+  return `<tr class="${kind}">${cells.map(dataCell).join('')}</tr>`;
+}
+
+function dataCell(cell: string): string {
+  return `<td>${cell}</td>`;
 }
 
 /** A row's rounds in one window: a count (nought included, when counted) or *count unavailable*. */
@@ -195,7 +211,9 @@ function stagesCell(read: RoundCountsRead, provider: string): string {
 function besideCell(mine: readonly MoneyGroup[]): string {
   const said = BESIDE.map(([kind, word]) => [word, turnsOf(mine, kind)] as const).filter(([, turns]) => turns > 0);
 
-  return said.length === 0 ? '—' : `${said.map(([word, turns]) => `${word} ${turns}`).join(' · ')} recorded turns`;
+  const list = said.map(([word, turns]) => `${word} ${turns}`).join(' · ');
+
+  return said.length === 0 ? '—' : `${list} recorded turns`;
 }
 
 function turnsOf(groups: readonly MoneyGroup[], kind: string): number {
