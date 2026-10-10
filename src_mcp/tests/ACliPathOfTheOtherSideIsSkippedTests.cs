@@ -54,6 +54,25 @@ public sealed class ACliPathOfTheOtherSideIsSkippedTests
     private static SystemPlaces Places(bool windows, string systemDrive) => new(string.Empty, []) { Windows = windows, SystemDrive = systemDrive };
 
     [Fact]
+    public void RowsSharingOneCliPath_AskTheDiskOnce_AndEachRowGetsTheAnswer()
+    {
+        // E1's code round: the probe is synchronous, and a hundred rows on one other-side path were a hundred stats.
+        var asked = new List<string>();
+        const string Json = """
+            [{"id":"a","runtime":"codex","executablePath":"/usr/local/bin/codex"},
+             {"id":"b","runtime":"codex","executablePath":" /usr/local/bin/codex "},
+             {"id":"c","runtime":"codex","executablePath":"/usr/local/bin/codex"},
+             {"id":"d","runtime":"codex","executablePath":"/opt/other/codex"}]
+            """;
+
+        var vendors = PanelSettings.ParseVendors(Json, Places(true, "C:"), full => { asked.Add(full); return RootPresence.Absent; });
+
+        asked.Should().Equal([@"C:\usr\local\bin\codex", @"C:\opt\other\codex"], "one stat per distinct path, not one per row");
+        vendors.Select(v => (v.Provider, v.ExecutablePath, v.OtherSideExecutable)).Should().Equal(
+            ("a", "", "/usr/local/bin/codex"), ("b", "", "/usr/local/bin/codex"), ("c", "", "/usr/local/bin/codex"), ("d", "", "/opt/other/codex"));
+    }
+
+    [Fact]
     public void TheConsultantsCase_AnExistingRootRelativeCliOnWindows_RunsQualifiedWithTheSystemDrive_NeverAPathInstall()
     {
         // E1's cadence consultation: `/Program Files/nodejs/node.exe --version` launches from C:\ — skipping it lexically ran

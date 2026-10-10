@@ -1256,9 +1256,17 @@ public sealed record PanelSettings
     internal static List<ProviderSettings> ParseVendors(string json) => ParseVendors(json, OperatingSystem.IsWindows());
 
     /// <summary>The vendor list as a host that is, or is not, Windows reads it — the platform injected for a test.</summary>
-    internal static List<ProviderSettings> ParseVendors(string json, bool windows)
+    internal static List<ProviderSettings> ParseVendors(string json, bool windows) =>
+        ParseVendors(json, SystemPlaces.Current with { Windows = windows }, ExecutablePaths.FilePresenceOf);
+
+    /// <summary>
+    /// The vendor list on a side described by <paramref name="places"/>, asking <paramref name="presence"/> about a CLI path
+    /// of the other OS's spelling — injected for a test. THIS side's CLI is decided after the distinct, once per DISTINCT
+    /// path: a hundred rows sharing one path probe the disk once (E1's code round).
+    /// </summary>
+    internal static List<ProviderSettings> ParseVendors(string json, SystemPlaces places, Func<string, RootPresence> presence)
     {
-        // (THIS side's CLI path: WithThisSidesCli, after the distinct — the disk is asked once per row.)
+        var cliOf = ExecutablePaths.Memoized(places, presence);
         try
         {
             var vendors = System.Text.Json.JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ListVendorDto);
@@ -1309,7 +1317,7 @@ public sealed record PanelSettings
                     // provider/role key of every reviewer launch, so two rows sharing it would
                     // collide in the round's dictionary before any model ran.
                     .DistinctBy(v => v.Provider)
-                    .Select(v => WithThisSidesCli(v, windows))];
+                    .Select(v => WithThisSidesCli(v, cliOf))];
         }
         catch (System.Text.Json.JsonException)
         {
@@ -1322,9 +1330,9 @@ public sealed record PanelSettings
     /// skipped (the PATH lookup) and named for the startup log, never refused; one that exists here, or that the disk could
     /// not answer for, runs qualified (<see cref="ExecutablePaths.Here(string?, bool)"/>).
     /// </summary>
-    private static ProviderSettings WithThisSidesCli(ProviderSettings vendor, bool windows)
+    private static ProviderSettings WithThisSidesCli(ProviderSettings vendor, Func<string?, ThisSidePath> cliOf)
     {
-        var cli = ExecutablePaths.Here(vendor.ExecutablePath, windows);
+        var cli = cliOf(vendor.ExecutablePath);
 
         return vendor with { ExecutablePath = cli.Path, OtherSideExecutable = cli.OtherSide };
     }

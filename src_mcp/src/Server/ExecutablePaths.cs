@@ -46,6 +46,28 @@ public static class ExecutablePaths
             : new ThisSidePath(here, string.Empty);
     }
 
+    /// <summary>
+    /// <see cref="Here(string?, SystemPlaces, Func{string, RootPresence})"/> for one read of a list: an answer per trimmed
+    /// path is kept for the life of the returned function, so rows sharing a CLI path ask the disk once (E1's code round —
+    /// the probe is synchronous, and a hundred rows on one path were a hundred stats).
+    /// </summary>
+    public static Func<string?, ThisSidePath> Memoized(SystemPlaces places, Func<string, RootPresence> presence)
+    {
+        var answers = new Dictionary<string, ThisSidePath>(StringComparer.Ordinal);
+
+        return path =>
+        {
+            var key = path?.Trim() ?? string.Empty;
+            if (!answers.TryGetValue(key, out var answer))
+            {
+                answer = Here(key, places, presence);
+                answers[key] = answer;
+            }
+
+            return answer;
+        };
+    }
+
     /// <summary>What the disk says about a FILE — <see cref="QuestionRoots.PresenceOf(string, Func{string, FileAttributes}, bool)"/>'s three answers, a directory being no CLI.</summary>
     public static RootPresence FilePresenceOf(string full) => QuestionRoots.PresenceOf(full, File.GetAttributes, wantsDirectory: false);
 
