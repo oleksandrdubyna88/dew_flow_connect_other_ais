@@ -11,6 +11,7 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
+import { describedBy } from './catalogShell';
 import { jsonForScript } from './webviewHtml';
 import { activeQuestionsBody } from './activeQuestions';
 import type { QuestionConsult } from './questionConsults';
@@ -1446,12 +1447,14 @@ export function modelWords(runtime: Runtime, baseUrl: string): { title: string; 
  * each box in `.stages` wherever it lands is what lets one rule reach both layouts — without it, the
  * hosted card's boxes stay bright while the remote card's dim, which is what two reviewers caught on
  * the plan round of issue #124.</p>
+ *
+ * @param why the id of the line on the page that says why the box is refused — the Models card's lock line
  */
 export function stageBox(
-  kind: 'plan' | 'code' | 'document' | 'feature', id: string, on: boolean, enabled: boolean, text: string, tip = '',
+  kind: 'plan' | 'code' | 'document' | 'feature', id: string, on: boolean, enabled: boolean, text: string, tip = '', why = '',
 ): string {
   return `<span class="stages${enabled ? '' : ' off'}"><label class="check">`
-    + `<input type="checkbox" data-setting="${kind}" data-vendor="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}>`
+    + `<input type="checkbox" data-setting="${kind}" data-vendor="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}${describedBy(why)}>`
     // The tip AFTER the label: a click inside a label activates its checkbox, so a "?" in it flipped the stage.
     + ` ${text}</label>${tip}</span>`;
 }
