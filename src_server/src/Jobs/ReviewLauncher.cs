@@ -33,13 +33,39 @@ public abstract record ReviewAttempt
     /// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same
     /// parser does not exist twice and drift.
     /// </param>
-    public sealed record Answered(string Raw, long TokensIn, long TokensOut) : ReviewAttempt;
+    /// <param name="Usage">
+    /// What the launch reported — the WHOLE usage, cached and reasoning included, so the ledger line carries what the
+    /// vendor said (story 3.1 of todo/PLAN_every_round_is_counted.md: two longs used to drop the rest on the floor).
+    /// </param>
+    public sealed record Answered(string Raw, Usage Usage) : ReviewAttempt
+    {
+        /// <summary>An answer whose launch reported only its input and output counts.</summary>
+        public Answered(string raw, long tokensIn, long tokensOut)
+            : this(raw, new Usage(tokensIn, tokensOut, null))
+        {
+        }
+
+        public long TokensIn => Usage.TokensIn;
+
+        public long TokensOut => Usage.TokensOut;
+    }
 
     /// <param name="Outcome">
     /// The executor's own verdict, unchanged — this server maps it to a wire vocabulary and invents
     /// none of its own.
     /// </param>
-    public sealed record Failed(ReviewerOutcome Outcome) : ReviewAttempt;
+    /// <param name="Usage">
+    /// What the attempt's launches reported — a launch and its continuation together — whatever the verdict. A vendor
+    /// that ran and failed was billed for what it ran, so the ledger line keeps it (story 3.1).
+    /// </param>
+    public sealed record Failed(ReviewerOutcome Outcome, Usage Usage) : ReviewAttempt
+    {
+        /// <summary>A verdict alone: the attempt reports what the verdict itself carries (<see cref="ReviewerOutcome.TotalUsage"/>).</summary>
+        public Failed(ReviewerOutcome outcome)
+            : this(outcome, outcome.TotalUsage)
+        {
+        }
+    }
 }
 
 /// <summary>
@@ -154,10 +180,10 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
 
     /// <summary>What a launch and its continuation mean together.</summary>
     /// <remarks>
-    /// The continuation decides — it is the later and the more specific word — and both launches are billed
-    /// when it answered or came back empty. A continuation that ended in a terminal outcome is that outcome,
-    /// which carries no usage on this server, like every terminal outcome here: the first launch's tokens
-    /// are then not recorded. (Our own reviewer; the documented gap, not a new one.)
+    /// The continuation decides — it is the later and the more specific word — and both launches are billed,
+    /// whatever it came to: the attempt carries the two launches' usage together, a terminal outcome included
+    /// (story 3.1 of todo/PLAN_every_round_is_counted.md closed the gap this used to document — a continuation that
+    /// ended badly dropped the first launch's tokens).
     /// </remarks>
     private static ReviewAttempt Continued(ReviewerLaunch first, ReviewerLaunch second) =>
         Noted(Read(second with { Usage = first.Usage.Add(second.Usage) }),
@@ -165,8 +191,8 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
 
     /// <summary>An empty answer's reason, with what became of its continuation; any other attempt unchanged.</summary>
     private static ReviewAttempt Noted(ReviewAttempt attempt, string note) =>
-        attempt is ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing }
-            ? new ReviewAttempt.Failed(nothing with { Reason = nothing.Reason + note })
+        attempt is ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing } failed
+            ? failed with { Outcome = nothing with { Reason = nothing.Reason + note } }
             : attempt;
 
     /// <summary>What one launch means to this server.</summary>
@@ -190,16 +216,16 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// </remarks>
     private static ReviewAttempt Read(ReviewerLaunch launch) => launch switch
     {
-        { Terminal: { } terminal } => new ReviewAttempt.Failed(terminal),
+        // The LAUNCH's usage, not the outcome's: after a continuation it is both launches together (Continued).
+        { Terminal: { } terminal } => new ReviewAttempt.Failed(terminal, launch.Usage),
         { Answer: null or "" } => Nothing(launch.Usage),
         { Answer: { } answer } when string.IsNullOrWhiteSpace(answer) => Nothing(launch.Usage),
-        { Answer: { } answer } => new ReviewAttempt.Answered(answer, launch.Usage.TokensIn, launch.Usage.TokensOut),
+        { Answer: { } answer } => new ReviewAttempt.Answered(answer, launch.Usage),
     };
 
     /// <summary>A clean exit that produced no answer — a failure, and NOT <c>NotStarted</c>.</summary>
     private static ReviewAttempt.Failed Nothing(Usage usage) =>
-        new(new ReviewerOutcome.Unparseable(
-            "the vendor exited cleanly without writing an answer", usage));
+        new(new ReviewerOutcome.Unparseable("the vendor exited cleanly without writing an answer", usage), usage);
 
     /// <summary>
     /// The ONE step that makes this a confined launch: the adapter's argv and the child's

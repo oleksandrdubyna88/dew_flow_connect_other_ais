@@ -142,26 +142,10 @@ public sealed class JobRunner(
             ReviewAttempt.Answered answered => Succeeded(slot, job, answered, now),
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.RateLimited limited } =>
                 RateLimited(vendor, slot, job, limited, now),
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.NonZeroExit exit } =>
-                JobTransitions.Fail(job, FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode), now),
-            // Its own sentence rather than the expiry one. This is the reviewer's OWN timeout firing,
-            // which is the case the server's backstop exists to be later than — and since abandonment
-            // joined the expiry reasons, borrowing that sentence could have described a job nobody
-            // was polling as one the vendor was too slow for. Two different events, two sentences.
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.TimedOut } =>
-                JobTransitions.Fail(
-                    job,
-                    FailureKind.TimedOut,
-                    $"the vendor did not answer within the {job.RunBudget.TotalSeconds:0}s it was given",
-                    now),
-            // The tokens travel with THIS one. It is the failure that ran and was billed, and
-            // dropping its usage wrote a spending line saying a broken vendor cost nothing.
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable bad } =>
-                JobTransitions.Fail(
-                    job, FailureKind.UnparseableByVendor, bad.Reason, now,
-                    bad.Usage.TokensIn, bad.Usage.TokensOut),
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.NotStarted missing } =>
-                JobTransitions.Fail(job, FailureKind.NotStarted, missing.Reason, now),
+            // The usage travels with EVERY failure — whatever the launch reported, the attempt carries
+            // (story 3.1 of todo/PLAN_every_round_is_counted.md). It used to travel with Unparseable alone,
+            // so a vendor that crashed after it was billed was written as one that cost nothing.
+            ReviewAttempt.Failed failed => Failed(job, failed, now),
             _ => JobTransitions.Fail(
                 job, FailureKind.NotStarted, "the executor returned a verdict this server cannot read", now),
         };
@@ -184,8 +168,30 @@ public sealed class JobRunner(
         // three refusals into an exponential wait.
         slots.MarkSucceeded(slot);
 
-        return JobTransitions.Succeed(job, answered.Raw, answered.TokensIn, answered.TokensOut, now);
+        return JobTransitions.Succeed(job, answered.Raw, answered.Usage, now);
     }
+
+    /// <summary>A failure the vendor decided, with what its launches reported beside it.</summary>
+    private static JobRecord Failed(JobRecord job, ReviewAttempt.Failed failed, DateTimeOffset now)
+    {
+        var (kind, reason) = WhyItFailed(job, failed.Outcome);
+
+        return JobTransitions.Fail(job, kind, reason, now, failed.Usage);
+    }
+
+    private static (FailureKind Kind, string Reason) WhyItFailed(JobRecord job, ReviewerOutcome outcome) => outcome switch
+    {
+        ReviewerOutcome.NonZeroExit exit => (FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode)),
+        // Its own sentence rather than the expiry one. This is the reviewer's OWN timeout firing,
+        // which is the case the server's backstop exists to be later than — and since abandonment
+        // joined the expiry reasons, borrowing that sentence could have described a job nobody
+        // was polling as one the vendor was too slow for. Two different events, two sentences.
+        ReviewerOutcome.TimedOut =>
+            (FailureKind.TimedOut, $"the vendor did not answer within the {job.RunBudget.TotalSeconds:0}s it was given"),
+        ReviewerOutcome.Unparseable bad => (FailureKind.UnparseableByVendor, bad.Reason),
+        ReviewerOutcome.NotStarted missing => (FailureKind.NotStarted, missing.Reason),
+        _ => (FailureKind.NotStarted, "the executor returned a verdict this server cannot read"),
+    };
 
     /// <summary>
     /// The account said no. Park it, and give the job back to the queue if another one could serve it.
@@ -234,6 +240,8 @@ public sealed class JobRunner(
 
         try
         {
+            // The whole-Usage overload: cached and reasoning tokens, a missing price and a usage nobody
+            // captured are written as a reviewer's local line writes them (story 3.1).
             ledger.RecordJob(
                 finished.Email,
                 vendor.Id,
@@ -241,10 +249,9 @@ public sealed class JobRunner(
                 job.Role,
                 finished.Status == JobStatus.Done ? "ok" : finished.Failure.ToString(),
                 finished.Elapsed,
-                finished.TokensIn,
-                finished.TokensOut,
-                costUsd: null,
-                kind: JobKinds.Wire(job.Kind));
+                finished.Usage,
+                kind: JobKinds.Wire(job.Kind),
+                stage: "TeamServer");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

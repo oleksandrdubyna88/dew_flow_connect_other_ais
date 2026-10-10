@@ -25,7 +25,13 @@ public sealed record UsageLine(
     long TokensOut,
     double? CostUsd,
     /// <summary>A review or a conversation. A line written before the field existed was a review.</summary>
-    JobKind Kind = JobKinds.WhenNotSaid)
+    JobKind Kind = JobKinds.WhenNotSaid,
+    /// <summary>How much of the input the vendor reported as cached — a subset of it, never added to it.</summary>
+    long TokensCached = 0,
+    /// <summary>How much of the output the vendor reported as reasoning — a subset of it, for the record.</summary>
+    long TokensReasoning = 0,
+    /// <summary><c>usage not captured</c> when the launch ended before the vendor reported anything; else empty.</summary>
+    string UsageNote = "")
 {
     /// <summary>True when this run produced no answer. It cost the same.</summary>
     public bool Failed => !Outcome.Equals("ok", StringComparison.OrdinalIgnoreCase);
@@ -162,7 +168,12 @@ public sealed class UsageReader(string dataDir)
                 entry.TokensIn,
                 entry.TokensOut,
                 entry.CostUsd,
-                kind);
+                kind,
+                // Read whole (story 3.1 of todo/PLAN_every_round_is_counted.md): a line from before these fields
+                // reads 0 / 0 / empty, which is what it always meant.
+                entry.TokensCached,
+                entry.TokensReasoning,
+                entry.UsageNote ?? string.Empty);
         }
         catch (JsonException)
         {

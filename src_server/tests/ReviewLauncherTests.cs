@@ -391,6 +391,24 @@ public sealed class ReviewLauncherTests
             .Which.Outcome.Should().BeOfType<ReviewerOutcome.TimedOut>("the continuation's own verdict is the latest and the most specific");
     }
 
+    /// <summary>
+    /// A continuation that ends in a terminal outcome is that outcome — and BOTH launches were billed, so the attempt
+    /// keeps the first launch's usage beside it (story 3.1 of todo/PLAN_every_round_is_counted.md). The terminal arm
+    /// used to read the outcome alone, and the first launch's tokens were never recorded.
+    /// </summary>
+    [Fact]
+    public async Task AContinuationThatEndsBadly_KeepsTheFirstLaunchsUsage()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(1, AnsweredStream, "the continuation crashed", TimedOut: false));
+
+        var attempt = await RunAgy(scripted);
+
+        var failed = attempt.Should().BeOfType<ReviewAttempt.Failed>().Subject;
+        failed.Outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>("the continuation's own verdict is the job's");
+        failed.Usage.Should().Match<Usage>(u => u.TokensIn == 140 && u.TokensOut == 25,
+            "the denied first launch (100/5) and the failed continuation (40/20) were both billed");
+    }
+
     [Fact]
     public async Task AFollowUp_GetsOnlyWhatIsLeftOfTheJobsBudget()
     {

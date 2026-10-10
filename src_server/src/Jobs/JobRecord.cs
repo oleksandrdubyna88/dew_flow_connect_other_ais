@@ -1,3 +1,5 @@
+using CoaiMcp.Core.Findings;
+
 namespace CoaiServer;
 
 /// <summary>Where a review is in its life.</summary>
@@ -83,8 +85,6 @@ public sealed record JobRecord(
     string Slot = "",
     FailureKind Failure = FailureKind.None,
     string Reason = "",
-    long TokensIn = 0,
-    long TokensOut = 0,
 
     /// <summary>The accounts that have already refused this job with a rate limit.</summary>
     /// <remarks>
@@ -104,6 +104,18 @@ public sealed record JobRecord(
     /// </summary>
     string SystemPromptSha = "")
 {
+    /// <summary>
+    /// What the vendor reported for this job — the whole usage, cached and reasoning included (story 3.1 of
+    /// todo/PLAN_every_round_is_counted.md). It replaced two longs, which is where the server ledger lost the rest.
+    /// </summary>
+    public Usage Usage { get; init; } = Usage.None;
+
+    /// <summary>The input count the status endpoint reports.</summary>
+    public long TokensIn => Usage.TokensIn;
+
+    /// <summary>The output count the status endpoint reports.</summary>
+    public long TokensOut => Usage.TokensOut;
+
     public bool IsTerminal => Status is JobStatus.Done or JobStatus.Failed;
 
     /// <summary>The accounts that have refused it, never null.</summary>
@@ -188,37 +200,32 @@ public static class JobTransitions
             RunDeadlineUtc = nowUtc + job.RunBudget + RunSlack,
         };
 
-    public static JobRecord Succeed(JobRecord job, string answer, long tokensIn, long tokensOut, DateTimeOffset nowUtc) =>
+    public static JobRecord Succeed(JobRecord job, string answer, Usage usage, DateTimeOffset nowUtc) =>
         job with
         {
             Status = JobStatus.Done,
             Answer = answer,
-            TokensIn = tokensIn,
-            TokensOut = tokensOut,
+            Usage = usage,
             FinishedUtc = nowUtc,
         };
 
-    /// <param name="tokensIn">
-    /// What the attempt actually cost, when the failure carries it. A vendor that answered unusably
-    /// still BILLED for the call, and leaving these at zero writes a usage line saying the company
-    /// spent nothing — which is precisely the vendor somebody would want to find in that report.
-    /// Defaulted, because most failures genuinely have no usage to carry: nothing ran.
-    /// (CodeRabbit, PR 93.)
+    /// <summary>A failure that ran nothing, so it carries no usage.</summary>
+    public static JobRecord Fail(JobRecord job, FailureKind kind, string reason, DateTimeOffset nowUtc) =>
+        Fail(job, kind, reason, nowUtc, Usage.None);
+
+    /// <param name="usage">
+    /// What the attempt actually cost. A vendor that answered unusably, or exited non-zero, still BILLED for the call,
+    /// and leaving it out writes a usage line saying the company spent nothing — which is precisely the vendor somebody
+    /// would want to find in that report. (CodeRabbit, PR 93; widened to every failure and to the whole usage by story
+    /// 3.1 of todo/PLAN_every_round_is_counted.md.)
     /// </param>
-    public static JobRecord Fail(
-        JobRecord job,
-        FailureKind kind,
-        string reason,
-        DateTimeOffset nowUtc,
-        long tokensIn = 0,
-        long tokensOut = 0) =>
+    public static JobRecord Fail(JobRecord job, FailureKind kind, string reason, DateTimeOffset nowUtc, Usage usage) =>
         job with
         {
             Status = JobStatus.Failed,
             Failure = kind,
             Reason = reason,
-            TokensIn = tokensIn,
-            TokensOut = tokensOut,
+            Usage = usage,
             FinishedUtc = nowUtc,
         };
 
