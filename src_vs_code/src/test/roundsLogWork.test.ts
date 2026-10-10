@@ -28,6 +28,10 @@ function recording(): { readonly hooks: RoundsLogHooks; readonly called: string[
       onForgetChat: (provider, model) => note(`forgetChat ${provider} ${model}`)(),
       onExport: (rows) => note(`export ${rows.length}`)(),
       onFindings: (key, round) => note(`findings ${key} ${round.sessionId}/${round.stage}/${round.number}`)(),
+      onTeamWindow: (id) => note(`teamWindow ${id}`)(),
+      onTeamRefresh: (server) => note(`teamRefresh ${server}`)(),
+      onTeamServer: (server) => note(`teamServer ${server}`)(),
+      onTeamTab: (shown) => note(`teamTab ${String(shown)}`)(),
     },
   };
 }
@@ -43,6 +47,10 @@ test('every command that asks the host for work maps to its own hook, and the wo
     { kind: 'forgetChat', provider: 'codex', model: 'gpt-6-astra' },
     { kind: 'export', rows: [] },
     { kind: 'findings', key: 'k1', sessionId: 's1', stage: 'CodeReview', number: 2 },
+    { kind: 'teamWindow', id: 'acme|year' },
+    { kind: 'teamRefresh', server: 'acme' },
+    { kind: 'teamServer', server: 'acme' },
+    { kind: 'teamTab', shown: true },
   ];
 
   for (const command of commands) {
@@ -54,6 +62,7 @@ test('every command that asks the host for work maps to its own hook, and the wo
   assert.deepEqual(called, [
     'answer q1', 'usageWindow week', 'spotsPeriod month', 'forget codex', 'closeConsultation c1',
     'forgetChat codex gpt-6-astra', 'export 0', 'findings k1 s1/CodeReview/2',
+    'teamWindow acme|year', 'teamRefresh acme', 'teamServer acme', 'teamTab true',
   ]);
 });
 

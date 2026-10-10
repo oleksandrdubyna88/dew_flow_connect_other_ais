@@ -139,6 +139,53 @@ export interface VendorUsage {
   readonly failed: number;
   readonly seconds: number;
   readonly costUsd?: number;
+  /** The vendor-reported cost is a floor: some runs carried none. */
+  readonly costIsFloor?: boolean;
+  readonly unpricedRuns?: number;
+  /**
+   * What ran, per model — a newer server only (todo/PLAN_team_usage_by_person.md, E2 story 2.2). Absent is an OLDER
+   * server, never "no models": a new server answers it, empty, too.
+   */
+  readonly models?: readonly ModelUsage[];
+}
+
+/** One model's share of a vendor row, from a server new enough to say (E2). */
+export interface ModelUsage {
+  readonly model: string;
+  readonly runs: number;
+  readonly failed: number;
+  readonly tokensIn: number;
+  readonly tokensOut: number;
+  readonly costUsd?: number;
+  readonly costIsFloor?: boolean;
+  readonly unpricedRuns?: number;
+}
+
+/** One person's spending, in a company answer — grouped by the SERVER, case-insensitively (D2). */
+export interface PersonUsage {
+  readonly email: string;
+  readonly vendors: readonly VendorUsage[];
+}
+
+/** Launches per vendor on one UTC calendar day, from a newer server's company answer (E2, D7). */
+export interface DailyBucket {
+  /** `yyyy-MM-dd` as the server wrote it — printed as-is, never through `new Date()`, which would shift it. */
+  readonly day: string;
+  readonly vendors: readonly { readonly vendor: string; readonly runs: number }[];
+}
+
+/** The last 30 UTC days, dense — a newer server only. Its ABSENCE is how an older server is recognised (D8). */
+export interface DailyUsage {
+  readonly fromUtc: string;
+  readonly toUtc: string;
+  readonly days: readonly DailyBucket[];
+}
+
+/** One row of a newer server's admin-only `GET /api/people` (E2, D5): three fields and never more. */
+export interface PersonListing {
+  readonly email: string;
+  readonly displayName: string;
+  readonly lastUsedUtc: string;
 }
 
 /**
@@ -162,6 +209,15 @@ export interface Usage {
   readonly vendors: readonly VendorUsage[];
   /** Optional: a server that predates the field sends none, and the panel then says nothing. */
   readonly kinds?: readonly KindUsage[];
+  /** The trailing UTC range the server counted over. */
+  readonly fromUtc?: string;
+  readonly toUtc?: string;
+  /** `company` answers only: each person's spending, sorted by email. */
+  readonly people?: readonly PersonUsage[];
+  /** `company` answers only, and only to an admin: ledger lines the server could not read. */
+  readonly unreadableLines?: number;
+  /** `company` answers from a newer server only (E2): launches per day for the last 30 UTC days. */
+  readonly daily?: DailyUsage;
 }
 
 /** The bearer this machine holds for one server, or empty when it has never signed in. */

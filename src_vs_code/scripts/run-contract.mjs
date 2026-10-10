@@ -37,6 +37,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const DOMAIN = process.env.COAI_CONTRACT_DOMAIN ?? 'contract.test';
+// The admin persona the Team server tab's contract needs (teamUsage.contract.ts): an email in Coai:Admins. Pointed at
+// a server you already run, set COAI_CONTRACT_ADMIN to one in ITS list.
+const ADMIN = process.env.COAI_CONTRACT_ADMIN ?? `admin@${DOMAIN}`;
 // Startup is a build this job just compiled, not a download: 30s is generous, and a shorter
 // deadline is what turns a hang into a diagnosis instead of a coffee break.
 const READY_TIMEOUT_MS = 30_000;
@@ -194,6 +197,9 @@ async function startServer() {
       // inherits whatever the shell has — so both are cleared for the child rather than trusted.
       Auth__Microsoft__Tenant: '',
       Auth__Google__Enabled: 'false',
+      // One admin, named, so the company view has a caller it answers and a member (anyone else) it refuses. Pinned like
+      // the domain above: an inherited list could make every persona an admin and the 403 case pass as a 200.
+      Coai__Admins: ADMIN,
     },
   });
 
@@ -308,7 +314,7 @@ if (given.length > 0) {
       + 'COAI_CONTRACT_ALLOW_REMOTE=1 if that is genuinely what you want.');
   }
   console.log(`run-contract: using the server at ${safeToPrint(given)}`);
-  process.exit(await runTests({ COAI_CONTRACT_DOMAIN: DOMAIN }));
+  process.exit(await runTests({ COAI_CONTRACT_DOMAIN: DOMAIN, COAI_CONTRACT_ADMIN: ADMIN }));
 }
 
 const server = await startServer();
@@ -319,6 +325,7 @@ try {
     COAI_CONTRACT_URL: server.url,
     COAI_CONTRACT_KEY: server.key,
     COAI_CONTRACT_DOMAIN: DOMAIN,
+    COAI_CONTRACT_ADMIN: ADMIN,
   });
 } finally {
   runCleanUp();

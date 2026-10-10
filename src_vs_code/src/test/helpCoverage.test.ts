@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { COPY_ANSWER } from '../chatPage';
 import { BLOCK_CONTROL_TERMS } from '../renderAnswer';
+import { TEAM_TAB_LABEL } from '../teamServerTabPage';
 
 /**
  * Every command in the manifest, and every setting, is described somewhere in the help.
@@ -37,6 +38,22 @@ test('every language’s chat article names the header button, not just the arti
       `the ${language} chat article does not mention the New chat button, so a reader of it never learns `
       + 'where the reset is — the article is a release out of date rather than absent, which nothing else here can see',
     );
+  }
+});
+
+test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
+  // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
+  // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).
+  // The tab's label is English in every language, as every control name here is, so it is the string all five carry.
+  const named = `**${TEAM_TAB_LABEL}**`;
+  for (const id of ['the-rounds-log', 'what-each-ai-has-used', 'team-servers']) {
+    const article = HELP_ARTICLES.find((one) => one.id === id);
+    assert.ok(article !== undefined, `the ${id} article has been renamed, and this test is now asserting nothing`);
+    for (const language of HELP_LANGUAGES) {
+      const said = Object.values(bodyFor(article, language).body).join(' ');
+      assert.ok(said.includes(named), `the ${language} ${id} article never names the ${TEAM_TAB_LABEL} tab — stale rather than missing`);
+      assert.ok(!said.includes('Show the whole company'), `the ${language} ${id} article still promises the removed Company toggle`);
+    }
   }
 });
 

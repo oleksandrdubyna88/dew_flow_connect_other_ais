@@ -26,6 +26,7 @@ import {
 import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, type TextSettings } from './textControls';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
+import { TEAM_TAB_BUTTON, TEAM_TAB_CSS, TEAM_TAB_SCRIPT, teamSectionHtml } from './teamServerTabPage';
 import { IDLE } from './busySnapshot';
 
 /**
@@ -918,6 +919,17 @@ export function questionsHtml(questions: readonly Escalation[]): string {
 }
 
 /**
+ * What the spending tab shows beside this machine's own ledger — named, so a caller that wants only the chat ledger
+ * does not pass a positional placeholder for everything before it.
+ */
+export interface UsageTabExtras {
+  /** What each Team server says was spent ON IT, by this account. */
+  readonly teamServers?: readonly TeamServerState[];
+  /** The chat's own two ledgers. */
+  readonly chat?: ChatLedgers;
+}
+
+/**
  * The spending tab's body: the window buttons and the per-vendor region the sidebar used to carry.
  *
  * <p>Moved here from the sidebar on 2026-09-05 — "перенеси отдельной табой в Review rounds и убери из
@@ -929,15 +941,13 @@ export function usageTabHtml(
   window: Window,
   vendors: readonly Vendor[],
   prices: Readonly<Record<string, ModelPrice>>,
-  teamServers: readonly TeamServerState[] = [],
-  usageScope: 'me' | 'company' = 'me',
-  chat: ChatLedgers = { turns: [], doors: [] },
+  { teamServers = [], chat = { turns: [], doors: [] } }: UsageTabExtras = {},
 ): string {
   const buttons = WINDOWS
     .map((w) => `<button type="button" class="tab${w.id === window ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`)
     .join('');
 
-  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, usageScope, chat)}</div>`;
+  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, chat)}</div>`;
 }
 
 /**
@@ -1517,6 +1527,7 @@ ${TEXT_CONTROLS_CSS}
   .view-conversations .facet-stage, .view-conversations .facet-verdict,
   .view-conversations #exportpicked, .view-conversations #clearpicked,
   .view-conversations #recorded { display: none; }
+${TEAM_TAB_CSS}
 ${BUSY_CSS}
 </style>
 </head>
@@ -1525,7 +1536,7 @@ ${BUSY_BAR}
 <header><h1>Review rounds</h1>${textControlsHtml(text.size, text.tone)}</header>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
-<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="questions">Questions</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
+<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="questions">Questions</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button>${TEAM_TAB_BUTTON}</div>
 <section id="tab-rounds" data-section="rounds" class="view-rounds">
 <div class="asChat">${periodButtonsHtml('conversations', DEFAULT_PERIOD)}</div>
 <div class="toolbar">
@@ -1559,6 +1570,7 @@ ${BUSY_BAR}
 <section id="tab-questions" data-section="questions" hidden><div id="qconsults-body">${qconsultsHtmlText || waitingFor()}</div></section>
 <section id="tab-usage" data-section="usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
 <section id="tab-spots" data-section="spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
+${teamSectionHtml(waitingFor())}
 <script nonce="${nonce}">
 (function () {
   // A page that fails must say so on the page. The first release of this page came up as a header
@@ -1587,7 +1599,8 @@ ${BUSY_BAR}
   // the consultations entry read undefined, the guard skipped it on every tick, and a tab that
   // opened on the placeholder and never received a push sat on "Reading the log…" for ever — which
   // is the exact state the timeout exists to end. (CodeRabbit, on the pull request.)
-  var WAITING = ${JSON.stringify({ usage: usageHtml === '', spots: spotsHtml === '', consultations: consultationsHtmlText === '', qconsults: qconsultsHtmlText === '' })};
+  // The Team server tab is always waiting: its figures only ever arrive by push (todo/PLAN_team_usage_by_person.md, 1.3).
+  var WAITING = ${jsonForScript({ usage: usageHtml === '', spots: spotsHtml === '', consultations: consultationsHtmlText === '', qconsults: qconsultsHtmlText === '', team: true })};
   var ROWS = ${jsonForScript(rows)};
   // Assigned, never declared: the extension ships BUNDLED and minified, and a minifier renames a
   // function that is not a top-level export — so the declaration this embedded read
@@ -1895,51 +1908,67 @@ ${BUSY_BAR}
     }
   }
 
+  // Which tab is showing. The Team server tab tells the host when it comes and goes, because the host asks the server
+  // for company figures only while it is the one showing (each such answer is a whole-ledger parse on the server).
+  var currentTab = 'rounds';
+  function showTab(which) {
+    if ((which === 'team') !== (currentTab === 'team')) {
+      send({ type: 'command', command: 'teamTab', id: which === 'team' ? 'shown' : 'hidden' }, null);
+    }
+    currentTab = which;
+    var tabs = document.querySelectorAll('[data-tab]');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].className = tabs[i].getAttribute('data-tab') === which ? 'tab on' : 'tab';
+    }
+    // DERIVED from the markup, never a list of ids. Three named one at a time meant a section
+    // added tomorrow would render and never be un-hidden, with nothing red — which is the defect
+    // the notifications page was deliberately built without, and the reason this step exists.
+    const sections = document.querySelectorAll('section[data-section]');
+    for (let s = 0; s < sections.length; s++) {
+      sections[s].hidden = sections[s].getAttribute('data-section') !== which;
+    }
+    // BEFORE the table's own line, which follows and wins. One section answers to TWO tabs, so
+    // the general rule gets it wrong for conversations and the exception has to run last; the
+    // other way round the table would vanish the moment somebody chose conversations.
+    // ONE section serves both halves of the table, so it stays on screen for either tab and wears
+    // the view as a class. Everything a conversation has no answer for is hidden by that class,
+    // rather than shown as a row of blanks under a round's headers.
+    var table = document.getElementById('tab-rounds');
+    var asTable = which === 'rounds' || which === 'conversations';
+    table.hidden = !asTable;
+    if (asTable && which !== state.view) {
+      table.className = which === 'conversations' ? 'view-conversations' : 'view-rounds';
+      state.view = which;
+      // AND THE FILTERS THE NEW VIEW CANNOT ANSWER GO WITH IT. A conversation has no repository,
+      // branch, stage or verdict, so a value chosen while looking at rounds matches none of them
+      // and empties the tab the moment it opens — with the control that did it hidden, so nothing
+      // on screen says why. Cleared in the state AND on the select, or the box goes on showing a
+      // choice that is no longer being applied.
+      if (which === 'conversations') {
+        for (var f = 0; f < ROUND_ONLY_FACETS.length; f++) {
+          delete state.filters[ROUND_ONLY_FACETS[f]];
+          var box = document.querySelector('[data-filter="' + ROUND_ONLY_FACETS[f] + '"]');
+          if (box) { box.value = ''; }
+        }
+      }
+      // The same rule every other filter change follows: a page number belongs to a list, and this
+      // is a different list.
+      firstPage();
+      render();
+    }
+  }
   document.addEventListener('click', function (event) {
     var target = event.target;
     var tab = target.closest('[data-tab]');
     if (tab) {
-      var which = tab.getAttribute('data-tab');
-      var tabs = document.querySelectorAll('[data-tab]');
-      for (var i = 0; i < tabs.length; i++) {
-        tabs[i].className = tabs[i].getAttribute('data-tab') === which ? 'tab on' : 'tab';
-      }
-      // DERIVED from the markup, never a list of ids. Three named one at a time meant a section
-      // added tomorrow would render and never be un-hidden, with nothing red — which is the defect
-      // the notifications page was deliberately built without, and the reason this step exists.
-      const sections = document.querySelectorAll('section[data-section]');
-      for (let s = 0; s < sections.length; s++) {
-        sections[s].hidden = sections[s].getAttribute('data-section') !== which;
-      }
-      // BEFORE the table's own line, which follows and wins. One section answers to TWO tabs, so
-      // the general rule gets it wrong for conversations and the exception has to run last; the
-      // other way round the table would vanish the moment somebody chose conversations.
-      // ONE section serves both halves of the table, so it stays on screen for either tab and wears
-      // the view as a class. Everything a conversation has no answer for is hidden by that class,
-      // rather than shown as a row of blanks under a round's headers.
-      var table = document.getElementById('tab-rounds');
-      var asTable = which === 'rounds' || which === 'conversations';
-      table.hidden = !asTable;
-      if (asTable && which !== state.view) {
-        table.className = which === 'conversations' ? 'view-conversations' : 'view-rounds';
-        state.view = which;
-        // AND THE FILTERS THE NEW VIEW CANNOT ANSWER GO WITH IT. A conversation has no repository,
-        // branch, stage or verdict, so a value chosen while looking at rounds matches none of them
-        // and empties the tab the moment it opens — with the control that did it hidden, so nothing
-        // on screen says why. Cleared in the state AND on the select, or the box goes on showing a
-        // choice that is no longer being applied.
-        if (which === 'conversations') {
-          for (var f = 0; f < ROUND_ONLY_FACETS.length; f++) {
-            delete state.filters[ROUND_ONLY_FACETS[f]];
-            var box = document.querySelector('[data-filter="' + ROUND_ONLY_FACETS[f] + '"]');
-            if (box) { box.value = ''; }
-          }
-        }
-        // The same rule every other filter change follows: a page number belongs to a list, and this
-        // is a different list.
-        firstPage();
-        render();
-      }
+      showTab(tab.getAttribute('data-tab'));
+      return;
+    }
+    // A window chip on the Team server tab: its id names the server it was pressed on, so a press that crosses a
+    // switch of server still changes the one it was meant for.
+    var teamChip = target.closest('[data-team-window]');
+    if (teamChip) {
+      teamWindowPressed(teamChip);
       return;
     }
     // A PERIOD button on Conversations or Consultations: filtered here, because their rows are on the
@@ -2209,9 +2238,14 @@ ${BUSY_BAR}
       if (open.has(one.getAttribute('data-fold'))) { one.open = true; }
     });
   }
+${TEAM_TAB_SCRIPT}
   window.addEventListener('message', function (event) {
     var message = event.data;
     if (!message) { return; }
+    if (message.type === 'team') {
+      try { teamPushed(message); } catch (e) { failed(String(e && e.message ? e.message : e)); }
+      return;
+    }
     if (message.type === 'consultations' && typeof message.html === 'string') {
       told.consultations = true;
       replaceKeepingFolds(document.getElementById('consultations-body'), message.html);
@@ -2291,7 +2325,7 @@ ${BUSY_BAR}
   // is a console.warn in the extension host, which nobody opens. Four findings across both remote
   // vendors and three roles said so on the code round.
   setTimeout(function () {
-    var sections = [['usage', 'usage-body'], ['spots', 'spots-body'], ['consultations', 'consultations-body'], ['qconsults', 'qconsults-body']];
+    var sections = [['usage', 'usage-body'], ['spots', 'spots-body'], ['consultations', 'consultations-body'], ['qconsults', 'qconsults-body'], ['team', 'team-status']];
     for (var w = 0; w < sections.length; w++) {
       // Only a section that OPENED on the placeholder, and only one nothing ever reached. The
       // spending tab is painted with real numbers on the first paint, and replacing those with an

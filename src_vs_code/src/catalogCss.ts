@@ -1,4 +1,5 @@
 import { SETTINGS_CSS } from './settingsPage';
+import { CATALOG_BADGES, CATALOG_CHIPS, CATALOG_TOKENS } from './catalogSheet';
 
 /**
  * The Settings page's stylesheet (research/PLAN_one_model_catalog.md, E3), from the accepted mockup (`new_design/`).
@@ -7,20 +8,6 @@ import { SETTINGS_CSS } from './settingsPage';
  * theme variable, so a light, dark or high-contrast theme needs nothing of this sheet. It extends `SETTINGS_CSS`
  * (tabs, the text controls, `[hidden]` winning) rather than copying it.</p>
  */
-const TOKENS = `
-  .catalog {
-    --ok: var(--vscode-testing-iconPassed, #5cc46f);
-    --warn: var(--vscode-editorWarning-foreground, #e8b02a);
-    --err: var(--vscode-errorForeground, #f48771);
-    --link: var(--vscode-textLink-foreground, #4daafc);
-    --muted: var(--vscode-descriptionForeground, #9d9d9d);
-    --border: var(--vscode-widget-border, var(--vscode-panel-border, #2b2b2b));
-    --border-strong: var(--vscode-input-border, var(--vscode-panel-border, #3c3c3c));
-    --card: var(--vscode-editorWidget-background, transparent);
-    --secondary: var(--vscode-button-secondaryBackground, #313131);
-    --focus: var(--vscode-focusBorder, #0078d4);
-    --hover: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.08));
-  }`;
 
 /** The shell: the two levels of tabs, the panes, the dialog and the shared marks. */
 const SHELL = `
@@ -121,17 +108,7 @@ const MODELS = `
   .catalog .toolbar .spacer { flex: 1; }
   .catalog .toolbar label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); white-space: nowrap; }
   .catalog .toolbar input[type="search"] { width: 16em; }
-  .catalog .filters { display: grid; gap: 6px; margin-bottom: 14px; }
-  .catalog .chip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .catalog .chip-row .group { color: var(--muted); min-width: 6em; }
-  .catalog .chip {
-    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); border-radius: 12px;
-    padding: 2px 10px; background: transparent; color: var(--vscode-foreground); cursor: pointer; margin: 0;
-  }
-  .catalog .chip:hover { background: var(--hover); }
-  .catalog .chip[aria-pressed="true"] { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, transparent); }
-  .catalog .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .catalog .chip.empty { border-style: dashed; color: var(--warn); }
+  .catalog .filters { display: grid; gap: 6px; margin-bottom: 14px; }${CATALOG_CHIPS}
   .catalog .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
   @media (min-width: 1100px) { .catalog .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .catalog .card {
@@ -146,14 +123,7 @@ const MODELS = `
   .catalog .card .actions button { margin: 0; }
   .catalog .card .actions .ask { background: transparent; color: var(--err); border: 1px solid transparent; padding: 0 6px; }
   .catalog .card .actions .ask:hover { border-color: var(--err); }
-  .catalog .card .actions .ask:disabled { color: var(--muted); }
-  .catalog .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
-  .catalog .badge { border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 7px; font-size: 0.88em; }
-  .catalog .badge.verdict.ok, .catalog .badge.health.ok { border-color: color-mix(in srgb, var(--ok) 60%, transparent); }
-  .catalog .badge.health.ok::before { content: "● "; color: var(--ok); }
-  .catalog .badge.health.warn::before { content: "● "; color: var(--warn); }
-  .catalog .badge.health.err::before { content: "● "; color: var(--err); }
-  .catalog .badge.health.busy::before { content: "◌ "; color: var(--link); }
+  .catalog .card .actions .ask:disabled { color: var(--muted); }${CATALOG_BADGES}
   .catalog .world { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
   .catalog .world button { margin: 0; width: auto; }
   .catalog .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
@@ -173,4 +143,4 @@ const MODELS = `
   .catalog .empty-state { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 24px; text-align: center; color: var(--muted); }`;
 
 /** The whole sheet the Settings page carries beside the shared one `pageDocument` draws. */
-export const CATALOG_CSS = `${SETTINGS_CSS}${TOKENS}${SHELL}${MODELS}`;
+export const CATALOG_CSS = `${SETTINGS_CSS}${CATALOG_TOKENS}${SHELL}${MODELS}`;

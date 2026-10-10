@@ -3341,7 +3341,87 @@ test.
 awaited by one; it repaints when it lands, and its freshness check is what stops the loop — the
 render it triggers finds the answer fresh and starts nothing. A catalog that could not be re-fetched
 is shown as stale rather than as absent, because last week's slot counts are more useful than a blank
-row and saying they are old is what keeps that honest.
+row and saying they are old is what keeps that honest. (Since 2026-10-09 freshness is per server and per figure, and
+the Review rounds page asks on its own clock — next section.)
+
+### The Team server tab, and who asks a Team server for usage (2026-10-09)
+
+[PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md), epic 1. An admin of a Team server reads **who on
+the team spent what** on a tab of the Review rounds page, **Team server**, after *What it keeps missing* — present only
+when a configured server's catalog says this account is an admin there (`Catalog.isAdmin`), and the server's own
+`403` on `scope=company` is the decision (D1).
+
+**One owner fetches; the page's visibility asks.** `PanelProvider` is still the only thing that sends a Team-server
+request, but the cache and its rules are `teamUsageCache.ts`, which imports no `vscode`: answers are kept per
+**(server, scope, window)**, each key with its own freshness stamp and its own request number, and the number is
+checked BEFORE an answer is written — so the older of two requests landing last is dropped, a personal answer never
+lands on the company figures, and a window chosen while another request is running is asked at once. Before, one
+answer per server and one stamp for everything let `me` and `company` overwrite each other and a sidebar refresh make
+the page's question look answered. Whether to ask `company` is taken from THIS refresh's catalog (`Prepared.admin`),
+not the one held before it. The catalog and the token are refreshed at most once a minute per server
+(`PanelProvider.catalogFor`, shared while in flight).
+
+**Privacy is an eviction.** A `401`/`403` on `company` forgets that server's company figures (a failed request used
+to keep the last good answer, which would have shown a demoted admin every colleague's email); a catalog that says the
+caller is no admin, a different account on the token, a sign-out and a removal forget too
+(`TeamUsageCache.evictCompany` / `evictServer`). A failed PERSONAL request still keeps the last answer and says why.
+
+**Delivery.** A refresh used to end with `render()`, which repaints the sidebar alone and returns early when none is
+held — so with the sidebar closed the page's Team-server figures never moved. The cache's `changed` callback now
+repaints the sidebar AND calls `onTeamUsageChanged`, which `extension.ts` wires to `refreshRoundsLog`. The page has its
+own clock: `pollWhileOpen` (`teamUsagePoll.ts`) started in `showRoundsLog` through `RoundsLogPanel.whileOpen` and
+stopped when the page closes, one tick at a time; it asks `company` only while the Team server tab is the one showing
+(`teamTabSelection.usageWants`), because each company answer makes the server parse its whole ledger.
+
+```mermaid
+sequenceDiagram
+  participant Page as Review rounds page
+  participant Host as extension.ts hooks
+  participant Panel as PanelProvider
+  participant Cache as TeamUsageCache
+  participant Server as Team server
+  Page->>Host: teamTab shown / teamWindow acme|year / teamRefresh acme / teamServer beta
+  Host->>Panel: setTeam… then refreshTeamUsage(force)
+  Host->>Page: push team region at once (Asking acme…)
+  Panel->>Cache: refresh(targets: wants + prepare)
+  Cache->>Panel: prepare() — catalog + token, once a minute per server
+  Cache->>Server: GET /api/usage?window=year&scope=company (per key, numbered)
+  Server-->>Cache: answer (dropped if a newer request for the key exists)
+  Cache-->>Panel: changed()
+  Panel-->>Host: onTeamUsageChanged → refreshRoundsLog
+  Host->>Page: push team region with the figures
+  Note over Host,Page: pollWhileOpen ticks refreshTeamUsage every 60 s while the page is open
+```
+
+**The tab is always drawn, hidden.** The page is built once and admin status arrives after it, so the button and the
+section (`teamServerTabPage.ts`: `TEAM_TAB_BUTTON`, `teamSectionHtml`) are in every page; the pushed `admin` flag reveals
+or hides them, and a page showing the tab when the flag goes is taken back to Rounds. The `team` region
+(`pushLedger.ts`) carries the flag, the server list, the selected server and window, the time the answer landed (the
+page prints it in local time) and the pieces `teamServerTab.ts` renders — status, badges, summary, people, idle,
+vendors, chart, notes. It is pushed at once with *Asking <server>…* and again when the answer lands, so the 15 s
+never-received watchdog (where `team` is listed, and in `WAITING`) cannot fire on a slow server.
+**Interaction state is the page's.** The toolbar, the search box and the sort `<select>` are never replaced; the cards
+are replaced the way `replaceKeepingFolds` keeps the consultations folds open, keyed by server plus lower-cased email,
+then searched and sorted again (`teamMatches` / `teamOrder`, embedded by their source). The page tells the host four
+things, each its own `LogCommand` kind: `teamWindow` (`<serverId>|<window>` — not `usageWindow`, which would move the
+spending tab), `teamRefresh` and `teamServer` (the server id), and `teamTab` (`shown`/`hidden`).
+
+**Launches, not rounds, and absent is never zero (D8).** Today's server (0.10.0) answers people and vendors with runs,
+failures and tokens; the tab counts **launches** and its notes say a round launches several reviewers. What it cannot
+say — a price (`~$`), who is signed in without spending, the model per row, the 30-day chart — says *needs Team server
+≥ 0.11.0* (`TEAM_SERVER_WITH_PEOPLE`, the release the plan's epic 2 ships) in its place; a server is recognised as
+older by the ABSENCE of `daily`. `Usage` types `people`, `unreadableLines`, `fromUtc`/`toUtc`, and — optional for
+epic 3 — `VendorUsage.models`, `daily` and `PersonListing`. Every server string goes through `escapeHtml`.
+
+**Styled with the Settings design.** Its tokens, chips and badges moved from `catalogCss.ts` into the LEAF
+`catalogSheet.ts` (which imports nothing — `catalogCss.ts` imports `settingsPage`, which would drag `SETTINGS_CSS` onto
+this page), inserted where they were so `CATALOG_CSS` is byte-identical (`teamServerTab.test.ts` pins its hash); the
+section carries `.catalog`; the tab's own layout is scoped to `.team`, and no selector names a button.
+
+**The dead *Company* toggle is gone (D6).** `usageScopeControl` emitted `teamUsageScope` with no id, which the page's
+decoder drops, so `scope=company` was never asked. It went with `PanelState.usageScope`, the provider's field and case,
+the `PANEL_COMMANDS` entry and the positional parameter of `usageTabHtml`, whose tail is now an options object
+(`{ teamServers, chat }`). The spending tab is this account's own spending.
 
 ### A Team-server sign-in belongs to a SIDE (2026-09-06)
 
@@ -4162,7 +4242,7 @@ accident. The design record is
 [PLAN_team_server_side_and_url.md](PLAN_team_server_side_and_url.md), whose status line says which
 half of it survived — the per-side sign-in did, and that is the half that mattered.
 
-**`teamServers` and `usageScope` are OPTIONAL on `PanelState`,** which is an accommodation and worth
+**`teamServers` is OPTIONAL on `PanelState`** (and `usageScope` was, until the Company toggle it served was removed on 2026-10-09), which is an accommodation and worth
 naming as one: the test fixtures are stored with CRLF under `core.autocrlf=true`, so any commit that
 touches one rewrites every line of it. Making the fields required cost sixteen unreviewable
 whole-file diffs to add a field none of those assertions read. Absent means none — which is what a
@@ -5685,7 +5765,7 @@ the first paint landed in the state and waited for something unrelated to repain
 `aProbeThatLandsRepaints.test.ts` holds it both ways round: every probe's answer moves the key, and a
 question, a caret, an opened section or the same answer built in another order does not.
 
-Two things the list had that the markup does not, both on purpose: `usageWindow`/`usageScope`, which
+Two things the list had that the markup does not, both on purpose: `usageWindow` (and `usageScope`, removed on 2026-10-09 with the Company toggle), which
 the panel stopped drawing when the spending chart moved to the rounds log, and `openSections`. A
 toggle is made BY the page, so a key that moved with it reloaded the webview a few seconds later to
 show what was already on screen, dropping the scroll position and any open dropdown; a repaint made
@@ -5701,7 +5781,7 @@ refuted the obvious fix before it was written.
 **The measurement.** `chatPrompt` was suspected of repainting the panel on every save, which is why
 the draft plan called "save as you type" a trap. It does not: the paint decision is `staticKey`, and
 its eleven fields are `settings`, `vendors`, `codexModels`, `localEngines`, `server`, `side`,
-`latestServerVersion`, `usageWindow`, `openSections`, `teamServers` and `usageScope`. `state.chat` is
+`latestServerVersion`, `usageWindow`, `openSections`, `teamServers` and `usageScope` (the last removed on 2026-10-09). `state.chat` is
 not one of them, and `state.settings` is `CoaiSettings`, which the chat keys are deliberately not
 part of. A chat setting cannot rebuild the page. That is now an assertion in
 `thePromptBoxRemembers.test.ts`, so adding `chat` to the key fails with that sentence instead of
@@ -7146,7 +7226,8 @@ window buttons and the same `usageRegion` rows the sidebar rendered — one rend
 row — and `RoundsLogPanel` routes the two commands the tab posts (`usageWindow`, `forgetUsage`)
 back to the sidebar's provider, which still owns the window choice, the price cache and the forget
 marks. `within('day')` is since local midnight now, by the operator's ruling; week, month and year
-stay rolling.
+stay rolling. A Team server's own block on this tab is this account's spending on it (`scope=me`); the company view is
+the **Team server** tab (2026-10-09), and a window press re-asks the servers for the new window at once.
 
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the

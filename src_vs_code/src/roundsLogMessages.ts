@@ -66,6 +66,16 @@ export type LogCommand =
     readonly number: number;
   }
   | { readonly kind: 'export'; readonly rows: readonly ExportedRow[] }
+  /**
+   * The Team server tab (todo/PLAN_team_usage_by_person.md, 1.3). A window chip's id is `<serverId>|<window>` and is
+   * its OWN kind: reusing `usageWindow` would move the spending tab. Refresh and the server picker carry the server
+   * id; an id-less command is dropped above, like every other.
+   */
+  | { readonly kind: 'teamWindow'; readonly id: string }
+  | { readonly kind: 'teamRefresh'; readonly server: string }
+  | { readonly kind: 'teamServer'; readonly server: string }
+  /** The Team server tab became the one showing, or stopped being it — company figures are asked only meanwhile. */
+  | { readonly kind: 'teamTab'; readonly shown: boolean }
   | { readonly kind: 'ignore' };
 
 /**
@@ -88,6 +98,11 @@ function spotsPeriodOf(id: string): LogCommand {
   const period = periodOf(id);
 
   return period === undefined ? IGNORE : { kind: 'spotsPeriod', period };
+}
+
+/** The tab's two states, named; any other word is not one of them. */
+function teamTabOf(id: string): LogCommand {
+  return id === 'shown' || id === 'hidden' ? { kind: 'teamTab', shown: id === 'shown' } : IGNORE;
 }
 
 /** A string, or nothing at all — the page's values arrive over a bridge and are not typed there. */
@@ -169,6 +184,14 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return findingsOf(message, id);
     case 'export':
       return exportOf(message);
+    case 'teamWindow':
+      return { kind: 'teamWindow', id };
+    case 'teamRefresh':
+      return { kind: 'teamRefresh', server: id };
+    case 'teamServer':
+      return { kind: 'teamServer', server: id };
+    case 'teamTab':
+      return teamTabOf(id);
     default:
       return IGNORE;
   }
@@ -207,6 +230,14 @@ export interface RoundsLogHooks {
     key: string,
     round: { readonly sessionId: string; readonly stage: string; readonly number: number },
   ) => Promise<void>;
+  /** A window chip on the Team server tab — `<serverId>|<window>`. */
+  readonly onTeamWindow: (id: string) => Promise<void>;
+  /** Refresh on the Team server tab: ask that server again now, whatever is fresh. */
+  readonly onTeamRefresh: (server: string) => Promise<void>;
+  /** The Team server tab's server picker. */
+  readonly onTeamServer: (server: string) => Promise<void>;
+  /** The Team server tab became the one showing, or stopped being it. */
+  readonly onTeamTab: (shown: boolean) => Promise<void>;
 }
 
 /** A command of one kind, as the table below receives it. */
@@ -222,6 +253,10 @@ const WORK: { readonly [K in Exclude<LogCommand['kind'], 'ready' | 'ignore'>]: (
   forgetChat: (command, hooks) => hooks.onForgetChat(command.provider, command.model),
   export: (command, hooks) => hooks.onExport(command.rows),
   findings: (command, hooks) => hooks.onFindings(command.key, { sessionId: command.sessionId, stage: command.stage, number: command.number }),
+  teamWindow: (command, hooks) => hooks.onTeamWindow(command.id),
+  teamRefresh: (command, hooks) => hooks.onTeamRefresh(command.server),
+  teamServer: (command, hooks) => hooks.onTeamServer(command.server),
+  teamTab: (command, hooks) => hooks.onTeamTab(command.shown),
 };
 
 /**
