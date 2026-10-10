@@ -2,7 +2,8 @@
 
 > Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
 > deviations are under E1); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
-> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E5, E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
+> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E2 implemented 2026-10-10 on
+> `feat/paths-per-side-e2-sides-seen` (stories 2.1–2.4; its deviations are under E2); E5, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
 > pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
@@ -457,15 +458,40 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
 
 ### E2 — the sides this profile has been used on · `feat/paths-per-side-e2-sides-seen`
 
-- **2.1** `sidesSeen.ts` (pure): `stampSide(stored, side, family, label, now)` and `knownFamilies(records, now)`, with
+- ✅ **2.1** `sidesSeen.ts` (pure): `stampSide(stored, side, family, label, now)` and `knownFamilies(records, now)`, with
   the 90-day window and pruning. RED: `knownFamilies` of a Windows and a WSL record within 90 days is `{windows, posix}`;
   a 91-day-old WSL record is pruned.
-- **2.2** Stamped at activation, at most once a day per side (`extension.ts`), never awaited by activation.
-- **2.3** `coai.pathFieldsPerSide` (`auto`/`always`/`never`, `application` scope), declared, described in the five help
+- ✅ **2.2** Stamped at activation, at most once a day per side (`extension.ts`), never awaited by activation.
+- ✅ **2.3** `coai.pathFieldsPerSide` (`auto`/`always`/`never`, `application` scope), declared, described in the five help
   languages, never exported (`configTransfer.ts` `NEVER_TRANSFERRED`).
-- **2.4** Setup › This side lists the sides seen (label, family, last seen) with **Forget** and the switch, and a local
+- ✅ **2.4** Setup › This side lists the sides seen (label, family, last seen) with **Forget** and the switch, and a local
   window names itself (`thisSideLabel`, not *"this machine"*). Page test: two seeded records draw two rows; Forget posts
   the side key. `test:host` scenario: activation leaves a `coai.sideSeen@…` record for the test window's side.
+
+**E2 as built (2026-10-10) — deviations and what is left.** Every story above is done, RED first, with a compiling
+break-it on its deciding line; the observed messages are in the commits and in `research/module_tests.md`.
+
+- **The store half lives in `sidesSeen.ts` too**: `stampThisSide` (stamp if due, then prune — never awaited by
+  `extension.ts`), `sidesIn` and `forgetSide` take a structural store (`keys`/`get`/`update`), which `context.globalState`
+  is, so the module stays `vscode`-free and is run by `sidesSeenStore.test.ts` against a map. Pruning happens at the
+  stamp, not at every read; a read simply leaves out what is past the window.
+- **This side's identity is one pure function**, `sideHereOf(thisSide(storage), process.platform)` (`sideKey`,
+  `familyOf`, `thisSideLabel`), called by activation and by the panel. A first build put it in a `vscode`-importing
+  module of its own; `sonarExclusions.test.ts` refused a new module no test can run, and taking the `Side` as an argument
+  removed the need.
+- **The `test:host` scenario reads the registry through what `activate` returns** (`CoaiExports { sidesSeen }`): a host
+  has no other way into another extension's `globalState`. The editor's user-data directory outlives a run, so a same-day
+  stamp from an earlier run satisfies it as well — what it proves is that a window of this profile holds a fresh record
+  for this side.
+- **Forget is refused for this window's own record**, on the page (no button on that row) and in the host
+  (`forgetSide`): it is in use now and would only be stamped again at the next start.
+- **The decision E3/E4 will read is already here**: `twoPathFields(view)` — the switch, or under `auto` both families
+  seen within 90 days, this window counting as seen now (so its own stamp landing late changes nothing). `familyLabel`
+  (**Windows** / **WSL / Linux**) joined `pathFamily.ts`. Today only the page's sentence reads it.
+- **The help** paragraph is in the `settings-and-the-server` article in all five languages, the control labels in
+  English as everywhere; `helpCoverage.test.ts` asks each language for them.
+- **Not in E2:** the second path field (E3 stores it, E4 draws it), so the switch and the list are shown and recorded
+  but change no field yet.
 
 ### E3 — two values, stored and resolved · `feat/paths-per-side-e3-two-values`
 
@@ -585,8 +611,8 @@ The four questions this plan asked were answered the same day; the design above 
 - [ ] A NAMED data directory that does not exist is red on the page and said at every start (D3); the default location
       on a first start is never red; nothing creates a missing named root (E5.7, `test:host` both halves).
 - [x] *Export settings* never carries `qconsultRoots` (D4) — E1.6.
-- [ ] Sides seen are recorded, listed and forgettable; `coai.pathFieldsPerSide` declared and documented in five
-      languages.
+- [x] Sides seen are recorded, listed and forgettable; `coai.pathFieldsPerSide` declared and documented in five
+      languages (E2).
 - [ ] Two labelled fields per path when both sides are known, one otherwise; older extensions and servers unaffected
       (compat legs green).
 - [ ] `research/module_extension.md`, `research/module_server.md` and `research/architecture.md` updated; the help

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**New: Settings › Setup › This side lists the sides this profile has been used on.** VS Code shares your settings between
+a Windows window and a WSL window on the same machine, and until now nothing recorded that both were in use. Every
+window now notes its side once a day — Windows, or WSL / Linux for a WSL distro or a remote host — and *This side* lists
+them with the day each was last seen and a **Forget** button for a side you no longer use; a side not seen for 90 days
+is forgotten on its own. The record stays on this machine (it is not synced to others). A local window now names
+itself by its operating system (*This side is Windows*) instead of "this machine". A new setting, **Path fields per
+side** (`coai.pathFieldsPerSide`: *Automatic*, *Always two*, *Always one*), decides whether a path setting gets a
+Windows field and a WSL / Linux field — Automatic once both sides have been seen; the page says what it decides today
+and why. It is yours rather than a side's, so every window reads the same value, and *Export settings* never carries
+it. The second field itself comes in a following release; until then the list and the switch are recorded and shown.
+Help in all five languages.
+
 ## Server 0.46.0 — 2026-10-10
 
 **A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares
