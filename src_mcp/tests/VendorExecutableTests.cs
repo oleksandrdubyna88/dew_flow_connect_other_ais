@@ -22,8 +22,10 @@ public sealed class VendorExecutableTests
     [Fact]
     public void AVendorsExecutablePath_TravelsInTheVendorList()
     {
+        // Read as the WSL side reads it: on a Windows host a POSIX path is the other side's and skipped
+        // (todo/PLAN_paths_per_side.md E1.2, ACliPathOfTheOtherSideIsSkippedTests).
         var vendors = PanelSettings.ParseVendors(
-            """[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"/home/user/.npm-global/bin/codex"}]""");
+            """[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"/home/user/.npm-global/bin/codex"}]""", windows: false);
 
         vendors.Should().ContainSingle()
             .Which.ExecutablePath.Should().Be("/home/user/.npm-global/bin/codex");
@@ -48,14 +50,16 @@ public sealed class VendorExecutableTests
     [Fact]
     public void APathInTheList_OutranksTheEnvironment()
     {
+        // A path spelled for THIS host's OS: one of the other OS is that side's and skipped (paths per side, E1.2).
+        var listed = OperatingSystem.IsWindows() ? "C:/from/the/list" : "/from/the/list";
         var env = new Dictionary<string, string>
         {
-            ["COAI_VENDORS"] = """[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"/from/the/list"}]""",
+            ["COAI_VENDORS"] = $$"""[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"{{listed}}"}]""",
             ["COAI_EXE_CODEX"] = "/from/the/env",
         };
 
         PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name))
-            .Providers.Should().ContainSingle().Which.ExecutablePath.Should().Be("/from/the/list",
+            .Providers.Should().ContainSingle().Which.ExecutablePath.Should().Be(listed,
                 "the list is the specific statement about THIS vendor");
     }
 
