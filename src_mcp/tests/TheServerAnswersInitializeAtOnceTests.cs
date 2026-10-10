@@ -47,6 +47,7 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
         using var server = StdioServer.Start(_data, "debug", 1800,
             ("PATH", _bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")),
             ("COAI_CREDS_KEY", "test-config-key"),
+            ("FAKECLI_HELP_STDOUT", "creds config -  (" + Server.KeyVault.StdinMarker + ")"), // a current creds: the key goes on stdin
             ("COAI_EXE_CODEX", fake),
             ("FAKECLI_MODE", "vendor"),
             ("FAKECLI_SLEEP_MS", SlowMs.ToString()));
@@ -88,6 +89,7 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
         using var server = StdioServer.Start(_data, "debug", 1800,
             ("PATH", _bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")),
             ("COAI_CREDS_KEY", "test-config-key"),
+            ("FAKECLI_HELP_STDOUT", "creds config -  (" + Server.KeyVault.StdinMarker + ")"), // a current creds: the key goes on stdin
             ("COAI_EXE_CODEX", fake),
             ("FAKECLI_MODE", "vendor"),
             ("FAKECLI_SLEEP_MS", SlowMs.ToString()));
@@ -153,7 +155,7 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
 
     /// <summary>
     /// The fake CLI copied in as <c>creds</c>, next to its own assembly, in a directory of the test's that goes FIRST on the
-    /// server's PATH — the vault reads <c>creds config &lt;key&gt;</c> off PATH. Returns the fake's own path for the probe.
+    /// server's PATH — the vault probes <c>creds --help</c> and reads <c>creds config -</c> off PATH. Returns the fake's own path for the probe.
     /// </summary>
     private string SlowCredsOnPath()
     {

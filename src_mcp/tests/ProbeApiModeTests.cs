@@ -129,8 +129,10 @@ public sealed class ProbeApiModeTests : IDisposable
 
         await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint], vault);
 
-        vault.Requests.Should().ContainSingle().Which.Arguments.Should().Equal("config", "the-config-key");
-        vault.Requests.Single().Executable.Should().Be("creds");
+        var read = vault.Requests.Should().ContainSingle().Subject;
+        read.Arguments.Should().Equal("config", "-");
+        read.StdIn.Should().Be("the-config-key\n", "the key travels on stdin, never as an argument");
+        read.Executable.Should().Be("creds");
     }
 
     [Fact]
@@ -234,7 +236,7 @@ public sealed class ProbeApiModeTests : IDisposable
         var code = await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint], vault, credsKey: null);
 
         code.Should().Be(0, Stderr);
-        vault.Requests.Should().ContainSingle().Which.Arguments.Should().Equal("config", "the-key-the-panel-saved");
+        vault.Requests.Should().ContainSingle().Which.StdIn.Should().Be("the-key-the-panel-saved\n");
         _stub.Requests.Should().ContainSingle("the probe reached the endpoint with the vault's key")
             .Which.Authorization.Should().Be($"Bearer {Key}");
         Report().GetProperty("models").GetProperty("ids").EnumerateArray().Select(m => m.GetString())
@@ -250,19 +252,27 @@ public sealed class ProbeApiModeTests : IDisposable
 
         await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint], vault, credsKey: "the-client-env-key");
 
-        vault.Requests.Should().ContainSingle().Which.Arguments.Should().Equal(
-            ["config", "the-client-env-key"], "a variable in the client's config is more specific than a file any window may rewrite");
+        vault.Requests.Should().ContainSingle().Which.StdIn.Should().Be(
+            "the-client-env-key\n", "a variable in the client's config is more specific than a file any window may rewrite");
     }
 
     private void WriteSettings(string json) => File.WriteAllText(Path.Combine(_dir, "settings.json"), json);
 
-    /// <summary>The vault, answering `creds config` with a body — and recording what it was asked.</summary>
+    /// <summary>
+    /// The vault, answering `creds config` with a body — and recording the READS it was asked for. Its
+    /// `--help` probe is answered as a current creds CLI would, naming the stdin marker, and not recorded.
+    /// </summary>
     private sealed class VaultAnswers(string stdout, int exitCode = 0) : IProcessLauncher
     {
         public List<ProcessRequest> Requests { get; } = [];
 
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
+            if (request.Arguments is ["--help"])
+            {
+                return Task.FromResult(new ProcessResult(0, "creds config -  (" + Server.KeyVault.StdinMarker + ")", string.Empty, false));
+            }
+
             Requests.Add(request);
 
             return Task.FromResult(new ProcessResult(exitCode, stdout, string.Empty, false));
