@@ -146,3 +146,35 @@ test('a caller whose consultant cannot be placed says why under its pick, and it
     'the reason the consultant cannot run is not said under its pick');
   assert.deepEqual(pick.find((node) => node.tagName === 'B'), [], 'the stored id was drawn as markup');
 });
+
+// Operator, 2026-10-10: GPT-6-Astra was ticked consultant on Models and Claude Code still asked the shipped pair. That is
+// the design — a tick makes a row AVAILABLE, the caller's pick decides, absence is the shipped pair (D2) — but nothing on
+// the page said so. The pick now says it, naming the ticked rows, while the caller is on the shipped pair.
+
+/** The quiet hints under one caller's pick, as text. */
+function hintsUnder(pick: PageNode): readonly string[] {
+  return pick.find((node) => node.className.split(' ').includes('hint')).map((node) => node.text());
+}
+
+test('a caller on the shipped pair, with other rows ticked consultant, is told they are not asked until picked here', () => {
+  const astra: Vendor = { ...row('chat-preset-mtwtqr0p-3', ['consultant']), name: 'GPT-6-Astra' };
+  const one = [...DEFAULT_VENDORS, astra, chatty];
+  const two = [...one, deep];
+
+  assert.ok(hintsUnder(pickOn(DEFAULT_CONSULT, one, 'claude')).includes(
+    'GPT-6-Astra is ticked consultant on Models, but Claude Code still asks the shipped pair — pick it here to use it.'),
+  `under Claude Code's pick: ${JSON.stringify(hintsUnder(pickOn(DEFAULT_CONSULT, one, 'claude')))}`);
+  assert.ok(hintsUnder(pickOn(DEFAULT_CONSULT, two, 'other')).includes(
+    'GPT-6-Astra and deep-high are ticked consultant on Models, but Another client still asks the shipped pair — pick one here to use it.'));
+});
+
+test('no such word when nothing but the shipped pair\'s own row is ticked, or when the caller has picked a row', () => {
+  // The shipped pair of Claude Code is codex: a codex row ticked consultant is the pair it already asks.
+  const codexTicked = [{ ...DEFAULT_VENDORS[0]!, uses: ['consultant'] as Vendor['uses'] }, DEFAULT_VENDORS[1]!];
+  const picked = consultWith({ claude: reference('deep-high') }, ROWS);
+
+  assert.ok(!hintsUnder(pickOn(DEFAULT_CONSULT, codexTicked, 'claude')).some((one) => one.includes('still asks the shipped pair')));
+  assert.ok(!hintsUnder(pickOn(picked, ROWS, 'claude')).some((one) => one.includes('still asks the shipped pair')));
+  assert.ok(hintsUnder(pickOn(picked, ROWS, 'codex')).some((one) => one.includes('still asks the shipped pair')),
+    'and a neighbour still on its pair IS told — the check above is looking at the right picks');
+});

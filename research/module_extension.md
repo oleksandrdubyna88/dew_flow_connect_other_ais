@@ -11193,6 +11193,13 @@ row's Models card, never here. The caps, prompt and cadence are the current page
 - **Never cleared (D3):** a stored pick of a row no longer ticked, or no longer on Models, stays selected as
   "(stranded)" with a sentence saying so; only the person moves it. The caller's own vendor is offered, never refused,
   with a word that it shares the caller's blind spots.
+- **A tick is not a pick, and the pick says so** (2026-10-10, operator report: GPT-6-Astra ticked consultant, Claude
+  Code still on the shipped pair). The rule is unchanged — a tick only makes a row available; the caller's pick
+  decides; absence is the shipped pair (D2). While a caller is on its shipped pair and any row other than the pair's
+  own row (`DEFAULT_CONSULT.stored[caller].vendor`) is ticked consultant, `consultantPickView.unpicked` names those rows
+  (`rowName`) and the pick draws it as a quiet `.hint.unpicked` line: "GPT-6-Astra is ticked consultant on Models, but
+  Claude Code still asks the shipped pair — pick it here to use it." Nothing is said once the caller has picked. The
+  Question consultant has no shipped pair (each row picks a catalog row), so it has no such line.
 - **Stored as a reference:** `consultantPickWrites` writes `consultants[caller] = { vendor: <row id> }`, or removes the
   key for the shipped pair — and never the rows. It refuses a caller this build does not emit and a row not ticked
   Consultant (both arrive in a webview message).

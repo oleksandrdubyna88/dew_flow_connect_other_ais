@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Consultants › Consultant says when a ticked model is not being asked.** Ticking **consultant** on a Models card
+offers the model to every caller; each caller still asks its shipped pair until you pick the model under **Claude Code
+asks** (or another caller). That stays the rule, and now the page says it: under a caller still on its shipped pair, a
+quiet line names the ticked models it is not asking — "GPT-6-Astra is ticked consultant on Models, but Claude Code still
+asks the shipped pair — pick it here to use it."
+
 **Fixed: the Consultants tabs name a model the way its Models card does.** A model migrated from a chat preset showed
 up as its raw id — "Used by: chat-preset-mtwtqr0p-3", and the same id in the question consultant's Model picker —
 while its card is called "GPT-6-Astra". The "Used by" line above every feature tab, the consultant and question
