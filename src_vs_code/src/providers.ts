@@ -93,16 +93,34 @@ export interface ProviderNotes {
    * server too old to name its keys — three answers an empty list alone would collapse into one.
    */
   readonly vault: VaultState;
+  /**
+   * The refused settings the server could name by KIND — which key, which stored value, and the same sentence
+   * `unrecognised` carries (todo/PLAN_paths_per_side.md E5.2). Empty from a server that predates the field, which is
+   * how the generic toast knows it is still the only surface for those sentences.
+   */
+  readonly settingProblems: readonly SettingProblem[];
 }
 
 export type VaultState = 'read' | 'unreadable' | 'not-reported';
 
+/** One refused setting the server named by kind — the shape `--providers` prints under `settingProblems`. */
+export interface SettingProblem {
+  /** The settings-file key — `COAI_QCONSULT_ROOTS`. */
+  readonly key: string;
+  /** `missing-folder` or `unreadable-folder` today; a kind this build does not know is kept and marks nothing. */
+  readonly kind: string;
+  /** The stored value as the file spells it — what the page holds and matches on. */
+  readonly value: string;
+  /** The sentence `unrecognised` also carries — what the generic toast drops when this covers it. */
+  readonly sentence: string;
+}
+
 /** Two empties — what an unparseable body, or a build too old to send them, amounts to. */
-export const NO_NOTES: ProviderNotes = { unrecognised: [], vaultNote: '', vaultKeys: [], vault: 'not-reported' };
+export const NO_NOTES: ProviderNotes = { unrecognised: [], vaultNote: '', vaultKeys: [], vault: 'not-reported', settingProblems: [] };
 
 export function parseProviderNotes(output: string): ProviderNotes {
   try {
-    const parsed = JSON.parse(output) as { unrecognised?: unknown; vaultNote?: unknown; vaultKeyNames?: unknown; vaultRead?: unknown } | null;
+    const parsed = JSON.parse(output) as { unrecognised?: unknown; vaultNote?: unknown; vaultKeyNames?: unknown; vaultRead?: unknown; settingProblems?: unknown } | null;
     if (parsed === null || typeof parsed !== 'object') {
       return NO_NOTES;
     }
@@ -113,10 +131,42 @@ export function parseProviderNotes(output: string): ProviderNotes {
       vaultNote: typeof parsed.vaultNote === 'string' ? parsed.vaultNote : '',
       vaultKeys: keyNamesFrom(parsed.vaultKeyNames),
       vault: vaultStateOf(parsed.vaultKeyNames, parsed.vaultRead),
+      settingProblems: settingProblemsFrom(parsed.settingProblems),
     };
   } catch {
     return NO_NOTES;
   }
+}
+
+/** The problems the server named, each kept only whole: a key, a kind and a value that are non-empty strings, and a sentence. */
+function settingProblemsFrom(value: unknown): readonly SettingProblem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((row) => {
+    const problem = settingProblemOf(row);
+
+    return problem === undefined ? [] : [problem];
+  });
+}
+
+function settingProblemOf(row: unknown): SettingProblem | undefined {
+  const fields = recordOf(row);
+  const [key, kind, value] = [textOf(fields['key']), textOf(fields['kind']), textOf(fields['value'])];
+  const whole = [key, kind, value].every((one) => one.length > 0);
+
+  return whole ? { key, kind, value, sentence: textOf(fields['sentence']) } : undefined;
+}
+
+/** A JSON object's fields, or none for anything that is not one. */
+function recordOf(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+/** A string field as a string; anything else is empty. */
+function textOf(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 /**

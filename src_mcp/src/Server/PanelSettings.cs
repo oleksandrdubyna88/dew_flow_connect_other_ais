@@ -577,6 +577,14 @@ public sealed record PanelSettings
     public IReadOnlyList<UnrecognisedSetting> UnrecognisedSettings { get; init; } = [];
 
     /// <summary>
+    /// The unrecognised settings whose problem has a KIND — the projection <c>--providers</c> prints as
+    /// <c>settingProblems</c> (todo/PLAN_paths_per_side.md E5.2), beside <see cref="Unrecognised"/>, which keeps every
+    /// sentence for an older extension.
+    /// </summary>
+    public IReadOnlyList<SettingProblem> SettingProblems =>
+        [.. UnrecognisedSettings.Where(one => one.Kind.Length > 0).Select(one => new SettingProblem(one.Key, one.Kind, one.Value, one.Sentence))];
+
+    /// <summary>
     /// Which vendor and model consult for each CALLER kind (<c>claude</c>, <c>codex</c>, <c>gemini</c>,
     /// <c>other</c>) — see <see cref="ConsultantRouting"/> for the shipped map and its rule.
     /// </summary>

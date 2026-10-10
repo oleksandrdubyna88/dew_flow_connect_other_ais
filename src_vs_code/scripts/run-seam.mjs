@@ -27,29 +27,12 @@ const TIMEOUT_MS = 30_000;
 
 const repo = resolve(import.meta.dirname, '..', '..');
 
-/**
- * The binary this repository just built, in whichever configuration built it.
- *
- * <p>RELEASE first, because that is what CI builds — `dotnet build … -c Release` — and a script that
- * only looked under `Debug` would have refused on its very first run there. Debug second, because
- * that is what a person has locally. `COAI_MCP_DLL` overrides both, for a published binary.</p>
- */
-function findBinary() {
-  const named = process.env['COAI_MCP_DLL'];
-  if (named !== undefined && named.length > 0) {
-    return named;
-  }
-  for (const configuration of ['Release', 'Debug']) {
-    const candidate = join(repo, 'src_mcp', 'src', 'bin', configuration, 'net10.0', 'coai-mcp.dll');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
+// The binary this repository just built — Release first (what CI builds), Debug second, `COAI_MCP_DLL` over both. ONE
+// finder, shared with the providers-answer contract (`src/test/coaiMcpBinary.ts`): this script carried its own copy
+// until that contract needed the same answer, and a second copy is the duplication `reuse-first.md` names.
+const { coaiMcpBinary } = await import('../out/test/coaiMcpBinary.js');
 
-  return '';
-}
-
-const binary = findBinary();
+const binary = coaiMcpBinary();
 if (binary === '') {
   console.error('seam: no coai-mcp build found. Run: dotnet build src_mcp/src/CoaiMcp.csproj');
   process.exit(1);
