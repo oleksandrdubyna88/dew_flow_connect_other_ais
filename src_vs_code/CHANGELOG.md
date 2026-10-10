@@ -19,6 +19,28 @@ way Models already did, at the same width. On Roles & prompts each role keeps th
 by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
 the Models cards.
 
+## Server 0.45.1 — 2026-10-10
+
+**The vault key never travels on a command line.** coai read your vendor keys with `creds config <key>`, so the
+CredsForDevs config key sat in a process's command line — readable by every user inside WSL and by every process of
+your user on Windows. Now:
+- coai asks the `creds` CLI for its `--help` first, and only a CLI that says it takes the key on stdin
+  (`config-key-stdin`) is started — as `creds config -`, with the key written to its stdin. Neither launch inherits
+  `COAI_CREDS_KEY` from coai's own environment.
+- **Needs the `creds` CLI 0.3.1 or later.** An older one is refused with "update the creds CLI" — it is never given
+  the key — and every vendor that needs a vault key is unavailable until it is updated; keyless vendors keep working.
+  `providers` says which. A CLI whose `--help` hangs, fails or is cancelled says that instead.
+- Update the CLI from CredsForDevs (*Install `creds` (terminal CLI)…*), then restart your MCP client: the vault is read
+  once per server start.
+- A config key that was ever passed on a command line could have been seen by another process — rotate it in
+  CredsForDevs (*Revoke Code Access…*, then *Enable Code Access…*) and put the new one in the panel.
+
+**A question-consultant folder of the other OS is skipped, not refused.** VS Code shares settings between a WSL window
+and a Windows one, so a folder added on one side reached the server on the other, and every start there failed with
+"is not a directory on this machine". A folder written for the other OS that does not exist here is now skipped on this
+side; one that exists but cannot be read is still refused by name. On Windows a root-relative folder (`/work`) means
+the system drive.
+
 ## Extension 0.66.0 — 2026-10-10
 
 **Fixed: the first start after an update in place no longer shows an error.** When VS Code updated the extension before
