@@ -121,7 +121,9 @@ test('one line under BOTH ledgers adds them up', () => {
   // and the estimate stay apart across the join, as they do inside each half.
   const html = page();
 
-  assert.match(html, /<div class="hint total everything">Reviewers and chat together: 4\.2M tokens · ~\$12.00<\/div>/,
+  // `≥`: the reviewer line's model has no price here (story 2.5 of todo/PLAN_every_round_is_counted.md), so its 1.2M tokens
+  // add nothing to the money and the joint figure is AT LEAST the chat's $12 — it used to read as the whole of it.
+  assert.match(html, /<div class="hint total everything">Reviewers and chat together: 4\.2M tokens · ≥ ~\$12.00<\/div>/,
     'the two ledgers are not added up under a rule of their own');
   assert.strictEqual(html.match(/<hr class="ledgers">/g)?.length, 2,
     'there is no second rule, so the joint total reads as part of the chat section');

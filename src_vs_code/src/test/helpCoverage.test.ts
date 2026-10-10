@@ -71,6 +71,20 @@ test('every language says what the Team server tab shows from a newer server —
   }
 });
 
+test('every language says the spending tab prices each line at its own model and marks a floor ≥', () => {
+  // Story 2.5 of todo/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
+  // be priced. Same blind spot as above — a translation a release out of date is not a MISSING one — so the one string
+  // every language carries, the mark and its example figure, is asked for in all five.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['**≥**', '`≥ ~$2.40`']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+  }
+});
+
 test('every language’s chat article names both copy controls and the reserved reply tag', () => {
   // The same blind spot as the test above, on the change that introduced a SECOND copy control. Three
   // English strings every language has to carry: the two labels, whose difference is the entire point

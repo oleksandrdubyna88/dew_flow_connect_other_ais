@@ -785,7 +785,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   async consultationsTab(log: DbLog): Promise<string> {
     const vendors = this.vendorsHere();
-    const prices = await this.modelPrices(vendors);
+    // Each consultation is priced at the model that answered it (`priceOfLine`), so those models are looked up too.
+    const prices = await this.modelPrices(vendors, log.consultations.map((one) => one.model));
 
     return consultationsHtml(log, vendors, (model: string) => prices[model]);
   }
@@ -796,12 +797,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   async usageTab(): Promise<string> {
     const vendors = this.vendorsHere();
+    const usage = this.remembered(await this.readUsage());
 
     return usageTabHtml(
-      this.remembered(await this.readUsage()),
+      usage,
       this.usageWindow,
       vendors,
-      await this.modelPrices(vendors),
+      // Every model the LEDGER names, not only the ones the rows are set to now: a line is priced at the model that
+      // answered it (story 2.5 of todo/PLAN_every_round_is_counted.md), and a row that changed model has history at
+      // the old one, which a map of today's models would leave unpriced.
+      await this.modelPrices(vendors, usage.map((line) => line.model)),
       {
       // What each Team server says was spent ON IT. This machine's ledger has no line for a
       // review that ran there, so the two are shown beside each other rather than summed into
@@ -1524,16 +1529,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return cardPrices(rows, (model, baseUrl) => PRICE_BOOK.priceOf(model, baseUrl));
   }
 
-  private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
+  private async modelPrices(vendors: readonly Vendor[], ledger: readonly string[] = []): Promise<Record<string, ModelPrice>> {
     await this.refreshPriceTables();
 
     // THE MODELS OF BOTH HALVES OF THE PAGE. A reviewer row selects one; a chat is switched between
     // model PRESETS, which select their own - and this map used to hold only the first kind, so a
     // chat card read "no rate set for this model" for a model the published table prices perfectly
     // well. The two lists are asked the same question and answered from the same table.
-    // (CodeRabbit, PR #209.)
+    // (CodeRabbit, PR #209.) And the models a ledger names, each once, for a tab that prices each line by its own.
     const presets = chatModelsAndPresets();
-    const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
+    const wanted = [...new Set([...vendors.map((one) => one.model), ...presets.map((one) => one.model), ...ledger])];
     // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
     // guess and answers nothing for it.
     const priced = (model: string, baseUrl = ''): (readonly [string, ModelPrice])[] => {
