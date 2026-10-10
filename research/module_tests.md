@@ -3132,4 +3132,4 @@ section is declared for the settings surface.
 | `claudeModels.test.ts` "a Claude dropdown says it is being asked", `panelPhrasesScript.test.ts` "the looking mark is one rule" | gone with `claudeNote` and `LOOKING`, which only the old rows drew |
 | `qconsultWrite.test.ts` "choosing another vendor or prompt takes the row off" | "choosing another prompt takes the row off" — a row picks a catalog row; there is no vendor control |
 | `refusedSelect.test.ts`: a `'consultants'` composite write snaps back | a consultant PICK (`savePick`) snaps back |
-| `catalogRow.test.ts`, `theOldPagePricesWhatItShows.test.ts` name `shownOnTheOldPage` | `isReviewerRow` |
+| `catalogRow.test.ts`, `theOldPagePricesWhatItShows.test.ts` (since 2026-10-09 `theCardsArePricedFromEveryRow.test.ts`, pinning the per-row prices instead) name `shownOnTheOldPage` | `isReviewerRow` |

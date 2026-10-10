@@ -41,7 +41,7 @@ C4Container
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn as the coai-reader agent (tools: view_file), plan mode, from the read-only folder")
   Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file, deny the rest")
-  Rel(mcp, creds, "creds config <key>, once per start, in the background")
+  Rel(mcp, creds, "creds --help probe, then creds config - with the key on stdin, once per start, in the background")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
   Rel(ext, srv, "Microsoft sign-in, then a session token; and a CHAT turn, as a job with no role")
@@ -242,7 +242,10 @@ What crosses the containers:
   It holds the tick OUT of the file for an installed server older than `FEATURE_SINCE` (the row still
   crosses, so the vendor keeps reviewing plans and code) and never writes it on a Team-server row. The
   rounds log draws a skip as its own neutral state, *skipped — did not block*, with the reason; the
-  snippet gained a fifth half (`coai-feature` v1, artefact v13) that tells an AI when to call the tool.
+  snippet gained a fifth half (`coai-feature` v1, artefact v13) that tells an AI when to call the tool. On
+  2026-10-09 that half moved into the shared conventions as `coai-feature` v3 (#730), and a sixth arrived beside
+  it, `coai-question` v1 (ask the consultants before the person): every half is a mounted rule now
+  (artefact v17).
   See [module_extension.md](module_extension.md).
 - **The Team server runs no feature review** in this version (D10 of the plan). `AcceptedRoles`
   refuses the feature role by name, even under `AllowAny`, and the client never sends one to a remote

@@ -135,7 +135,7 @@ test('a paste with no document half is reported as older', () => {
     snippetStatus(gateOnly),
     {
       kind: 'older',
-      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant'],
+      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant', 'coai-question'],
       current: ARTEFACT_VERSION,
     },
     'the AI obeying it will never call review_document, which is what "older" is for',
@@ -157,7 +157,7 @@ test('a paste with no caller half is reported as older', () => {
     snippetStatus(withoutCaller),
     {
       kind: 'older',
-      behind: ['coai-caller', 'coai-consultant'],
+      behind: ['coai-caller', 'coai-consultant', 'coai-question'],
       current: ARTEFACT_VERSION,
     },
   );
@@ -185,7 +185,7 @@ test('the mounted shared rules are byte-identical to what the menu hands out', (
 
     return ruleBody(source);
   });
-  assert.equal(KNOWN_HALVES.length, 5, 'every half is a mounted shared rule');
+  assert.equal(KNOWN_HALVES.length, 6, 'every half is a mounted shared rule');
 
   // And no local copy is left beside the mount: a second source for the same half is the drift these
   // moves ended, so its absence is part of the guarantee.
@@ -362,7 +362,7 @@ test('the same text pasted into a CLAUDE.md is still a stale paste, with the old
     snippetStatus(mounted),
     {
       kind: 'older',
-      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant'],
+      behind: ['coai-document', 'coai-feature', 'coai-caller', 'coai-consultant', 'coai-question'],
       current: ARTEFACT_VERSION,
     },
   );

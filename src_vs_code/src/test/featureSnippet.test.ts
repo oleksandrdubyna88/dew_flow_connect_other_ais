@@ -137,14 +137,14 @@ test('a paste made before the feature half is OLDER, naming it', () => {
 });
 
 /**
- * A repository that MOUNTS the shared rules is judged on all five halves again (S3.5).
+ * A repository that MOUNTS the shared rules is judged on every half again (S3.5; six since the question half).
  *
  * <p>While the feature half was this product's own, no mount could carry it, so a mount was judged on the
  * other four (S3.3a). Since conventions #58 a mount carries `coai-feature-gate.md` like any other half: a
  * mount that has it is current, and a mount pinned before it is told the feature gate is missing — which
  * it is, and the cure is moving its pin. A PASTE is judged whole, as it always was.</p>
  */
-const MOUNTED_RULES = ['coai-review-gate.md', 'coai-document-gate.md', FEATURE_FILE, 'coai-caller-model.md', 'coai-consultant.md'];
+const MOUNTED_RULES: readonly string[] = KNOWN_HALVES.map((half) => half.file);
 
 /** A reader over a fixed set of files — a fresh map per scenario, never one edited between them. */
 function readerOver(entries: readonly (readonly [string, string])[]): (name: string) => Promise<string> {

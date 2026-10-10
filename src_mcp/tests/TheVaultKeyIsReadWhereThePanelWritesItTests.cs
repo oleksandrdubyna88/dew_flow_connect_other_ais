@@ -55,8 +55,9 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
         answer.GetProperty("vaultRead").GetBoolean().Should().BeTrue(answer.GetProperty("vaultNote").GetString());
         answer.GetProperty("vaultKeyNames").EnumerateArray().Select(n => n.GetString()).Should().Equal("openrouter");
         // Hoisted: the predicate is an expression tree, and one may not hold a collection expression.
-        string[] theReadThePanelsKeyAsks = ["config", "the-key-the-panel-saved"];
-        vault.Requests.Should().Contain(r => r.Arguments.SequenceEqual(theReadThePanelsKeyAsks));
+        // The key travels on stdin, never as an argument (PLAN_creds_config_key_on_stdin.md).
+        string[] theReadAsks = ["config", "-"];
+        vault.Requests.Should().Contain(r => r.Arguments.SequenceEqual(theReadAsks) && r.StdIn == "the-key-the-panel-saved\n");
         output.ToString().Should().NotContain(VendorKey, "only the key NAMES leave the process");
     }
 
@@ -77,8 +78,9 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
             new StringWriter(),
             _ => { });
 
-        vault.Requests.Where(IsTheVaultRead)
-            .Should().ContainSingle().Which.Arguments.Should().Equal("config", "the-client-env-key");
+        var read = vault.Requests.Where(IsTheVaultRead).Should().ContainSingle().Subject;
+        read.Arguments.Should().Equal("config", "-");
+        read.StdIn.Should().Be("the-client-env-key\n");
     }
 
     /// <summary>A delegate lookup of the key variable — the shape every vault read shipped with.</summary>
@@ -160,7 +162,7 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
 
     private static string Relative(string file) => Path.GetRelativePath(RepoRoot(), file);
 
-    /// <summary>Whether a launch is the vault's own read — <c>creds config &lt;key&gt;</c> — rather than a CLI probe.</summary>
+    /// <summary>Whether a launch is the vault's own read — <c>creds config -</c> — rather than a CLI probe.</summary>
     private static bool IsTheVaultRead(ProcessRequest request) =>
         request.Arguments.Count > 0 && request.Arguments[0] == "config";
 
@@ -207,7 +209,10 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
                 _requests.Add(request);
             }
 
-            var body = IsTheVaultRead(request) ? stdout : "fake-cli 1.0.0";
+            // The vault's own --help probe is answered as a current creds CLI would: naming the marker.
+            var body = IsTheVaultRead(request)
+                ? stdout
+                : request.Arguments is ["--help"] ? "creds config -  (" + Server.KeyVault.StdinMarker + ")" : "fake-cli 1.0.0";
 
             return Task.FromResult(new ProcessResult(0, body, string.Empty, false));
         }

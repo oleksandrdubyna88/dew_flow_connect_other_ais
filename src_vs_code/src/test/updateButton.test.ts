@@ -48,7 +48,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     usage: [],
     usageWindow: 'week',
     cliStatus,
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

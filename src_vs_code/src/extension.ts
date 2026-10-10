@@ -1311,7 +1311,7 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
 
 async function copyClaudeSnippet(): Promise<void> {
   // The CLIPBOARD first, because what goes on it does not depend on what this workspace has: the
-  // artefact is all four rules, and a paste missing any of them is what `snippetStatus` calls
+  // artefact is all six rules, and a paste missing any of them is what `snippetStatus` calls
   // `older`. The snippet names no repository either — it is pasted into whichever one you are
   // adopting it for, and the AI reading it is already in a checkout it can name for itself.
   await vscode.env.clipboard.writeText(claudeSnippet());

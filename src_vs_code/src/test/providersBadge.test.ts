@@ -61,7 +61,7 @@ function page(over: Partial<PanelState> = {}): string {
     usageWindow: 'day',
     latestServerVersion: '',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     // `current`, not `version` — which the cast in the neighbouring fixture has been hiding, and
     // which the compiler said the moment this one stopped casting.
     snippetStatus: { kind: 'absent', current: 0 },

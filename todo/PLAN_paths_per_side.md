@@ -7,7 +7,7 @@
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
 > answer (`src_mcp`: `PanelSettings.cs`, `QuestionConsultSettings.cs`, `ServerJsonContext.cs`, `StartupNotices.cs`).
 >
-> **Builds on the unmerged branch `fix/qconsult-roots-other-os`** (record: `research/PLAN_qconsult_roots_of_the_other_os.md`
+> **Builds on `fix/qconsult-roots-other-os`, merged as PR #733 on 2026-10-10** (record: `research/PLAN_qconsult_roots_of_the_other_os.md`
 > on that branch, `src_vs_code/src/pathFamily.ts`, `shared/path-family-vectors.json`): a question-consultant root spelled
 > for the other OS that does not exist here is skipped on this side, not refused. This plan does not redo that; it
 > generalises its rule to every path setting and adds what the operator asked for next. Every `pathFamily.ts`,

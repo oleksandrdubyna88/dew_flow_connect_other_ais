@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.66.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.65.0...extension-v0.66.0) (2026-10-10)
+
+
+### Features
+
+* **extension:** the snippet's feature half is the shared conventions rule (S3.5) ([#730](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/730)) ([3360e9b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3360e9b25cd2fb91d81f5349fedd01e767eaf3de))
+* **extension:** the snippet's sixth half — ask the consultants before the person (v17) ([#728](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/728)) ([b69a58d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b69a58d1714d83daf575c2c351cdd951e8b7c905))
+
+
+### Bug Fixes
+
+* **extension:** the catalog migration waits for the window's settings instead of failing ([#722](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/722)) ([a5a8eeb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a5a8eebe96cc8c038c00c7e24069e3a1be0801b3))
+
 ## [0.65.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.64.0...extension-v0.65.0) (2026-10-09)
 
 

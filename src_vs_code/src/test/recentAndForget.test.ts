@@ -81,7 +81,7 @@ function html(over: {
     usage: over.usage ?? [],
     usageWindow: 'week',
     cliStatus: over.cliStatus ?? {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce', NOW);
 }

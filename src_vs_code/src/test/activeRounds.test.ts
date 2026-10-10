@@ -67,7 +67,7 @@ function state(sessions: readonly SessionFile[]): PanelState {
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   };
 }
