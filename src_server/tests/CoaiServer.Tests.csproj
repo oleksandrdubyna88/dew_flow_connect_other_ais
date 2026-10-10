@@ -20,4 +20,11 @@
     <ProjectReference Include="..\src\CoaiServer.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ledger lines copied, redacted, from the live Team server (story 1.2 of
+         todo/PLAN_every_round_is_counted.md): what the deployed server WRITES, as bytes, so a reader
+         change is tested against history rather than against a line the test itself composed. -->
+    <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
