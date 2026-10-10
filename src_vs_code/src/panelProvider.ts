@@ -90,7 +90,8 @@ import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
-import { hostExecutableSide, hostPlatform, Platform } from './hostSide';
+import { hostExecutableSide, hostFamily, hostPlatform, Platform } from './hostSide';
+import { vendorFieldWrite } from './cliPathSave';
 import { executableOf, otherSideClis } from './pathFamily';
 import { thisSide } from './installer';
 import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -2029,7 +2030,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // (Ux finding, plan 5's plan round.)
         const vendors = vendorsFrom(this.read(config)('vendors')).map((v) =>
           v.id === write.vendor
-            ? { ...v, ...pinnedDocument(v, write.key), [write.key]: write.value }
+            // The CLI-path box is THIS side's field: saved per side and mirrored (todo/PLAN_paths_per_side.md E3.2).
+            ? { ...v, ...pinnedDocument(v, write.key), ...vendorFieldWrite(v, write.key, write.value, hostFamily()) }
             : v,
         );
         await this.saveWrite(config, 'vendors', vendors, write, from);

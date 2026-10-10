@@ -220,10 +220,28 @@ function isPlainRecord(raw: unknown): raw is Readonly<Record<string, unknown>> {
 /**
  * The per-side value THIS side's field holds — rule 1 of design (c): `executablePathBySide[family]` when the member is
  * PRESENT (an empty one included: it is the PATH lookup and final) — or nothing, when the legacy `executablePath` is the
- * value this side has.
+ * value this side has: there is no member, or an older extension saved the legacy value since ({@link olderSaveFor}).
  */
 function ownSidePath(stored: StoredExecutable, family: PathFamily): string | undefined {
-  return stored.executablePathBySide?.[family]?.trim();
+  const own = stored.executablePathBySide?.[family];
+
+  return own === undefined || olderSaveFor(stored, family) ? undefined : own.trim();
+}
+
+/**
+ * Whether an extension that does not know `executablePathBySide` saved the legacy value since a newer one last wrote it
+ * — the legacy value is not what the newer one recorded as `mirrored` (todo/PLAN_paths_per_side.md design (c), the
+ * cadence consultation for epics 4-6) — AND that save is this family's: spelled for it, or for neither OS. Decided by
+ * the SPELLING alone, so the page (which asks no disk) and the host draw and run the same value. A row no newer
+ * extension saved has no `mirrored` and nothing to compare.
+ */
+function olderSaveFor(stored: StoredExecutable, family: PathFamily): boolean {
+  const mirrored = stored.executablePathBySide?.mirrored;
+  if (mirrored === undefined || mirrored.trim() === stored.executablePath.trim()) {
+    return false;
+  }
+
+  return !spelledForTheOtherOs(stored.executablePath, family === 'windows');
 }
 
 /** A stored CLI path as a row holds it — the legacy single value every extension version reads, and the per-side ones. */

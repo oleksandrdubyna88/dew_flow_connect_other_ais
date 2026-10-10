@@ -98,9 +98,10 @@ const UNRESOLVED_READS: Readonly<Record<string, { readonly count: number; readon
   'chatModelEdits.ts': { count: 1, why: 'an edit of the stored value' },
   'chatPresetMove.ts': { count: 1, why: 'moves a stored preset into the catalog' },
   'chatPresets.ts': { count: 1, why: 'turns a reviewer row into a stored preset' },
+  'cliPathSave.ts': { count: 2, why: 'the write rule: keeps the legacy value on the other side\'s save, and asks whose it is — stored, never run' },
   'consultSettings.ts': { count: 1, why: 'matches a stored definition\'s value to a row\'s — the stored value' },
   'setupTab.ts': { count: 2, why: 'draws a CLI group\'s path — already this side\'s stored value — in the vendor-keys table' },
-  'pathFamily.ts': { count: 2, why: 'the side rule itself' },
+  'pathFamily.ts': { count: 4, why: 'the side rule itself, and whether an older extension saved since' },
 };
 
 /** The calls of `executableHere`: ONE value, so a legacy definition's — a row through it would skip its per-side value. */
