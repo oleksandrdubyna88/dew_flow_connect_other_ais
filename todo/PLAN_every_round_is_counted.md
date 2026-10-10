@@ -374,6 +374,7 @@ records that failure).
 | `AnOldLedgerLine_StillReads` (1.2's fixtures) | 3.1 / 3.4 |
 | `AVendorReason_IsNotClipped`, `AProbe_WritesALine`, `ARequeuedAttempt_WritesALine`, `ARepair_WritesTwoLinesSharingATurn`, `AnAgyFollowUp_SecondLineCarriesTheDifference` | 3.3 |
 | `ACodexRowsEffort_IsRecordedAsIgnored` | 3.4 |
+| `TheRecordedLaunch_IsWhatWasSent` — for a local launch and a server launch, the line's `cli`/`cliVersion`, `effort`/`effortFrom` and `tier`/`tierFrom` equal the effective launch options the fake `IProcessLauncher` received (argv and environment), not the row's configured ones; `ADroppedRemoteEffort_IsRecordedAsDropped` (the server's `ClientOptions` drop → `effortFrom: dropped`, effort empty); `AnEmptyValue_IsLabelledFromCliConfig_NeverChanged` (`cli-config` fills only the LABEL, and the argv carries no flag it did not carry before) | 3.4 — the plan round's finding (2026-10-10) |
 | `TheCanary_IsNotARound_AndNotARunWithoutARound` | 3.5 |
 | `ARetryARepairAndAFollowUp_ShareTheRoundsId`, `Again_GetsANewId` | 4.1 |
 | `TheNewBody_IsAcceptedByTheLiveServer_ThenDeleted` (contract suite, `COAI_CONTRACT_URL`) | 4.1 |
