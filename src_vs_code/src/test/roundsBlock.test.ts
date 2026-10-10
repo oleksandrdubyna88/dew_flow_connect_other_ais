@@ -139,6 +139,17 @@ test('the Models card carries its row\'s line from the cached snapshot (story 2.
   assert.match(unavailable, /<div class="rounds-line">Rounds: count unavailable<\/div>/u);
 });
 
+test('the card counts only the consult turns inside the same 7 days as the block (CodeRabbit on #750)', () => {
+  // The tail read can start mid-chunk and the snapshot is held for a minute, so the ledger can carry a line older than
+  // the window; the block cut it, the card did not, and the two "7 days" figures disagreed.
+  const codex = { ...DEFAULT_VENDORS[0]!, id: 'codex' };
+  const lines = [usageLine({ kind: 'consult' }), usageLine({ kind: 'consult', utc: hoursAgo(24 * 8) })];
+  const html = modelsTabHtml({ ...panelState('reviewers'), vendors: [codex], roundsSnapshot: snapshot(counted(), lines) });
+
+  assert.match(html, /<div class="rounds-line">7 days: 14 rounds · 1 consult turns · 5 h: 2<\/div>/u,
+    'a consult turn eight days old was counted in the card\'s 7 days');
+});
+
 test('the card line says consult turns are unavailable when the ledger would not read — never 0 consult turns', () => {
   const codex = { ...DEFAULT_VENDORS[0]!, id: 'codex' };
   const html = modelsTabHtml({ ...panelState('reviewers'), vendors: [codex], roundsSnapshot: snapshot(counted(), [], 'EACCES') });

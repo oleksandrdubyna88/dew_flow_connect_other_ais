@@ -129,6 +129,17 @@ test('one line under BOTH ledgers adds them up', () => {
     'there is no second rule, so the joint total reads as part of the chat section');
 });
 
+test('an unpriced chat turn makes the joint total a floor too, not only an unpriced reviewer line', () => {
+  // CodeRabbit on #750: the joint line took its `≥` from the reviewer half alone, so a window whose reviewers were all
+  // priced and whose chat had a turn nobody priced read as the whole of the money — the help says an unpriced line
+  // makes it a floor, whichever half the line is in.
+  const prices = { 'gpt-5.6-sol': { inPerMillion: 1, outPerMillion: 10, source: 'openrouter' as const } };
+  const html = usageTabHtml([REVIEW], 'day', [], prices, { chat: { turns: [TURN], doors: [] } });
+
+  assert.match(html, /Reviewers and chat together: 4\.2M tokens · ≥ ~\$3\.00<\/div>/,
+    'an unpriced chat turn left the joint total looking complete');
+});
+
 test('a tab with no conversations still shows the chat section, and says why it is empty', () => {
   const html = usageTabHtml([REVIEW], 'day', [], PRICES, { chat: { turns: [], doors: [] } });
 

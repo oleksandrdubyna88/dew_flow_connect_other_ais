@@ -5,7 +5,7 @@ import {
 } from './roundCounts';
 import { RoundsSnapshot } from './roundCountsCache';
 import {
-  LedgerLine, MEDIAN_OUTPUT_LABEL, MoneyGroup, moneyGroups, PER_RECORDED_TURN, perUnit, RateOf, rollUp, Rollup,
+  inside, LedgerLine, MEDIAN_OUTPUT_LABEL, MoneyGroup, moneyGroups, PER_RECORDED_TURN, perUnit, RateOf, rollUp, Rollup,
   TimeWindow, tokenText, unitDivisor,
 } from './roundMoney';
 import { costText, shortNumber } from './usage';
@@ -141,10 +141,14 @@ function headerCell(label: string): string {
   return `<th scope="col">${label}</th>`;
 }
 
-function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
-  const end = windowEndMs(snapshot.read, snapshot.atMs);
+/** The 7 d window the block and the card line both cut the ledger to — the counts' own edges when they counted. */
+function sevenDays(snapshot: RoundsSnapshot): TimeWindow {
   // `(from, to]`, as the counts are: a millisecond past the start, so a line on the edge is in the same window as a round.
-  const window = { fromMs: windowStartMs(snapshot.read, '7d', snapshot.atMs) + 1, toMs: end };
+  return { fromMs: windowStartMs(snapshot.read, '7d', snapshot.atMs) + 1, toMs: windowEndMs(snapshot.read, snapshot.atMs) };
+}
+
+function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
+  const window = sevenDays(snapshot);
   const groups = moneyGroups([...snapshot.ledger, ...input.chat], window, input.rateOf);
 
   return { read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure };
@@ -343,5 +347,9 @@ function consultTurns(snapshot: RoundsSnapshot, provider: string): string {
     return `consult turns ${LEDGER_UNAVAILABLE}`;
   }
 
-  return `${snapshot.ledger.filter((one) => one.provider === provider && one.kind === 'consult').length} consult turns`;
+  // Cut to the block's own 7 days: the tail read can start mid-chunk and the snapshot is held a minute, so the ledger
+  // can carry an older line, and the card and the block must not disagree about one "7 days" (CodeRabbit on #750).
+  const window = sevenDays(snapshot);
+
+  return `${snapshot.ledger.filter((one) => one.provider === provider && one.kind === 'consult' && inside(one, window)).length} consult turns`;
 }

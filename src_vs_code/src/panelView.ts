@@ -2650,7 +2650,8 @@ function chatRegion(
   // the whole aggregation. (Four reviewers of the code round, independently.)
   const priceOf: ChatPriceOf = (model) => prices[model];
   const { rows, totals: sums } = chatSpend(chat.turns, chat.doors, window, new Date(), priceOf, chat.vendorOf);
-  const totals = { tokens: sums.tokens, cost: sums.costUsd, guess: sums.estimatedUsd, seconds: 0 };
+  // A turn nobody priced adds nothing to the money, so the money is a floor — the same rule as an unpriced reviewer line.
+  const totals = { tokens: sums.tokens, cost: sums.costUsd, guess: sums.estimatedUsd, seconds: 0, floor: sums.unpriced > 0 };
   if (rows.length === 0) {
     return {
       html: '<div class="empty">No conversations in this window. Ask a second model about a passage and'
@@ -2699,7 +2700,7 @@ export function usageRegion(
   const reviewers = reviewersRegion(usage, window, vendors, prices, teamServers);
   const chats = chatRegion(chat, window, prices, vendorPalette(vendors.map((v) => v.id)));
   const tokens = reviewers.totals.tokens + chats.totals.tokens;
-  const money = atLeast(reviewers.totals.floor === true, total(
+  const money = atLeast(reviewers.totals.floor === true || chats.totals.floor === true, total(
     bothHalves(reviewers.totals.cost, chats.totals.cost),
     bothHalves(reviewers.totals.guess, chats.totals.guess),
   ));
