@@ -82,6 +82,7 @@ import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { SECURITY_COMMANDS } from './securityLaneState';
+import { cardColumns } from './cardColumns';
 
 /**
  * The panel's HTML, as a pure function of what it shows.
@@ -2263,13 +2264,15 @@ ${serverNotes(state, role)}
   // By BUCKET, which is what a ROUND is selected by. A document role used to be filtered out
   // here because it took part in nothing; since plan 4 it has a round, and a role with a round
   // but no budget and no switch on this panel is a role a person cannot configure.
-  const plan = all.filter((r) => bucketOf(r) === PLAN_CODE).map(roleRow).join('\n');
-  const code = all.filter((r) => bucketOf(r) === RESULT_CODE).map(roleRow).join('\n');
-  const documents = all.filter((r) => bucketOf(r) === RESULT_DOCUMENT).map(roleRow).join('\n');
+  // Each stage's boxes in the page's columns (`cardColumns.ts`): two side by side on a wide editor.
+  const boxes = (bucket: string): string => cardColumns(all.filter((r) => bucketOf(r) === bucket).map(roleRow).join('\n'));
+  const plan = boxes(PLAN_CODE);
+  const code = boxes(RESULT_CODE);
+  const documents = boxes(RESULT_DOCUMENT);
   // The fourth stage's own group (S2.1 of the feature-review plan): its role has a round, a budget
   // and a switch of its own, and drawing it among the code roles would count it into a fan-out it
   // takes no part in. The stage's vendor tick and its tool are epic 3's; this is what the seed forces.
-  const features = all.filter((r) => bucketOf(r) === FEATURE_CODE).map(roleRow).join('\n');
+  const features = boxes(FEATURE_CODE);
 
   return PROMPTS_HALVES[half](state, { plan, code, documents, features });
 }

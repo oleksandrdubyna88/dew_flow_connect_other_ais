@@ -190,9 +190,11 @@ test('the page helpers: search is case-blind on the server text, sort is highest
 
 test('the Settings sheet is byte-identical after its tokens, chips and badges moved to the shared leaf', () => {
   // Pinned when the three pieces were EXTRACTED from catalogCss.ts (todo/PLAN_team_usage_by_person.md, 1.3): the
-  // hash of CATALOG_CSS as it was before the move. A deliberate change to the Settings sheet re-pins it, on purpose.
+  // hash of CATALOG_CSS as main's UNEXTRACTED catalogCss.ts produces it. Re-pinned at the merge of main's #724 (the
+  // Settings tabs' two columns, bd11f64a) from main's own file — built against this tree's settingsPage, never from
+  // the merged sheet — so it still proves the extraction changed nothing. A deliberate change re-pins it, on purpose.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    '09f5493ba751296ed0d0b20dfb44b1a193e87fb934e2b46a85b60dfd7a662783');
+    '9e1a9ad49c7ddecd983b12c40928a4e416afc02d678552ffcdbb9ad1f8d19b14');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }

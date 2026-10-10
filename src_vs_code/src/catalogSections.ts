@@ -1,3 +1,4 @@
+import { cardColumns } from './cardColumns';
 import type { CatalogUse } from './catalogFields';
 import { escapeHtml } from './escapeHtml';
 import { USE_LABELS } from './modelCardFields';
@@ -71,8 +72,9 @@ function everyRow(state: PanelState): PanelState {
  * Reviewers tab became Models, which the page builds itself; every other old tab is in {@link SPLIT}.
  */
 const MOVED_SECTIONS: Readonly<Record<string, (state: PanelState) => string>> = {
-  // Its "Edit commands…" a jump to Reviews › Commands here, never the commands page (E5.1 step 1).
-  'reviews/gate': (state) => gateBody(state),
+  // Its "Edit commands…" a jump to Reviews › Commands here, never the commands page (E5.1 step 1). Its fields in the
+  // page's columns, two on a wide editor; Limits, five numbers one to a row, keeps its one column.
+  'reviews/gate': (state) => cardColumns(gateBody(state)),
   'reviews/limits': limitsSection,
   'setup/keys': (state) => keysBody(everyRow(state)),
   'setup/team': teamServersSection,
