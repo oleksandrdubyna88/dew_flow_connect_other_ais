@@ -44,11 +44,17 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
     public const string StdinMarker = "config-key-stdin";
 
     /// <summary>A help text is a few kilobytes; past this it is not one.</summary>
-    private const int MaxHelpChars = 64 * 1024;
+    public const int MaxHelpChars = 64 * 1024;
+
+    /// <summary>How long the <c>--help</c> probe may take: two orders of magnitude above an AOT start-up.</summary>
+    public static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long the read itself may take — unchanged from before the probe existed.</summary>
+    public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
 
     private readonly IReadOnlyList<string> _fallbacks = fallbacks ?? [];
 
-    private readonly TimeSpan _probeTimeout = probeTimeout ?? TimeSpan.FromSeconds(10);
+    private readonly TimeSpan _probeTimeout = probeTimeout ?? DefaultProbeTimeout;
 
     /// <summary>
     /// The vault as this machine has it: <c>creds</c> from PATH, then the CLI the CredsForDevs
@@ -85,69 +91,91 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
             return VaultKeys.None($"no {KeyVariable} configured — keyless vendors still work on their own auth");
         }
 
-        var read = await RunFirstInstalledAsync(configKey, ct);
-        if (read.Refusal is { Length: > 0 } refusal)
+        return await RunFirstInstalledAsync(configKey, ct) switch
         {
-            return VaultKeys.None(refusal);
-        }
-
-        if (read.Result is not { } result)
-        {
-            return VaultKeys.None(NotInstalled());
-        }
-
-        if (result.TimedOut)
-        {
-            return VaultKeys.None("creds config timed out — is a VS Code window with the vault open?");
-        }
-
-        if (result.ExitCode != 0)
-        {
-            return VaultKeys.None($"creds config refused (exit {result.ExitCode}) — the key may be revoked, or no unlocked window holds the entry");
-        }
-
-        return Parse(result.StdOut);
+            Read.Answered answered => FromAnswer(answered.Result),
+            Read.Refused refused => VaultKeys.None(refused.Reason),
+            _ => VaultKeys.None(NotInstalled()),
+        };
     }
 
-    /// <summary>A read's outcome: the CLI's answer, or why a started CLI was never given the key, or neither (none started).</summary>
-    private sealed record Read(ProcessResult? Result, string Refusal);
+    /// <summary>What a CLI that was given the key answered.</summary>
+    private static VaultKeys FromAnswer(ProcessResult result) => result switch
+    {
+        { TimedOut: true } => VaultKeys.None("creds config timed out — is a VS Code window with the vault open?"),
+        { ExitCode: not 0 } => VaultKeys.None($"creds config refused (exit {result.ExitCode}) — the key may be revoked, or no unlocked window holds the entry"),
+        _ => Parse(result.StdOut),
+    };
+
+    /// <summary>
+    /// How one attempt at the vault ended — three cases, named, rather than a null and an empty string
+    /// standing in for two of them (code round).
+    /// </summary>
+    private abstract record Read
+    {
+        private Read()
+        {
+        }
+
+        /// <summary>A CLI was given the key on stdin and answered.</summary>
+        public sealed record Answered(ProcessResult Result) : Read;
+
+        /// <summary>A CLI started but was never given the key; the sentence says why. Never contains the key.</summary>
+        public sealed record Refused(string Reason) : Read;
+
+        /// <summary>No candidate could be started at all.</summary>
+        public sealed record NoneStarted : Read;
+    }
 
     /// <summary>
     /// <c>creds config -</c>, the key on stdin, through the first CLI that exists: PATH's, then each
     /// fallback in order — after that CLI's <c>--help</c> has said it reads the key from stdin.
     /// </summary>
     /// <remarks>
-    /// Only "could not be started" moves on to the next place. A CLI that started and refused, timed out,
-    /// printed junk — or turned out too old to be given the key at all — has answered, and that answer is
-    /// the vault's: asking a second copy would turn one refusal into two reads of a person's vault.
+    /// Only "could not be started" — at the PROBE — moves on to the next place. A CLI that started and
+    /// refused, timed out, printed junk, turned out too old to be given the key, or vanished between its
+    /// probe and its read has answered, and that answer is the vault's: asking a second copy would turn one
+    /// refusal into two reads of a person's vault.
     /// </remarks>
     private async Task<Read> RunFirstInstalledAsync(string configKey, CancellationToken ct)
     {
         foreach (var candidate in (string[])[executable, .. _fallbacks])
         {
+            ProcessResult help;
             try
             {
-                if (WhyNotStdin(await ProbeAsync(candidate, ct)) is { Length: > 0 } refusal)
-                {
-                    return new Read(null, refusal);
-                }
-
-                var result = await launcher.RunAsync(
-                    new ProcessRequest(candidate, ["config", "-"], Environment.CurrentDirectory)
-                    {
-                        StdIn = configKey + "\n",
-                        Timeout = TimeSpan.FromSeconds(30),
-                    },
-                    ct);
-                return new Read(result, string.Empty);
+                help = await ProbeAsync(candidate, ct);
             }
             catch (System.ComponentModel.Win32Exception)
             {
-                // Not there, or not startable: the next place is asked.
+                continue; // Not there, or not startable: the next place is asked.
             }
+
+            return WhyNotStdin(help) is { Length: > 0 } refusal
+                ? new Read.Refused(refusal)
+                : await ReadWithAsync(candidate, configKey, ct);
         }
 
-        return new Read(null, string.Empty);
+        return new Read.NoneStarted();
+    }
+
+    /// <summary>The read itself, on a CLI whose probe just answered. Failing to start it now is that CLI's answer.</summary>
+    private async Task<Read> ReadWithAsync(string candidate, string configKey, CancellationToken ct)
+    {
+        try
+        {
+            return new Read.Answered(await launcher.RunAsync(
+                new ProcessRequest(candidate, ["config", "-"], Environment.CurrentDirectory)
+                {
+                    StdIn = configKey + "\n",
+                    Timeout = ReadTimeout,
+                },
+                ct));
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return new Read.Refused("the creds CLI answered --help but could not be started for the read — was it removed or replaced just now?");
+        }
     }
 
     /// <summary>The CLI's <c>--help</c>, bounded, stdin closed at once. A launch failure throws, as a read's does.</summary>
@@ -162,15 +190,17 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
 
     /// <summary>
     /// Empty when the help names <see cref="StdinMarker"/>; otherwise the sentence for why this CLI is not
-    /// given the key. Three different cures, so three sentences — none of them contains the key.
+    /// given the key. A different cure each, so a different sentence each — none of them contains the key.
     /// </summary>
     private string WhyNotStdin(ProcessResult help) =>
         help switch
         {
+            { Cancelled: true } =>
+                "the vault read was cancelled before the creds CLI was given the config key",
             { TimedOut: true } =>
-                $"the creds CLI did not answer --help within {_probeTimeout.TotalSeconds:0.#} s, so it was not given the config key — is it hung or broken?",
+                FormattableString.Invariant($"the creds CLI did not answer --help within {_probeTimeout.TotalSeconds:0.#} s, so it was not given the config key — is it hung or broken?"),
             { ExitCode: not 0 } =>
-                $"the creds CLI's --help exited {help.ExitCode}, so it was not given the config key — is it broken?",
+                FormattableString.Invariant($"the creds CLI's --help exited {help.ExitCode}, so it was not given the config key — is it broken?"),
             _ when !help.StdOut.Contains(StdinMarker, StringComparison.Ordinal) =>
                 $"the creds CLI is too old to take the config key on stdin (its --help does not name {StdinMarker}) — "
                     + "update the creds CLI (CredsForDevs: Install `creds` (terminal CLI)…); the key is never passed as an argument",

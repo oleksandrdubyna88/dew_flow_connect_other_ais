@@ -25,12 +25,6 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 
     private const string OldHelp = "creds — …\n  creds config <key>                 print one config file (for an app at startup)\n";
 
-    private static readonly string[] Steering =
-    [
-        "FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_EXIT", "FAKECLI_STDERR", "FAKECLI_RECORD_DIR",
-        "FAKECLI_HELP_STDOUT", "FAKECLI_HELP_EXIT", "FAKECLI_HELP_SLEEP_MS",
-    ];
-
     private readonly string _records = Path.Combine(Path.GetTempPath(), "coai-vault-stdin-" + Guid.NewGuid().ToString("N"));
 
     private static string FakeCliExe => Path.Combine(
@@ -38,6 +32,7 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 
     public TheVaultKeyTravelsOnStdinTests()
     {
+        FakeCliSteering.Reset();
         Directory.CreateDirectory(_records);
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         Environment.SetEnvironmentVariable("FAKECLI_EXIT", "0");
@@ -48,17 +43,13 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var name in Steering)
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
-
+        FakeCliSteering.Reset();
         Directory.Delete(_records, recursive: true);
     }
 
     /// <summary>Each recorded launch: its argv, then its stdin as the last field.</summary>
     private List<string[]> Launches() =>
-        [.. Directory.GetFiles(_records, "*.argv").Select(file => File.ReadAllText(file).Split('\0'))];
+        [.. Directory.EnumerateFiles(_records, "*.argv").Select(path => LaunchRecords.Read(path).Split('\0'))];
 
     private static Task<VaultKeys> Read(KeyVault vault) =>
         vault.ReadFromConfigurationAsync(VaultConfiguration.Holding(FakeKey), TestContext.Current.CancellationToken);
@@ -80,6 +71,7 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
     {
         await Read(new KeyVault(new ProcessLauncher(), FakeCliExe));
 
+        Launches().Should().NotBeEmpty("an empty record would make the next line pass for nothing");
         Launches().SelectMany(launch => launch[..^1]).Should().NotContain(argument => argument.Contains("FAKE"));
     }
 
@@ -149,13 +141,13 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
         Carries(["a sentence with " + FakeKey], FakeKey).Should().BeTrue();
 
         var sentences = new List<string>();
-        foreach (var (help, exit, sleep, stdout, cliExit) in new (string, string?, string?, string, string)[]
+        foreach (var (help, exit, sleep, stdout, cliExit, expected) in new (string, string?, string?, string, string, string)[]
         {
-            (OldHelp, null, null, "{}", "0"),
-            (NewHelp, "3", null, "{}", "0"),
-            (NewHelp, null, "20000", "{}", "0"),
-            (NewHelp, null, null, "{}", "92"),
-            (NewHelp, null, null, "not json", "0"),
+            (OldHelp, null, null, "{}", "0", "update the creds CLI"),
+            (NewHelp, "3", null, "{}", "0", "--help exited 3"),
+            (NewHelp, null, "20000", "{}", "0", "did not answer --help"),
+            (NewHelp, null, null, "{}", "92", "refused (exit 92)"),
+            (NewHelp, null, null, "not json", "0", "not valid JSON"),
         })
         {
             Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", help);
@@ -163,7 +155,11 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
             Environment.SetEnvironmentVariable("FAKECLI_HELP_SLEEP_MS", sleep);
             Environment.SetEnvironmentVariable("FAKECLI_STDOUT", stdout);
             Environment.SetEnvironmentVariable("FAKECLI_EXIT", cliExit);
-            var keys = await Read(new KeyVault(new ProcessLauncher(), FakeCliExe, probeTimeout: TimeSpan.FromMilliseconds(800)));
+            // Only the hang gets the short bound: a cold start on a loaded machine must not turn the
+            // other four into "did not answer" and skip the sentences they exist to reach.
+            var bound = sleep is null ? KeyVault.DefaultProbeTimeout : TimeSpan.FromMilliseconds(800);
+            var keys = await Read(new KeyVault(new ProcessLauncher(), FakeCliExe, probeTimeout: bound));
+            keys.Unavailability.Should().Contain(expected);
             sentences.Add(keys.Unavailability);
         }
 
@@ -173,4 +169,112 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 
     private static bool Carries(IEnumerable<string> lines, string key) =>
         lines.Any(line => line.Contains(key, StringComparison.Ordinal) || line.Contains(key["cfgk_".Length..], StringComparison.Ordinal));
+}
+
+/// <summary>
+/// The vault against a launcher that records every request and answers by script — for what the real
+/// fake CLI cannot stage: a cancelled probe, a binary that vanishes between probe and read, and the
+/// exact shape of each request.
+/// </summary>
+public sealed class TheVaultsRequestsAreShapedForTheKeyTests
+{
+    private const string FakeKey = "cfgk_FAKEFAKEFAKEFAKEFAKEFAKEFAKE";
+
+    private sealed class Scripted(Func<ProcessRequest, ProcessResult> answer) : IProcessLauncher
+    {
+        public List<ProcessRequest> Requests { get; } = [];
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(answer(request));
+        }
+    }
+
+    private static ProcessResult Help(string text) => new(0, text, string.Empty, false);
+
+    private static Task<VaultKeys> Read(KeyVault vault) =>
+        vault.ReadFromConfigurationAsync(VaultConfiguration.Holding(FakeKey), TestContext.Current.CancellationToken);
+
+    [Fact]
+    public void The_marker_is_the_value_the_creds_CLI_prints()
+    {
+        // dew_flow_creds_for_devs pins the same value on its side (CommandLine.ConfigStdinMarker). A
+        // change on either side alone makes every CLI read as too old, so the value is pinned, not the name.
+        KeyVault.StdinMarker.Should().Be("config-key-stdin");
+    }
+
+    [Fact]
+    public async Task The_probe_and_the_read_are_shaped_as_the_plan_says()
+    {
+        var launcher = new Scripted(r => r.Arguments is ["--help"] ? Help("(config-key-stdin)") : Help("{}"));
+
+        await Read(new KeyVault(launcher, "creds"));
+
+        launcher.Requests.Should().HaveCount(2);
+        var probe = launcher.Requests[0];
+        probe.Arguments.Should().Equal("--help");
+        probe.StdIn.Should().BeEmpty("the probe is never given anything, least of all the key");
+        probe.Timeout.Should().Be(KeyVault.DefaultProbeTimeout).And.Be(TimeSpan.FromSeconds(10));
+        probe.MaxOutputChars.Should().Be(64 * 1024);
+        var read = launcher.Requests[1];
+        read.Arguments.Should().Equal("config", "-");
+        read.StdIn.Should().Be(FakeKey + "\n");
+        read.Timeout.Should().Be(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task A_marker_only_on_stderr_is_not_a_marker()
+    {
+        var launcher = new Scripted(r => new ProcessResult(0, "usage", "config-key-stdin", false));
+
+        var keys = await Read(new KeyVault(launcher, "creds"));
+
+        keys.Unavailability.Should().Contain("update the creds CLI");
+        launcher.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_cancelled_probe_says_cancelled_rather_than_calling_the_CLI_hung()
+    {
+        var launcher = new Scripted(r => new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true, Cancelled: true));
+
+        var keys = await Read(new KeyVault(launcher, "creds"));
+
+        keys.Unavailability.Should().Contain("cancelled").And.NotContain("hung");
+        launcher.Requests.Should().ContainSingle("nothing is read after a cancelled probe");
+    }
+
+    [Fact]
+    public async Task A_CLI_that_vanishes_between_probe_and_read_is_its_own_answer()
+    {
+        // The probe started it, so it is the answer: the next place is NOT asked, and the sentence says
+        // what happened instead of "not installed".
+        var launcher = new Scripted(r => r.Arguments is ["--help"]
+            ? Help("(config-key-stdin)")
+            : throw new System.ComponentModel.Win32Exception(2, "gone"));
+
+        var keys = await Read(new KeyVault(launcher, "creds", ["a-fallback-that-must-not-run"]));
+
+        keys.Unavailability.Should().Contain("could not be started for the read").And.NotContain("not installed");
+        launcher.Requests.Select(r => r.Executable).Should().OnlyContain(e => e == "creds");
+    }
+}
+
+/// <summary>
+/// Clears every <c>FAKECLI_*</c> variable this process holds. The vault's probe made several more of them
+/// matter to the vault tests, so a class that sets only its own and inherits the rest from whichever test
+/// ran before can see a "--help exited 3" it never asked for (own review).
+/// </summary>
+internal static class FakeCliSteering
+{
+    public static void Reset()
+    {
+        foreach (var name in Environment.GetEnvironmentVariables().Keys.Cast<string>()
+                     .Where(name => name.StartsWith("FAKECLI_", StringComparison.Ordinal))
+                     .ToList())
+        {
+            Environment.SetEnvironmentVariable(name, null);
+        }
+    }
 }

@@ -49,6 +49,7 @@ public sealed class KeyVaultProcessTests : IDisposable
 
     public KeyVaultProcessTests()
     {
+        FakeCliSteering.Reset();
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         // A current creds CLI: its --help names the stdin marker, so it is given the key.
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", "creds config -  (" + KeyVault.StdinMarker + ")");

@@ -25,6 +25,7 @@ public sealed class TheVaultIsFoundWhereCredsForDevsInstallsItTests : IDisposabl
 
     public TheVaultIsFoundWhereCredsForDevsInstallsItTests()
     {
+        FakeCliSteering.Reset();
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         Environment.SetEnvironmentVariable("FAKECLI_EXIT", "0");
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", """{"grok": "sk-live"}""");
