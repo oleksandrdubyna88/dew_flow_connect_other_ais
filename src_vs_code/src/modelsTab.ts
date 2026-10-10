@@ -7,6 +7,7 @@ import { accessOf, modelCard, usedFor } from './modelCard';
 import { USE_LABELS } from './modelCardFields';
 import { checkFactsOf } from './modelCardWorld';
 import { cardContextFor, type PanelState } from './panelView';
+import { cardRoundsLine } from './roundsBlock';
 import type { Vendor } from './vendors';
 
 /**
@@ -90,6 +91,7 @@ export function modelsTabHtml(shown: PanelState): string {
     context: contextOf(row), references: referencesOf(state, row.id), lastFor: lastStagesOf(rows, row), binary,
     check: checkFactsOf(state.consultantHealth, row.id), teamServers: state.teamServers ?? [],
     firstSeen: state.firstSeen ?? {}, now: state.now ?? Date.now(),
+    roundsLine: cardRoundsLine(state.roundsSnapshot, row.id),
   }));
 
   return `<p class="lead">Every model this side can use, added once. Tick what each one is used for; one model can be added `

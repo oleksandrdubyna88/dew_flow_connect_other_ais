@@ -63,6 +63,7 @@ import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
 import { type WatchedDir } from './escalationDirs';
 import { roleOnServers } from './serverRoles';
+import type { RoundsSnapshot } from './roundCountsCache';
 import { CUSTOM_ROLES_SINCE } from './rolesBlocks';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -320,6 +321,11 @@ export interface PanelState {
    * have cost through an API. Anything typed wins over it.</p>
    */
   readonly cardPrices: Readonly<Record<string, ModelPrice>>;
+  /**
+   * The rounds each Models card's line counts (story 2.4 of todo/PLAN_every_round_is_counted.md) — the CACHED snapshot,
+   * never a read of its own (`roundCountsCache.ts`); absent before the first read, and the card then says nothing.
+   */
+  readonly roundsSnapshot?: RoundsSnapshot | undefined;
   /**
    * Each vendor's installed and published CLI version, by vendor id.
    *

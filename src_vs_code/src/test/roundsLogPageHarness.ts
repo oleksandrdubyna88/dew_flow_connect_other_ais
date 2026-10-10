@@ -91,13 +91,19 @@ export interface BundledLog {
   rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[], log?: unknown) => unknown[];
 }
 
-export function bundledLogModule(): BundledLog {
+/**
+ * @param extra more `export … from` lines for the same bundle, each naming a file under `src/` — what a test of a region
+ * the HOST renders into the page (the Rounds block, story 2.3) needs, minified exactly as the page module is.
+ */
+export function bundledLogModule(extra: Readonly<Record<string, readonly string[]>> = {}): BundledLog {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
+  const more = Object.entries(extra)
+    .map(([file, names]) => `export { ${names.join(', ')} } from ${JSON.stringify(path.join(ROOT, 'src', file))};\n`).join('');
   // A tiny entry so the bundle exports exactly what the assertion needs; `--minify` is what the
   // shipped bundle uses, and the renaming it does is the whole point of this test.
-  fs.writeFileSync(entry, `export { roundsLogHtml, rowsFrom } from ${JSON.stringify(path.join(ROOT, 'src', 'roundsLog.ts'))};\n`);
+  fs.writeFileSync(entry, `export { roundsLogHtml, rowsFrom } from ${JSON.stringify(path.join(ROOT, 'src', 'roundsLog.ts'))};\n${more}`);
   // esbuild's JS API, not its binary: on Linux `node_modules/esbuild/bin/esbuild` is a shell shim,
   // and running it through node is a SyntaxError — which is exactly how this test passed on Windows
   // and failed on the CI runner the day it was written.

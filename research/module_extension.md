@@ -7324,8 +7324,52 @@ MODEL line by the rounds that used it when the caller knows them, else per recor
 every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
 the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
 this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
-says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1); rendering the
-Rounds block, the card line and `readRoundCounts` are stories 2.2–2.4 and not built yet.
+says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1), read as below.
+
+**The counts are read once a minute, and the Spending tab's first block is Rounds (2026-10-10, stories 2.2–2.4 of
+`todo/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
+
+- `roundCounts.ts` — the mode's contract as data (`RoundCountsAnswer`: `nowUtc`, three windows `5h` / `24h` / `7d`
+  half-open `(from, to]`, each a row per vendor with rounds by stage, the reviewer rows and the rounds per model;
+  `modelsKnownSince`), checked field by field by `parseRoundCounts`, and `roundCountsFrom(exit, output)` → a
+  `RoundCountsRead` that is `counted` or `unavailable` WITH ITS REASON: exit 64 is *older than --round-counts — update it
+  in Setup › MCP server*, 65 refused, 74 the database would not read, -1 a timeout or a spawn that failed, an exit-0
+  answer outside the contract *something this build cannot read*. Rows `[]` on exit 0 is a count of nought. Never a zero
+  standing in for "nobody knows" — `COUNT_UNAVAILABLE` is what every surface prints instead.
+- `roundCountsRead.ts` — `readRoundCounts(executable, run)` through `serverRun` from `roundsDbRead.ts`, the one door
+  that hands the child this window's data directory (a child inheriting the window's environment would count the
+  DEFAULT directory's rounds); `roundsLoader` spawns it and reads the ledger's tail in parallel; `otherStores` asks only
+  whether another installation's `coai.db` EXISTS. Its own file because `roundsDbRead.ts` is at 796 of its 800 lines,
+  and because the page module imports the types — a spawn beside them would drag `node:child_process` into the bundle.
+- `ledgerTail.ts` — `readTailSince(path, sinceMs, parse)` reads `usage.jsonl` from its END in 64 KiB chunks and stops at
+  the first chunk whose oldest whole line is older than the instant asked for (the code round's rule: a year of history
+  is one chunk, not a parse per refresh); a line torn across a chunk is carried back and joined; a missing file is no
+  lines. It answers `bytesRead`, which is what the bound is tested by.
+- `roundCountsCache.ts` — **bounded freshness, never a spawn per render.** `current()` never reads; `refresh()` reads
+  when the snapshot is older than `ROUNDS_MAX_AGE_MS` (60 s), after `forget()` — a consultation or a question ended
+  (`consultations.onChanged`, `questionConsults.onChanged` in `extension.ts`) — or after the session files hold one more
+  finished round (`noteFinishedRounds(finishedRounds(sessions))`, from the panel's own render; the first sighting only
+  remembers), one read at a time; a load that throws is a stamped `unavailable` snapshot, so a failing read is not
+  retried per render. The age bound is what lets a trailing window FALL while nothing runs, and the early refresh is what
+  makes a consultation-only session move the numbers. The clock and the loader are handed in (fake-clock tests).
+
+`PanelProvider` owns one `RoundCountsCache` (`roundCountsOf`), notes finished rounds and refreshes on every render
+without awaiting (a read that lands repaints), and refreshes on the spending tab's own tick (`usageTab`). The tab's
+FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
+by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
+by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
+history, the median output per recorded turn, tokens in / cached / out / reasoning and money over 7 d through
+`roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
+this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
+only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*
+(`ranOnOf`). The block names the store it counted (`storeSentence`: *Counted from this side's store only — WSL: Ubuntu,
+<dir>.*) and every other installation's existing store as *not included* — the other side's WAL `coai.db` is never
+opened across the `\\wsl.localhost` / drvfs boundary. Before the first read the block says *Counting…*; an unavailable
+read says *count unavailable* in every count cell, once with the reason, and the ledger's tokens still show. The Models
+card's foot carries `cardRoundsLine` — `7 days: 14 rounds · 1 consult turns · 5 h: 2` (consult TURNS, since one
+consultation is several ledger lines), `Rounds: count unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
+the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
+says the product ships no price table.
 
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
