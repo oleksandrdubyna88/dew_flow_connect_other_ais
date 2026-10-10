@@ -96,6 +96,8 @@ src_vs_code/src/generated/consultantRule.ts
 src_vs_code/src/generated/consultantRule.ts.tmp
 src_vs_code/src/generated/featureRule.ts
 src_vs_code/src/generated/featureRule.ts.tmp
+src_vs_code/src/generated/questionRule.ts
+src_vs_code/src/generated/questionRule.ts.tmp
 
 # Coverage reports, written by c8 locally and by the sonarcloud workflow in CI.
 coverage/

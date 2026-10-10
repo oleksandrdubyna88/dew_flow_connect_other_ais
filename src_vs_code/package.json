@@ -229,7 +229,7 @@
       },
       {
         "command": "coai.copyClaudeSnippet",
-        "title": "Copy the CLAUDE.md snippet (v16)",
+        "title": "Copy the CLAUDE.md snippet (v17)",
         "category": "ConnectOtherAIs"
       },
       {
