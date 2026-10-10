@@ -3177,3 +3177,23 @@ before this session observed it, so every behaviour was re-reddened by reverting
 **NOT covered:** `PanelProvider.roundsBlockHtml` / `roundCountsOf` and the two `forgetRoundCounts` calls in
 `extension.ts` (thin `vscode` wiring over the tested cache — `forget()` itself is tested); the CSS of the block and the
 card line (no behaviour to assert).
+
+## The server ledger tells the truth — the whole usage, and the canary's own kind (2026-10-10, stories 3.1 and 3.5 of `todo/PLAN_every_round_is_counted.md`)
+
+The seam rule of the plan's test plan: a defect BELOW `IReviewLauncher` is tested through the real `ReviewLauncher` with
+a fake `IProcessLauncher` (`TheWholeUsageTravelsTests.Codex` writes the `-o` answer file and prints a codex event
+stream), because a fake launcher above the defect cannot fail for the right reason.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheWholeUsageTravelsTests` (4) | `TheServerLedger_KeepsCachedAndReasoningTokens` — a codex `turn.completed` with 12 544 cached tokens reaches the job and the server ledger line; `AReasoningCount_ReachesTheServerLedger`; `ANonZeroExit_KeepsItsUsage` — a codex launch that exits 1 after reporting 14 508 / 12 544 is written with them; `TheServersReader_ReadsCachedReasoningAndTheUsageNote` — the reader keeps all three fields of a line | RED before the fix: `Expected job.Usage.TokensCached to be 12544L … but found 0L`; `… TokensReasoning to be 41L, but found 0L`; `Expected job.Usage.TokensIn to be 14508L because a vendor that ran and exited non-zero was billed for what it ran, but found 0L`; `Expected line.TokensCached to be 12544L because the reader dropped the cached count the line holds, but found 0L`. Break-it: the success taking only in/out → the cached and reasoning tests red; the runner's failure arm keeping usage for `Unparseable` alone → `ANonZeroExit_KeepsItsUsage` red with the same 0L |
+| `ReviewLauncherTests` (+1) | `AContinuationThatEndsBadly_KeepsTheFirstLaunchsUsage` — an agy denial (100/5) continued into a launch that exits 1 (40/20): the attempt is that `NonZeroExit`, carrying 140/25 | RED: `Expected failed.Usage to match (u.TokensIn == 140) AndAlso (u.TokensOut == 25) … but found` the empty usage. Break-it: the terminal arm reading the outcome alone → the same |
+| `TheCanaryIsACanaryTests` (2) | `TheCanary_IsAReviewTheDeploySends_SaidAsItsOwnKind` — `canary` reads as a kind, wires as `canary`, is accepted with a role and refused without one, and the ledger knows the word; `TheCanary_IsReadBackAsItsOwnKind_AndReportedApart` — a canary line reads back as `canary` and `UsageTotals.ByKind` reports it apart from the reviews | RED: `Expected JobKinds.TryRead("canary", out var kind) to be True because the release script says it, but found False`; `Expected JobKinds.Wire(lines[0].Kind) to be "canary" … but "review" differs`. Break-it: the table's review row without `Canary` → `Expected JobKinds.Refusal("canary", null, Shipped) <null> to contain "needs a role"` |
+| `install.test.ts` (+1) | the deploy canary names `"kind":"canary"` and recognises an older server's *is not a kind of job* before it starts polling | RED: `the canary submit names its kind` |
+| `teamServerView.test.ts` (+1) | a `canary` kind is named *deploy canaries* beside the reviews | RED: `the wire word shown bare reads as somebody's kind of review` |
+
+The script's fallback was also run against stubbed `curl` and `python3` (a harness outside the suite): an old server
+answered the kind with its 400 and got a second, plain submit; a new one got one submit carrying the kind.
+
+**NOT covered by the suite:** the script's fallback as an executed behaviour (the suite asserts the script's TEXT, like
+every deploy-script test here; the stub run above is the behaviour, recorded once).

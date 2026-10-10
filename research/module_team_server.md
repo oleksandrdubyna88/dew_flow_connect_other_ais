@@ -650,6 +650,15 @@ sequenceDiagram
 - **One ledger, not two.** `UsageLedger` gained an email column and a `RecordJob` overload rather
   than `src_server` growing its own JSONL writer — a second writer is how two spending records come
   to disagree.
+- **The whole usage travels (2026-10-10, story 3.1 of `todo/PLAN_every_round_is_counted.md`).** Every one of the 4 091
+  lines on the live server held 0 cached and 0 reasoning tokens, and a crashed vendor's tokens were dropped: two longs
+  carried the usage from the launcher to the ledger. Now `ReviewAttempt.Answered` and `ReviewAttempt.Failed` carry the
+  launch's whole `Usage` — after a follow-up, both launches together, a terminal outcome included — `JobRecord.Usage`
+  replaced `TokensIn`/`TokensOut` (both stay as read-only views for the status DTO), `JobTransitions.Succeed/Fail` take
+  a `Usage`, `JobRunner` keeps it for EVERY failure (it used to for `Unparseable` alone), and `Ledger` writes through
+  `RecordJob`'s `Usage` overload — cached, reasoning, *no price set* and *usage not captured* as a local line writes
+  them. `UsageReader` reads the three fields back (`UsageEntryDto`, `UsageLine`); a line from before them reads 0 / 0 /
+  empty, which is what it always meant. A `Failed` built from an outcome alone carries `ReviewerOutcome.TotalUsage`.
 
 ### Story 2.4 — the money, and the contract suite
 
@@ -1134,7 +1143,8 @@ roles. `JobKinds` is now that statement as a table:
 | `review` | absent | refused, naming the roles: a client that made a claim is held to it |
 | `chat` | absent | accepted |
 | `chat` | present | refused — dropping a role silently is how a field comes to mean something else |
-| anything else | — | refused, naming both kinds |
+| `canary` | as `review` | judged exactly as a review — the deploy's own check, named apart (2026-10-10, below) |
+| anything else | — | refused, naming the kinds |
 
 The first row is why the field is `string?` rather than defaulted to `review`. A default collapses
 *said nothing* into *said review* and refuses every installed copy of `coai-mcp --ask-remote` and of
@@ -1149,6 +1159,16 @@ the vendor rows use, so an unknown price is never zero here either. That is the 
 total answers neither. **A line with no kind folds as a review**, because everything written before
 the field existed was one — and a kind from a server NEWER than this one is also counted as a
 review rather than dropped, since that line already happened and already cost money.
+
+**`canary` (2026-10-10, story 3.5 of `todo/PLAN_every_round_is_counted.md`).** The release script's canary — one real
+`PlanCritique` review per vendor after a swap — was written as an ordinary `review`, told apart from a person's only by
+its token's email. It now says `"kind":"canary"`: `JobKind.Canary` is judged exactly as a review (a role is required),
+`UsageKinds.Canary` keeps the ledger's vocabulary level with the server's (the parity test), and `UsageDto.kinds`
+reports it as its own row, which the extension names *deploy canaries* (`teamServerView.ts` `KIND_NAMES`). Keeping it
+out of the ROUND count is epic 5's, when rounds exist here. **The script asks once more without the kind** when the
+server answers 400 *"'canary' is not a kind of job"* — an older server refuses the word before any vendor starts, and
+rolling back a healthy release over a field it did not know would be the canary failing for its own sake. Measured
+against stubbed `curl` and `python3`: an old server gets two submits, the second plain; a new one gets one.
 
 **Abandonment, on two clocks rather than one.** A client can die without saying so, and no promise
 survives that — the extension's cancel-on-close is best-effort by construction. So a job nobody has
