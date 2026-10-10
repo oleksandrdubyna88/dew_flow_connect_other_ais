@@ -11,6 +11,8 @@
  */
 
 import { rowsOnTheWire } from './catalogRules';
+import { hostFamily } from './hostSide';
+import { executableHere } from './pathFamily';
 import { DEFAULT_VENDORS, Vendor } from './vendors';
 import { RowPriceLookup, rowOnTheWire, vendorsEnv } from './vendorsWire';
 import { FEATURES } from './binaryFeatures';
@@ -630,7 +632,8 @@ function callersOnTheWire(consult: ConsultSettings): readonly string[] {
 function wireEntry(one: ResolvedConsultant, row: Readonly<Record<string, unknown>> | undefined): Record<string, unknown> {
   return one.kind === 'unavailable'
     ? { vendor: one.vendor, model: one.model }
-    : { vendor: one.vendor, model: one.model, runtime: one.runtime, baseUrl: one.baseUrl, executablePath: one.executablePath, ...(row === undefined ? {} : { row }) };
+    // The CLI path this SIDE runs: a legacy definition's path spelled for the other OS crosses empty (paths per side, E1.2).
+    : { vendor: one.vendor, model: one.model, runtime: one.runtime, baseUrl: one.baseUrl, executablePath: executableHere(one.executablePath, hostFamily()), ...(row === undefined ? {} : { row }) };
 }
 
 /**

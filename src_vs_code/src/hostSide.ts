@@ -1,3 +1,4 @@
+import { familyOf, type PathFamily } from './pathFamily';
 import { runningUnderWsl } from './wslNetwork';
 
 /**
@@ -54,6 +55,14 @@ export function hostPlatform(raw: string = process.platform): Platform {
   }
 
   return 'linux';
+}
+
+/**
+ * Which family this host spells paths in — what decides whether a stored path is the OTHER side's
+ * (`pathFamily.ts`). A WSL window is `posix` whatever machine it is on, exactly as `hostPlatform` says.
+ */
+export function hostFamily(raw: string = process.platform): PathFamily {
+  return familyOf(raw);
 }
 
 /** How this host can reach a live Windows session to run something only Windows can run. */

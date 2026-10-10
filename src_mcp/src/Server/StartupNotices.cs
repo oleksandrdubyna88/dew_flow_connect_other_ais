@@ -76,6 +76,19 @@ internal static class StartupNotices
         }
 
         OtherSideRoots(settings, log);
+        OtherSideExecutables(settings, log);
+    }
+
+    /// <summary>
+    /// A reviewer's CLI path of the OTHER operating system, said at Information and nowhere louder — the root rule's twin
+    /// (todo/PLAN_paths_per_side.md E1.2): one side always holds the other's paths, and this side looks the CLI up on PATH.
+    /// </summary>
+    private static void OtherSideExecutables(PanelSettings settings, Serilog.ILogger log)
+    {
+        foreach (var provider in settings.Providers.Where(one => one.OtherSideExecutable.Length > 0))
+        {
+            log.Information("{Skipped}", ExecutablePaths.SkippedSentence(provider.Provider, provider.OtherSideExecutable, OperatingSystem.IsWindows()));
+        }
     }
 
     /// <summary>

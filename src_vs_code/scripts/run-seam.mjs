@@ -78,6 +78,7 @@ const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
 const { featuresSeam } = await import('./seam-features.mjs');
 // The question consultant's roots of the other OS: the page's decision against the server's, one root at a time.
 const { qconsultRootsSeam } = await import('./seam-qconsult-roots.mjs');
+const { cliPathOtherSideSeam } = await import('./seam-cli-path-other-side.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -831,6 +832,14 @@ const qroots = await qconsultRootsSeam({
 });
 console.log('  ok  a question-consultant root of the other OS is skipped without a complaint, and the page agrees with the server on every root');
 
+// A reviewer's CLI path of the OTHER OS (todo/PLAN_paths_per_side.md E1.2): the extension sends nothing for it, and the
+// server skips it in a file an older extension wrote — the CLI is looked up instead, never probed as the other side's file.
+const clipath = await cliPathOtherSideSeam({
+  providersIn, fakeCli: cli,
+  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
+});
+console.log('  ok  a reviewer\'s CLI path of the other OS is skipped by both halves, and the card does not say cannot review');
+
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
@@ -841,4 +850,5 @@ console.log(`seam: and a consultation the binary RAN was read back out of --log 
 console.log(`seam: and a consultant DEFINED with no reviewer row answered through its own CLI path — "${String(throughDefinition.advice).slice(0, 60)}…"`);
 console.log(`seam: and a REAL refusal carrying a secret was written with it taken out, read back by the extension's own reader, and survived its parser byte for byte — "${refusal.title.slice(0, 90)}…" (${refusal.logs} log file(s) checked too)`);
 console.log(`seam: and the question consultant's roots — kept ${qroots.kept}, skipped ${qroots.skipped}, the page agreeing on both`);
+console.log(`seam: and a reviewer's CLI path of the other side — ${clipath.skipped} skipped by the page and by the server`);
 console.log(`seam: asked ${binary}`);

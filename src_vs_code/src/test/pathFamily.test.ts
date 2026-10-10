@@ -5,7 +5,7 @@ import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { ROOT_ANSWER_LIFETIME_MS, RootExistence, directoryAt, existingHere, otherSideHere, qualified, spelledForTheOtherOs, systemDriveOf } from '../pathFamily';
+import { ROOT_ANSWER_LIFETIME_MS, RootExistence, directoryAt, executableHere, existingHere, familyOf, otherSideHere, pathForThisSide, qualified, spelledForTheOtherOs, systemDriveOf } from '../pathFamily';
 
 /**
  * The TS half of `shared/path-family-vectors.json` — which roots are the OTHER operating system's. The server skips
@@ -218,4 +218,27 @@ test('a definitive answer lives ROOT_ANSWER_LIFETIME_MS: within it one stat, aft
   assert.deepEqual((await answers.of(['/work'], true, 'C:')).existing, ['/work'], 'after it, the disk is asked again and the new folder is seen');
   assert.equal(asked, 2);
   assert.equal(ROOT_ANSWER_LIFETIME_MS, 60_000, 'the lifetime is the named constant the docs state');
+});
+
+test('a CLI path of the other OS is skipped — the PATH lookup — and named; answers the shared executable vectors as the server does', () => {
+  // todo/PLAN_paths_per_side.md E1.2: a Windows `codex.cmd` read in a WSL window was probed as a file there, and the card
+  // said "cannot review". It is the Windows side's CLI: this side runs the runtime's own name from PATH instead.
+  const all = rowsOf('executable');
+  assert.ok(all.length > 5, 'the file is read, not an empty array');
+  assert.ok(all.some((v) => v.flag('otherSide')) && all.some((v) => !v.flag('otherSide')), 'both answers are in the file');
+
+  for (const vector of all) {
+    const family = vector.flag('windows') ? 'windows' : 'posix';
+    const answer = pathForThisSide({ executablePath: vector.text('path') }, family);
+    const said = `${family}: ${JSON.stringify(vector.text('path'))} — ${vector.text('why')}`;
+    assert.equal(answer.path, vector.text('here'), said);
+    assert.equal(answer.otherSide, vector.flag('otherSide') ? vector.text('path').trim() : '', said);
+    assert.equal(executableHere(vector.text('path'), family), vector.text('here'), said);
+  }
+});
+
+test('the family of a host is windows for win32 alone — WSL, Linux and macOS spell their paths alike', () => {
+  assert.equal(familyOf('win32'), 'windows');
+  assert.equal(familyOf('linux'), 'posix');
+  assert.equal(familyOf('darwin'), 'posix');
 });

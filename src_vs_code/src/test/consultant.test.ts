@@ -21,6 +21,7 @@ import { consultantBody } from '../consultantView';
 import { badEndpoint, endpointAnswer, endpointConflict } from '../consultantWrite';
 import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
+import { hostFamily } from '../hostSide';
 import { Vendor, vendorsFrom } from '../vendors';
 
 /**
@@ -456,12 +457,24 @@ test('COAI_CONSULTANTS carries the RESOLVED definition — all five fields — n
 });
 
 test('a stored definition crosses as itself — its own endpoint and CLI path, nothing borrowed from a row', () => {
+  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+  const own = hostFamily() === 'windows' ? 'C:\\opt\\claude\\claude.exe' : '/opt/claude/bin/claude';
   const map = wire({
-    consultants: { codex: { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: '/opt/claude/bin/claude' } },
+    consultants: { codex: { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: own } },
     vendors: [LUNA_ROW],
   });
 
-  assert.deepEqual(map['codex'], { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: '/opt/claude/bin/claude' });
+  assert.deepEqual(map['codex'], { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: own });
+});
+
+test('a stored definition\'s CLI path of the other OS crosses empty — the server there runs it, this one looks it up on PATH', () => {
+  const other = hostFamily() === 'windows' ? '/opt/claude/bin/claude' : 'C:\\opt\\claude\\claude.exe';
+  const map = wire({
+    consultants: { codex: { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: other } },
+    vendors: [LUNA_ROW],
+  });
+
+  assert.equal((map['codex'] as Record<string, unknown>)['executablePath'], '');
 });
 
 test('only the callers that differ from the shipped pair are on the wire — the file carries what differs, per caller', () => {

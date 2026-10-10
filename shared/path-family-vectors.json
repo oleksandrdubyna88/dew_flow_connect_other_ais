@@ -29,7 +29,29 @@
     "it with the SYSTEM drive (`%SystemDrive%`, `C:` when unset): on Windows a root with one leading `/`, or a `\\`",
     "not followed by another, becomes `<drive>` + the path with backslashes, for the existence decision AND, on the",
     "server, for the root it keeps. Everything else, and every root elsewhere, is unchanged (trimmed). Answered by",
-    "`QuestionRoots.Qualified` and the extension's `qualified`."
+    "`QuestionRoots.Qualified` and the extension's `qualified`.",
+    "",
+    "`executable` is a CLI path — a reviewer's, a consultant's, a question row's or a chat model's `executablePath`",
+    "(todo/PLAN_paths_per_side.md E1.2). The SPELLING alone decides it, with no disk check: one spelled for the other",
+    "operating system is skipped — the CLI is looked up on PATH by its runtime's name — never launched and never",
+    "refused. `here` is what this side runs (empty = the PATH lookup) and `otherSide` whether the value was skipped;",
+    "`windows` is the side asking. Answered by the extension's `pathForThisSide` (what it writes into COAI_VENDORS and",
+    "what it launches) and by coai-mcp's `ExecutablePaths.Here` (its own vendor read, for a settings file an older",
+    "extension wrote)."
+  ],
+  "executable": [
+    { "path": "/usr/local/bin/codex", "windows": true, "here": "", "otherSide": true, "why": "a WSL CLI read by the Windows side — PATH answers instead" },
+    { "path": "/usr/local/bin/codex", "windows": false, "here": "/usr/local/bin/codex", "otherSide": false, "why": "the same path on the side it was written for" },
+    { "path": "C:\\Users\\jinx\\AppData\\Roaming\\npm\\codex.cmd", "windows": false, "here": "", "otherSide": true, "why": "the Windows npm shim read by the WSL side — the operator's case, a card that said cannot review" },
+    { "path": "C:\\Users\\jinx\\AppData\\Roaming\\npm\\codex.cmd", "windows": true, "here": "C:\\Users\\jinx\\AppData\\Roaming\\npm\\codex.cmd", "otherSide": false, "why": "kept on Windows" },
+    { "path": "d:/tools/claude.exe", "windows": false, "here": "", "otherSide": true, "why": "a drive letter with a forward slash is still Windows" },
+    { "path": "\\\\wsl.localhost\\Ubuntu\\usr\\bin\\codex", "windows": false, "here": "", "otherSide": true, "why": "how a Windows window names a WSL file — Windows's spelling" },
+    { "path": "  /home/jinx/.local/bin/claude  ", "windows": false, "here": "/home/jinx/.local/bin/claude", "otherSide": false, "why": "trimmed, as both readers trim it" },
+    { "path": "  /home/jinx/.local/bin/claude  ", "windows": true, "here": "", "otherSide": true, "why": "judged trimmed on the other side too" },
+    { "path": "//server/share/codex", "windows": true, "here": "//server/share/codex", "otherSide": false, "why": "a UNC share with forward slashes is nobody's alone — kept" },
+    { "path": "codex", "windows": true, "here": "codex", "otherSide": false, "why": "a bare name is a PATH lookup on both sides" },
+    { "path": "codex", "windows": false, "here": "codex", "otherSide": false, "why": "a bare name is a PATH lookup on both sides" },
+    { "path": "", "windows": true, "here": "", "otherSide": false, "why": "nothing set is the PATH lookup, and nothing was skipped" }
   ],
   "resolution": [
     { "path": "/work", "windows": true, "systemDrive": "D:", "qualified": "D:\\work", "why": "the operator's case: the system drive, never the current one" },

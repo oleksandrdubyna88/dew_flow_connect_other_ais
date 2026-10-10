@@ -167,6 +167,47 @@ export class RootExistence {
   }
 }
 
+/**
+ * The two families a side's paths are spelled in (decided with the operator, D1): `windows` for a host on Windows,
+ * `posix` for every other — WSL, an SSH remote, Linux and macOS alike.
+ */
+export type PathFamily = 'windows' | 'posix';
+
+/** The family of a host by its `process.platform` — the caller hands it in, so this module stays pure. */
+export function familyOf(platform: string): PathFamily {
+  return platform === 'win32' ? 'windows' : 'posix';
+}
+
+/** A stored CLI path as a row holds it — the legacy single value every extension version reads. */
+export interface StoredExecutable {
+  readonly executablePath: string;
+}
+
+/** What this side does with a stored CLI path: the path it runs (empty = PATH lookup), and the value it skipped. */
+export interface ThisSidePath {
+  readonly path: string;
+  /** The stored value, trimmed, when it was spelled for the other OS and so skipped — empty otherwise. */
+  readonly otherSide: string;
+}
+
+/**
+ * The CLI path THIS side runs (todo/PLAN_paths_per_side.md, design (c), rules 2-3): the stored `executablePath`
+ * trimmed, unless it is spelled for the other operating system — then nothing, so the runtime's own name is looked up
+ * on PATH, and the skipped value is named so a page can say whose it is. Never refused: a Windows `codex.cmd` read in a
+ * WSL window is the Windows side's CLI, not a broken setting. The spelling alone decides — a CLI path is not asked of
+ * the disk. Answered by the `executable` vectors, which coai-mcp's `ExecutablePaths.Here` answers too.
+ */
+export function pathForThisSide(stored: StoredExecutable, family: PathFamily): ThisSidePath {
+  const value = stored.executablePath.trim();
+
+  return spelledForTheOtherOs(value, family === 'windows') ? { path: '', otherSide: value } : { path: value, otherSide: '' };
+}
+
+/** {@link pathForThisSide}'s path alone — for a launch or a wire field that needs only what to run. */
+export function executableHere(path: string, family: PathFamily): string {
+  return pathForThisSide({ executablePath: path }, family).path;
+}
+
 /** The sentence beside a stored root of the other side — said, never drawn as a refusal. */
 export function otherSideNote(windows: boolean): string {
   return windows

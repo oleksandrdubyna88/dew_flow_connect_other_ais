@@ -35,6 +35,13 @@ public sealed record ProviderSettings(string Provider)
 
     public string ExecutablePath { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The stored CLI path this side SKIPPED because it is spelled for the other operating system — empty when none was
+    /// (<see cref="ExecutablePaths"/>). Kept so the startup log can say it; <see cref="ExecutablePath"/> is then empty and
+    /// the runtime's CLI is looked up on PATH.
+    /// </summary>
+    public string OtherSideExecutable { get; init; } = string.Empty;
+
     /// <summary>Which CLI shape drives it — `codex` or `gemini`.</summary>
     public string Runtime { get; init; } = string.Empty;
 
@@ -1246,7 +1253,10 @@ public sealed record PanelSettings
 
     /// <summary>Malformed JSON is no configuration at all — the caller falls back rather than
     /// running a review with a vendor list somebody half-wrote.</summary>
-    internal static List<ProviderSettings> ParseVendors(string json)
+    internal static List<ProviderSettings> ParseVendors(string json) => ParseVendors(json, OperatingSystem.IsWindows());
+
+    /// <summary>The vendor list as a host that is, or is not, Windows reads it — the platform injected for a test.</summary>
+    internal static List<ProviderSettings> ParseVendors(string json, bool windows)
     {
         try
         {
@@ -1267,7 +1277,10 @@ public sealed record PanelSettings
                         // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
                         // row id is ours to normalise; this one is not. Caught on the code round.
                         RemoteVendor = v.RemoteVendor?.Trim() ?? string.Empty,
-                        ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
+                        // THIS side's CLI: a path spelled for the other OS is the other side's, skipped (PATH lookup)
+                        // and named for the startup log — never probed, never refused (paths per side, E1.2).
+                        ExecutablePath = ExecutablePaths.Here(v.ExecutablePath, windows).Path,
+                        OtherSideExecutable = ExecutablePaths.Here(v.ExecutablePath, windows).OtherSide,
                         // Absent is TRUE on both, so a vendor list written by an older extension
                         // keeps reviewing both stages rather than silently reviewing neither.
                         Plan = v.Plan != false,

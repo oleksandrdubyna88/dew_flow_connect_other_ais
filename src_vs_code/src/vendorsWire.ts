@@ -2,7 +2,9 @@ import { FEATURES } from './binaryFeatures';
 import { apiRuntimeOnServer } from './apiRuntime';
 import { apiSettingsOnTheWire } from './apiSettings';
 import { featureOnServer, reviewsFeatures } from './featureGate';
+import { hostFamily } from './hostSide';
 import { ModelPrice } from './modelPrices';
+import { executableHere, type PathFamily } from './pathFamily';
 import { saidText } from './saidText';
 import { Vendor } from './vendors';
 
@@ -87,32 +89,49 @@ export type RowPriceLookup = (v: Vendor) => ModelPrice | undefined;
  * cannot carry a runtime and a base URL, and inventing a second encoding for them would be a
  * format nobody could read in a config file.
  */
-export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = '', priceOf: RowPriceLookup = () => undefined, features: readonly string[] = []): string {
+export function vendorsEnv(
+  vendors: readonly Vendor[],
+  installedServerVersion = '',
+  priceOf: RowPriceLookup = () => undefined,
+  features: readonly string[] = [],
+): string {
   return JSON.stringify(
     vendors
-      .filter((v) => v.enabled)
-      // An `api` row is SUPPRESSED from the file for a server older than `API_RUNTIME_SINCE`, not
-      // merely disabled in the card: the old server reads the settings file, not the panel, and its
-      // `RuntimeOf` turns a runtime it does not know into codex WITH the base URL — a Grok review
-      // through the Codex CLI against xAI's endpoint, under the row's own name (§4.13). Every other
-      // row still crosses, so a person's codex and antigravity keep reviewing while the api row waits
-      // for the update. Unknown is not old — see `apiRuntimeOnServer`.
-      .filter((v) => v.runtime !== 'api' || apiRuntimeOnServer(installedServerVersion))
+      .filter((v) => v.enabled && crossesTo(v, installedServerVersion))
       .map((v) => rowOnTheWire(v, installedServerVersion, priceOf, features)),
   );
+}
+
+/**
+ * Whether a switched-on row crosses to this server at all. An `api` row is SUPPRESSED from the file for a server older
+ * than `API_RUNTIME_SINCE`, not merely disabled in the card: the old server reads the settings file, not the panel, and
+ * its `RuntimeOf` turns a runtime it does not know into codex WITH the base URL — a Grok review through the Codex CLI
+ * against xAI's endpoint, under the row's own name (§4.13). Every other row still crosses, so a person's codex and
+ * antigravity keep reviewing while the api row waits for the update. Unknown is not old — see `apiRuntimeOnServer`.
+ */
+function crossesTo(v: Vendor, installedServerVersion: string): boolean {
+  return v.runtime !== 'api' || apiRuntimeOnServer(installedServerVersion);
 }
 
 /**
  * ONE row as `COAI_VENDORS` writes it — the one field list, also what a consultant entry and a question row carry as
  * `row` (research/PLAN_one_model_catalog.md, C2) and what `--check-model` is handed. A field the wire gains is gained by all.
  */
-export function rowOnTheWire(v: Vendor, installedServerVersion: string, priceOf: RowPriceLookup, features: readonly string[]): Record<string, unknown> {
+export function rowOnTheWire(
+  v: Vendor,
+  installedServerVersion: string,
+  priceOf: RowPriceLookup,
+  features: readonly string[],
+  family: PathFamily = hostFamily(),
+): Record<string, unknown> {
   return {
     id: v.id,
     runtime: v.runtime,
     model: v.model,
     baseUrl: v.baseUrl,
-    executablePath: v.executablePath,
+    // THIS side's CLI (todo/PLAN_paths_per_side.md E1.2): a path spelled for the other OS crosses as empty, so the
+    // server looks the runtime's CLI up on PATH instead of probing a file that is the other side's.
+    executablePath: executableHere(v.executablePath, family),
     ...saidOnTheWire(v),
     ...featureOnTheWire(v, installedServerVersion),
     ...apiOnTheWire(v, priceOf),
