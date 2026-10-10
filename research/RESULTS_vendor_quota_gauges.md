@@ -75,7 +75,7 @@ additional input from stdin...` (stdin was not a terminal).
 
 - **No rate-limit percentage, window or reset. No model, effort or tier.** The usage object is the only number a
   launch reports, and `cache_write_input_tokens` is a field coai's `UsageParser` does not read today.
-- A one-word prompt costs ~14.5–15.3 k input tokens of which 83–86 % are cached — the system prompt and tool
+- A one-word prompt costs ~14.5–15.3 k input tokens of which about 79–86 % are cached (86 % Windows, 79 % WSL) — the system prompt and tool
   declarations; the per-launch floor every reviewer pays before the plan text. Reasoning was 0 on a trivial prompt even
   with the inherited `high`.
 - `auth.json` was byte-identical before and after on both sides (Windows `FE36ACD0…`, WSL `a6e6f9c7…`).
@@ -234,7 +234,7 @@ signed in in their own CLIs; the Team server's slots on the same accounts) and v
 | ChatGPT | this machine's **Windows** store — `%USERPROFILE%\.codex`, codex-cli 0.160.0 | `auth.json` present, its own token set | reviews, consultations, question rows in the Windows `usage.jsonl`; chat in `chat-usage.jsonl` |
 | ChatGPT | this machine's **WSL** store — `~/.codex`, codex-cli 0.154.0 | its own `auth.json` (different hash and mtime from the Windows one) | the WSL store's ledgers |
 | ChatGPT | the **Team server's codex slot** — exactly one slot, read-only listing of `accounts/codex/` | one directory, named with a single letter, not an email | the server `usage.jsonl` (one line per terminal job) |
-| ChatGPT | **codex used directly** by the operator — the TUI, the app, an IDE, any other tool signed in as this account | the local `sessions` folder (hundreds of files) and the two 140 M-token days of §2.4 that no ledger here holds | **nothing** — and nothing in coai can |
+| ChatGPT | **codex used directly** by the operator — the TUI, the app, an IDE, any other tool signed in as this account | the local `sessions` folder (hundreds of files); the two ~140 M-token days of §2.4 are account-wide usage that no ledger here holds and that is **not attributed** — direct use is one of three untested hypotheses for them | **nothing** — and nothing in coai can |
 | Google | Windows agy 1.3.3 (`~/.gemini`), WSL agy 1.3.2 | both signed in (the Windows one answered the refusal; WSL's binary and version found) | the local ledgers, as the `gemini` / `antigravity` rows |
 | Google | the **Team server's antigravity slot** — one slot | the same listing | the server ledger |
 | Google | agy used directly | not verified; the same shape as codex's | nothing |
