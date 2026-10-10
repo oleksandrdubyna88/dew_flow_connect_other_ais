@@ -42,11 +42,12 @@ then names `creds config <key>`.
 1. **Probe, then read.** For each candidate, in the existing order: run `candidate --help` (bounded: 10 s, output
    capped at 64 Ki characters, stdin closed). A `Win32Exception` is "not installed here" and moves to the next candidate,
    exactly as today.
-2. **A CLI that started is an answer.** If its help does not contain `config-key-stdin` — or the probe timed out or
-   exited non-zero — the read ends with `VaultKeys.None("the creds CLI is too old to take the config key on stdin (its
-   --help does not name config-key-stdin) — update the creds CLI; the key is never passed as an argument")`. **No
-   fallback to the argument form**, and no second candidate: the person's machine has a stale CLI, and saying so is the
-   fix.
+2. **A CLI that started is an answer.** Its help without `config-key-stdin` ends the read with `VaultKeys.None("the
+   creds CLI is too old to take the config key on stdin (its --help does not name config-key-stdin) — update the creds
+   CLI; the key is never passed as an argument")`. A probe that timed out or exited non-zero ends it too, with its OWN
+   sentence (plan round 1: "update" is the wrong cure for a hung or broken binary) — "the creds CLI did not answer
+   --help within 10 s" / "the creds CLI's --help exited N". **No fallback to the argument form**, and no second
+   candidate: the person's machine has a stale or broken CLI, and saying which is the fix.
 3. Otherwise `ProcessRequest(candidate, ["config", "-"]) { StdIn = key + "\n", Timeout = 30 s }` — the existing
    timeout, exit and parse handling unchanged.
 4. Every sentence is a constant or names only the binary; none contains the key. The marker lives in one constant,
@@ -80,6 +81,13 @@ start (`StartingHost`) and once per `--providers`/`--probe-api`/consultant check
 creds `cli` (with the marker) is released first. Then this ships as an `mcp` release. A machine that updates `coai-mcp`
 before `creds` loses its vault keys with a sentence saying "update the creds CLI" — never a leak; a machine that
 updates `creds` before `coai-mcp` loses them until this ships, because the new CLI refuses the argument form.
+
+**Recovery, and why there is no compatibility window** (plan round 1). Keeping the two compatible would mean a CLI that
+still accepts the key as an argument — the leak itself — so the owner chose to refuse it at once. The window is kept
+short instead: this ships in the same working session as the creds release, and both releases are announced together.
+During it, keyless vendors keep working and `providers` names the cause; the recovery is to update the lagging half
+(`coai-mcp` through the extension's *Install the MCP server…*, or `creds` through CredsForDevs' *Install `creds`
+(terminal CLI)…*) and restart the MCP client — the vault is read once per server start.
 
 ## 7. Definition of Done
 
