@@ -90,6 +90,7 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
     public async Task ProvidersLeavesAMissingNamedDataDirectoryAbsent_AndStillAnswers()
     {
         var output = new StringWriter();
+        Program.Classify(["--providers"]).Should().Be(Program.Startup.Providers, "the seam below is what this mode runs");
 
         var code = await Program.ProvidersJsonCoreAsync(
             name => name == "COAI_DATA_DIR" ? Missing : null, new NothingAnswers(), output, _ => { });
