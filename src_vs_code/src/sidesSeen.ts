@@ -155,6 +155,40 @@ function isTime(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+// ---------------------------------------------------------------- the switch
+
+/**
+ * `coai.pathFieldsPerSide` (E2.3; design (a)'s override E): `auto` decides from the registry, `always` and `never` are a
+ * person's answer. `application` scope — the person's, not a side's — so every window reads one value.
+ */
+export type PathFieldsMode = 'auto' | 'always' | 'never';
+
+/** What Setup › This side draws, and what decides two path fields: this window, the sides seen, the switch, the clock. */
+export interface SidesView {
+  readonly here: SideHere;
+  readonly seen: readonly SeenSide[];
+  readonly mode: PathFieldsMode;
+  readonly now: number;
+}
+
+/** The stored switch; anything but `always` or `never` — nothing set, a hand edit — is `auto`. */
+export function pathFieldsModeOf(value: unknown): PathFieldsMode {
+  return value === 'always' || value === 'never' ? value : 'auto';
+}
+
+/**
+ * Whether a path setting shows a Windows field AND a WSL / Linux field (design (d)): the switch, or under `auto` both
+ * families seen within the window — this window counting as seen now, so its own stamp landing late changes nothing.
+ * Re-read on every render (E0: a stamp from the other side reaches an open window live).
+ */
+export function twoPathFields(view: SidesView): boolean {
+  if (view.mode !== 'auto') {
+    return view.mode === 'always';
+  }
+
+  return new Set([view.here.family, ...knownFamilies(view.seen, view.now)]).size === 2;
+}
+
 // ---------------------------------------------------------------- the store
 
 /** The part of a `vscode.Memento` the registry uses — `context.globalState` is one. */

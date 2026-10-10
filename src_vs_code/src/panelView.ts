@@ -85,6 +85,9 @@ import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
 import { otherSideNote, type PathFamily } from './pathFamily';
 import { VENDOR_EXECUTABLE } from './pathSettings';
+import { type SidesView } from './sidesSeen';
+import { sidesSeenHtml } from './sidesSeenView';
+import { thisSideLabel } from './consultantSides';
 import { SECURITY_COMMANDS } from './securityLaneState';
 import { cardColumns } from './cardColumns';
 
@@ -217,6 +220,12 @@ export interface PanelState {
    * per side would let one side hold values another side cannot see.</p>
    */
   readonly perSide: boolean;
+  /**
+   * The sides this profile has been used on, this window's own and the switch (todo/PLAN_paths_per_side.md E2.4) — read
+   * from `globalState` on every render, so a side another window stamps appears at the next repaint. Absent (a test, the
+   * sidebar) draws Setup › This side without the list.
+   */
+  readonly sides?: SidesView | undefined;
   readonly questions: readonly Escalation[];
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
@@ -1494,7 +1503,7 @@ export function teamServersSection(state: PanelState): string {
  * research/PLAN_one_model_catalog.md E4.1 and E5 prerequisite (b).</p>
  */
 export function sideBody(state: PanelState): string {
-  const here = state.side.length === 0 ? 'this machine' : state.side;
+  const here = sideName(state);
 
   return `<div class="field">
   <div class="hint">One machine can hold several working environments — a local window, and each WSL
@@ -1504,7 +1513,16 @@ export function sideBody(state: PanelState): string {
   <div class="hint">This side is <b>${escapeHtml(here)}</b>. ${state.perSide
     ? 'It keeps its own vendors, models, proxies, CLI paths and vault key; your text size and help language stay shared.'
     : 'It shares its settings with every other side.'}</div>
-</div>`;
+</div>${state.sides === undefined ? '' : `\n${sidesSeenHtml(state.sides)}`}`;
+}
+
+/**
+ * This window's side by name — never "this machine" (todo/PLAN_paths_per_side.md E2.4): the name the side registry
+ * records it under (`thisSideLabel`), or, on a page drawn without the registry, the remote's label or this host's
+ * operating system.
+ */
+function sideName(state: PanelState): string {
+  return state.sides?.here.label ?? (state.side.length > 0 ? state.side : thisSideLabel(undefined, '', process.platform));
 }
 
 /**
@@ -3298,6 +3316,9 @@ export const PANEL_COMMANDS = [
   'moveDataDirectory',
   // And deleting what a VERIFIED move left behind, offered on the Settings page's MCP server tab after a reload (E4.5).
   'deleteOldDataFolder',
+  // Setup › This side: one side's record dropped from the side registry (todo/PLAN_paths_per_side.md E2.4). Its id is the
+  // side's key; the host refuses this window's own.
+  'forgetSide',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;
   // Review opens what it collected; and the server address is asked for in a dialog rather than
   // typed into the section, because a free-text control here would be rebuilt under the caret on

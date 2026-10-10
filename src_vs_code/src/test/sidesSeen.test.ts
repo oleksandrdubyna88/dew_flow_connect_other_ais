@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  KNOWN_FOR_MS, SIDE_SEEN_PREFIX, STAMP_EVERY_MS, knownFamilies, prunedKeys, seenSides, sideSeenKey, stampSide, type SideRecord,
+  KNOWN_FOR_MS, SIDE_SEEN_PREFIX, STAMP_EVERY_MS, knownFamilies, pathFieldsModeOf, prunedKeys, seenSides, sideSeenKey, stampSide, twoPathFields,
+  type SideRecord,
 } from '../sidesSeen';
 
 /**
@@ -94,4 +95,21 @@ test('the sides seen are listed newest first, each with the side it belongs to',
     ['a', 'Windows', 'windows', NOW - 10 * DAY],
     ['c', 'SSH', 'posix', NOW - 40 * DAY],
   ]);
+});
+
+test('the switch: Automatic gives two fields once both families were seen within 90 days, counting this window itself', () => {
+  const here = { key: 'local|s', family: 'windows', label: 'Windows' } as const;
+  const wsl = { side: 'wsl|s', ...record('posix', 'WSL: Ubuntu', 5) };
+  const old = { side: 'wsl|o', ...record('posix', 'WSL: Old', 91) };
+
+  assert.equal(twoPathFields({ here, seen: [wsl], mode: 'auto', now: NOW }), true, 'this window is Windows and a WSL side was seen');
+  assert.equal(twoPathFields({ here, seen: [], mode: 'auto', now: NOW }), false);
+  assert.equal(twoPathFields({ here, seen: [old], mode: 'auto', now: NOW }), false, 'a WSL side gone for 91 days still makes two fields');
+  assert.equal(twoPathFields({ here, seen: [], mode: 'always', now: NOW }), true);
+  assert.equal(twoPathFields({ here, seen: [wsl], mode: 'never', now: NOW }), false);
+});
+
+test('the switch reads auto from anything but always or never', () => {
+  assert.deepEqual(['always', 'never', 'auto', undefined, 'sometimes', 3, null].map(pathFieldsModeOf),
+    ['always', 'never', 'auto', 'auto', 'auto', 'auto', 'auto']);
 });
