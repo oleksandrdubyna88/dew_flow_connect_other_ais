@@ -399,7 +399,12 @@ export class ChatStoreKeeper {
       const from = join(this.dir, recordName(id));
       const to = join(this.dir, QUARANTINE_DIR, `${id}-orphan-${now}.json`);
       try {
-        await makeDataDirectory(join(this.dir, QUARANTINE_DIR));
+        const made = await makeDataDirectory(join(this.dir, QUARANTINE_DIR));
+        if (!made.made) {
+          console.error(`ConnectOtherAIs: an orphaned conversation transcript could not be set aside: ${made.sentence}`);
+
+          return { kind: 'failed', reason: 'an orphaned transcript could not be set aside' };
+        }
         await rename(from, to);
         console.info(`ConnectOtherAIs: a conversation transcript with no index entry was set aside, unchanged, at ${to}`);
 

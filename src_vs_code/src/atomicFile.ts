@@ -1,7 +1,7 @@
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { makeDataDirectory, makeDataDirectorySync } from './dataDirMaker';
+import { makeDataDirectory, makeDataDirectorySync, refusalError } from './dataDirMaker';
 import { refuseUnderMissingRoot, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
@@ -128,7 +128,11 @@ export async function writeFileAtomically(path: string, text: string | Uint8Arra
   // Never the missing NAMED data root (E5.0 of paths per side): the refusal is the finding's own sentence, and it is
   // thrown exactly as a disk that would not take the file is — the callers already turn that into a refusal.
   await refuseUnderMissingRootOnceSettled(dirname(path));
-  await makeDataDirectory(dirname(path));
+  const made = await makeDataDirectory(dirname(path));
+  if (!made.made) {
+    // The missing named root is an ANSWER of the maker; this write's own contract is to throw what it could not do.
+    throw refusalError(made);
+  }
   try {
     // BYTES AS WELL AS TEXT since 2026-09-17, and the change is the TYPE alone. A pasted picture is
     // a `Buffer` and wanted exactly this bargain — write beside the destination, rename over it —
@@ -157,7 +161,10 @@ export async function writeFileAtomically(path: string, text: string | Uint8Arra
 export function writeFileAtomicallySync(path: string, text: string): void {
   const beside = besideName(path);
   refuseUnderMissingRoot(dirname(path));
-  makeDataDirectorySync(dirname(path));
+  const made = makeDataDirectorySync(dirname(path));
+  if (!made.made) {
+    throw refusalError(made);
+  }
   try {
     writeFileSync(beside, text, 'utf8');
     for (let attempt = 1; ; attempt += 1) {

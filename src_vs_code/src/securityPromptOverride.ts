@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { makeDataDirectory } from './dataDirMaker';
+import { makeDataDirectory, refusalError } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
@@ -13,7 +13,10 @@ import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
  */
 export async function ensureOverride(path: string): Promise<void> {
   await refuseUnderMissingRootOnceSettled(dirname(path));
-  await makeDataDirectory(dirname(path));
+  const made = await makeDataDirectory(dirname(path));
+  if (!made.made) {
+    throw refusalError(made);
+  }
   try {
     await writeFile(path, '', { flag: 'wx' });
   } catch (error: unknown) {

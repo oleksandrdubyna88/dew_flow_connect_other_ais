@@ -32,32 +32,49 @@ type Plan =
   | { readonly kind: 'free' }
   | { readonly kind: 'named'; readonly named: NamedRoot; readonly levels: readonly string[] };
 
+/**
+ * What the maker answers: the folder is there now, or the NAMED root it lies under is missing — an expected outcome, so a
+ * value every caller handles (the E5 code round: expected failures are values, not exceptions). Anything else the disk
+ * refuses is unexpected and is thrown, unchanged.
+ */
+export type Made =
+  | { readonly made: true }
+  | { readonly made: false; readonly refused: 'missing-named-root'; readonly root: string; readonly sentence: string };
+
+/** The refused answer. */
+export type Refused = Extract<Made, { readonly made: false }>;
+
+const MADE: Made = { made: true };
+
 /** Makes `dir` — recursively when no named root holds it; level by level below an EXISTING named root otherwise. */
-export async function makeDataDirectory(dir: string): Promise<void> {
+export async function makeDataDirectory(dir: string): Promise<Made> {
   const plan = planFor(dir);
   if (plan.kind === 'free') {
     await mkdir(dir, { recursive: true });
 
-    return;
+    return MADE;
   }
-  await rootIsThere(plan.named);
-  for (const level of plan.levels) {
-    await mkdir(level).catch((reason: unknown) => { keptOrRefused(reason, plan.named); });
-  }
+  const root = await stat(plan.named.root).then(() => MADE, (reason: unknown) => outcomeOf(reason, plan.named));
+
+  return root.made ? madeLevels(plan.levels, plan.named) : root;
 }
 
 /** {@link makeDataDirectory} for the one caller that cannot wait — the sync atomic write, which races a force-kill. */
-export function makeDataDirectorySync(dir: string): void {
+export function makeDataDirectorySync(dir: string): Made {
   const plan = planFor(dir);
   if (plan.kind === 'free') {
     mkdirSync(dir, { recursive: true });
 
-    return;
+    return MADE;
   }
-  rootIsThereSync(plan.named);
-  for (const level of plan.levels) {
-    makeOneLevelSync(level, plan.named);
-  }
+  const root = attemptSync(() => { statSync(plan.named.root); }, plan.named);
+
+  return root.made ? madeLevelsSync(plan.levels, plan.named) : root;
+}
+
+/** The refusal as the Error a caller whose own contract is to throw raises — the finding's sentence, unchanged. */
+export function refusalError(refused: Refused): Error {
+  return new Error(refused.sentence);
 }
 
 /** The plan for `dir`: free when nothing is named or `dir` is outside the named root; the levels below it otherwise. */
@@ -78,39 +95,61 @@ function levelsBelow(root: string, dir: string): readonly string[] {
   return steps.map((_, at) => join(top, ...steps.slice(0, at + 1)));
 }
 
-/** A named root that is not there refuses, in the finding's words — it is never made. */
-async function rootIsThere(named: NamedRoot): Promise<void> {
-  await stat(named.root).catch((reason: unknown) => { throw refusalOr(reason, named); });
+/** Each level below the root, top-down; the first that finds the root gone answers the refusal. */
+async function madeLevels(levels: readonly string[], named: NamedRoot): Promise<Made> {
+  for (const level of levels) {
+    const one = await mkdir(level).then(() => MADE, (reason: unknown) => outcomeOf(reason, named));
+    if (!one.made) {
+      return one;
+    }
+  }
+
+  return MADE;
 }
 
-function rootIsThereSync(named: NamedRoot): void {
+function madeLevelsSync(levels: readonly string[], named: NamedRoot): Made {
+  for (const level of levels) {
+    const one = attemptSync(() => { mkdirSync(level); }, named);
+    if (!one.made) {
+      return one;
+    }
+  }
+
+  return MADE;
+}
+
+function attemptSync(work: () => void, named: NamedRoot): Made {
   try {
-    statSync(named.root);
+    work();
+
+    return MADE;
   } catch (reason) {
-    throw refusalOr(reason, named);
+    return outcomeOf(reason, named);
   }
 }
 
-function makeOneLevelSync(level: string, named: NamedRoot): void {
-  try {
-    mkdirSync(level);
-  } catch (reason) {
-    keptOrRefused(reason, named);
+/**
+ * A level already there (`EEXIST`) is made; `ENOENT` is the named root gone — the refusal, a value, never made; anything
+ * else the disk says is unexpected and is thrown unchanged.
+ */
+function outcomeOf(reason: unknown, named: NamedRoot): Made {
+  const code = codeOf(reason);
+  if (code === 'EEXIST') {
+    return MADE;
   }
+  if (code !== 'ENOENT') {
+    throw reason;
+  }
+
+  return refusedAt(named);
 }
 
-/** A level already there is kept; one whose parent went away is the root's refusal; anything else is the disk's. */
-function keptOrRefused(reason: unknown, named: NamedRoot): void {
-  if (codeOf(reason) !== 'EEXIST') {
-    throw refusalOr(reason, named);
-  }
-}
-
-/** `ENOENT` is the named root gone: the finding's own sentence. Any other failure is the disk's, unchanged. */
-function refusalOr(reason: unknown, named: NamedRoot): unknown {
+/** The refusal for `named`, in the finding's own sentence. */
+function refusedAt(named: NamedRoot): Refused {
   const missing = dataDirFinding(named, 'absent');
+  const sentence = missing === undefined ? `The data folder ${named.root} is not there.` : missingRootRefusal(missing).message;
 
-  return codeOf(reason) === 'ENOENT' && missing !== undefined ? missingRootRefusal(missing) : reason;
+  return { made: false, refused: 'missing-named-root', root: named.root, sentence };
 }
 
 function codeOf(reason: unknown): string {

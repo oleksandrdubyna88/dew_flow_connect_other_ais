@@ -1,6 +1,6 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { makeDataDirectory } from './dataDirMaker';
+import { makeDataDirectory, refusalError } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { finishedInTime } from './withinTheClock';
 
@@ -126,8 +126,7 @@ export function appendLine(
       // directory somebody NAMED is what is missing — then nothing here makes it (E5.0 of paths per
       // side): the refusal lands in the catch below, as a disk that would not take the line does.
       await refuseUnderMissingRootOnceSettled(dirname(path));
-      await makeDataDirectory(dirname(path));
-      await appendFile(path, line, 'utf8');
+      await appendUnder(path, line, what, options);
     } catch (reason: unknown) {
       // Said out loud rather than swallowed, per `coding-style.md`. What is lost is one line of
       // accounting; what would be lost by throwing is the thing the person is actually doing.
@@ -137,6 +136,22 @@ export function appendLine(
   });
 
   return queues[chain];
+}
+
+/**
+ * The folder made through the one maker, then the line appended. A missing named root is the maker's ANSWER: the line is
+ * lost, said and counted as any refused line is, and no folder is made for it. A disk that refuses the append throws to
+ * the caller's catch, as before.
+ */
+async function appendUnder(path: string, line: string, what: string, options: AppendOptions): Promise<void> {
+  const made = await makeDataDirectory(dirname(path));
+  if (!made.made) {
+    console.error(`ConnectOtherAIs: ${what} could not be written to its ledger: ${made.sentence}`);
+    options.onFailure?.(refusalError(made));
+
+    return;
+  }
+  await appendFile(path, line, 'utf8');
 }
 
 /**

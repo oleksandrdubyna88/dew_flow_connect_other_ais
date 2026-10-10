@@ -64,7 +64,7 @@ import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from
 import { ExportableRow } from './roundsCsv';
 import { asText } from './asText';
 import { renameWithRetry, writeFileAtomically } from './atomicFile';
-import { makeDataDirectory } from './dataDirMaker';
+import { makeDataDirectory, refusalError } from './dataDirMaker';
 import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRun, serverRunAt } from './roundsDbRead';
@@ -1112,7 +1112,11 @@ async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
  */
 async function createDataDirectory(): Promise<void> {
   await refuseUnderMissingRootOnceSettled(dataDir().fsPath);
-  await makeDataDirectory(dataDir().fsPath);
+  const made = await makeDataDirectory(dataDir().fsPath);
+  if (!made.made) {
+    // The settings write's contract is to throw what it could not do; the mirror reads the refusal from there.
+    throw refusalError(made);
+  }
 }
 
 /** The token this window currently holds, or empty. Read by the write, just before it renames. */

@@ -292,7 +292,12 @@ export async function claimConversation(dir: string, id: string, doing: string, 
   try {
     // Never the missing NAMED data root (E5.0 of paths per side) — the store sits under it.
     await refuseUnderMissingRootOnceSettled(dir);
-    await makeDataDirectory(dir);
+    const made = await makeDataDirectory(dir);
+    if (!made.made) {
+      console.error(`ConnectOtherAIs: a conversation lock could not be created: ${made.sentence}`);
+
+      return { kind: 'failed', reason: 'the conversation could not be locked' };
+    }
     for (let attempt = 1; ; attempt += 1) {
       if (await tryCreate(path, note) || (await breakIfStale(path, clock()) && await tryCreate(path, note))) {
         return { kind: 'claimed', release: () => releaseOwn(path, note.token) };
