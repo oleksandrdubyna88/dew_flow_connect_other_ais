@@ -1,6 +1,7 @@
 # PLAN — every round is counted, and what it cost the subscription is visible
 
-> Status: **in progress — E1 (stories 1.1 and 1.2, the measurement) landed 2026-10-10; E2–E6 not built.** Scope: the Team server's job ledger, `/api/usage` and
+> Status: **in progress — E1 landed 2026-10-10 in part (story 1.2 whole; story 1.1 without three measurements it
+> names — agy in WSL, the Team server slot, the read on an expired token); E2–E6 not built.** Scope: the Team server's job ledger, `/api/usage` and
 > job claim (`src_server`), the reviewer launch path both halves share (`src_mcp/runners/Reviewers`), `coai-mcp`'s
 > round store (`--log` family), the extension's Spending tab, Team-server block and model cards (`src_vs_code`), and
 > the deploy canary (`deploy/`).
@@ -126,7 +127,10 @@ shipped twin.
     a job ended by the host stopping (`JobRunner.cs:113-120`). Known to fold two launches into one line: a repair
     (`ReviewerExecutor.cs:565`) and a follow-up. Story 3.3 closes what this census lists.
   **Decides E6's scope.** No codex source → E6 is its record story alone, folded into E5.
-  *Done 2026-10-10 — [RESULTS_vendor_quota_gauges.md](../research/RESULTS_vendor_quota_gauges.md): codex HAS a source
+  *Done in part 2026-10-10 — three measurements of this scope were NOT made and stay open: agy was not launched in
+  WSL; the Team server slot was not read (a slot read needs the slot's lease on the live host — it moves to 6.1); and
+  the rate-limit read with an EXPIRED access token was deliberately not tried (the refresh risk 6.1 must settle).
+  What was measured — [RESULTS_vendor_quota_gauges.md](../research/RESULTS_vendor_quota_gauges.md): codex HAS a source
   (`codex app-server` · `account/rateLimits/read`, one weekly window, no 5-hour one on this plan; `exec --json` carries
   none), the read did not touch `auth.json` while the access token was valid, Gemini has only its refusal, and a fourth
   consumer — codex used directly outside coai — exists; E6 keeps 6.1 and 6.2 with the constraints its §6 lists.*

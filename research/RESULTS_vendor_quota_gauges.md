@@ -155,10 +155,10 @@ The last twelve buckets, in millions of tokens as the vendor counts them (every 
 - Against the previous record: the week of 2026-10-05's local codex tokens (reviews + consultations, Windows + WSL)
   were ≈ 128 M; the vendor's 10-05 → 10-09 buckets sum to 155 M — the same order of magnitude, with the server slot's
   share and the vendor's own weighting of cached input unknown.
-- **2026-10-01 and 10-02 carried 283 M tokens between them** — ten times the local ledgers' codex tokens for that week
+- **2026-10-01 and 10-02 carried 283 M tokens between them** — about six times the local ledgers' codex tokens for that week
   (≈ 47 M, previous record §3) — and the window ran out on 10-03 (0.75 M). The ledgers coai writes do not account for
   it. What might (not settled here, each a hypothesis): the Team server's slot (it runs the cheaper models and was
-  flat per day in the previous record, so unlikely to be ten times the local figure), the load campaign of early
+  flat per day in the previous record, so unlikely to be six times the local figure), the load campaign of early
   October, and **the operator's direct use of codex outside coai** — the local `sessions` folder holds hundreds of
   session files, none of which any coai ledger sees. That fourth consumer is the one 6.2's scope rule must name.
 - `peakDailyTokens` = the 10-01 bucket; `currentStreakDays 40` — the vendor counts days of use.
