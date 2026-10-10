@@ -126,11 +126,13 @@ async function flushTheGap(at: Date): Promise<void> {
  */
 async function write(record: NotificationRecord): Promise<boolean> {
   const at = new Date();
-  let landed = true;
-  await recordNotification(coaiDataDir(), record, () => {
-    landed = false;
+  // Three outcomes since E5.0 of paths per side: landed, HELD (the notice about a missing path, kept in memory while the
+  // named data root it reports is missing — shown, never written) or lost. A held record is not on disk either, so a
+  // caller about to refer to it is told exactly what a lost one tells it: nothing to refer to.
+  const outcome = await recordNotification(coaiDataDir(), record, () => {
     noteLoss(at);
   });
+  const landed = outcome === 'landed';
   if (landed) {
     // The disk is answering again, so the hole that opened while it was not gets written down now,
     // after the record that proved the disk is back — which puts it in the ledger in the order it

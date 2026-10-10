@@ -1,0 +1,167 @@
+import { resolve, sep } from 'node:path';
+import type { NotificationRecord } from './notifications';
+import { type PathFinding, isAboutAMissingPath, missingTitle } from './pathFindings';
+import { DATA_DIRECTORY } from './pathSettings';
+import { finishedInTime } from './withinTheClock';
+
+/**
+ * What this window knows about its paths right now — the findings the host last published — and the ONE storage-write
+ * policy built on them (todo/PLAN_paths_per_side.md E5.0, decided after the gate's cadence consultant verified the
+ * trap on E1: `notify` → `recordNotification` → `appendLine` → `mkdir(dirname(path), { recursive: true })`, so the notice
+ * about a missing NAMED data directory would itself create it, and hide the very condition it reports).
+ *
+ * <h2>The policy</h2>
+ *
+ * <p>While the named data root is missing, <b>nothing this window writes creates it</b>. Every writer that would make the
+ * directory asks {@link refuseUnderMissingRoot} first and is refused with the finding's own sentence — the ledgers
+ * (`jsonlLedger.ts`), the atomic file write (`atomicFile.ts`), the settings file and its lock (`extension.ts`), the probe
+ * cache, the token file, the prompt overrides, the backups (`everyWriterOfTheDataDirectory.test.ts` derives the list and
+ * holds each to a guard or a stated reason). A refused notification is a LOST one, counted into the ledger's own write
+ * gap and written down by the first append that lands once the folder exists — except the notice about a missing path
+ * itself, which is <b>held in memory</b> ({@link holdNotice}): the toast is shown, the notifications page shows the held
+ * record for this window run, and no ledger is written. Why not the default location's ledger: that is not where this
+ * window's notifications page reads, a row there would be invisible AND split the history across two folders; the notice
+ * is re-raised at every window start while the condition holds (D3), so persistence adds nothing a person needs; and
+ * writing nothing is the only choice that cannot touch a bare `/mnt/z` mount point.</p>
+ *
+ * <h2>Lifecycle and cap</h2>
+ *
+ * <p>At most ONE held notice per setting key — a new missing path for the same key replaces it — and a held notice is
+ * cleared the moment its path changes or the folder is found again ({@link publishFindings} keeps only what is still
+ * missing). The list is therefore bounded by the number of path settings in the registry, never by how often a person
+ * retypes a path (E1's plan round).</p>
+ *
+ * <p>Module state, on `dataDir.ts`'s `useStorageSettings` precedent: there is one answer to "is this window's data root
+ * missing" and the ledger gate, the page and the host all read it. `vscode`-free, so the pure half is tested here; the
+ * host that publishes is `pathWatch.ts`.</p>
+ */
+
+/** One held notice: the setting key it is about and the record the ledger did not take. */
+export interface HeldNotice {
+  readonly key: string;
+  readonly record: NotificationRecord;
+}
+
+let published: readonly PathFinding[] = [];
+let held: readonly HeldNotice[] = [];
+let listeners: readonly (() => void)[] = [];
+
+/**
+ * The first answer about the data root, which the ledger gate waits for before it decides — resolved from the start,
+ * so a window with no host watch (a test) is never held, and bounded ({@link SETTLE_CEILING_MS}) so a probe that never
+ * answers cannot hold every toast of the window.
+ */
+let settling: Promise<unknown> = Promise.resolve();
+
+/** How long the ledger gate waits for the first data-root answer at most — the probe's own deadline, with room. */
+export const SETTLE_CEILING_MS = 10_000;
+
+/** The host has decided what it knows: the page reads it, the gate reads it, held notices still missing stay held. */
+export function publishFindings(findings: readonly PathFinding[]): void {
+  published = findings;
+  held = stillHeld(held, findings);
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+export function currentFindings(): readonly PathFinding[] {
+  return published;
+}
+
+/** Told after every publish — the panel repaints from it. */
+export function onFindings(listener: () => void): void {
+  listeners = [...listeners, listener];
+}
+
+/** The host says which probe answers the data-root question first; the gate waits for it (bounded) before deciding. */
+export function expectDataRoot(answer: Promise<unknown>): void {
+  settling = answer.then(() => undefined, () => undefined);
+}
+
+/** Resolved once the data root has been asked about (or the ceiling passed) — what `recordNotification` awaits. */
+export async function dataRootSettled(): Promise<void> {
+  await finishedInTime(settling, SETTLE_CEILING_MS);
+}
+
+/** The finding that THIS window's named data root is missing, or nothing — the default location is never one (D3). */
+export function missingDataRoot(): PathFinding | undefined {
+  return published.find((one) => one.key === DATA_DIRECTORY.id && one.state === 'missing');
+}
+
+/** The missing data-root finding when `path` is at or under that root — the write that would create it — or nothing. */
+export function refusedDataRoot(path: string): PathFinding | undefined {
+  const missing = missingDataRoot();
+
+  return missing !== undefined && under(path, missing.value) ? missing : undefined;
+}
+
+/**
+ * The guard every writer that makes the data directory calls before its `mkdir`: refused, with the finding's sentence,
+ * when the write would create a missing named root. A caller's ordinary failure handling takes it from there.
+ */
+export function refuseUnderMissingRoot(path: string): void {
+  const missing = refusedDataRoot(path);
+  if (missing !== undefined) {
+    throw missingRootRefusal(missing);
+  }
+}
+
+/** The refusal a writer meets, in the finding's own words — one sentence for the guard and for a lost notification. */
+export function missingRootRefusal(missing: PathFinding): Error {
+  return new Error(`${missingTitle(missing)} Nothing is written under it until it exists.`);
+}
+
+/** Whether `path` is `root` or inside it — spelled as the resolver spells both, case folded where the platform folds it. */
+function under(path: string, root: string): boolean {
+  const child = comparable(path);
+  const parent = comparable(root);
+
+  return child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+}
+
+function comparable(path: string): string {
+  const full = resolve(path);
+
+  return process.platform === 'win32' ? full.toLowerCase() : full;
+}
+
+/** A notice the ledger would not take, kept for this window run — one per setting key, the newest replacing the older. */
+export function holdNotice(record: NotificationRecord): void {
+  held = withHeld(held, record);
+}
+
+/** The held notices, newest last — what the notifications page shows for this window run beside the ledger's rows. */
+export function heldNotices(): readonly NotificationRecord[] {
+  return held.map((one) => one.record);
+}
+
+/** The setting key a missing-path notice is about — the half of its subject before the value. */
+export function keyOfSubject(subject: string | undefined): string {
+  return (subject ?? '').split('|')[0] ?? '';
+}
+
+/** `list` with `record` held — replacing a notice already held for the same setting key, so a key is held once. */
+export function withHeld(list: readonly HeldNotice[], record: NotificationRecord): readonly HeldNotice[] {
+  const key = keyOfSubject(record.subject);
+
+  return [...list.filter((one) => one.key !== key), { key, record }];
+}
+
+/** The held notices whose path is STILL missing in `findings` — a path that changed or came back releases its notice. */
+export function stillHeld(list: readonly HeldNotice[], findings: readonly PathFinding[]): readonly HeldNotice[] {
+  const missing = new Set(findings.filter((one) => one.state === 'missing').map((one) => `${one.key}|${one.value}`));
+
+  return list.filter((one) => missing.has(one.record.subject ?? ''));
+}
+
+/** Whether a record is one the gate holds rather than loses. Re-exported so the gate's callers need one import. */
+export { isAboutAMissingPath };
+
+/** For a test: nothing published, nothing held, nothing awaited. */
+export function forgetFindingsBoard(): void {
+  published = [];
+  held = [];
+  listeners = [];
+  settling = Promise.resolve();
+}

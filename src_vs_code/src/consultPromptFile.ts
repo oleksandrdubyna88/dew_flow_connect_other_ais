@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { CONSULT_PROMPT_PATH, type ConsultPromptWrite, consultPromptWrite } from './consultPrompt';
 import { notify } from './notify';
+import { refuseUnderMissingRoot } from './findingsBoard';
 
 /**
  * The consultant's prompt override, as a file on disk — read at paint, written on a keystroke pause.
@@ -82,6 +83,8 @@ export class ConsultPromptFile {
         return;
       }
       const directory = vscode.Uri.joinPath(this.dataDir, this.path[0]!);
+      // Never the missing NAMED data root (E5.0 of paths per side): refused like any write the disk would not take.
+      refuseUnderMissingRoot(directory.fsPath);
       await vscode.workspace.fs.createDirectory(directory);
       const temp = vscode.Uri.joinPath(directory, `${this.path[1]}.${process.pid}.tmp`);
       await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));

@@ -42,6 +42,7 @@ import { ImportReport, describe as describeImport, importLegacyTabs, importSucce
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
+import { refuseUnderMissingRoot } from './findingsBoard';
 import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
@@ -992,7 +993,7 @@ function readCoaiConfiguration(context: vscode.ExtensionContext) {
  * after it.</p>
  */
 async function writeSettingsFile(json: string): Promise<void> {
-  await vscode.workspace.fs.createDirectory(dataDir());
+  await createDataDirectory();
   // Written beside it and renamed over it, the way an answered escalation already is. `writeFile`
   // truncates before it fills, so a host killed between the two leaves every other window — and the
   // server — reading a truncated file. That is worse than the revert this epic is about, and it
@@ -1036,7 +1037,7 @@ async function writeSettingsFile(json: string): Promise<void> {
  * person happened to change something else.</p>
  */
 async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
-  await vscode.workspace.fs.createDirectory(dataDir());
+  await createDataDirectory();
   const token = await takeLock();
   if (token === '') {
     return false;
@@ -1056,6 +1057,20 @@ async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * The ONE road by which this file makes the data directory — for the settings file and for its lock.
+ *
+ * <p>It makes the default location, and a side folder inside a named root that exists; it REFUSES a named root that is
+ * missing (todo/PLAN_paths_per_side.md E5.7, decided with the operator as D3): creating `/mnt/z/coai` while the drive is
+ * not mounted wrote the server's settings into a bare mount point, and hid the one condition the page and the notice
+ * now report. The refusal is the finding's sentence; the mirror reads it as a write it must not retry
+ * (`no-data-root`), and the person is told once per start by the notice, never twice for one folder.</p>
+ */
+async function createDataDirectory(): Promise<void> {
+  refuseUnderMissingRoot(dataDir().fsPath);
+  await vscode.workspace.fs.createDirectory(dataDir());
 }
 
 /** The token this window currently holds, or empty. Read by the write, just before it renames. */

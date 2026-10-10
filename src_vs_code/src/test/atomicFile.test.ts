@@ -4,6 +4,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { besideName, writeFileAtomically, writeFileAtomicallySync } from '../atomicFile';
+import { forgetFindingsBoard, publishFindings } from '../findingsBoard';
+import { familyOf } from '../pathFamily';
 
 /**
  * The write that a crash cannot leave half of.
@@ -229,4 +231,21 @@ test('a write that fails leaves the file that was already there', async (t) => {
 
   assert.deepEqual([...fs.readFileSync(file)], [...before],
     'a failed replacement destroyed the file that was already attached');
+});
+
+// ---------- the storage-write policy (todo/PLAN_paths_per_side.md E5.0) ----------
+
+test('a write under a missing named data root is refused with the finding\'s sentence, and makes no folder', async () => {
+  // The shared atomic write is how the chat store, the probe cache, the roles and commands pages and a backup reach the
+  // disk: one road, one guard. Creating `/mnt/z/coai` while the drive is not mounted writes into a bare mount point.
+  const gone = path.join(tempDir(), 'gone');
+  forgetFindingsBoard();
+  publishFindings([{ key: 'coai.dataDirectory', place: 'setup/mcp', value: gone, family: familyOf(process.platform), state: 'missing', owner: '' }]);
+  try {
+    await assert.rejects(() => writeFileAtomically(path.join(gone, 'wsl', 'record.json'), 'x'), /was not found on this machine/u);
+    assert.throws(() => writeFileAtomicallySync(path.join(gone, 'ledger.json'), 'x'), /was not found on this machine/u);
+    assert.equal(fs.existsSync(gone), false, 'the write created the root it was refused for');
+  } finally {
+    forgetFindingsBoard();
+  }
 });

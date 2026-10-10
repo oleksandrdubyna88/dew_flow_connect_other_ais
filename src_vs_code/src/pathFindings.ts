@@ -29,6 +29,18 @@ import { PATH_SETTINGS, type PathKind, type PathSetting } from './pathSettings';
 /** What the disk said about a path of this side, when it said anything but "there". */
 export type FindingState = 'missing' | 'unknown';
 
+/**
+ * The notice's code — a string literal at its one call site (`pathWatch.ts`, so the notifications census sees it) and
+ * this constant for every reader: the ledger gate that HOLDS such a notice while the data folder itself is missing
+ * (`findingsBoard.ts`), and the tests. `findingsBoard.test.ts` pins that the census found a call site spelling it.
+ */
+export const SETTING_PATH_MISSING = 'setting-path-missing';
+
+/** Whether a record is the notice about a missing path — the one kind the ledger gate holds rather than loses. */
+export function isAboutAMissingPath(record: { readonly code: string }): boolean {
+  return record.code === SETTING_PATH_MISSING;
+}
+
 /** One missing or unanswerable path of this side. */
 export interface PathFinding {
   /** The registry id — `coai.qconsultRoots`, `coai.vendors[].executablePath`, … (`pathSettings.ts`). */

@@ -1,6 +1,7 @@
 import { join, resolve } from 'node:path';
 import { WatchedDir } from './escalationDirs';
 import { familyOf, otherSideNote, spelledForTheOtherOs, type PathFamily } from './pathFamily';
+import { type PathFinding, type Presence, findingOf } from './pathFindings';
 import { DATA_DIRECTORY } from './pathSettings';
 
 /**
@@ -308,6 +309,34 @@ export function chosenRoot(): string {
   const chosen = currentChoice();
 
   return chosen.directory.length === 0 ? '' : resolve(chosen.directory);
+}
+
+/** A data root somebody NAMED — the environment, this side's choice or the shared setting — and which layer named it. */
+export interface NamedRoot {
+  /** The root, absolute, as `chosenRoot` resolves it. */
+  readonly root: string;
+  readonly source: StorageSource;
+}
+
+/**
+ * The named root this window's storage was chosen with, or nothing when the default location is in use — the one
+ * directory E5.7's finding is about: the default (`%LOCALAPPDATA%\coai-mcp`, `~/.local/share/coai-mcp`) is created lazily
+ * by whichever half writes first and is never checked, so a first start is never red (decided with the operator, D3).
+ */
+export function namedRoot(): NamedRoot | undefined {
+  const chosen = currentChoice();
+
+  return chosen.directory.length === 0 ? undefined : { root: resolve(chosen.directory), source: chosen.source };
+}
+
+/**
+ * The finding about a NAMED data root that is not there (todo/PLAN_paths_per_side.md E5.7, D3): `missing` when the disk
+ * SAID the root is absent, `unknown` when it could not tell; nothing for the default location, and nothing while the
+ * probe has not answered. The side folder INSIDE an existing root (`<root>/<side>`) is not this finding's business — it
+ * is created lazily by the server and the move flow, so its absence keeps `whereData`'s quiet note.
+ */
+export function dataDirFinding(named: NamedRoot | undefined, presence: Presence, family: PathFamily = familyOf(process.platform)): PathFinding | undefined {
+  return named === undefined ? undefined : findingOf({ setting: DATA_DIRECTORY, value: named.root, path: named.root }, family, presence);
 }
 
 export function serverEnv(): Readonly<Record<string, string>> {
