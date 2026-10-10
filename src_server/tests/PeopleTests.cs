@@ -163,6 +163,40 @@ public sealed class PeopleTests
         Emails(people).Should().BeEquivalentTo([Dev], "the record with no email is not a person; the one with one still is");
     }
 
+    /// <summary>
+    /// The gate and the roster decide "does this server serve that domain" from ONE method
+    /// (<see cref="CallerFilter.Admits"/>): a domain change flips both at once — the raw token is
+    /// refused at the gate AND the retained session leaves the roster — and neither can drift from the
+    /// other. (Final code round on E1+E2, 2026-10-10.)
+    /// </summary>
+    [Fact]
+    public async Task ADomainChange_FlipsTheGateAndTheRosterTogether()
+    {
+        var data = Path.Combine(Path.GetTempPath(), "coai-server-tests", Guid.NewGuid().ToString("N"));
+        using (var before = new TeamServer(new Dictionary<string, string?> { ["Coai__DataDir"] = data }))
+        {
+            await SignInAsync(before, Dev, "A Developer");
+            using var devBefore = before.ClientFor(Dev);
+            (await devBefore.GetAsync("/api/whoami", Ct)).StatusCode.Should().Be(HttpStatusCode.OK, "served, before");
+        }
+
+        using var after = new TeamServer(new Dictionary<string, string?>
+        {
+            ["Coai__DataDir"] = data,
+            ["Coai__AllowedDomains"] = "another.example",
+            ["Coai__Admins"] = "boss@another.example",
+        });
+        await SignInAsync(after, "stayer@another.example", "A Stayer");
+        using var devAfter = after.ClientFor(Dev);
+        using var admin = after.ClientFor("boss@another.example");
+
+        (await devAfter.GetAsync("/api/whoami", Ct)).StatusCode.Should().Be(HttpStatusCode.Forbidden, "the gate refuses the domain");
+        var roster = await admin.GetAsync(Route, Ct);
+        roster.StatusCode.Should().Be(HttpStatusCode.OK);
+        Emails(JsonDocument.Parse(await roster.Content.ReadAsStringAsync(Ct)).RootElement)
+            .Should().BeEquivalentTo(["stayer@another.example"], "and the roster drops the same domain, from the same decision");
+    }
+
     /// <summary>A field this build does not know, written by a newer one, is not a reason to drop the person.</summary>
     [Fact]
     public async Task ASessionFileWithAnUnknownField_IsStillListed()

@@ -116,6 +116,26 @@ public sealed class UsageDailyTests
 
     private static IEnumerable<(string Vendor, int Runs)> Rows(DailyDto daily, string day) =>
         daily.Days.Single(d => d.Day == day).Vendors.Select(v => (v.Vendor, v.Runs));
+
+    /// <summary>
+    /// A record's positional default cannot be <c>[]</c> and survive deserialisation, which writes
+    /// the property directly and writes null for an absent one (doctrine §4a, §7). The lists on the
+    /// chart's DTOs normalise at the boundary like <c>UsageDto.Kinds</c> and <c>VendorTotal.Models</c>,
+    /// so nothing downstream has to ask. (Final code round on E1+E2, 2026-10-10.)
+    /// </summary>
+    [Fact]
+    public void AChartDtoWithoutItsList_HasAnEmptyList_NotNull()
+    {
+        var web = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+        using var scope = new FluentAssertions.Execution.AssertionScope();
+        new DayDto("2026-09-05", null!).Vendors.Should().NotBeNull().And.BeEmpty("built without the list");
+        new DailyDto(Now, Now.AddDays(1), null!).Days.Should().NotBeNull().And.BeEmpty("built without the list");
+        JsonSerializer.Deserialize<DayDto>("""{"day":"2026-09-05"}""", web)!.Vendors
+            .Should().NotBeNull().And.BeEmpty("deserialised without the property");
+        JsonSerializer.Deserialize<DailyDto>("""{"fromUtc":"2026-08-08T00:00:00Z","toUtc":"2026-09-07T00:00:00Z"}""", web)!.Days
+            .Should().NotBeNull().And.BeEmpty("deserialised without the property");
+    }
 }
 
 /// <summary>

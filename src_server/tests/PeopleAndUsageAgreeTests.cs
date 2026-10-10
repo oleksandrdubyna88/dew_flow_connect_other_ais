@@ -11,10 +11,12 @@ namespace CoaiServer.Tests;
 /// whether that caller presents an identity-provider token or a session minted from one.
 /// </summary>
 /// <remarks>
-/// Both routes sit behind the one <see cref="CallerFilter"/> and the one inline admin check, so this
-/// is a pin rather than a repair: the risk consultation on story 2.1 (2026-10-10) asked for the
-/// agreement to be observed, because a disagreement here is an admin who can see who spent what but
-/// not who is signed in, or the reverse — and nothing else exercises the two together.
+/// Both routes sit behind the one <see cref="CallerFilter"/> and the one admin decision,
+/// <see cref="AdminOnly.RefusalFor"/> — applied to the whole of <c>/api/people</c> by <see cref="AdminFilter"/>
+/// and to the company branch of <c>/api/usage</c> from inside its handler — so this is a pin rather than
+/// a repair: the risk consultation on story 2.1 (2026-10-10) asked for the agreement to be observed,
+/// because a disagreement here is an admin who can see who spent what but not who is signed in, or the
+/// reverse — and nothing else exercises the two together.
 /// </remarks>
 [Collection(ServerCollection.Name)]
 public sealed class PeopleAndUsageAgreeTests

@@ -30,18 +30,20 @@ public sealed class CallerFilter(
     /// <summary>Where the resolved caller is put for the handler to read.</summary>
     public const string Key = "coai.caller";
 
-    /// <summary>Whether this server serves <paramref name="email"/> at all — the allow-list, as the gate applies it.</summary>
+    /// <summary>Whether this server serves <paramref name="email"/> at all — the allow-list, the ONE place it is applied.</summary>
     /// <remarks>
-    /// Exposed for the admin roster: a session file outlives its domain's removal from
-    /// <c>Coai:AllowedDomains</c>, and a roster that listed it would show an admin somebody every
-    /// request refuses. The same predicate the gate uses, so the two cannot disagree.
+    /// The gate below calls it for every request, and the admin roster calls it for every session it
+    /// lists: a session file outlives its domain's removal from <c>Coai:AllowedDomains</c>, and a roster
+    /// that listed it would show an admin somebody every request refuses. One method, so the two cannot
+    /// disagree — until the final code round on E1+E2 (2026-10-10) <see cref="Auth.RequireCaller"/> kept
+    /// its own copy of this composition.
     /// </remarks>
     public bool Admits(string email) => allowAnyDomain || TokenIdentity.DomainAllowed(email, allowedDomains);
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var ctx = context.HttpContext;
-        if (Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is not { } who)
+        if (Auth.RequireCaller(ctx, Admits) is not { } who)
         {
             // RequireCaller has already set 401 or 403. Returning Results.Empty preserves it —
             // returning any other result here would overwrite the status the gate chose.

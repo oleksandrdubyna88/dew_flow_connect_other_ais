@@ -15,12 +15,20 @@ public sealed record DayVendorDto(string Vendor, int Runs);
 /// A row for EVERY vendor seen anywhere in the chart's range, in a fixed order, so a stacked bar needs
 /// no lookup and a vendor absent on a day is a zero rather than a hole.
 /// </param>
-public sealed record DayDto(string Day, IReadOnlyList<DayVendorDto> Vendors);
+public sealed record DayDto(string Day, IReadOnlyList<DayVendorDto> Vendors)
+{
+    /// <summary>Never null, whatever a deserialiser did with the property — see <see cref="UsageDto.Kinds"/>.</summary>
+    public IReadOnlyList<DayVendorDto> Vendors { get; init; } = Vendors ?? [];
+}
 
 /// <summary>The launches-per-day chart under the company answer — thirty days, dense.</summary>
 /// <param name="FromUtc">The first day's midnight.</param>
 /// <param name="ToUtc">Tomorrow's midnight, exclusive: the range is half-open like every other here.</param>
-public sealed record DailyDto(DateTimeOffset FromUtc, DateTimeOffset ToUtc, IReadOnlyList<DayDto> Days);
+public sealed record DailyDto(DateTimeOffset FromUtc, DateTimeOffset ToUtc, IReadOnlyList<DayDto> Days)
+{
+    /// <summary>Never null, whatever a deserialiser did with the property — see <see cref="UsageDto.Kinds"/>.</summary>
+    public IReadOnlyList<DayDto> Days { get; init; } = Days ?? [];
+}
 
 /// <summary>
 /// The chart's own range and its buckets — pure functions over parsed lines, like <see cref="UsageTotals"/>.

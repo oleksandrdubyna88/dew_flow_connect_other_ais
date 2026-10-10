@@ -775,7 +775,13 @@ model and a month of bars. Nothing here changes what an older client reads.
   routes for both people at once, and the two refusals are the one sentence with the route's name in it.
   The same round made the thirty-day chart count launches by (day, vendor) in ONE pass over the lines in
   range and build the dense rows as lookups — it used to re-scan each day's lines once per vendor — with
-  the rows byte-identical, guarded by a several-vendors-over-several-days test.
+  the rows byte-identical, guarded by a several-vendors-over-several-days test. Its final round closed
+  two more seams: the allow-list is applied by ONE method, `CallerFilter.Admits` — the gate's
+  `Auth.RequireCaller` now takes it as the predicate instead of composing its own copy, and the roster
+  already called it — pinned by a test in which one domain change refuses the raw token at the gate and
+  drops the retained session from the roster together; and the chart's `DayDto.Vendors` and
+  `DailyDto.Days` normalise to `[]` the way `UsageDto.Kinds` and `VendorTotal.Models` do, so a DTO
+  built or deserialised without the list carries an empty one, never null.
 - **The contract runner seeds one ledger line** (`http/run-contracts.mjs`), the developer's, stamped
   now: with an empty ledger `vendors` is `[]` and an assertion over each vendor's `models` passes over
   nothing. `http/people/people.http` mints its own session first for the same reason — the suite's
