@@ -1,5 +1,6 @@
 import { type Admission, admit } from './capabilityAdmission';
 import { pickRefusal } from './catalogPicks';
+import { USE_LABELS } from './modelCardFields';
 import { qualified } from './pathFamily';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
 import { MAX_ACTIVE_ROWS, type QuestionPromptSetting, type QuestionRowSetting } from './qconsultSettings';
@@ -50,10 +51,27 @@ function borrowedRuntime(vendor: string, vendors: readonly Vendor[]): string {
 /** What the capability table says of a row's pair, or why the row has no pair at all. */
 export function rowAdmission(row: QuestionRowSetting, prompts: readonly QuestionPromptView[], vendors: readonly Vendor[]): Admission {
   const prompt = prompts.find((p) => p.id === row.prompt);
+  if (prompt === undefined) {
+    return noPair(noPrompt(row));
+  }
+  const runtime = runtimeOfRow(row, vendors);
 
-  return prompt === undefined
-    ? { admitted: false, standing: '', flag: '', caveat: '', reason: noPrompt(row) }
-    : admit(runtimeOfRow(row, vendors), prompt.capability);
+  return runtime.length > 0 ? admit(runtime, prompt.capability) : noPair(noModel(row));
+}
+
+function noPair(reason: string): Admission {
+  return { admitted: false, standing: '', flag: '', caveat: '', reason };
+}
+
+/**
+ * A row with no runtime to borrow: its pick is gone from Models, or it picks nothing (operator, 2026-10-10 — the table's
+ * sentence named a runtime of nothing, "'' is not a runtime…"). The server refuses the same row in its own words
+ * (`CapabilityMatrix.Admit`); a real runtime this build cannot launch still gets the table's sentence.
+ */
+function noModel(row: QuestionRowSetting): string {
+  return row.vendor.length === 0
+    ? 'this row picks no model — pick one'
+    : `${row.vendor} is no longer ticked ${USE_LABELS.qconsult} (or was removed) — pick another model`;
 }
 
 function noPrompt(row: QuestionRowSetting): string {

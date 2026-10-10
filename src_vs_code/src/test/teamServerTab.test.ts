@@ -195,11 +195,12 @@ test('the Settings sheet is byte-identical after its tokens, chips and badges mo
   // Pinned when the three pieces were EXTRACTED from catalogCss.ts (todo/PLAN_team_usage_by_person.md, 1.3): the
   // hash of CATALOG_CSS as main's UNEXTRACTED catalogCss.ts produces it. Re-pinned at the merge of main's #724 (the
   // Settings tabs' two columns, bd11f64a) from main's own file — built against this tree's settingsPage, never from
-  // the merged sheet — so it still proves the extraction changed nothing. A deliberate change re-pins it, on purpose.
-  // Re-pinned for the Models card's `.rounds-line` rule (story 2.4 of todo/PLAN_every_round_is_counted.md): the sheet
-  // with that comment and rule taken out still hashes to the previous pin, 9e1a9ad4…19b14.
+  // the merged sheet — so it still proves the extraction changed nothing. A deliberate change re-pins it, on purpose:
+  // re-pinned 2026-10-10 for the Models card's lock line (`.catalog .card .lock`, one rule added in catalogCss.ts),
+  // and again for the card's `.rounds-line` rule (story 2.4 of todo/PLAN_every_round_is_counted.md): the sheet with
+  // that comment and rule taken out still hashes to the lock line's pin, a7f97106…2aa5.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    'ff9d45c6db5447f667c4e6de7dc84c04d2efdbf07737fc9e0bbffd157a7783e4');
+    'e6185fd3e5f13704ad4d715840141752460c306df27a9dd7a17998e4bd29f4ab');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }

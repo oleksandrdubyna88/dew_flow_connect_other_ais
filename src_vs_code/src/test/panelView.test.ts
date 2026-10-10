@@ -1200,9 +1200,9 @@ test('another installation’s directories are named, and a refused one says why
   const html = everyPageHtml(state({
     storage: where({
       alsoWatched: [
-        { asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' },
-        { asked: '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp', path: '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp', refusal: '' },
-        { asked: '/home/user/.local/share/coai-mcp', path: '', refusal: 'this looks like a path inside WSL.' },
+        { asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '', otherSide: '' },
+        { asked: '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp', path: '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp', refusal: '', otherSide: '' },
+        { asked: '/home/user/.local/share/coai-mcp', path: '', refusal: 'this looks like a path inside WSL.', otherSide: '' },
       ],
     }),
   }), 'n');
@@ -1216,7 +1216,7 @@ test('another installation’s directories are named, and a refused one says why
 test('with only its own directory there is nothing extra to say', () => {
   // The default installation, which is most of them: a heading promising other installations when
   // there are none is furniture.
-  const html = everyPageHtml(state({ storage: where({ alsoWatched: [{ asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' }] }) }), 'n');
+  const html = everyPageHtml(state({ storage: where({ alsoWatched: [{ asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '', otherSide: '' }] }) }), 'n');
 
   assert.ok(!html.includes('Questions from another installation'), 'an empty list was introduced anyway');
 });

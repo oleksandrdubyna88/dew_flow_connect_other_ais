@@ -1,4 +1,5 @@
-import { isPosixAbsolute } from './pathFamily';
+import { otherSideNote, spelledForTheOtherOs } from './pathFamily';
+import { WATCHED_DIRECTORIES } from './pathSettings';
 
 /**
  * WHICH directories are watched for questions, and what is wrong with the ones that are not.
@@ -26,24 +27,34 @@ export interface WatchedDir {
   readonly path: string;
   /** Empty when the directory is usable. A sentence otherwise. */
   readonly refusal: string;
+  /**
+   * Empty for a directory of this side. For one spelled for the OTHER operating system, the sentence saying it is that
+   * side's — skipped here, never refused (todo/PLAN_paths_per_side.md E1.3): VS Code shares this setting between a WSL
+   * window and a Windows window, so each side's right value is the other side's wrong one.
+   */
+  readonly otherSide: string;
 }
 
 /**
- * A path inside WSL, named from a Windows window, cannot be reached by writing it the way WSL does.
+ * How a Windows window names a WSL folder — said beside a WSL path in the list, because `/home/x` resolved by a Windows
+ * host is `C:\home\x`, which is not that folder.
  *
- * <p>This is the FIRST thing the reporter of the bug would have typed: their store is
- * `/home/<user>/.local/share/coai-mcp`, and that is the string the panel shows them on the WSL side.
- * Resolved by a Windows extension host it becomes `C:\home\…`, which does not exist — and a
- * directory that does not exist contributes nothing and says nothing, which reproduces the exact
- * symptom this feature exists to end, with no feedback at all.</p>
- *
- * <p><b>No distribution is guessed.</b> Turning `/home/x` into `\\wsl.localhost\<distro>\home\x`
- * needs a distro name, and inventing one means watching a path nobody chose and reporting it as
- * healthy. The refusal names the shape that works and leaves the choice where it belongs.</p>
+ * <p>A WSL path in this list is no longer REFUSED on Windows (todo/PLAN_paths_per_side.md E1.3): the list is shared with
+ * the WSL window, where it is right, and that window answers its own questions. This sentence stays for a person who
+ * wants THIS window to answer them too. <b>No distribution is guessed</b>: turning `/home/x` into
+ * `\\wsl.localhost\<distro>\home\x` needs a distro name, and inventing one means watching a path nobody chose.</p>
  */
-export const POSIX_ON_WINDOWS =
-  'this looks like a path inside WSL. From a Windows window name it as '
+export const WSL_FROM_WINDOWS =
+  'To answer its questions from this Windows window too, name it as '
   + '\\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\coai-mcp';
+
+/** The sentence beside a watched folder spelled for the other OS: the other side's, skipped here. */
+export function otherSidesFolder(platform: NodeJS.Platform): string {
+  const windows = platform === 'win32';
+  const note = otherSideNote(windows, WATCHED_DIRECTORIES);
+
+  return windows ? `${note}. ${WSL_FROM_WINDOWS}` : note;
+}
 
 /**
  * Two spellings of one directory, as one key.
@@ -71,37 +82,36 @@ export function dirKey(path: string, platform: NodeJS.Platform): string {
  * quietly vanishes from the list is the same silence this whole change is about.</p>
  */
 export function watchedDirs(own: string, extras: readonly string[], platform: NodeJS.Platform): readonly WatchedDir[] {
-  const out: WatchedDir[] = [{ asked: own, path: own, refusal: '' }];
+  const out: WatchedDir[] = [{ asked: own, path: own, refusal: '', otherSide: '' }];
   const seen = new Set<string>([dirKey(own, platform)]);
 
-  for (const raw of extras) {
-    const asked = raw.trim();
-    if (asked.length === 0) {
-      continue;
-    }
-    // REFUSED, not normalised away: a path that cannot work on this host is a thing to correct, and
-    // the person only learns it from the panel if it survives to be rendered there.
-    // `//server/share` is a UNC path written with forward slashes and is perfectly reachable from
-    // Windows; only a SINGLE leading slash is the POSIX shape that resolves to C:\… here. The shape is
-    // `pathFamily.ts`'s, the one the question consultant's roots are judged by too.
-    if (platform === 'win32' && isPosixAbsolute(asked)) {
-      out.push({ asked, path: '', refusal: POSIX_ON_WINDOWS });
-      continue;
-    }
+  for (const asked of extras.map((raw) => raw.trim()).filter((one) => one.length > 0)) {
     const key = dirKey(asked, platform);
-    if (seen.has(key)) {
-      continue;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(watchedOne(asked, platform));
     }
-    seen.add(key);
-    out.push({ asked, path: asked, refusal: '' });
   }
 
   return out;
 }
 
-/** The directories that can actually be read — what the watcher subscribes to. */
+/**
+ * One named directory: this side's, to be read — or, spelled for the OTHER operating system, the other side's, kept
+ * so the panel can say so and never handed to the watcher. `//server/share` is a UNC path with forward slashes and
+ * reachable from both, so it is this side's; only a single leading slash is the POSIX shape (`pathFamily.ts`'s rule,
+ * the one the question consultant's roots and the CLI paths are judged by too). The spelling alone decides: a
+ * `\\wsl.localhost\…` path read in WSL is the Windows window's name for a WSL folder, never a relative name here.
+ */
+function watchedOne(asked: string, platform: NodeJS.Platform): WatchedDir {
+  return spelledForTheOtherOs(asked, platform === 'win32')
+    ? { asked, path: '', refusal: '', otherSide: otherSidesFolder(platform) }
+    : { asked, path: asked, refusal: '', otherSide: '' };
+}
+
+/** The directories that can actually be read — what the watcher subscribes to. Never the other side's. */
 export function usableDirs(dirs: readonly WatchedDir[]): readonly string[] {
-  return dirs.filter((dir) => dir.refusal.length === 0).map((dir) => dir.path);
+  return dirs.filter((dir) => dir.refusal.length === 0 && dir.otherSide.length === 0).map((dir) => dir.path);
 }
 
 /** Where an answer is written, and the temporary file it is renamed from. */

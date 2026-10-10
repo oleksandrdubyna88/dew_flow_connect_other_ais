@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DEFAULTS, envBlock } from '../settingsShape';
+import { hostFamily } from '../hostSide';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 
 /**
@@ -48,8 +49,9 @@ test('saying yes or no to "reviews documents" on a shipped row reaches the file'
 
 test('a CLI path on a shipped row reaches the file', () => {
   // The WSL case the field exists for: PATH resolves `codex` to the Windows npm shim.
-  assert.equal(codexIn(written({ executablePath: '/home/me/.npm-global/bin/codex' })).executablePath,
-    '/home/me/.npm-global/bin/codex');
+  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+  const own = hostFamily() === 'windows' ? 'C:\\Users\\me\\npm\\codex.cmd' : '/home/me/.npm-global/bin/codex';
+  assert.equal(codexIn(written({ executablePath: own })).executablePath, own);
 });
 
 test('the pristine shipped pair still writes nothing', () => {

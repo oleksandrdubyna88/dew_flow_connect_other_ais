@@ -1,12 +1,14 @@
 # PLAN — a path in the settings belongs to a side: a missing folder is marked, and two sides get two fields
 
-> Status: **plan only, nothing implemented yet (2026-10-09).** Scope: the extension's path-bearing settings and the
+> Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
+> deviations are under E1); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
+> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E5, E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
 > pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
 > answer (`src_mcp`: `PanelSettings.cs`, `QuestionConsultSettings.cs`, `ServerJsonContext.cs`, `StartupNotices.cs`).
 >
-> **Builds on the unmerged branch `fix/qconsult-roots-other-os`** (record: `research/PLAN_qconsult_roots_of_the_other_os.md`
+> **Builds on `fix/qconsult-roots-other-os`, merged as PR #733 on 2026-10-10** (record: `research/PLAN_qconsult_roots_of_the_other_os.md`
 > on that branch, `src_vs_code/src/pathFamily.ts`, `shared/path-family-vectors.json`): a question-consultant root spelled
 > for the other OS that does not exist here is skipped on this side, not refused. This plan does not redo that; it
 > generalises its rule to every path setting and adds what the operator asked for next. Every `pathFamily.ts`,
@@ -269,9 +271,14 @@ is replaced by it for that case. What counts, decided here so the first start is
 Each story: RED first, the failure message recorded, then green, then break-it on the line that decides. Page tests
 RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/pageTree.ts` — never a regex over HTML.
 
-### E0 — measure before building (no product code) · `plan/paths-per-side-e0-measure`
+### E0 — measure before building (no product code) — ✅ measured 2026-10-10
 
-- **0.1** On the operator's machine, a `test:host`-style probe: a stamp written to `globalState` in a WSL window — is it
+**Result** ([RESULTS_side_registry_reaches_the_other_window.md](../research/RESULTS_side_registry_reaches_the_other_window.md)):
+a stamp written in a WSL window was visible to an already-open Windows window at its next read (≤ 23 s), and the
+reverse (≤ 20 s), without a reload; `Memento.keys()` is available in both hosts. "Both known" therefore flips live;
+the E0.2 fallback stays a person's override (`coai.pathFieldsPerSide = always`), not a detection signal.
+
+- ✅ **0.1** On the operator's machine, a `test:host`-style probe: a stamp written to `globalState` in a WSL window — is it
   visible to an already-open Windows window through `Memento.keys()`/`get`, and how soon (reload / focus / live)?
   Recorded in `research/RESULTS_side_registry_reaches_the_other_window.md`. It needs both kinds of window on the
   operator's machine, so it runs when the operator is present; **nothing in E1–E5 waits on it**.
@@ -283,48 +290,140 @@ RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/p
   window that sees a path spelled for the other OS in the shared settings (option D used to SWITCH, not to guess — a
   person can turn it back to `never`), and the This side page says which signal turned two fields on. Release
   requirement for E2: one of the two signals is proven by a `test:host` scenario.
-- **0.3** The VS Code floor (`engines.vscode ^1.85.0`) has `Memento.keys()` — confirm against `@types/vscode`; if not,
-  the registry is one record under one key with per-side entries (races lose at most a `lastSeen`).
+- ✅ **0.3** The VS Code floor (`engines.vscode ^1.85.0`) has `Memento.keys()` — confirmed: `@types/vscode` ^1.85 declares
+  `keys(): readonly string[]` on `Memento`, and both hosts answered it in the measurement.
 
 ### E1 — one rule for every path setting · `feat/paths-per-side-e1-one-rule`
 
-- **1.1 The registry as code.** `pathSettings.ts`: every path setting, its field, its kind (`folder`, `file`,
+- ✅ **1.1 The registry as code.** `pathSettings.ts`: every path setting, its field, its kind (`folder`, `file`,
   `folderList`), whether it must already exist, and who says it (the table in (e)). RED: a census test that walks
   `package.json`'s `contributes.configuration` and fails on a setting or nested field named `*Path`/`*Directory`/`*Roots`/
   `*Directories` missing from the registry (today: seven fields in six settings; `coai.credsPath` would be the eighth).
-- **1.2 A CLI path of the other OS is skipped, not run.** `pathForThisSide` (rules 2–3 of (c)) in the extension's
+- ✅ **1.2 A CLI path of the other OS is skipped, not run.** `pathForThisSide` (rules 2–3 of (c)) in the extension's
   `COAI_VENDORS` writer and launch paths (`vendorsWire.ts:115`, `chatPresets.ts:470`, `claudeCli.ts:32-41`), and the
   same in coai-mcp's vendor read (`PanelSettings.cs:1270`). RED (TS): a Windows-side reader given
   `executablePath: '/usr/local/bin/codex'` sends it to the server today. RED (C#): the probe of such a row answers
   `CliFound=false`; after, it probes the PATH name and logs one Information line. Vectors in
   `shared/path-family-vectors.json` (`executable` set), read checked by both halves.
-- **1.3 `alsoWatchDataDirectories` reads the other side's entries as the other side's.** On Windows a `/…` entry stops
+- ✅ **1.3 `alsoWatchDataDirectories` reads the other side's entries as the other side's.** On Windows a `/…` entry stops
   being REFUSED (`escalationDirs.ts:84`) and becomes *"the other side's"*; on WSL a `\\wsl.localhost\…` entry stops
   failing as *"could not be read"*. RED: `watchedDirs(own, ['\\\\wsl.localhost\\Ubuntu\\x'], 'linux')` returns it as
   usable today.
-- **1.4 A shared `dataDirectory` of the other OS is not resolved.** `chooseStorage` skips a shared-layer value spelled
+- ✅ **1.4 A shared `dataDirectory` of the other OS is not resolved.** `chooseStorage` skips a shared-layer value spelled
   for the other OS (falls to the default) and `whereData` says so. RED: a `linux` host with shared `Z:\coai` resolves to
   `<cwd>/Z:\coai` today (inject `resolve`/platform).
-- **1.5** The page names every such value *"the other side's — skipped here"* in the quiet hint tone, through the one
+- ✅ **1.5** The page names every such value *"the other side's — skipped here"* in the quiet hint tone, through the one
   `otherSideNote` (`pathFamily.ts:154-158`), generalised by setting. Page test: the Models card of a row with a POSIX path
   on a Windows page shows the note, and no **cannot review** badge is blamed on it.
-- **1.6 *Export settings* leaves `qconsultRoots` out** (decided with the operator, D4) — added to `NEVER_TRANSFERRED`
+- ✅ **1.6 *Export settings* leaves `qconsultRoots` out** (decided with the operator, D4) — added to `NEVER_TRANSFERRED`
   (`configTransfer.ts:29-40`) as *"paths on this machine"*, like `alsoWatchDataDirectories`; an import that carries it
   (an older export) refuses that entry by name and keeps the importer's own roots. RED: `exportedSettings` of a profile
   with roots set contains `qconsultRoots` today; an import of a v2 file holding it overwrites the importer's roots today.
+
+**E1 as built (2026-10-10) — deviations and what is left.** Every story above is done, RED first, with a break-it on
+its deciding line; the observed messages are in the commits and in `research/module_tests.md`.
+
+- **Seven fields in SEVEN settings**, not six: `qconsultRoots`, `vendors[].executablePath`,
+  `consultants.*.executablePath`, `qconsultRows[].executablePath`, `chatModelPresets[].executablePath`,
+  `alsoWatchDataDirectories`, `dataDirectory`. The census can only see what the manifest DECLARES: the
+  `qconsultRows` and `chatModelPresets` item schemas do not declare `executablePath`, so those two are registered by
+  hand and a new undeclared nested path field would not be caught (the census checks properties, items, map entries
+  and the keys of default rows).
+- **1.2 reached more sites than the plan cited.** Besides `vendorsWire.ts` (`rowOnTheWire`), `chatPresets.ts`
+  (`chatRunSpec`) and `claudeCli.ts`: `settingsShape.ts` (a consultant definition on `COAI_CONSULTANTS`),
+  `qconsultSettings.ts` (`COAI_QCONSULT_ROWS`), `vendorTerminal.ts` (`executableFor`, `executableForRuntime`, and a
+  self-update decided on ITS platform), `chatLaunch.ts`, `cliChatLaunch.ts` and the agy model list in
+  `panelProvider.ts`. A scan test (`aCliPathOfTheOtherSideIsSkipped.test.ts`, `UNRESOLVED_READS`) counts every raw
+  read of a stored `executablePath`, so a launch site that skips the rule goes red. `pathForThisSide(stored, side)`
+  implements rules 2-3 only; rule 1 (`executablePathBySide`) is E3's.
+- **1.2 asks the disk, as the roots do (the gate's cadence consultant, codex, before E1's code round — verified, accepted).**
+  The first build skipped a CLI path purely by its SPELLING, but on Windows `/Program Files/nodejs/node.exe` is a legal
+  root-relative path that launches from the drive root, so a configured CLI written that way silently became a
+  different PATH installation, or nothing. Now the roots' rule (`otherSideHere`) applies to a FILE: spelled for the
+  other OS, the path is qualified with the SYSTEM drive (`qualified` / `QuestionRoots.Qualified`) and asked of the disk
+  as a file — there, or the disk could not tell → this side's, run QUALIFIED; confirmed absent (none, a directory, an
+  unspellable name) → the other side's, the PATH lookup. `ExecutableSide { family, systemDrive, fileAt }` is passed to
+  every site (`hostSide.hostExecutableSide()`, a SYNCHRONOUS `stat` installed by activation — `useFileProbe(fileAt(statSync))`,
+  the `useStorageSettings` pattern, because the Settings page's modules bundle without the host and may reach no
+  `node:fs`; before it is installed every path is `unknown` and KEPT. The page is told which rows the host skipped
+  (`PanelState.otherSideClis`, `otherSideClis(rows, side)`) rather than asking the disk itself. The wire writers are synchronous, and the only
+  paths ever asked are this machine's own spellings of the other OS's: `C:\usr\…` on Windows, a relative name in WSL,
+  never a share); `fileAt` maps a `stat` as `directoryAt` does. The server: `ExecutablePaths.Here(path, places,
+  presence)` with `FilePresenceOf` (`QuestionRoots.PresenceOf(…, wantsDirectory: false)`, one exception mapping for
+  both), applied once per row after the distinct. The `executable` vectors gained `systemDrive`, `existsHere` and
+  `unknownHere` (an existing `/Program Files/nodejs/node.exe` → `C:\Program Files\nodejs\node.exe`, an unknown one kept,
+  a POSIX-side Windows spelling that IS a file here kept); the seam leg gained a case on a Windows host: a COPY of the
+  fake CLI on the system drive spelled without its drive letter, with the row's fallback (`COAI_EXE_SEAM_CLI`) pointed
+  at a file that does not exist — the copy must answer. RED (TS): `actual '', expected 'C:\\Program Files\\nodejs\\node.exe'`;
+  RED (C#): `Expected answer.Path to be "C:\Program Files\nodejs\node.exe" … but "" has a length of 0`. Break-it: the
+  server rule made lexical again → the seam red (`the server did not run the existing /Users/…/FakeCli.exe … cliFound:
+  false … not-the-fallback`); the extension skipping an UNKNOWN path → `skipped on a guess`. The card's note now says
+  *"… and no CLI on this machine — the other side's CLI …"* (`asksDisk` true for the CLI entries).
+- **1.2 on the server: `ParseVendors` only.** Every `ParseVendors` caller gets the skip (`COAI_VENDORS`, a
+  consultant's or a question row's catalog `row`, `--check-model`); the legacy consultant / question-row
+  `executablePath` fields OUTSIDE a `row` are not skipped server-side — the extension already writes this side's value
+  for them, and only an older extension's file would still carry the other side's.
+- **"No cannot review blamed on it" (1.5) — the research table overstated the symptom.** The card's badge
+  (`cannotRun` → `availabilityOf`) reads `auth` only, and a CLI that is not found is reported `cliFound: false` with
+  `auth: "own auth"`, so the red badge was not drawn for a missing CLI path — the probe's note said "was not found on
+  this machine". The page test therefore asserts the quiet note, no `cannot-run` and no `stale` on that card; the seam
+  leg (`seam-cli-path-other-side.mjs`) reads the row's `cliFound`, version and note from `--providers` instead of the
+  badge. Whether a missing CLI should badge at all is E5's question (5.4), not answered here.
+- **1.3:** `POSIX_ON_WINDOWS` (the refusal) is gone; its advice survives as `WSL_FROM_WINDOWS`, appended to the
+  other-side sentence on Windows. Entries of the other side are de-duplicated like any other.
+- **1.4:** only the SHARED layer is skipped — the environment and this side's own overlay choice are this side's by
+  construction. `chooseStorage` gained a `family` parameter (default: the host's) instead of an injected `resolve`.
+- **1.5:** `otherSideNote(windows, setting)` takes its words from the registry (the roots' sentence is byte-identical);
+  `PanelState.hostFamily` (absent = the host's) and `PanelState.otherSideClis` (the host's decision) let a page test draw
+  both sides on one machine.
+- **Not in E1:** the server's structured `settingProblems`, the missing-path notice and mark (E5), the side registry
+  (E2), the second field (E3/E4). The same cadence consultation raised two points about E5 itself; they are written into
+  E5 below (5.0, and 5.1 / 5.3 / 5.7 amended), not built here.
 
 ### E5 — a missing path of this OS: a notice at every start and a bright mark · `feat/paths-per-side-e5-missing`
 
 Built right after E1: it is the operator's item 1 and needs no side registry.
 
+- **5.0 The storage-write policy comes FIRST** (the gate's cadence consultant before E1's code round — verified on
+  `fix`+E1: `notify.ts` `write` → `recordNotification(coaiDataDir(), …)` → `jsonlLedger.appendLine` → `mkdir(dirname(path),
+  { recursive: true })`, so the notice about a missing NAMED data directory would itself create it, and hide the very
+  condition it reports). **Decided: a notice whose subject is the missing data directory itself is held IN MEMORY —
+  the toast, and the notifications page's view of this window run — and written to no ledger**, rather than to the
+  default location's ledger. Why: the default location is not where this window's notifications page reads (it reads
+  `coaiDataDir()`, the named directory), so a ledger row there would be invisible AND would split the history across two
+  folders; the notice is re-raised at every window start while the condition holds (D3), so persistence adds nothing a
+  person needs; and writing nothing is the only choice that cannot touch a bare `/mnt/z` mount point. Once the folder
+  exists, ledger writes resume as today. Stories: (a) `notify`'s writer refuses to write while `dataDirFinding` says the
+  named root is missing and keeps the record in a bounded in-memory list the page shows (RED: the notice's own write
+  creates the folder — injected `mkdir`). **Lifecycle and cap** (E1's plan round): at most ONE held notice per setting
+  key — a new missing path for the same key replaces it, and it is cleared the moment the path changes or the folder
+  is found again; the list is therefore bounded by the number of path settings (the registry, `pathSettings.ts`), never
+  by how often a person retypes a path. Test: three successive missing values for `dataDirectory` leave one held notice;
+  a recovery clears it; (b) **an inventory of every writer that creates the data directory, derived
+  by a scan test**, each either guarded the same way or recorded as creating only the default location or a side folder
+  inside an existing root. Found by search on 2026-10-10, to be re-derived by the scan: `jsonlLedger.appendLine` (through
+  `notificationsFile`, `notificationsSeen`, `chatUsageFile`, `chatDoorsFile`), `chatStoreFile`, `claudeProbeCache`,
+  `consultPromptFile`, `securityPromptEditor`, `teamServerAuth` (the token file), `configTransferCommands` (prompt
+  texts), `dataCommands` (the choice and move flows), `extension.ts` (`writeSettingsFile` / `underSettingsLock`) and
+  `roundsDbRead`.
 - **5.1 The findings.** `pathFindings(registry, read, family, isDirectory/isFile)` → `PathFinding[]`, one `stat` at a
   time, cached, unknown never cached (the `RootExistence` contract). RED: a this-OS root `D:\old-project` that is ENOENT
-  yields `missing` — today the page asks the disk about other-OS roots only.
+  yields `missing` — today the page asks the disk about other-OS roots only. **Amended (the gate's cadence consultant,
+  verified: `existingHere` awaits each `stat` in turn with no deadline, so one stalled share stops every later path,
+  while the 60 s expiry of `RootExistence` lets a SECOND probe start beside the stalled one):** each probe has a
+  **deadline** (a timeout answers `unknown`), there is **at most one outstanding probe per path** (a path still being
+  asked is not asked again — the expiry starts no second one), and an `unknown` path is never counted as missing and
+  never raises the notice. Tests, with an injected stat and clock: a never-settling share probe followed by a missing
+  local folder — the local `missing` finding still publishes and the outstanding work stays bounded (one per path,
+  however many renders and expiries pass); an `unavailable → present` recovery (the share comes back) clears the finding
+  without any settings edit.
 - **5.2 The server says which setting and which value.** `UnrecognisedSetting` gains a kind; `ProvidersAnswer` gains
   `SettingProblems` (additive, JSON name `settingProblems`); `providers.ts` parses it, an absent field reading as none.
   RED (C#): `--providers` with a missing root carries no `settingProblems`. Contract test (`test:contract`) on the
   field's shape.
-- **5.3 The notice.** `setting-path-missing` per `(key, value)` through `notifyOnce`, with **Open in Settings**; the
+- **5.3 The notice.** `setting-path-missing` per `(key, value)` through `notifyOnce`, with **Open in Settings**, worded
+  *"not found now"* — never *"deleted"*: an unmounted drive or a sleeping share reports absence too (the cadence
+  consultant); the
   generic toast stops repeating a sentence whose `(key, value)` the structured answer covers. RED: the operator's case
   today produces the generic code with the cure *"running without those settings"*; after, one
   `setting-path-missing` with the place, and no generic toast. Unit test on the dedupe; `notificationSites` ratchet
@@ -352,7 +451,9 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   *missing*, and a default location that does not exist yet draws **no** mark; (4) `test:host` — a fresh profile with no
   data directory anywhere starts with **no** `setting-path-missing` in the ledger (the first-start guarantee), and a
   profile whose overlay names a deleted folder gets exactly one per window start, and the folder is still absent after
-  activation. Break-it: drop the `source` guard — (4)'s first half must go red.
+  activation **and after the notice has settled** (its toast shown and its record handled — 5.0: the notice itself must
+  not recreate it). Break-it: drop the `source` guard — (4)'s first half must go red; route the notice back through the
+  ledger — (4)'s "still absent" must go red.
 
 ### E2 — the sides this profile has been used on · `feat/paths-per-side-e2-sides-seen`
 
@@ -470,9 +571,12 @@ The four questions this plan asked were answered the same day; the design above 
 
 ## Definition of Done
 
-- [ ] E0 measured and recorded in `research/`; the plan says whether "both known" flips live.
-- [ ] Every path setting is in one registry; a census test fails on a new one that is not.
+- [x] E0 measured and recorded in `research/`; the plan says whether "both known" flips live (it does).
+- [x] Every path setting is in one registry; a census test fails on a new one that is not (E1.1; a nested field the
+      manifest does not declare is registered by hand — see E1's deviations).
 - [ ] A path spelled for the other OS is skipped, never refused and never a toast, on both halves, from one vector file.
+      (E1: every path setting in the extension; on the server the `COAI_VENDORS` / catalog-`row` CLI paths and, from the
+      fix branch, the roots.)
 - [ ] A missing path of this OS raises one `setting-path-missing` notice per window start, with **Open in Settings**,
       and no generic toast for the same folder (RED first, teeth shown).
 - [ ] The Settings page marks it with `.path-missing` in `--err`, `aria-invalid`, and a count on its tab — page tests
@@ -480,7 +584,7 @@ The four questions this plan asked were answered the same day; the design above 
 - [ ] The page and coai-mcp agree on which paths are missing — the seam leg green against the real binary.
 - [ ] A NAMED data directory that does not exist is red on the page and said at every start (D3); the default location
       on a first start is never red; nothing creates a missing named root (E5.7, `test:host` both halves).
-- [ ] *Export settings* never carries `qconsultRoots` (D4).
+- [x] *Export settings* never carries `qconsultRoots` (D4) — E1.6.
 - [ ] Sides seen are recorded, listed and forgettable; `coai.pathFieldsPerSide` declared and documented in five
       languages.
 - [ ] Two labelled fields per path when both sides are known, one otherwise; older extensions and servers unaffected

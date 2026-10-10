@@ -250,11 +250,17 @@ public static class QuestionRoots
     /// — a NUL (<see cref="ArgumentException"/>), or one Windows refuses (ERROR_INVALID_NAME) — is ABSENT: it can never be this
     /// machine's folder, and the extension's probe answers the same (the fourth code round).
     /// </summary>
-    public static RootPresence PresenceOf(string full, Func<string, FileAttributes> attributesOf)
+    public static RootPresence PresenceOf(string full, Func<string, FileAttributes> attributesOf) => PresenceOf(full, attributesOf, wantsDirectory: true);
+
+    /// <summary>
+    /// The same three answers for a FOLDER (<paramref name="wantsDirectory"/>) or a FILE — a CLI path
+    /// (<see cref="ExecutablePaths.FilePresenceOf"/>): the other kind at that path is Absent, the exception mapping is one.
+    /// </summary>
+    public static RootPresence PresenceOf(string full, Func<string, FileAttributes> attributesOf, bool wantsDirectory)
     {
         try
         {
-            return (attributesOf(full) & FileAttributes.Directory) != 0 ? RootPresence.Present : RootPresence.Absent;
+            return ((attributesOf(full) & FileAttributes.Directory) != 0) == wantsDirectory ? RootPresence.Present : RootPresence.Absent;
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException
             || e is IOException { HResult: InvalidName })

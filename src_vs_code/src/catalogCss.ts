@@ -121,7 +121,9 @@ const MODELS = `
   .catalog .card .actions button { margin: 0; }
   .catalog .card .actions .ask { background: transparent; color: var(--err); border: 1px solid transparent; padding: 0 6px; }
   .catalog .card .actions .ask:hover { border-color: var(--err); }
-  .catalog .card .actions .ask:disabled { color: var(--muted); }${CATALOG_BADGES}
+  .catalog .card .actions .ask:disabled { color: var(--muted); }
+  /* Why the switch, the remove and the stage ticks are refused — said on the card, in the quiet hint tone: information. */
+  .catalog .card .lock { margin: 6px 0 0; font-size: 0.9em; }${CATALOG_BADGES}
   .catalog .world { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
   .catalog .world button { margin: 0; width: auto; }
   /* A model CARD's block: Chat draws its models as .block too, and a page-wide .block gave them this line and space. */

@@ -12,8 +12,10 @@ import {
   importQuestion,
   importedConfig,
   withLocalPaths,
+  NEVER_TRANSFERRED,
   type Declared,
 } from '../configTransfer';
+import { PATH_SETTINGS } from '../pathSettings';
 
 /**
  * Export config / Import config — issue #467. Everything a person edited travels in a JSON file; a secret,
@@ -48,6 +50,43 @@ test('a secret and this machine\u2019s layout are never exported, whatever they 
   const out = exportedSettings(declared, base({ credsKey: 'k-123', dataDirectory: 'D:/somewhere' }));
 
   assert.deepEqual(out, {});
+});
+
+/** The settings this build's own manifest declares — so a fixture key is one the real reader accepts. */
+const shipped = (): Declared => declaredSettings(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')));
+
+test('the question consultant\'s roots are paths on this machine, and are never exported (D4)', () => {
+  // todo/PLAN_paths_per_side.md E1.6, decided with the operator: a root is a folder of the machine that wrote it.
+  const out = exportedSettings(shipped(), base({ qconsultRoots: ['D:\\rsd\\work', '/home/jinx/git'], maxConcurrency: 7 }));
+
+  assert.equal(Object.hasOwn(out, 'maxConcurrency'), true, 'the premise: a changed setting is exported from this manifest');
+  assert.equal(Object.hasOwn(out, 'qconsultRoots'), false, 'the roots were exported');
+});
+
+test('an older export carrying the roots: that entry is refused by name, the importer keeps its own, the rest applies', () => {
+  const text = JSON.stringify({
+    format: CONFIG_FORMAT, version: CONFIG_VERSION, exportedAt: 'x', note: '',
+    settings: { maxConcurrency: 7, qconsultRoots: ['D:\\on\\their\\machine'] },
+    prompts: {},
+  });
+
+  const back = importedConfig(text, shipped());
+
+  assert.ok(back.ok);
+  assert.deepEqual(back.settings, { maxConcurrency: 7 }, 'the roots would be written over the importer\'s own');
+  assert.deepEqual(back.refused, [{ name: 'qconsultRoots', why: 'never transferred: paths on this machine' }]);
+});
+
+test('every whole path setting of the registry is kept out of Export settings; a nested CLI path is stripped instead', () => {
+  // Derived from pathSettings.ts, so the next path setting cannot travel by being forgotten here.
+  for (const one of PATH_SETTINGS) {
+    const key = one.setting.replace(/^coai\./, '');
+    if (one.id === one.setting) {
+      assert.ok(Object.hasOwn(NEVER_TRANSFERRED, key), `${one.setting} holds a path on this machine and is exported`);
+    } else {
+      assert.ok(one.id.endsWith('.executablePath'), `${one.id} is a nested path field the export does not strip`);
+    }
+  }
 });
 
 test('a path on this machine inside a vendor or a consultant is removed, the rest of the entry kept', () => {

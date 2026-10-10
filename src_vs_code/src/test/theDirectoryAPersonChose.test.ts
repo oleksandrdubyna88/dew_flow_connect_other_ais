@@ -9,6 +9,7 @@ import {
   useStorageSettings,
   whereData,
 } from '../dataDir';
+import { hostFamily } from '../hostSide';
 import { serverRun } from '../roundsDbRead';
 
 /**
@@ -91,6 +92,41 @@ test('the shared setting answers when this side has chosen nothing', () => {
 
   assert.equal(chosen.directory, ROOT);
   assert.equal(chosen.source, 'shared setting');
+});
+
+// ---------- a shared directory of the other OS (todo/PLAN_paths_per_side.md E1.4) ----------
+
+test('a SHARED directory spelled for the other OS is not resolved here — this side falls to the default', () => {
+  // VS Code shares the setting between a WSL and a Windows window: `Z:\coai` written from Windows, read in WSL, was
+  // resolved against the extension host's working directory — a folder nobody chose, created on first write.
+  const inWsl = chooseStorage(NOTHING, NOTHING, { directory: 'Z:\\coai', side: 'wsl' }, 'posix');
+  const onWindows = chooseStorage(NOTHING, NOTHING, { directory: '/mnt/z/coai', side: '' }, 'windows');
+
+  assert.deepEqual([inWsl.source, inWsl.directory, inWsl.skippedShared], ['default', '', 'Z:\\coai']);
+  assert.equal(inWsl.ignoredSide, 'wsl', 'the side it named is still reported as doing nothing');
+  assert.deepEqual([onWindows.source, onWindows.directory, onWindows.skippedShared], ['default', '', '/mnt/z/coai']);
+});
+
+test('a shared directory of THIS OS, and every directory this side or its environment named, is used as before', () => {
+  assert.deepEqual(pick(chooseStorage(NOTHING, NOTHING, { directory: '/mnt/z/coai', side: '' }, 'posix')), ['shared setting', '/mnt/z/coai', '']);
+  assert.deepEqual(pick(chooseStorage(NOTHING, NOTHING, { directory: 'Z:\\coai', side: '' }, 'windows')), ['shared setting', 'Z:\\coai', '']);
+  // A skipped shared value does not stand in front of this side's own choice, and is still named.
+  assert.deepEqual(pick(chooseStorage(NOTHING, { directory: '/mnt/z/coai', side: '' }, { directory: 'Z:\\coai', side: '' }, 'posix')), ['this side', '/mnt/z/coai', 'Z:\\coai']);
+});
+
+const pick = (chosen: ReturnType<typeof chooseStorage>): readonly string[] => [chosen.source, chosen.directory, chosen.skippedShared];
+
+test('the panel says the shared directory is the other side\'s, and that this side uses the next choice', () => {
+  const other = hostFamily() === 'windows' ? '/mnt/z/coai' : 'Z:\\coai';
+  withEnv({ COAI_DATA_DIR: undefined, COAI_DATA_SIDE: undefined }, () => {
+    withChoice(NOTHING, { directory: other, side: '' }, () => {
+      const where = whereData(() => true);
+
+      assert.equal(where.source, 'default', 'the other side\'s directory was resolved here');
+      assert.ok(where.notes.some((note) => note.includes(other) && note.includes('the other side\'s data folder') && note.includes('uses the next choice')),
+        `no note names the skipped value: ${JSON.stringify(where.notes)}`);
+    });
+  });
 });
 
 test('with nothing named anywhere it is the platform default', () => {

@@ -1,5 +1,5 @@
 import type { Admission } from './capabilityAdmission';
-import { optionHtml, rowPicks } from './catalogPicks';
+import { offeredLine, optionHtml, rowPicks } from './catalogPicks';
 import { escapeHtml } from './escapeHtml';
 import type { HelpKey } from './help';
 import { help, segmentedRadio } from './panelControls';
@@ -128,6 +128,7 @@ function rowsBlock(settings: QconsultSettings, state: QconsultViewState): string
   const on = settings.rows.filter((r) => r.enabled).length;
 
   return `<h3>${help('qconsultRows')}Who answers</h3>
+${offeredLine('qconsult')}
 ${settings.rows.map((row) => rowHtml(questionRowView(row, settings, state), state.pickFrom)).join('\n')}
 <button type="button" class="link" data-command="qconsultAddRow" data-id="">Add a row</button>
 <div class="hint">${on} of at most ${MAX_ACTIVE_ROWS} on. One row is a model and exactly one prompt; the same prompt may sit on several rows. A row is added switched off.</div>`;

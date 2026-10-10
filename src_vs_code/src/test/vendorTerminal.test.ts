@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { keyVariable, OFFICIAL_SOURCES, vendorInstall, vendorTerminal , executableForRuntime } from '../vendorTerminal';
+import { hostFamily } from '../hostSide';
 import { Vendor } from '../vendors';
+
+// A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+const onThisOs = (posix: string, windows: string): string => (hostFamily() === 'windows' ? windows : posix);
 
 const vendor = (over: Partial<Vendor> = {}): Vendor => ({
   id: 'codex',
@@ -136,20 +140,20 @@ test('the run button uses the CLI path when one is set', () => {
   // A button that then runs the bare name ignores the one thing they told it.
   const term = vendorTerminal({
     id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true, baseUrl: '',
-    executablePath: '/mnt/c/Users/user/AppData/Local/agy/bin/agy.exe', pricePerMillionIn: 0, pricePerMillionOut: 0,
+    executablePath: onThisOs('/mnt/c/Users/user/AppData/Local/agy/bin/agy.exe', 'C:\\Users\\user\\AppData\\Local\\agy\\bin\\agy.exe'), pricePerMillionIn: 0, pricePerMillionOut: 0,
   });
 
-  assert.match(term.command, /^\/mnt\/c\/Users\/user\/AppData\/Local\/agy\/bin\/agy\.exe\b/);
+  assert.ok(term.command.startsWith(onThisOs('/mnt/c/Users/user/AppData/Local/agy/bin/agy.exe ', 'C:\\Users\\user\\AppData\\Local\\agy\\bin\\agy.exe ')), term.command);
   assert.ok(term.usageCommand.endsWith('agy.exe usage'), 'the usage line must run the same binary: ' + term.usageCommand);
 });
 
 test('a path with a space survives being put on a command line', () => {
   const term = vendorTerminal({
     id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '',
-    executablePath: '/home/user/my tools/codex', pricePerMillionIn: 0, pricePerMillionOut: 0,
+    executablePath: onThisOs('/home/user/my tools/codex', 'C:\\Users\\user\\my tools\\codex.cmd'), pricePerMillionIn: 0, pricePerMillionOut: 0,
   });
 
-  assert.ok(term.command.startsWith('"/home/user/my tools/codex"'), term.command);
+  assert.ok(term.command.startsWith(onThisOs('"/home/user/my tools/codex"', '"C:\\Users\\user\\my tools\\codex.cmd"')), term.command);
 });
 
 test('the install prerequisite is the one for THIS operating system', () => {

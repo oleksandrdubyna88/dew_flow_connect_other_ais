@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   DEFAULT_VENDORS, freeVendorId, normaliseId, presetsOffered, reviewerPickItems, VENDOR_PRESETS, vendorsFrom,
 } from '../vendors';
+import { hostFamily } from '../hostSide';
 import { vendorsEnv } from '../vendorsWire';
 
 test('every default vendor can be added back after being removed', () => {
@@ -89,11 +90,13 @@ test('the path travels to the server, because PATH cannot always answer', () => 
   // WSL is why: `codex` resolves there to the Windows npm shim on the interop PATH, which runs
   // Linux node against a Windows install and dies. The native one is in ~/.npm-global/bin and
   // nothing could point at it, so a WSL round failed whatever anybody configured.
+  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+  const own = hostFamily() === 'windows' ? 'C:\\tools\\codex.exe' : '/usr/local/bin/codex';
   const env = vendorsEnv([
-    { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '/usr/local/bin/codex', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+    { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: own, pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ]);
 
-  assert.ok(env.includes('/usr/local/bin/codex'), 'the server reads this list and nothing else');
+  assert.equal((JSON.parse(env) as Record<string, unknown>[])[0]?.['executablePath'], own, 'the server reads this list and nothing else');
   assert.ok(env.includes('executablePath'), 'under the name the server parses');
 });
 

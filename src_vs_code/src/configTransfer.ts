@@ -32,6 +32,9 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   dataDirectory: 'a path on this machine',
   dataSide: 'which side of this machine this window is',
   alsoWatchDataDirectories: 'paths on this machine',
+  // The question consultant's disk roots are folders of the machine that wrote them (todo/PLAN_paths_per_side.md E1.6,
+  // decided with the operator, D4). An older export that carries them is refused by name; the importer keeps its own.
+  qconsultRoots: 'paths on this machine',
   perSideSettings: 'how this machine splits its settings between its sides',
   // The catalog's one-time move (PLAN_one_model_catalog.md E1.3): this machine's own copy of its settings from
   // before it, and whether it ran. Carried across, the copy would overwrite the importer's own backup, and a

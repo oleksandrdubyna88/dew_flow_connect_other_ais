@@ -131,6 +131,11 @@ export class Node {
     this.attributes[name] = value;
   }
 
+  /** The other half of `setAttribute` — a busy mark that clears itself takes its attribute away again. */
+  removeAttribute(name: string): void {
+    Reflect.deleteProperty(this.attributes, name);
+  }
+
   under(parent: Node): Node {
     this.parent = parent;
 

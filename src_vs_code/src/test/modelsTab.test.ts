@@ -8,7 +8,7 @@ import { cardContextFor, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { click, lastWrite, panelState, runPanel, withoutSeq } from './panelPageHarness';
 import { Node, runPageHtml } from './pageScriptHarness';
-import { pageTree } from './pageTree';
+import { type PageNode, pageTree } from './pageTree';
 
 /**
  * The Models tab, RUN (research/PLAN_one_model_catalog.md E3.2): one card per catalog row, every control writing that row
@@ -97,9 +97,58 @@ test('the last model switched on for a review stage cannot be switched off, unti
   const codexCard = html.slice(html.indexOf('data-model-card="codex"'), html.indexOf('data-model-card="claude"'));
 
   assert.match(codexCard, /data-setting="enabled" data-vendor="codex" checked disabled title="the only model switched on for plan review"/);
-  assert.match(codexCard, /<input type="checkbox" data-setting="plan" data-vendor="codex" checked disabled>/);
+  assert.match(codexCard, /<input type="checkbox" data-setting="plan" data-vendor="codex" checked disabled aria-describedby="lock-codex">/);
   assert.match(codexCard, /data-asks="removeModel" data-id="codex"[^>]* disabled title="the only model switched on for plan review"/);
 });
+
+/**
+ * Whether a node is drawn visible inside its card — nothing from it up to the card is hidden. The tab's pane is hidden in
+ * the markup until the page's script shows it, which is the pane's business and not the card's.
+ */
+function shownIn(node: Node, card: Node): boolean {
+  for (let at: Node | undefined = node; at !== undefined && at !== card; at = at.parent) {
+    if (at.hidden) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Operator, 2026-10-10: the switch and the ✕ of the last plan+code model were refused, and the reason lived only in a
+// hover title nobody found. The card itself must SAY it, and every refused control must point at that line.
+for (const [label, vendors, stages, reviews] of [
+  ['the plan stage', [codex(), claude({ plan: false })], ['plan'], 'plans'],
+  ['the plan and the code stage', [codex(), claude({ enabled: false })], ['plan', 'code'], 'plans and code'],
+] as const) {
+  test(`a card locked as the last model for ${label} says so on its face, and its refused controls point at that line`, () => {
+    const page = run(stateWith(vendors));
+    const tree = pageTree(page.html);
+    const card = (id: string): PageNode => tree.one((node) => node.dataset['modelCard'] === id, `${id} card`);
+    const locked = card('codex');
+    const control = (match: (node: PageNode) => boolean, what: string): PageNode => locked.one(match, what);
+    const toggle = control((node) => node.dataset['setting'] === 'enabled', 'switch on the codex card');
+    const lineId = toggle.attrs['aria-describedby'] ?? '';
+    const line = locked.one((node) => lineId.length > 0 && node.id === lineId, 'line the refused switch is described by');
+    const refused = [
+      toggle,
+      control((node) => node.dataset['asks'] === 'removeModel', '✕ on the codex card'),
+      ...stages.map((stage) => control((node) => node.dataset['setting'] === stage, `${stage} tick on the codex card`)),
+    ];
+
+    assert.equal(line.text(), `Locked: the only model switched on for ${stages.join(' and ')} review — `
+      + `switch on or add another model that reviews ${reviews} first.`);
+    assert.ok(shownIn(line, locked), 'the lock line is drawn hidden');
+    assert.ok(line.className.split(' ').includes('hint'), 'the lock is information, drawn in the quiet hint tone');
+    for (const one of refused) {
+      assert.equal(one.disabled, true, `${one.dataset['setting'] ?? one.dataset['asks']} is not refused`);
+      assert.equal(one.attrs['aria-describedby'], lineId, `${one.dataset['setting'] ?? one.dataset['asks']} does not point at the lock line`);
+    }
+    assert.equal(toggle.attrs['title'], line.text().slice('Locked: '.length, line.text().indexOf(' — ')), 'the hover title is kept');
+    assert.ok(!card('claude').text().includes('Locked'), 'a card that is not last says it is locked');
+    assert.ok(!card('claude').all().some((node) => 'aria-describedby' in node.attrs), 'a card that is not last points at a lock line');
+  });
+}
 
 test('effort and thinking as the RUNTIME takes them: claude lists levels, codex says it is unmeasured, neither has a thinking switch', () => {
   const html = modelsTabHtml(stateWith([codex({ effort: 'high' }), claude()]));

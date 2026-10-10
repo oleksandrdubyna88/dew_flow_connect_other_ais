@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
+import { hostExecutableSide } from '../hostSide';
 import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { ROOT_ANSWER_LIFETIME_MS, RootExistence, directoryAt, existingHere, otherSideHere, qualified, spelledForTheOtherOs, systemDriveOf } from '../pathFamily';
+import { ROOT_ANSWER_LIFETIME_MS, RootExistence, directoryAt, executableHere, existingHere, familyOf, fileAt, otherSideHere, pathForThisSide, qualified, spelledForTheOtherOs, systemDriveOf, useFileProbe, type ExecutableSide, type FilePresence } from '../pathFamily';
 
 /**
  * The TS half of `shared/path-family-vectors.json` — which roots are the OTHER operating system's. The server skips
@@ -218,4 +219,72 @@ test('a definitive answer lives ROOT_ANSWER_LIFETIME_MS: within it one stat, aft
   assert.deepEqual((await answers.of(['/work'], true, 'C:')).existing, ['/work'], 'after it, the disk is asked again and the new folder is seen');
   assert.equal(asked, 2);
   assert.equal(ROOT_ANSWER_LIFETIME_MS, 60_000, 'the lifetime is the named constant the docs state');
+});
+
+test('a CLI path of the other OS is skipped — the PATH lookup — and named; answers the shared executable vectors as the server does', () => {
+  // todo/PLAN_paths_per_side.md E1.2: a Windows `codex.cmd` read in a WSL window was probed as a file there, and the card
+  // said "cannot review". It is the Windows side's CLI: this side runs the runtime's own name from PATH instead.
+  const all = rowsOf('executable');
+  assert.ok(all.length > 5, 'the file is read, not an empty array');
+  assert.ok(all.some((v) => v.flag('otherSide')) && all.some((v) => !v.flag('otherSide')), 'both answers are in the file');
+
+  assert.ok(all.some((v) => v.flag('existsHere') && !v.flag('otherSide')), 'an existing root-relative file is pinned in the file');
+  assert.ok(all.some((v) => v.optionalFlag('unknownHere')), 'the unknown state is pinned in the file');
+
+  for (const vector of all) {
+    const family = vector.flag('windows') ? 'windows' : 'posix';
+    const asked: string[] = [];
+    const presence: FilePresence = vector.flag('existsHere') ? 'here' : vector.optionalFlag('unknownHere') ? 'unknown' : 'absent';
+    const side: ExecutableSide = { family, systemDrive: vector.text('systemDrive'), fileAt: (path) => { asked.push(path); return presence; } };
+    const answer = pathForThisSide({ executablePath: vector.text('path') }, side);
+    const said = `${family}: ${JSON.stringify(vector.text('path'))} — ${vector.text('why')}`;
+    assert.equal(answer.path, vector.text('here'), said);
+    assert.equal(answer.otherSide, vector.flag('otherSide') ? vector.text('path').trim() : '', said);
+    assert.equal(executableHere(vector.text('path'), side), vector.text('here'), said);
+    assert.ok(asked.every((path) => path === qualified(vector.text('path'), family === 'windows', vector.text('systemDrive'))), `${said}: asked the disk about ${JSON.stringify(asked)}`);
+  }
+});
+
+test('the consultant\'s case: an existing root-relative CLI on Windows runs qualified with the system drive, not a PATH install', () => {
+  // E1 cadence consultation: `/Program Files/nodejs/node.exe --version` launches from C:\ — a lexical skip silently ran a
+  // different installation. The disk is injected, so this is the same test on any machine.
+  const side = (presence: FilePresence): ExecutableSide => ({ family: 'windows', systemDrive: 'Q:', fileAt: (path) => (path === 'Q:\\Program Files\\nodejs\\node.exe' ? presence : 'absent') });
+
+  assert.deepEqual(pathForThisSide({ executablePath: '/Program Files/nodejs/node.exe' }, side('here')), { path: 'Q:\\Program Files\\nodejs\\node.exe', otherSide: '' });
+  assert.deepEqual(pathForThisSide({ executablePath: '/Program Files/nodejs/node.exe' }, side('unknown')), { path: 'Q:\\Program Files\\nodejs\\node.exe', otherSide: '' }, 'skipped on a guess');
+  assert.deepEqual(pathForThisSide({ executablePath: '/Program Files/nodejs/node.exe' }, side('absent')), { path: '', otherSide: '/Program Files/nodejs/node.exe' });
+});
+
+test('the host side asks the INSTALLED probe — and before activation installs one, every path is unknown and kept', () => {
+  const windows = hostExecutableSide('win32');
+  try {
+    useFileProbe(() => 'unknown');
+    assert.equal(executableHere('/usr/local/bin/codex', windows), `${windows.systemDrive}\\usr\\local\\bin\\codex`, 'skipped on a guess before the probe was installed');
+    useFileProbe(() => 'absent');
+    assert.equal(executableHere('/usr/local/bin/codex', windows), '', 'the installed probe is the one asked');
+  } finally {
+    useFileProbe(fileAt(fs.statSync));
+  }
+});
+
+test('a file probe says here for a file, absent only when the disk said so, unknown otherwise — on the real stat too', () => {
+  const failing = (code: string) => (): never => { throw Object.assign(new Error(code), { code }); };
+  assert.equal(fileAt(() => ({ isFile: () => true }))('x'), 'here');
+  assert.equal(fileAt(() => ({ isFile: () => false }))('x'), 'absent', 'a directory where the CLI should be is no CLI');
+  for (const code of ['ENOENT', 'ENOTDIR', 'ERR_INVALID_ARG_VALUE']) {
+    assert.equal(fileAt(failing(code))('x'), 'absent', code);
+  }
+  for (const code of ['EACCES', 'EBUSY', 'EIO', 'EPERM']) {
+    assert.equal(fileAt(failing(code))('x'), 'unknown', code);
+  }
+  const real = fileAt(fs.statSync);
+  assert.equal(real(__filename), 'here');
+  assert.equal(real(__dirname), 'absent');
+  assert.equal(real(path.join(__dirname, 'no-such-cli.exe')), 'absent');
+});
+
+test('the family of a host is windows for win32 alone — WSL, Linux and macOS spell their paths alike', () => {
+  assert.equal(familyOf('win32'), 'windows');
+  assert.equal(familyOf('linux'), 'posix');
+  assert.equal(familyOf('darwin'), 'posix');
 });

@@ -1,3 +1,4 @@
+import { familyOf, installedFileProbe, systemDriveOf, type ExecutableSide, type PathFamily } from './pathFamily';
 import { runningUnderWsl } from './wslNetwork';
 
 /**
@@ -54,6 +55,22 @@ export function hostPlatform(raw: string = process.platform): Platform {
   }
 
   return 'linux';
+}
+
+/**
+ * Which family this host spells paths in — what decides whether a stored path is the OTHER side's
+ * (`pathFamily.ts`). A WSL window is `posix` whatever machine it is on, exactly as `hostPlatform` says.
+ */
+export function hostFamily(raw: string = process.platform): PathFamily {
+  return familyOf(raw);
+}
+
+/**
+ * The side a CLI path is judged on, as THIS host is: its family (or the one named — a self-update shown for a platform,
+ * a page drawn for a test), its system drive and the file probe activation installed (`useFileProbe`).
+ */
+export function hostExecutableSide(raw: string = process.platform): ExecutableSide {
+  return { family: familyOf(raw), systemDrive: systemDriveOf(process.env['SystemDrive']), fileAt: installedFileProbe };
 }
 
 /** How this host can reach a live Windows session to run something only Windows can run. */

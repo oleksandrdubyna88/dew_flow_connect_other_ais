@@ -4,6 +4,7 @@
 import { NotificationsPanel } from './notificationsPanel';
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
+import { statSync } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -41,6 +42,7 @@ import { ImportReport, describe as describeImport, importLegacyTabs, importSucce
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
+import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
@@ -102,6 +104,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
+  // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
+  // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
+  useFileProbe(fileAt(statSync));
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
