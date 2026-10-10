@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 163,
+  "sites": 164,
   "direct": 0,
   "modal": 25,
-  "events": 138,
+  "events": 139,
   "inTheFunnel": 3,
-  "routed": 163,
+  "routed": 164,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 0,
@@ -150,6 +150,7 @@
     "server-not-installed-for-sending",
     "server-too-old-to-close-a-consultation",
     "setting-not-saved",
+    "setting-path-missing",
     "settings-mirrored-after-all",
     "settings-stood-down",
     "shipped-role-not-removable",

@@ -95,7 +95,7 @@ import { thisSide } from './installer';
 import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
 import { LogPeriod } from './logPeriod';
-import { NO_NOTES, ProviderNotes, ProvidersAnswer } from './providers';
+import { NO_NOTES, ProviderNotes, ProvidersAnswer, type SettingProblem, withoutCovered } from './providers';
 import { readProviders } from './providersProbe';
 import { presetEndpoint, VAULT_KEY_MARK, VaultKeyItem, vaultKeyItems, vaultKeyRow } from './apiKeyVendors';
 import { askedOrRefused, asksAnEndpoint, type EndpointListing, listingOf } from './endpointModels';
@@ -838,7 +838,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * gap, not the one that prompted the work.</p>
    */
   private sayWhatTheServerSaid(answer: ProvidersAnswer): void {
-    const said = answer.notes.unrecognised;
+    // Never two toasts for one folder (paths per side, E5.3): a sentence the server also named structurally — a missing
+    // root, by key and value — is the missing-path notice's to say, with its place and its button; this toast keeps the rest.
+    const said = withoutCovered(answer.notes.unrecognised, answer.notes.settingProblems);
     if (said.length === 0) {
       return;
     }
@@ -866,6 +868,21 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       detail: said.join('\n'),
       cure: 'The server is running without those settings. Fix them in ConnectOtherAIs Settings and reload the window.',
     });
+  }
+
+  /**
+   * Told what coai-mcp said about its settings by KIND after every probe — `undefined` from a server that has not answered
+   * or predates `settingProblems`. Bound by activation to the path watch, which cannot be constructed here.
+   */
+  public onServerProblems: ((problems: readonly SettingProblem[] | undefined) => void) | undefined = undefined;
+
+  /**
+   * The path watch prefers the server's answer about the roots to its own probe — from a server that answered and lists
+   * the capability; anything else leaves the window's own findings (paths per side, E5.6).
+   */
+  private async tellTheWatch(answer: ProvidersAnswer): Promise<void> {
+    const trusted = answer.answered && hasFeature(await this.binaryFeatures(), FEATURES.settingProblems);
+    this.onServerProblems?.(trusted ? answer.notes.settingProblems : undefined);
   }
 
   /** Keyed on the executable too: a reinstall inside the window must not serve the old one's answer. */
@@ -1065,6 +1082,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.providersCache = answer;
       this.providersAt = Date.now();
       this.providersFrom = executable;
+      await this.tellTheWatch(answer);
       if (changed) {
         await this.render();
       }

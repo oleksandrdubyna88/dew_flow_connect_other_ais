@@ -1,6 +1,7 @@
 import { placeLabel } from './catalogPlaces';
 import { type FilePresence, type PathFamily, isWindowsAbsolute, spelledForTheOtherOs } from './pathFamily';
 import { PATH_SETTINGS, type PathKind, type PathSetting } from './pathSettings';
+import type { SettingProblem } from './providers';
 
 /**
  * A path of THIS side that is not where the settings say it is — the one model behind the notice at every start and the
@@ -119,6 +120,41 @@ export function pathFindings(values: readonly PathValue[], family: PathFamily, p
 
       return finding === undefined ? [] : [finding];
     });
+}
+
+/**
+ * The findings the page and the notice run on when the SERVER has answered (todo/PLAN_paths_per_side.md E5.6): for the
+ * settings coai-mcp judges (`saidBy: 'server'` — the question consultant's roots) its `settingProblems` replace this
+ * window's own probe, so the page and the server cannot disagree about a root; every other setting keeps this
+ * window's findings. `undefined` is a server that has not answered, or is older than the capability — then this
+ * window's own findings stand, as before.
+ */
+export function agreed(own: readonly PathFinding[], server: readonly SettingProblem[] | undefined, family: PathFamily): readonly PathFinding[] {
+  if (server === undefined) {
+    return own;
+  }
+  const theirs = new Set(PATH_SETTINGS.filter((one) => one.saidBy === 'server').map((one) => one.id));
+
+  return [...own.filter((one) => !theirs.has(one.key)), ...findingsFromServer(server, family)];
+}
+
+/** The server's problems as findings — a key this build does not know, or a kind it does not, marks nothing. */
+export function findingsFromServer(problems: readonly SettingProblem[], family: PathFamily): readonly PathFinding[] {
+  return problems.flatMap((problem) => {
+    const setting = PATH_SETTINGS.find((one) => one.saidBy === 'server' && one.wireKey === problem.key);
+    const state = STATE_OF_KIND[problem.kind];
+
+    return setting === undefined || state === undefined
+      ? []
+      : [{ key: setting.id, place: setting.place, value: problem.value.trim(), family, state, owner: '' }];
+  });
+}
+
+/** The server's kinds (`SettingProblemKinds` in C#) as this model's states, and back — the seam compares through them. */
+const STATE_OF_KIND: Readonly<Record<string, FindingState | undefined>> = { 'missing-folder': 'missing', 'unreadable-folder': 'unknown' };
+
+export function kindOfState(state: FindingState): string {
+  return state === 'missing' ? 'missing-folder' : 'unreadable-folder';
 }
 
 /** The finding about one stored value of one setting, or nothing. */

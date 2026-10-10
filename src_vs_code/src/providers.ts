@@ -138,6 +138,18 @@ export function parseProviderNotes(output: string): ProviderNotes {
   }
 }
 
+/**
+ * The sentences the generic "the server could not understand a setting" toast still has to carry: every one of
+ * `unrecognised` that no structured problem covers (todo/PLAN_paths_per_side.md E5.3). A sentence a problem names is
+ * the missing-path notice's to say, with its place and its button — never two toasts for one folder. From a server
+ * before the field the list is empty, so every sentence stays the toast's, as before.
+ */
+export function withoutCovered(unrecognised: readonly string[], problems: readonly SettingProblem[]): readonly string[] {
+  const covered = new Set(problems.map((one) => one.sentence).filter((one) => one.length > 0));
+
+  return unrecognised.filter((sentence) => !covered.has(sentence));
+}
+
 /** The problems the server named, each kept only whole: a key, a kind and a value that are non-empty strings, and a sentence. */
 function settingProblemsFrom(value: unknown): readonly SettingProblem[] {
   if (!Array.isArray(value)) {

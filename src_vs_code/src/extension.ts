@@ -42,7 +42,8 @@ import { ImportReport, describe as describeImport, importLegacyTabs, importSucce
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
-import { refuseUnderMissingRoot } from './findingsBoard';
+import { onFindings, refuseUnderMissingRoot } from './findingsBoard';
+import { startPathWatch } from './pathWatchHost';
 import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
@@ -108,6 +109,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
   // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
   useFileProbe(fileAt(statSync));
+  // The paths of THIS side, asked of the disk and said when missing (paths per side, E5.3) — started here, before the
+  // settings mirror below writes the data directory, because the mirror and every ledger ask the watch's answer first
+  // (E5.0): a named data root that is missing is never created by them.
+  const pathWatch = startPathWatch(context);
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
@@ -269,6 +274,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
   const chatPanels = new ChatPanels();
+  // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
+  // the watch through the panel's probe (paths per side, E5.3 / E5.6).
+  onFindings(() => { void panelRef.render(); });
   const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
     const question = watcher.openQuestions.find((q) => q.id === id);
     if (question !== undefined) {
@@ -293,6 +301,8 @@ export function activate(context: vscode.ExtensionContext): void {
       mirrorSettings(mirroring);
     }
   });
+  // What coai-mcp said about its settings by kind reaches the path watch through the panel's probe (paths per side, E5.6).
+  panel.onServerProblems = (problems) => { pathWatch.serverSaid(problems); };
   // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
   context.subscriptions.push({ dispose: () => { panel.dispose(); } });
   // A Team-server answer landing repaints the rounds log too, not only the sidebar — the page is where the company
@@ -536,6 +546,8 @@ export function activate(context: vscode.ExtensionContext): void {
         // Re-read WHERE first: `mirrorSettings` writes the settings file into the data directory, so
         // a changed `coai.dataDirectory` has to be in effect before that write chooses its path.
         storageReadsThisSide(context);
+        // And the paths are asked of the disk again, the data root among them, before the mirror decides (E5.3).
+        pathWatch.forget();
         mirrorSettings(settingsSync);
         void panel.render();
       }

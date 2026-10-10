@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
 
@@ -83,6 +84,14 @@ test('a write at or under the missing named root is refused with the finding\'s 
 
   publishFindings([]);
   assert.equal(refusedDataRoot(ROOT), undefined);
+});
+
+test('the code the gate holds is the code a real call site raises — the notifications census found it', () => {
+  // `SETTING_PATH_MISSING` is a constant for the readers; the call site spells the literal so the census can see it. A
+  // rename on one side alone would hold nothing and toast everything.
+  const inventory = JSON.parse(readFileSync(resolve(__dirname, '..', '..', 'notification-sites.json'), 'utf8')) as { codes: string[] };
+
+  assert.ok(inventory.codes.includes(SETTING_PATH_MISSING), `no call site raises ${SETTING_PATH_MISSING}; the census knows ${inventory.codes.length} codes`);
 });
 
 test('a publish tells its listeners and is what the page reads; the gate waits for the data root to be asked about, bounded', async () => {
