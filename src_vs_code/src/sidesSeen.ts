@@ -32,6 +32,9 @@ export const KNOWN_FOR_MS = 90 * DAY_MS;
 /** A side is stamped at most once in this long — activation is frequent, and a write per window start is noise. */
 export const STAMP_EVERY_MS = DAY_MS;
 
+/** The furthest instant a JavaScript `Date` can hold, either side of 1970 (ECMA-262, 100 000 000 days). */
+const LATEST_DATE_MS = 8.64e15;
+
 /** What one side's record says. Times are UTC milliseconds (`Date.now()`); a person reads them as a local day. */
 export interface SideRecord {
   readonly family: PathFamily;
@@ -83,7 +86,7 @@ export function sideSeenKey(side: string): string {
  * `firstSeen`.
  */
 export function stampSide(stored: unknown, side: string, family: PathFamily, label: string, now: number): SideStamp | undefined {
-  const before = recordOf(stored);
+  const before = recordOf(stored, now);
   if (stampedLately(before, now)) {
     return undefined;
   }
@@ -100,7 +103,7 @@ function stampedLately(before: SideRecord | undefined, now: number): boolean {
 export function seenSides(entries: readonly (readonly [string, unknown])[], now: number): readonly SeenSide[] {
   return entries
     .flatMap(([key, stored]): SeenSide[] => {
-      const record = key.startsWith(SIDE_SEEN_PREFIX) ? recordOf(stored) : undefined;
+      const record = key.startsWith(SIDE_SEEN_PREFIX) ? recordOf(stored, now) : undefined;
 
       return record !== undefined && known(record, now) ? [{ ...record, side: key.slice(SIDE_SEEN_PREFIX.length) }] : [];
     })
@@ -125,19 +128,24 @@ function known(record: SideRecord, now: number): boolean {
 }
 
 function knownRecord(stored: unknown, now: number): boolean {
-  const record = recordOf(stored);
+  const record = recordOf(stored, now);
 
   return record !== undefined && known(record, now);
 }
 
-/** The stored value as a record, or nothing — a hand edit or an older shape must never read as a side. */
-function recordOf(stored: unknown): SideRecord | undefined {
+/**
+ * The stored value as a record, or nothing — a hand edit or an older shape must never read as a side, and neither may a
+ * time no `Date` can hold or one more than {@link STAMP_EVERY_MS} ahead of `now` (the code round on E2: `1e300` is
+ * finite, counted as seen in the far future, held off every later stamp and threw `RangeError` on the page). Such a
+ * record is ignored, and pruned at the next stamp — never thrown on. A day of slack keeps another clock's stamp.
+ */
+function recordOf(stored: unknown, now: number): SideRecord | undefined {
   if (typeof stored !== 'object' || stored === null) {
     return undefined;
   }
   const fields = stored as Readonly<Record<string, unknown>>;
 
-  return hasRecordFields(fields)
+  return readable(fields, now)
     ? { family: fields.family, label: fields.label, firstSeen: fields.firstSeen, lastSeen: fields.lastSeen }
     : undefined;
 }
@@ -145,6 +153,16 @@ function recordOf(stored: unknown): SideRecord | undefined {
 /** Every field a record needs, each of its type — the shape a hand edit or an older build may not have. */
 function hasRecordFields(fields: Readonly<Record<string, unknown>>): fields is Readonly<Record<string, unknown>> & SideRecord {
   return isFamily(fields['family']) && typeof fields['label'] === 'string' && isTime(fields['firstSeen']) && isTime(fields['lastSeen']);
+}
+
+/** A record's fields, each of its type, with times that can be believed. */
+function readable(fields: Readonly<Record<string, unknown>>, now: number): fields is Readonly<Record<string, unknown>> & SideRecord {
+  return hasRecordFields(fields) && plausible(fields, now);
+}
+
+/** Both times within what a `Date` holds, and neither more than a day ahead of now. */
+function plausible(record: SideRecord, now: number): boolean {
+  return [record.firstSeen, record.lastSeen].every((at) => Math.abs(at) <= LATEST_DATE_MS && at - now <= STAMP_EVERY_MS);
 }
 
 function isFamily(value: unknown): value is PathFamily {

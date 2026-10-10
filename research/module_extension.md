@@ -3391,7 +3391,7 @@ path field of `todo/PLAN_paths_per_side.md` (E3/E4) needs exactly that. E2 is th
   reaches the other side's already-open window at its next read — `research/RESULTS_side_registry_reaches_the_other_window.md`).
   `globalState` is not synced by Settings Sync, so another machine's sides never appear. `stampSide` writes at most once a
   day (`STAMP_EVERY_MS`) and keeps `firstSeen`; `seenSides` lists the sides seen within 90 days (`KNOWN_FOR_MS`, the 90th
-  day included), newest first; `prunedKeys` names the older ones and any value under the prefix that is not a record;
+  day included), newest first; `prunedKeys` names the older ones and any value under the prefix that is not a record — a time outside what a `Date` holds, or more than a day ahead of now, makes it no record (it would count as seen in the far future and throw on the page);
   `knownFamilies` is `{windows, posix}` once both were seen. Families are D1's two (`PathFamily`, `familyLabel`:
   **Windows** / **WSL / Linux**). The `coai.firstSeenControls` record (`newTags.ts`) is the precedent.
 - **This side's identity** — `sideHereOf(thisSide(storage), process.platform)`: `sideKey` (the key `installedKey` and

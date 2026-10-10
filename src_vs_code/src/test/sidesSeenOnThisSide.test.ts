@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import type { PanelState } from '../panelView';
 import { settingMessageFrom, settingWrite } from '../settingsShape';
-import { sideSeenKey, type SeenSide, type SidesView } from '../sidesSeen';
+import { sideSeenKey, sidesIn, type SeenSide, type SidesView } from '../sidesSeen';
 import { seenDay } from '../sidesSeenView';
 import { type Page, click, lastWrite, panelState, runPanel, work } from './panelPageHarness';
 import { pageTree, type PageNode } from './pageTree';
@@ -104,4 +104,18 @@ test('a side stamped by another window appears at the next render — the list i
   const after = rows(opened(view()).pane).map((row) => row[0]);
 
   assert.deepEqual([before, after], [[HERE], [HERE, WSL]]);
+});
+
+test('a stored record with a time no Date can hold is ignored, and the page still opens', () => {
+  // The code round's accepted finding on E2: the page wrote lastSeen 1e300 with toISOString and threw RangeError.
+  const values = new Map<string, unknown>([
+    [sideSeenKey(HERE), { family: 'windows', label: 'Windows', firstSeen: NOW - DAY, lastSeen: NOW }],
+    [sideSeenKey(WSL), { family: 'posix', label: 'WSL: Ubuntu', firstSeen: NOW - DAY, lastSeen: 1e300 }],
+  ]);
+  const store = { keys: () => [...values.keys()], get: (key: string) => values.get(key), update: () => Promise.resolve() };
+
+  const { pane } = opened(view({ seen: sidesIn(store, NOW) }));
+
+  assert.deepEqual(rows(pane).map((row) => row[0]), [HERE]);
+  assert.ok(pane.text().includes('only Windows has been seen'), 'a side seen "in the year 1e300" made two fields');
 });

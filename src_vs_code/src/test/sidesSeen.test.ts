@@ -113,3 +113,21 @@ test('the switch reads auto from anything but always or never', () => {
   assert.deepEqual(['always', 'never', 'auto', undefined, 'sometimes', 3, null].map(pathFieldsModeOf),
     ['always', 'never', 'auto', 'auto', 'auto', 'auto', 'auto']);
 });
+
+test('a stored time outside what a Date can hold, or more than a day ahead, reads as no record: never listed, never known, pruned, stamped over', () => {
+  // The code round's accepted finding on E2: 1e300 is finite, so it passed as a time, counted as seen in the far
+  // future, threw RangeError when the page wrote it as an ISO date, and held off every later stamp.
+  for (const lastSeen of [1e300, -1e300, 8.64e15 + 1, NOW + DAY + 1]) {
+    const stored = { family: 'posix', label: 'WSL: Ubuntu', firstSeen: NOW - DAY, lastSeen };
+    const entries: (readonly [string, unknown])[] = [[sideSeenKey('wsl|s'), stored]];
+
+    assert.deepEqual(seenSides(entries, NOW), [], `lastSeen ${lastSeen} was listed`);
+    assert.deepEqual(prunedKeys(entries, NOW), [sideSeenKey('wsl|s')], `lastSeen ${lastSeen} was kept`);
+    assert.deepEqual(stampSide(stored, 'wsl|s', 'posix', 'WSL: Ubuntu', NOW)?.record,
+      { family: 'posix', label: 'WSL: Ubuntu', firstSeen: NOW, lastSeen: NOW }, `lastSeen ${lastSeen} held off the stamp`);
+  }
+  const badFirst = { family: 'posix', label: 'WSL: Ubuntu', firstSeen: 1e300, lastSeen: NOW - DAY };
+  assert.deepEqual(seenSides([[sideSeenKey('wsl|s'), badFirst]], NOW), [], 'a firstSeen of 1e300 was listed');
+  assert.deepEqual(seenSides([[sideSeenKey('wsl|s'), { ...badFirst, firstSeen: NOW - DAY, lastSeen: NOW + DAY }]], NOW).length, 1,
+    'the premise: a stamp up to a day ahead (another machine\'s clock) is still believed');
+});
