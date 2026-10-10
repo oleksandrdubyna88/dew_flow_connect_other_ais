@@ -90,6 +90,7 @@ import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostExecutableSide, hostPlatform, Platform } from './hostSide';
+import { currentFindings } from './findingsBoard';
 import { executableHere, otherSideClis } from './pathFamily';
 import { thisSide } from './installer';
 import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1336,6 +1337,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
       // Which rows' CLI paths this side skips as the other side's — asked of the disk HERE (paths per side, E1.5).
       otherSideClis: otherSideClis(vendors, hostExecutableSide()),
+      // The paths of this side that are missing or unanswerable, as the watch last published them (E5.4): the marks
+      // beside the values and the counts on the tabs. Read, never asked here — the watch asks the disk.
+      pathFindings: currentFindings(),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
