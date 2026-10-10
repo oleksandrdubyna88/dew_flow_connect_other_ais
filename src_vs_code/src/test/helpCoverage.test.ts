@@ -6,6 +6,7 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { COPY_ANSWER } from '../chatPage';
 import { BLOCK_CONTROL_TERMS } from '../renderAnswer';
 import { TEAM_TAB_LABEL } from '../teamServerTabPage';
+import { TEAM_SERVER_WITH_PEOPLE } from '../teamServerTab';
 
 /**
  * Every command in the manifest, and every setting, is described somewhere in the help.
@@ -53,6 +54,19 @@ test('every language names the Team server tab where the help lists the tabs of 
       const said = Object.values(bodyFor(article, language).body).join(' ');
       assert.ok(said.includes(named), `the ${language} ${id} article never names the ${TEAM_TAB_LABEL} tab — stale rather than missing`);
       assert.ok(!said.includes('Show the whole company'), `the ${language} ${id} article still promises the removed Company toggle`);
+    }
+  }
+});
+
+test('every language says what the Team server tab shows from a newer server — names, last seen, ~$, the chart — and what an older one says', () => {
+  // Epic 3 of todo/PLAN_team_usage_by_person.md. The control names are English in every language, as everywhere here,
+  // and the version is read from the one constant the tab prints, so a release that moves it moves the help's check too.
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
+  assert.ok(article !== undefined, 'the rounds-log article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['**last seen**', '**~$**', '**≥**', '**launches per day**', '**The numbers**', `needs Team server ≥ ${TEAM_SERVER_WITH_PEOPLE}`]) {
+      assert.ok(said.includes(named), `the ${language} rounds-log article never says “${named}” — stale rather than missing`);
     }
   }
 });

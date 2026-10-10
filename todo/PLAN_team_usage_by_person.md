@@ -1,8 +1,9 @@
 # PLAN — who on the team is spending it: the Team server tab
 
-> Status: **in progress, 2026-10-10 — E1 (the tab on today's server, stories 1.1–1.5) and E2 stories 2.1–2.2 (the
-> server half: `GET /api/people`, `models[]`, `daily`, an hourly session sweep) implemented on `feat/team-server-tab`;
-> open: 2.3 (release and the deploy, which waits for the operator), E3 (the tab uses E2).** Scope: a new admin-only **Team server** tab on the
+> Status: **in progress, 2026-10-10 — E1 (the tab on today's server, stories 1.1–1.5), E2 stories 2.1–2.2 (the
+> server half: `GET /api/people`, `models[]`, `daily`, an hourly session sweep) and E3 stories 3.1–3.3 with 3.4's tests,
+> contract cases, help and docs implemented on `feat/team-server-tab`; open: 2.3 (the server release and the deploy,
+> which waits for the operator) and 3.4's extension release and live check against the deployed server.** Scope: a new admin-only **Team server** tab on the
 > extension's Review rounds page (`src_vs_code`), two additive answers from the Team server (`src_server`), and the
 > removal of the dead *Company* toggle from the spending tab.
 >
@@ -279,6 +280,17 @@ launches; `/api/people` returns exactly three fields and refuses a non-admin.
 | a held session file is a read hazard | the lazy last-used stamp in `Validate` is non-fatal, and a refused rename removes its `*.tmp` | on Windows `File.Move(overwrite)` fails while any reader holds the file, whatever share it asks — measured, and pinned by a test |
 | `Sweep` deletes unreadable files (`Sessions.cs:132-137`) | `Sweep` deletes only what it has READ and judged: expired, torn, or naming nobody; a file it could not read this time is kept and said once (`JsonFileStore.TryRead` → `FileRead<T>`, `SessionStore.Classify`) | a null meant absent, held and torn alike, and the hourly sweep deleted a live session whose own stamp was renaming it — the concurrency test lost one before the fix (risk consultation on 2.1, 2026-10-10) |
 | every unexpired session is a person | a record with `"email": null` is refused by `Validate`, skipped by `Active`, removed by `Sweep` | it took every admin's roster down with a 500 through the gate's domain check (risk consultation on 2.1) |
+
+### Deviations in E3 (2026-10-10)
+
+| What the plan said | What was built | Why |
+|---|---|---|
+| names and *last seen* from `/api/people` | asked by the SAME cache as a third key, `(server, 'people', '')`, admin-only and only while the tab is in front; a refusal of the listing forgets the company figures and the other way round | one owner, one eviction rule for every admin view (the coordinator's brief for E3) |
+| *last seen within the hour* | "within the hour" under an hour, then "N h ago" up to 48 h, then "N days ago" | the server's stamp is one-hour resolution; the coarser steps claim no more than it has |
+| search by name and by email | the box says "Search name or email" only when the server sent a name (`named` in the push), else "Search email" | a placeholder promising names a server cannot send would be a small lie |
+| sort by ~$ / launches / tokens / last seen | ~$ and last seen are disabled, saying *needs Team server ≥ 0.11.0*, until the answer can serve them (`sorts` in the push); a chosen one an answer cannot serve falls back to launches | the same sort control serves an old and a new server |
+| the chart's axis and days | an inline SVG with gridlines at 0, half and a round top; the first and last days labelled as the server wrote them; the full series in a table under *The numbers* | thirty day labels do not fit; the table is the text alternative |
+| contract: `/api/people`, `models`, `daily` over the real server | `scripts/run-contract.mjs` seeds the started server's `usage.jsonl` with three lines (two people, one unnamed model, one vendor id with a capital) and sets `COAI_CONTRACT_SEEDED`; the per-model/per-day case skips, saying so, against a server it did not seed | a fresh server's ledger is empty and every such assertion would pass vacuously |
 
 ## What the plan round changed (2026-10-09)
 

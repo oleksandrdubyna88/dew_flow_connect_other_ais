@@ -30,9 +30,16 @@ function windowChips(): string {
 
 const NEEDS = escapeHtml(`needs Team server ≥ ${TEAM_SERVER_WITH_PEOPLE}`);
 
+/**
+ * The sorts. ~$ needs the per-model figures and last seen needs the people listing, both from a newer server, so each
+ * carries the label it shows when the answer can serve it and the one it shows when it cannot — the push says which.
+ */
 function sortOptions(): string {
+  const later = (value: string, label: string): string => `<option value="${value}" disabled data-ready="${label}" `
+    + `data-later="${label} — ${NEEDS}">${label} — ${NEEDS}</option>`;
+
   return '<option value="launches">Launches</option><option value="tokens">Tokens</option>'
-    + `<option value="cost" disabled>~$ — ${NEEDS}</option><option value="seen" disabled>Last seen — ${NEEDS}</option>`;
+    + `${later('cost', '~$')}${later('seen', 'Last seen')}`;
 }
 
 /** The section, with every piece a push fills in empty — and the toolbar it never touches. */
@@ -118,6 +125,14 @@ export const TEAM_TAB_CSS = `${CATALOG_TOKENS}${CATALOG_CHIPS}${CATALOG_BADGES}
   .team .vhead .model { color: var(--muted); font-family: var(--vscode-editor-font-family); font-size: .92em; }
   .team .vline { color: var(--muted); font-size: .92em; margin-top: 4px; }
   .team .chart { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; margin-top: 10px; }
+  .team .chart svg { width: 100%; height: auto; display: block; }
+  .team .chart text { fill: var(--muted); font-size: 10px; }
+  .team .chart .gridline { stroke: var(--border); }
+  .team .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .92em; color: var(--muted); margin-top: 4px; }
+  .team .chart-data { margin-top: 6px; }
+  .team .chart-data > summary { cursor: pointer; color: var(--muted); }
+  .team .who .mail { color: var(--muted); margin-left: 6px; }
+  .team .quiet ul { margin: 6px 0 0; padding-left: 18px; }
   .team .notes { margin-top: 16px; color: var(--muted); font-size: .92em; display: grid; gap: 3px; max-width: 110ch; }`;
 
 /** Whether a card's search text holds what was typed — the server's emails, lower-cased on the way in. Embedded. */
@@ -125,13 +140,22 @@ export function teamMatches(search: string, query: string): boolean {
   return search.indexOf(query.trim().toLowerCase()) >= 0;
 }
 
-/** The order of two cards: the chosen figure, highest first, then by email so equal ones never swap. Embedded. */
-export function teamOrder(
-  a: { readonly launches: number; readonly tokens: number; readonly search: string },
-  b: { readonly launches: number; readonly tokens: number; readonly search: string },
-  key: string,
-): number {
-  const by = key === 'tokens' ? b.tokens - a.tokens : b.launches - a.launches;
+/** What a card is sorted by. `cost` is -1 and `seen` 0 when not known, so an unknown sorts last. */
+export interface TeamFacts {
+  readonly launches: number;
+  readonly tokens: number;
+  readonly cost: number;
+  readonly seen: number;
+  readonly search: string;
+}
+
+/**
+ * The order of two cards: the chosen figure, highest — or most recent — first, then by email and name so equal ones
+ * never swap. Embedded by its source, so it may reference nothing but its arguments.
+ */
+export function teamOrder(a: TeamFacts, b: TeamFacts, key: string): number {
+  const field = ['tokens', 'cost', 'seen'].indexOf(key) >= 0 ? (key as 'tokens' | 'cost' | 'seen') : 'launches';
+  const by = b[field] - a[field];
 
   return by !== 0 ? by : (a.search < b.search ? -1 : Number(a.search > b.search));
 }
@@ -146,8 +170,26 @@ export const TEAM_TAB_SCRIPT = `
   var teamOrder = ${teamOrder.toString()};
   var team = { server: '', query: '', sort: 'launches', servers: null };
   function teamFacts(card) {
-    return { launches: Number(card.getAttribute('data-launches')) || 0, tokens: Number(card.getAttribute('data-tokens')) || 0,
-      search: card.getAttribute('data-search') || '' };
+    var number = function (name, otherwise) { var said = Number(card.getAttribute(name)); return isNaN(said) ? otherwise : said; };
+    return { launches: number('data-launches', 0), tokens: number('data-tokens', 0), cost: number('data-cost', -1),
+      seen: number('data-seen', 0), search: card.getAttribute('data-search') || '' };
+  }
+  // The search box says what it matches: names too, once the server sent any (3.1).
+  function teamSearchSays(named) {
+    var box = document.getElementById('team-q');
+    box.setAttribute('placeholder', named ? 'Search name or email' : 'Search email');
+    box.setAttribute('aria-label', named ? 'Search people by name or email' : 'Search people by email');
+  }
+  // Each sort the answer cannot serve is disabled and says why; a chosen one that can no longer be served falls back.
+  function teamSortOffers(sorts) {
+    var select = document.getElementById('team-sort');
+    var offers = select.querySelectorAll('option[data-later]');
+    for (var i = 0; i < offers.length; i++) {
+      var ready = sorts[offers[i].value] === true;
+      offers[i].disabled = !ready;
+      offers[i].textContent = offers[i].getAttribute(ready ? 'data-ready' : 'data-later');
+      if (!ready && team.sort === offers[i].value) { team.sort = 'launches'; select.value = 'launches'; }
+    }
   }
   // Search and sort are the page's own: no round trip, and they survive every push because they run after it.
   function teamArrange() {
@@ -185,6 +227,8 @@ export const TEAM_TAB_SCRIPT = `
     document.getElementById('team-server-pick').hidden = picker.querySelectorAll('option').length < 2;
     team.server = message.selected;
     teamMarkWindow(message.window);
+    teamSearchSays(message.named === true);
+    teamSortOffers(message.sorts || {});
     document.getElementById('team-read').textContent = message.readUtc ? teamClock(message.readUtc) : '';
   }
   function teamFill(parts) {

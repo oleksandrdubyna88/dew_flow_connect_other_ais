@@ -1,4 +1,4 @@
-import { ServerResult, Usage } from './teamServerApi';
+import { PersonListing, ServerResult, Usage } from './teamServerApi';
 
 /**
  * What each Team server says has been spent on it — asked, remembered and refreshed, without `vscode`.
@@ -22,6 +22,15 @@ import { ServerResult, Usage } from './teamServerApi';
 /** Whose spending: this account's, or — for an admin — everybody's. */
 export type UsageScope = 'me' | 'company';
 
+/**
+ * What a surface can want of a server: a spending scope, or — for an admin — the list of who is signed in
+ * (`GET /api/people`, todo/PLAN_team_usage_by_person.md 3.1), which has no window and is kept under `''`.
+ */
+export type WantScope = UsageScope | 'people';
+
+/** The scopes only an admin is answered, and a refusal of which forgets every one of them. */
+const ADMIN_ONLY: ReadonlySet<WantScope> = new Set<WantScope>(['company', 'people']);
+
 /** How long an answer stands before it is asked again. */
 export const USAGE_FRESH_MS = 60 * 1000;
 
@@ -33,7 +42,7 @@ export interface UsageServer {
 
 /** One thing a surface wants shown: a scope over a window, in the server's own window names. */
 export interface UsageWant {
-  readonly scope: UsageScope;
+  readonly scope: WantScope;
   readonly window: string;
 }
 
@@ -58,6 +67,8 @@ export interface UsageTarget {
 export interface UsageCell {
   /** The last answer, or undefined when there has never been one — or it was evicted. */
   readonly usage?: Usage | undefined;
+  /** The last people listing, for the `people` key — undefined like `usage` when there is none. */
+  readonly people?: readonly PersonListing[] | undefined;
   /** Why the last request failed, or empty. */
   readonly problem: string;
   /** The server refused this scope (`401`/`403`): for `company`, this account is no admin there now. */
@@ -76,6 +87,8 @@ export interface UsageCell {
 export interface TeamUsageDeps {
   readonly now: () => number;
   readonly fetchUsage: (url: string, token: string, window: string, scope: UsageScope) => Promise<ServerResult<Usage>>;
+  /** `GET /api/people`. Absent: nothing asks for the listing (a caller with no use for it). */
+  readonly fetchPeople?: (url: string, token: string) => Promise<ServerResult<readonly PersonListing[]>>;
   /** Told after every answer that lands, so whatever shows these figures — the sidebar AND the page — repaints. */
   readonly changed: () => void;
 }
@@ -84,17 +97,33 @@ export interface TeamUsageDeps {
 const REFUSED = new Set([401, 403]);
 
 /** The key one answer is kept under. NUL cannot occur in a server id, a scope or a window name. */
-function keyOf(serverId: string, scope: UsageScope, window: string): string {
+function keyOf(serverId: string, scope: WantScope, window: string): string {
   return `${serverId}\u0000${scope}\u0000${window}`;
 }
 
 /** Whether a failure means "not this caller" for a scope that needs an admin — then nothing held may stay. */
-function refuses(scope: UsageScope, status: number): boolean {
-  return scope === 'company' && REFUSED.has(status);
+function refuses(scope: WantScope, status: number): boolean {
+  return ADMIN_ONLY.has(scope) && REFUSED.has(status);
 }
 
-function belongsTo(key: string, serverId: string, scope?: UsageScope): boolean {
+function belongsTo(key: string, serverId: string, scope?: WantScope): boolean {
   return key.startsWith(scope === undefined ? `${serverId}\u0000` : `${serverId}\u0000${scope}\u0000`);
+}
+
+/** What a failure keeps of the cell it replaces: nothing after a refusal, everything after an outage. */
+function keptThrough(refused: boolean, known: UsageCell | undefined): UsageCell | undefined {
+  return refused ? undefined : known;
+}
+
+/** What one key holds of an answer: the spending, or the listing. */
+interface Answer {
+  readonly usage?: Usage;
+  readonly people?: readonly PersonListing[];
+}
+
+/** A typed answer, as the one shape a cell is written from — a failure carried across unchanged. */
+function asAnswer<T>(result: ServerResult<T>, held: (value: T) => Answer): ServerResult<Answer> {
+  return result.ok ? { ...result, value: held(result.value) } : result;
 }
 
 export class TeamUsageCache {
@@ -110,19 +139,19 @@ export class TeamUsageCache {
 
   constructor(private readonly deps: TeamUsageDeps) {}
 
-  cell(serverId: string, scope: UsageScope, window: string): UsageCell | undefined {
+  cell(serverId: string, scope: WantScope, window: string): UsageCell | undefined {
     return this.cells.get(keyOf(serverId, scope, window));
   }
 
   /** Whether this key's answer is recent enough to stand. */
-  isFresh(serverId: string, scope: UsageScope, window: string): boolean {
+  isFresh(serverId: string, scope: WantScope, window: string): boolean {
     const held = this.cell(serverId, scope, window);
 
     return held !== undefined && this.deps.now() - (held.askedAt ?? held.answeredAt) < USAGE_FRESH_MS;
   }
 
   /** Whether a request for this key is on its way. */
-  isAsking(serverId: string, scope: UsageScope, window: string): boolean {
+  isAsking(serverId: string, scope: WantScope, window: string): boolean {
     const key = keyOf(serverId, scope, window);
 
     return this.newest.has(key) && this.newest.get(key) !== this.settled.get(key);
@@ -134,9 +163,12 @@ export class TeamUsageCache {
     this.accounts.delete(serverId);
   }
 
-  /** Forget one server's company figures — the caller is no admin there, as far as anyone can now tell. */
+  /**
+   * Forget one server's admin views — its company figures AND its people listing: the caller is no admin there, as far
+   * as anyone can now tell.
+   */
   evictCompany(serverId: string): void {
-    this.forget((key) => belongsTo(key, serverId, 'company'));
+    this.forget((key) => [...ADMIN_ONLY].some((scope) => belongsTo(key, serverId, scope)));
   }
 
   /** Whether anything a target wants is neither fresh nor already being asked. */
@@ -189,12 +221,12 @@ export class TeamUsageCache {
     const number = this.requests;
     this.newest.set(key, number);
     const askedAt = this.deps.now();
-    const spent = await this.deps.fetchUsage(server.url, token, want.window, want.scope);
+    const spent = await this.fetch(server, token, want);
     if (this.newest.get(key) !== number) {
       return;
     }
-    // A refusal of company is about the CALLER, not the window: every window of this server's company figures goes,
-    // and any still in flight with it, before the refusal is written down.
+    // A refusal of an admin view is about the CALLER, not the window: every window of this server's company figures
+    // and its people listing go, and any still in flight with them, before the refusal is written down.
     if (!spent.ok && refuses(want.scope, spent.status)) {
       this.evictCompany(server.id);
     }
@@ -203,11 +235,26 @@ export class TeamUsageCache {
     this.deps.changed();
   }
 
-  private write(key: string, scope: UsageScope, spent: ServerResult<Usage>, askedAt: number): void {
+  /** The one request a want stands for: the listing, or the spending over its window. */
+  private async fetch(server: UsageServer, token: string, want: UsageWant): Promise<ServerResult<Answer>> {
+    if (want.scope === 'people') {
+      return asAnswer(await this.peopleOf(server, token), (people) => ({ people }));
+    }
+
+    return asAnswer(await this.deps.fetchUsage(server.url, token, want.window, want.scope), (usage) => ({ usage }));
+  }
+
+  private peopleOf(server: UsageServer, token: string): Promise<ServerResult<readonly PersonListing[]>> {
+    return this.deps.fetchPeople === undefined
+      ? Promise.resolve({ ok: false, status: 0, contract: undefined, message: 'nothing here asks for the people listing' })
+      : this.deps.fetchPeople(server.url, token);
+  }
+
+  private write(key: string, scope: WantScope, spent: ServerResult<Answer>, askedAt: number): void {
     const known = this.cells.get(key);
     const answeredAt = this.deps.now();
     const cell: UsageCell = spent.ok
-      ? { usage: spent.value, problem: '', contract: spent.contract, answeredAt, askedAt }
+      ? { ...spent.value, problem: '', contract: spent.contract, answeredAt, askedAt }
       : { ...this.failed(scope, spent, known, answeredAt), askedAt };
     this.cells = new Map([...this.cells, [key, cell]]);
   }
@@ -216,21 +263,16 @@ export class TeamUsageCache {
    * A failure: an outage keeps the last good answer and says what went wrong; a refusal of `company` keeps NOTHING.
    */
   private failed(
-    scope: UsageScope,
-    spent: Extract<ServerResult<Usage>, { ok: false }>,
+    scope: WantScope,
+    spent: Extract<ServerResult<Answer>, { ok: false }>,
     known: UsageCell | undefined,
     answeredAt: number,
   ): UsageCell {
     const refused = refuses(scope, spent.status);
-    const kept: UsageCell = known ?? { problem: '', answeredAt };
+    const kept = keptThrough(refused, known) ?? { problem: '', answeredAt };
+    const contract = spent.contract ?? known?.contract;
 
-    return {
-      usage: refused ? undefined : kept.usage,
-      problem: spent.message,
-      refused,
-      contract: spent.contract ?? kept.contract,
-      answeredAt,
-    };
+    return { usage: kept.usage, people: kept.people, problem: spent.message, refused, contract, answeredAt };
   }
 
   /**

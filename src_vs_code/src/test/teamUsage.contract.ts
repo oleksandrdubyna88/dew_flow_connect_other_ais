@@ -14,7 +14,8 @@ import * as assert from 'node:assert';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';
 
-import { createSession, fetchCatalog, fetchUsage, Usage } from '../teamServerApi';
+import { ask, createSession, fetchCatalog, fetchPeople, fetchUsage, Usage } from '../teamServerApi';
+import { personCard } from '../teamPeople';
 import { teamParts, teamTabPush } from '../teamServerTab';
 import { TeamServerState } from '../teamServerView';
 import { NO_SELECTION, withShown } from '../teamTabSelection';
@@ -115,6 +116,7 @@ test('an admin\'s company figures come through the real client, and a window cha
   const pushed = teamTabPush({
     states: [state(true)], selection: withShown(NO_SELECTION, true),
     cell: (_server, window) => cache.cell('contract', 'company', window), asking: () => false, palette: () => 'var(--c)',
+    people: () => undefined, price: () => undefined, now: Date.now(),
   });
   assert.strictEqual(pushed.admin, true);
   assert.ok(pushed.readUtc.length > 0, 'the tab cannot say when it read the answer');
@@ -140,10 +142,83 @@ test('the same body without what a newer server adds says what it needs — neve
     assert.fail(`the company answer was refused: ${answer.status} — ${answer.message}`);
   }
   // As today's server answers, whatever this one answers: the fields a newer server adds, removed.
-  const { daily: _daily, ...older } = answer.value;
-  const parts = teamParts(state(true), { usage: older as Usage, problem: '', answeredAt: Date.now() }, false, () => 'var(--c)');
+  const { daily: _daily, ...rest } = answer.value;
+  const strip = (rows: Usage['vendors']): Usage['vendors'] => rows.map(({ models: _models, ...row }) => row);
+  const older: Usage = { ...rest, vendors: strip(rest.vendors), people: (rest.people ?? []).map((one) => ({ ...one, vendors: strip(one.vendors) })) };
+  const parts = teamParts(state(true), { usage: older, problem: '', answeredAt: Date.now() }, false, () => 'var(--c)');
   const text = Object.values(parts).map((html) => pageTree(html).text()).join(' ');
 
   assert.match(text, /needs Team server ≥/);
   assert.doesNotMatch(text, /\$0(\.0+)?\b/);
+});
+
+// ---------- epic 3: who is signed in, and per-model and per-day figures, through the real client ----------
+
+/** An identity token with a display name, as an identity provider sends one. */
+function namedToken(email: string, name: string): string {
+  const part = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const head = part({ alg: 'HS256', typ: 'JWT' });
+  const body = part({ iss: 'coai-local', email, name, exp: Math.floor(Date.now() / 1000) + 600 });
+
+  return `${head}.${body}.${createHmac('sha256', KEY).update(`${head}.${body}`).digest('base64url')}`;
+}
+
+/** Whether the runner wrote spending into this server's ledger (scripts/run-contract.mjs, seedLedger). */
+const SEEDED = (process.env['COAI_CONTRACT_SEEDED'] ?? '') === '1';
+
+test('an admin is told who is signed in — three fields a row, its own name among them; a member is refused 403', async () => {
+  const signedIn = await createSession(SERVER, namedToken(ADMIN, 'Contract Admin'));
+  assert.ok(signedIn.ok, `the admin could not sign in: ${signedIn.ok ? '' : signedIn.message}`);
+
+  const raw = await ask<unknown>(SERVER, 'api/people', { token: signedIn.value.token });
+  if (!raw.ok) {
+    assert.fail(`the people listing was refused an admin: ${raw.status} — ${raw.message}`);
+  }
+  assert.ok(Array.isArray(raw.value) && raw.value.length > 0, 'an admin who has just signed in is not listed — the check would be vacuous');
+  for (const row of raw.value as Record<string, unknown>[]) {
+    assert.deepStrictEqual(Object.keys(row).sort(), ['displayName', 'email', 'lastUsedUtc'], `a row carries more than the three fields: ${JSON.stringify(row)}`);
+  }
+  const listed = await fetchPeople(SERVER, signedIn.value.token);
+  assert.ok(listed.ok);
+  const me = listed.value.find((one) => one.email.toLowerCase() === ADMIN.toLowerCase());
+  assert.strictEqual(me?.displayName, 'Contract Admin');
+  assert.match(pageTree(personCard({ usage: { email: ADMIN, vendors: [] }, name: me.displayName, lastUsedUtc: me.lastUsedUtc },
+    { serverId: 'contract', price: () => undefined, palette: () => 'var(--c)', now: Date.now() })).text(), /last seen within the hour/,
+  'a session used a moment ago does not read as seen within the hour');
+
+  const member = await fetchPeople(SERVER, await sessionFor(`member@${DOMAIN}`));
+  assert.strictEqual(member.ok ? 200 : member.status, 403, 'a member was shown who is signed in');
+});
+
+test('the company answer names each model under its vendor, lower-cases vendor ids, and counts 30 dense UTC days', async (t) => {
+  if (!SEEDED) {
+    t.skip('this server\'s ledger was not seeded by scripts/run-contract.mjs, so there are no models or days to read');
+    return;
+  }
+  const answer = await fetchUsage(SERVER, await sessionFor(ADMIN), 'week', 'company');
+  if (!answer.ok) {
+    assert.fail(`the company answer was refused: ${answer.status} — ${answer.message}`);
+  }
+  const usage = answer.value;
+
+  assert.deepStrictEqual(usage.vendors.map((one) => one.vendor).sort(), ['codex', 'gemini'], 'a vendor id written "Codex" was not lower-cased');
+  const codex = usage.vendors.find((one) => one.vendor === 'codex');
+  assert.deepStrictEqual(codex?.models?.map((one) => [one.model, one.runs]), [['gpt-5.6-sol', 2]]);
+  assert.deepStrictEqual(usage.vendors.find((one) => one.vendor === 'gemini')?.models?.map((one) => one.model), [''],
+    'a line with no model is grouped under "" — unknown');
+  const daily = usage.daily;
+  assert.ok(daily !== undefined, 'a newer server sent no daily series');
+  assert.strictEqual(daily.days.length, 30);
+  assert.ok(daily.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.day)), 'a day is not a yyyy-MM-dd string');
+  assert.ok(daily.days.every((day) => day.vendors.length === 2), 'the series is not dense: a day lacks a vendor');
+  const sum = (vendor: string) => daily.days.reduce((s, day) => s + (day.vendors.find((one) => one.vendor === vendor)?.runs ?? 0), 0);
+  assert.deepStrictEqual([sum('codex'), sum('gemini')], [2, 1], 'the chart\'s days do not add up to the launches the ledger holds');
+
+  // And the tab draws it: a chart, names, prices at a list rate, and nothing saying a newer server is needed.
+  const parts = teamParts(state(true), { usage, problem: '', answeredAt: Date.now() }, false, () => 'var(--c)', {
+    price: (model) => (model === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10, source: 'openrouter' } : undefined),
+    now: Date.now(),
+  });
+  assert.ok(pageTree(parts.chart).find((node) => node.tagName === 'RECT').length > 0, 'the real daily series drew no bars');
+  assert.doesNotMatch(Object.values(parts).map((html) => pageTree(html).text()).join(' '), /needs Team server/);
 });

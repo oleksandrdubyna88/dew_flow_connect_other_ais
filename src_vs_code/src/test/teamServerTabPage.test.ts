@@ -54,7 +54,7 @@ function push(
 ): TeamPush {
   const cell: UsageCell | undefined = usage === undefined ? undefined : { usage, problem: '', answeredAt: Date.UTC(2026, 9, 9, 10, 0) };
 
-  return teamTabPush({ states, selection, cell: () => cell, asking: () => false, palette });
+  return teamTabPush({ states, selection, cell: () => cell, asking: () => false, palette, people: () => undefined, price: () => undefined, now: 0 });
 }
 
 function send(page: DomPage, team: TeamPush): void {
@@ -246,4 +246,106 @@ test('the fifteen-second watchdog leaves a tab alone once it was pushed, and spe
   const never = runningDomPage(bundle);
   never.runTimers();
   assert.match(never.element('team-status').textContent, /never received its data/);
+});
+
+// ---------- epic 3: the same page against a NEW server's body (models, daily, the people listing) ----------
+
+const NOW = Date.UTC(2026, 9, 10, 12, 0);
+
+/** A company answer as a server ≥ 0.11.0 sends it: models under each vendor, 30 dense days, people. */
+function newCompany(): Usage {
+  const model = (name: string, runs: number, tokensIn: number, tokensOut: number) => ({ model: name, runs, failed: 0, tokensIn, tokensOut });
+  const vendor = (name: string, runs: number, models: ReturnType<typeof model>[]) => ({
+    vendor: name, runs, failed: 0, seconds: 1,
+    tokensIn: models.reduce((s, m) => s + m.tokensIn, 0), tokensOut: models.reduce((s, m) => s + m.tokensOut, 0), models,
+  });
+  const days = Array.from({ length: 30 }, (_, i) => ({
+    day: `2026-09-${String(11 + i).padStart(2, '0')}`.replace(/2026-09-(3[1-9]|4\d)/, (_m, d: string) => `2026-10-${String(Number(d) - 30).padStart(2, '0')}`),
+    vendors: [{ vendor: 'codex', runs: i % 3 }, { vendor: 'gemini', runs: i === 29 ? 4 : 0 }],
+  }));
+
+  return {
+    window: 'week',
+    vendors: [vendor('codex', 7, [model('gpt-5.6-sol', 7, 3_000_000, 300_000)]), vendor('gemini', 2, [model('', 2, 100, 10)])],
+    people: [
+      { email: 'alice@example.com', vendors: [vendor('codex', 2, [model('gpt-5.6-sol', 2, 2_000_000, 200_000)])] },
+      { email: 'bob@example.com', vendors: [vendor('codex', 5, [model('gpt-5.6-sol', 5, 1_000_000, 100_000)]), vendor('gemini', 2, [model('', 2, 100, 10)])] },
+    ],
+    unreadableLines: 0,
+    daily: { fromUtc: '2026-09-11T00:00:00Z', toUtc: '2026-10-11T00:00:00Z', days },
+  };
+}
+
+const LISTED = [
+  { email: 'Alice@Example.com', displayName: 'Alice Smith', lastUsedUtc: new Date(NOW - 30 * 60_000).toISOString() },
+  { email: 'bob@example.com', displayName: 'Bob <b>Jones</b>', lastUsedUtc: new Date(NOW - 5 * 3_600_000).toISOString() },
+  { email: 'carol@example.com', displayName: 'Carol Idle', lastUsedUtc: new Date(NOW - 50 * 3_600_000).toISOString() },
+];
+
+function pushNew(usage: Usage = newCompany()): TeamPush {
+  const cell: UsageCell = { usage, problem: '', answeredAt: NOW };
+  const people: UsageCell = { people: LISTED, problem: '', answeredAt: NOW };
+
+  return teamTabPush({
+    states: [server('acme', 'Acme')], selection: withShown(NO_SELECTION, true), cell: () => cell, asking: () => false, palette,
+    people: () => people,
+    price: (name) => (name === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10, source: 'openrouter' } : undefined),
+    now: NOW,
+  });
+}
+
+test('a NEW server: names, last seen, ~$, the idle list and the chart — and nothing says a newer server is needed', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushNew());
+
+  const text = page.element('tab-team').textContent;
+  assert.match(text, /Alice Smith/);
+  assert.match(text, /last seen within the hour/);
+  assert.match(text, /last seen 5 h ago/);
+  assert.match(page.element('team-summary').textContent, /≥ ~\$9\.00/, 'codex at list price is ~$9.00; gemini\'s unknown model makes it a floor');
+  assert.match(page.element('team-idle').textContent, /Signed in, no recorded runs in this window: 1/);
+  assert.match(page.element('team-idle').textContent, /Carol Idle/);
+  assert.ok(page.element('team-chart').querySelectorAll('rect').length > 0, 'the chart drew no bars');
+  assert.match(page.element('team-chart').textContent, /codex/);
+  assert.doesNotMatch(text, /needs Team server/, 'a newer server was told it is too old');
+  assert.equal(page.element('team-people').querySelectorAll('b').filter((one) => one.textContent === 'Jones').length, 0,
+    'a display name became markup on the page');
+});
+
+test('a NEW server: the search matches names, says so, and ~$ and last seen become sorts', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushNew());
+
+  assert.equal(page.element('team-q').getAttribute('placeholder'), 'Search name or email');
+  typeSearch(page, 'smith');
+  assert.deepEqual(shownEmails(page), ['alice@example.com alice smith']);
+  typeSearch(page, '');
+  const sort = page.element('team-sort');
+  const cost = sort.querySelector('option[value="cost"]')!;
+  assert.equal(cost.disabled, false, 'a new server sends per-model figures, and the ~$ sort is still disabled');
+  assert.equal(cost.textContent, '~$');
+  sort.value = 'cost';
+  page.document.dispatch('change', sort);
+  assert.deepEqual(cards(page).map((card) => card.getAttribute('data-fold')), ['acme|alice@example.com', 'acme|bob@example.com'],
+    'Alice cost ~$6, Bob ~$3 and a floor — the order by ~$ is wrong');
+  sort.value = 'seen';
+  page.document.dispatch('change', sort);
+  assert.equal(cards(page)[0]!.getAttribute('data-fold'), 'acme|alice@example.com', 'the most recently seen first');
+});
+
+test('an OLD server after a new one: the sorts it cannot serve go back to saying why, and the search to email', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushNew());
+  const sort = page.element('team-sort');
+  sort.value = 'cost';
+  page.document.dispatch('change', sort);
+
+  send(page, push([server('acme', 'Acme')], company([ALICE, BOB])));
+
+  const cost = sort.querySelector('option[value="cost"]')!;
+  assert.equal(cost.disabled, true);
+  assert.match(cost.textContent, /needs Team server ≥ 0\.11\.0/);
+  assert.equal(sort.value, 'launches', 'a sort the answer cannot serve stayed chosen');
+  assert.equal(page.element('team-q').getAttribute('placeholder'), 'Search email');
+  assert.doesNotMatch(page.element('tab-team').textContent, /\$0(\.0+)?\b/, 'an old server rendered a zero price');
 });

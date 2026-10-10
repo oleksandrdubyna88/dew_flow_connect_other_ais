@@ -91,7 +91,8 @@ export function selectedServer(selection: TeamSelection, adminIds: readonly stri
 
 /**
  * What one server's figures are wanted for: always this account's own over the spending tab's window, and the
- * company's over the tab's window only while the tab is showing that server.
+ * company's over the tab's window — and who is signed in there (`/api/people`, 3.1) — only while the tab is showing that
+ * server on a page in front.
  */
 export function usageWants(
   selection: TeamSelection,
@@ -102,5 +103,5 @@ export function usageWants(
   const mine: UsageWant = { scope: 'me', window: meWindow };
   const showing = selection.page === 'front' && selection.shown && selectedServer(selection, adminIds) === serverId;
 
-  return showing ? [mine, { scope: 'company', window: windowOf(selection, serverId) }] : [mine];
+  return showing ? [mine, { scope: 'company', window: windowOf(selection, serverId) }, { scope: 'people', window: '' }] : [mine];
 }

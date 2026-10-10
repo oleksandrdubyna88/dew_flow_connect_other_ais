@@ -6,7 +6,8 @@ import { test } from 'node:test';
 
 import { CATALOG_CSS } from '../catalogCss';
 import { CATALOG_BADGES, CATALOG_CHIPS, CATALOG_TOKENS } from '../catalogSheet';
-import { NO_TEAM_PUSH, TEAM_SERVER_WITH_PEOPLE, isOlderServer, personCard, statusLine, teamParts, teamTabPush } from '../teamServerTab';
+import { NO_TEAM_PUSH, TEAM_SERVER_WITH_PEOPLE, isOlderServer, statusLine, teamParts, teamTabPush } from '../teamServerTab';
+import { personCard } from '../teamPeople';
 import { TEAM_TAB_CSS, teamMatches, teamOrder } from '../teamServerTabPage';
 import { Usage } from '../teamServerApi';
 import { TeamServerState } from '../teamServerView';
@@ -96,6 +97,9 @@ test('a non-admin is pushed nothing but the flag — not a single email', () => 
     cell: () => ({ usage: OLD_BODY, problem: '', answeredAt: 0 }),
     asking: () => false,
     palette,
+    people: () => undefined,
+    price: () => undefined,
+    now: 0,
   });
 
   assert.deepEqual(pushed, NO_TEAM_PUSH);
@@ -104,7 +108,7 @@ test('a non-admin is pushed nothing but the flag — not a single email', () => 
 test('an admin push carries the selected server, its window and when it was read', () => {
   const pushed = teamTabPush({
     states: [state()], selection: withShown(NO_SELECTION, true),
-    cell: () => ({ usage: OLD_BODY, problem: '', answeredAt: Date.UTC(2026, 9, 9, 10, 0) }), asking: () => false, palette,
+    cell: () => ({ usage: OLD_BODY, problem: '', answeredAt: Date.UTC(2026, 9, 9, 10, 0) }), asking: () => false, palette, people: () => undefined, price: () => undefined, now: 0,
   });
 
   assert.equal(pushed.admin, true);
@@ -114,7 +118,8 @@ test('an admin push carries the selected server, its window and when it was read
 });
 
 test('a hostile server and person are text', () => {
-  const card = personCard('acme', { email: '"><script>x</script>', vendors: [] }, palette);
+  const card = personCard({ usage: { email: '"><script>x</script>', vendors: [] }, name: '"><script>y</script>', lastUsedUtc: '' },
+    { serverId: 'acme', price: () => undefined, palette, now: 0 });
 
   assert.ok(!card.includes('<script>'), 'an email became a script element');
   assert.equal(pageTree(card).find((node) => node.tagName === 'DETAILS').length, 1, 'the card closed early');
@@ -137,7 +142,7 @@ test('company figures are wanted only while the tab shows THAT server', () => {
   assert.deepEqual(usageWants(hidden, 'beta', 'today', admins).map((one) => one.scope), ['me']);
   assert.deepEqual(usageWants(showing, 'acme', 'today', admins).map((one) => one.scope), ['me']);
   assert.deepEqual(usageWants(showing, 'beta', 'today', admins), [
-    { scope: 'me', window: 'today' }, { scope: 'company', window: DEFAULT_TEAM_WINDOW },
+    { scope: 'me', window: 'today' }, { scope: 'company', window: DEFAULT_TEAM_WINDOW }, { scope: 'people', window: '' },
   ]);
   assert.equal(selectedServer(withServer(NO_SELECTION, 'gone'), admins), 'acme', 'a server no longer admin falls back to the first');
 });
@@ -145,11 +150,14 @@ test('company figures are wanted only while the tab shows THAT server', () => {
 test('the page helpers: search is case-blind on the server text, sort is highest first and stable by email', () => {
   assert.equal(teamMatches('alice@example.com', ' ALI '), true);
   assert.equal(teamMatches('alice@example.com', 'bob'), false);
-  const a = { launches: 2, tokens: 9, search: 'a' };
-  const b = { launches: 5, tokens: 1, search: 'b' };
+  const a = { launches: 2, tokens: 9, cost: 4, seen: 100, search: 'a' };
+  const b = { launches: 5, tokens: 1, cost: -1, seen: 200, search: 'b' };
   assert.ok(teamOrder(a, b, 'launches') > 0);
   assert.ok(teamOrder(a, b, 'tokens') < 0);
+  assert.ok(teamOrder(a, b, 'cost') < 0, 'a known ~$ sorts before an unknown one');
+  assert.ok(teamOrder(a, b, 'seen') > 0, 'the more recently seen first');
   assert.ok(teamOrder(a, { ...a, search: 'c' }, 'launches') < 0, 'equal figures order by email');
+  assert.ok(teamOrder(a, b, 'nonsense') > 0, 'an unknown key sorts by launches');
 });
 
 test('the Settings sheet is byte-identical after its tokens, chips and badges moved to the shared leaf', () => {

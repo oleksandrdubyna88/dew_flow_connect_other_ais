@@ -3435,12 +3435,30 @@ then searched and sorted again (`teamMatches` / `teamOrder`, embedded by their s
 things, each its own `LogCommand` kind: `teamWindow` (`<serverId>|<window>` — not `usageWindow`, which would move the
 spending tab), `teamRefresh` and `teamServer` (the server id), and `teamTab` (`shown`/`hidden`).
 
-**Launches, not rounds, and absent is never zero (D8).** Today's server (0.10.0) answers people and vendors with runs,
-failures and tokens; the tab counts **launches** and its notes say a round launches several reviewers. What it cannot
-say — a price (`~$`), who is signed in without spending, the model per row, the 30-day chart — says *needs Team server
-≥ 0.11.0* (`TEAM_SERVER_WITH_PEOPLE`, the release the plan's epic 2 ships) in its place; a server is recognised as
-older by the ABSENCE of `daily`. `Usage` types `people`, `unreadableLines`, `fromUtc`/`toUtc`, and — optional for
-epic 3 — `VendorUsage.models`, `daily` and `PersonListing`. Every server string goes through `escapeHtml`.
+**Launches, not rounds, and absent is never zero (D8).** The tab counts **launches** and its notes say a round launches
+several reviewers. Against a server older than 0.11.0 (`TEAM_SERVER_WITH_PEOPLE`, the one version constant), what it
+cannot say — a price (`~$`), who is signed in, the model per row, the 30-day chart, and the two sorts that need them —
+says *needs Team server ≥ 0.11.0* in its place; a server is recognised as older by the ABSENCE of `daily`, never by an
+empty `models`. Every server string goes through `escapeHtml`.
+
+**Who, with what, and when — against a newer server (epic 3, 2026-10-10).**
+- *Names and last seen (3.1).* `GET /api/people` (`fetchPeople`, believed only as far as its shape by `peopleFrom`)
+  rides the same one-owner cache under the key `(server, 'people', '')` (`WantScope`): asked only of an admin and only
+  while the tab is in front showing that server (`usageWants`), and a `401`/`403` on it forgets the company figures
+  too, as a refusal of company forgets the listing (`ADMIN_ONLY`). `teamPeople.ts` joins it to the spending by
+  case-insensitive email, keeping every spender — one with no session is a card with no name — and lists the signed-in
+  who spent nothing in the collapsed *Signed in, no recorded runs in this window* (D3, D5). *Last seen* is said at the
+  server's one-hour resolution ("within the hour", hours, days). Cards search by name or email, and the box says which
+  (`named` in the push); display names are identity-provider text and escaped.
+- *~$ per model (3.2, D4).* `teamCost.ts`: each model at ITS public list price through `PRICE_BOOK.priceOf` — never the
+  admin's own typed row rates, never a long-context tier on a sum — a vendor-reported `costUsd` winning, a model no list
+  prices a dash that makes its total a floor (`≥`). Person, vendor and summary totals add those; the note says the
+  server's lines carry no cached count, so cache-heavy input is overstated. ~$ and *last seen* become sorts when the
+  answer can serve them (`sorts` in the push; the page disables and labels the others).
+- *The chart (3.3, D7).* `teamChart.ts`: an inline SVG of the dense 30 UTC days, stacked by vendor, drawn to one scale,
+  its axis labelled *launches*, coloured through the vendor palette (theme colours, no hex), the days the server's
+  `yyyy-MM-dd` strings printed as they came (never through `new Date()`), a legend naming each vendor, a summary as the
+  image's label and the numbers as a table under *The numbers*; it says its 30 calendar days are not the Month window.
 
 **Styled with the Settings design.** Its tokens, chips and badges moved from `catalogCss.ts` into the LEAF
 `catalogSheet.ts` (which imports nothing — `catalogCss.ts` imports `settingsPage`, which would drag `SETTINGS_CSS` onto

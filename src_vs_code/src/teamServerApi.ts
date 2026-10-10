@@ -439,3 +439,28 @@ export function fetchUsage(
     fetchImpl,
   });
 }
+
+/**
+ * Who is signed in to a server — `GET /api/people`, admin-only (todo/PLAN_team_usage_by_person.md, 2.1 and 3.1).
+ *
+ * <p>A stranger's answer, so it is believed only as far as its shape: a row without a string email is dropped, a missing
+ * name or stamp is empty. Anything else the server adds is not kept — the listing is three fields by contract.</p>
+ */
+export async function fetchPeople(
+  url: string,
+  token: string,
+  fetchImpl?: typeof fetch,
+): Promise<ServerResult<readonly PersonListing[]>> {
+  const answer = await ask<unknown>(url, 'api/people', { token, fetchImpl });
+
+  return answer.ok ? { ...answer, value: peopleFrom(answer.value) } : answer;
+}
+
+/** The rows of a people listing that are rows at all. */
+export function peopleFrom(value: unknown): readonly PersonListing[] {
+  const text = (field: unknown): string => (typeof field === 'string' ? field : '');
+
+  return (Array.isArray(value) ? value : [])
+    .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null && typeof (row as { email?: unknown }).email === 'string')
+    .map((row) => ({ email: text(row['email']), displayName: text(row['displayName']), lastUsedUtc: text(row['lastUsedUtc']) }));
+}

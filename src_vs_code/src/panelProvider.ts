@@ -160,7 +160,7 @@ import {
   VENDOR_PRESETS,
   vendorsFrom,
 } from './vendors';
-import { Catalog, fetchClientConfig, fetchUsage } from './teamServerApi';
+import { Catalog, fetchClientConfig, fetchPeople, fetchUsage } from './teamServerApi';
 import { Prepared, TeamUsageCache, USAGE_FRESH_MS, UsageTarget } from './teamUsageCache';
 import { TeamTabHost } from './teamTabHost';
 import { TeamPush, teamTabPush } from './teamServerTab';
@@ -379,6 +379,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private readonly teamUsage = new TeamUsageCache({
     now: () => Date.now(),
     fetchUsage: (url, token, window, scope) => fetchUsage(url, token, window, scope),
+    fetchPeople: (url, token) => fetchPeople(url, token),
     // EVERY surface showing the figures is told, not only the sidebar: a refresh used to end with `this.render()`,
     // which repaints the sidebar alone and returns early when none is held, so the page never heard (1.1).
     changed: () => {
@@ -751,6 +752,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       cell: (serverId, window) => this.teamUsage.cell(serverId, 'company', window),
       asking: (serverId, window) => this.teamUsage.isAsking(serverId, 'company', window),
       palette: vendorPalette(this.vendorIds()),
+      // Who is signed in (`GET /api/people`, 3.1), asked by the same cache while the tab is in front.
+      people: (serverId) => this.teamUsage.cell(serverId, 'people', ''),
+      // Each model at ITS public list price (3.2, D4) — the window's price book; never this person's typed row rates.
+      price: (model) => PRICE_BOOK.priceOf(model),
+      now: Date.now(),
     });
   }
 
