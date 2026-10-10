@@ -32,6 +32,7 @@ function recording(): { readonly hooks: RoundsLogHooks; readonly called: string[
       onTeamRefresh: (server) => note(`teamRefresh ${server}`)(),
       onTeamServer: (server) => note(`teamServer ${server}`)(),
       onTeamTab: (shown) => note(`teamTab ${String(shown)}`)(),
+      onVisible: () => undefined,
     },
   };
 }

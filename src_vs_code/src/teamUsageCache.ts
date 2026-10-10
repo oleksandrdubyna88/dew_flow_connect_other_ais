@@ -64,8 +64,13 @@ export interface UsageCell {
   readonly refused?: boolean | undefined;
   /** The HTTP contract the answering server said it speaks, when a response arrived. */
   readonly contract?: number | undefined;
-  /** When the answer landed — what freshness is measured from. */
+  /** When the answer landed — what the page prints as "Read". */
   readonly answeredAt: number;
+  /**
+   * When the request it answers was SENT — what freshness is measured from. From the landing instead, a one-minute
+   * clock found every answer that took a moment still fresh and re-asked only every second minute.
+   */
+  readonly askedAt?: number;
 }
 
 export interface TeamUsageDeps {
@@ -113,7 +118,7 @@ export class TeamUsageCache {
   isFresh(serverId: string, scope: UsageScope, window: string): boolean {
     const held = this.cell(serverId, scope, window);
 
-    return held !== undefined && this.deps.now() - held.answeredAt < USAGE_FRESH_MS;
+    return held !== undefined && this.deps.now() - (held.askedAt ?? held.answeredAt) < USAGE_FRESH_MS;
   }
 
   /** Whether a request for this key is on its way. */
@@ -183,21 +188,27 @@ export class TeamUsageCache {
     this.requests += 1;
     const number = this.requests;
     this.newest.set(key, number);
+    const askedAt = this.deps.now();
     const spent = await this.deps.fetchUsage(server.url, token, want.window, want.scope);
     if (this.newest.get(key) !== number) {
       return;
     }
+    // A refusal of company is about the CALLER, not the window: every window of this server's company figures goes,
+    // and any still in flight with it, before the refusal is written down.
+    if (!spent.ok && refuses(want.scope, spent.status)) {
+      this.evictCompany(server.id);
+    }
     this.settled.set(key, number);
-    this.write(key, want.scope, spent);
+    this.write(key, want.scope, spent, askedAt);
     this.deps.changed();
   }
 
-  private write(key: string, scope: UsageScope, spent: ServerResult<Usage>): void {
+  private write(key: string, scope: UsageScope, spent: ServerResult<Usage>, askedAt: number): void {
     const known = this.cells.get(key);
     const answeredAt = this.deps.now();
     const cell: UsageCell = spent.ok
-      ? { usage: spent.value, problem: '', contract: spent.contract, answeredAt }
-      : this.failed(scope, spent, known, answeredAt);
+      ? { usage: spent.value, problem: '', contract: spent.contract, answeredAt, askedAt }
+      : { ...this.failed(scope, spent, known, answeredAt), askedAt };
     this.cells = new Map([...this.cells, [key, cell]]);
   }
 
@@ -222,12 +233,20 @@ export class TeamUsageCache {
     };
   }
 
-  /** Drop every key a predicate names — the cells, and the request numbers, so an answer still in flight is dropped. */
+  /**
+   * Drop every key a predicate names — the cells, and the request numbers, so an answer still in flight is dropped —
+   * and tell the page when anything was held: what it shows must go with what was forgotten, or a signed-out server's
+   * last company push stays on screen with nothing left to replace it.
+   */
   private forget(named: (key: string) => boolean): void {
+    const before = this.cells.size;
     this.cells = new Map([...this.cells].filter(([key]) => !named(key)));
     for (const key of [...this.newest.keys()].filter(named)) {
       this.newest.delete(key);
       this.settled.delete(key);
+    }
+    if (this.cells.size < before) {
+      this.deps.changed();
     }
   }
 }

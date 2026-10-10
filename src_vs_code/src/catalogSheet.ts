@@ -4,7 +4,7 @@
  * <p>A LEAF: it imports nothing. `catalogCss.ts` imports `settingsPage`, so a page importing that sheet for its tokens
  * would drag `SETTINGS_CSS` along with them; the Review rounds page's Team server tab takes these three and nothing
  * else (todo/PLAN_team_usage_by_person.md, story 1.3). Moved here by EXTRACTION, text unchanged and inserted where it
- * was, so the Settings page's `CATALOG_CSS` is byte-identical — `catalogSheet.test.ts` holds it to that.</p>
+ * was, so the Settings page's `CATALOG_CSS` is byte-identical — `teamServerTab.test.ts` pins its hash.</p>
  *
  * <p>Every rule is scoped under `.catalog`, which is where the tokens live: a page that wants them puts the class on the
  * element they should reach.</p>

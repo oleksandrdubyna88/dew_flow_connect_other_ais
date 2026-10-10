@@ -170,7 +170,7 @@ test('the same email on another server is another card — an opened one does no
   send(page, push(both, company([ALICE])));
   cards(page)[0]!.open = true;
 
-  send(page, push(both, company([ALICE]), { shown: true, server: 'beta', windows: {} }));
+  send(page, push(both, company([ALICE]), { page: 'front', shown: true, server: 'beta', windows: {} }));
 
   assert.equal(page.element('team-server-pick').hidden, false, 'two admin servers and no picker');
   assert.equal(page.element('team-server').value, 'beta');
@@ -218,6 +218,23 @@ test('an admin demoted while looking is taken back to Rounds, and the tab goes',
   assert.equal(page.element('team-tab').hidden, true);
   assert.equal(page.element('tab-team').hidden, true, 'the company figures stayed on screen for somebody no longer an admin');
   assert.equal(page.element('tab-rounds').hidden, false);
+  // Hidden is not gone: the section is still in the document, and anything left in it is one style change from view.
+  assert.ok(!page.element('tab-team').textContent.includes('alice@example.com'),
+    'the demoted admin\'s page still holds a colleague\'s email, merely hidden');
+  assert.equal(page.element('team-people').querySelectorAll('details').length, 0);
+  assert.equal(page.element('team-server').querySelectorAll('option').length, 0, 'the server list stayed behind');
+});
+
+test('signing out pushes no tab, and the page then holds no email at all', () => {
+  const page = runningDomPage(bundle);
+  send(page, push([server('acme', 'Acme')], company([ALICE, BOB])));
+
+  // After a sign-out the host no longer holds a catalog for the server, so the push it builds says: no admin anywhere.
+  const { catalog: _gone, ...signedOut } = { ...server('acme', 'Acme'), email: '' };
+  send(page, push([signedOut], company([ALICE, BOB])));
+
+  assert.equal(page.element('team-tab').hidden, true);
+  assert.ok(!/@example\.com/.test(page.element('tab-team').textContent), 'an email survived the sign-out on the page');
 });
 
 test('the fifteen-second watchdog leaves a tab alone once it was pushed, and speaks when it never was', () => {

@@ -307,3 +307,53 @@ test('a key in flight says so, and stops saying so when it lands', async () => {
 
   assert.equal(cache.isAsking(SERVER.id, 'me', 'today'), false);
 });
+
+test('a refusal of company clears EVERY window of it, not only the one that was refused', async () => {
+  const { cache, calls } = rig(true);
+
+  const both = cache.refresh([target([company('week'), company('month')], { admin: true })]);
+  await settle();
+  for (const call of calls) { call.answer(ok(body(call.window, 900))); }
+  await both;
+  const again = cache.refresh([target([company('month')], { admin: true })], true);
+  await settle();
+  calls[2]?.answer(refused(403));
+  await again;
+
+  assert.equal(cache.cell(SERVER.id, 'company', 'week')?.usage, undefined,
+    'Month was refused and Week still holds every colleague\'s spending');
+});
+
+test('an eviction tells the page, so what it shows goes with what the cache forgot', async () => {
+  const { cache, calls, changed } = rig(true);
+
+  const first = cache.refresh([target([company('week')], { admin: true })]);
+  await settle();
+  calls[0]!.answer(ok(body('week', 900)));
+  await first;
+  const told = changed();
+  cache.evictServer(SERVER.id);
+
+  assert.ok(changed() > told, 'the server was signed out of and the page was never told — its last company push stays');
+  const after = changed();
+  cache.evictServer(SERVER.id);
+  assert.equal(changed(), after, 'an eviction that removed nothing is no change');
+});
+
+test('freshness counts from when an answer was ASKED, so a one-minute clock re-asks every minute', async () => {
+  const { cache, calls, clock } = rig();
+  const start = clock.now;
+
+  const first = cache.refresh([target([me('today')])]);
+  await settle();
+  clock.now += 2_000;
+  calls[0]!.answer(ok(body('today', 1)));
+  await first;
+  clock.now = start + 60_000;
+  const tick = cache.refresh([target([me('today')])]);
+  await settle();
+
+  assert.equal(calls.length, 2, 'the answer took two seconds, so the minute\'s tick found it fresh and waited another minute');
+  calls[1]?.answer(ok(body('today', 2)));
+  await tick;
+});

@@ -69,8 +69,6 @@ import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { NO_TEAM_PUSH, TeamPush } from './teamServerTab';
-import { pollWhileOpen } from './teamUsagePoll';
-import { USAGE_FRESH_MS } from './teamUsageCache';
 import { regionOr } from './logRegions';
 import { PRICE_BOOK } from './priceBook';
 import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsSync';
@@ -247,6 +245,13 @@ export function activate(context: vscode.ExtensionContext): void {
     onTeamServer: async (server) => {
       panelRef.setTeamServer(server);
       await askTheTeamServers(roundsLog, watcher, panelRef);
+    },
+    // In front again: whatever went stale while it was behind is asked now rather than on the next minute.
+    onVisible: (visible) => {
+      panelRef.teamPageVisible(visible);
+      if (visible) {
+        void panelRef.refreshTeamUsage();
+      }
     },
     onTeamTab: async (shown) => {
       panelRef.setTeamTabShown(shown);
@@ -1363,7 +1368,9 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
     await regionOr('spending', () => panel.usageTab()));
   // The page's own clock for the Team-server figures: every minute while it is open, whether or not the sidebar is,
   // and stopped when it closes. Company figures only while the Team server tab is the one showing (teamTabSelection.ts).
-  log.whileOpen(() => pollWhileOpen(() => panel.refreshTeamUsage(), USAGE_FRESH_MS));
+  // The page's closing is what ends both — and tells the host the Team server tab is no longer showing, which no
+  // message from a closing page ever could (teamTabHost.ts).
+  log.whileOpen(() => panel.teamPageOpened());
   await refreshRoundsLog(log, watcher, panel, true);
 }
 

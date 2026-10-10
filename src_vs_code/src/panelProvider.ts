@@ -162,7 +162,7 @@ import {
 } from './vendors';
 import { Catalog, fetchClientConfig, fetchUsage } from './teamServerApi';
 import { Prepared, TeamUsageCache, USAGE_FRESH_MS, UsageTarget } from './teamUsageCache';
-import { NO_SELECTION, TeamSelection, usageWants, withServer, withShown, withWindow } from './teamTabSelection';
+import { TeamTabHost } from './teamTabHost';
 import { TeamPush, teamTabPush } from './teamServerTab';
 import { vendorPalette } from './vendorColour';
 import { webviewNonce } from './webviewNonce';
@@ -390,8 +390,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** Told when a Team-server answer lands. The Review rounds page wires its repaint here. */
   onTeamUsageChanged: () => void = () => undefined;
 
-  /** What the Team server tab is looking at — what the host asks the server for (teamTabSelection.ts). */
-  private teamTab: TeamSelection = NO_SELECTION;
+  /**
+   * The Review rounds page as the usage cache sees it — open, in front, showing the Team server tab — and its clock
+   * (teamTabHost.ts): what the host asks the servers for, whoever triggers the refresh.
+   */
+  private readonly teamPage = new TeamTabHost({ refresh: () => this.refreshTeamUsage() });
 
   /**
    * What each server's last catalog refresh learned, and when — so a refresh that only wants a usage figure does not
@@ -717,24 +720,34 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** The Team server tab's window chip: `<serverId>|<window>`. */
   setTeamWindow(id: string): void {
-    this.teamTab = withWindow(this.teamTab, id);
+    this.teamPage.chooseWindow(id);
   }
 
   /** The Team server tab's server picker. */
   setTeamServer(id: string): void {
-    this.teamTab = withServer(this.teamTab, id);
+    this.teamPage.chooseServer(id);
   }
 
   /** Whether the Team server tab is the one showing — company figures are asked only meanwhile. */
   setTeamTabShown(shown: boolean): void {
-    this.teamTab = withShown(this.teamTab, shown);
+    this.teamPage.tabShown(shown);
+  }
+
+  /** The Review rounds page opened: its clock starts. Returns what the page's closing calls. */
+  teamPageOpened(): () => void {
+    return this.teamPage.opened();
+  }
+
+  /** The Review rounds page came to the front, or went behind another editor tab. */
+  teamPageVisible(visible: boolean): void {
+    this.teamPage.visible(visible);
   }
 
   /** What the Team server tab is told: the admin flag, the toolbar's state and the figures held (teamServerTab.ts). */
   teamTabPush(): TeamPush {
     return teamTabPush({
       states: this.teamServerStates(vscode.workspace.getConfiguration('coai')),
-      selection: this.teamTab,
+      selection: this.teamPage.selection,
       cell: (serverId, window) => this.teamUsage.cell(serverId, 'company', window),
       asking: (serverId, window) => this.teamUsage.isAsking(serverId, 'company', window),
       palette: vendorPalette(this.vendorIds()),
@@ -3815,7 +3828,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
     return servers.map((server) => ({
       server: { id: server.id, url: server.url },
-      wants: usageWants(this.teamTab, server.id, WINDOW_ON_THE_WIRE[this.usageWindow], admins),
+      wants: this.teamPage.wants(server.id, WINDOW_ON_THE_WIRE[this.usageWindow], admins),
       prepare: () => this.catalogFor(server, renew, force),
     }));
   }

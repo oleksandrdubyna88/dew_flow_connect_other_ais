@@ -238,6 +238,11 @@ export interface RoundsLogHooks {
   readonly onTeamServer: (server: string) => Promise<void>;
   /** The Team server tab became the one showing, or stopped being it. */
   readonly onTeamTab: (shown: boolean) => Promise<void>;
+  /**
+   * The page came to the front or went behind another editor tab — VS Code's view state, not a page message: a page
+   * that is not seen asks no company figures (teamTabHost.ts).
+   */
+  readonly onVisible: (visible: boolean) => void;
 }
 
 /** A command of one kind, as the table below receives it. */

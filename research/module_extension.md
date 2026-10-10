@@ -3354,7 +3354,8 @@ when a configured server's catalog says this account is an admin there (`Catalog
 
 **One owner fetches; the page's visibility asks.** `PanelProvider` is still the only thing that sends a Team-server
 request, but the cache and its rules are `teamUsageCache.ts`, which imports no `vscode`: answers are kept per
-**(server, scope, window)**, each key with its own freshness stamp and its own request number, and the number is
+**(server, scope, window)**, each key with its own freshness stamp — measured from when its request was SENT, so a
+one-minute clock re-asks every minute even when an answer takes seconds — and its own request number, and the number is
 checked BEFORE an answer is written — so the older of two requests landing last is dropped, a personal answer never
 lands on the company figures, and a window chosen while another request is running is asked at once. Before, one
 answer per server and one stamp for everything let `me` and `company` overwrite each other and a sidebar refresh make
@@ -3362,17 +3363,30 @@ the page's question look answered. Whether to ask `company` is taken from THIS r
 not the one held before it. The catalog and the token are refreshed at most once a minute per server
 (`PanelProvider.catalogFor`, shared while in flight).
 
-**Privacy is an eviction.** A `401`/`403` on `company` forgets that server's company figures (a failed request used
-to keep the last good answer, which would have shown a demoted admin every colleague's email); a catalog that says the
-caller is no admin, a different account on the token, a sign-out and a removal forget too
-(`TeamUsageCache.evictCompany` / `evictServer`). A failed PERSONAL request still keeps the last answer and says why.
+**Privacy is an eviction.** A `401`/`403` on `company` forgets EVERY window of that server's company figures, and any
+still in flight, before the refusal is written (a failed request used to keep the last good answer, which would have
+shown a demoted admin every colleague's email); a catalog that says the caller is no admin, a different account on the
+token, a sign-out and a removal forget too (`TeamUsageCache.evictCompany` / `evictServer`). An eviction that removed
+anything calls `changed`, so the page is pushed again — after a sign-out nothing else would fire, and the last company
+push would stay on screen. On the page, a push that takes the admin flag away EMPTIES the tab (every piece and the
+server list), not merely hides it; and a page that closes leaves `RoundsLogPanel` holding no team push, so the next
+page learns admin status from a fresh one. A failed PERSONAL request still keeps the last answer and says why.
 
 **Delivery.** A refresh used to end with `render()`, which repaints the sidebar alone and returns early when none is
 held — so with the sidebar closed the page's Team-server figures never moved. The cache's `changed` callback now
-repaints the sidebar AND calls `onTeamUsageChanged`, which `extension.ts` wires to `refreshRoundsLog`. The page has its
-own clock: `pollWhileOpen` (`teamUsagePoll.ts`) started in `showRoundsLog` through `RoundsLogPanel.whileOpen` and
-stopped when the page closes, one tick at a time; it asks `company` only while the Team server tab is the one showing
-(`teamTabSelection.usageWants`), because each company answer makes the server parse its whole ledger.
+repaints the sidebar AND calls `onTeamUsageChanged`, which `extension.ts` wires to `refreshRoundsLog`.
+
+**What is asked depends on the page, and the page is a model (`teamTabHost.ts`).** `PanelProvider` holds a
+`TeamTabHost`: the page is `closed`, open `behind` another editor tab, or open in `front`, and showing the Team server
+tab or not. `showRoundsLog` opens it through `RoundsLogPanel.whileOpen` — which starts the page's clock
+(`pollWhileOpen`, `teamUsagePoll.ts`: one tick AT ONCE, so a page opened with the sidebar closed does not wait a minute,
+then one a minute, never two at a time) — and the page's disposal closes it, stopping the clock and clearing `shown`.
+VS Code's view state (`onDidChangeViewState` → the `onVisible` hook) moves it between `front` and `behind`, keeping
+what the tab shows; coming to the front asks at once. A page that OPENS starts on Rounds, so opening clears `shown` too.
+`company` is wanted (`teamTabSelection.usageWants`) only for a page in front showing that server's tab — whoever triggers
+the refresh, the sidebar's render included — because each company answer makes the server parse its whole ledger.
+Before the own review of epic 1, only the page's `teamTab` message changed this, a closing page sends none, and the
+host went on asking every minute for every colleague's spending with the page closed.
 
 ```mermaid
 sequenceDiagram
@@ -3391,7 +3405,7 @@ sequenceDiagram
   Cache-->>Panel: changed()
   Panel-->>Host: onTeamUsageChanged → refreshRoundsLog
   Host->>Page: push team region with the figures
-  Note over Host,Page: pollWhileOpen ticks refreshTeamUsage every 60 s while the page is open
+  Note over Host,Page: TeamTabHost: pollWhileOpen ticks at once, then every 60 s, while the page is open; company only in front with the tab shown
 ```
 
 **The tab is always drawn, hidden.** The page is built once and admin status arrives after it, so the button and the

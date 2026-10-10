@@ -31,7 +31,7 @@ export function pollWhileOpen(
   warn: (message: string, reason: unknown) => void = console.error,
 ): () => void {
   let running = false;
-  const handle = ticker.every(() => {
+  const once = (): void => {
     if (running) {
       return;
     }
@@ -39,7 +39,10 @@ export function pollWhileOpen(
     void tick()
       .catch((reason: unknown) => { warn('ConnectOtherAIs: the rounds log could not refresh its Team-server figures', reason); })
       .finally(() => { running = false; });
-  }, everyMs);
+  };
+  const handle = ticker.every(once, everyMs);
+  // At once as well: a page opened with the sidebar closed would otherwise ask nothing for its first minute.
+  once();
 
   return () => { ticker.stop(handle); };
 }

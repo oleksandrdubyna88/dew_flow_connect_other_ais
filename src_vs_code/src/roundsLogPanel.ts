@@ -121,15 +121,25 @@ export class RoundsLogPanel {
 
     const text = pushTextControlsTo(panel.webview);
     const busy = this.listen(panel);
+    const seen = panel.onDidChangeViewState((event) => { this.hooks.onVisible(event.webviewPanel.visible); });
     panel.onDidDispose(() => {
       busy.dispose();
       text.dispose();
-      this.panel = undefined;
-      this.clearAssumption();
-      this.ledger.rebuilt();
-      this.stopClock?.();
-      this.stopClock = undefined;
+      seen.dispose();
+      this.closed();
     });
+  }
+
+  /** The page went away: nothing it was told still holds, and what ran while it was open stops. */
+  private closed(): void {
+    this.panel = undefined;
+    this.clearAssumption();
+    this.ledger.rebuilt();
+    this.stopClock?.();
+    this.stopClock = undefined;
+    // What the closed page was told about the company goes with it: a page opened later learns admin status from the
+    // next push, never from the last one somebody saw (the own review of epic 1).
+    this.latest = { ...this.latest, team: NO_TEAM_PUSH };
   }
 
   /**

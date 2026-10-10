@@ -93,3 +93,13 @@ test('a tick still running when the next comes is not doubled, and a failed tick
   assert.equal(started, 2);
   assert.equal(warned.length, 1, 'a tick that failed vanished without a word');
 });
+
+test('an opened page asks at once, not a minute later', () => {
+  const { ticker } = handTurned();
+  let ticks = 0;
+
+  const stop = pollWhileOpen(async () => { ticks += 1; }, 60_000, ticker);
+  stop();
+
+  assert.equal(ticks, 1, 'the page opened with the sidebar closed and asked nothing for a minute');
+});

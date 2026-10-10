@@ -11,7 +11,7 @@ import { TEAM_TAB_CSS, teamMatches, teamOrder } from '../teamServerTabPage';
 import { Usage } from '../teamServerApi';
 import { TeamServerState } from '../teamServerView';
 import {
-  DEFAULT_TEAM_WINDOW, NO_SELECTION, selectedServer, usageWants, withServer, withShown, withWindow,
+  DEFAULT_TEAM_WINDOW, NO_SELECTION, selectedServer, usageWants, withPage, withServer, withShown, withWindow,
 } from '../teamTabSelection';
 import { pageTree } from './pageTree';
 
@@ -132,7 +132,7 @@ test('a window chip names its server and a window the server knows; anything els
 test('company figures are wanted only while the tab shows THAT server', () => {
   const admins = ['acme', 'beta'];
   const hidden = withServer(NO_SELECTION, 'beta');
-  const showing = withShown(hidden, true);
+  const showing = withShown(withPage(hidden, 'front'), true);
 
   assert.deepEqual(usageWants(hidden, 'beta', 'today', admins).map((one) => one.scope), ['me']);
   assert.deepEqual(usageWants(showing, 'acme', 'today', admins).map((one) => one.scope), ['me']);

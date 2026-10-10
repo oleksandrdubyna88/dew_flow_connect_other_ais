@@ -23,7 +23,12 @@ export type TeamWindow = (typeof TEAM_WINDOWS)[number]['id'];
 /** Who spent what this week is the question an admin opens the tab with; Today is one click away. */
 export const DEFAULT_TEAM_WINDOW: TeamWindow = 'week';
 
+/** Where the Review rounds page is: closed, open behind another editor tab, or open in front. */
+export type TeamPage = 'closed' | 'behind' | 'front';
+
 export interface TeamSelection {
+  /** Whether the page is open, and in front. Company figures are asked only for a page somebody can see. */
+  readonly page: TeamPage;
   /** Whether the Team server tab is the selected one on the page. */
   readonly shown: boolean;
   /** The server it shows, or empty for "the first admin server". */
@@ -32,7 +37,7 @@ export interface TeamSelection {
   readonly windows: Readonly<Record<string, TeamWindow>>;
 }
 
-export const NO_SELECTION: TeamSelection = { shown: false, server: '', windows: {} };
+export const NO_SELECTION: TeamSelection = { page: 'closed', shown: false, server: '', windows: {} };
 
 function isTeamWindow(value: string): value is TeamWindow {
   return TEAM_WINDOWS.some((one) => one.id === value);
@@ -66,6 +71,19 @@ export function withShown(selection: TeamSelection, shown: boolean): TeamSelecti
   return { ...selection, shown };
 }
 
+/**
+ * The page moved in front of or behind another editor tab, or closed. Moving keeps what the page is showing — nothing
+ * on it changed, so it posts nothing — while closing clears `shown`; the server and windows chosen are kept.
+ */
+export function withPage(selection: TeamSelection, page: TeamPage): TeamSelection {
+  return page === 'closed' ? { ...selection, page, shown: false } : { ...selection, page };
+}
+
+/** A page that OPENS starts on Rounds, whatever the last one was showing. */
+export function opened(selection: TeamSelection): TeamSelection {
+  return { ...selection, page: 'front', shown: false };
+}
+
 /** The server the tab shows: the chosen one while it is still an admin server here, otherwise the first that is. */
 export function selectedServer(selection: TeamSelection, adminIds: readonly string[]): string {
   return adminIds.includes(selection.server) ? selection.server : (adminIds[0] ?? '');
@@ -82,7 +100,7 @@ export function usageWants(
   adminIds: readonly string[],
 ): readonly UsageWant[] {
   const mine: UsageWant = { scope: 'me', window: meWindow };
-  const showing = selection.shown && selectedServer(selection, adminIds) === serverId;
+  const showing = selection.page === 'front' && selection.shown && selectedServer(selection, adminIds) === serverId;
 
   return showing ? [mine, { scope: 'company', window: windowOf(selection, serverId) }] : [mine];
 }

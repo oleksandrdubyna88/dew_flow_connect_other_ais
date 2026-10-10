@@ -51,7 +51,7 @@ export function teamSectionHtml(waiting: string): string {
 <div class="team-cols">
   <div>
     <div class="colhead"><h2>People</h2><span id="team-count" class="hint"></span><span class="spacer"></span>
-      <input type="search" id="team-q" placeholder="Search name or email" aria-label="Search people" autocomplete="off">
+      <input type="search" id="team-q" placeholder="Search email" aria-label="Search people by email" autocomplete="off">
       <label class="hint" for="team-sort">Sort</label> <select id="team-sort" aria-label="Sort people">${sortOptions()}</select>
     </div>
     <div id="team-people" class="team-list"></div>
@@ -197,12 +197,21 @@ export const TEAM_TAB_SCRIPT = `
     teamArrange();
   }
   // The admin flag reveals the tab or takes it away; a page that was SHOWING it when the flag went goes back to Rounds.
+  // Taken away means EMPTIED, not hidden: a hidden section still holds every colleague's email in the document.
   function teamReveal(admin) {
     var button = document.getElementById('team-tab');
     button.hidden = !admin;
     if (admin) { return; }
     if (currentTab === 'team') { showTab('rounds'); }
     document.getElementById('tab-team').hidden = true;
+    teamEmpty();
+  }
+  function teamEmpty() {
+    var pieces = ['status', 'badges', 'summary', 'people', 'idle', 'vendors', 'chart', 'notes', 'count', 'read'];
+    for (var i = 0; i < pieces.length; i++) { document.getElementById('team-' + pieces[i]).innerHTML = ''; }
+    document.getElementById('team-server').innerHTML = '';
+    document.getElementById('team-server-pick').hidden = true;
+    team.servers = null;
   }
   function teamPushed(message) {
     told.team = true;
