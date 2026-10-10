@@ -18,6 +18,7 @@ import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
 import { FIRST_SEEN_KEY } from './newTags';
+import { forgetSide, pathFieldsModeOf, sideHereOf, sidesIn, type SideHere } from './sidesSeen';
 import { appliedTextControl } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
@@ -1361,6 +1362,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       server,
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
+      // Read from globalState on EVERY render (E2.2): a side another window stamped appears at the next repaint.
+      sides: { here: this.sideHere(), seen: sidesIn(this.context.globalState, Date.now()), mode: pathFieldsModeOf(config.get('pathFieldsPerSide')), now: Date.now() },
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions,
@@ -2202,6 +2205,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       : '';
   }
 
+  /** This window's side as the side registry records it — the one activation stamps (`sideHereOf`). */
+  private sideHere(): SideHere {
+    return sideHereOf(thisSide(this.context.globalStorageUri), process.platform);
+  }
+
   /** Whether this side keeps its own settings. Shared by every side, deliberately: one switch. */
   private perSide(config: vscode.WorkspaceConfiguration): boolean {
     return config.get<boolean>('perSideSettings') === true;
@@ -2580,6 +2588,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // The command keeps every check of its own (the record verified, nothing written to the old folder since).
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.deleteOldDataFolder);
         await this.render();
+        break;
+      case 'forgetSide':
+        // A side gone for good stops counting before its 90 days are up (todo/PLAN_paths_per_side.md E2.4); this
+        // window's own record is refused inside. The render below redraws the list from the store.
+        if (id !== undefined) {
+          await forgetSide(this.context.globalState, id, this.sideHere().key);
+        }
         break;
       case 'copyPhrase':
         await this.copyPhrase(id, from);
