@@ -1,5 +1,19 @@
 # Changelog
 
+## Server 0.46.0 — 2026-10-10
+
+**A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares
+your settings between a WSL window and a Windows one, so a reviewer row's CLI path written on one side (a Windows
+`C:\…\codex.cmd`, or a WSL `/usr/local/bin/codex`) reached the other side's coai-mcp, which probed it as a file there,
+found nothing and reported the CLI as not found — that reviewer dropped out of every round on that side. Now:
+- A path spelled for the other OS that does not exist here is skipped: coai-mcp looks the CLI up on `PATH` by its
+  runtime's name instead, and says once in its log (Information) that it did — never a notice, never a refusal.
+- A path that DOES exist here is still used. On Windows a root-relative `/Program Files/nodejs/node.exe` is a real
+  path: it runs from the system drive (`C:\Program Files\nodejs\node.exe`). When the disk cannot tell, the path is kept.
+- Rows that share one CLI path ask the disk once.
+- The extension already sends this side's value (extension 0.67.0); this is the same rule for a settings file an older
+  extension wrote.
+
 ## Extension 0.67.0 — 2026-10-10
 
 **New: a Team server tab, for that server's admins.** On *Review rounds*, an admin of a Team server now sees who on the
