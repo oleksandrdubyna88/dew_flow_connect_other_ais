@@ -328,8 +328,31 @@ its deciding line; the observed messages are in the commits and in `research/mod
   `qconsultSettings.ts` (`COAI_QCONSULT_ROWS`), `vendorTerminal.ts` (`executableFor`, `executableForRuntime`, and a
   self-update decided on ITS platform), `chatLaunch.ts`, `cliChatLaunch.ts` and the agy model list in
   `panelProvider.ts`. A scan test (`aCliPathOfTheOtherSideIsSkipped.test.ts`, `UNRESOLVED_READS`) counts every raw
-  read of a stored `executablePath`, so a launch site that skips the rule goes red. `pathForThisSide(stored, family)`
+  read of a stored `executablePath`, so a launch site that skips the rule goes red. `pathForThisSide(stored, side)`
   implements rules 2-3 only; rule 1 (`executablePathBySide`) is E3's.
+- **1.2 asks the disk, as the roots do (the gate's cadence consultant, codex, before E1's code round — verified, accepted).**
+  The first build skipped a CLI path purely by its SPELLING, but on Windows `/Program Files/nodejs/node.exe` is a legal
+  root-relative path that launches from the drive root, so a configured CLI written that way silently became a
+  different PATH installation, or nothing. Now the roots' rule (`otherSideHere`) applies to a FILE: spelled for the
+  other OS, the path is qualified with the SYSTEM drive (`qualified` / `QuestionRoots.Qualified`) and asked of the disk
+  as a file — there, or the disk could not tell → this side's, run QUALIFIED; confirmed absent (none, a directory, an
+  unspellable name) → the other side's, the PATH lookup. `ExecutableSide { family, systemDrive, fileAt }` is passed to
+  every site (`hostSide.hostExecutableSide()`, a SYNCHRONOUS `stat` installed by activation — `useFileProbe(fileAt(statSync))`,
+  the `useStorageSettings` pattern, because the Settings page's modules bundle without the host and may reach no
+  `node:fs`; before it is installed every path is `unknown` and KEPT. The page is told which rows the host skipped
+  (`PanelState.otherSideClis`, `otherSideClis(rows, side)`) rather than asking the disk itself. The wire writers are synchronous, and the only
+  paths ever asked are this machine's own spellings of the other OS's: `C:\usr\…` on Windows, a relative name in WSL,
+  never a share); `fileAt` maps a `stat` as `directoryAt` does. The server: `ExecutablePaths.Here(path, places,
+  presence)` with `FilePresenceOf` (`QuestionRoots.PresenceOf(…, wantsDirectory: false)`, one exception mapping for
+  both), applied once per row after the distinct. The `executable` vectors gained `systemDrive`, `existsHere` and
+  `unknownHere` (an existing `/Program Files/nodejs/node.exe` → `C:\Program Files\nodejs\node.exe`, an unknown one kept,
+  a POSIX-side Windows spelling that IS a file here kept); the seam leg gained a case on a Windows host: a COPY of the
+  fake CLI on the system drive spelled without its drive letter, with the row's fallback (`COAI_EXE_SEAM_CLI`) pointed
+  at a file that does not exist — the copy must answer. RED (TS): `actual '', expected 'C:\\Program Files\\nodejs\\node.exe'`;
+  RED (C#): `Expected answer.Path to be "C:\Program Files\nodejs\node.exe" … but "" has a length of 0`. Break-it: the
+  server rule made lexical again → the seam red (`the server did not run the existing /Users/…/FakeCli.exe … cliFound:
+  false … not-the-fallback`); the extension skipping an UNKNOWN path → `skipped on a guess`. The card's note now says
+  *"… and no CLI on this machine — the other side's CLI …"* (`asksDisk` true for the CLI entries).
 - **1.2 on the server: `ParseVendors` only.** Every `ParseVendors` caller gets the skip (`COAI_VENDORS`, a
   consultant's or a question row's catalog `row`, `--check-model`); the legacy consultant / question-row
   `executablePath` fields OUTSIDE a `row` are not skipped server-side — the extension already writes this side's value
@@ -345,22 +368,52 @@ its deciding line; the observed messages are in the commits and in `research/mod
 - **1.4:** only the SHARED layer is skipped — the environment and this side's own overlay choice are this side's by
   construction. `chooseStorage` gained a `family` parameter (default: the host's) instead of an injected `resolve`.
 - **1.5:** `otherSideNote(windows, setting)` takes its words from the registry (the roots' sentence is byte-identical);
-  `PanelState.hostFamily` (absent = the host's) and `CardContext.family` let a page test draw both sides on one machine.
+  `PanelState.hostFamily` (absent = the host's) and `PanelState.otherSideClis` (the host's decision) let a page test draw
+  both sides on one machine.
 - **Not in E1:** the server's structured `settingProblems`, the missing-path notice and mark (E5), the side registry
-  (E2), the second field (E3/E4).
+  (E2), the second field (E3/E4). The same cadence consultation raised two points about E5 itself; they are written into
+  E5 below (5.0, and 5.1 / 5.3 / 5.7 amended), not built here.
 
 ### E5 — a missing path of this OS: a notice at every start and a bright mark · `feat/paths-per-side-e5-missing`
 
 Built right after E1: it is the operator's item 1 and needs no side registry.
 
+- **5.0 The storage-write policy comes FIRST** (the gate's cadence consultant before E1's code round — verified on
+  `fix`+E1: `notify.ts` `write` → `recordNotification(coaiDataDir(), …)` → `jsonlLedger.appendLine` → `mkdir(dirname(path),
+  { recursive: true })`, so the notice about a missing NAMED data directory would itself create it, and hide the very
+  condition it reports). **Decided: a notice whose subject is the missing data directory itself is held IN MEMORY —
+  the toast, and the notifications page's view of this window run — and written to no ledger**, rather than to the
+  default location's ledger. Why: the default location is not where this window's notifications page reads (it reads
+  `coaiDataDir()`, the named directory), so a ledger row there would be invisible AND would split the history across two
+  folders; the notice is re-raised at every window start while the condition holds (D3), so persistence adds nothing a
+  person needs; and writing nothing is the only choice that cannot touch a bare `/mnt/z` mount point. Once the folder
+  exists, ledger writes resume as today. Stories: (a) `notify`'s writer refuses to write while `dataDirFinding` says the
+  named root is missing and keeps the record in a bounded in-memory list the page shows (RED: the notice's own write
+  creates the folder — injected `mkdir`); (b) **an inventory of every writer that creates the data directory, derived
+  by a scan test**, each either guarded the same way or recorded as creating only the default location or a side folder
+  inside an existing root. Found by search on 2026-10-10, to be re-derived by the scan: `jsonlLedger.appendLine` (through
+  `notificationsFile`, `notificationsSeen`, `chatUsageFile`, `chatDoorsFile`), `chatStoreFile`, `claudeProbeCache`,
+  `consultPromptFile`, `securityPromptEditor`, `teamServerAuth` (the token file), `configTransferCommands` (prompt
+  texts), `dataCommands` (the choice and move flows), `extension.ts` (`writeSettingsFile` / `underSettingsLock`) and
+  `roundsDbRead`.
 - **5.1 The findings.** `pathFindings(registry, read, family, isDirectory/isFile)` → `PathFinding[]`, one `stat` at a
   time, cached, unknown never cached (the `RootExistence` contract). RED: a this-OS root `D:\old-project` that is ENOENT
-  yields `missing` — today the page asks the disk about other-OS roots only.
+  yields `missing` — today the page asks the disk about other-OS roots only. **Amended (the gate's cadence consultant,
+  verified: `existingHere` awaits each `stat` in turn with no deadline, so one stalled share stops every later path,
+  while the 60 s expiry of `RootExistence` lets a SECOND probe start beside the stalled one):** each probe has a
+  **deadline** (a timeout answers `unknown`), there is **at most one outstanding probe per path** (a path still being
+  asked is not asked again — the expiry starts no second one), and an `unknown` path is never counted as missing and
+  never raises the notice. Tests, with an injected stat and clock: a never-settling share probe followed by a missing
+  local folder — the local `missing` finding still publishes and the outstanding work stays bounded (one per path,
+  however many renders and expiries pass); an `unavailable → present` recovery (the share comes back) clears the finding
+  without any settings edit.
 - **5.2 The server says which setting and which value.** `UnrecognisedSetting` gains a kind; `ProvidersAnswer` gains
   `SettingProblems` (additive, JSON name `settingProblems`); `providers.ts` parses it, an absent field reading as none.
   RED (C#): `--providers` with a missing root carries no `settingProblems`. Contract test (`test:contract`) on the
   field's shape.
-- **5.3 The notice.** `setting-path-missing` per `(key, value)` through `notifyOnce`, with **Open in Settings**; the
+- **5.3 The notice.** `setting-path-missing` per `(key, value)` through `notifyOnce`, with **Open in Settings**, worded
+  *"not found now"* — never *"deleted"*: an unmounted drive or a sleeping share reports absence too (the cadence
+  consultant); the
   generic toast stops repeating a sentence whose `(key, value)` the structured answer covers. RED: the operator's case
   today produces the generic code with the cure *"running without those settings"*; after, one
   `setting-path-missing` with the place, and no generic toast. Unit test on the dedupe; `notificationSites` ratchet
@@ -388,7 +441,9 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   *missing*, and a default location that does not exist yet draws **no** mark; (4) `test:host` — a fresh profile with no
   data directory anywhere starts with **no** `setting-path-missing` in the ledger (the first-start guarantee), and a
   profile whose overlay names a deleted folder gets exactly one per window start, and the folder is still absent after
-  activation. Break-it: drop the `source` guard — (4)'s first half must go red.
+  activation **and after the notice has settled** (its toast shown and its record handled — 5.0: the notice itself must
+  not recreate it). Break-it: drop the `source` guard — (4)'s first half must go red; route the notice back through the
+  ledger — (4)'s "still absent" must go red.
 
 ### E2 — the sides this profile has been used on · `feat/paths-per-side-e2-sides-seen`
 
