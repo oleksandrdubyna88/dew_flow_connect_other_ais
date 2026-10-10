@@ -1,6 +1,6 @@
 # PLAN — every round is counted, and what it cost the subscription is visible
 
-> Status: **plan only, nothing implemented yet, 2026-10-09.** Scope: the Team server's job ledger, `/api/usage` and
+> Status: **in progress — E1 (stories 1.1 and 1.2, the measurement) landed 2026-10-10; E2–E6 not built.** Scope: the Team server's job ledger, `/api/usage` and
 > job claim (`src_server`), the reviewer launch path both halves share (`src_mcp/runners/Reviewers`), `coai-mcp`'s
 > round store (`--log` family), the extension's Spending tab, Team-server block and model cards (`src_vs_code`), and
 > the deploy canary (`deploy/`).
@@ -126,9 +126,13 @@ shipped twin.
     a job ended by the host stopping (`JobRunner.cs:113-120`). Known to fold two launches into one line: a repair
     (`ReviewerExecutor.cs:565`) and a follow-up. Story 3.3 closes what this census lists.
   **Decides E6's scope.** No codex source → E6 is its record story alone, folded into E5.
+  *Done 2026-10-10 — [RESULTS_vendor_quota_gauges.md](../research/RESULTS_vendor_quota_gauges.md): codex HAS a source
+  (`codex app-server` · `account/rateLimits/read`, one weekly window, no 5-hour one on this plan; `exec --json` carries
+  none), the read did not touch `auth.json` while the access token was valid, Gemini has only its refusal, and a fourth
+  consumer — codex used directly outside coai — exists; E6 keeps 6.1 and 6.2 with the constraints its §6 lists.*
 - **1.2 Server ledger bodies as fixtures** (Fable) — one `ok`, one withdrawal-written-as-`TimedOut`, one
   `RateLimited` line from the live server, redacted (no email, no prompt), under `src_server/tests/`, with a check
-  that no fixture line contains `@`.
+  that no fixture line contains `@`. *Done 2026-10-10 — `src_server/tests/fixtures/usage/`, `UsageLedgerFixtureTests`.*
 
 ### E2 — the local counter · `feat/round-counter-e2-local-counter`
 
