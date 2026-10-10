@@ -12,6 +12,17 @@ namespace CoaiServer;
 public sealed record UsageRange(DateTimeOffset FromUtc, DateTimeOffset ToUtc)
 {
     public bool Contains(DateTimeOffset at) => at >= FromUtc && at < ToUtc;
+
+    /// <summary>The smallest range that holds both — what one scan is asked for when two answers are built from it.</summary>
+    /// <remarks>
+    /// The company answer carries a summary over the SELECTED window and a chart over its own thirty
+    /// days, and the ledger is parsed once for both: the reader is handed this, and each answer applies
+    /// its own range to what came back. Two ranges that do not touch leave a gap in the middle that
+    /// nobody asked about and nobody reads; it costs the lines between, which is cheaper than a second
+    /// parse of the whole file.
+    /// </remarks>
+    public UsageRange Union(UsageRange other) =>
+        new(FromUtc <= other.FromUtc ? FromUtc : other.FromUtc, ToUtc >= other.ToUtc ? ToUtc : other.ToUtc);
 }
 
 /// <summary>The windows a caller may ask for.</summary>
@@ -72,6 +83,41 @@ public sealed record VendorTotal(
     long TokensIn,
     long TokensOut,
     double Seconds,
+    double? CostUsd,
+    bool CostIsFloor,
+    int UnpricedRuns,
+    /// <summary>The same runs, by the model that ran them.</summary>
+    /// <remarks>
+    /// <para>Story 2.2 of <c>PLAN_team_usage_by_person.md</c> (D4): the client prices each MODEL at its
+    /// public list price, because a vendor's current model is not what ran, and a vendor total cannot
+    /// be priced at all. Trailing and defaulted like <see cref="UsageDto.Kinds"/>, for the same reason —
+    /// a client older than the field deserialises the answer unchanged — and computed for BOTH scopes by
+    /// the shared fold: the JSON context writes nulls, so a "company only" breakdown would have put
+    /// <c>"models": null</c> into every personal answer.</para>
+    /// <para>An older server is recognised by the absence of <c>daily</c> on the company answer, never by
+    /// an empty <c>models</c>, which a new server answers too for a vendor with no runs.</para>
+    /// </remarks>
+    IReadOnlyList<ModelTotal> Models = null!)
+{
+    /// <summary>Never null, whatever a deserialiser did with the property — see <see cref="UsageDto.Kinds"/>.</summary>
+    public IReadOnlyList<ModelTotal> Models { get; init; } = Models ?? [];
+}
+
+/// <summary>What one MODEL of a vendor cost, over a window — a row under its vendor.</summary>
+/// <remarks>
+/// Grouped by the model id ORDINALLY: the id is the vendor's own string and the client prices it by
+/// exact lookup, so two casings would be two lookups there too. A line with no model — every line
+/// written before the column existed — is kept under <c>""</c>, which the client labels <i>unknown</i>:
+/// its spending is still spending, and dropping the row would hide it. The cost trio (<see cref="CostUsd"/>,
+/// <see cref="CostIsFloor"/>, <see cref="UnpricedRuns"/>) means exactly what it means on
+/// <see cref="VendorTotal"/>, and is folded by the same function so the two cannot disagree.
+/// </remarks>
+public sealed record ModelTotal(
+    string Model,
+    int Runs,
+    int Failed,
+    long TokensIn,
+    long TokensOut,
     double? CostUsd,
     bool CostIsFloor,
     int UnpricedRuns);
@@ -142,13 +188,63 @@ public static class UsageTotals
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>One pass over the group, because three were three passes for no reason.</summary>
+    /// <summary>A vendor's row: its own sum, and the same lines summed again per model beneath it.</summary>
+    /// <remarks>
+    /// Two passes over the group — the vendor's sum and the per-model grouping — where the first
+    /// version made four and a copy (two reviewers, code round) and story 2.2 would have made it one
+    /// with a mutable accumulator per model. Two passes over a few thousand lines is milliseconds;
+    /// one arithmetic function for every row on the page is the property worth keeping.
+    /// </remarks>
+    private static VendorTotal Fold(IGrouping<string, UsageLine> group)
+    {
+        var sum = Add(group);
+
+        return new VendorTotal(
+            group.Key,
+            sum.Runs,
+            sum.Failed,
+            sum.TokensIn,
+            sum.TokensOut,
+            Math.Round(sum.Seconds, 1),
+            sum.CostUsd,
+            sum.CostIsFloor,
+            sum.UnpricedRuns,
+            ByModel(group));
+    }
+
+    /// <summary>Per model, within one vendor's lines. Ordinal on the id — see <see cref="ModelTotal"/>.</summary>
+    private static IReadOnlyList<ModelTotal> ByModel(IEnumerable<UsageLine> lines) =>
+        [.. lines
+            .GroupBy(l => l.Model, StringComparer.Ordinal)
+            .Select(g => AsModel(g.Key, Add(g)))
+            .OrderByDescending(m => m.Runs)
+            .ThenBy(m => m.Model, StringComparer.Ordinal)];
+
+    private static ModelTotal AsModel(string model, Sum sum) =>
+        new(model, sum.Runs, sum.Failed, sum.TokensIn, sum.TokensOut, sum.CostUsd, sum.CostIsFloor, sum.UnpricedRuns);
+
+    /// <summary>
+    /// The ONE arithmetic every row here is built from: a vendor's, a model's and a kind's.
+    /// </summary>
+    /// <param name="Seconds">Raw; the vendor row rounds it, the others do not carry it.</param>
+    /// <param name="CostUsd">The sum of the KNOWN prices, rounded, or null when none were known.</param>
+    private sealed record Sum(
+        int Runs,
+        int Failed,
+        long TokensIn,
+        long TokensOut,
+        double Seconds,
+        double? CostUsd,
+        bool CostIsFloor,
+        int UnpricedRuns);
+
+    /// <summary>One pass over the lines, because three were three passes for no reason.</summary>
     /// <remarks>
     /// The first version called <c>Where().ToList()</c> and then <c>Count</c>, <c>Sum</c>, <c>Sum</c>
     /// on the original grouping — four traversals and a copy per vendor, on every company request.
     /// (Two reviewers, code round.)
     /// </remarks>
-    private static VendorTotal Fold(IGrouping<string, UsageLine> group)
+    private static Sum Add(IEnumerable<UsageLine> lines)
     {
         var runs = 0;
         var failed = 0;
@@ -158,7 +254,7 @@ public static class UsageTotals
         var priced = 0;
         var cost = 0d;
 
-        foreach (var line in group)
+        foreach (var line in lines)
         {
             runs += 1;
             failed += line.Failed ? 1 : 0;
@@ -174,13 +270,12 @@ public static class UsageTotals
 
         var unpriced = runs - priced;
 
-        return new VendorTotal(
-            group.Key,
+        return new Sum(
             runs,
             failed,
             tokensIn,
             tokensOut,
-            Math.Round(seconds, 1),
+            seconds,
             priced > 0 ? Math.Round(cost, 4) : null,
             priced > 0 && unpriced > 0,
             unpriced);
@@ -190,30 +285,28 @@ public static class UsageTotals
     /// Per kind — the gate against asking — over the same lines.
     /// </summary>
     /// <remarks>
-    /// <para>Folded through <see cref="Fold"/> so the arithmetic is the SAME arithmetic: an unknown
-    /// price is never zero here either, and a failed run is counted rather than filtered, because a
-    /// conversation that burned ninety seconds and answered nothing spent exactly what one that
-    /// answered did.</para>
+    /// <para>Summed by <see cref="Add"/> so the arithmetic is the SAME arithmetic: an unknown price is
+    /// never zero here either, and a failed run is counted rather than filtered, because a conversation
+    /// that burned ninety seconds and answered nothing spent exactly what one that answered did.</para>
     /// <para>Only the kinds that actually occur appear. A window with no conversations in it says so
     /// by having one row, not by carrying a row of zeroes that reads as a measurement.</para>
     /// </remarks>
     public static IReadOnlyList<KindTotal> ByKind(IEnumerable<UsageLine> lines) =>
         [.. lines
             .GroupBy(l => JobKinds.Wire(l.Kind), StringComparer.Ordinal)
-            .Select(Fold)
-            .Select(AsKind)
+            .Select(g => AsKind(g.Key, Add(g)))
             .OrderByDescending(k => k.Runs)
             .ThenBy(k => k.Kind, StringComparer.Ordinal)];
 
     /// <summary>The same numbers, named for a kind rather than a vendor.</summary>
     /// <remarks>
-    /// <see cref="Fold"/> folds a GROUP and names the result by that group's key, whatever the key
-    /// means; here it means a kind. Re-labelling it beats a second copy of the arithmetic, which is
-    /// how two totals on one page come to disagree about what a failed run costs.
+    /// <see cref="Add"/> sums LINES and knows nothing of what grouped them; here the key means a kind.
+    /// Re-labelling one sum beats a second copy of the arithmetic, which is how two totals on one
+    /// page come to disagree about what a failed run costs.
     /// </remarks>
-    private static KindTotal AsKind(VendorTotal folded) =>
-        new(folded.Vendor, folded.Runs, folded.Failed, folded.TokensIn, folded.TokensOut,
-            folded.Seconds, folded.CostUsd, folded.CostIsFloor, folded.UnpricedRuns);
+    private static KindTotal AsKind(string kind, Sum sum) =>
+        new(kind, sum.Runs, sum.Failed, sum.TokensIn, sum.TokensOut,
+            Math.Round(sum.Seconds, 1), sum.CostUsd, sum.CostIsFloor, sum.UnpricedRuns);
 
     /// <summary>Per kind, for one person.</summary>
     public static IReadOnlyList<KindTotal> ByKindFor(IEnumerable<UsageLine> lines, string email) =>

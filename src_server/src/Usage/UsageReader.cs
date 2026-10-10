@@ -144,10 +144,17 @@ public sealed class UsageReader(string dataDir)
             // which is the one thing this file must never do.
             var kind = JobKinds.TryRead(entry.Kind, out var said) ? said : JobKinds.WhenNotSaid;
 
+            // The vendor id is canonicalised ONCE, here, to the lower-case form the catalog groups by
+            // (case-insensitively) and the client's palette and labels know. Every aggregate downstream
+            // — the summary, the people, the kinds and the thirty-day chart — then names a vendor by
+            // the same string. Each of them groups case-insensitively, but each used to keep the
+            // FIRST casing it met, and the summary and the chart meet different lines (the window's
+            // against the chart's), so one answer could say "Codex" where the other said "codex" and
+            // a client joining the two by id found nothing. (Own review, 2026-10-09.)
             return new UsageLine(
                 at.ToUniversalTime(),
                 entry.Email ?? string.Empty,
-                entry.Provider ?? string.Empty,
+                (entry.Provider ?? string.Empty).ToLowerInvariant(),
                 entry.Model ?? string.Empty,
                 entry.Role ?? string.Empty,
                 entry.Outcome ?? string.Empty,

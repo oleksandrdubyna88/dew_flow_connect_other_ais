@@ -87,7 +87,8 @@ sequenceDiagram
 | `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models/**kinds** · `409` an idempotency key reused for a different request · `429 + Retry-After` over the queued cap |
 | `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost. **A read that writes**: the poll is the only evidence anybody is still listening, so it stamps `LastPolledUtc` |
 | `DELETE /api/reviews/{id}` | owner | `204` |
-| `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind** · `400` unknown window · `403` company as a non-admin |
+| `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind**; every vendor row carries `models[]` (since 2026-10-09), and the company answer alone carries `daily` — thirty dense UTC calendar days of launches per vendor, its own range whatever the window · `400` unknown window · `403` company as a non-admin |
+| `GET /api/people` | **admins** | who has an unexpired session this server still serves (the allow-list applied): `[{email, displayName, lastUsedUtc}]`, one row per case-insensitive email, sorted by email — and nothing else about a session · `403` as a non-admin, naming `Coai:Admins` (2026-10-09) |
 
 **Every route that has a caller reads its credential from `Authorization: Bearer …` and from
 nowhere else** — `Auth.Bearer` looks at that header, and no handler here reads a token out of a
@@ -677,9 +678,87 @@ sequenceDiagram
   review finishing while somebody looked at the usage page would fail to append its line and the
   spending record would silently lose a row.
 
+### Who, with what, and per day — the Team server tab's server half (2026-10-09)
+
+Epic 2 of [PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md), stories 2.1 and 2.2:
+two additive answers and one new route, so an admin's tab can show names, a last seen, a price per
+model and a month of bars. Nothing here changes what an older client reads.
+
+- **`models[]` under every vendor row, in BOTH scopes.** The client prices each MODEL at its public
+  list price, because a vendor's current model is not what ran (D4). Each model row carries the cost
+  trio its vendor row carries — `costUsd`, `costIsFloor`, `unpricedRuns` — and all three rows on the
+  page (vendor, model, kind) are built by ONE arithmetic, `UsageTotals.Add`, so they cannot disagree
+  about a failed or an unpriced run. Grouped by the model id ordinally, and a line with no model —
+  every line written before the column — is kept under `""`, which the client labels *unknown*:
+  dropping it would hide spending. Computed for the personal answer too, because the JSON context
+  writes nulls and a company-only breakdown would have put `"models": null` on every person's page.
+- **`daily` on the company answer, and only there.** Thirty UTC calendar days ending with today,
+  `[today − 29 days 00:00, tomorrow 00:00)`, DENSE: thirty buckets whatever happened, a `day` that is
+  a `yyyy-MM-dd` STRING the client prints as it is (never through `new Date()`, which shifts it into
+  the viewer's day), and on every day a row for every vendor seen anywhere in the range, zero where
+  nothing ran — so a stacked bar needs no lookup. It is not the `month` window's trailing 30 × 24
+  hours; a bar is a day and a day has a date. Omitted when null rather than written as `null`, which
+  is the one place `ServerJsonContext` does that on purpose: a client reads the ABSENCE of `daily` as
+  "not the company answer, or a server older than the chart" (D8), never as zero.
+- **One scan for two ranges.** The reader keeps only what is inside the range it is handed, so a chart
+  built from a `today` read would have shown one bar. The company branch reads the UNION of the
+  selected window and the chart's thirty days once (`UsageRange.Union`), then the summary applies the
+  window and the chart applies its own range to the same lines. The personal answer has no chart and
+  still reads its window alone. When the deferred read-from-the-end plan reopens, its stop condition
+  is the OLDER of the two ranges.
+- **`GET /api/people` — the roster, three fields, admin-only.** The ledger knows who SPENT; only the
+  sessions know who is signed in, and until this nothing listed them. `SessionStore.Active(now)` reads
+  `sessions/*.json` directly and is the opposite of its siblings in three ways: it never deletes
+  (`Sweep` and `Validate` do), it never moves `LastUsedUtc`, and it never reports a file it could not
+  read — a vanished file is a session revoked between the listing and the read, a torn one is a write
+  the sweep will remove, and a log line about either sixty times an hour per open admin page would
+  bury the failures that matter. One row per case-insensitive email: the newest session's casing and
+  its latest NON-EMPTY name (a renamed person signs in again, and the newest session carries the new
+  name; a hand-written `"name": null` reads as empty rather than as a 500), the latest use over EVERY
+  unexpired session, not the newest's (a laptop that never signs out is older than the phone that
+  signed in yesterday) — at the store's one-hour resolution, so the page says *within the hour*. The
+  endpoint drops a session whose domain has since left `Coai:AllowedDomains` (`CallerFilter.Admits`,
+  the gate's own predicate): the store would still accept it, the server refuses every request from
+  it, and a roster is for people the server serves. The same inline admin check and the same `403` as
+  `scope=company`; the wire shape is pinned by a test that enumerates the JSON keys, because the number
+  of fields is the privacy boundary. A display name is identity-provider text and is answered as it
+  is — escaping it is the page's job, and a server that "cleaned" it would hand back a name that is
+  not the person's.
+- **Expired session files are swept at boot and every hour** — `SessionSweeper`, a hosted
+  `PeriodicTimer` like `JobPump`'s deadline sweep. Until 2026-10-09 the only sweep was the boot line in
+  `Program.cs`, and `Validate` removed an expired file only when its token was presented again, so a
+  server that is never restarted kept every session whose owner simply stopped — and the roster read
+  walked all of them once a minute. Each tick is its own unit: a failed sweep is logged and the next
+  one runs.
+- **A last-used stamp that cannot land is a warning, not a refused request.** `Validate` rewrites a
+  session file once an hour by rename, and on Windows a rename over a file somebody holds open is
+  refused (`UnauthorizedAccessException`) — a backup, an editor, or the roster's own read in progress.
+  The stamp decides nothing, so `Validate` reports the failure and answers the session as it now is;
+  `Issue` keeps throwing on a failed write, because a token the server never stored can only ever be
+  refused. The obvious alternative — the reader granting `ReadWrite | Delete` — was measured and does
+  not let `File.Move(overwrite)` through (`MoveFileEx` has no POSIX rename); `JsonFileStoreTests`
+  keeps that measurement as a test so the share-side fix is not tried a second time.
+- **A vendor id is canonicalised once, in the reader**, to lower case — the form the catalog groups
+  by (case-insensitively) and the palette knows. The summary, the people, the kinds and the chart each
+  group case-insensitively but each kept the FIRST casing it met, and the summary and the chart meet
+  different lines (the window's against the chart's), so one answer could say `Codex` where the other
+  said `codex` and a client joining the two by id found nothing.
+- **The refusal shape is one function now.** `Refusal.Json(because, status)` — the `{ error }` body
+  every endpoint here answers — was built in-line at each endpoint until `/api/people` would have been
+  the third copy; `UsageEndpoints` and the new route go through it. `SessionEndpoints` and the five
+  in-line sites in `ReviewEndpoints` still build it by hand and are the next thing to move.
+- **The contract runner seeds one ledger line** (`http/run-contracts.mjs`), the developer's, stamped
+  now: with an empty ledger `vendors` is `[]` and an assertion over each vendor's `models` passes over
+  nothing. `http/people/people.http` mints its own session first for the same reason — the suite's
+  personas are raw identity tokens with no session file — and withdraws it at the end. **Only the
+  untagged requests depend on either fixture**, and they ask for `window=year` so a run straddling UTC
+  midnight cannot miss a line stamped seconds earlier; every `@prod` request asserts the shape of
+  whatever rows the live server has, because the post-deploy check sends exactly that subset at the
+  deployed server (`common/http-contracts.md`, `# @prod`).
+
 ### The `http/` suite — and the bug only it could find
 
-`http/` covers all ten routes; `node http/run-contracts.mjs` builds the server, starts it on a free
+`http/` covers all eleven routes; `node http/run-contracts.mjs` builds the server, starts it on a free
 port with a throwaway data directory, mints three personas through the `Local` scheme, runs httpyac
 and tears everything down. The verdict is the exit code.
 
@@ -936,7 +1015,10 @@ written into the plan: that test is owed before Google is enabled anywhere.
 ```
 <DataDir>/
   vendors.json                     the operator's allowlist, edited by hand, hot-reloaded
-  sessions/<sha256(token)>.json    one per server token; the raw token is never stored
+  sessions/<sha256(token)>.json    one per server token; the raw token is never stored.
+                                   Listed by GET /api/people as {email, displayName, lastUsedUtc}
+                                   and nothing more — a read that never deletes; SessionSweeper
+                                   removes the expired ones at boot and every hour
   accounts/<vendor>/<slot>/        used as HOME for a launch on that account
       .lock                        held with FileShare.None for the life of a job
       state.json                   cooldown, needs-sign-in, last used, consecutive cooldowns

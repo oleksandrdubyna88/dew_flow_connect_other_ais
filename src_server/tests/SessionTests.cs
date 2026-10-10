@@ -229,4 +229,30 @@ public sealed class SessionTests
 
         store.Validate(live, start).Should().NotBeNull();
     }
+
+    /// <summary>
+    /// The hourly last-used stamp is informational, and a stamp that cannot land must not log a
+    /// person out: a listing holding the file (or any reader without the delete share) is a
+    /// warning in the log, not a refused request.
+    /// </summary>
+    /// <remarks>Own review of the people endpoint, 2026-10-09. Windows-only: Linux lets the rename through.</remarks>
+    [Fact]
+    public void AStampThatCannotBeWritten_StillAnswersTheSession_AndIsReported()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to replace a file somebody holds open");
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var reported = new List<string>();
+        var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
+        var start = DateTimeOffset.UtcNow;
+        var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "", start);
+        // Somebody holding the file open WITHOUT the delete share: an older reader, a backup, an editor.
+        using var holder = new FileStream(
+            Path.Combine(data, "sessions", SessionStore.FileNameFor(token)), FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        var later = store.Validate(token, start.AddHours(2));
+
+        later.Should().NotBeNull("the stamp decides nothing, so failing to write it must refuse nothing");
+        later!.LastUsedUtc.Should().Be(start.AddHours(2), "the caller still sees the session as it now is");
+        reported.Should().ContainSingle().Which.Should().Contain("could not be written");
+    }
 }

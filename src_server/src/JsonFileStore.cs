@@ -25,15 +25,41 @@ namespace CoaiServer;
 /// </remarks>
 public sealed class JsonFileStore(Action<string, Exception>? onFailure = null)
 {
+    /// <summary>What a read lets OTHERS do to the file while it holds it.</summary>
+    /// <remarks>
+    /// <para>The default a <c>File.ReadAllText</c> has, named so the fact below has somewhere to live.
+    /// <see cref="Write"/> REPLACES by rename, and on Windows a rename over a file somebody holds open
+    /// is refused — <c>UnauthorizedAccessException: Access to the path is denied</c> — so a roster
+    /// listing in progress (<see cref="SessionStore.Active"/>, once a minute per admin page) can land
+    /// under a session's hourly last-used stamp.</para>
+    /// <para><b>Widening this to <c>ReadWrite | Delete</c> was measured on 2026-10-09 and does not help</b>:
+    /// <c>File.Move(…, overwrite: true)</c> goes through <c>MoveFileEx</c>, which has no POSIX rename
+    /// semantics, and the replace is refused whatever share the reader granted. The test that pins
+    /// the measurement is <c>JsonFileStoreTests</c>; the fix is on the WRITING side — the one write
+    /// that may collide with a reader, the stamp, is non-fatal (<see cref="SessionStore.Validate"/>).</para>
+    /// </remarks>
+    internal const FileShare ReadShare = FileShare.Read;
+
     /// <summary>The record in <paramref name="path"/>, or null — absent, unreadable, or not JSON.</summary>
     public T? Read<T>(string path, JsonTypeInfo<T> shape)
         where T : class
     {
         try
         {
-            return File.Exists(path)
-                ? JsonSerializer.Deserialize(File.ReadAllText(path), shape)
-                : null;
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, ReadShare);
+
+            return JsonSerializer.Deserialize(file, shape);
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Gone between the existence check and the open: revoked or swept by somebody else a
+            // moment ago. Absent is absent, and absent was never reported.
+            return null;
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {

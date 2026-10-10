@@ -51,6 +51,21 @@ public sealed class UsageWindowTests
     public void ARunThatFinishedDuringThisRequestIsInToday() =>
         // The exclusive upper bound is a second ahead of now for exactly this reason.
         UsageWindow.Range("today", Now)!.Contains(Now).Should().BeTrue();
+
+    [Fact]
+    public void TheUnionOfTwoRangesSpansBoth()
+    {
+        // The company answer reads ONE scan for two ranges — the selected window for the summary and
+        // the chart's thirty days — so the reader is handed the union of the two.
+        var today = UsageWindow.Range("today", Now)!;
+        var earlier = new UsageRange(Now.AddDays(-29), Now.AddDays(-20));
+
+        var union = today.Union(earlier);
+
+        union.FromUtc.Should().Be(earlier.FromUtc);
+        union.ToUtc.Should().Be(today.ToUtc);
+        earlier.Union(today).Should().Be(union, "the union does not depend on the order");
+    }
 }
 
 public sealed class UsageTotalsTests
@@ -60,8 +75,75 @@ public sealed class UsageTotalsTests
     private static UsageLine Line(
         string email = "dev@example.com", string vendor = "codex", string outcome = "ok",
         double? cost = null, long tokensIn = 100, long tokensOut = 10, double seconds = 5,
-        JobKind kind = JobKind.Review) =>
-        new(At, email, vendor, "m", "Architecture", outcome, seconds, tokensIn, tokensOut, cost, kind);
+        JobKind kind = JobKind.Review, string model = "m") =>
+        new(At, email, vendor, model, "Architecture", outcome, seconds, tokensIn, tokensOut, cost, kind);
+
+    [Fact]
+    public void EachVendorIsBrokenDownByModel_WithTheSameArithmeticAsItsOwnRow()
+    {
+        // Story 2.2 of PLAN_team_usage_by_person.md: the client prices each MODEL at its list price,
+        // because a vendor's current model is not what ran. Every model row carries the cost trio its
+        // vendor row carries, folded by the same function, so the two cannot disagree about a failed
+        // or an unpriced run.
+        var codex = UsageTotals.ByVendor([
+            Line(model: "gpt-5", cost: 1.25),
+            Line(model: "gpt-5"),
+            Line(model: "o3", outcome: "RateLimited", tokensIn: 7),
+        ]).Single();
+
+        codex.Models.Should().HaveCount(2);
+        var gpt5 = codex.Models[0];
+        gpt5.Model.Should().Be("gpt-5");
+        gpt5.Runs.Should().Be(2);
+        gpt5.TokensIn.Should().Be(200);
+        gpt5.CostUsd.Should().Be(1.25);
+        gpt5.CostIsFloor.Should().BeTrue("one of its two runs had no price");
+        gpt5.UnpricedRuns.Should().Be(1);
+        var o3 = codex.Models[1];
+        o3.Model.Should().Be("o3");
+        o3.Runs.Should().Be(1);
+        o3.Failed.Should().Be(1, "a failed run is counted in its model, as in its vendor");
+        o3.TokensIn.Should().Be(7);
+        o3.CostUsd.Should().BeNull("nothing priced it, and null is not zero");
+    }
+
+    [Fact]
+    public void ModelsAreOrderedByUseThenByName()
+    {
+        var codex = UsageTotals.ByVendor([Line(model: "z"), Line(model: "a"), Line(model: "m"), Line(model: "m")]).Single();
+
+        codex.Models.Select(m => m.Model).Should().ContainInOrder("m", "a", "z");
+    }
+
+    [Fact]
+    public void AModelIsGroupedByItsExactId()
+    {
+        // Ordinal, deliberately: model ids are the vendor's own strings, and a client prices them by
+        // exact lookup in its price book — two casings would be two lookups there too.
+        var codex = UsageTotals.ByVendor([Line(model: "GPT-5"), Line(model: "gpt-5")]).Single();
+
+        codex.Models.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ALineWithNoModelIsKeptUnderAnEmptyName_ForTheClientToLabel()
+    {
+        // An old ledger line has no model. Its spending is still spending; the client labels "" as
+        // unknown, and dropping the row would hide what was spent.
+        var codex = UsageTotals.ByVendor([Line(model: ""), Line(model: "m")]).Single();
+
+        codex.Models.Should().Contain(m => m.Model == "" && m.Runs == 1);
+    }
+
+    [Fact]
+    public void TheModelBreakdownIsThereForOnePersonToo()
+    {
+        // Computed by the shared fold for BOTH scopes: the JSON context writes nulls, so a "company
+        // only" breakdown would have put `"models": null` into every personal answer.
+        var mine = UsageTotals.ByVendorFor([Line(model: "gpt-5"), Line(email: "other@example.com", model: "o3")], "dev@example.com").Single();
+
+        mine.Models.Should().ContainSingle().Which.Model.Should().Be("gpt-5");
+    }
 
     [Fact]
     public void FailedRunsAreCountedAndTheirTokensTooBecauseTheyCostTheSame()
@@ -265,6 +347,16 @@ public sealed class UsageReaderTests : IDisposable
 
         scan.Unreadable.Should().Be(0);
         scan.Lines.Should().ContainSingle().Which.Email.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AVendorIsReadInItsCanonicalCasing()
+    {
+        // Canonicalised once, on the way in, so the summary and the chart — which group different
+        // subsets of the same scan — cannot each keep a different first-seen casing of one vendor.
+        WriteLedger("""{"utc":"2026-09-06T12:00:00.000Z","provider":"Codex","model":"m","role":"Architecture","stage":"CodeReview","seconds":5,"tokensIn":1,"tokensOut":2,"costUsd":null,"outcome":"ok"}""");
+
+        new UsageReader(_dir).Read(Everything).Lines.Should().ContainSingle().Which.Vendor.Should().Be("codex");
     }
 
     [Fact]

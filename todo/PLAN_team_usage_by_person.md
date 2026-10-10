@@ -1,6 +1,8 @@
 # PLAN — who on the team is spending it: the Team server tab
 
-> Status: **plan only, nothing implemented yet, 2026-10-09.** Scope: a new admin-only **Team server** tab on the
+> Status: **in progress, 2026-10-09 — E2 stories 2.1 and 2.2 (the server half: `GET /api/people`, `models[]`,
+> `daily`) implemented on `feat/team-tab-server`; E1, E3 and 2.3 (contract-over-the-real-server, release, deploy)
+> open.** Scope: a new admin-only **Team server** tab on the
 > extension's Review rounds page (`src_vs_code`), two additive answers from the Team server (`src_server`), and the
 > removal of the dead *Company* toggle from the spending tab.
 >
@@ -240,7 +242,7 @@ E1 without it.
 | Surface | Size | Retired by | Interrupted |
 |---|---|---|---|
 | `/api/usage` company answer, `models` + `daily` | `daily` is 30 days × vendors (≤ 3 today) ≈ 90 small objects; `models` ≤ vendors × models (≤ 6) | per request | a read; nothing stored |
-| `/api/people` | one row per person; the read is over session FILES — people × sides × renewals within the 7-day TTL (tens, not five) | sessions expire (7 days) and `Sweep` removes them | a read of files that may be swept mid-read: a vanished file is skipped |
+| `/api/people` | one row per person; the read is over session FILES — people × sides × renewals within the 7-day TTL (tens, not five) | sessions expire (7 days); `SessionSweeper` removes the expired files at boot and every hour (until 2026-10-09 the only sweep was at boot, so a server never restarted kept every dead file for the roster to walk) | a read of files that may be swept mid-read: a vanished file is skipped; a sweep that fails a tick is logged and the next tick runs |
 | The host's usage cache | servers × 2 scopes × 4 windows, a few KB each | evicted per server on sign-out, removal, account change and a company `401`/`403`; otherwise replaced | per key sequence; a lost answer leaves the key as it was |
 | The tab's state on the page | the last answer per server | the page | refreshed on open and every 60 s while the tab is selected |
 
