@@ -1,5 +1,19 @@
 # Changelog
 
+## Server 0.46.0 — 2026-10-10
+
+**A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares
+your settings between a WSL window and a Windows one, so a reviewer row's CLI path written on one side (a Windows
+`C:\…\codex.cmd`, or a WSL `/usr/local/bin/codex`) reached the other side's coai-mcp, which probed it as a file there,
+found nothing and reported the CLI as not found — that reviewer dropped out of every round on that side. Now:
+- A path spelled for the other OS that does not exist here is skipped: coai-mcp looks the CLI up on `PATH` by its
+  runtime's name instead, and says once in its log (Information) that it did — never a notice, never a refusal.
+- A path that DOES exist here is still used. On Windows a root-relative `/Program Files/nodejs/node.exe` is a real
+  path: it runs from the system drive (`C:\Program Files\nodejs\node.exe`). When the disk cannot tell, the path is kept.
+- Rows that share one CLI path ask the disk once.
+- The extension already sends this side's value (extension 0.67.0); this is the same rule for a settings file an older
+  extension wrote.
+
 ## Extension 0.67.0 — 2026-10-10
 
 **New: a Team server tab, for that server's admins.** On *Review rounds*, an admin of a Team server now sees who on the
@@ -16,6 +30,30 @@ dropped before it reached anything. The company view is the Team server tab now.
 **Fixed: a Team server's figures on Review rounds refresh with the sidebar closed.** They were fetched only when the
 sidebar drew itself, so with it closed they never changed, and pressing a window did not ask the server again. The page
 now asks for itself, once a minute while it is open and at once on a window press.
+
+**Fixed: Consultants › Question consultant says what it offers, and what a removed model means.** Under **Who
+answers** a quiet line now says "Offered: the models ticked question consultant on Models.", with **Change on
+Models** beside it — the Model pickers list only those. A row whose model was removed from Models said "'' is not a
+runtime the question consultant can launch for 'disk'"; it now names the model and says it is no longer ticked
+question consultant (or was removed), and to pick another model.
+
+**Consultants › Consultant says when a ticked model is not being asked.** Ticking **consultant** on a Models card
+offers the model to every caller; each caller still asks its shipped pair until you pick the model under **Claude Code
+asks** (or another caller). That stays the rule, and now the page says it: under a caller still on its shipped pair, a
+quiet line names the ticked models it is not asking — "GPT-6-Astra is ticked consultant on Models, but Claude Code still
+asks the shipped pair — pick it here to use it."
+
+**Fixed: the Consultants tabs name a model the way its Models card does.** A model migrated from a chat preset showed
+up as its raw id — "Used by: chat-preset-mtwtqr0p-3", and the same id in the question consultant's Model picker —
+while its card is called "GPT-6-Astra". The "Used by" line above every feature tab, the consultant and question
+consultant pickers and the "not ticked" note now say "GPT-6-Astra (chat-preset-mtwtqr0p-3)"; a model with no name of its
+own keeps its id.
+
+**Fixed: a Models card that cannot be switched off or removed now says why on the card.** The only model switched on
+for plan or code review keeps its switch, its ✕ and that stage's tick refused, and the reason was only a tooltip, so the
+card looked broken. A quiet line under the card's head now reads, for example, "Locked: the only model switched on for
+plan and code review — switch on or add another model that reviews plans and code first." Screen readers read the same
+line from the switch, the ✕ and the tick.
 
 **Fixed: a question-consultant folder from the other side is no longer an error.** VS Code shares your settings
 between a WSL window and a Windows one, so a folder added in WSL (`/home/you/git`) was read on Windows too, and the

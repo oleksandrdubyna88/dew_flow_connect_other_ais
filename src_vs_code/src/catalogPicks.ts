@@ -35,11 +35,35 @@ export function rowsFor(use: CatalogUse, rows: readonly Vendor[]): readonly Vend
   return rows.filter((row) => tickedFor(row, use));
 }
 
+/**
+ * A row as a person knows it: the display name edited on its Models card, or its id when it has none (operator,
+ * 2026-10-10: a migrated row's id, `chat-preset-mtwtqr0p-3`, named a model its card calls "GPT-6-Astra").
+ */
+export function rowName(row: Vendor): string {
+  const name = (row.name ?? '').trim();
+
+  return name.length > 0 ? name : row.id;
+}
+
+/** A row named where a page lists or mentions it: its display name, with the id beside it when the two differ. */
+export function rowLabel(row: Vendor): string {
+  const name = rowName(row);
+
+  return name === row.id ? name : `${name} (${row.id})`;
+}
+
+/** A picked id, named by its row while the row is still on Models — the bare id once it is gone. */
+function pickedLabel(picked: string, rows: readonly Vendor[]): string {
+  const row = rows.find((one) => one.id === picked);
+
+  return row === undefined ? picked : rowLabel(row);
+}
+
 /** The option for a pick the list does not hold: still offered, so the next change cannot lose it silently. */
 function strandedOption(use: CatalogUse, picked: string, rows: readonly Vendor[]): readonly PickOption[] {
   const listed = picked === '' || rows.some((row) => row.id === picked && tickedFor(row, use));
 
-  return listed ? [] : [{ value: picked, label: `${picked} (stranded)`, disabled: false }];
+  return listed ? [] : [{ value: picked, label: `${pickedLabel(picked, rows)} (stranded)`, disabled: false }];
 }
 
 /** Why a pick is stranded, in words — or '' when it is not. */
@@ -52,7 +76,7 @@ function strandedNote(use: CatalogUse, picked: string, rows: readonly Vendor[], 
     return `${picked} is no longer on Models. ${who} keeps asking for it until you pick another.`;
   }
 
-  return tickedFor(row, use) ? '' : `${picked} is not ticked for the ${USE_LABELS[use]} on Models. ${who} keeps it until you pick another.`;
+  return tickedFor(row, use) ? '' : `${rowLabel(row)} is not ticked for the ${USE_LABELS[use]} on Models. ${who} keeps it until you pick another.`;
 }
 
 /**
@@ -62,7 +86,7 @@ function strandedNote(use: CatalogUse, picked: string, rows: readonly Vendor[], 
  * @param who what holds the pick, for the sentence ("This caller", "This row")
  */
 export function rowPicks(use: CatalogUse, picked: string, rows: readonly Vendor[], who: string): RowPicks {
-  const ticked = rows.filter((row) => tickedFor(row, use)).map((row) => ({ value: row.id, label: `${row.id}${row.enabled ? '' : ' (switched off)'}`, disabled: false }));
+  const ticked = rows.filter((row) => tickedFor(row, use)).map((row) => ({ value: row.id, label: `${rowLabel(row)}${row.enabled ? '' : ' (switched off)'}`, disabled: false }));
 
   return { options: [...ticked, ...strandedOption(use, picked, rows)], note: strandedNote(use, picked, rows, who) };
 }
@@ -70,6 +94,15 @@ export function rowPicks(use: CatalogUse, picked: string, rows: readonly Vendor[
 /** Why a picked id cannot be what the page offered for `use` — '' when it can. It arrives in a webview message. */
 export function pickRefusal(use: CatalogUse, rowId: string, rows: readonly Vendor[]): string {
   return rows.some((row) => row.id === rowId && tickedFor(row, use)) ? '' : `${rowId} is not ticked for the ${USE_LABELS[use]} on Models.`;
+}
+
+/**
+ * The quiet line that says what a feature's pickers offer, with the way to change it — a picker listing only the rows
+ * ticked for its use, and not saying so, read as a page that could not see the models at all (operator, 2026-10-10).
+ */
+export function offeredLine(use: CatalogUse): string {
+  return `<div class="hint offered">Offered: the models ticked ${escapeHtml(USE_LABELS[use])} on Models.`
+    + ` <button type="button" class="link" data-models-uses="${use}">Change on Models</button></div>`;
 }
 
 export function optionHtml(option: PickOption, selected: string): string {

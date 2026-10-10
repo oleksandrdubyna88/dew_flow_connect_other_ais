@@ -11115,6 +11115,15 @@ flowchart LR
   a use toggled in the catalog's order — Bugz moves to the one row ticked and `coai.bugzModel` with it (D7); a
   duplicate copies everything (`vaultKeyName` too) under the next free id, right after its source; a remove after the
   page's confirm (no second modal), refused for the last model of a stage. The card locks the same rule (`lastStagesOf`).
+  **The lock is said on the card, not only in a hover** (2026-10-10, operator report): a locked card draws
+  `<p class="hint lock" id="lock-<row>">` under its head — "Locked: the only model switched on for plan and code
+  review — switch on or add another model that reviews plans and code first." — its words built from `lockOf` (the
+  same phrase the switch's and the ✕'s `title` keep). The refused switch, the refused ✕ (`confirmButton`'s
+  `describedBy`) and each locked stage tick (`stageBox`'s `why`) carry `aria-describedby` to that line, through the one
+  `describedBy` helper in `catalogShell.ts`. Quiet hint tone (`.catalog .hint`), never the error colour — it is
+  information. A card that is not last draws no line and no `aria-describedby`. A stage tick on the last model is drawn
+  disabled, so no refusal toast arises from the card; the write path's refusal (`lastStageMessage`) stays for any
+  other caller.
 - **Add a model** is the existing picker, grouped by where a model runs (`addModelGroups.ts`: a CLI here, an API key,
   this machine's GPU, a Team server — with a line saying where to add a server when none is signed in).
 - **This coai-mcp ignores…** on a card through `skew` by capability (`systemPrompt`, `timeoutMinutes`, `cliEffort`).
@@ -11184,6 +11193,13 @@ row's Models card, never here. The caps, prompt and cadence are the current page
 - **Never cleared (D3):** a stored pick of a row no longer ticked, or no longer on Models, stays selected as
   "(stranded)" with a sentence saying so; only the person moves it. The caller's own vendor is offered, never refused,
   with a word that it shares the caller's blind spots.
+- **A tick is not a pick, and the pick says so** (2026-10-10, operator report: GPT-6-Astra ticked consultant, Claude
+  Code still on the shipped pair). The rule is unchanged — a tick only makes a row available; the caller's pick
+  decides; absence is the shipped pair (D2). While a caller is on its shipped pair and any row other than the pair's
+  own row (`DEFAULT_CONSULT.stored[caller].vendor`) is ticked consultant, `consultantPickView.unpicked` names those rows
+  (`rowName`) and the pick draws it as a quiet `.hint.unpicked` line: "GPT-6-Astra is ticked consultant on Models, but
+  Claude Code still asks the shipped pair — pick it here to use it." Nothing is said once the caller has picked. The
+  Question consultant has no shipped pair (each row picks a catalog row), so it has no such line.
 - **Stored as a reference:** `consultantPickWrites` writes `consultants[caller] = { vendor: <row id> }`, or removes the
   key for the shipped pair — and never the rows. It refuses a caller this build does not emit and a row not ticked
   Consultant (both arrive in a webview message).
@@ -11201,6 +11217,25 @@ name and CLI path; the switch, prompt, caveat and Remove are unchanged. The writ
 table (`qconsultWrite.EDITS.qconsultRowPick` → `rowPicked`): the row becomes a reference `{ vendor: <row id>, runtime:
 '' }`, keeps its id and prompt, and goes OFF as a vendor change does; a row not ticked "question consultant" is refused
 and the control snaps back. It goes through the usual fold, which drops a row only when its question row is REMOVED.
+
+**The tab says what it offers, and a removed pick says so** (2026-10-10, operator report: the picker listed only the
+rows ticked question consultant and did not say so; a row whose pick was gone read "'' is not a runtime the question
+consultant can launch for 'disk'"). `catalogPicks.offeredLine(use)` draws "Offered: the models ticked question
+consultant on Models." with the same `data-models-uses` **Change on Models** link as the strip, under **Who answers**.
+`qconsultWrite.rowAdmission` no longer hands an EMPTY runtime to the capability table (`admit`): a row whose vendor has
+no runtime to borrow (gone from the catalog and not a preset) is refused as "<id> is no longer ticked question
+consultant (or was removed) — pick another model" ("this row picks no model — pick one" with no vendor); a real
+runtime this build cannot launch keeps the table's sentence. The server's `CapabilityMatrix.Admit` still words the
+same refusal as a runtime of nothing — a follow-up for `src_mcp`, not changed here.
+
+**A row is named by its display name** (2026-10-10, operator report: "Used by: chat-preset-mtwtqr0p-3" for a card
+called "GPT-6-Astra"). `catalogPicks.rowName` is the name edited on the row's Models card, or its id when it has none;
+`rowLabel` is that name with the id beside it when the two differ — "GPT-6-Astra (chat-preset-mtwtqr0p-3)". Every
+`rowPicks` option label (the consultant's callers, the question rows), the stranded option and the "not ticked"
+sentence, and the "Used by" strip above every feature tab (`catalogSections.tickedFor`) use it; an option's VALUE stays
+the id, because the id is what a pick stores. A pick of a row that is gone is still named by its id — there is no name
+left to read. Not yet: the Security lane's Reviewer select draws its options from raw ids (`securityLaneView.select`),
+though its stranded sentence goes through `rowPicks` and is named.
 
 **Fixed on the way (both pages):** the Question consultant section resolved its rows against the panel's `vendors` —
 the current page's reviewers since E1.4 — so a row epic 1 had migrated into a reference to an `ask-<id>` row read as

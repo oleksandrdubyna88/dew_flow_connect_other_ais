@@ -1,5 +1,5 @@
 import { CALLER_KINDS, DEFAULT_CONSULT, type ConsultantChoice, type ConsultSettings, type ResolvedConsultant, isCallersOwnRuntime } from './consultSettings';
-import { optionHtml, pickRefusal, rowPicks, type PickOption } from './catalogPicks';
+import { optionHtml, pickRefusal, rowName, rowPicks, rowsFor, type PickOption } from './catalogPicks';
 import { type ConsultantHealthState, callerHealth } from './consultantHealthState';
 import { healthBlock } from './consultantHealthView';
 import { escapeHtml } from './escapeHtml';
@@ -23,6 +23,8 @@ export interface ConsultantPickView {
   readonly selected: string;
   /** What to say under the picker — a stranded pick, the caller's own vendor — or ''. */
   readonly note: string;
+  /** The rows ticked consultant this caller does not ask while it is on its shipped pair, said by name — or ''. */
+  readonly unpicked: string;
 }
 
 /** One setting the host saves, in order. */
@@ -56,6 +58,45 @@ function sameVendorNote(caller: string, picked: string, rows: readonly Vendor[])
   return row !== undefined && isCallersOwnRuntime(caller, row.runtime) ? 'The same vendor as the caller: it can be a stronger model, but it shares the caller’s blind spots.' : '';
 }
 
+/** The words a sentence about one row, or about several, takes. */
+const ONE_ROW = { verb: 'is', pick: 'it' } as const;
+const SOME_ROWS = { verb: 'are', pick: 'one' } as const;
+
+/** Names as a sentence lists them: "A", "A and B", "A, B and C". */
+function namesSaid(names: readonly string[]): string {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}`;
+}
+
+/** The rows ticked consultant other than the caller's shipped pair's own row — none once the caller has picked. */
+function unpickedRows(caller: string, picked: string, rows: readonly Vendor[]): readonly string[] {
+  const shipped = DEFAULT_CONSULT.stored[caller]?.vendor ?? '';
+
+  return picked === '' ? rowsFor('consultant', rows).filter((row) => row.id !== shipped).map(rowName) : [];
+}
+
+/**
+ * Why a ticked row is not asked (operator, 2026-10-10): a tick on Models only makes a row AVAILABLE — the caller's pick
+ * decides, and absence is the shipped pair (D2), which stays the rule. So a caller on its pair says, by name, which
+ * ticked rows it is not asking and where to pick them. '' when it has picked, or nothing else is ticked.
+ */
+function unpickedNote(caller: string, picked: string, rows: readonly Vendor[]): string {
+  const names = unpickedRows(caller, picked, rows);
+  const words = names.length === 1 ? ONE_ROW : SOME_ROWS;
+
+  return names.length === 0 ? '' : `${namesSaid(names)} ${words.verb} ticked consultant on Models, but ${callerLabel(caller)} `
+    + `still asks the shipped pair — pick ${words.pick} here to use it.`;
+}
+
+/** A caller as the page names it — "Claude Code" — or its id for one this build does not list. */
+function callerLabel(caller: string): string {
+  return CALLER_KINDS.find((one) => one.id === caller)?.label ?? caller;
+}
+
+/** A quiet line under a pick, of one kind — '' when there is nothing to say. */
+function hintLine(kind: string, text: string): string {
+  return text.length === 0 ? '' : `\n  <div class="hint ${kind}">${escapeHtml(text)}</div>`;
+}
+
 /**
  * One caller's picker.
  *
@@ -71,6 +112,7 @@ export function consultantPickView(caller: string, stored: ConsultantChoice, row
     options: [{ value: '', label: `The shipped pair — ${shipped}`, disabled: false }, ...picks.options],
     selected: picked,
     note: picks.note || sameVendorNote(caller, picked, rows),
+    unpicked: unpickedNote(caller, picked, rows),
   };
 }
 
@@ -115,7 +157,7 @@ function modelWords(model: string): string {
 
 function pickHtml(caller: { id: string; label: string }, consult: ConsultSettings, rows: readonly Vendor[], health: ConsultantHealthState | undefined): string {
   const view = consultantPickView(caller.id, consult.stored[caller.id] ?? DEFAULT_CONSULT.stored[caller.id]!, rows);
-  const note = view.note.length === 0 ? '' : `\n  <div class="hint stranded">${escapeHtml(view.note)}</div>`;
+  const note = hintLine('stranded', view.note) + hintLine('unpicked', view.unpicked);
 
   return `<div class="field consult-pick">
   <label for="consult-row-${caller.id}">${help('consultCaller')}${escapeHtml(caller.label)} asks</label>
