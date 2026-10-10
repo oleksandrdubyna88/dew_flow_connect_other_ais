@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.66.0 — 2026-10-10
 
 **Fixed: the first start after an update in place no longer shows an error.** When VS Code updated the extension before
 it had started, moving your models into the catalog could meet settings the window had not loaded yet and showed
@@ -19,6 +19,19 @@ also asks for `callerModel` and never a secret in `lessons`.
   the feature rule existed is told the feature gate is missing; move its pin.
 - The consultant half moved to v4 with the same conventions release (snippet v15): a cadence consultation
   counts only after `close_consult` records its outcome.
+
+**The CLAUDE.md snippet gains a sixth half: ask the consultants before the person (snippet v17).** The
+pasted block now carries the conventions rule `coai-question-consultant.md` (`coai-question` v1): before
+any question reaches you — in every phase, the planning questions the server would let through included —
+the AI sends it to `ask_consultants`, and asks you only what their answers did not settle, plus what is
+yours to decide whatever they say (an action outside the working copy such as an issue or a pull request
+in another owner's repository or a publication, a change to your machine, a pure preference), with the
+consultants' answers and its own recommendation beside each question. The server's phase rule is
+unchanged; the rule only raises the bar above it.
+- A paste without the `coai-question` marker is reported as older — copy the snippet again.
+- A repository that mounts the conventions is now checked for six rule files. A mount pinned before this
+  rule is told the question consultant is missing; move its pin (the panel still says to replace the
+  pasted block — a known gap).
 
 ## Extension 0.65.0 — 2026-10-09
 
