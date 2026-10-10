@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// The vault's config key reaches <c>creds</c> on STDIN — never in its command line, which every
 /// user inside WSL and every process of the same user on Windows can read
-/// (todo/PLAN_creds_config_key_on_stdin.md).
+/// (research/PLAN_creds_config_key_on_stdin.md).
 /// </summary>
 /// <remarks>
 /// <para>Driven against the real fake CLI, which records each launch's argv and stdin

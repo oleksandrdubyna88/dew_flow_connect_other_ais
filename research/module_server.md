@@ -1572,7 +1572,7 @@ Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI
 `COAI_MAX_PER_PROVIDER`, `COAI_REVIEWER_TIMEOUT_MINUTES`, `COAI_DATA_DIR`, `COAI_LOG_LEVEL`, and
 `COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config -` once per
 start, the key written to its stdin and never in its arguments (2026-10-10,
-[PLAN_creds_config_key_on_stdin.md](../todo/PLAN_creds_config_key_on_stdin.md)): first `creds --help` (10 s), and a CLI
+[PLAN_creds_config_key_on_stdin.md](PLAN_creds_config_key_on_stdin.md)): first `creds --help` (10 s), and a CLI
 whose help does not name `config-key-stdin` is refused with "update the creds CLI" — a hung or failing `--help` with its
 own sentence — and is never given the key. That refusal is the CLI's answer; only a CLI that cannot be started moves on
 to the next place. Since 2026-10-06 the read runs in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in

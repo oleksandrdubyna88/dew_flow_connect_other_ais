@@ -1,6 +1,6 @@
 # PLAN — the vault key reaches `creds` on stdin, never on its command line
 
-> Status: **plan only, nothing implemented yet, 2026-10-10.** Scope: `src_mcp/src/Server/KeyVault.cs`, its tests
+> Status: **IMPLEMENTED, 2026-10-10** (released as an `mcp` release after creds `cli`, § 6; deviations § 8). Scope: `src_mcp/src/Server/KeyVault.cs`, its tests
 > (`src_mcp/tests/KeyVaultTests.cs`, `src_mcp/tests/TheVaultIsFoundWhereCredsForDevsInstallsItTests.cs`), and the
 > documents that describe the read (`.agents/PROJECT.md`, `research/architecture.md`, `research/module_server.md`).
 >
@@ -9,7 +9,7 @@
 > config key given as an argument and reads it from stdin (`creds config -`) or `CREDSFORDEVS_KEY`. The two halves ship
 > in that order — creds `cli` first, then this — see § 6.
 >
-> Boundary with [PLAN_coai_finds_creds_where_it_is.md](PLAN_coai_finds_creds_where_it_is.md): that plan decides WHERE
+> Boundary with [PLAN_coai_finds_creds_where_it_is.md](../todo/PLAN_coai_finds_creds_where_it_is.md): that plan decides WHERE
 > `creds` is found (PATH, the extension's folder, `COAI_CREDS_EXE`); this one decides only HOW the key is handed to
 > whatever was found. Disjoint; either can land first.
 
@@ -97,3 +97,25 @@ During it, keyless vendors keep working and `providers` names the cause; the rec
 - [ ] No sentence on any path contains the key (sweep test with a positive control).
 - [ ] `.agents/PROJECT.md`, `research/architecture.md`, `research/module_server.md` updated.
 - [ ] Plan and code rounds of the review gate passed; promoted on completion; released as `mcp` after creds `cli`.
+
+## 8. What shipped, and how it differs
+
+Built as § 3 says, with three changes from the code round and our own review:
+
+1. **The read's outcome is a closed record hierarchy** — `Answered` / `Refused` / `NoneStarted` — rather than a null
+   result and an empty refusal standing in for two of the three states.
+2. **"Not started" means at the PROBE.** A CLI that answered `--help` and then could not be started for the read is
+   that CLI's answer, with its own sentence ("could not be started for the read — was it removed or replaced just
+   now?"); the first cut caught that exception around both launches and asked the next place, ending in "not
+   installed".
+3. **A cancelled probe says cancelled**, not "hung or broken", and the timeout/exit sentences are culture-invariant.
+
+Tests beyond § 4: the request shapes are pinned (probe: `--help`, empty stdin, 10 s, 64 Ki; read: `config -`, key
+plus newline on stdin, 30 s); a marker that appears only on stderr is not a marker; the marker's VALUE is pinned on
+this side as it is on the creds side; every `FAKECLI_*` variable is reset around the vault classes, because the probe
+made several more of them matter. The fakes of `ProbeApiModeTests` and `TheServerAnswersInitializeAtOnceTests` answer
+`--help` as a current creds CLI.
+
+**Rejected in the code round, with the reason:** a release check that runs the REAL creds CLI. CI here has no creds
+binary and should not acquire another product's release artefact; the contract is pinned by value on both sides
+instead, and the released CLI's `--help` is checked for the marker by hand before this ships (§ 6).

@@ -115,7 +115,7 @@ node .agents/conventions/tools/pin-check.mjs
 - **No secret ever reaches argv or a log line.** Vendor keys come from one CredsForDevs `config`
   entry, read once at startup via `creds config -` with the config key written to its STDIN — after the
   CLI's `--help` has named `config-key-stdin`; an older CLI is refused with "update the creds CLI", never
-  given the key as an argument (`todo/PLAN_creds_config_key_on_stdin.md`).
+  given the key as an argument (`research/PLAN_creds_config_key_on_stdin.md`).
 - **Logging** per `.agents/conventions/common/logging-serilog.md`: coloured ANSI console (stderr in
   stdio mode) + one file per run under `logs/{yyyy-MM-dd}/`, everything UTC.
 - `.claude/settings.json` and `.claude/hooks/load-instructions.mjs` are byte-identical copies of

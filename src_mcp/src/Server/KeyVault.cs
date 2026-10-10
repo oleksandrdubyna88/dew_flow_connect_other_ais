@@ -18,7 +18,7 @@ public sealed record VaultKeys(IReadOnlyDictionary<string, string> Keys, string 
 /// route is the vault's app-reads-its-own-secrets door, authenticated by a key only the person can mint.
 /// </summary>
 /// <remarks>
-/// <para><b>The key is never an argument</b> (todo/PLAN_creds_config_key_on_stdin.md). A command line
+/// <para><b>The key is never an argument</b> (research/PLAN_creds_config_key_on_stdin.md). A command line
 /// is readable by every user inside WSL and by every process of the same user on Windows, and this key
 /// unlocks every vendor key the gate uses. So the CLI is first asked for its <c>--help</c>; only one
 /// that names <see cref="StdinMarker"/> is given the key, on stdin. An older CLI reads the key ONLY
