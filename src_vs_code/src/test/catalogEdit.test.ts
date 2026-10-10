@@ -59,6 +59,18 @@ test('editing a migrated consultant\'s model rewrites its row and keeps the refe
   assert.match(env(after)['COAI_CONSULTANTS'] ?? '', /"vendor":"glm","model":"glm-6"/u, 'and coai-mcp reads the edit');
 });
 
+test('rewriting a row in place keeps its per-side CLI paths — a field the definition does not carry is not a field the edit drops', () => {
+  // todo/PLAN_paths_per_side.md E3.1: the fold rewrites only the launch fields; `executablePathBySide` rides along.
+  const bySide = { windows: 'C:\\tools\\codex.cmd', posix: '/opt/codex', mirrored: 'C:\\tools\\codex.cmd' };
+  const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
+  const withSides = { ...state, vendors: (state.vendors as Record<string, unknown>[]).map((raw) => (raw['id'] === 'consult-codex' ? { ...raw, executablePathBySide: bySide } : raw)) };
+  const after = saved(withSides, 'consultants', { codex: GLM_6 });
+  const row = vendorsFrom(after.vendors).find((one) => one.id === 'consult-codex');
+
+  assert.equal(row?.model, 'glm-6', 'the row was rewritten');
+  assert.deepEqual(row?.executablePathBySide, bySide);
+});
+
 test('picking another vendor for a migrated consultant rewrites the same row', () => {
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
   // The definition the old page wrote for Claude picked in place of glm: the catalogue's Claude entry.

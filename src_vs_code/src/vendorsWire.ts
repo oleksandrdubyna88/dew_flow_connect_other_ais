@@ -4,7 +4,7 @@ import { apiSettingsOnTheWire } from './apiSettings';
 import { featureOnServer, reviewsFeatures } from './featureGate';
 import { hostExecutableSide } from './hostSide';
 import { ModelPrice } from './modelPrices';
-import { executableHere, type ExecutableSide } from './pathFamily';
+import { pathForThisSide, type ExecutableSide } from './pathFamily';
 import { saidText } from './saidText';
 import { Vendor } from './vendors';
 
@@ -129,9 +129,10 @@ export function rowOnTheWire(
     runtime: v.runtime,
     model: v.model,
     baseUrl: v.baseUrl,
-    // THIS side's CLI (todo/PLAN_paths_per_side.md E1.2): a path spelled for the other OS crosses as empty, so the
-    // server looks the runtime's CLI up on PATH instead of probing a file that is the other side's.
-    executablePath: executableHere(v.executablePath, side),
+    // THIS side's CLI (todo/PLAN_paths_per_side.md E1.2, E3.1): the row's per-side value when one was saved for this
+    // family, else the legacy value — which, spelled for the other OS, crosses as empty, so the server looks the
+    // runtime's CLI up on PATH instead of probing a file that is the other side's. One string, whatever the server's age.
+    executablePath: pathForThisSide(v, side).path,
     ...saidOnTheWire(v),
     ...featureOnTheWire(v, installedServerVersion),
     ...apiOnTheWire(v, priceOf),

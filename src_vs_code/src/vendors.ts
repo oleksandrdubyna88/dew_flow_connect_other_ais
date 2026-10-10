@@ -4,6 +4,7 @@ import { reviewsFeatures } from './featureGate';
 import { Runtime, RUNTIMES } from './models';
 import { saidText } from './saidText';
 import { catalogFields, CatalogUse, type FastSetting } from './catalogFields';
+import { bySideOf, type ExecutableBySide } from './pathFamily';
 
 /** Every CLI shape this build can drive. Kept beside the parser that has to recognise them. */
 
@@ -91,6 +92,13 @@ export interface Vendor {
    * failed every time, whatever anybody configured.</p>
    */
   readonly executablePath: string;
+  /**
+   * The CLI path per SIDE (todo/PLAN_paths_per_side.md E3.1): VS Code shares this row between a Windows window and a WSL
+   * window, and one `executablePath` cannot hold both `C:\…\codex.cmd` and `/usr/local/bin/codex`. Only when SAID, like
+   * `dialect`; a present member wins over `executablePath` on its side (`pathForThisSide`), an empty one being the PATH
+   * lookup. Never crosses in `COAI_VENDORS`: this side's value is resolved before the file is written.
+   */
+  readonly executablePathBySide?: ExecutableBySide | undefined;
   /**
    * What this vendor bills, per million tokens. Zero means "not set".
    *
@@ -383,7 +391,7 @@ export function vendorsFrom(value: unknown): Vendor[] {
       // `coai.vendors` is JSON a person reads and edits, and a `"remoteVendor": ""` on every row
       // is noise that means nothing.
       ...namedFields(v),
-      executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
+      ...cliPathFields(v),
       pricePerMillionIn: rate(v['pricePerMillionIn']),
       pricePerMillionOut: rate(v['pricePerMillionOut']),
       // Both only when said, like `dialect`: `coai.vendors` is JSON a person reads (S3.6, S3.7).
@@ -449,6 +457,18 @@ function migrateRetired(vendor: Vendor): Vendor {
  */
 function featureField(v: Record<string, unknown>): { feature?: true } {
   return reviewsFeatures({ runtime: String(v['runtime']), feature: v['feature'] === true }) ? { feature: true } : {};
+}
+
+/**
+ * The row's CLI path: the legacy `executablePath` every extension reads, and the per-side pair only when a row said one
+ * (`bySideOf`: the string members by name, trimmed) — so a row an older extension wrote stays byte-identical (paths per
+ * side E3.1).
+ */
+function cliPathFields(v: Record<string, unknown>): { executablePath: string; executablePathBySide?: ExecutableBySide } {
+  const executablePath = typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '';
+  const executablePathBySide = bySideOf(v['executablePathBySide']);
+
+  return executablePathBySide === undefined ? { executablePath } : { executablePath, executablePathBySide };
 }
 
 /** The vault key's name, lower-cased like the vault's own matching — only when a row said one. */

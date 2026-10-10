@@ -46,8 +46,12 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   catalogMigration: 'whether this machine\'s settings were moved into the model catalog',
 };
 
-/** The field inside a vendor or a consultant that is a path on this machine. */
-const MACHINE_PATH_FIELD = 'executablePath';
+/**
+ * The fields inside a vendor or a consultant that are paths on this machine: the legacy CLI path, and the per-side pair a
+ * row keeps for its Windows and WSL / Linux windows (todo/PLAN_paths_per_side.md E3.1) — as much this machine's as the
+ * first, and as wrong on another.
+ */
+const MACHINE_PATH_FIELDS: readonly string[] = ['executablePath', 'executablePathBySide'];
 
 /** What the manifest says about one setting: its default, and the JSON type(s) a value must have. */
 export interface DeclaredSetting {
@@ -188,9 +192,9 @@ export function importedConfig(text: string, declared: Declared): Imported {
  * says so; the rest of the entry applies.</p>
  */
 function pathRefusals(kept: Readonly<Record<string, unknown>>): Refused[] {
-  return Object.keys(kept).sort(byName)
-    .filter((key) => canonical(kept[key]) !== canonical(withoutMachinePaths(kept[key])))
-    .map((key) => ({ name: `${key} → ${MACHINE_PATH_FIELD}`, why: 'a path on the machine that wrote the file' }));
+  return Object.keys(kept).sort(byName).flatMap((key) => MACHINE_PATH_FIELDS
+    .filter((field) => canonical(kept[key]) !== canonical(withoutField(kept[key], field)))
+    .map((field) => ({ name: `${key} → ${field}`, why: 'a path on the machine that wrote the file' })));
 }
 
 function textsOf(kept: Readonly<Record<string, unknown>>): Record<string, string> {
@@ -294,7 +298,7 @@ function promptRefusal(id: string, value: unknown): string {
 /**
  * An imported value with this machine's own paths put back — issue #467's plan round.
  *
- * <p>Export leaves every `executablePath` out, so a whole-value import would wipe each local CLI path. The
+ * <p>Export leaves every `executablePath` (and `executablePathBySide`) out, so a whole-value import would wipe each local CLI path. The
  * same ENTRY — by `id` in a list, by key in a map — takes the path it already has here; an entry this
  * machine does not have yet gets none, which is what a new vendor has anyway.</p>
  */
@@ -316,28 +320,32 @@ function sameId(current: unknown, entry: unknown): unknown {
 }
 
 function withPathOf(entry: unknown, local: unknown): unknown {
-  const path = localPath(local);
-
-  return isRecord(entry) && path.length > 0 ? { ...entry, [MACHINE_PATH_FIELD]: path } : entry;
+  return isRecord(entry) ? { ...entry, ...localPaths(local) } : entry;
 }
 
-/** The path this machine's entry carries, or empty. */
-function localPath(local: unknown): string {
-  const path = recordOr(local)[MACHINE_PATH_FIELD];
+/** The path fields this machine's entry carries — the legacy path when it has one, the per-side pair when it has one. */
+function localPaths(local: unknown): Record<string, unknown> {
+  const here = recordOr(local);
+  const path = typeof here['executablePath'] === 'string' && here['executablePath'].length > 0 ? { executablePath: here['executablePath'] } : {};
 
-  return typeof path === 'string' ? path : '';
+  return isRecord(here['executablePathBySide']) ? { ...path, executablePathBySide: here['executablePathBySide'] } : path;
 }
 
-/** A value with every `executablePath` removed, at any depth. */
+/** A value with every `executablePath` and `executablePathBySide` removed, at any depth. */
 export function withoutMachinePaths(value: unknown): unknown {
+  return MACHINE_PATH_FIELDS.reduce(withoutField, value);
+}
+
+/** A value with every `field` removed, at any depth. */
+function withoutField(value: unknown, field: string): unknown {
   if (Array.isArray(value)) {
-    return value.map(withoutMachinePaths);
+    return value.map((inner) => withoutField(inner, field));
   }
 
   return isRecord(value)
     ? Object.fromEntries(Object.entries(value)
-      .filter(([key]) => key !== MACHINE_PATH_FIELD)
-      .map(([key, inner]) => [key, withoutMachinePaths(inner)]))
+      .filter(([key]) => key !== field)
+      .map(([key, inner]) => [key, withoutField(inner, field)]))
     : value;
 }
 

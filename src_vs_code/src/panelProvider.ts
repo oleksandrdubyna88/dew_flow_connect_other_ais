@@ -91,7 +91,7 @@ import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostExecutableSide, hostPlatform, Platform } from './hostSide';
-import { executableHere, otherSideClis } from './pathFamily';
+import { executableOf, otherSideClis } from './pathFamily';
 import { thisSide } from './installer';
 import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
@@ -4444,9 +4444,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return this.agyModels;
     }
     this.agyCheckedAt = Date.now();
-    // This side's agy only: a path spelled for the other OS is skipped (todo/PLAN_paths_per_side.md E1.2).
+    // This side's agy only: the row's per-side value first, a path spelled for the other OS skipped (paths per side E1.2, E3.1).
     const agyRow = vendors.find((v) => v.runtime === 'antigravity');
-    const agy = executableHere(agyRow?.executablePath ?? '', hostExecutableSide()) || 'agy';
+    const agy = (agyRow === undefined ? '' : executableOf(agyRow, hostExecutableSide())) || 'agy';
     const { code, output } = await capture(unquoted(agy), ['models'], false, 20_000);
 
     return code === 0 ? parseAgyModels(output) : [];

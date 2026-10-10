@@ -80,3 +80,14 @@ test('on a Windows page a root-relative CLI path that EXISTS on the system drive
 
   assert.equal(notes(cardOf(tree, 'node-cli')).length, 0, 'an existing file of this machine is called the other side\'s');
 });
+
+test('the one CLI-path box shows THIS side\'s per-side value — and no note, since nothing of the other side runs here', () => {
+  // todo/PLAN_paths_per_side.md E3.1: the legacy value is the Windows one; the WSL window saved a per-side value of its own.
+  const split = vendorsFrom([{ ...DEFAULT_VENDORS[0]!, id: 'split', runtime: 'codex', enabled: true, executablePath: 'C:\\tools\\codex.exe', executablePathBySide: { posix: '/opt/codex' } }]);
+  const isBox = (node: PageNode): boolean => node.tagName === 'INPUT' && node.dataset['setting'] === 'executablePath';
+  const posix = cardOf(modelsPage(split, 'posix'), 'split');
+
+  assert.equal(posix.one(isBox, 'the box').value, '/opt/codex', 'the WSL page draws the legacy Windows value it skips');
+  assert.equal(notes(posix).length, 0, 'the WSL page calls its own per-side value the other side\'s');
+  assert.equal(cardOf(modelsPage(split, 'windows'), 'split').one(isBox, 'the box').value, 'C:\\tools\\codex.exe', 'the Windows page, with no per-side value of its own, draws the legacy value');
+});

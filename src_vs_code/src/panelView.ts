@@ -83,7 +83,7 @@ import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
-import { otherSideNote, type PathFamily } from './pathFamily';
+import { otherSideNote, storedForThisSide, type PathFamily } from './pathFamily';
 import { VENDOR_EXECUTABLE } from './pathSettings';
 import { type SidesView } from './sidesSeen';
 import { sidesSeenHtml } from './sidesSeenView';
@@ -1120,6 +1120,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
     otherSideCli: otherSides.includes(v.id) ? family : undefined,
+    family,
   });
 }
 
@@ -1214,6 +1215,11 @@ export interface CardContext {
   readonly serverVersion: string;
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
+  /**
+   * The family the page is drawn for. The one CLI-path field is THIS side's (todo/PLAN_paths_per_side.md E3.1), so it
+   * draws the row's per-side value for this family when one was saved, else the legacy value.
+   */
+  readonly family: PathFamily;
 }
 
 /**
@@ -1279,11 +1285,11 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean, otherSide: PathFamily | undefined): string {
+export function runtimeFields(vendor: Vendor, id: string, remote: boolean, otherSide: PathFamily | undefined, family: PathFamily = hostFamily()): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
-           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
+           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(storedForThisSide(vendor, family))}">
   </div>${otherSidesCli(otherSide)}`;
 }
 

@@ -75,6 +75,19 @@ test('the env block coai-mcp reads is byte-identical after the migration', () =>
   assert.deepEqual(env(migrated(OPERATOR)), env(OPERATOR));
 });
 
+test('a row\'s per-side CLI paths survive the migration, and the env block still names only this side\'s one', () => {
+  // todo/PLAN_paths_per_side.md E3.1: the migration rewrites the rows it moves definitions into; every other field of
+  // every row rides along, `executablePathBySide` included — and the wire carries the resolved `executablePath` alone.
+  const bySide = { windows: 'C:\\tools\\codex.cmd', posix: '/opt/codex', mirrored: 'C:\\tools\\codex.cmd' };
+  const layer: CatalogLayer = { ...OPERATOR, vendors: [{ ...REVIEWERS[0]!, executablePathBySide: bySide }, REVIEWERS[1]!] };
+  const after = migrated(layer);
+  const codex = vendorsFrom(after.vendors).find((row) => row.id === 'codex');
+
+  assert.deepEqual(codex?.executablePathBySide, bySide);
+  assert.deepEqual(env(after), env(layer));
+  assert.equal(JSON.stringify(env(after)).includes('executablePathBySide'), false, 'nothing per-side crosses to coai-mcp');
+});
+
 test('a consultant definition becomes a row that reviews nothing, and the caller refers to it', () => {
   const after = migrated({ vendors: REVIEWERS, consultants: OPERATOR.consultants });
   const rows = vendorsFrom(after.vendors);

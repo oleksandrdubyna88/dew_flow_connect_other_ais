@@ -185,9 +185,51 @@ export function familyLabel(family: PathFamily): string {
   return family === 'windows' ? 'Windows' : 'WSL / Linux';
 }
 
-/** A stored CLI path as a row holds it — the legacy single value every extension version reads. */
+/**
+ * A row's CLI path PER SIDE (todo/PLAN_paths_per_side.md E3.1, design (b) O2): one value per family, each PRESENT only when
+ * a save wrote it — an explicitly empty one is the PATH lookup — and `mirrored`, the legacy `executablePath` as the last
+ * save by an extension that knows this field left it. Additive on the row: an older extension ignores it (and drops it
+ * when it saves the list), and coai-mcp never sees it — the extension resolves this side's value before it writes the
+ * server's settings file.
+ */
+export interface ExecutableBySide {
+  readonly windows?: string;
+  readonly posix?: string;
+  readonly mirrored?: string;
+}
+
+/** The members of {@link ExecutableBySide}, each read by name — a hand edit of another shape is nothing. */
+const BY_SIDE_MEMBERS = ['windows', 'posix', 'mirrored'] as const;
+
+/** The stored per-side field as a record of its string members, trimmed, or nothing when it says nothing. */
+export function bySideOf(raw: unknown): ExecutableBySide | undefined {
+  if (!isPlainRecord(raw)) {
+    return undefined;
+  }
+  const fields = raw;
+  const said = BY_SIDE_MEMBERS.filter((name) => typeof fields[name] === 'string').map((name) => [name, String(fields[name]).trim()] as const);
+
+  return said.length === 0 ? undefined : Object.fromEntries(said);
+}
+
+/** An object that is not an array — the only shape a per-side field can have. */
+function isPlainRecord(raw: unknown): raw is Readonly<Record<string, unknown>> {
+  return typeof raw === 'object' && raw !== null && !Array.isArray(raw);
+}
+
+/**
+ * The per-side value THIS side's field holds — rule 1 of design (c): `executablePathBySide[family]` when the member is
+ * PRESENT (an empty one included: it is the PATH lookup and final) — or nothing, when the legacy `executablePath` is the
+ * value this side has.
+ */
+function ownSidePath(stored: StoredExecutable, family: PathFamily): string | undefined {
+  return stored.executablePathBySide?.[family]?.trim();
+}
+
+/** A stored CLI path as a row holds it — the legacy single value every extension version reads, and the per-side ones. */
 export interface StoredExecutable {
   readonly executablePath: string;
+  readonly executablePathBySide?: ExecutableBySide | undefined;
 }
 
 /** What this side does with a stored CLI path: the path it runs (empty = PATH lookup), and the value it skipped. */
@@ -222,7 +264,14 @@ export interface ExecutableSide {
  * `ExecutablePaths.Here` answers too.
  */
 export function pathForThisSide(stored: StoredExecutable, side: ExecutableSide): ThisSidePath {
-  const value = stored.executablePath.trim();
+  const own = ownSidePath(stored, side.family);
+
+  return own === undefined ? legacyForThisSide(stored.executablePath, side) : { path: own, otherSide: '' };
+}
+
+/** Rules 2-3 of design (c) over the legacy value — what every side ran before E3, and what a row without a per-side value still runs. */
+function legacyForThisSide(stored: string, side: ExecutableSide): ThisSidePath {
+  const value = stored.trim();
   if (!spelledForTheOtherOs(value, side.family === 'windows')) {
     return { path: value, otherSide: '' };
   }
@@ -240,9 +289,23 @@ export function otherSideClis(rows: readonly (StoredExecutable & { readonly id: 
   return rows.filter((row) => pathForThisSide(row, side).otherSide.length > 0).map((row) => row.id);
 }
 
-/** {@link pathForThisSide}'s path alone — for a launch or a wire field that needs only what to run. */
+/** {@link pathForThisSide}'s path alone, for a LEGACY definition — a consultant's, a question row's, a chat preset's — which holds one value. */
 export function executableHere(path: string, side: ExecutableSide): string {
   return pathForThisSide({ executablePath: path }, side).path;
+}
+
+/** {@link pathForThisSide}'s path alone, for a stored ROW — the per-side value when this side has one. What a launch runs. */
+export function executableOf(stored: StoredExecutable, side: ExecutableSide): string {
+  return pathForThisSide(stored, side).path;
+}
+
+/**
+ * The STORED value of this side's CLI-path field, unresolved — what the one field draws, what a copy of a row into a
+ * definition (a consultant's, a question row's, a chat model's) takes, so the copy is resolved later exactly as the row
+ * would be: the per-side value when this side has one, else the legacy value, trimmed.
+ */
+export function storedForThisSide(stored: StoredExecutable, family: PathFamily): string {
+  return ownSidePath(stored, family) ?? stored.executablePath.trim();
 }
 
 /**
