@@ -52,6 +52,15 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
     /// <summary>How long the read itself may take — unchanged from before the probe existed.</summary>
     public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// Both launches drop <see cref="KeyVariable"/> from what the child inherits (code round): the server may
+    /// hold the key in its OWN environment — a client's config sets it — and an inherited copy would reach the
+    /// probed CLI too, even an old one that is then refused. A null value removes the variable from the child's
+    /// environment block.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string?> WithoutTheKey =
+        new Dictionary<string, string?> { [KeyVariable] = null };
+
     private readonly IReadOnlyList<string> _fallbacks = fallbacks ?? [];
 
     private readonly TimeSpan _probeTimeout = probeTimeout ?? DefaultProbeTimeout;
@@ -169,6 +178,7 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
                 {
                     StdIn = configKey + "\n",
                     Timeout = ReadTimeout,
+                    Environment = WithoutTheKey,
                 },
                 ct));
         }
@@ -185,6 +195,7 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
             {
                 Timeout = _probeTimeout,
                 MaxOutputChars = MaxHelpChars,
+                Environment = WithoutTheKey,
             },
             ct);
 

@@ -224,6 +224,49 @@ public sealed class TheVaultsRequestsAreShapedForTheKeyTests
     }
 
     [Fact]
+    public async Task Neither_launch_inherits_the_vault_key_through_the_environment()
+    {
+        // The server may hold the config key in its OWN environment (the client's config sets
+        // COAI_CREDS_KEY). Inherited, it would reach the probed CLI too — even an old one that is then
+        // refused (code round). Null removes the variable from the child's block.
+        var launcher = new Scripted(r => r.Arguments is ["--help"] ? Help("(config-key-stdin)") : Help("{}"));
+
+        await Read(new KeyVault(launcher, "creds"));
+
+        launcher.Requests.Should().HaveCount(2);
+        launcher.Requests.Should().OnlyContain(r => r.Environment.ContainsKey(KeyVault.KeyVariable) && r.Environment[KeyVault.KeyVariable] == null);
+    }
+
+    [Fact]
+    public async Task A_null_environment_value_really_removes_an_inherited_variable()
+    {
+        // What the line above relies on, checked against a real child: the launcher inherits this
+        // process's environment, and a null in the request removes the name. A uniquely named variable,
+        // so no other test in the run can see it.
+        const string Name = "COAI_TEST_INHERITED_7F3A";
+        Environment.SetEnvironmentVariable(Name, "inherited-value");
+        try
+        {
+            var (shell, args) = OperatingSystem.IsWindows()
+                ? ("cmd.exe", new[] { "/d", "/c", "echo [%" + Name + "%]" })
+                : ("/bin/sh", new[] { "-c", "echo \"[${" + Name + "-unset}]\"" });
+            var launcher = new ProcessLauncher();
+
+            var kept = await launcher.RunAsync(new ProcessRequest(shell, args, Environment.CurrentDirectory), TestContext.Current.CancellationToken);
+            var removed = await launcher.RunAsync(
+                new ProcessRequest(shell, args, Environment.CurrentDirectory) { Environment = new Dictionary<string, string?> { [Name] = null } },
+                TestContext.Current.CancellationToken);
+
+            kept.StdOut.Should().Contain("[inherited-value]", "the control: without the null the child does inherit it");
+            removed.StdOut.Should().NotContain("inherited-value");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(Name, null);
+        }
+    }
+
+    [Fact]
     public async Task A_marker_only_on_stderr_is_not_a_marker()
     {
         var launcher = new Scripted(r => new ProcessResult(0, "usage", "config-key-stdin", false));
@@ -276,5 +319,54 @@ internal static class FakeCliSteering
         {
             Environment.SetEnvironmentVariable(name, null);
         }
+    }
+}
+
+/// <summary>
+/// The LIVE half of the cross-repository contract (testing.md, "one live check compares the two sides for
+/// real"): a real creds CLI's <c>--help</c> names <see cref="KeyVault.StdinMarker"/>, and it refuses the argument
+/// form. Both pinned constants could agree while a real CLI disagreed; only running one can see that.
+/// </summary>
+/// <remarks>
+/// Runs against the binary <c>COAI_LIVE_CREDS_CLI</c> names and skips, saying so, when it names none — CI has no
+/// creds CLI and must not fetch another product's release. Run it before every mcp release that touches the
+/// vault: <c>COAI_LIVE_CREDS_CLI=&lt;path to the released creds&gt; CoaiMcp.Tests --filter-class "*Live*"</c>.
+/// Only a FAKE key is ever handed to it, and only in the argument form it must refuse before reaching any window.
+/// </remarks>
+public sealed class TheRealCredsCliSpeaksTheVaultsMarkerLiveTests
+{
+    private const string FakeKey = "cfgk_FAKEFAKEFAKEFAKEFAKEFAKEFAKE";
+
+    private static string LiveCli() =>
+        Environment.GetEnvironmentVariable("COAI_LIVE_CREDS_CLI") is { Length: > 0 } path
+            ? path
+            : throw SkipNow();
+
+    private static Exception SkipNow()
+    {
+        Assert.Skip("COAI_LIVE_CREDS_CLI names no creds CLI to check against — set it to a released creds binary");
+        return new InvalidOperationException("unreachable: Assert.Skip throws");
+    }
+
+    [Fact]
+    public async Task A_real_creds_CLI_names_the_marker_in_its_help()
+    {
+        var help = await new ProcessLauncher().RunAsync(
+            new ProcessRequest(LiveCli(), ["--help"], Environment.CurrentDirectory) { Timeout = KeyVault.DefaultProbeTimeout },
+            TestContext.Current.CancellationToken);
+
+        help.ExitCode.Should().Be(0);
+        help.StdOut.Should().Contain(KeyVault.StdinMarker, "KeyVault refuses every CLI whose help does not");
+    }
+
+    [Fact]
+    public async Task A_real_creds_CLI_refuses_the_argument_form_without_echoing_it()
+    {
+        var refused = await new ProcessLauncher().RunAsync(
+            new ProcessRequest(LiveCli(), ["config", FakeKey], Environment.CurrentDirectory) { Timeout = TimeSpan.FromSeconds(30) },
+            TestContext.Current.CancellationToken);
+
+        refused.ExitCode.Should().Be(96, "the creds contract's usage exit");
+        (refused.StdOut + refused.StdErr).Should().NotContain("FAKE");
     }
 }

@@ -116,6 +116,17 @@ this side as it is on the creds side; every `FAKECLI_*` variable is reset around
 made several more of them matter. The fakes of `ProbeApiModeTests` and `TheServerAnswersInitializeAtOnceTests` answer
 `--help` as a current creds CLI.
 
-**Rejected in the code round, with the reason:** a release check that runs the REAL creds CLI. CI here has no creds
-binary and should not acquire another product's release artefact; the contract is pinned by value on both sides
-instead, and the released CLI's `--help` is checked for the marker by hand before this ships (§ 6).
+4. **Neither launch inherits `COAI_CREDS_KEY`** (second code round). The server may hold the key in its own
+   environment when a client's config sets it, and the launcher inherits by default, so an old CLI that was then
+   refused would still have had the key in its environment. Both requests now carry `{ COAI_CREDS_KEY: null }`; a
+   real-child test proves a null removes an inherited name (with the control showing it is inherited otherwise).
+5. **A live check of the contract** (second code round, testing.md "one live check compares the two sides for
+   real"): `TheRealCredsCliSpeaksTheVaultsMarkerLiveTests` runs the creds binary `COAI_LIVE_CREDS_CLI` names — its
+   `--help` must carry the marker, and `config <fake key>` must be refused with exit 96 without echoing it. It skips,
+   saying so, when the variable is unset (CI has no creds CLI). Run 2026-10-10: green against a creds build of the
+   stdin branch, red (both tests) against one built from creds `main` before the change — so it has teeth. It is run
+   again against the released creds CLI before the `mcp` release.
+
+**Rejected in the code rounds, with the reasons:** making `probeTimeout` non-nullable (it is normalised once at
+construction; no logic sees a null), and a progress line while the probe runs (noise on every healthy read; the slow
+case already ends in a sentence naming the cause).
