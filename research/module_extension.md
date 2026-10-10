@@ -10480,7 +10480,26 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   by name, a drive root, the profile folder itself, a system folder or anything inside the data folder, or a
   relative path — D14 (c), the server's `QuestionRoots` mirrored (and since S4b a folder holding one of those, a
   credential folder, and a link resolving to any of them); a stored root that is one of those shows the refusal
-  beside it.
+  beside it. **Since 2026-10-09 a stored root spelled for the OTHER operating system** — a WSL path in a Windows
+  window, a Windows path in WSL, which arrive because VS Code shares these settings between the two windows — and
+  that is no folder on this machine (`otherSideHere`; the host asks the disk about those roots alone, `existingHere`
+  into `RootPlaces.existingHere`, so `/work` that exists is this side's and never called otherwise; it is looked for on
+  the SYSTEM drive, `RootPlaces.systemDrive` from `%SystemDrive%` or `C:` — `qualified`, the server's rule — never the
+  current one; the answers are KEPT in `RootExistence`, keyed by platform, drive and root list, asked one root at a
+  time, and dropped when `coai.qconsultRoots` changes or a root is added or removed, so a repaint stats nothing;
+  `rootRefusal` and Add a folder's duplicate check judge the QUALIFIED path too, so `/Windows` is refused on the page
+  as the server refuses `C:\Windows`, and a picked `C:\work` is the stored `/work`; a `stat` that fails with anything
+  but ENOENT/ENOTDIR is UNKNOWN — `directoryAt`, `RootPlaces.unknownHere` — never called the other side's, said on the
+  page as "could not tell", and never cached; a NUL — Node's ERR_INVALID_ARG_VALUE — is ABSENT, as on the server; a
+  definitive answer lives `ROOT_ANSWER_LIFETIME_MS` (60 s) and is forgotten on every `coai` settings change (the mirror),
+  a binary's settled `--features` answer and `coai.installServer` — `PanelProvider.forgetQconsultRootAnswers`) — is
+  said to be *the other side's folder* (a plain hint, never the `stale` refusal), because the server on this side
+  skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
+  `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window
+  is). When every stored root is the other side's, the block adds that a disk row is not asked on this side —
+  the server's `disabled` row. `escalationDirs.ts`'s POSIX-on-Windows refusal now asks `isPosixAbsolute` instead of
+  its own copy of the shape. `shared/path-family-vectors.json` is answered by `pathFamily.test.ts` and the C#;
+  `qconsultSection.test.ts` runs the page both ways.
 - *Before it asks you* (off / remind / require) and the three limits.
 
 A row's controls ride the write's CALLER slot (the row id; a prompt box the prompt id) and `panelProvider`
@@ -10821,9 +10840,11 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
-  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
-  (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
+  Display only; every write reads the rows afresh. The page's price map was built from that one list (`isReviewerRow`),
+  keyed by MODEL — so a consultant-only model had no catalog price on its Models card (the page draws `catalogRows`);
+  pricing every row by model instead would have let a hidden `api` consultant with a reviewer's model put its endpoint's
+  rate on the reviewer's card (PR #681's review). Since 2026-10-09 the Models cards are priced per ROW from every row instead (`priceBook.cardPrices`, below the E5.3 section;
+  `theCardsArePricedFromEveryRow.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
 - `scripts/seam-catalog.mjs`, the seam's tenth leg: a multi-instance catalog (two `claude` rows, a consultant and a
@@ -11814,11 +11835,27 @@ Nothing a person sees changes: everything removed here was drawn by nothing sinc
   **＋ Add a model** was refused as "another caller's consultant". A consultant holds an endpoint only when its entry
   defines one; the row is the holder of its own URL.
 
-**Found on the way, not fixed here:** a Models card takes its catalog price from `state.modelPrices[model]`, which is
-priced from the reviewers only (`isReviewerRow`, to keep a hidden api consultant from overwriting a reviewer's rate
-for the same model). So a row that is not a reviewer — a consultant-only model — shows no catalog price on Models.
-It predates E5; recorded as a follow-up in the plan.
+**Found on the way, fixed after it** (research/PLAN_models_card_prices_every_row.md, below): a Models card took its catalog
+price from `state.modelPrices[model]`, priced from the reviewers only, so a consultant-only model showed no price.
 
+## A Models card prices its own row (2026-10-09, research/PLAN_models_card_prices_every_row.md)
+
+- `priceBook.cardPrices(rows, priceOf)` — the price service's one function for the cards: for EVERY catalog row, its own
+  model on its own route (`billedRoute`: an `api` row's `baseUrl`, `''` for every other runtime), keyed by the row's
+  `id`; a row the lists do not know, or with no model, has no entry. `PanelProvider.cardPrices` calls it with
+  `PRICE_BOOK.priceOf` over `vendors` (every row) after the same `refreshPriceTables()`; the state field is
+  `PanelState.cardPrices`, and `cardContextFor` reads `state.cardPrices[v.id]`.
+- Keyed by row, no row's route can land on another row's card — the guarantee the reviewers-only list protected now
+  holds by construction, so `shown` no longer decides prices. Two rows on one model and two endpoints each show their
+  own rate.
+- `billedRoute` is ALSO what the by-model `modelPrices(vendors)` of the spending and consultation tabs routes an api row
+  by, so a row's card and its runs are priced on one route. Those tabs are otherwise unchanged (every row and the chat
+  presets, by model).
+- Tests: `aModelsCardPricesItsOwnRow.test.ts` runs the Settings page on Models (`catalogHtml` → `pageTree` → `runPageHtml`; CodeRabbit, PR #723) with the map
+  `cardPrices` builds — a consultant-only row's card shows its price (RED: `—`), a reviewer and an api consultant on one
+  model show 1.25 and 3 (RED: both 1.25), an unknown model keeps its dash; `theCardsArePricedFromEveryRow.test.ts` pins
+  the render's wiring (every row, the one price book). Break-it: reading by model, pricing only the reviewers,
+  routing an api row off its endpoint, and the render pricing `shown` each turn a test red.
 ## The Settings tabs lay out in two columns on a wide editor (2026-10-09)
 
 Asked for by the operator on 0.65.0: Models drew its cards in two columns on a wide editor, and every other tab was the

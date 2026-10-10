@@ -126,7 +126,7 @@ import { commandEdit } from './commandsMessages';
 import { flushChatPresetEdits, onChatPresetsRedraw, pruneDeadModelRows, queueChatPresetEdit } from './chatPresetsHost';
 import { presetEdit } from './chatPresetsMessages';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
-import { PRICE_BOOK } from './priceBook';
+import { billedRoute, cardPrices, PRICE_BOOK } from './priceBook';
 import {
   ConfigReader,
   roleRecordUpdate,
@@ -348,6 +348,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   public questionConsults: { readonly questions: readonly QuestionConsult[] } | undefined;
   private readonly qconsult: QconsultHost;
+
+  /** `coai.qconsultRoots` changed: the next paint asks the disk again about the roots spelled for the other OS. */
+  forgetQconsultRootAnswers(): void {
+    this.qconsult.forgetRootAnswers();
+  }
   private readonly roundsLog_: RoundsLogCache;
 
 
@@ -1262,8 +1267,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
     const sessions = await this.readSessions();
-    // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
-    // one list: priced from every row, a hidden api consultant put its endpoint's rate on a reviewer's card.
+    // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer. Every
+    // write reads the rows afresh, so a hidden row is never dropped by one. The Models cards are priced per ROW from every
+    // row (`cardPrices`), so this list no longer decides prices (research/PLAN_models_card_prices_every_row.md).
     const shown = vendors.filter(isReviewerRow);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
@@ -1300,7 +1306,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       latestTeamServerVersion: this.latestTeamServer,
       storage: await whereThisWindowKeepsItsData(),
       cliStatus: await this.vendorCliStatus(vendors),
-      modelPrices: await this.modelPrices(shown),
+      cardPrices: await this.cardPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
@@ -1308,7 +1314,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       securityPromptDir: promptsDir(this.dataDir.fsPath),
       securityPromptText: this.settingsTab.view === undefined ? undefined
         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
-      qconsultPlaces: this.qconsult.places(),
+      qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
@@ -1511,6 +1517,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
   }
 
+  /** The Models cards' prices, from the price service, after the same refresh the tabs' prices wait for. */
+  private async cardPrices(rows: readonly Vendor[]): Promise<Readonly<Record<string, ModelPrice>>> {
+    await this.refreshPriceTables();
+
+    return cardPrices(rows, (model, baseUrl) => PRICE_BOOK.priceOf(model, baseUrl));
+  }
+
   private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
     await this.refreshPriceTables();
 
@@ -1534,7 +1547,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // An `api` row is billed by the endpoint it names, so ITS model is priced on that route (S3.7b) —
       // xAI's own rate for grok on api.x.ai, not OpenRouter's resale price. Spread last, so the routed
       // price is the one its card shows.
-      ...Object.fromEntries(vendors.filter((one) => one.runtime === 'api').flatMap((one) => priced(one.model, one.baseUrl))),
+      ...Object.fromEntries(vendors.filter((one) => billedRoute(one).length > 0).flatMap((one) => priced(one.model, billedRoute(one)))),
     };
   }
 

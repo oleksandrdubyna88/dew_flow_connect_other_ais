@@ -74,6 +74,25 @@ internal static class StartupNotices
             noticing.Offered(() => Note(
                 ServerNoticeCodes.UnrecognisedSetting, StoodDown, setting.Key, setting.Sentence));
         }
+
+        OtherSideRoots(settings, log);
+    }
+
+    /// <summary>
+    /// A question-consultant root of the OTHER operating system, said at Information and nowhere louder.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT a notice (operator, 2026-10-09): VS Code's settings are shared by a WSL and a Windows window, so
+    /// one side always holds the other's roots, and a stood-down notice for them was a failure toast on every start of
+    /// a configuration that is right. The person sees it where it matters — beside the root on the Settings page, and
+    /// on a disk row left with no folder on this side — and the operator reads it here.
+    /// </remarks>
+    private static void OtherSideRoots(PanelSettings settings, Serilog.ILogger log)
+    {
+        foreach (var root in settings.QuestionConsult.OtherSideRoots)
+        {
+            log.Information("{Skipped}", QuestionRoots.SkippedSentence(root, SystemPlaces.Current.Windows));
+        }
     }
 
     private static void Storage(

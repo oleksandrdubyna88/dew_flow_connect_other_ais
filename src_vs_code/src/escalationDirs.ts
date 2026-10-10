@@ -1,3 +1,5 @@
+import { isPosixAbsolute } from './pathFamily';
+
 /**
  * WHICH directories are watched for questions, and what is wrong with the ones that are not.
  *
@@ -80,8 +82,9 @@ export function watchedDirs(own: string, extras: readonly string[], platform: No
     // REFUSED, not normalised away: a path that cannot work on this host is a thing to correct, and
     // the person only learns it from the panel if it survives to be rendered there.
     // `//server/share` is a UNC path written with forward slashes and is perfectly reachable from
-    // Windows; only a SINGLE leading slash is the POSIX shape that resolves to C:\… here.
-    if (platform === 'win32' && asked.startsWith('/') && !asked.startsWith('//')) {
+    // Windows; only a SINGLE leading slash is the POSIX shape that resolves to C:\… here. The shape is
+    // `pathFamily.ts`'s, the one the question consultant's roots are judged by too.
+    if (platform === 'win32' && isPosixAbsolute(asked)) {
       out.push({ asked, path: '', refusal: POSIX_ON_WINDOWS });
       continue;
     }

@@ -342,7 +342,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // What the installed coai-mcp accepts (`--features`, PLAN_one_model_catalog.md E2) — one cache for the window: the
   // settings file reads its last settled answer without spawning, and the catalog migration asks it per run. Every
   // settled answer writes the file again — the first one this session, and an updated binary's.
-  const features = new FeaturesCache(() => mirrorSettings(settingsSync));
+  // A settled answer means a binary answered — after an install, an update, a restart — and the file is written again:
+  // the page's root answers are dropped with it.
+  const features = new FeaturesCache(() => {
+    panel.forgetQconsultRootAnswers();
+    mirrorSettings(settingsSync);
+  });
   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),
@@ -519,6 +524,9 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('coai')) {
+        // The settings are mirrored to the server: what the page says about the question consultant's roots is asked
+        // of the disk again on the next paint, not kept from before (the fourth code round).
+        panel.forgetQconsultRootAnswers();
         // Re-read WHERE first: `mirrorSettings` writes the settings file into the data directory, so
         // a changed `coai.dataDirectory` has to be in effect before that write chooses its path.
         storageReadsThisSide(context);
@@ -744,6 +752,8 @@ export function activate(context: vscode.ExtensionContext): void {
     // showing the version it had replaced, which is the very symptom the button was fixed for.
     vscode.commands.registerCommand('coai.installServer', async () => {
       await installServer(context);
+      // A (re)installed server reads the roots afresh on its start; the page asks the disk afresh too.
+      panel.forgetQconsultRootAnswers();
       await panel.render();
     }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
