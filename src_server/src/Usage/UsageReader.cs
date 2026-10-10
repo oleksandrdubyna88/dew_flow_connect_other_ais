@@ -31,7 +31,11 @@ public sealed record UsageLine(
     /// <summary>How much of the output the vendor reported as reasoning — a subset of it, for the record.</summary>
     long TokensReasoning = 0,
     /// <summary><c>usage not captured</c> when the launch ended before the vendor reported anything; else empty.</summary>
-    string UsageNote = "")
+    string UsageNote = "",
+    /// <summary>The id every launch of one turn shares — on this server, the job's id; empty on a line older than the field.</summary>
+    string Turn = "",
+    /// <summary>What the launch was inside its turn (<c>LaunchAttempts</c>); empty on a line older than the field.</summary>
+    string Attempt = "")
 {
     /// <summary>True when this run produced no answer. It cost the same.</summary>
     public bool Failed => !Outcome.Equals("ok", StringComparison.OrdinalIgnoreCase);
@@ -173,7 +177,10 @@ public sealed class UsageReader(string dataDir)
                 // reads 0 / 0 / empty, which is what it always meant.
                 entry.TokensCached,
                 entry.TokensReasoning,
-                entry.UsageNote ?? string.Empty);
+                entry.UsageNote ?? string.Empty,
+                // Read, not dropped (story 3.3): one line per launch, tied to its turn. An older line has neither.
+                entry.Turn ?? string.Empty,
+                entry.Attempt ?? string.Empty);
         }
         catch (JsonException)
         {

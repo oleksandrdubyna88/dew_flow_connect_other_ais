@@ -220,8 +220,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// <summary>The ledger's word for a turn cut short before it ended — the word the other records use for the same thing.</summary>
     private const string Interrupted = "interrupted";
 
+    /// <remarks>
+    /// The vendor's reason WHOLE and redacted (<see cref="ReviewerSummaryFactory.DescribeWhole"/>, story 3.3 of
+    /// todo/PLAN_every_round_is_counted.md): it was the summary's 160-character cut, unredacted — the record lost a
+    /// bearer token that the ledger line beside it kept.
+    /// </remarks>
     private static string Outcome(ReviewerLaunch final) =>
-        final.Terminal is { } terminal ? ReviewerSummaryFactory.Describe(terminal) : "ok";
+        final.Terminal is { } terminal ? ReviewerSummaryFactory.DescribeWhole(terminal) : "ok";
 
     /// <summary>A turn that produced no answer, as the row's ending — or null when it answered.</summary>
     private static (string Status, string Reason)? Unanswered(IConsultantRuntime runtime, RowTurn turn) =>

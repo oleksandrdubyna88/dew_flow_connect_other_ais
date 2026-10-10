@@ -45,6 +45,20 @@ test('TheParser_KeepsCachedReasoningAndKind — a new line keeps its cached, rea
   assert.equal(old?.kind, 'review', 'everything written before `kind` existed was a review');
 });
 
+test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it shares and what it was; an old line has neither', () => {
+  // Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, tied to its turn — read, not dropped.
+  const [repair, old] = parseUsage([
+    '{"utc":"2026-10-10T10:00:00Z","provider":"gemini","model":"gemini-3.7-flash-low","tokensIn":200,"tokensOut":7,'
+    + '"kind":"review","outcome":"ok","turn":"3f9a0c1b2d4e","attempt":"repair"}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.equal(repair?.turn, '3f9a0c1b2d4e', 'the turn a repair shares with its first launch was dropped on the way in');
+  assert.equal(repair?.attempt, 'repair', 'what the launch was was dropped on the way in');
+  assert.equal(old?.turn, undefined, 'an old line says nothing about its turn — absent, never an empty id that matches every other old line');
+  assert.equal(old?.attempt, undefined);
+});
+
 test('APastLine_IsPricedAtItsOwnModel — a row that changed model prices its earlier lines at the model that answered them', () => {
   // The Gemini row moved to flash-medium on 2026-10-02: every earlier flash-low line was priced as flash-medium.
   const prices = listed({

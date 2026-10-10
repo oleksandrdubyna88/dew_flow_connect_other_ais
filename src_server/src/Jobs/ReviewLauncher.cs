@@ -29,6 +29,16 @@ public abstract record ReviewAttempt
     {
     }
 
+    /// <summary>
+    /// Both launches of an attempt that took two — the first and its follow-up in the same conversation (#515) — one
+    /// part each; empty for an attempt of one launch.
+    /// </summary>
+    /// <remarks>
+    /// The LEDGER's (story 3.3 of todo/PLAN_every_round_is_counted.md): <see cref="JobRunner"/> writes one line per part,
+    /// linked by the job's id, while the attempt's own usage stays the sum the job reports.
+    /// </remarks>
+    public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
+
     /// <param name="Raw">
     /// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same
     /// parser does not exist twice and drift.
@@ -130,7 +140,8 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             var executor = new ReviewerExecutor(launcher);
             var first = Confined(runtime, vendor, job, work, environment);
             var launch = await executor.LaunchAsync(first, ct);
-            var left = RetryLadder.Remaining(spent.Elapsed, job.RunBudget);
+            var firstTook = spent.Elapsed;
+            var left = RetryLadder.Remaining(firstTook, job.RunBudget);
             if (FollowUpOf(first, launch) is not { } followUp)
             {
                 return Read(launch);
@@ -142,7 +153,9 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
 
             // Inside the same try: the schema file and the job's TMPDIR are still there for it, and the
             // finally deletes them after BOTH launches.
-            return Continued(launch, await executor.LaunchAsync(Within(followUp, left), ct));
+            var second = await executor.LaunchAsync(Within(followUp, left), ct);
+
+            return Continued(launch, second) with { Launches = Launches(launch, firstTook, second, spent.Elapsed - firstTook) };
         }
         finally
         {
@@ -188,6 +201,23 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     private static ReviewAttempt Continued(ReviewerLaunch first, ReviewerLaunch second) =>
         Noted(Read(second with { Usage = first.Usage.Add(second.Usage) }),
             ", and again when asked in the same conversation after an auto-denied command");
+
+    /// <summary>
+    /// The two launches as the ledger's two lines (story 3.3 of todo/PLAN_every_round_is_counted.md): the first — whose
+    /// clean exit said nothing, which is what a follow-up is asked after — and the follow-up, each with what IT reported.
+    /// </summary>
+    /// <remarks>
+    /// <para>The attempt's own usage stays the SUM (<see cref="Continued"/>, story 3.1): the job reports it, and the two
+    /// parts add up to it. A follow-up's usage is what its launch reported, as a local follow-up's line is; whether agy
+    /// reports a continued conversation cumulatively, and what the job's sum should then be, is
+    /// PLAN_the_reviewer_follow_up_is_billed_once.md's to measure, not this one's to assume.</para>
+    /// <para>The follow-up's words are the job's own ending, which <see cref="JobRunner"/> writes when it records the job.</para>
+    /// </remarks>
+    private static IReadOnlyList<LaunchPart> Launches(ReviewerLaunch first, TimeSpan firstTook, ReviewerLaunch second, TimeSpan secondTook) =>
+    [
+        new(LaunchAttempts.First, first.Usage, firstTook, nameof(FailureKind.UnparseableByVendor)),
+        new(LaunchAttempts.FollowUp, second.Usage, secondTook, string.Empty),
+    ];
 
     /// <summary>An empty answer's reason, with what became of its continuation; any other attempt unchanged.</summary>
     private static ReviewAttempt Noted(ReviewAttempt attempt, string note) =>

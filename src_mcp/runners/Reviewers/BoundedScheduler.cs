@@ -581,6 +581,9 @@ public sealed class BoundedScheduler(
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var attempts = 1;
         var outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
+        // Every launch of every step, for the ledger's one line per launch (story 3.3 of
+        // todo/PLAN_every_round_is_counted.md) — set on the outcome only once a step was retried.
+        var launches = LaunchLines.StepOf(outcome, watch.Elapsed, LaunchAttempts.First);
 
         while (outcome is ReviewerOutcome.RateLimited limited && !RateLimit.Hopeless(limited.Reason))
         {
@@ -596,15 +599,18 @@ public sealed class BoundedScheduler(
                 note: $"rate limited on attempt {attempts} — waiting {wait.Value.TotalSeconds:F0}s before the next");
             await Task.Delay(wait.Value, ct);
             attempts += 1;
+            var started = watch.Elapsed;
             // What is LEFT of the deadline, never the whole of it again.
             var next = await executor.RunAsync(
                 RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget),
                 w.Repair is null ? null : RetryLadder.WithinRemaining(w.Repair, watch.Elapsed, budget),
                 ct);
+            launches = [.. launches, .. LaunchLines.StepOf(next, watch.Elapsed - started, LaunchAttempts.Retry)];
             // The step being left behind may have PAID: a first launch that completed and answered
             // junk, whose repair was then the launch that was rate limited. Its cost rides forward on
-            // the next step's outcome, whatever that outcome is, or the ladder files it as free.
-            outcome = next with { EarlierLaunches = outcome.LastTurnUsage.Add(next.EarlierLaunches) };
+            // the next step's outcome, whatever that outcome is, or the ladder files it as free — and
+            // each of its launches is still its own line in the ledger.
+            outcome = next with { EarlierLaunches = outcome.LastTurnUsage.Add(next.EarlierLaunches), Launches = launches };
         }
 
         return outcome is ReviewerOutcome.RateLimited hopeless
@@ -656,20 +662,40 @@ public static class ReviewerSummaryFactory
                 .Where(r => r.Outcome is ReviewerOutcome.StoodDown)
                 .Select(r => new SkippedRole($"{r.Invocation.Provider}/{r.Invocation.Role}", ((ReviewerOutcome.StoodDown)r.Outcome).Reason))]);
 
-    public static string Describe(ReviewerOutcome outcome) => outcome switch
+    /// <summary>The sentence a person reads in a summary or a table cell: a vendor's line cut at <see cref="ReasonLength"/>.</summary>
+    public static string Describe(ReviewerOutcome outcome) => Described(outcome, ReasonLength);
+
+    /// <summary>
+    /// The same sentence with the vendor's line WHOLE — for the ledger's outcome and the log's reason, which are where a
+    /// refusal is read back later (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <remarks>
+    /// The cut at <see cref="ReasonLength"/> is right for a cell and was wrong here: agy's weekly refusal reached the
+    /// ledger as <c>…Resets in 110h12m4…</c>, which is how the plan's own measurement lost the line it needed. Bounded
+    /// only by <see cref="VendorReason.SafetyCap"/>, far past any sentence a vendor has been seen to write.
+    /// <para><b>Whole, and REDACTED</b> — through the product's one redactor, which every record already passes. A
+    /// vendor's stderr is not ours: the question fan-out's own test feeds a row an <c>Authorization: Bearer …</c> line,
+    /// and the ledger line and the log line are written down exactly as a record is. The 160-character cut used to
+    /// bound how much of such a line could leak; keeping the line whole must not widen that, so nothing is written
+    /// whole that was not redacted first.</para>
+    /// </remarks>
+    public static string DescribeWhole(ReviewerOutcome outcome) =>
+        VendorReason.Written(Described(outcome, VendorReason.SafetyCap));
+
+    private static string Described(ReviewerOutcome outcome, int cap) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
         // The real number, because after the ladder it is not always one — and a round that says
         // "one retry" over four launches is a sentence a person would plan around.
         ReviewerOutcome.RateLimited r =>
-            $"rate limited (after {r.Attempts} attempt{(r.Attempts == 1 ? "" : "s")}){Because(r.Reason)}",
+            $"rate limited (after {r.Attempts} attempt{(r.Attempts == 1 ? "" : "s")}){Because(r.Reason, cap)}",
         // The stderr tail travels WITH the exit code. "exit 1" alone was what made the same codex
         // failure undiagnosable twice at a real gate: the executor had captured the reason and
         // this sentence — the only place a person reads — threw it away.
         // stderr FIRST, and the stream the adapter recovered only when stderr is silent: a vendor
         // writing an error line means it; a line lifted out of an event stream is the best guess
         // available. Every vendor here but codex uses stderr, so this changes nothing for them.
-        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail, e.FailureReason)}",
+        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail, cap, e.FailureReason)}",
         ReviewerOutcome.NotStarted n => $"not started: {n.Reason}",
         ReviewerOutcome.StoodDown s => $"stood down: {s.Reason}",
         ReviewerOutcome.Unparseable u => $"unparseable: {u.Reason}",
@@ -706,7 +732,7 @@ public static class ReviewerSummaryFactory
     /// recovered beats a non-announcing line because a deprecation warning is not why anything
     /// failed. See <c>IReviewerRuntime.WhyItFailed</c> for why the fourth source exists at all.
     /// </remarks>
-    private static string Because(string stdErrTail, string saidElsewhere = "")
+    private static string Because(string stdErrTail, int cap, string saidElsewhere = "")
     {
         // A vendor that named a closed door gets its cure quoted instead of its stack trace. The
         // Gemini retirement was mistaken for three different things because the sentence a reader
@@ -723,14 +749,14 @@ public static class ReviewerSummaryFactory
         if (lines.Count == 0)
         {
             return saidElsewhere.Trim() is { Length: > 0 } only
-                ? $": {Quote(only)}"
+                ? $": {Quote(only, cap)}"
                 : " (the CLI said nothing on stderr)";
         }
 
         var meaningful = lines.Where(l => !IsScaffolding(l)).ToList();
         if (meaningful.FirstOrDefault(Announces) is { } announced)
         {
-            return $": {Quote(announced)}";
+            return $": {Quote(announced, cap)}";
         }
 
         // Nothing on stderr ANNOUNCES a failure — it is scaffolding, or a node deprecation warning,
@@ -739,10 +765,10 @@ public static class ReviewerSummaryFactory
         // put the useless sentence back on the page with extra steps. (gemini, plan round.)
         if (saidElsewhere.Trim() is { Length: > 0 } elsewhere)
         {
-            return $": {Quote(elsewhere)}";
+            return $": {Quote(elsewhere, cap)}";
         }
 
-        return meaningful.Count == 0 ? NothingButScaffolding(lines) : $": {Quote(meaningful[0])}";
+        return meaningful.Count == 0 ? NothingButScaffolding(lines, cap) : $": {Quote(meaningful[0], cap)}";
     }
 
     /// <summary>
@@ -755,10 +781,10 @@ public static class ReviewerSummaryFactory
     /// got started. A stack trace with no message in it keeps the old behaviour, because its last
     /// line is at least something a person can search for. (codex, the plan round.)
     /// </remarks>
-    private static string NothingButScaffolding(IReadOnlyList<string> lines) =>
+    private static string NothingButScaffolding(IReadOnlyList<string> lines, int cap) =>
         lines.Any(IsProgressNote)
             ? " — it was still waiting for its engine when it stopped, and gave no other reason"
-            : $": {Quote(lines[^1])}";
+            : $": {Quote(lines[^1], cap)}";
 
     /// <summary>
     /// The line, capped — unless we wrote it.
@@ -771,9 +797,11 @@ public static class ReviewerSummaryFactory
     /// of a 340-character verdict, ending mid-word, with every cure it names past the cut. The plan's
     /// own Definition of Done said "reports <c>QueuedOutMessage</c>, WHOLE", and it did not.
     /// (codex, three findings across two roles.)</para>
+    /// <para><paramref name="cap"/> is <see cref="ReasonLength"/> for a sentence a person reads in a cell, and
+    /// <see cref="VendorReason.SafetyCap"/> for the ledger and the log (<see cref="DescribeWhole"/>).</para>
     /// </remarks>
-    private static string Quote(string line) =>
-        ShimNotes.Ours(line) || line.Length <= ReasonLength ? line : $"{line[..ReasonLength]}…";
+    private static string Quote(string line, int cap) =>
+        ShimNotes.Ours(line) || line.Length <= cap ? line : $"{line[..cap]}…";
 
     private static bool Announces(string line) =>
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));

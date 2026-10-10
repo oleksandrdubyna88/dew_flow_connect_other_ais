@@ -50,7 +50,7 @@ sequenceDiagram
 | `CommittedFile.ReadAtAsync` | `Collecting/CommittedFile.cs` | the read without the commit check, for a caller that pinned the commit itself; `ReadAsync` is this after checking |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. **An adapter records on the invocation what it LAUNCHED** — `Model:` always, `Effort:` where it actually passed a reasoning flag (only `LocalRuntime` does) — which four of six adapters silently did not until 2026-09-12, issue #129; `EveryAdapterRecordsWhatItLaunchedTests` drives every adapter's own `Build` rather than a hand-made invocation, because the test it replaces built the value it asserted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
-| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired — and a repair whose OWN launch fails carries the malformed first attempt's usage on the failure's `EarlierLaunches` (2026-09-26, the section *A failed repair still counts the malformed attempt*); `LastTurnUsage` and `TotalUsage` on the BASE are the one answer to what a turn and a conversation cost, for the ledger and the round total alike. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
+| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired — and a repair whose OWN launch fails carries the malformed first attempt's usage on the failure's `EarlierLaunches` (2026-09-26, the section *A failed repair still counts the malformed attempt*); `LastTurnUsage` and `TotalUsage` on the BASE are the one answer to what a turn and a conversation cost, for the ledger and the round total alike; **`Launches`** on the base (story 3.3, 2026-10-10) lists every paid launch of the last turn when it took more than one — the first and its repair or follow-up, every step of the rate-limit ladder — for the ledger's one line per launch, the sums untouched. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below; a launch is the reviewer's whole CONVERSATION (`ReviewerWork.Continue`, S3.2 — the section at the end), one terminal outcome either way |
 | `IReviewerContinuation`, `TurnDecision`, `ReviewerContinuation.None`, `TurnUsage` | `Reviewers/ReviewerContinuation.cs` | the seam a stage plugs a conversation into: after each answered turn, the next turn's whole work (launch AND repair) or a stop; `None` is every stage but one |
@@ -63,7 +63,9 @@ sequenceDiagram
 | `RemoteAsk`, `RemotePoll`, `RemoteState` | `Reviewers/RemoteAsk.cs` | the PURE half of the shim: the request body, the poll parse, every exit code and every sentence a person will see — so each failure path is tested without a server |
 | `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
 | `RemoteProbe`, `RemoteCatalog` | `Reviewers/RemoteProbe.cs` | a remote vendor's health over `GET /api/catalog`: the server's own slot counts as the note, 401/403/426/outage told apart, a cache whose FAILURE wait is never shorter than its success wait, and a refusal that says WHICH of a row's two names was tried |
-| `UsageLedger`, `UsageEntry`, `UsageKinds`, `LedgerJsonContext` | `Reviewers/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape. Since 2026-09-09 a line also carries its **`kind`** — `review` or `chat` — because "what did the gate cost me" and "what did asking cost me" are two questions one total answers neither of. The field is trailing and defaulted, so every line already on disk stays valid and an absent kind is READ as a review, which is what all of them were. `UsageKinds` holds the two names here rather than only in the server's own `JobKind`, which this library cannot see: the dependency runs server → mcp and not back, and two vocabularies for one field is how a writer and a reader come to disagree. A test in `src_server` asserts the enum spells exactly these |
+| `UsageLedger`, `UsageEntry`, `UsageKinds`, `LedgerJsonContext` | `Reviewers/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape. Since 2026-09-09 a line also carries its **`kind`** — `review` or `chat` — because "what did the gate cost me" and "what did asking cost me" are two questions one total answers neither of. The field is trailing and defaulted, so every line already on disk stays valid and an absent kind is READ as a review, which is what all of them were. `UsageKinds` holds the two names here rather than only in the server's own `JobKind`, which this library cannot see: the dependency runs server → mcp and not back, and two vocabularies for one field is how a writer and a reader come to disagree. A test in `src_server` asserts the enum spells exactly these. **Since story 3.3 (2026-10-10) a line is one paid LAUNCH, not one turn**: `Record` writes each launch of a turn as its own line, every one carrying the turn's **`turn`** id (twelve hex characters of a GUID, minted per turn at record time) and its **`attempt`** (`first` / `repair` / `followUp` / `retry`); the failure's words are `ReviewerSummaryFactory.DescribeWhole` — the vendor's reason whole and redacted, never the summary's 160-character cut. `UsageKinds.Probe` (`probe`, local-only) is `coai-mcp --probe-api --model`'s kind |
+| `LaunchAttempts`, `LaunchPart`, `LaunchLines` | `Reviewers/LaunchParts.cs` | story 3.3's one rule both halves write by: the attempt vocabulary (`first`, `repair`, `followUp`, `retry`, `rotated`), one paid launch as (attempt, usage, elapsed, outcome), and `LaunchLines.Of` — one line per launch when the launches' usage adds up EXACTLY to the turn's (every count, both markers, the money to a hair), else the turn as the one line it always was; the last line takes the turn's own outcome and what is left of its seconds. `StepOf` labels a ladder step (`first`, then `retry`); `NewTurn` mints a local turn id |
+| `VendorReason` | `Reviewers/VendorReason.cs` | how much of a vendor's reason the ledger and the log keep: `SafetyCap` 4 000 characters (agy's longest recorded refusal is under 300), `Capped` for `ReviewerExecutor.TailOf`'s one-line-longer-than-the-budget case, `Written` = `Redaction.SafeText` at the cap — whole, and redacted first |
 | `IAnsweringRuntime` | `Consultation/IAnsweringRuntime.cs` | the launch half of the consultant seam — `Vendor`, `Build`, `NeedsAnswerSchema`, `ReadAdvice` — extracted as the base of `IConsultantRuntime` for the question consultant (PLAN_question_consultant.md, S1); the conversation members stay on the derived interface and no shipped adapter changed shape |
 | `LaunchConfinement`, `ConsultantLaunch.Confinement` / `.ScratchDir` | `Consultation/LaunchConfinement.cs`, `IConsultantRuntime.cs` | how a launch is confined: `AsShipped` (the default — today's argv byte for byte) or `Planned(Confinement.Planned)` — the planner's fragments, a scratch or root cwd, one shot, the minimal environment |
 | `ApiConsultant`, `QuestionMaterial`, `AnsweringMemory`, `AnsweringTurn`, `IAnsweringFollowUps` | `Consultation/ApiConsultant.cs`, `AnsweringTurns.cs` | a hosted API answering a question row: composes `ApiRuntime` the way `LocalConsultant` composes `LocalRuntime`, `none` only, the key under the row's `VaultKeyName` read by the caller; its source turns serve `sourceRequests` from the pinned HEAD and hand back the same launch with a tail (A9) |
@@ -1485,8 +1487,11 @@ a turn whose repair timed out lost that turn's first attempt too.
 
 `ReviewerOutcome` carries **`EarlierLaunches`** on the base (`Usage`, `None` by default): what this turn's
 earlier launches consumed before the ending the outcome describes. `RunAsync`'s tail is `AfterTheRepair`, and
-its failure arm returns `failed with { EarlierLaunches = first.Usage.Add(second.Usage) }` — the first
-attempt's, plus whatever the repair's own launch reported before it failed. **`LastTurnUsage`** on the base is
+its failure arm returns `failed with { EarlierLaunches = first.Usage }` — the first attempt's; whatever the
+repair's own launch reported before it failed is the failure's OWN usage already. (It read
+`first.Usage.Add(second.Usage)` until story 3.3, 2026-10-10: a `NonZeroExit` carries its launch's usage as its own,
+so a repair billed and then refused — the api shim's exit 70 — was counted twice in the turn, the line and the round
+total; splitting the turn into one line per launch is what made the two sums disagree.) **`LastTurnUsage`** on the base is
 `EarlierLaunches + OwnUsage` (the latter a protected virtual: `Ok`'s and `Unparseable`'s `Usage`, nothing for a
 run that never finished) and **`TotalUsage`** is `EarlierUsage + LastTurnUsage`; both moved off `Ok` and
 replaced the two switches that used to answer the same question in `UsageLedger.Record` and
@@ -1496,6 +1501,53 @@ on `LastTurnUsage`, and the next step's outcome takes it onto its own `EarlierLa
 climbed three steps and was refused three times reports three attempts' worth. What is NOT covered: a
 cancellation that lands during the repair — the launcher throws, there is no outcome to carry it on, and the
 scheduler's abandoned `NotStarted` keeps only the earlier TURNS.
+
+## Every paid launch is its own ledger line (story 3.3, 2026-10-10)
+
+`todo/PLAN_every_round_is_counted.md`, story 3.3, closing the paid-path census of
+`research/RESULTS_vendor_quota_gauges.md` §5. A ledger line was one terminal TURN: a repair, a follow-up and every
+step of the rate-limit ladder were folded into their turn's line, so a week's retries, repairs and follow-ups could
+only be inferred from sums. Now each paid launch writes its own line, and the turn's sums — `LastTurnUsage`,
+`TotalUsage`, the round total, the audit line — are exactly what they were.
+
+```mermaid
+flowchart LR
+  E["ReviewerExecutor.RunAsync<br/>first + repair/follow-up"] -->|"outcome.Launches = [first, repair|followUp]"| L["BoundedScheduler.LadderAsync<br/>each step: StepOf(first|retry)"]
+  L -->|"outcome.Launches = every step's launches"| T["TurnLoop<br/>TurnUsage.Launches per earlier turn"]
+  T --> R["UsageLedger.Record<br/>one turn id per turn"]
+  R --> O{"LaunchLines.Of:<br/>parts add up to the turn?"}
+  O -->|yes| P["one line per launch<br/>turn + attempt + own usage"]
+  O -->|no| F["the turn as one line, as before"]
+```
+
+- **Who builds the parts.** The executor, for a turn that took a second launch: `first` (its own usage, the seconds
+  until the second launch started, `unparseable: …`) and `repair` or `followUp` (`SecondLaunch` says which; the
+  second launch's own usage — a failure's `LastTurnUsage`, so a kill reads *not captured*). The ladder, once a step is
+  retried: every step's launches, the first step's opening `first`, each later step's `retry`
+  (`LaunchLines.StepOf`). The turn loop keeps each answered turn's launches on its `TurnUsage`. The security answer
+  limit keeps them when it turns an answer into a refusal.
+- **What a line says.** `turn` — twelve hex characters, minted per turn when the reviewer is recorded; `attempt`;
+  the launch's own usage and seconds (the last line takes what is left of the turn's, so the seconds add up too);
+  its outcome — `ok`, `unparseable: …`, `rate limited (after 1 attempt): …`, and on the last line the turn's own
+  ending.
+- **The guard.** `LaunchLines.Of` writes the parts only when their usage adds up to the turn's exactly; otherwise the
+  turn is the one line it always was. A ledger whose lines summed to something the round total did not would be a
+  second answer to "what did this cost".
+- **Reasons whole.** The ledger's outcome and `RoundAudit`'s FAILED line read `ReviewerSummaryFactory.DescribeWhole`
+  — the vendor's line uncut to `VendorReason.SafetyCap` and passed through `Redaction.SafeText` — where they read the
+  summary's 160-character `Describe`. That cut is how agy's weekly refusal reached the ledger as `…Resets in 110h12m4…`.
+  The question row's and the consultation's ledger outcome take the same road (both had written the cut, unredacted:
+  a bearer token on a CLI's stderr reached `usage.jsonl` though the record had lost it). `ReviewerExecutor.TailOf`
+  keeps a single stderr line longer than its 400-character budget whole to the cap instead of its opening 400. The
+  summary, the notices and the table cells still show `Describe`.
+- **Probes.** `coai-mcp --probe-api --model` (`ProbeApiMode`) writes one line per completion sent with the real key —
+  kind `probe`, stage `Probe`, the variant as its role, the probed model, `ok` with what the endpoint reported,
+  `HTTP 400 (refused <field>)` with nought, `no answer` with *usage not captured*. The wrong-key request bills nobody
+  and writes nothing; a probe has no turn and no attempt.
+- **Not here.** The cumulative difference for an agy follow-up (each line carries what ITS launch reported) is
+  `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`'s to measure first. A consultation's and a question row's
+  continued turns still fold into one line per turn (census rows 2 and 4); a cancellation landing during a repair
+  still leaves no outcome to carry its parts on (story 3.2's).
 
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 

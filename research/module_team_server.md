@@ -659,6 +659,25 @@ sequenceDiagram
   `RecordJob`'s `Usage` overload — cached, reasoning, *no price set* and *usage not captured* as a local line writes
   them. `UsageReader` reads the three fields back (`UsageEntryDto`, `UsageLine`); a line from before them reads 0 / 0 /
   empty, which is what it always meant. A `Failed` built from an outcome alone carries `ReviewerOutcome.TotalUsage`.
+- **Every launch is a line (2026-10-10, story 3.3 of `todo/PLAN_every_round_is_counted.md`).** Row 10 of the paid-path
+  census (`research/RESULTS_vendor_quota_gauges.md` §5.1): a follow-up folded into the first launch's line, and an
+  attempt a rate-limited slot handed back to the queue wrote NOTHING (`RateLimited` returned null and `Record` returned
+  before the ledger). Now:
+  - `ReviewAttempt.Launches` — the first launch and its follow-up in the same conversation (#515), each with what IT
+    reported and how long it took (`ReviewLauncher.Launches`); the attempt's own usage stays the sum the job reports.
+  - `JobRunner.Ledger` writes one line per launch through `LaunchLines.Of` (the same rule as the local ledger: the
+    parts only when they add up to the job's usage exactly), every line carrying the **job's id as its `turn`** — a job
+    IS one reviewer turn, and its id is already in the server's log — and its **`attempt`**: `first` when the job met
+    one account, `rotated` when another had refused it, `followUp` for the continuation. The first launch of a
+    follow-up pair says `UnparseableByVendor` (it ended with an empty answer, which is what a follow-up is asked
+    after); the last line says the job's own ending.
+  - A requeued attempt writes its own line before the job goes back to the queue: `RateLimited`, `rotated`, its usage
+    (usually none — 0/0 with whatever note the usage carries), its seconds from the claim (`JobRunner.Refused`, a
+    terminal record built for the line only, never stored). A review is counted by its turn, so this adds a launch,
+    not a review.
+  - `UsageEntryDto` and `UsageLine` read `turn` and `attempt`; a line older than the fields reads both empty.
+  Still NOT written: a job ended by the host stopping or by an infrastructure throw (story 3.2's), and the cumulative
+  difference of an agy follow-up (each line carries its own launch's report — `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`).
 
 ### Story 2.4 — the money, and the contract suite
 

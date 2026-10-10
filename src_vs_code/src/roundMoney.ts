@@ -24,9 +24,10 @@ import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptu
  *       priced, and over zero rounds says *no rounds in this window* rather than dividing by nothing.</li>
  * </ul>
  *
- * <p><b>A ledger line is a recorded TURN, not a launch.</b> Until story 3.3 writes one line per launch, a repair or a
- * follow-up is two launches summed on one line; a per-launch figure cannot be computed from this ledger and is not
- * claimed — the medians say *per recorded turn*.</p>
+ * <p><b>A ledger line is a recorded TURN, not a launch — for the lines written before story 3.3.</b> Those hold a repair
+ * or a follow-up as two launches summed on one line; lines written since are one per launch, linked by their `turn`
+ * (`usage.ts` reads it). A seven-day window can hold both, so a per-launch figure is still not claimed — the medians say
+ * *per recorded turn*.</p>
  */
 
 /** One ledger line as this module reads it — a parsed `usage.jsonl` line, or a chat turn read into the same shape. */
@@ -95,10 +96,12 @@ export const PER_RECORDED_TURN = 'recorded turn';
 export const MEDIAN_OUTPUT_LABEL = `median output per ${PER_RECORDED_TURN}`;
 
 /** The order a report reads best in — `UsageKinds.Known` in `src_mcp`, with anything newer after them. */
-const KIND_ORDER: readonly string[] = ['review', 'consult', 'question', 'chat'];
+const KIND_ORDER: readonly string[] = ['review', 'consult', 'question', 'chat', 'probe'];
 
-/** What one of each kind is called, for the denominator a caller supplies; a chat turn IS its line. */
-const UNIT_OF: Readonly<Record<string, string>> = { review: 'round', consult: 'consultation', question: 'question', chat: PER_RECORDED_TURN };
+/** What one of each kind is called, for the denominator a caller supplies; a chat turn and a probe completion ARE their line. */
+const UNIT_OF: Readonly<Record<string, string>> = {
+  review: 'round', consult: 'consultation', question: 'question', chat: PER_RECORDED_TURN, probe: PER_RECORDED_TURN,
+};
 
 /** The lines inside the window, grouped per vendor row × model × kind, rows and models in name order. */
 export function moneyGroups(lines: readonly LedgerLine[], window: TimeWindow, rateOf: RateOf): MoneyGroup[] {

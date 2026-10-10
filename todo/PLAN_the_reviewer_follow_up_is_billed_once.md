@@ -12,6 +12,7 @@
 |---|---|---|
 | The SUM of a first launch's and its follow-up's usage | **this plan** | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) 3.1 carries whatever sum this plan produces onto the server line, and labels the line `attempt: followUp` |
 | `attempt`, round id, cached/reasoning on the server line | that plan (3.1, 4.1) | — |
+| One ledger line per launch — the follow-up its own line (`attempt: followUp`), each line carrying what ITS launch reported, linked by `turn` | that plan (3.3, landed 2026-10-10: `ReviewerOutcome.Launches`, `ReviewAttempt.Launches`, `LaunchLines.Of`) | if the measurement here shows a follow-up reports CUMULATIVELY, this plan changes the follow-up PART to the difference together with the sum — `LaunchLines.Of` writes the parts only while they add up to the turn's usage exactly, so changing one without the other folds the turn back into one line rather than double-writing it. 3.3 deliberately does not take the difference (its decision 3): it is unmeasured |
 
 Disjoint; either may land first.
 

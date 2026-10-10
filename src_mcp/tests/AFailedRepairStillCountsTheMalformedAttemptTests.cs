@@ -80,11 +80,18 @@ public sealed class AFailedRepairStillCountsTheMalformedAttemptTests : IDisposab
         outcome.LastTurnUsage.TokensOut.Should().Be(50);
         outcome.TotalUsage.TokensIn.Should().Be(1000, "exactly once: no earlier turn to add it to twice");
 
+        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md — this test asserted the
+        // folded single line until then; the sum is what it always was.
         var lines = Recorded(outcome, "ledger-" + repairArgs[0]);
-        lines.Should().ContainSingle("one reviewer, one turn, one line — the malformed attempt is on the failure's line, never a line of its own");
+        lines.Should().HaveCount(2, "the malformed first launch and the failed repair, each its own line in one turn");
+        lines.Select(l => l.Attempt).Should().Equal(LaunchAttempts.First, LaunchAttempts.Repair);
+        lines[0].Turn.Should().NotBeEmpty().And.Be(lines[1].Turn);
         lines[0].TokensIn.Should().Be(1000, "the first launch completed and reported what it consumed; only its answer was malformed");
         lines[0].TokensOut.Should().Be(50);
-        lines[0].Outcome.Should().NotBe("ok", "the reviewer failed, and the ledger says so beside what it cost");
+        lines[0].Outcome.Should().StartWith("unparseable");
+        lines[1].TokensIn.Should().Be(0, "the repair's own launch reported nothing before it failed");
+        lines[1].Outcome.Should().NotBe("ok", "the reviewer failed, and the ledger says so beside what it cost");
+        lines.Sum(l => l.TokensIn).Should().Be(1000, "exactly once, as the folded line said");
 
         var record = RoundTotal(outcome, "store-" + repairArgs[0]);
         record.TokensIn.Should().Be(1000, "the round's total counts a failure that still burned tokens — a repair that failed is one");
@@ -111,9 +118,13 @@ public sealed class AFailedRepairStillCountsTheMalformedAttemptTests : IDisposab
         (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken)).Should().HaveCount(3, "three malformed first launches, one per step");
         outcome.TotalUsage.TokensIn.Should().Be(3000, "each step's cost rides forward on the next step's outcome");
 
+        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md: each step's malformed launch
+        // and its refused repair, the steps after the first named retries — and the sum is what the folded line said.
         var lines = Recorded(outcome, "ledger-ladder");
-        lines.Should().ContainSingle("one reviewer, one line, however many steps it climbed");
-        lines[0].TokensIn.Should().Be(3000, "each step's first launch completed and was billed before its repair was refused");
+        lines.Select(l => l.Attempt).Should().Equal(
+            LaunchAttempts.First, LaunchAttempts.Repair, LaunchAttempts.Retry, LaunchAttempts.Repair, LaunchAttempts.Retry, LaunchAttempts.Repair);
+        lines.Select(l => l.Turn).Distinct().Should().ContainSingle("every step of the ladder is the same turn");
+        lines.Sum(l => l.TokensIn).Should().Be(3000, "each step's first launch completed and was billed before its repair was refused");
         RoundTotal(outcome, "store-ladder").TokensIn.Should().Be(3000);
     }
 }

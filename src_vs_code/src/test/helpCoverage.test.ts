@@ -99,6 +99,21 @@ test('every language says the Rounds block comes first on the spending tab, and 
   }
 });
 
+test('every language says a probe sits beside the rounds as its own kind, and that every paid launch is its own ledger line', () => {
+  // Story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per paid completion,
+  // shown on the Rounds block as **probe** and never as a round; and a repair, a follow-up, a retry and a rotated
+  // Team-server attempt each write a line of their own, so a vendor's runs count them. The command and the kind's name
+  // are English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['**probe**', '--probe-api --model', '`turn`']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+  }
+});
+
 test('no language still says the product ships no price table — every one names the list the default price comes from', () => {
   // Untrue since the list prices (research/PLAN_models_card_prices_every_row.md): a model is priced at its public list
   // price unless a rate is typed, so "leave it empty and it stays a dash" sent a reader to type a rate the tab no

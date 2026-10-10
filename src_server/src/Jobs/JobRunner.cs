@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
@@ -152,14 +153,28 @@ public sealed class JobRunner(
 
         if (finished is null)
         {
-            // Requeued onto another account. Nothing terminal happened, so nothing is recorded: a
-            // usage line per rate-limited attempt would count one review several times.
+            // Requeued onto another account. The JOB is not over, but this attempt is: it ran on an account and was
+            // refused there, so it is written as a launch of its own — `RateLimited`, `rotated` — and the attempt that
+            // finally runs the job is another line of the same turn. It used to write nothing, on the reasoning that a
+            // line per refused attempt would count one review several times; a REVIEW is counted by its turn (the job's
+            // id, on every line), and what one line counts now is one launch (story 3.3 of
+            // todo/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
+            Ledger(vendor, job, Refused(job, attempt, now), attempt.Launches, LaunchAttempts.Rotated);
+
             return;
         }
 
         jobs.Finish(finished);
-        Ledger(vendor, job, finished);
+        Ledger(vendor, job, finished, attempt.Launches, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
     }
+
+    /// <summary>
+    /// The refused attempt as a terminal record of its own, for its ledger line only — never stored: the job itself went
+    /// back to the queue. Its seconds run from its claim to now, and its usage is what the refused launch reported —
+    /// usually nothing, which reads as 0/0 with whatever note the usage carries.
+    /// </summary>
+    private static JobRecord Refused(JobRecord job, ReviewAttempt attempt, DateTimeOffset now) =>
+        JobTransitions.Fail(job, FailureKind.RateLimited, "requeued", now, attempt is ReviewAttempt.Failed failed ? failed.Usage : Usage.None);
 
     private JobRecord Succeeded(
         AccountSlot slot, JobRecord job, ReviewAttempt.Answered answered, DateTimeOffset now)
@@ -231,7 +246,20 @@ public sealed class JobRunner(
                 : "every account for this vendor is rate-limited",
             now);
     }
-    private void Ledger(VendorConfig vendor, JobRecord job, JobRecord finished)
+    /// <summary>
+    /// The job's lines: one per launch of the attempt that ended it — a follow-up is its own — every one carrying the
+    /// job's id as its turn and saying which attempt it was (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <param name="firstAttempt">
+    /// What the attempt's first launch is called: <c>first</c> when this account was the only one the job met, else
+    /// <c>rotated</c> — on a refused attempt and on the one that finally ran a job other accounts had refused.
+    /// </param>
+    /// <remarks>
+    /// The job id is the turn on this server, and deliberately: a job IS one reviewer turn — the client's whole request,
+    /// whichever accounts it took and whatever its adapter continued — and the id is already unique, already in the
+    /// server's log beside the job, and what a person asking "what happened to this review" holds.
+    /// </remarks>
+    private void Ledger(VendorConfig vendor, JobRecord job, JobRecord finished, IReadOnlyList<LaunchPart> launches, string firstAttempt)
     {
         if (ledger is null)
         {
@@ -242,16 +270,12 @@ public sealed class JobRunner(
         {
             // The whole-Usage overload: cached and reasoning tokens, a missing price and a usage nobody
             // captured are written as a reviewer's local line writes them (story 3.1).
-            ledger.RecordJob(
-                finished.Email,
-                vendor.Id,
-                job.Model,
-                job.Role,
-                finished.Status == JobStatus.Done ? "ok" : finished.Failure.ToString(),
-                finished.Elapsed,
-                finished.Usage,
-                kind: JobKinds.Wire(job.Kind),
-                stage: "TeamServer");
+            foreach (var line in LaunchLines.Of(launches, finished.Usage, finished.Elapsed, OutcomeOf(finished), firstAttempt))
+            {
+                ledger.RecordJob(
+                    finished.Email, vendor.Id, job.Model, job.Role, line.Outcome, line.Elapsed, line.Usage,
+                    kind: JobKinds.Wire(job.Kind), stage: "TeamServer", turn: job.Id, attempt: line.Attempt);
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -261,6 +285,10 @@ public sealed class JobRunner(
             _report($"the usage line for job {finished.Id} could not be written", e);
         }
     }
+
+    /// <summary>The ledger's word for how a job ended: <c>ok</c>, or its failure kind's name.</summary>
+    private static string OutcomeOf(JobRecord finished) =>
+        finished.Status == JobStatus.Done ? LaunchLines.Answered : finished.Failure.ToString();
 
     private static string Tail(string stdErr, int exitCode) =>
         stdErr.Length > 0 ? stdErr.Trim() : $"the vendor exited {exitCode} without saying why";

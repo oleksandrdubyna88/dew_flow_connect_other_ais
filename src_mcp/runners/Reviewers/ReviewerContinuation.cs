@@ -68,4 +68,8 @@ public static class ReviewerContinuation
 /// turn from these, and the round total adds them. An earlier turn is always one that ANSWERED: only an
 /// <c>Ok</c> continues.
 /// </remarks>
-public sealed record TurnUsage(int Turn, Usage Usage, TimeSpan Elapsed);
+public sealed record TurnUsage(int Turn, Usage Usage, TimeSpan Elapsed)
+{
+    /// <summary>Every launch of this turn when it took more than one (<see cref="ReviewerOutcome.Launches"/>); empty for one.</summary>
+    public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
+}

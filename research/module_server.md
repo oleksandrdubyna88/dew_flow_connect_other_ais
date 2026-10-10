@@ -1964,6 +1964,12 @@ answer through `Api/BoundedBody` — streamed after the headers (`ResponseHeader
 `Content-Length` over 8 MiB refused unread, an undeclared one refused the moment the count passes it —
 because `ReadAsStringAsync` buffered the whole body before any cap ran (epic 1's code round). The shim itself, its exit
 codes and the probe are in [module_runners.md](module_runners.md#a-hosted-api-is-a-direct-call-with-a-vault-key--the-api-runtime-2026-09-25-plan_feature_review-s12).
+**Since story 3.3 of `todo/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
+`usage.jsonl` line per completion sent with the real key, as it answers — kind `probe` (`UsageKinds.Probe`, local-only),
+stage `Probe`, the variant as its role, the row it probed and the model it asked, `ok` / `HTTP <status> (refused
+<field>)` / `no answer` as its outcome (the allowlist's words, never the vendor's text) and what the endpoint reported
+(a request with no answer is *usage not captured*). The wrong-key request and a run without `--model` write nothing.
+Its stdout report is unchanged.
 
 ## `call_human` stops the review (2026-09-02)
 
@@ -4062,7 +4068,9 @@ same number while nothing between them is broken — which is the state the meas
 `RoundAudit` writes what the one-line round summary cannot: the roster and the exact argv (at
 Debug, so a failure can be reproduced by pasting it into a terminal), each reviewer's start, its
 answer with tokens and cost, every failure as a WARNING naming the reason, and every finding with
-its origin. It rides the same per-run log file as everything else.
+its origin. It rides the same per-run log file as everything else. The FAILED warning's reason is
+`ReviewerSummaryFactory.DescribeWhole` since story 3.3 (2026-10-10): the vendor's line whole to 4 000 characters and
+redacted, not the summary's 160-character cut that turned agy's weekly refusal into `…Resets in 110h12m4…`.
 
 ### A round names the reviewer it could not run (2026-09-07)
 
@@ -6435,7 +6443,7 @@ flowchart TD
   settings --> stage["FeatureStage.WorkAsync: ONE SourceResolver per round for the pinned head<br/>SourceTurns.On(resolver, followUps) — or SourceTurns.None at 0"]
   stage --> roster["RosterBuilder.Add: Turn(tail) = base + tail (launch) · repairBase + tail + RepairInstruction.Text (repair)<br/>Continue = SourceConversation(turns, Turn) for the feature stage, None otherwise"]
   roster --> truth["ReviewerPrompt.WhatYouHave(Outline, followUps): ANSWERED up to N follow-ups, only the LAST answer counts — or RECORDED at 0"]
-  roster --> engine["the engine's callback: UsageLedger.Record — one line per turn; LiveRound.Finish — every turn in the total;<br/>RoundAudit: 'answered in 12.3s over 2 turns … (N cached) … source: …'"]
+  roster --> engine["the engine's callback: UsageLedger.Record — one line per launch of every turn (story 3.3); LiveRound.Finish — every turn in the total;<br/>RoundAudit: 'answered in 12.3s over 2 turns … (N cached) … source: …'"]
   engine --> record["the round record: reviewers.note = 'N turns; source: …'; the reply's notes carry what the LAST turn still asked for"]
 ```
 

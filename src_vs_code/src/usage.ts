@@ -35,8 +35,16 @@ export interface UsageEntry {
   readonly tokensCached?: number;
   /** How many of `tokensOut` the vendor reported as reasoning — for the record; the bill is `tokensOut`. */
   readonly tokensReasoning?: number;
-  /** What the line WAS — `review`, `consult`, `question`, `chat`; a line older than the field is a review. */
+  /** What the line WAS — `review`, `consult`, `question`, `chat`, `probe`; a line older than the field is a review. */
   readonly kind?: string;
+  /**
+   * The id every launch of one reviewer turn shares (story 3.3 of todo/PLAN_every_round_is_counted.md) — a repair, a
+   * follow-up, a retry and a rotated Team-server attempt each write a line of their own, and this ties them back to
+   * their turn. Absent on a line older than the field, and on a kind with no turns.
+   */
+  readonly turn?: string;
+  /** What the launch was inside its turn — `first`, `repair`, `followUp`, `retry`, `rotated`; absent like `turn`. */
+  readonly attempt?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -98,6 +106,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...(typeof parsed.costNote === 'string' && parsed.costNote.length > 0 ? { costNote: parsed.costNote } : {}),
       ...(typeof parsed.usageNote === 'string' && parsed.usageNote.length > 0 ? { usageNote: parsed.usageNote } : {}),
       ...ledgerExtras(parsed),
+      ...launchFields(parsed),
     };
   } catch {
     return undefined;
@@ -117,6 +126,28 @@ function ledgerExtras(parsed: Partial<UsageEntry>): Required<Pick<UsageEntry, 't
     tokensReasoning: number(parsed.tokensReasoning),
     kind: typeof parsed.kind === 'string' && parsed.kind.length > 0 ? parsed.kind : 'review',
   };
+}
+
+/**
+ * The two fields story 3.3 of todo/PLAN_every_round_is_counted.md added — the turn a launch shares and what the launch
+ * was — present only when the line says them. An older line has neither, and an empty one is absent rather than an id:
+ * every old line with an empty turn would otherwise read as one turn.
+ */
+function launchFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, 'turn' | 'attempt'> {
+  return { ...turnOf(parsed.turn), ...attemptOf(parsed.attempt) };
+}
+
+/** A text field the line actually says — a non-empty string; anything else is silence. */
+function saidText(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function turnOf(value: unknown): Pick<UsageEntry, 'turn'> {
+  return saidText(value) ? { turn: value } : {};
+}
+
+function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
+  return saidText(value) ? { attempt: value } : {};
 }
 
 function number(value: unknown): number {

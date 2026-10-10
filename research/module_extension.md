@@ -7424,6 +7424,18 @@ unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
 the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
 says the product ships no price table.
 
+**Story 3.3 (2026-10-10): a probe is its own kind, and a ledger line is a launch.** `coai-mcp --probe-api --model` now
+writes a line per paid completion, of kind `probe`; `roundsBlock`'s `BESIDE` names it (`probe N recorded turns`, a
+`probe · N recorded turns` kind line), `roundMoney`'s kind order and units know it (per recorded line), and it never
+reaches a model line or a round — a row's money still holds every kind. `usage.ts`'s parser reads the two new ledger
+fields, `turn` and `attempt` (`launchFields`: present only when the line says them, so old lines with no turn never read
+as one turn). A repair, a follow-up, a retry and a rotated Team-server attempt are each a line since this story, so the
+spending tab's `runs` count them; the median is still labelled per recorded turn, because a seven-day window holds lines
+from both sides of the change. The help's spending article says both, in five languages
+(`helpCoverage.test.ts` asks every language for `**probe**`, `--probe-api --model` and `` `turn` ``).
+The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
+plan's deviations.
+
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
 window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes
