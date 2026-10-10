@@ -5,8 +5,10 @@ import path from 'node:path';
 
 import { admit } from '../capabilityAdmission';
 import { QCONSULT_SINCE, type QuestionRowSetting } from '../qconsultSettings';
+import type { RootPlaces } from '../qconsultWrite';
 import { DEFAULTS } from '../settingsShape';
 import { type Control, type Page, click, panelState, runPanel, withoutSeq } from './panelPageHarness';
+import { type PageNode, pageTree } from './pageTree';
 
 /**
  * The Question consultant tab, RUN (todo/PLAN_question_consultant.md, S4 acceptance 2): its own script over its
@@ -162,6 +164,78 @@ test('the tab carries a banner for a server known to be older than QCONSULT_SINC
   assert.ok(older.html.includes(`update it to ${QCONSULT_SINCE}`), 'an older server is not named on the tab');
   assert.ok(!current.html.includes(`update it to ${QCONSULT_SINCE}`));
   assert.ok(!page([]).html.includes(`update it to ${QCONSULT_SINCE}`), 'an unknown version is not an old one');
+});
+
+// ---------- a root of the other operating system (operator, 2026-10-09) ----------
+
+const WINDOWS_PLACES: RootPlaces = {
+  dataDir: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', profile: 'C:\\Users\\me', systemDirs: ['C:\\Windows'], caseless: true, windows: true, existingHere: [], unknownHere: [], systemDrive: 'C:',
+};
+
+const LINUX_PLACES: RootPlaces = { dataDir: '/home/me/.local/share/coai-mcp', profile: '/home/me', systemDirs: ['/usr/share'], caseless: false, windows: false, existingHere: [], unknownHere: [], systemDrive: 'C:' };
+
+/** The page RUN with these roots stored and this side's places, read back as the tree it drew. */
+function rootsOn(roots: readonly string[], places: RootPlaces): PageNode {
+  const on = runPanel(panelState('questionconsultant', {
+    settings: { ...DEFAULTS, qconsult: { ...DEFAULTS.qconsult, roots } },
+    qconsultPlaces: places,
+  }));
+
+  return pageTree(on.html);
+}
+
+/** The line the page drew for one stored root. */
+function rootLine(tree: PageNode, root: string): PageNode {
+  return tree.one((node) => node.className.split(' ').includes('qconsult-root')
+    && node.find((child) => child.tagName === 'CODE' && child.text() === root).length > 0, `line for the root ${root}`);
+}
+
+test('in a Windows window a WSL root is named the other side\'s folder — not refused — and this machine\'s root beside it is plain', () => {
+  // VS Code settings are shared by the WSL window and the Windows one: the WSL window wrote /home/jinx/git.
+  const tree = rootsOn(['/home/jinx/git', 'D:\\rsd\\work'], WINDOWS_PLACES);
+
+  const foreign = rootLine(tree, '/home/jinx/git');
+  assert.match(foreign.text(), /the other side's folder/, 'the WSL root is not explained in a Windows window');
+  assert.equal(foreign.find((node) => node.className.split(' ').includes('stale')).length, 0, 'the WSL root is drawn as broken, which the server no longer says it is');
+  assert.doesNotMatch(rootLine(tree, 'D:\\rsd\\work').text(), /other side/, 'this machine\'s own folder is no other side\'s');
+  assert.doesNotMatch(tree.text(), /not asked on this side/, 'one folder of this machine is left, so a disk row still runs here');
+});
+
+test('in a Windows window a root-relative folder that EXISTS here (/work) is never called the other side\'s, and a disk row still runs', () => {
+  // `/work` is a legal Windows path to a folder on the system drive; the host found it there, so it is this side's.
+  const tree = rootsOn(['/work', '/home/jinx/git'], { ...WINDOWS_PLACES, existingHere: ['/work'] });
+
+  assert.doesNotMatch(rootLine(tree, '/work').text(), /other side/, 'an existing folder of this machine is called the other side\'s');
+  assert.match(rootLine(tree, '/home/jinx/git').text(), /the other side's folder/, 'the WSL root that is no folder here still is');
+  assert.doesNotMatch(tree.text(), /not asked on this side/, '/work is a folder of this machine, so a disk row runs here');
+});
+
+test('a root the disk could not answer for is never called the other side\'s, and the page says it could not tell', () => {
+  // EACCES / EBUSY on the stat: not "absent here", so not the other side's (the code round, 2026-10-09).
+  const tree = rootsOn(['/home/jinx/git'], { ...WINDOWS_PLACES, unknownHere: ['/home/jinx/git'] });
+
+  const line = rootLine(tree, '/home/jinx/git').text();
+  assert.doesNotMatch(line, /other side's folder/, 'a root of unknown existence is called the other side\'s');
+  assert.match(line, /could not tell whether this folder exists/, 'the page does not say why it makes no claim');
+  assert.doesNotMatch(tree.text(), /not asked on this side/, 'and the block does not say a disk row is inactive on a guess');
+});
+
+test('in a Windows window a root-relative root is judged at its system-drive path: /Windows, the profile and the data folder are refused as the server refuses them', () => {
+  // The server qualifies `/Windows` to `C:\Windows` before D14 (c) and refuses it; the page must judge the same path.
+  const roots = ['/Windows', '/Users/me', '/Users/me/AppData/Local/coai-mcp/x'];
+  const tree = rootsOn(roots, { ...WINDOWS_PLACES, existingHere: roots });
+
+  const stale = (root: string): string => rootLine(tree, root).find((node) => node.className.split(' ').includes('stale')).map((node) => node.text()).join(' ');
+  assert.match(stale('/Windows'), /system folder/, 'the system folder spelled from the root of the drive is not refused on the page');
+  assert.match(stale('/Users/me'), /profile folder itself/);
+  assert.match(stale('/Users/me/AppData/Local/coai-mcp/x'), /inside the data folder/);
+});
+
+test('in a WSL window a Windows root is the other side\'s folder, and with no folder of this side a disk row is said to be not asked here', () => {
+  const tree = rootsOn(['C:\\Users\\jinx\\git'], LINUX_PLACES);
+
+  assert.match(rootLine(tree, 'C:\\Users\\jinx\\git').text(), /the other side's folder/);
+  assert.match(tree.text(), /not asked on this side/, 'every folder is the other side\'s, and the page does not say what that means for a disk row here');
 });
 
 test('Add a row, Remove, Add a prompt and Add a folder are buttons the page binds, each posting its command', () => {

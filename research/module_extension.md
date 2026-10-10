@@ -10360,7 +10360,26 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   by name, a drive root, the profile folder itself, a system folder or anything inside the data folder, or a
   relative path — D14 (c), the server's `QuestionRoots` mirrored (and since S4b a folder holding one of those, a
   credential folder, and a link resolving to any of them); a stored root that is one of those shows the refusal
-  beside it.
+  beside it. **Since 2026-10-09 a stored root spelled for the OTHER operating system** — a WSL path in a Windows
+  window, a Windows path in WSL, which arrive because VS Code shares these settings between the two windows — and
+  that is no folder on this machine (`otherSideHere`; the host asks the disk about those roots alone, `existingHere`
+  into `RootPlaces.existingHere`, so `/work` that exists is this side's and never called otherwise; it is looked for on
+  the SYSTEM drive, `RootPlaces.systemDrive` from `%SystemDrive%` or `C:` — `qualified`, the server's rule — never the
+  current one; the answers are KEPT in `RootExistence`, keyed by platform, drive and root list, asked one root at a
+  time, and dropped when `coai.qconsultRoots` changes or a root is added or removed, so a repaint stats nothing;
+  `rootRefusal` and Add a folder's duplicate check judge the QUALIFIED path too, so `/Windows` is refused on the page
+  as the server refuses `C:\Windows`, and a picked `C:\work` is the stored `/work`; a `stat` that fails with anything
+  but ENOENT/ENOTDIR is UNKNOWN — `directoryAt`, `RootPlaces.unknownHere` — never called the other side's, said on the
+  page as "could not tell", and never cached; a NUL — Node's ERR_INVALID_ARG_VALUE — is ABSENT, as on the server; a
+  definitive answer lives `ROOT_ANSWER_LIFETIME_MS` (60 s) and is forgotten on every `coai` settings change (the mirror),
+  a binary's settled `--features` answer and `coai.installServer` — `PanelProvider.forgetQconsultRootAnswers`) — is
+  said to be *the other side's folder* (a plain hint, never the `stale` refusal), because the server on this side
+  skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
+  `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window
+  is). When every stored root is the other side's, the block adds that a disk row is not asked on this side —
+  the server's `disabled` row. `escalationDirs.ts`'s POSIX-on-Windows refusal now asks `isPosixAbsolute` instead of
+  its own copy of the shape. `shared/path-family-vectors.json` is answered by `pathFamily.test.ts` and the C#;
+  `qconsultSection.test.ts` runs the page both ways.
 - *Before it asks you* (off / remind / require) and the three limits.
 
 A row's controls ride the write's CALLER slot (the row id; a prompt box the prompt id) and `panelProvider`

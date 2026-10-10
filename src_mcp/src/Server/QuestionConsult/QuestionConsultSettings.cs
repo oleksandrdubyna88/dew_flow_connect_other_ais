@@ -30,6 +30,13 @@ public sealed record QuestionConsultSettings
     /// <summary>The folders a <c>disk</c> row may read — validated (D14 c), absolute, existing.</summary>
     public IReadOnlyList<string> Roots { get; init; } = [];
 
+    /// <summary>
+    /// The roots spelled for the OTHER operating system — a WSL path read by a Windows server, a Windows path read by a
+    /// Linux one — that are no directory on this machine, as written. Skipped here, never refused: the server on that side
+    /// reads them (<see cref="QuestionRoots.OtherSideHere"/>). One that exists here is this side's, in <see cref="Roots"/>.
+    /// </summary>
+    public IReadOnlyList<string> OtherSideRoots { get; init; } = [];
+
     /// <summary>How long one row may run; past it the row is <c>timed_out</c> and the others still answer (A1).</summary>
     public TimeSpan RowBudget { get; init; } = TimeSpan.FromMinutes(DefaultRowMinutes);
 
@@ -74,6 +81,18 @@ public static class QuestionConsultKeys
 }
 
 /// <summary>
+/// What the disk said about a root: a folder, CONFIRMED no folder (not found, not a directory, a file), or nothing it
+/// could tell (access denied, busy, an I/O failure) — the third code round, 2026-10-09: "cannot tell" is not "absent",
+/// and only a confirmed absence lets a root be the other side's. The extension's <c>directoryAt</c> answers the same three.
+/// </summary>
+public enum RootPresence
+{
+    Present,
+    Absent,
+    Unknown,
+}
+
+/// <summary>
 /// The places on THIS machine a disk root may not be (D14 c): the profile directory itself, and the system
 /// directories. Injected, so a test can name temp folders as them.
 /// </summary>
@@ -81,6 +100,19 @@ public static class QuestionConsultKeys
 /// <param name="SystemDirectories">Windows, Program Files, ProgramData (and what the platform calls them) — a root in or under one.</param>
 public sealed record SystemPlaces(string UserProfile, IReadOnlyList<string> SystemDirectories)
 {
+    /// <summary>Whether this machine spells paths the Windows way — what decides which roots are the OTHER side's.</summary>
+    public bool Windows { get; init; } = OperatingSystem.IsWindows();
+
+    /// <summary>
+    /// The drive a root-relative Windows root (<c>/work</c>, <c>\tools</c>) is qualified with — <c>%SystemDrive%</c>, or
+    /// <c>C:</c> when it is unset. Never the CURRENT drive, which the extension host and this server need not share
+    /// (<see cref="QuestionRoots.Qualified"/>).
+    /// </summary>
+    public string SystemDrive { get; init; } = SystemDriveOf(Environment.GetEnvironmentVariable("SystemDrive"));
+
+    /// <summary>The environment's system drive, or <c>C:</c> when it says none.</summary>
+    public static string SystemDriveOf(string? value) => string.IsNullOrWhiteSpace(value) ? "C:" : value.Trim();
+
     public static SystemPlaces Current { get; } = new(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         [.. new[]
@@ -99,7 +131,10 @@ public static class QuestionConsultReader
     {
         var rows = QuestionRows.Parse(env(QuestionConsultKeys.Rows));
         var prompts = QuestionPromptSet.ParseCustom(env(QuestionConsultKeys.Prompts));
-        var roots = QuestionRoots.Validate(Listed(env(QuestionConsultKeys.Roots)), dataDir, places, isDirectory ?? Directory.Exists);
+        var listed = Listed(env(QuestionConsultKeys.Roots));
+        var roots = isDirectory is null
+            ? QuestionRoots.Validate(listed, dataDir, places, QuestionRoots.PresenceOf)
+            : QuestionRoots.Validate(listed, dataDir, places, isDirectory);
         var (mode, modeComplaint) = ModeOf(env(QuestionConsultKeys.Mode));
 
         var settings = new QuestionConsultSettings
@@ -110,6 +145,7 @@ public static class QuestionConsultReader
             RowsUnreadable = rows.Unreadable,
             Prompts = QuestionPromptSet.With(prompts.Prompts),
             Roots = roots.Accepted,
+            OtherSideRoots = roots.OtherSide,
             RowBudget = TimeSpan.FromMinutes(PanelSettings.IntVar(env, QuestionConsultKeys.RowMinutes, QuestionConsultSettings.DefaultRowMinutes)),
             QuestionsPerSession = PanelSettings.IntVar(env, QuestionConsultKeys.QuestionsPerSession, QuestionConsultSettings.DefaultQuestionsPerSession),
             FreeBatches = PanelSettings.IntVar(env, QuestionConsultKeys.FreeBatches, QuestionConsultSettings.DefaultFreeBatches),
@@ -170,7 +206,9 @@ public static class QuestionConsultReader
 /// directory (or inside one), inside the data directory, not absolute, or not an existing directory — and
 /// (S4b item 2) when it CONTAINS the profile, the data directory or a system directory, when it is a
 /// credential directory or inside one, or contains one, judged on the path as written AND on what its
-/// junctions and symlinks resolve to.
+/// junctions and symlinks resolve to. A root spelled for the OTHER operating system that is no directory here is
+/// none of these: it is skipped before any check, the other side's folder (<see cref="OtherSideHere"/>, operator
+/// 2026-10-09) — and one that IS a directory here (<c>/work</c> on Windows) is this side's, checked as any other.
 /// </summary>
 /// <remarks>
 /// <para>The reviewer's scenario is concrete: a drive root is the whole disk, and a <c>--restricted</c> claude
@@ -183,22 +221,76 @@ public static class QuestionConsultReader
 /// </remarks>
 public static class QuestionRoots
 {
-    public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused);
+    /// <param name="OtherSide">
+    /// The roots spelled for the other operating system that are no directory here, trimmed and as written — skipped,
+    /// never judged against this machine's places, and never refused (<see cref="OtherSideHere"/>).
+    /// </param>
+    public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused, IReadOnlyList<string> OtherSide);
 
+    /// <summary>A two-valued disk, as the tests and a caller with only <c>Directory.Exists</c> have it: present or absent.</summary>
+    public static Verdict Validate(
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null) =>
+        Validate(roots, dataDir, places, full => isDirectory(full) ? RootPresence.Present : RootPresence.Absent, followLink);
+
+    /// <summary>
+    /// What the disk says about a path: a folder, CONFIRMED none — not found, not a directory, a file, a name this OS
+    /// cannot spell — or <see cref="RootPresence.Unknown"/> when it could not tell (access denied, busy, an I/O failure).
+    /// <c>Directory.Exists</c> answers false for all of those alike, which is how an inaccessible root was skipped as
+    /// the other side's (the third code round, 2026-10-09).
+    /// </summary>
+    public static RootPresence PresenceOf(string full) => PresenceOf(full, File.GetAttributes);
+
+    /// <summary>ERROR_INVALID_NAME as an HRESULT — "the filename, directory name, or volume label syntax is incorrect".</summary>
+    private const int InvalidName = unchecked((int)0x8007007B);
+
+    /// <summary>
+    /// The mapping, over an injected attribute read — so the Unknown arm (access denied, a sharing violation), which no
+    /// test can provoke on demand on every platform, is tested with the exception types <c>File.GetAttributes</c>
+    /// really throws. Not-found types are caught BEFORE <see cref="IOException"/>, their base. A name this OS cannot spell
+    /// — a NUL (<see cref="ArgumentException"/>), or one Windows refuses (ERROR_INVALID_NAME) — is ABSENT: it can never be this
+    /// machine's folder, and the extension's probe answers the same (the fourth code round).
+    /// </summary>
+    public static RootPresence PresenceOf(string full, Func<string, FileAttributes> attributesOf)
+    {
+        try
+        {
+            return (attributesOf(full) & FileAttributes.Directory) != 0 ? RootPresence.Present : RootPresence.Absent;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException
+            || e is IOException { HResult: InvalidName })
+        {
+            return RootPresence.Absent;
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+        {
+            return RootPresence.Unknown;
+        }
+    }
+
+    /// <param name="presence">What the disk says about a qualified root — <see cref="PresenceOf"/> in production, injected in a test.</param>
     /// <param name="followLink">
     /// Resolves ONE path entry's link (<see cref="DocumentReader.FollowLink"/> by default): every component of a root,
     /// and of each refused place, is walked through it (<see cref="DocumentReader.Canonical"/>), so a junction or a
     /// symlink is judged at its final target (S4b item 2).
     /// </param>
     public static Verdict Validate(
-        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null)
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, RootPresence> presence, Func<string, string>? followLink = null)
     {
+        // Every root is looked for, judged and kept QUALIFIED: a root-relative Windows root on the system drive, never on
+        // whatever drive this process stands on (the code round, 2026-10-09). The other side's list keeps the spelling.
+        string Here(string root) => Qualified(root, places.Windows, places.SystemDrive);
+        bool TheOtherSides(string root) => OtherSide(root, places.Windows) && Skipped(root, presence(Full(Here(root))));
+        bool Skipped(string root, RootPresence said) =>
+            OtherSideHere(root, places.Windows, said == RootPresence.Present, said == RootPresence.Unknown);
+        // Decided ONCE per root: the decision may probe the disk, and its answer serves both lists (the code round).
+        var decided = roots.Select(root => (Root: root, OtherSide: TheOtherSides(root))).ToList();
+        var otherSide = decided.Where(one => one.OtherSide).Select(one => one.Root.Trim()).Distinct(StringComparer.Ordinal).ToList();
         var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
         var accepted = new List<string>();
         var refused = new List<string>();
-        foreach (var root in roots)
+        foreach (var root in decided.Where(one => !one.OtherSide).Select(one => Here(one.Root)))
         {
-            var why = WhyNot(root, seen, isDirectory);
+            var why = WhyNot(root, seen, presence);
             if (why.Length > 0)
             {
                 refused.Add(why);
@@ -209,15 +301,88 @@ public static class QuestionRoots
             }
         }
 
-        return new Verdict(accepted, refused);
+        return new Verdict(accepted, refused, otherSide);
     }
+
+    /// <summary>
+    /// Whether a root is spelled for the OTHER operating system — a POSIX path (<c>/home/…</c>, <c>/mnt/c/…</c>) on a
+    /// Windows server, a Windows one (<c>C:\…</c>, <c>d:/…</c>, <c>\\server\share</c>) on Linux, WSL or macOS.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it is skipped rather than refused</b> (operator, 2026-10-09): VS Code's user settings are shared by a
+    /// WSL window and a plain Windows window on one machine, and each side runs its own server — so a root written from
+    /// one side reaches the other. It is not missing; it is the other side's folder, and the server THERE reads it. Judged
+    /// here it became "not a directory on this machine" and a failure notice on every start of this side.</para>
+    /// <para>Lexical, so a test decides both directions on any machine. <c>//server/share</c> is neither side's alone — a UNC
+    /// share on Windows, a path from <c>/</c> on POSIX — and a relative or drive-relative root is this side's, refused by
+    /// name as before. <c>shared/path-family-vectors.json</c> is answered by this and by the extension's
+    /// <c>spelledForTheOtherOs</c>. This is the SPELLING only: whether a root is skipped also asks whether it exists
+    /// here (<see cref="OtherSideHere"/>), because <c>/work</c> is a real folder on a Windows drive.</para>
+    /// </remarks>
+    public static bool OtherSide(string root, bool windows)
+    {
+        var text = root.Trim();
+
+        return windows ? IsPosixAbsolute(text) : IsWindowsAbsolute(text);
+    }
+
+    /// <summary>
+    /// The DECISION: a root is the other side's when it is spelled for the other operating system AND is no directory on
+    /// this machine. The spelling alone is not enough (the plan round, 2026-10-09): on Windows <c>/work</c> is a legal
+    /// root-relative path to the folder <c>work</c> (looked for on the system drive, <see cref="Qualified"/>), and a person who typed an existing folder that
+    /// way must not lose it — an existing one is this side's and goes through the ordinary checks. Answered by
+    /// <c>shared/path-family-vectors.json</c>'s <c>existence</c> vectors, as the extension's <c>otherSideHere</c> is.
+    /// </summary>
+    /// <param name="unknownHere">The disk could not tell (<see cref="RootPresence.Unknown"/>): such a root is NEVER the other side's —
+    /// it stays this side's and is judged, and refused by name when it cannot be read (the third code round).</param>
+    public static bool OtherSideHere(string root, bool windows, bool existsHere, bool unknownHere = false) =>
+        !existsHere && !unknownHere && OtherSide(root, windows);
+
+    /// <summary>
+    /// The root as this side looks for it and keeps it: on Windows a root-relative root — one leading <c>/</c>, or a
+    /// <c>\</c> not followed by another — is qualified with the SYSTEM drive (<c>/work</c> on <c>D:</c> → <c>D:\work</c>);
+    /// everything else, and every root elsewhere, is the root trimmed.
+    /// </summary>
+    /// <remarks>
+    /// The code round, 2026-10-09: resolved against the CURRENT drive, the extension host and this server — which need
+    /// not stand on the same drive — could decide differently, and the server could check one drive and read another.
+    /// One explicit base on both sides, for the existence decision and for the root kept, so every later use (the grant,
+    /// <c>--add-dir</c>, the prompt) names its drive. Answered by <c>shared/path-family-vectors.json</c>'s
+    /// <c>resolution</c> vectors, as the extension's <c>qualified</c> is.
+    /// </remarks>
+    public static string Qualified(string root, bool windows, string systemDrive)
+    {
+        var text = root.Trim();
+
+        return windows && IsRootRelative(text) ? systemDrive + text.Replace('/', '\\') : text;
+    }
+
+    private static bool IsRootRelative(string text) =>
+        text.Length > 0 && text[0] is '/' or '\\' && !(text.Length > 1 && text[1] is '/' or '\\');
+
+    /// <summary>What a server says about a root it skipped — the Information line its log carries (<c>StartupNotices</c>).</summary>
+    public static string SkippedSentence(string root, bool windows) => windows
+        ? $"{QuestionConsultKeys.Roots}: '{root}' is a Linux, WSL or macOS path and this server runs on Windows — it is the other side's folder, read by the server there; this side skips it"
+        : $"{QuestionConsultKeys.Roots}: '{root}' is a Windows path and this server does not run on Windows — it is the Windows side's folder, read by the server there; this side skips it";
+
+    /// <summary>Why a disk row is not asked on this side when every root it could read is the other side's.</summary>
+    public static string InactiveSentence(IReadOnlyList<string> otherSide) =>
+        $"inactive on this side — every folder a disk row may read ({string.Join(", ", otherSide.Select(root => $"'{root}'"))}) is spelled for "
+        + "the other operating system, so the server there reads it and this one has none; add a folder of this machine in "
+        + "ConnectOtherAIs > Question consultant to ask this row here too";
+
+    private static bool IsPosixAbsolute(string text) => text.StartsWith('/') && !text.StartsWith("//", StringComparison.Ordinal);
+
+    private static bool IsWindowsAbsolute(string text) =>
+        text.Length >= 3 && char.IsAsciiLetter(text[0]) && text[1] == ':' && text[2] is '/' or '\\'
+        || text.StartsWith('\\');
 
     /// <summary>The folders a root may be under but never ABOVE, as their credentials live in them: a vendor's sign-in, a machine's keys.</summary>
     /// <remarks>Matched as path segments wherever they are (a <c>.ssh</c> copied to a backup is still keys), and as directories under the profile.</remarks>
     public static IReadOnlyList<string> CredentialDirectories { get; } = [".ssh", ".aws", ".gnupg", ".config/gcloud", ".claude", ".codex", ".azure"];
 
     /// <summary>Why a root may not be read, or empty. The checks in the order a person would fix them — on the path as written AND on what it resolves to.</summary>
-    private static string WhyNot(string root, Seen seen, Func<string, bool> isDirectory)
+    private static string WhyNot(string root, Seen seen, Func<string, RootPresence> presence)
     {
         if (!IsAbsolute(root))
         {
@@ -229,9 +394,16 @@ public static class QuestionRoots
 
         return Place(full, seen) is { Length: > 0 } place ? place
             : Place(real, seen) is { Length: > 0 } target ? $"{target} ('{full}' resolves to it)"
-            : !isDirectory(full) ? $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists"
-            : string.Empty;
+            : Missing(root, presence(full));
     }
+
+    /// <summary>Why a root that passed every place check still cannot be read: no folder, or a disk that would not say.</summary>
+    private static string Missing(string root, RootPresence said) => said switch
+    {
+        RootPresence.Present => string.Empty,
+        RootPresence.Unknown => $"{QuestionConsultKeys.Roots}: '{root}' could not be checked on this machine (access denied, or the disk would not answer) — a disk row needs a folder it can read",
+        _ => $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists",
+    };
 
     /// <summary>The first place this path may not be — each check its own sentence, or empty.</summary>
     private static string Place(string full, Seen seen) =>

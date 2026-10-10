@@ -142,6 +142,20 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     }
 
     [Fact]
+    public void ARootOfTheOtherSide_IsLoggedAtInformation_AndNeverReachesThePageAsANotice()
+    {
+        // Operator, 2026-10-09: one side always holds the other side's roots, because VS Code's settings are shared by a
+        // WSL and a Windows window. A notice for them was a failure toast on every start of a configuration that is right.
+        var settings = new PanelSettings { QuestionConsult = new QuestionConsultSettings { OtherSideRoots = ["/home/jinx/git"] } };
+
+        StartupNotices.Record(settings, [], Collecting, Watching());
+
+        _written.Should().BeEmpty("a folder of the other side is not a setting this build stood down from");
+        _said.Should().ContainSingle(line => line.Contains("'/home/jinx/git'", StringComparison.Ordinal)
+            && line.Contains("this side skips it", StringComparison.Ordinal), "the operator's terminal still reads it");
+    }
+
+    [Fact]
     public void AnUnrecognisedSetting_IsAStandDown()
     {
         StartupNotices.Record(With(new UnrecognisedSetting("COAI_ROLES", "not JSON")), [], Collecting, Watching());

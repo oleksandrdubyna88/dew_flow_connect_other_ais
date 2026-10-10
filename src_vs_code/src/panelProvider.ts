@@ -345,6 +345,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   public questionConsults: { readonly questions: readonly QuestionConsult[] } | undefined;
   private readonly qconsult: QconsultHost;
+
+  /** `coai.qconsultRoots` changed: the next paint asks the disk again about the roots spelled for the other OS. */
+  forgetQconsultRootAnswers(): void {
+    this.qconsult.forgetRootAnswers();
+  }
   private readonly roundsLog_: RoundsLogCache;
 
 
@@ -1239,7 +1244,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       securityPromptDir: promptsDir(this.dataDir.fsPath),
       securityPromptText: this.settingsTab.view === undefined ? undefined
         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
-      qconsultPlaces: this.qconsult.places(),
+      qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
