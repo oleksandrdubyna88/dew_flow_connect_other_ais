@@ -445,7 +445,9 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   `whereData`): `missing` when a named ROOT is absent; nothing for `source: 'default'`; nothing (the quiet note) for an
   absent side folder inside an existing root. The activation order puts the check before the settings-file write, and
   `writeSettingsFile`/`underSettingsLock` stop creating a missing named root (they still create the default location
-  and a side folder). The choice flow creates the folder it was given or refuses the choice. REDs, each recorded:
+  and a side folder). The choice flow makes no folder — the system dialog returns one that exists; the MOVE flow makes
+  `<destination>/<side>` inside the folder a person just picked, the one intended exception (the pick is the consent;
+  recovery is making the folder again or choosing one again — item A below). REDs, each recorded:
   (1) unit — a named `Z:\coai` that does not exist yields no finding today, only the *"not there yet"* note;
   (2) unit, injected `createDirectory` — activation with a missing named root creates it today (the write that hides
   the condition); (3) page, RUN through `runPanel` — Setup › MCP server draws the missing root with `.path-missing` and
@@ -502,7 +504,7 @@ of this OS*, `research/module_server.md` *`--providers` says which setting and w
   answer is in. The consultants survey is a writer by proxy — the server's `--consultants` writes
   `consultations/health/consultants.json` with a `CreateDirectory` — and is not started while the named root is
   missing (said as an unanswered probe). Left: the person-initiated checks (`--check-consultant`, `--check-model`,
-  `--check-security`) may still let the server create the folder, as the choice flow creates the folder it is given.
+  `--check-security`) may still let the server create the folder, as the move flow creates the folder it is given.
 - **5.5** the badge's words are *"N missing folders or paths"* (one: *"folder or path"*); a top tab counts every
   sub-place under it, a sub-tab its own.
 - **5.6 the agreement is one-way, by setting**: the server's problems replace this window's own findings for the
@@ -510,16 +512,48 @@ of this OS*, `research/module_server.md` *`--providers` says which setting and w
   an older server's silence replaces nothing.
 - **5.7** `whereData` keeps its quiet note only for a side folder inside an EXISTING root; `probePaths` probes the root
   itself; the mirror's new outcome `no-data-root` is terminal — not retried, not reported, because the notice already
-  says it. The choice flow already created the folder it was given (`dataCommands`, recorded in the inventory as the
-  folder a person chose) and was not changed. The host cannot observe the toast or count it (a held notice is written
+  says it. The choice flow makes no folder (see the risk consultation below); the MOVE flow makes `<destination>/<side>`
+  inside the folder a person just picked (`dataCommands`, recorded in the inventory as the folder a person chose) and
+  was not changed. The host cannot observe the toast or count it (a held notice is written
   to no ledger, and the bundle's module state is out of a scenario's reach), so `test:host` asserts what a host CAN see —
   the ordinary launch's ledger holds no `setting-path-missing` after a first start with an existing named directory; a
   SECOND launch (`run-host.mjs`, `COAI_DATA_DIR` naming a folder that is not there) finds it still absent after
   activation, after the notice has settled and after a settings change, and `settings.json` landing within seconds
-  once the folder is made. The once-per-run and the button are unit values (`pathWatch.test.ts`,
-  `findingsBoard.test.ts`), RED (3)'s "default location draws no mark" is a unit value (`dataDirFinding(undefined, …)`),
-  and the planned host break-its (the `source` guard, the notice routed back through the ledger) are held by the unit
-  break-its of the same lines.
+  once the folder is made — with NO settings edit since the risk consultation below. The once-per-run and the button are
+  unit values (`pathWatch.test.ts`, `findingsBoard.test.ts`), RED (3)'s "default location draws no mark" is a unit value
+  (`dataDirFinding(undefined, …)`), and the planned host break-its (the `source` guard, the notice routed back through
+  the ledger) are held by the unit break-its of the same lines.
+- **5.0/5.7, the gate's plan round (items A, B) and its risk consultation of 5.7 (items C–F), 2026-10-10** — each claim
+  verified before any code changed, RED first, every break-it compiling:
+  - **A — refuted as stated.** The plan round took the CHOICE flow (`askWhereDataLives`) to create the folder a person
+    chooses. It does not: the system dialog returns a folder that exists, the flow reads it and saves the setting, and
+    `<root>/<side>` is made lazily through the one maker. The flow that makes a folder is the MOVE (`moveDataDirectory`
+    + `copyInventory`, `<destination>/<side>` inside the folder just picked) — the intended exception, the pick being the
+    consent; a person whose named folder is gone recovers by making it again or choosing a folder again (the notice's
+    cure already says so). Pinned by `theChoiceMakesNoFolder.test.ts` (a scan — the flows open dialogs).
+  - **B — done.** The inventory (`test/dataDirWriters.ts`) now counts the one maker's calls and VS Code's
+    `writeFile` / `rename` / `copy`, which make missing parent folders; every writer under the data directory must make
+    folders through the maker alone; and `everyWriterLeavesAMissingRootAbsent.test.ts` RUNS each such writer with the
+    root absent and the board knowing nothing (the settings file is run by the host; the import backup is held by the
+    scan, needing an editor).
+  - **C — verified.** `--bugs-json`, `--pairs-json`, `--real-method`, `--file-at`, `--tree-at` (`RoundsDb.Open`'s
+    `CreateDirectory`) and `--providers` (the answer schema provisioned in a field initialiser) created a missing data
+    directory; seven other readers did not. Readers now open only an existing database (`RoundsDb.IsThere` /
+    `OpenExisting`) and the schema is provisioned on first need; every mode the extension launches is classified
+    (`everyServerModeTheExtensionLaunches.test.ts`) and every reader run by `AReaderModeNeverMakesTheDataDirectoryTests`.
+    `bugzLiveContract` seeds through a writer mode (`--requeue-refused`) since `--bugs-json` makes no database.
+  - **D — verified.** After `forget()` the root read `pending`, and a probe past its deadline `unknown` — neither a
+    finding — so a ledger append or the heartbeat created the folder and the mirror wrote. The board keeps its own
+    state (`noteDataRoot`, `absentDataRoot`): an absence the disk SAID holds until a probe CONFIRMS the root.
+  - **E — partly already true.** All layers unset → the default is made, and a side folder inside an existing root is
+    made — both held before and after; an explicit value equal to the default path was made when the board had no
+    finding — refused now by the maker.
+  - **F — verified.** A root removed between the guard and the recursive `mkdir` was made again. `dataDirMaker.ts`
+    makes one non-recursive level at a time below a named root and never the root; the settings file, the consultant
+    prompt override and an escalation answer no longer go through VS Code's writes. Recovery without a settings edit:
+    `PathWatch` rechecks absent paths every 5 s (`RECHECK_MS`), a confirmed root resolves the notice and tells
+    `onDataRootBack`, where the mirror writes again; the host's second launch now proves it without touching a setting.
+    The planned host break-it of the recheck is held by the unit break-its of the same lines.
 - **Not in E5:** the side registry (E2), the second field (E3/E4). Whether a missing CLI should wear the *cannot
   review* badge was left as E1 left it: the mark under the box is E5's answer, the badge stays `auth`-only.
 

@@ -3453,6 +3453,47 @@ red at every start and created by nothing (D3).
   the folder, and answers `no-data-root` — a terminal `SyncOutcome` that `MirrorSchedule` neither retries nor reports,
   because the notice already says it; nothing is remembered as written, so the content lands on the next change once
   the folder exists. `REASONS['no-data-root']` words it on the page.
+- **What the gate's risk consultation on 5.7 changed (2026-10-10)** — each item verified before it was fixed, RED first:
+  - **The guard keeps its own state** (item D). `findingsBoard.noteDataRoot(root, presence)` — asked by the watch on
+    every refresh, before `publishFindings` — keeps a root the disk SAID is absent (`absentDataRoot()`) until a probe
+    CONFIRMS it is there or the setting names another root; `pending` (the re-ask after a settings change) and `unknown`
+    (a probe past its deadline) never lift it. Before, the guard read only the published finding: after `forget()` the
+    root read `pending`, the first-answer wait had settled at activation, and a ledger append or the heartbeat created
+    the folder; a timed-out probe let the mirror write. `refusedDataRoot` and `PathWatch.dataRootMissing` read it.
+  - **One maker, never a named root** (items E and F). `dataDirMaker.ts` `makeDataDirectory(dir)` /
+    `makeDataDirectorySync(dir)` is the one way a folder that may lie under the data directory is made: below a NAMED
+    root one non-recursive `mkdir` per level from the root down, the root itself only `stat`-ed and never made — so a
+    root removed between the guard and the write (a drive unmounted) is refused at the moment of the write, in the
+    finding's words; the default location and any path outside a named root recursively, as before. Which LAYER named
+    the folder decides, never its spelling: an explicit value equal to the default path is named. Every writer under the
+    data directory makes folders only through it — the atomic write, the ledgers, the chat store's claim and quarantine,
+    the import backup, the token file, the security prompt override (`securityPromptOverride.ensureOverride`, moved out
+    of the vscode-bound editor so it can run in a test), the settings file. VS Code's `workspace.fs.writeFile` /
+    `rename` / `copy` make missing parent folders, so the settings file (`fsp.writeFile` + `atomicFile.renameWithRetry`),
+    the consultant prompt override (now the shared atomic write) and an answered escalation are written with Node.
+  - **Recovery without a settings edit** (item F). `PathWatch` rechecks every path it found ABSENT every `RECHECK_MS`
+    (5 s; `PathProbes.recheck` — one outstanding probe each, a quiet window asks nothing) through the host's
+    `setInterval` (`PathWatchDeps.every`, unref'd, disposed with the extension). A probe that confirms the root lifts the
+    kept absence, resolves the notice, releases the held notice and tells `onDataRootBack`, where `activate` runs the
+    settings mirror again — so a person recovers by making the folder (or mounting the drive), as the notice's cure says
+    (*"Connect the drive, create the folder, or choose another"*).
+  - **The writers, checked two ways** (item B). `test/dataDirWriters.ts` holds the inventory the scan derives — every
+    `mkdir` / `mkdirSync` / `createDirectory` / `makeDataDirectory(Sync)` and VS Code parent-making write in the shipped
+    source, each classified (`the one maker`, `board`, `through the maker`, `the folder a person chose`, `extension
+    storage`, `a temp folder`) — and `everyWriterLeavesAMissingRootAbsent.test.ts` RUNS every writer classified as
+    writing under the data directory with the root absent and the board knowing nothing, asserting the root absent on
+    disk; the two that need an editor (`extension.ts`, `configTransferCommands.ts`) must import `vscode`, and the
+    settings file is run by the host's second launch.
+  - **The choice makes no folder** (item A, the gate's premise refuted). `askWhereDataLives` reads the folder the system
+    dialog returned (which exists) and saves the setting; it makes nothing, and `<root>/<side>` is made lazily through
+    the maker. The one flow that makes a folder is the MOVE (`moveDataDirectory` + `copyInventory`: `<destination>/<side>`
+    inside the folder a person just picked) — the recorded exception, the pick being the consent.
+    `theChoiceMakesNoFolder.test.ts` pins where the calls are.
+  - **The server's readers** (item C). Every `coai-mcp` mode the extension launches is classified
+    (`everyServerModeTheExtensionLaunches.test.ts`, from `Program.Classify`): 13 readers, 10 launched on a person's act,
+    the consultants survey (held by the extension), and `--help` (not a coai-mcp launch); every reader is run against a
+    missing data directory by the server's own test — see `research/module_server.md`, *A reader never makes the data
+    directory*.
 - **Page and server agree (story 5.6)** — coai-mcp names each refused root as a `settingProblems` entry
   (`{ key, kind, value, sentence }`, kinds `missing-folder` / `unreadable-folder`; `--features` lists
   `settingProblems`); `providers.parseProviderNotes` reads the list (a row kept only whole), `FEATURES.settingProblems`

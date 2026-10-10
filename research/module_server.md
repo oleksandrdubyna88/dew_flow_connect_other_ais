@@ -1136,6 +1136,29 @@ complaint.Kind to be "missing-folder" … but "" has a length of 0`); the extens
 produced with one existing and one missing root; the seam leg `seam-path-missing.mjs` holds the page's own findings
 level with this list as the same `key|value|kind` set.
 
+**A reader never makes the data directory (2026-10-10, `todo/PLAN_paths_per_side.md` E5.7, the risk consultation's
+item C).** The extension refuses to create a NAMED data directory that is missing, but it launches this binary to
+read. Measured with `COAI_DATA_DIR` naming a missing child of a temp folder: `--bugs-json`, `--pairs-json`,
+`--real-method`, `--file-at` and `--tree-at` created it with `coai.db` (`RoundsDb.Open`'s first line is
+`Directory.CreateDirectory`), and `--providers` created `schemas/` (the consultation and question services provisioned
+their answer schema in a field initialiser, and `--providers` builds them to read the providers' health); `--log`,
+`--findings`, `--findings-many`, `--trees`, `--features`, `--version` and `--cadence` did not. Now
+`RoundsDb.IsThere(dataDir)` / `RoundsDb.OpenExisting(dataDir, log)` open — and migrate — only a database file already
+there, `Mode=ReadWrite` (a file removed between the two fails to open, never recreated), with no `CreateDirectory`;
+`Open` (and its create mode) is the writers' (`Connect` is the one connection both build). `--bugs-json` migrates and
+sweeps only an existing file (`MigratedAndSwept`) and otherwise answers the empty corpus; `--pairs-json` answers an
+empty `items`; the three pair reads (`AnswerOnePairAsync`) answer `pair_not_found`; exit codes and shapes unchanged.
+The answer schema is provisioned the first time a consultation or a fan-out needs it (`AnswerSchema => field ??=
+Provision(…)`). `Program.RunAsync` is `internal` so `AReaderModeNeverMakesTheDataDirectoryTests` drives every reader
+through the real dispatch (RED: six modes, e.g. `` `coai-mcp --bugs-json` exited 0 and left the missing data directory
+behind, holding: coai.db, coai.db-shm, coai.db-wal ``); its `READER MODES` block is the inventory the extension's
+`everyServerModeTheExtensionLaunches.test.ts` reads, so a mode the extension starts launching to read is red there
+until it is run here. The modes launched on a person's act (`--collect-bugs`, `--pairs-keep`, `--pairs-decide`,
+`--tree-remove`, `--upload-pairs`, `--close-consult`, the three checks, `--probe-api`) may still make the folder — the
+person's act is the consent, as the move flow's is; the consultants survey writes its health file and is not started by
+the extension while the named root is missing. The MCP serve mode, started by an MCP client and not by the extension,
+still makes its data directory.
+
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
 commit) — `AskHumanService`, with the two helpers it called on the service forwarded under their names and
@@ -3222,7 +3245,9 @@ measurement. `--all` shows the handled ones too — and, since the second code r
 is not a reader — but it is the first caller to want the collector's columns, and a person may run
 `--bugs-json` before the server has ever opened the file with a build that has them. The mode opens
 `RoundsDb` once (idempotent through `user_version`) and then reads. Without that the honest answer to
-an old schema is nought candidates, which reads as *no material* rather than *wrong schema*.
+an old schema is nought candidates, which reads as *no material* rather than *wrong schema*. Since
+2026-10-10 it opens only a file that is THERE (`RoundsDb.OpenExisting`): a mode launched to read must
+never create the data directory or its database (*A reader never makes the data directory*, above).
 
 Plan: `research/PLAN_a_corpus_of_real_defects.md`, which carries the funnel measurement in full and the
 five stories after this one.
