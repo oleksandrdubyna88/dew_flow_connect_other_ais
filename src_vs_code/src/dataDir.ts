@@ -1,5 +1,7 @@
 import { join, resolve } from 'node:path';
 import { WatchedDir } from './escalationDirs';
+import { familyOf, otherSideNote, spelledForTheOtherOs, type PathFamily } from './pathFamily';
+import { DATA_DIRECTORY } from './pathSettings';
 
 /**
  * The server's own name for it (`RoundsDb.FileName`), and the file a person would move.
@@ -146,6 +148,11 @@ export interface ChosenStorage extends StorageChoice {
   /** A side named in a layer that named no directory, so it partitions nothing. */
   readonly ignoredSide: string;
   readonly source: StorageSource;
+  /**
+   * The SHARED setting's directory when it was skipped because it is spelled for the other operating system — empty
+   * otherwise (todo/PLAN_paths_per_side.md E1.4). `Z:\coai` written from Windows is `<cwd>/Z:\coai` to a WSL window.
+   */
+  readonly skippedShared: string;
 }
 
 /**
@@ -168,26 +175,54 @@ export function chooseStorage(
   environment: StorageChoice,
   thisSide: StorageChoice,
   shared: StorageChoice,
+  family: PathFamily = familyOf(process.platform),
 ): ChosenStorage {
+  const here = sharedHere(shared, family);
   const layers: readonly (readonly [StorageSource, StorageChoice])[] = [
     ['environment', environment],
     ['this side', thisSide],
-    ['shared setting', shared],
+    ['shared setting', here.layer],
   ];
 
   for (const [source, layer] of layers) {
     const directory = layer.directory.trim();
     if (directory.length > 0) {
-      return { directory, side: sideNameIn(layer), ignoredSide: '', source };
+      return { directory, side: sideNameIn(layer), ignoredSide: '', source, skippedShared: here.skipped };
     }
   }
 
-  // Nobody named a directory, so nobody's side partitions anything. Naming the side that was asked
-  // for anyway is the difference between "you have no side" and "you set one and it is doing
-  // nothing", and only the second sentence tells somebody what to change.
-  const named = layers.map(([, layer]) => sideNameIn(layer)).find((side) => side.length > 0) ?? '';
+  return { directory: '', side: '', ignoredSide: ignoredSideOf(layers), source: 'default', skippedShared: here.skipped };
+}
 
-  return { directory: '', side: '', ignoredSide: named, source: 'default' };
+/**
+ * Nobody named a directory, so nobody's side partitions anything. Naming the side that was asked for anyway is the
+ * difference between "you have no side" and "you set one and it is doing nothing", and only the second sentence tells
+ * somebody what to change.
+ */
+function ignoredSideOf(layers: readonly (readonly [StorageSource, StorageChoice])[]): string {
+  return layers.map(([, layer]) => sideNameIn(layer)).find((side) => side.length > 0) ?? '';
+}
+
+/**
+ * The shared layer as THIS side may use it (todo/PLAN_paths_per_side.md E1.4): a directory spelled for the other
+ * operating system is the other side's — written from a Windows window, `Z:\coai` read in WSL resolved to a relative
+ * path under the host's working directory — so this side does not resolve it and falls to the next choice, the
+ * default. Only the SHARED layer: the environment and this side's own choice are this side's by construction. Its side
+ * name is kept, so a side named with nothing to partition is still reported as doing nothing.
+ */
+function sharedHere(shared: StorageChoice, family: PathFamily): { readonly layer: StorageChoice; readonly skipped: string } {
+  const directory = shared.directory.trim();
+
+  return spelledForTheOtherOs(directory, family === 'windows')
+    ? { layer: { directory: '', side: shared.side }, skipped: directory }
+    : { layer: shared, skipped: '' };
+}
+
+/** What the panel says about a skipped shared directory — nothing when none was skipped. */
+function skippedNotes(chosen: ChosenStorage, family: PathFamily): readonly string[] {
+  return chosen.skippedShared.length === 0
+    ? []
+    : [`The shared setting coai.dataDirectory is ${chosen.skippedShared}: ${otherSideNote(family === 'windows', DATA_DIRECTORY)}.`];
 }
 
 /** A layer's side, in the shape the server compares: trimmed and lower-cased. */
@@ -340,7 +375,7 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
       side: '',
       ignoredSide: chosen.ignoredSide,
       refusal: '',
-      notes: [],
+      notes: skippedNotes(chosen, familyOf(process.platform)),
       alsoWatched: [],
       env: {},
       source: chosen.source,
@@ -348,7 +383,7 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
   }
 
   const root = resolve(chosen.directory);
-  const notes: string[] = [];
+  const notes: string[] = [...skippedNotes(chosen, familyOf(process.platform))];
 
   if (directory !== root && exists(join(root, DATABASE_FILE))) {
     notes.push(
