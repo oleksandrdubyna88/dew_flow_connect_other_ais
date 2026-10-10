@@ -2612,6 +2612,20 @@ it is IN the mount makes the mount dirty, and the resolver — which runs first 
 instead. So the malformed-text case asks `consultantBody` directly, and a clean pinned mount that lacks
 the rule is its own case.
 
+## The question half is read from the mount (2026-10-09)
+
+[PLAN_the_feature_and_question_halves_are_shared_rules.md](PLAN_the_feature_and_question_halves_are_shared_rules.md).
+Conventions #58 added a rule, the question consultant (`common/coai-question-consultant.md`, v1: ask the
+consultants before the person, in every phase). The same release's other two changes reached this
+repository first and separately: the consultant half at v4 with the pin bump (#726, artefact 15) and the
+feature half from the mount at v3 (#730, S3.5, artefact 16, above). This change adds the sixth half.
+
+| what | where |
+|---|---|
+| **The generator emits the question half.** `QUESTION_SOURCE` reads `.agents/conventions/common/coai-question-consultant.md` through `ruleBody` with its own marker and heading, and `prepareMountedHalf` writes it to `generated/questionRule.ts` (git-ignored); a pin from before the rule fails naming the file and the fix. | `scripts/prepare-gate.mjs`, `.gitignore` |
+| **A sixth row, last.** `QUESTION_VERSION` 1, `ARTEFACT_VERSION` 17, the menu title `(v17)`, `SNIPPET_BODY_SHA` re-pinned. A mount from before the release is now `older` on the question half too; the panel still words that as *copy it again and replace the old block*, the wrong cure for a mount (move the pin) — a known gap owned by [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md). | `claudeSnippet.ts`, `package.json` |
+| **Tests.** `questionSnippet.test.ts` (new): the row, the marker, the load-bearing sentences, and a paste or a mount without it is `older` naming it. `prepareGate.test.mjs`: the missing-file case and the body stripped and refused. `snippetDiscovery`/`snippetVersion`/`featureSnippet`: six files. `live-feature-vendor-compat.mjs` expects the halves raised since the last release (consultant, feature, question), both ways. | `src_vs_code/src/test/`, `scripts/` |
+
 ## The consultant's kinds on every card, and a "?" on every consultant setting (2026-09-26)
 
 Stories 2 and 3 of [PLAN_consult_limits_kinds_and_help.md](PLAN_consult_limits_kinds_and_help.md).
@@ -10346,7 +10360,26 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   by name, a drive root, the profile folder itself, a system folder or anything inside the data folder, or a
   relative path — D14 (c), the server's `QuestionRoots` mirrored (and since S4b a folder holding one of those, a
   credential folder, and a link resolving to any of them); a stored root that is one of those shows the refusal
-  beside it.
+  beside it. **Since 2026-10-09 a stored root spelled for the OTHER operating system** — a WSL path in a Windows
+  window, a Windows path in WSL, which arrive because VS Code shares these settings between the two windows — and
+  that is no folder on this machine (`otherSideHere`; the host asks the disk about those roots alone, `existingHere`
+  into `RootPlaces.existingHere`, so `/work` that exists is this side's and never called otherwise; it is looked for on
+  the SYSTEM drive, `RootPlaces.systemDrive` from `%SystemDrive%` or `C:` — `qualified`, the server's rule — never the
+  current one; the answers are KEPT in `RootExistence`, keyed by platform, drive and root list, asked one root at a
+  time, and dropped when `coai.qconsultRoots` changes or a root is added or removed, so a repaint stats nothing;
+  `rootRefusal` and Add a folder's duplicate check judge the QUALIFIED path too, so `/Windows` is refused on the page
+  as the server refuses `C:\Windows`, and a picked `C:\work` is the stored `/work`; a `stat` that fails with anything
+  but ENOENT/ENOTDIR is UNKNOWN — `directoryAt`, `RootPlaces.unknownHere` — never called the other side's, said on the
+  page as "could not tell", and never cached; a NUL — Node's ERR_INVALID_ARG_VALUE — is ABSENT, as on the server; a
+  definitive answer lives `ROOT_ANSWER_LIFETIME_MS` (60 s) and is forgotten on every `coai` settings change (the mirror),
+  a binary's settled `--features` answer and `coai.installServer` — `PanelProvider.forgetQconsultRootAnswers`) — is
+  said to be *the other side's folder* (a plain hint, never the `stale` refusal), because the server on this side
+  skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
+  `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window
+  is). When every stored root is the other side's, the block adds that a disk row is not asked on this side —
+  the server's `disabled` row. `escalationDirs.ts`'s POSIX-on-Windows refusal now asks `isPosixAbsolute` instead of
+  its own copy of the shape. `shared/path-family-vectors.json` is answered by `pathFamily.test.ts` and the C#;
+  `qconsultSection.test.ts` runs the page both ways.
 - *Before it asks you* (off / remind / require) and the three limits.
 
 A row's controls ride the write's CALLER slot (the row id; a prompt box the prompt id) and `panelProvider`
@@ -10687,9 +10720,11 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
-  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
-  (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
+  Display only; every write reads the rows afresh. The page's price map was built from that one list (`isReviewerRow`),
+  keyed by MODEL — so a consultant-only model had no catalog price on its Models card (the page draws `catalogRows`);
+  pricing every row by model instead would have let a hidden `api` consultant with a reviewer's model put its endpoint's
+  rate on the reviewer's card (PR #681's review). Since 2026-10-09 the Models cards are priced per ROW from every row instead (`priceBook.cardPrices`, below the E5.3 section;
+  `theCardsArePricedFromEveryRow.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
 - `scripts/seam-catalog.mjs`, the seam's tenth leg: a multi-instance catalog (two `claude` rows, a consultant and a
@@ -10942,7 +10977,8 @@ Every place of the new page but Models draws the CURRENT page's section for it, 
 `catalogSections.placeBody(place, state)` names the builder of each place (`SPLIT`, and since E5 prerequisite (b)
 `MOVED_SECTIONS` — it used to look the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`), so no
 builder is copied and a control behaves the same on both pages until E5 retires the old one. The page wraps it in a
-`.moved` column (760 px, the width the sections were written for); the MCP server keeps its 1.5× zoom on its new pane.
+`.moved` column (760 px, the width the sections were written for — lifted on a wide editor where a place lays out
+in columns, see *The Settings tabs lay out in two columns*); the MCP server keeps its 1.5× zoom on its new pane.
 
 - **The prompts section is split in two** by one parameter, `promptsBody(state, half)` (`PromptsHalf`): `both` is the
   current page, unchanged; `stages` (Reviews → Stages) is the switches, rounds, thresholds, lens deals and workspace;
@@ -11679,7 +11715,53 @@ Nothing a person sees changes: everything removed here was drawn by nothing sinc
   **＋ Add a model** was refused as "another caller's consultant". A consultant holds an endpoint only when its entry
   defines one; the row is the holder of its own URL.
 
-**Found on the way, not fixed here:** a Models card takes its catalog price from `state.modelPrices[model]`, which is
-priced from the reviewers only (`isReviewerRow`, to keep a hidden api consultant from overwriting a reviewer's rate
-for the same model). So a row that is not a reviewer — a consultant-only model — shows no catalog price on Models.
-It predates E5; recorded as a follow-up in the plan.
+**Found on the way, fixed after it** (research/PLAN_models_card_prices_every_row.md, below): a Models card took its catalog
+price from `state.modelPrices[model]`, priced from the reviewers only, so a consultant-only model showed no price.
+
+## A Models card prices its own row (2026-10-09, research/PLAN_models_card_prices_every_row.md)
+
+- `priceBook.cardPrices(rows, priceOf)` — the price service's one function for the cards: for EVERY catalog row, its own
+  model on its own route (`billedRoute`: an `api` row's `baseUrl`, `''` for every other runtime), keyed by the row's
+  `id`; a row the lists do not know, or with no model, has no entry. `PanelProvider.cardPrices` calls it with
+  `PRICE_BOOK.priceOf` over `vendors` (every row) after the same `refreshPriceTables()`; the state field is
+  `PanelState.cardPrices`, and `cardContextFor` reads `state.cardPrices[v.id]`.
+- Keyed by row, no row's route can land on another row's card — the guarantee the reviewers-only list protected now
+  holds by construction, so `shown` no longer decides prices. Two rows on one model and two endpoints each show their
+  own rate.
+- `billedRoute` is ALSO what the by-model `modelPrices(vendors)` of the spending and consultation tabs routes an api row
+  by, so a row's card and its runs are priced on one route. Those tabs are otherwise unchanged (every row and the chat
+  presets, by model).
+- Tests: `aModelsCardPricesItsOwnRow.test.ts` runs the Settings page on Models (`catalogHtml` → `pageTree` → `runPageHtml`; CodeRabbit, PR #723) with the map
+  `cardPrices` builds — a consultant-only row's card shows its price (RED: `—`), a reviewer and an api consultant on one
+  model show 1.25 and 3 (RED: both 1.25), an unknown model keeps its dash; `theCardsArePricedFromEveryRow.test.ts` pins
+  the render's wiring (every row, the one price book). Break-it: reading by model, pricing only the reviewers,
+  routing an api row off its endpoint, and the render pricing `shown` each turn a test red.
+## The Settings tabs lay out in two columns on a wide editor (2026-10-09)
+
+Asked for by the operator on 0.65.0: Models drew its cards in two columns on a wide editor, and every other tab was the
+760 px `.moved` column with the right half of the screen empty. Reviews (every sub-tab but **Limits**), **Security lane**
+and **Chat** now lay their repeated cards out the way Models does — by the SAME rule, not a copy of it.
+
+- **One class, one rule.** `cardColumns.ts` exports `CARD_COLUMNS` (`card-columns`) and `cardColumns(cards)`, which
+  wraps drawn cards in that class and draws nothing for no cards. Models' rule (`.catalog .cards`, one column, two from
+  `min-width: 1100px`) became the page's `.catalog .card-columns`, in `COLUMNS` at the end of `catalogCss.ts`; Models'
+  container carries both classes. Inside the same media query `.catalog .moved:has(.card-columns)` drops the 760 px
+  cap, so a narrow editor keeps the column it had. The cells' own single-column margins are cleared
+  (`.card-columns > *`; the gap spaces them) and a fieldset gets `min-width: 0`, or its min-content width pushes the track.
+- **What flows, by place.** Stages and Prompts per round: each stage's role boxes (`promptsBody`); the stage's switches
+  and notes span. **Roles & prompts: each role's PROMPTS** (`rolesBlocks.promptBlocks`) — a role spans the page, because
+  a stage often holds one role and two columns of roles left Plan review as narrow as before. The gate: its fields
+  (`catalogSections`, around `gateBody`). Commands: Yours and Shipped, each list's blocks. Security lane: the two numbers,
+  the prompt cards and the pairs; the switch, the legend, each list's count and button and *Try it* span. Chat: the
+  models a chat can open on, the three sending fields, the prompt presets; a stranded choice and a conflict's table span.
+- **Not touched:** Limits (five numbers, one a row), Consultants (a form of single settings with no repeated card),
+  Setup.
+- **Models' card-block rule is the card's.** It was the page-wide `.catalog .block`, and Chat draws its models as
+  `.block` too, so they wore a card block's top line and padding; it is `.catalog .card .block` now.
+- **Tests:** `theSettingsTabsFlowInTwoColumns.test.ts` runs the page on each place. Every card family is drawn exactly
+  as many times as its source of truth says (the state, the shipped catalogue, or the builder's own output — a family
+  drawing nothing would otherwise pass) and each card's PARENT is the shared class (a class written beside the cards
+  instead of around them reads the same to a search); Limits draws none; Models' cards sit in it; the sheet holds
+  exactly one two-column rule — on the shared class, at 1100 px — with the cap lifted there; and no top-border rule
+  reaches a Chat model block while one still reaches a Models card block. Design record:
+  [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).

@@ -203,7 +203,7 @@ trace contains that substring nowhere, so the mode exited 0 and the panel said t
 recorded when nothing could be read at all.
 
 **And the vault is not read on this path.** A close talks to nobody: it reads a record file, writes it
-back and projects a row. Reading the key vault spawns `creds config <key>`, which is a process and a
+back and projects a row. Reading the key vault spawns `creds --help` and `creds config -`, which are processes and a
 wait in the middle of a button a person expects to be instant. `--providers` reads it because it
 REPORTS on keys.
 
@@ -1059,6 +1059,52 @@ admits `api`). D13's flag is shown beside every answer. S3 made the server refus
 `acknowledged` tick; **the operator revised that on 2026-10-03** — the flag is enough, there is nothing to
 acknowledge (*The door to the person* below), and an old `acknowledged` field is read past.
 
+**A root of the other operating system is skipped, not refused (operator, 2026-10-09).** VS Code's user settings are
+shared by a WSL window and a plain Windows window on one machine, and each side runs its own `coai-mcp` — so a disk root
+written from WSL (`/home/jinx/git`) reached the Windows server, which refused it as *"not a directory on this machine"*;
+the panel turned that into a `server-did-not-understand-a-setting` failure toast on every start (extension 0.65.0 /
+coai-mcp 0.44.2). Only that root was dropped — the other question-consultant settings always applied — but the toast's
+cure said *"running without those settings"* every time, for a configuration that is right on its own side.
+`QuestionRoots.OtherSide(root, windows)` now decides, lexically, whether a root is spelled for the OTHER operating system:
+a POSIX absolute path (one leading `/`) on a Windows server, a Windows one (`X:\`, `X:/`, a leading `\` — UNC included)
+on Linux, WSL or macOS; `//server/share` is neither side's alone, and a relative or drive-relative root stays this side's.
+**The spelling is not the whole decision** (the plan round, same day): on Windows `/work` is a legal root-relative path
+to the folder `work`, so `QuestionRoots.OtherSideHere(root, windows, existsHere)` skips a root only when it is spelled
+for the other OS AND is no directory here — `Validate` asks its injected `isDirectory` about those roots alone, and an
+existing one is this side's and goes through every check below. **Where it is looked for is one explicit base**
+(the code round): a root-relative Windows root — one leading `/`, or a `\` not followed by another — is qualified
+with the SYSTEM drive (`QuestionRoots.Qualified`; `SystemPlaces.SystemDrive` = `%SystemDrive%`, `C:` when unset),
+never the current one, which the extension host and this server need not share: `/work` → `C:\work` for the
+existence decision, for every check, and as the root KEPT in `Roots`, so the grant, `--add-dir` and the prompt all
+name the drive. The extension qualifies the same way (`pathFamily.ts` `qualified`), so the page and the server decide
+alike; the `resolution` vectors hold the rule. **This is a deliberate compatibility change**: before it the server
+kept `Full(root)`, so a hand-written `/work` meant the SERVER's current drive (`D:\work` for a coai-mcp started from
+D:); now it means `%SystemDrive%\work`. Only a hand-written root-relative root is affected — Add a folder always
+writes a drive-qualified path — and `TheDeliberateChange_AHandWrittenRootRelativeRoot_NowMeansTheSystemDrive_…` pins
+it. An explicit WSL share (`\\wsl.localhost\<distro>\…`) is an ordinary Windows root: judged, kept, or refused by
+name when unreachable — never skipped; a bare `/home/…` with no folder here is skipped, since the setting names no distro.
+Each root is DECIDED ONCE in `Validate` (one disk probe per other-side root, its answer serving both lists). The two
+halves are checked against each other live by the seam leg `scripts/seam-qconsult-roots.mjs` ([module_tests.md](module_tests.md)).
+**Three answers from the disk, not two** (the third code round): `QuestionRoots.PresenceOf` returns `RootPresence.Present`,
+`Absent` (not found, not a directory, a file, a name this OS cannot spell) or `Unknown` (access denied, any other I/O
+failure) — `Directory.Exists` had answered false for all of them, so an inaccessible `/work` was skipped as the other
+side's and its row disabled. Only a CONFIRMED absence makes a root the other side's (`OtherSideHere(…, unknownHere)`);
+an unknown root stays this side's, goes through D14 (c), and is refused by name: "could not be checked on this machine
+(access denied, or the disk would not answer)". The extension's `directoryAt` answers the same three, and the
+`existence` vectors pin it (`unknownHere`). An UNSPELLABLE name — a NUL (`ArgumentException`) or one Windows refuses
+(`IOException` with ERROR_INVALID_NAME) — is `Absent`: it can never be this machine's folder, and the extension's probe
+answers the same (the fourth code round; the `unspellable` existence vector is answered by both REAL probes).
+Such a root is taken out BEFORE any D14 (c) check — this machine's places say nothing about another OS's path — into
+`QuestionConsultSettings.OtherSideRoots`, and is never a complaint: `StartupNotices` logs it at **Information** and writes
+no notice. `SystemPlaces.Windows` carries the platform, so a test decides both directions on one machine. A disk row whose
+EVERY root is the other side's (no root of this machine) is admitted as `disabled` — *"inactive on this side — every
+folder a disk row may read (…) is spelled for the other operating system …; add a folder of this machine …"* — rather
+than `blocked` with the planner's "needs at least one root", because the row is fine where those folders are; the
+planner's refusal stands when nothing is set at all, and a pair the matrix refuses keeps its own reason
+(`QuestionAdmission.Refusal`). A missing root of THIS operating system is still refused by name, as before.
+`shared/path-family-vectors.json` holds the spelling (`vectors`) and the decision (`existence`), answered by
+`QuestionConsultSettingsTests` and by the extension's `pathFamily.test.ts`, so the Settings page names exactly the roots the server skips.
+
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
 commit) — `AskHumanService`, with the two helpers it called on the service forwarded under their names and
@@ -1570,8 +1616,12 @@ front of `ask_human` has let it through — *The door to the person*, above.
 Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI_EXE_*`,
 `COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED`, `COAI_MAX_CONCURRENCY`,
 `COAI_MAX_PER_PROVIDER`, `COAI_REVIEWER_TIMEOUT_MINUTES`, `COAI_DATA_DIR`, `COAI_LOG_LEVEL`, and
-`COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config <key>` once per
-start — since 2026-10-06 in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
+`COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config -` once per
+start, the key written to its stdin and never in its arguments (2026-10-10,
+[PLAN_creds_config_key_on_stdin.md](PLAN_creds_config_key_on_stdin.md)): first `creds --help` (10 s), and a CLI
+whose help does not name `config-key-stdin` is refused with "update the creds CLI" — a hung or failing `--help` with its
+own sentence — and is never given the key; neither launch inherits `COAI_CREDS_KEY` from the server's environment, and `TheRealCredsCliSpeaksTheVaultsMarkerLiveTests` (`COAI_LIVE_CREDS_CLI`) checks a real CLI against the marker. That refusal is the CLI's answer; only a CLI that cannot be started moves on
+to the next place. Since 2026-10-06 the read runs in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
 **The key is read from the LAYERED configuration, like every other setting (2026-10-01).** The panel

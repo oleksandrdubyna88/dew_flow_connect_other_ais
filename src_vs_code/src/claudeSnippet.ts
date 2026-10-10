@@ -1,6 +1,7 @@
 import { CALLER_RULE, DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
 import { CONSULTANT_RULE } from './generated/consultantRule';
 import { FEATURE_RULE } from './generated/featureRule';
+import { QUESTION_RULE } from './generated/questionRule';
 
 /**
  * The instruction text a person pastes into a target repository's CLAUDE.md, teaching that
@@ -39,7 +40,7 @@ import { FEATURE_RULE } from './generated/featureRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '2bcd89d815918770';
+export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -47,7 +48,7 @@ export const SNIPPET_BODY_SHA = '2bcd89d815918770';
  * <p><b>A different thing from `SNIPPET_VERSION`, which is why the two disagree — and drift further
  * apart with every change to the paste — and must not be “tidied” into agreement.</b> That one is the
  * marker inside `coai-review-gate.md` and is frozen at 5 by the conventions migration baseline; this
- * one numbers the paste as a whole — gate, document, feature, caller and consultant together — and is
+ * one numbers the paste as a whole — gate, document, feature, caller, consultant and question together — and is
  * free to move when any of them does. (A docblock here once said they "differ by one", which was true for a
  * day and false from the next change on; the gap is not a fact about either number.)</p>
  *
@@ -64,7 +65,7 @@ export const SNIPPET_BODY_SHA = '2bcd89d815918770';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 16;
+export const ARTEFACT_VERSION = 17;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -174,6 +175,20 @@ export const CONSULTANT_VERSION = 4;
 export const FEATURE_VERSION = 3;
 
 /**
+ * The QUESTION half's version — ask the consultants before the person.
+ *
+ * <p><b>A sixth number, a mounted rule from its first version.</b> The server's phase rule lets planning
+ * questions and the first two batches after a plan's `proceed` reach the person directly; the rule sets
+ * a higher bar — every question goes to `ask_consultants` first, and the person gets only what the
+ * answers did not settle and what is theirs to decide. Asked by the operator on 2026-10-09
+ * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).</p>
+ *
+ * <p>Not cosmetic either: a paste without it never learns the bar, and the person is asked what the
+ * consultants could have settled.</p>
+ */
+export const QUESTION_VERSION = 1;
+
+/**
  * The halves the artefact is made of: the one place that knows which they are, in what order, and
  * which of them can be versioned at all.
  *
@@ -199,6 +214,7 @@ export const KNOWN_HALVES = [
   { id: 'coai-feature', name: 'the feature gate', version: FEATURE_VERSION, text: FEATURE_RULE, frozen: false, file: 'coai-feature-gate.md' },
   { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false, file: 'coai-caller-model.md' },
   { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false, file: 'coai-consultant.md' },
+  { id: 'coai-question', name: 'the question consultant', version: QUESTION_VERSION, text: QUESTION_RULE, frozen: false, file: 'coai-question-consultant.md' },
 ] as const;
 
 /** The ids this build reads, in the order the artefact carries them. */
@@ -457,8 +473,8 @@ export function callerVersionIn(text: string): number | undefined {
 
 
 /**
- * All five rules, in the order an AI should read them: the gate, the document gate, the feature gate,
- * the caller, the consultant.
+ * All six rules, in the order an AI should read them: the gate, the document gate, the feature gate,
+ * the caller, the consultant, the question consultant.
  *
  * <p>Several files because the first one is frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`. A
  * person pasting this gets one block either way, and the AI reading it gets every rule, which is

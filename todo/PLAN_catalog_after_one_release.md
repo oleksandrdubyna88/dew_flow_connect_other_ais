@@ -22,7 +22,7 @@ person might still reach for. After the NEXT extension release has shipped, thes
 
 - The feature review of the catalog plan did not run (no model ticked for features); it runs when the operator ticks a
   model — the planned pair is Fugu Max and Grok, waiting with the xAI work.
-- The Models card's prices for non-reviewer rows: [PLAN_models_card_prices_every_row.md](PLAN_models_card_prices_every_row.md).
+- The Models card's prices for non-reviewer rows: [PLAN_models_card_prices_every_row.md](../research/PLAN_models_card_prices_every_row.md).
 
 ## Build order
 

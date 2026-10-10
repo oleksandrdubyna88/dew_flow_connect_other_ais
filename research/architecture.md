@@ -41,7 +41,7 @@ C4Container
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn as the coai-reader agent (tools: view_file), plan mode, from the read-only folder")
   Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file, deny the rest")
-  Rel(mcp, creds, "creds config <key>, once per start, in the background")
+  Rel(mcp, creds, "creds --help probe, then creds config - with the key on stdin, once per start, in the background")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
   Rel(ext, srv, "Microsoft sign-in, then a session token; and a CHAT turn, as a job with no role")
@@ -242,7 +242,10 @@ What crosses the containers:
   It holds the tick OUT of the file for an installed server older than `FEATURE_SINCE` (the row still
   crosses, so the vendor keeps reviewing plans and code) and never writes it on a Team-server row. The
   rounds log draws a skip as its own neutral state, *skipped — did not block*, with the reason; the
-  snippet gained a fifth half (`coai-feature` v1, artefact v13) that tells an AI when to call the tool.
+  snippet gained a fifth half (`coai-feature` v1, artefact v13) that tells an AI when to call the tool. On
+  2026-10-09 that half moved into the shared conventions as `coai-feature` v3 (#730), and a sixth arrived beside
+  it, `coai-question` v1 (ask the consultants before the person): every half is a mounted rule now
+  (artefact v17).
   See [module_extension.md](module_extension.md).
 - **The Team server runs no feature review** in this version (D10 of the plan). `AcceptedRoles`
   refuses the feature role by name, even under `AllowAny`, and the client never sends one to a remote
@@ -1105,6 +1108,14 @@ give, so a pair the panel lets a person save is a pair the server launches, and 
 Nothing else crossed a container in S1: the confinement planner, the sanitisers and the api answering
 runtime are `coai-mcp`'s alone ([module_core.md](module_core.md), [module_runners.md](module_runners.md)),
 and the tool, the record and the settings that will reach the extension are S2–S4.
+
+**A disk root of the other operating system (2026-10-09).** VS Code's settings are shared by a WSL window and a
+Windows window, and each side runs its own `coai-mcp`, so `COAI_QCONSULT_ROOTS` reaches both sides carrying both
+sides' folders. Which ones are the OTHER side's — spelled for the other OS and no folder here, because `/work` is a
+real folder on a Windows drive — is decided twice — the server skips them (`QuestionRoots.OtherSide`),
+the Settings page says so beside them (`pathFamily.ts`) — and held level the capability table's way:
+`shared/path-family-vectors.json`, answered by `QuestionConsultSettingsTests` and `pathFamily.test.ts`
+([module_server.md](module_server.md), [module_extension.md](module_extension.md)).
 
 ### The question card gained a status and the consultants' answers (2026-10-02, S3 of the question consultant)
 

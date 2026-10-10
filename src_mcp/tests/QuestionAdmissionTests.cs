@@ -50,6 +50,36 @@ public sealed class QuestionAdmissionTests
     }
 
     [Fact]
+    public void ADiskRowWhoseEveryRootIsTheOtherSides_IsInactiveOnThisSide_SaidPlainly()
+    {
+        // Every folder was written from the other side (a WSL window's /home/..., read by the Windows server): on this
+        // side the row has nothing to read. It is not a fault here, so it is not BLOCKED — it is not asked, and says why.
+        var settings = new QuestionConsultSettings { OtherSideRoots = ["/home/jinx/git"] };
+
+        var refused = Admit(Row("claude", "claude", "question-disk"), settings).Should().BeOfType<RowAdmission.Refused>().Subject;
+
+        refused.Status.Should().Be(RowOutcomes.Disabled, "inactive on this side, never a stopped row");
+        refused.Reason.Should().Contain("inactive on this side").And.Contain("/home/jinx/git").And.Contain("add a folder of this machine");
+    }
+
+    [Fact]
+    public void ADiskRowWithNoRootAtAll_IsStillBlocked_AskingForAFolder()
+    {
+        // Nothing set anywhere is the old case, and keeps its sentence.
+        var refused = Admit(Row("claude", "claude", "question-disk"), Settings()).Should().BeOfType<RowAdmission.Refused>().Subject;
+
+        refused.Status.Should().Be(RowOutcomes.Blocked);
+        refused.Reason.Should().Contain("needs at least one root");
+    }
+
+    [Fact]
+    public void ARowThatReadsNoDisk_IsAskedWhateverTheRootsAre()
+    {
+        Admit(Row("claude", "claude", "question-opinion"), new QuestionConsultSettings { OtherSideRoots = ["/home/jinx/git"] })
+            .Should().BeOfType<RowAdmission.Admitted>("the roots are a disk prompt's alone");
+    }
+
+    [Fact]
     public void ABlockedPair_IsStillBlocked_WithItsRealReason()
     {
         // A3's refusal is untouched: a pair the runtime cannot do at all is blocked whatever the row says.

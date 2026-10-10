@@ -133,7 +133,7 @@ function page(vendors: readonly Vendor[]): string {
     side: '', perSide: false,
     questions: [], sessions: [], openSections: ['reviewers'],
     usage: [], usageWindow: 'day', latestServerVersion: '',
-    cliStatus: {}, modelPrices: {},
+    cliStatus: {}, cardPrices: {},
     snippetStatus: { kind: 'absent', version: 0 },
     teamServers: [],
   } as unknown as PanelState, 'nonce');

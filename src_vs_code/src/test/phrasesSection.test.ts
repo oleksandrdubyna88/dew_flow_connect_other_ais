@@ -38,7 +38,7 @@ const state = (phrases: readonly Phrase[] = PHRASES): PanelState => ({
   usage: [],
   usageWindow: 'week',
   cliStatus: {},
-  modelPrices: {},
+  cardPrices: {},
   snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   latestServerVersion: '',
   phrases,

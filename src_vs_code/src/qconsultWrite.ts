@@ -1,5 +1,6 @@
 import { type Admission, admit } from './capabilityAdmission';
 import { pickRefusal } from './catalogPicks';
+import { qualified } from './pathFamily';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
 import { MAX_ACTIVE_ROWS, type QuestionPromptSetting, type QuestionRowSetting } from './qconsultSettings';
 import { RESERVED_FILE_NAMES } from './rolesPrompts';
@@ -303,6 +304,26 @@ export interface RootPlaces {
   readonly systemDirs: readonly string[];
   /** Windows compares paths without case; elsewhere case is part of the name. */
   readonly caseless: boolean;
+  /**
+   * Whether this window's extension host — and so the server it starts — runs on Windows: what decides which stored
+   * roots are the OTHER side's (`spelledForTheOtherOs`). A WSL window is not Windows, whatever machine it is on.
+   */
+  readonly windows: boolean;
+  /**
+   * The stored roots spelled for the other OS that ARE directories here (`existingHere`, asked by the host): on Windows
+   * `/work` is the folder `work` on the system drive, and such a root is this side's — never called the other side's.
+   */
+  readonly existingHere: readonly string[];
+  /**
+   * The stored roots spelled for the other OS the disk could NOT answer for (EACCES, EBUSY — anything but ENOENT or
+   * ENOTDIR): neither this side's nor the other side's, so the page makes no claim about them and says it could not tell.
+   */
+  readonly unknownHere: readonly string[];
+  /**
+   * The drive a root-relative Windows root is looked for on — `%SystemDrive%`, or `C:` (`systemDriveOf`): never the
+   * current drive, which this window's host and the server need not share. The server's `SystemPlaces.SystemDrive`.
+   */
+  readonly systemDrive: string;
 }
 
 /**
@@ -311,9 +332,12 @@ export interface RootPlaces {
  * since S4b item 2 a folder that CONTAINS the profile, the data folder or a system folder, and a credential
  * folder, anything inside one, or a folder holding one. Existence and links are the host's to resolve
  * (`rootAdded`'s `real`): this is pure.
+ *
+ * <p>Judged at the path the server judges ({@link here}): on Windows `/Windows` is `C:\Windows` and refused as a system
+ * folder, as `QuestionRoots.Validate` refuses it after `Qualified` (the cadence consultant, 2026-10-09).</p>
  */
 export function rootRefusal(root: string, places: RootPlaces): string {
-  const full = trimmed(root);
+  const full = trimmed(here(root, places));
   const credential = credentialIn(full, places);
   const checks: readonly (readonly [boolean, string])[] = [
     [!isAbsolute(full), `'${root}' is not an absolute path — a disk root is spelled from a drive or from /`],
@@ -364,7 +388,12 @@ export function rootAdded(
     return { roots, refusal };
   }
 
-  return roots.some((r) => same(r, root, places)) ? { roots, refusal: '' } : { roots: [...roots, trimmed(root)], refusal: '' };
+  return roots.some((r) => same(here(r, places), here(root, places), places)) ? { roots, refusal: '' } : { roots: [...roots, trimmed(root)], refusal: '' };
+}
+
+/** A root at the path this side — and the server — looks for it: `pathFamily.qualified` with this machine's facts. */
+function here(root: string, places: RootPlaces): string {
+  return qualified(root, places.windows, places.systemDrive);
 }
 
 /** The picked folder's refusal, or — when it has none — the refusal of what it RESOLVES to, saying so. */
