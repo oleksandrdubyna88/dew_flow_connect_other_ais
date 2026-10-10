@@ -3399,7 +3399,9 @@ path field of `todo/PLAN_paths_per_side.md` (E3/E4) needs exactly that. E2 is th
   "this machine". One function, called by activation and by the panel, so the row the page marks *(this window)* is the
   record activation wrote.
 - **The stamp** — `extension.ts` calls `stampThisSide(context.globalState, …)` at activation, `void` (never awaited): this
-  side stamped if due, then every record past 90 days deleted. `activate` now returns `CoaiExports { sidesSeen }`, read only
+  side stamped if due, then every record past 90 days deleted. It never rejects: a store that refuses is handed to the
+  reporter activation gives it — `console.error` into the extension host's log, never a toast — and since a refused write
+  leaves no record, the next start stamps again (the coordinator's accepted finding on E2). `activate` now returns `CoaiExports { sidesSeen }`, read only
   by the `test:host` scenario, because a host has no other way into this extension's `globalState`.
 - **The switch** — `coai.pathFieldsPerSide` (`auto` / `always` / `never`, `application` scope: the person's, so every
   window reads one value; not overlaid, not a path field, in `NEVER_TRANSFERRED`). `pathFieldsModeOf` reads anything else

@@ -207,8 +207,23 @@ export function sidesIn(store: SideStore, now: number): readonly SeenSide[] {
 /**
  * What activation does (E2.2): this side's record, written at most once a day, then every record past the window removed.
  * Never awaited by activation — a slow store must not delay a window's start.
+ *
+ * <p><b>It never rejects.</b> A rejection nobody awaits leaves no trace (the coordinator's accepted finding on E2), so a
+ * store that refuses is handed to `failed` — the extension host's log, never a toast: a missing stamp only means two
+ * fields appear one start later. Nothing is written in a half-state that would stop the next start: a refused write
+ * leaves no record, so the next stamp is due and is tried again.</p>
+ *
+ * @param failed what to do with a refusal — activation logs it through the extension host's console
  */
-export async function stampThisSide(store: SideStore, here: SideHere, now: number): Promise<void> {
+export async function stampThisSide(store: SideStore, here: SideHere, now: number, failed: (error: unknown) => void): Promise<void> {
+  try {
+    await stampAndPrune(store, here, now);
+  } catch (error: unknown) {
+    failed(error);
+  }
+}
+
+async function stampAndPrune(store: SideStore, here: SideHere, now: number): Promise<void> {
   const stamp = stampSide(store.get(sideSeenKey(here.key)), here.key, here.family, here.label, now);
   if (stamp !== undefined) {
     await store.update(stamp.key, stamp.record);

@@ -386,7 +386,10 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   void context.globalState.update(FIRST_SEEN_KEY, seenNow(context.globalState.get(FIRST_SEEN_KEY), NEW_CONTROLS, Date.now()));
   // The sides this profile has been used on (todo/PLAN_paths_per_side.md E2.2): this side stamped at most once a day,
   // the sides gone for 90 days pruned — never awaited, so a slow store never delays a window's start.
-  void stampThisSide(context.globalState, sideHereOf(thisSide(context.globalStorageUri), process.platform), Date.now());
+  // A refusal is logged to the extension host, never a toast: the side is tried again at the next start.
+  void stampThisSide(context.globalState, sideHereOf(thisSide(context.globalStorageUri), process.platform), Date.now(), (error) => {
+    console.error('ConnectOtherAIs: this side could not be recorded in the side registry; it is tried again at the next start', error);
+  });
   // Ask once now: the settled answer writes the file again (above) — so a system prompt crosses this session.
   void askFeatures();
   // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
