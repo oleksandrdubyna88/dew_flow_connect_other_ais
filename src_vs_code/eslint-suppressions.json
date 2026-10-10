@@ -510,7 +510,7 @@
   },
   "src/escalationDirs.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "src/escalationWatcher.ts": {

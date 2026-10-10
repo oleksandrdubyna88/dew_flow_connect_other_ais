@@ -1,0 +1,78 @@
+namespace CoaiMcp.Server;
+
+/// <summary>What this side does with a stored CLI path: the path it runs (empty = the PATH lookup), and the value it skipped.</summary>
+/// <param name="Path">The trimmed path this side runs, or empty when the runtime's own name is looked up on PATH.</param>
+/// <param name="OtherSide">The trimmed stored value when it was spelled for the other operating system — empty otherwise.</param>
+public sealed record ThisSidePath(string Path, string OtherSide);
+
+/// <summary>
+/// A CLI path spelled for the OTHER operating system is the other side's CLI: skipped here, never probed, never refused
+/// (todo/PLAN_paths_per_side.md E1.2).
+/// </summary>
+/// <remarks>
+/// <para><b>Why.</b> VS Code's user settings are shared by a WSL window and a plain Windows window on one machine, and each
+/// side runs its own coai-mcp. A reviewer row's <c>C:\…\codex.cmd</c> written from Windows reached the WSL server, whose
+/// probe answered <c>CliFound=false</c>; the card said "cannot review" and every round on that side lost the vendor —
+/// for a row that is right on the side that wrote it.</para>
+/// <para>The extension already writes THIS side's value into <c>COAI_VENDORS</c>; this is defence in depth for a settings
+/// file an older extension wrote. The spelling alone decides (<see cref="QuestionRoots.OtherSide"/>) — a CLI path is not
+/// asked of the disk — and <c>shared/path-family-vectors.json</c>'s <c>executable</c> set is answered by this and by the
+/// extension's <c>pathForThisSide</c>.</para>
+/// </remarks>
+public static class ExecutablePaths
+{
+    /// <summary>The path this side runs for a stored <paramref name="path"/>, on a host that is or is not Windows, asking this disk.</summary>
+    public static ThisSidePath Here(string? path, bool windows) =>
+        Here(path, SystemPlaces.Current with { Windows = windows }, FilePresenceOf);
+
+    /// <summary>
+    /// The roots' rule (<see cref="QuestionRoots.OtherSideHere"/>) for a FILE: a path spelled for the other operating system
+    /// is the other side's only when the disk CONFIRMS no such file here. On Windows <c>/Program Files/nodejs/node.exe</c> is
+    /// a legal root-relative path — looked for qualified with the system drive (<see cref="QuestionRoots.Qualified"/>), and
+    /// when it is there, or when the disk cannot tell, it runs qualified: never skipped on a guess (the cadence consultant,
+    /// E1's code round). <paramref name="presence"/> is <see cref="FilePresenceOf"/> in production, injected in a test.
+    /// </summary>
+    public static ThisSidePath Here(string? path, SystemPlaces places, Func<string, RootPresence> presence)
+    {
+        var value = path?.Trim() ?? string.Empty;
+        if (!QuestionRoots.OtherSide(value, places.Windows))
+        {
+            return new ThisSidePath(value, string.Empty);
+        }
+        var here = QuestionRoots.Qualified(value, places.Windows, places.SystemDrive);
+
+        return presence(here) == RootPresence.Absent
+            ? new ThisSidePath(string.Empty, value)
+            : new ThisSidePath(here, string.Empty);
+    }
+
+    /// <summary>
+    /// <see cref="Here(string?, SystemPlaces, Func{string, RootPresence})"/> for one read of a list: an answer per trimmed
+    /// path is kept for the life of the returned function, so rows sharing a CLI path ask the disk once (E1's code round —
+    /// the probe is synchronous, and a hundred rows on one path were a hundred stats).
+    /// </summary>
+    public static Func<string?, ThisSidePath> Memoized(SystemPlaces places, Func<string, RootPresence> presence)
+    {
+        var answers = new Dictionary<string, ThisSidePath>(StringComparer.Ordinal);
+
+        return path =>
+        {
+            var key = path?.Trim() ?? string.Empty;
+            if (!answers.TryGetValue(key, out var answer))
+            {
+                answer = Here(key, places, presence);
+                answers[key] = answer;
+            }
+
+            return answer;
+        };
+    }
+
+    /// <summary>What the disk says about a FILE — <see cref="QuestionRoots.PresenceOf(string, Func{string, FileAttributes}, bool)"/>'s three answers, a directory being no CLI.</summary>
+    public static RootPresence FilePresenceOf(string full) => QuestionRoots.PresenceOf(full, File.GetAttributes, wantsDirectory: false);
+
+    /// <summary>The Information line that says a row's CLI path was the other side's — the operator's terminal reads it.</summary>
+    public static string SkippedSentence(string provider, string path, bool windows) => windows
+        ? $"COAI_VENDORS: {provider}'s CLI path '{path}' is a Linux, WSL or macOS path and this server runs on Windows — it is the other side's CLI, run by the server there; this side skips it and looks the CLI up on PATH"
+        : $"COAI_VENDORS: {provider}'s CLI path '{path}' is a Windows path and this server does not run on Windows — it is the Windows side's CLI, run by the server there; this side skips it and looks the CLI up on PATH";
+}

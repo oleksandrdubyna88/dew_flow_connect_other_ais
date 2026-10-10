@@ -35,6 +35,13 @@ public sealed record ProviderSettings(string Provider)
 
     public string ExecutablePath { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The stored CLI path this side SKIPPED because it is spelled for the other operating system — empty when none was
+    /// (<see cref="ExecutablePaths"/>). Kept so the startup log can say it; <see cref="ExecutablePath"/> is then empty and
+    /// the runtime's CLI is looked up on PATH.
+    /// </summary>
+    public string OtherSideExecutable { get; init; } = string.Empty;
+
     /// <summary>Which CLI shape drives it — `codex` or `gemini`.</summary>
     public string Runtime { get; init; } = string.Empty;
 
@@ -1246,8 +1253,20 @@ public sealed record PanelSettings
 
     /// <summary>Malformed JSON is no configuration at all — the caller falls back rather than
     /// running a review with a vendor list somebody half-wrote.</summary>
-    internal static List<ProviderSettings> ParseVendors(string json)
+    internal static List<ProviderSettings> ParseVendors(string json) => ParseVendors(json, OperatingSystem.IsWindows());
+
+    /// <summary>The vendor list as a host that is, or is not, Windows reads it — the platform injected for a test.</summary>
+    internal static List<ProviderSettings> ParseVendors(string json, bool windows) =>
+        ParseVendors(json, SystemPlaces.Current with { Windows = windows }, ExecutablePaths.FilePresenceOf);
+
+    /// <summary>
+    /// The vendor list on a side described by <paramref name="places"/>, asking <paramref name="presence"/> about a CLI path
+    /// of the other OS's spelling — injected for a test. THIS side's CLI is decided after the distinct, once per DISTINCT
+    /// path: a hundred rows sharing one path probe the disk once (E1's code round).
+    /// </summary>
+    internal static List<ProviderSettings> ParseVendors(string json, SystemPlaces places, Func<string, RootPresence> presence)
     {
+        var cliOf = ExecutablePaths.Memoized(places, presence);
         try
         {
             var vendors = System.Text.Json.JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ListVendorDto);
@@ -1267,6 +1286,7 @@ public sealed record PanelSettings
                         // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
                         // row id is ours to normalise; this one is not. Caught on the code round.
                         RemoteVendor = v.RemoteVendor?.Trim() ?? string.Empty,
+                        // Trimmed here; THIS side's CLI is decided once, below (WithThisSidesCli).
                         ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
                         // Absent is TRUE on both, so a vendor list written by an older extension
                         // keeps reviewing both stages rather than silently reviewing neither.
@@ -1296,12 +1316,25 @@ public sealed record PanelSettings
                     // hand-edited settings file is how one reaches the server. The id is the
                     // provider/role key of every reviewer launch, so two rows sharing it would
                     // collide in the round's dictionary before any model ran.
-                    .DistinctBy(v => v.Provider)];
+                    .DistinctBy(v => v.Provider)
+                    .Select(v => WithThisSidesCli(v, cliOf))];
         }
         catch (System.Text.Json.JsonException)
         {
             return [];
         }
+    }
+
+    /// <summary>
+    /// THIS side's CLI (paths per side, E1.2): a path spelled for the other OS that is no file here is the other side's —
+    /// skipped (the PATH lookup) and named for the startup log, never refused; one that exists here, or that the disk could
+    /// not answer for, runs qualified (<see cref="ExecutablePaths.Here(string?, bool)"/>).
+    /// </summary>
+    private static ProviderSettings WithThisSidesCli(ProviderSettings vendor, Func<string?, ThisSidePath> cliOf)
+    {
+        var cli = cliOf(vendor.ExecutablePath);
+
+        return vendor with { ExecutablePath = cli.Path, OtherSideExecutable = cli.OtherSide };
     }
 
     /// <summary>

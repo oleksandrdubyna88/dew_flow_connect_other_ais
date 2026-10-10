@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import { catalogHtml } from '../catalogPage';
 import type { DataLocation } from '../dataDir';
+import { watchedDirs } from '../escalationDirs';
 import type { PanelState } from '../panelView';
 import type { TeamServerState } from '../teamServerView';
 import { type Page, click, panelState, pressCommand, runPanel, work } from './panelPageHarness';
@@ -122,4 +123,17 @@ test('setup/mcp offers no delete of the old folder after a move that did not ver
   const { html } = opened('setup/mcp', everyButton({ lastDataMove: { from: 'C:\\old\\coai', to: 'Z:\\coai', verified: false } }));
 
   assert.equal(inPane(html, PRESSES.find((one) => one.command === 'deleteOldDataFolder')!), false, 'a delete offered over an unverified copy');
+});
+
+test('setup/mcp says a watched folder of the other OS is the other side\'s, quietly — never the refusal tone', () => {
+  // todo/PLAN_paths_per_side.md E1.3: the list is shared with the WSL window, where `/home/...` is right.
+  const alsoWatched = watchedDirs('C:\\Own', ['/home/user/.local/share/coai-mcp', 'C:\\Elsewhere'], 'win32');
+  const { html } = opened('setup/mcp', everyButton({ storage: { ...WHERE, alsoWatched } }));
+  const pane = pageTree(html).one((node) => node.dataset.pane === 'setup/mcp', 'the setup/mcp pane');
+  const line = pane.one((node) => node.tagName === 'DIV' && node.text().startsWith('/home/user/.local/share/coai-mcp'), 'line for the WSL folder');
+
+  assert.deepEqual(line.className.split(' ').sort(), ['hint', 'watched-other-side'], 'drawn in another tone than the quiet hint');
+  assert.match(line.text(), /the other side's data folder: a window on that side answers its questions, and this Windows side skips it/);
+  assert.equal(pane.find((node) => node.className.split(' ').includes('stale')).length, 0, 'something in this pane is drawn as a refusal');
+  assert.ok(pane.find((node) => node.className === 'status' && node.text() === 'C:\\Elsewhere').length === 1, 'this side\'s folder is not drawn plainly beside it');
 });

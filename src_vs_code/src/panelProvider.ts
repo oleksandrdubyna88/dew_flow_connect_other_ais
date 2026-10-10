@@ -89,7 +89,8 @@ import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
-import { hostPlatform, Platform } from './hostSide';
+import { hostExecutableSide, hostPlatform, Platform } from './hostSide';
+import { executableHere, otherSideClis } from './pathFamily';
 import { thisSide } from './installer';
 import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
@@ -1315,6 +1316,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       securityPromptText: this.settingsTab.view === undefined ? undefined
         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
       qconsultPlaces: await this.qconsult.places(settings.qconsult.roots),
+      // Which rows' CLI paths this side skips as the other side's — asked of the disk HERE (paths per side, E1.5).
+      otherSideClis: otherSideClis(vendors, hostExecutableSide()),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
@@ -4426,7 +4429,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return this.agyModels;
     }
     this.agyCheckedAt = Date.now();
-    const agy = vendors.find((v) => v.runtime === 'antigravity')?.executablePath || 'agy';
+    // This side's agy only: a path spelled for the other OS is skipped (todo/PLAN_paths_per_side.md E1.2).
+    const agyRow = vendors.find((v) => v.runtime === 'antigravity');
+    const agy = executableHere(agyRow?.executablePath ?? '', hostExecutableSide()) || 'agy';
     const { code, output } = await capture(unquoted(agy), ['models'], false, 20_000);
 
     return code === 0 ? parseAgyModels(output) : [];
@@ -4593,7 +4598,8 @@ async function probeWatched(own: string): Promise<readonly WatchedDir[]> {
   const asked = watchedDirs(own, alsoWatchDataDirectories(), process.platform);
 
   return Promise.all(asked.map(async (dir, at) => (
-    at === 0 || dir.refusal.length > 0 || await reachable(dir.path)
+    // Never the window's own, never a refused one, never the other side's (no path at all): nothing to probe there.
+    at === 0 || dir.path.length === 0 || await reachable(dir.path)
       ? dir
       : {
         ...dir,

@@ -3334,6 +3334,52 @@ switch on seeds this side from what it reads today, so nothing changes until som
 the seed is idempotent so switching off and on again keeps what a side had. `uiScale` and
 `helpLanguage` stay shared deliberately: a text size belongs to the person, not to the company.
 
+### Every path setting, one rule — a path of the other side is skipped, not refused (2026-10-10, paths per side E1)
+
+VS Code shares its user settings between a WSL window and a plain Windows window on one machine, and each side runs its
+own `coai-mcp` — so every path setting is read on both sides, and a value written on one is spelled for the other's
+operating system. `todo/PLAN_paths_per_side.md` E1 generalised the question-consultant roots' rule (`pathFamily.ts`)
+to every one of them:
+
+- **The registry** — `pathSettings.ts` `PATH_SETTINGS`: seven fields in seven settings (`coai.qconsultRoots`,
+  `coai.vendors[].executablePath`, the legacy `coai.consultants.*.executablePath` / `coai.qconsultRows[].executablePath`
+  / `coai.chatModelPresets[].executablePath`, `coai.alsoWatchDataDirectories`, `coai.dataDirectory`), each with its kind
+  (`folder` / `file` / `folderList`), whether it must exist, who says something about it (`server` / `extension` /
+  `nobody` for a field no page draws) and the words of its note. `pathSettings.test.ts` walks
+  `contributes.configuration` (properties, items, map entries, default rows) and fails on a `*Path` / `*Directory` /
+  `*Roots` / `*Directories` field missing from it; a companion test pins that the census still finds the known ones.
+  `configTransfer.test.ts` derives from it that every WHOLE path setting is in `NEVER_TRANSFERRED`.
+- **A CLI path** — `pathForThisSide(stored, side)` / `executableHere` (design (c) rules 2-3; rule 1, the per-side
+  field, is E3's): the stored `executablePath` trimmed, or nothing — the runtime's name looked up on PATH — when it is
+  spelled for the other OS AND the disk confirms no such FILE here, with the skipped value named. The roots' rule for a
+  file (the gate's cadence consultant): on Windows `/Program Files/nodejs/node.exe` is legal, so a spelling of the other
+  OS is qualified with the system drive (`qualified`) and asked of the disk — there, or unknown, it runs qualified.
+  `ExecutableSide { family, systemDrive, fileAt }`; `hostSide.hostExecutableSide()` is this host's, with a SYNCHRONOUS
+  `stat` (`fileAt`, `directoryAt`'s mapping for a file) that activation INSTALLS (`useFileProbe` — the Settings page's
+  modules bundle without the host, so none may import `node:fs`; uninstalled, every path is `unknown` and kept), because the wire writers are synchronous — and only this machine's
+  own spelling of an other-OS path is ever asked, never a share. Answered by the `executable` vectors of
+  `shared/path-family-vectors.json` (`existsHere`, `unknownHere`, `systemDrive`). `PathFamily` is `windows` | `posix`
+  (D1); `hostSide.hostFamily()` is this host's. Applied where a CLI path crosses to coai-mcp — `vendorsWire.rowOnTheWire`
+  (`COAI_VENDORS`, a consultant's or a question row's `row`, `--check-model`), `settingsShape`'s consultant
+  `wireEntry`, `qconsultSettings`' `rowsOnTheWire` — and where one is launched: `claudeCli.claudeExecutableFor`,
+  `vendorTerminal.executableFor` / `executableForRuntime` (a self-update on ITS platform), `chatPresets.chatRunSpec`,
+  `chatLaunch.cliFor`, `cliChatLaunch`, the agy model list. `aCliPathOfTheOtherSideIsSkipped.test.ts` counts every
+  raw read of a stored `executablePath` in the shipped source (`UNRESOLVED_READS`: the copies and displays, each with
+  why), so a new launch site that skips the rule is red.
+- **Watched data folders** — `escalationDirs.watchedDirs`: an entry spelled for the other OS is `WatchedDir.otherSide`
+  (a sentence), never watched, never probed and never refused; on Windows the sentence adds how a Windows window names
+  a WSL folder (`WSL_FROM_WINDOWS`, which replaced the `POSIX_ON_WINDOWS` refusal). Setup › MCP server draws it as
+  `hint watched-other-side`.
+- **The data directory** — `dataDir.chooseStorage(environment, thisSide, shared, family)` skips the SHARED layer's
+  directory when it is spelled for the other OS (`ChosenStorage.skippedShared`) and falls to the next choice; the
+  environment and this side's own choice are never skipped. `whereData` adds the note.
+- **The page** — one `otherSideNote(windows, setting)`, its words from the registry (the roots' sentence unchanged).
+  The Models card draws it under the CLI-path box (`hint path-other-side`, `panelView.runtimeFields`), decided by the HOST
+  (`otherSideClis(rows, hostExecutableSide())` into `PanelState.otherSideClis`) and drawn by the card from
+  `CardContext.otherSideCli`; `PanelState.hostFamily` (absent = this host's) only words the note.
+- **Export settings** — `qconsultRoots` joined `NEVER_TRANSFERRED` (D4): never exported, and an older export that
+  carries it is refused by name while the importer keeps its own roots.
+
 ### Team servers, and the four modules they are split into (2026-09-06)
 
 A **Team server** runs the vendor CLIs on one machine, on one company subscription, and everybody
@@ -10497,8 +10543,8 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   skips it and the one on that side reads it (`pathFamily.ts`: `spelledForTheOtherOs`, `isPosixAbsolute`,
   `isWindowsAbsolute`, `otherSideNote`; `RootPlaces.windows`, from `process.platform`, says which side this window
   is). When every stored root is the other side's, the block adds that a disk row is not asked on this side —
-  the server's `disabled` row. `escalationDirs.ts`'s POSIX-on-Windows refusal now asks `isPosixAbsolute` instead of
-  its own copy of the shape. `shared/path-family-vectors.json` is answered by `pathFamily.test.ts` and the C#;
+  the server's `disabled` row. Since paths per side E1 the same rule reaches every path setting (*Every path setting,
+  one rule*), and `escalationDirs.ts` no longer refuses the other OS's spelling. `shared/path-family-vectors.json` is answered by `pathFamily.test.ts` and the C#;
   `qconsultSection.test.ts` runs the page both ways.
 - *Before it asks you* (off / remind / require) and the three limits.
 
