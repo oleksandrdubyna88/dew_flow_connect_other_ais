@@ -1,7 +1,7 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { refuseUnderMissingRoot } from './findingsBoard';
+import { refuseUnderMissingRoot, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
  * Writing a file so that a crash cannot leave half of one.
@@ -122,7 +122,7 @@ export async function writeFileAtomically(path: string, text: string | Uint8Arra
   const beside = besideName(path);
   // Never the missing NAMED data root (E5.0 of paths per side): the refusal is the finding's own sentence, and it is
   // thrown exactly as a disk that would not take the file is — the callers already turn that into a refusal.
-  refuseUnderMissingRoot(dirname(path));
+  await refuseUnderMissingRootOnceSettled(dirname(path));
   await mkdir(dirname(path), { recursive: true });
   try {
     // BYTES AS WELL AS TEXT since 2026-09-17, and the change is the TYPE alone. A pasted picture is

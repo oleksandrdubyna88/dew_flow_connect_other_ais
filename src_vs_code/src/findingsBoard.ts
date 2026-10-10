@@ -53,6 +53,12 @@ let listeners: readonly (() => void)[] = [];
  */
 let settling: Promise<unknown> = Promise.resolve();
 
+/**
+ * Whether the first data-root answer has landed (or nothing was ever expected): a writer that can decide synchronously —
+ * a render's spawn, which must start in the same turn — asks this before it waits, so the wait is only ever real.
+ */
+let known = true;
+
 /** How long the ledger gate waits for the first data-root answer at most — the probe's own deadline, with room. */
 export const SETTLE_CEILING_MS = 10_000;
 
@@ -76,12 +82,19 @@ export function onFindings(listener: () => void): void {
 
 /** The host says which probe answers the data-root question first; the gate waits for it (bounded) before deciding. */
 export function expectDataRoot(answer: Promise<unknown>): void {
-  settling = answer.then(() => undefined, () => undefined);
+  known = false;
+  settling = answer.then(() => { known = true; }, () => { known = true; });
 }
 
 /** Resolved once the data root has been asked about (or the ceiling passed) — what `recordNotification` awaits. */
 export async function dataRootSettled(): Promise<void> {
   await finishedInTime(settling, SETTLE_CEILING_MS);
+  known = true;
+}
+
+/** Whether the board has its first data-root answer — true when no host watch ever asked for one (a test). */
+export function dataRootKnown(): boolean {
+  return known;
 }
 
 /** The finding that THIS window's named data root is missing, or nothing — the default location is never one (D3). */
@@ -105,6 +118,26 @@ export function refuseUnderMissingRoot(path: string): void {
   if (missing !== undefined) {
     throw missingRootRefusal(missing);
   }
+}
+
+/**
+ * The guard for a writer that can WAIT: the first data-root answer first (bounded by {@link SETTLE_CEILING_MS}), then
+ * the refusal. A write at activation runs beside the probe — the chat store's heartbeat, the probe cache — and a guard
+ * that read the board before the disk had answered let the heartbeat create the missing root on E5's first run in a
+ * real editor. Every async writer asks this one; only a caller that cannot wait asks {@link refuseUnderMissingRoot}.
+ */
+export async function refuseUnderMissingRootOnceSettled(path: string): Promise<void> {
+  const missing = await refusedDataRootOnceSettled(path);
+  if (missing !== undefined) {
+    throw missingRootRefusal(missing);
+  }
+}
+
+/** {@link refusedDataRoot}, once the first data-root answer has landed (bounded) — for a caller that answers rather than throws. */
+export async function refusedDataRootOnceSettled(path: string): Promise<PathFinding | undefined> {
+  await dataRootSettled();
+
+  return refusedDataRoot(path);
 }
 
 /** The refusal a writer meets, in the finding's own words — one sentence for the guard and for a lost notification. */
@@ -164,4 +197,5 @@ export function forgetFindingsBoard(): void {
   held = [];
   listeners = [];
   settling = Promise.resolve();
+  known = true;
 }

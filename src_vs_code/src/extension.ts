@@ -42,7 +42,7 @@ import { ImportReport, describe as describeImport, importLegacyTabs, importSucce
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
-import { onFindings, refuseUnderMissingRoot } from './findingsBoard';
+import { onFindings, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { startPathWatch } from './pathWatchHost';
 import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
@@ -1084,7 +1084,7 @@ async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
  * (`no-data-root`), and the person is told once per start by the notice, never twice for one folder.</p>
  */
 async function createDataDirectory(): Promise<void> {
-  refuseUnderMissingRoot(dataDir().fsPath);
+  await refuseUnderMissingRootOnceSettled(dataDir().fsPath);
   await vscode.workspace.fs.createDirectory(dataDir());
 }
 

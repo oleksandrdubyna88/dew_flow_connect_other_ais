@@ -8,7 +8,7 @@ import { ConsultSettings } from './consultSettings';
 import { Vendor } from './vendors';
 import { unquoted } from './cliVersions';
 import { writeFileAtomically } from './atomicFile';
-import { refuseUnderMissingRoot } from './findingsBoard';
+import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
  * What this machine knows about the Claude CLI's models, and how it finds out again.
@@ -242,7 +242,7 @@ export class ClaudeProbeCache {
     try {
       // Never the missing NAMED data root (E5.0 of paths per side): the probe runs with nobody acting, and a cache
       // written into a bare mount point would hide the folder being gone.
-      refuseUnderMissingRoot(this.dataDir.fsPath);
+      await refuseUnderMissingRootOnceSettled(this.dataDir.fsPath);
       await vscode.workspace.fs.createDirectory(this.dataDir);
       await writeFileAtomically(vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath, writeProbe(probe));
     } catch (error) {

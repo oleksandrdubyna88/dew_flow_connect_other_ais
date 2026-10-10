@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { refuseUnderMissingRoot } from './findingsBoard';
+import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { finishedInTime } from './withinTheClock';
 
 /**
@@ -124,7 +124,7 @@ export function appendLine(
       // extension's chat is the FIRST thing to write anything under the coai data directory. Unless the
       // directory somebody NAMED is what is missing — then nothing here makes it (E5.0 of paths per
       // side): the refusal lands in the catch below, as a disk that would not take the line does.
-      refuseUnderMissingRoot(dirname(path));
+      await refuseUnderMissingRootOnceSettled(dirname(path));
       await mkdir(dirname(path), { recursive: true });
       await appendFile(path, line, 'utf8');
     } catch (reason: unknown) {

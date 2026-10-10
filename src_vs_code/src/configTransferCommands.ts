@@ -14,7 +14,7 @@ import { notify, notifyAndAsk } from './notify';
 import { oneAtATime } from './oneAtATime';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { askPerson } from './personWait';
-import { refuseUnderMissingRoot } from './findingsBoard';
+import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
  * Export config / Import config, the `…` menu's pair — issue #467. Only VS Code here: what travels is
@@ -155,7 +155,7 @@ function backupsDir(): string {
 async function backedUp(context: vscode.ExtensionContext, path: string): Promise<boolean> {
   try {
     // Never the missing NAMED data root (E5.0 of paths per side): a backup that cannot be kept stops the import.
-    refuseUnderMissingRoot(backupsDir());
+    await refuseUnderMissingRootOnceSettled(backupsDir());
     await mkdir(backupsDir(), { recursive: true });
     await writeExport(context, path, backupSettings);
     await Promise.all(staleBackups(await readdir(backupsDir())).map((name) => rm(join(backupsDir(), name), { force: true })));

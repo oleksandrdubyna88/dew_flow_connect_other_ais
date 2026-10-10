@@ -60,6 +60,15 @@ export async function aFirstStartRaisesNoMissingPathNotice(): Promise<void> {
   assert.deepEqual(raised, [], 'a first start with an existing named data directory raised the missing-path notice');
 }
 
+/** What a folder that should not exist holds — the files name the writer that created it. */
+function whatIsInside(home: string): string {
+  try {
+    return fs.readdirSync(home, { recursive: true }).map(String).join(', ') || '(nothing)';
+  } catch {
+    return '(unreadable)';
+  }
+}
+
 /** The second launch: the named root is not there, stays not there, and the mirror resumes once it is. */
 export async function aMissingNamedDataRootStaysAbsent(): Promise<void> {
   const home = process.env['COAI_DATA_DIR'] ?? '';
@@ -70,7 +79,8 @@ export async function aMissingNamedDataRootStaysAbsent(): Promise<void> {
   // The notice settles here: its toast is shown and its record HANDLED — the write that created the folder on E1.
   await settle(SETTLE_MS);
 
-  assert.equal(fs.existsSync(home), false, `the missing named data directory ${home} was created during activation — the write that hides the condition`);
+  assert.equal(fs.existsSync(home), false,
+    `the missing named data directory ${home} was created during activation — the write that hides the condition; inside it: ${whatIsInside(home)}`);
   // And a setting change, which is the ordinary trigger of the mirror, must not create it either.
   const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
   try {

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import {
   type HeldNotice,
   currentFindings,
+  dataRootKnown,
   dataRootSettled,
   expectDataRoot,
   forgetFindingsBoard,
@@ -104,10 +105,13 @@ test('a publish tells its listeners and is what the page reads; the gate waits f
   assert.deepEqual(currentFindings(), [dataRoot]);
 
   let settled = false;
+  assert.equal(dataRootKnown(), true, 'with no host watch there is nothing to wait for, and a writer deciding in the same turn must know that');
   const first = new Promise<void>((resolve) => { setTimeout(() => { settled = true; resolve(); }, 20); });
   expectDataRoot(first);
+  assert.equal(dataRootKnown(), false, 'the board claims to know the data root before the probe has answered');
   await dataRootSettled();
   assert.equal(settled, true, 'the gate decided before the data root had been asked about');
+  assert.equal(dataRootKnown(), true, 'the answer landed and the board still says it does not know');
 
   expectDataRoot(Promise.reject(new Error('the probe threw')));
   await assert.doesNotReject(dataRootSettled(), 'a probe that threw must not hold every toast of the window');

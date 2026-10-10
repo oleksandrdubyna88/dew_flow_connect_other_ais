@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { besideName, writeFileAtomically, writeFileAtomicallySync } from '../atomicFile';
-import { forgetFindingsBoard, publishFindings } from '../findingsBoard';
+import { expectDataRoot, forgetFindingsBoard, publishFindings } from '../findingsBoard';
 import { familyOf } from '../pathFamily';
 
 /**
@@ -245,6 +245,28 @@ test('a write under a missing named data root is refused with the finding\'s sen
     await assert.rejects(() => writeFileAtomically(path.join(gone, 'wsl', 'record.json'), 'x'), /was not found on this machine/u);
     assert.throws(() => writeFileAtomicallySync(path.join(gone, 'ledger.json'), 'x'), /was not found on this machine/u);
     assert.equal(fs.existsSync(gone), false, 'the write created the root it was refused for');
+  } finally {
+    forgetFindingsBoard();
+  }
+});
+
+test('a write that starts before the disk has answered for the data root WAITS for the answer, and is refused', async () => {
+  // E5's first run in a real editor: the chat store's heartbeat is written at activation, beside the probe — and a guard
+  // that read the board before the disk had answered let it create the missing root. A writer that can wait, waits.
+  const gone = path.join(tempDir(), 'gone-later');
+  forgetFindingsBoard();
+  expectDataRoot(new Promise<void>((resolve) => {
+    setTimeout(() => {
+      publishFindings([{ key: 'coai.dataDirectory', place: 'setup/mcp', value: gone, family: familyOf(process.platform), state: 'missing', owner: '' }]);
+      resolve();
+    }, 40);
+  }));
+  try {
+    const outcome = await writeFileAtomically(path.join(gone, 'chat-conversations', 'housekeeping', 'window-1.json'), '{}')
+      .then(() => 'written', (reason: unknown) => String(reason));
+    assert.equal(fs.existsSync(gone), false,
+      'the write that started before the disk answered created the missing root — the guard read the board before the probe had answered');
+    assert.match(outcome, /Nothing is written under it until it exists/u);
   } finally {
     forgetFindingsBoard();
   }

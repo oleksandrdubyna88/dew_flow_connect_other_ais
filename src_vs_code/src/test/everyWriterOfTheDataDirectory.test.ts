@@ -77,15 +77,28 @@ test('every writer that makes a directory is in the inventory with its sites —
   assert.deepEqual(found, expected, 'a directory-making call site appeared, moved or went: classify it in WRITERS, with its guard or its reason');
 });
 
+/** Either guard: the sync one, or the one that waits for the first data-root answer (`refuseUnderMissingRootOnceSettled`). */
+const GUARD = /refuseUnderMissingRoot(?:OnceSettled)?\(/u;
+
 test('every writer guarded by the board actually asks it before it makes the directory', () => {
   for (const [file, one] of Object.entries(WRITERS).filter(([, writer]) => writer.guard === 'board')) {
-    assert.ok(codeOf(file).includes('refuseUnderMissingRoot('), `${file} is classified as guarded by the board and never calls refuseUnderMissingRoot — ${one.why}`);
+    assert.ok(GUARD.test(codeOf(file)), `${file} is classified as guarded by the board and never calls refuseUnderMissingRoot — ${one.why}`);
   }
+});
+
+test('a writer that can wait WAITS for the first data-root answer — a guard read before the disk answered let the heartbeat create the root', () => {
+  // E5's first run in a real editor: the chat store's heartbeat was written at activation beside the probe, through the
+  // atomic write, and the board had no finding yet. Every async road asks the awaiting guard; only the sync form of the
+  // atomic write — the one caller that cannot wait — keeps the sync one.
+  for (const [file] of Object.entries(WRITERS).filter(([, writer]) => writer.guard === 'board')) {
+    assert.ok(codeOf(file).includes('await refuseUnderMissingRootOnceSettled('), `${file} asks the board without waiting for the first data-root answer`);
+  }
+  assert.equal((codeOf('atomicFile.ts').match(/\brefuseUnderMissingRoot\(/gu) ?? []).length, 1, 'the sync guard belongs to the sync atomic write alone');
 });
 
 test('a writer classified as making no named root does NOT carry the guard — a guard there would say the folder can be missing when it cannot', () => {
   for (const [file] of Object.entries(WRITERS).filter(([, writer]) => writer.guard !== 'board')) {
-    assert.equal(codeOf(file).includes('refuseUnderMissingRoot('), false, `${file} carries the guard but is classified as never creating a named root`);
+    assert.equal(GUARD.test(codeOf(file)), false, `${file} carries the guard but is classified as never creating a named root`);
   }
 });
 
