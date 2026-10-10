@@ -1146,6 +1146,16 @@ the `executable` set — a reviewer's CLI path of the other OS is skipped (PATH 
 (`pathForThisSide`) and by the server's vendor read (`ExecutablePaths.Here`) alike, checked against each other by the
 seam leg `seam-cli-path-other-side.mjs` (`todo/PLAN_paths_per_side.md` E1).
 
+**A root of THIS OS that is missing is named by both halves too (2026-10-10, the same plan's E5).** coai-mcp's
+`--providers` carries `settingProblems: [{key, kind, value, sentence}]` (kinds `missing-folder` / `unreadable-folder`;
+the capability listed in `--features`), the extension's own bounded probes (`pathFindings.ts`, `pathProbes.ts`,
+`pathWatch.ts`) find the same set and take the server's word for the settings it judges (`agreed`), the generic "did not
+understand a setting" toast drops every sentence a problem covers, and the seam leg `seam-path-missing.mjs` holds the
+two level. A NAMED data directory that is missing is created by neither half: the extension's directory-making
+writers refuse under it (`findingsBoard.refuseUnderMissingRoot`), the notice about it is held in memory rather than
+written, and the settings mirror stands aside (`no-data-root`) until the folder exists — so the server keeps reading
+its previous settings file, or none ([module_extension.md](module_extension.md), [module_server.md](module_server.md)).
+
 ### The question card gained a status and the consultants' answers (2026-10-02, S3 of the question consultant)
 
 `escalations/<id>.json` has been the one file neither container owns since escalation shipped: `coai-mcp`

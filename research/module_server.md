@@ -1120,6 +1120,22 @@ consultant / question-row `executablePath` fields outside a `row` are left to th
 Answered by the `executable` vectors of `shared/path-family-vectors.json` (`ACliPathOfTheOtherSideIsSkippedTests`;
 the checked vector reader `SharedVectors` is a test file of its own now).
 
+**`--providers` says which setting and which value a refusal is about (2026-10-10, `todo/PLAN_paths_per_side.md`
+E5.2).** `UnrecognisedSetting(Key, Sentence, Kind, Value)` (`StartupNotes.cs`) gained the kind and the stored value,
+both default empty so every earlier construction reads as it did; `SettingProblemKinds` names the two that carry one —
+`missing-folder` (the root is not there) and `unreadable-folder` (it could not be checked). `QuestionRoots.Validate`
+answers a `Verdict(Accepted, Refusals, OtherSide)` whose `Refusals` are `RootRefusal(Sentence, Kind, Value)`, with
+`Refused` kept as the sentence projection every reader had; a root refused for WHERE it is (a drive root, the profile
+folder, the data folder) stays a sentence alone, because a mark saying *missing* there would lie.
+`PanelSettings.SettingProblems` projects them, `ProvidersAnswer.SettingProblems` carries them additively as
+`settingProblems: [{key, kind, value, sentence}]` — the sentence being the one `unrecognised` still carries, so a newer
+extension drops it from its generic toast (`withoutCovered`) and an older one keeps reading what it read — and
+`--features` lists `settingProblems`. `TheServerSaysWhichSettingAndValueTests` (RED with the kind stubbed: `Expected
+complaint.Kind to be "missing-folder" … but "" has a length of 0`); the extension's contract
+`providersAnswer.contract.ts` (`npm run test:contract`) asks the REAL binary over a settings file its own writer
+produced with one existing and one missing root; the seam leg `seam-path-missing.mjs` holds the page's own findings
+level with this list as the same `key|value|kind` set.
+
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
 commit) — `AskHumanService`, with the two helpers it called on the service forwarded under their names and

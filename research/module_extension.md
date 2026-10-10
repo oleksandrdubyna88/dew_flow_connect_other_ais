@@ -3380,6 +3380,89 @@ to every one of them:
 - **Export settings** — `qconsultRoots` joined `NEVER_TRANSFERRED` (D4): never exported, and an older export that
   carries it is refused by name while the importer keeps its own roots.
 
+### A missing path of this OS: a notice at every start and a bright mark (2026-10-10, paths per side E5)
+
+E1 decided which stored path is the OTHER side's and skipped it; `todo/PLAN_paths_per_side.md` E5 is the other half of
+its design (e): a path of THIS side that the disk says is not there is a finding — said once per window run with
+**Open in Settings**, drawn bright beside its value, counted on its tab — and a NAMED data directory that is missing is
+red at every start and created by nothing (D3).
+
+- **The finding** — `pathFindings.ts`: `PathFinding { key, place, value, family, state, owner }`, `state` being `missing`
+  (the disk SAID absent) or `unknown` (EACCES, EBUSY, a probe past its deadline — never counted, never toasted).
+  `probeable(value, family)` asks only this side's absolute spelling: a path of the other OS, a bare CLI name and a
+  relative root are E1's decisions (`otherSideHere`, `otherSideClis`, `WatchedDir.otherSide`, `skippedShared`), not
+  re-decided here. `pathFindings(values, family, presenceOf)` maps every `PathValue`; `findingFor`, `missingAt(findings,
+  place)` (a top place counts its sub-places; `unknown` counts for nothing), `findingSubject` (`<key>|<value>`) and the
+  words every surface shares — `missingTitle`, `missingCure`, `markSentence`: *"not found on this machine (Windows) just
+  now"*, never *"deleted"*, because an unmounted drive or a sleeping share reads the same. The registry
+  (`pathSettings.ts`) gained each setting's `wireKey` (the server's name for it), and its `place` became the Settings
+  page's place id, worded by `catalogPlaces.placeLabel`.
+- **The probes** — `pathProbes.ts` `PathProbes(stat)`: one `stat` at a time per path, a deadline (`PROBE_DEADLINE_MS`,
+  5 s) that answers `unknown`, at most ONE outstanding probe per path however many renders and expiries pass, an unknown
+  answer never kept as fresh, a definitive one kept `ROOT_ANSWER_LIFETIME_MS`. `presence()` is synchronous (`pending`
+  before the first answer) so a repaint never waits for a share; `settled()` waits the deadline at most. `statProbe`
+  maps a failure through `pathFamily.presenceOnFailure` (exported for it, not copied).
+- **The watch** — `pathWatch.ts` (vscode-free) and `pathWatchHost.ts` (the vscode around it): started at activation
+  BEFORE the settings mirror writes the data directory, never from the panel, which a window may never open. It reads
+  this side's values — the question consultant's roots (`qualified`), this side's CLI paths (`pathForThisSide`, the
+  owner named), the watched data folders of this side (`watchedDirs`), the named data root (`dataDir.namedRoot`,
+  `dataDirFinding`) — asks the probes, publishes to the board, SAYS a path when it APPEARS missing (never on every
+  refresh, which would be a ledger row per repaint) and resolves it (`notifyResolved`) when it is back, so going
+  missing again is news. It re-asks on a `coai` configuration change (`forget()`) and takes the server's word
+  (`serverSaid`) — see *page and server agree*.
+- **The notice** — `setting-path-missing` (a warning, source `pathWatch`, subject `<key>|<value>` so fixing one path
+  clears one notice) through the funnel's new door `notify.notifyOnceThen`: `notifyOnce`'s once per run with
+  `notifyThen`'s button — **Open in Settings** runs `coai.openSettings` with the finding's place. The census
+  (`scripts/count-notifications.mjs`) knows the door; `PLACES_THIS_SPEAKS` is 164. Never two toasts for one folder:
+  `providers.withoutCovered` drops from the generic "did not understand a setting" toast every sentence a structured
+  `settingProblems` entry covers (`panelProvider.sayWhatTheServerSaid`); from an older server nothing is covered.
+- **The board and the storage-write policy (D3, story 5.0)** — `findingsBoard.ts` is the one answer to "is this
+  window's data root missing": `publishFindings` / `currentFindings` / `onFindings` (the panel repaints on it),
+  `expectDataRoot` / `dataRootSettled` (bounded by `SETTLE_CEILING_MS`, 10 s), `missingDataRoot`,
+  `refusedDataRoot(path)` (at or under the missing root, case-folded on Windows) and `refuseUnderMissingRoot(path)`,
+  which throws `missingRootRefusal` — the guard every directory-making writer asks first: the ledgers (`jsonlLedger`),
+  the atomic write (`atomicFile`, both forms), the settings file and its lock (`extension.createDataDirectory`, one
+  road for both), the probe cache (`claudeProbeCache`), the token file (`teamServerAuth`), the prompt overrides
+  (`consultPromptFile`, `securityPromptEditor`), the import backup (`configTransferCommands`) and the chat store's
+  lock (`chatStoreLock`). `everyWriterOfTheDataDirectory.test.ts` derives the inventory of every `mkdir` / `mkdirSync`
+  / `createDirectory` site from the source and holds each to the guard or a stated reason (inside an existing store,
+  the folder a person chose, extension storage, a temp folder). `notificationsFile.recordNotification` answers
+  `landed | held | lost`: a record refused under a missing root is LOST and counted into the ledger's write gap —
+  except the missing-path notice itself, which is HELD in memory (`holdNotice` / `heldNotices`: one per setting key,
+  the newest replacing the older, released the moment the path changes or the folder is found again — bounded by the
+  registry) and shown on this window's Notifications page as `heldArrival` (ledger `extension`, at an offset no
+  acknowledgement covers, its detail saying it was written to no ledger).
+- **The data directory (D3, story 5.7)** — `dataDir.namedRoot()` is the root somebody NAMED (nothing for the default
+  location, which is created lazily and never red); `dataDirFinding(named, presence, family)` is its finding.
+  `whereData` keeps its quiet *"is not there yet"* note for a side folder inside an EXISTING root only — a missing
+  named root is the bright mark, not the same folder said twice in two tones — and `panelProvider.probePaths` probes
+  the root itself so the page can tell the two apart. The settings mirror asks the watch
+  (`PathWatch.dataRootMissing`, the board's settled answer) BEFORE its critical section, whose lock file would create
+  the folder, and answers `no-data-root` — a terminal `SyncOutcome` that `MirrorSchedule` neither retries nor reports,
+  because the notice already says it; nothing is remembered as written, so the content lands on the next change once
+  the folder exists. `REASONS['no-data-root']` words it on the page.
+- **Page and server agree (story 5.6)** — coai-mcp names each refused root as a `settingProblems` entry
+  (`{ key, kind, value, sentence }`, kinds `missing-folder` / `unreadable-folder`; `--features` lists
+  `settingProblems`); `providers.parseProviderNotes` reads the list (a row kept only whole), `FEATURES.settingProblems`
+  names the capability, and `pathFindings.agreed(own, server, family)` lets the server's problems REPLACE this
+  window's own findings for the settings the server judges (`saidBy: 'server'`, matched by `wireKey`) once the panel's
+  probe has answered from a server that lists the capability (`PanelProvider.onServerProblems` →
+  `PathWatch.serverSaid`), and leaves them otherwise. The seam leg `scripts/seam-path-missing.mjs` holds the two halves
+  level against the real binary.
+- **The mark (story 5.4)** — `pathMark.ts` is the one builder every place draws: `markClass` (` path-missing` /
+  ` path-unknown`), `markAttributes` (`aria-invalid="true"` and `aria-describedby` the sentence, for a missing path
+  only), `markNote` (a leading `●`, the word *missing* or *could not be checked*, the sentence). One CSS block in
+  `catalogCss.ts` for `.skew`, `.path-missing` and `.path-unknown` — the `.skew` shape (a 3px left border and an 8%
+  tint) in the editor's error colour, the unknown tone in its warning colour. Drawn on the Question consultant's root
+  line (`qconsultView.rootHtml`), the Models card's CLI-path field (`panelView.runtimeFields` ← `modelCard.connectionOf`,
+  the finding found by the STORED value, `CardContext.missingCli`) and Setup › MCP server's watched-folder lines and
+  data-directory line (`watchedLine`, `dataDirectoryLine`, `storageBlock`) — all from `PanelState.pathFindings`, which
+  the panel reads off the board, never asking the disk itself.
+- **The tab count (story 5.5)** — `tabStrip.Tab.mark?: TabMark { count, label }`, drawn AFTER the label as
+  `<span class="tab-mark" role="img" aria-label="N missing folders or paths">● N</span>` in the error colour, nothing
+  for a tab without one; `catalogPage.markFor(place, findings)` computes it through `missingAt` — a top tab counts every
+  sub-place under it, a sub-tab its own, zero findings draw no badge.
+
 ### Team servers, and the four modules they are split into (2026-09-06)
 
 A **Team server** runs the vendor CLIs on one machine, on one company subscription, and everybody

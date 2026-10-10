@@ -1,8 +1,9 @@
 # PLAN — a path in the settings belongs to a side: a missing folder is marked, and two sides get two fields
 
 > Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
-> deviations are under E1); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
-> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E5, E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
+> deviations are under E1); E5 implemented 2026-10-10 on `feat/paths-per-side-e5-on-main` (stories 5.0–5.7; its
+> deviations are under E5); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
+> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
 > pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
@@ -384,7 +385,7 @@ its deciding line; the observed messages are in the commits and in `research/mod
 
 Built right after E1: it is the operator's item 1 and needs no side registry.
 
-- **5.0 The storage-write policy comes FIRST** (the gate's cadence consultant before E1's code round — verified on
+- ✅ **5.0 The storage-write policy comes FIRST** (the gate's cadence consultant before E1's code round — verified on
   `fix`+E1: `notify.ts` `write` → `recordNotification(coaiDataDir(), …)` → `jsonlLedger.appendLine` → `mkdir(dirname(path),
   { recursive: true })`, so the notice about a missing NAMED data directory would itself create it, and hide the very
   condition it reports). **Decided: a notice whose subject is the missing data directory itself is held IN MEMORY —
@@ -406,7 +407,7 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   `consultPromptFile`, `securityPromptEditor`, `teamServerAuth` (the token file), `configTransferCommands` (prompt
   texts), `dataCommands` (the choice and move flows), `extension.ts` (`writeSettingsFile` / `underSettingsLock`) and
   `roundsDbRead`.
-- **5.1 The findings.** `pathFindings(registry, read, family, isDirectory/isFile)` → `PathFinding[]`, one `stat` at a
+- ✅ **5.1 The findings.** `pathFindings(registry, read, family, isDirectory/isFile)` → `PathFinding[]`, one `stat` at a
   time, cached, unknown never cached (the `RootExistence` contract). RED: a this-OS root `D:\old-project` that is ENOENT
   yields `missing` — today the page asks the disk about other-OS roots only. **Amended (the gate's cadence consultant,
   verified: `existingHere` awaits each `stat` in turn with no deadline, so one stalled share stops every later path,
@@ -417,30 +418,30 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   local folder — the local `missing` finding still publishes and the outstanding work stays bounded (one per path,
   however many renders and expiries pass); an `unavailable → present` recovery (the share comes back) clears the finding
   without any settings edit.
-- **5.2 The server says which setting and which value.** `UnrecognisedSetting` gains a kind; `ProvidersAnswer` gains
+- ✅ **5.2 The server says which setting and which value.** `UnrecognisedSetting` gains a kind; `ProvidersAnswer` gains
   `SettingProblems` (additive, JSON name `settingProblems`); `providers.ts` parses it, an absent field reading as none.
   RED (C#): `--providers` with a missing root carries no `settingProblems`. Contract test (`test:contract`) on the
   field's shape.
-- **5.3 The notice.** `setting-path-missing` per `(key, value)` through `notifyOnce`, with **Open in Settings**, worded
+- ✅ **5.3 The notice.** `setting-path-missing` per `(key, value)` through `notifyOnce`, with **Open in Settings**, worded
   *"not found now"* — never *"deleted"*: an unmounted drive or a sleeping share reports absence too (the cadence
   consultant); the
   generic toast stops repeating a sentence whose `(key, value)` the structured answer covers. RED: the operator's case
   today produces the generic code with the cure *"running without those settings"*; after, one
   `setting-path-missing` with the place, and no generic toast. Unit test on the dedupe; `notificationSites` ratchet
   updated.
-- **5.4 The mark.** `.path-missing` (`--err`, the `.skew` shape, `●`) beside the value on Question consultant, Models
+- ✅ **5.4 The mark.** `.path-missing` (`--err`, the `.skew` shape, `●`) beside the value on Question consultant, Models
   (CLI path), MCP server (watched folders); `aria-invalid`. Page test, RUN through `runPanel`: given a finding, the row
   holding `D:\old-project` has class `path-missing`, contains the word *missing*, and the input/row has
   `aria-invalid="true"`; given none, no such class anywhere. Break-it: draw it with `.stale` — the test must go red on
   the class, not on the text.
-- **5.5 The tab count.** `tabStrip` takes an optional mark per tab key; the Consultants tab and its Question consultant
+- ✅ **5.5 The tab count.** `tabStrip` takes an optional mark per tab key; the Consultants tab and its Question consultant
   sub-tab show `● 1` with `aria-label`. Page test through `pageTree`: the count is on the tab, in DOM order after the
   label; zero findings draw no badge.
-- **5.6 Page and server agree.** The page prefers the server's `settingProblems` for `qconsultRoots`; its own `stat`
+- ✅ **5.6 Page and server agree.** The page prefers the server's `settingProblems` for `qconsultRoots`; its own `stat`
   only fills in while the server has not answered or is older (capability via `--features`). Seam leg
   `scripts/seam-path-missing.mjs` in `test:seam`: the real coai-mcp, a settings file with one existing and one deleted
   root, the page's findings against `--providers`' `settingProblems` — the same `(key, value, kind)` set.
-- **5.7 A named data directory that is missing is always red (D3).** `dataDirFinding(chosen, exists)` (pure, beside
+- ✅ **5.7 A named data directory that is missing is always red (D3).** `dataDirFinding(chosen, exists)` (pure, beside
   `whereData`): `missing` when a named ROOT is absent; nothing for `source: 'default'`; nothing (the quiet note) for an
   absent side folder inside an existing root. The activation order puts the check before the settings-file write, and
   `writeSettingsFile`/`underSettingsLock` stop creating a missing named root (they still create the default location
@@ -454,6 +455,56 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   activation **and after the notice has settled** (its toast shown and its record handled — 5.0: the notice itself must
   not recreate it). Break-it: drop the `source` guard — (4)'s first half must go red; route the notice back through the
   ledger — (4)'s "still absent" must go red.
+
+**E5 as built (2026-10-10) — deviations and what is left.** Every story above is done, RED first, with a break-it on
+its deciding line that COMPILES — four first breaks that did not (an unused import, an unused parameter, an unused
+field, a narrowed `&& false`) left stale output under `noEmitOnError` and a false pass, and were replaced; the observed
+messages are in the commits and in `research/module_tests.md`. Record: `research/module_extension.md` *A missing path
+of this OS*, `research/module_server.md` *`--providers` says which setting and which value*, `research/architecture.md`.
+
+- **No `otherSide` finding state.** Design (e) listed three states; `missing` and `unknown` are E5's, and a value
+  spelled for the other OS is never a finding — E1 already decided it (`otherSideHere`, `otherSideClis`,
+  `WatchedDir.otherSide`, `skippedShared`) and says so on the page, so `pathFindings.probeable` does not ask about it; a
+  bare CLI name and a relative root are not asked either.
+- **5.0 held notices and lost records.** EVERY ledger write is refused under a missing named root — a refused record is
+  `lost` and counted into the ledger's write gap (`recordNotification` answers `landed | held | lost`) — while the
+  missing-path notice itself is `held` (one per setting key, the newest replacing the older) and shown on this
+  window's Notifications page as `heldArrival` (ledger `extension`, at an offset no acknowledgement covers, its detail
+  saying it was written to no ledger). The inventory test derives the writers from the source rather than from 5.0(b)'s
+  list, which was complete except for `extension.ts`'s second site (the settings lock) — found by the scan; every
+  guard goes through one `findingsBoard.refuseUnderMissingRoot`.
+- **5.1** `PathSetting.place` became the Settings page's place id (`consultants/qconsult`, `models`, `setup/mcp`),
+  worded by `catalogPlaces.placeLabel`, and the registry gained `wireKey` (the server's name for the value), which
+  `agreed` uses to match the server's `settingProblems` to a setting. The probes are a class of their own
+  (`pathProbes.ts`: a 5 s deadline, one outstanding probe per path, an unknown answer never fresh), `presence()`
+  synchronous so a repaint never waits.
+- **5.2** `test:contract` gained a contract against the REAL coai-mcp (`providersAnswer.contract.ts`); the binary
+  finder left `run-seam.mjs` for `src/test/coaiMcpBinary.ts`, shared. Only a root that is missing or unreadable
+  carries a kind and a value; a root refused for where it is stays a sentence alone. `QuestionRoots.Validate` answers
+  `Refusals` (`RootRefusal(Sentence, Kind, Value)`), `Refused` kept as the sentence projection.
+- **5.3 Open in Settings lands on the PLACE**, not on the value: `coai.openSettings(place)` opens the tab, and the mark
+  is what finds the row. The door is `notify.notifyOnceThen` (once per run + a button) — a fourth once-guard at the
+  call site being what the funnel exists to prevent; the census population is 164. The watch runs from activation
+  (`pathWatchHost.startPathWatch`), not from the panel.
+- **5.5** the badge's words are *"N missing folders or paths"* (one: *"folder or path"*); a top tab counts every
+  sub-place under it, a sub-tab its own.
+- **5.6 the agreement is one-way, by setting**: the server's problems replace this window's own findings for the
+  settings the server judges (`saidBy: 'server'`, the roots) once a server that lists `settingProblems` has answered;
+  an older server's silence replaces nothing.
+- **5.7** `whereData` keeps its quiet note only for a side folder inside an EXISTING root; `probePaths` probes the root
+  itself; the mirror's new outcome `no-data-root` is terminal — not retried, not reported, because the notice already
+  says it. The choice flow already created the folder it was given (`dataCommands`, recorded in the inventory as the
+  folder a person chose) and was not changed. The host cannot observe the toast or count it (a held notice is written
+  to no ledger, and the bundle's module state is out of a scenario's reach), so `test:host` asserts what a host CAN see —
+  the ordinary launch's ledger holds no `setting-path-missing` after a first start with an existing named directory; a
+  SECOND launch (`run-host.mjs`, `COAI_DATA_DIR` naming a folder that is not there) finds it still absent after
+  activation, after the notice has settled and after a settings change, and `settings.json` landing within seconds
+  once the folder is made. The once-per-run and the button are unit values (`pathWatch.test.ts`,
+  `findingsBoard.test.ts`), RED (3)'s "default location draws no mark" is a unit value (`dataDirFinding(undefined, …)`),
+  and the planned host break-its (the `source` guard, the notice routed back through the ledger) are held by the unit
+  break-its of the same lines.
+- **Not in E5:** the side registry (E2), the second field (E3/E4). Whether a missing CLI should wear the *cannot
+  review* badge was left as E1 left it: the mark under the box is E5's answer, the badge stays `auth`-only.
 
 ### E2 — the sides this profile has been used on · `feat/paths-per-side-e2-sides-seen`
 
@@ -577,13 +628,14 @@ The four questions this plan asked were answered the same day; the design above 
 - [ ] A path spelled for the other OS is skipped, never refused and never a toast, on both halves, from one vector file.
       (E1: every path setting in the extension; on the server the `COAI_VENDORS` / catalog-`row` CLI paths and, from the
       fix branch, the roots.)
-- [ ] A missing path of this OS raises one `setting-path-missing` notice per window start, with **Open in Settings**,
-      and no generic toast for the same folder (RED first, teeth shown).
-- [ ] The Settings page marks it with `.path-missing` in `--err`, `aria-invalid`, and a count on its tab — page tests
-      RUN the page.
-- [ ] The page and coai-mcp agree on which paths are missing — the seam leg green against the real binary.
-- [ ] A NAMED data directory that does not exist is red on the page and said at every start (D3); the default location
-      on a first start is never red; nothing creates a missing named root (E5.7, `test:host` both halves).
+- [x] A missing path of this OS raises one `setting-path-missing` notice per window start, with **Open in Settings**,
+      and no generic toast for the same folder (RED first, teeth shown) — E5.3.
+- [x] The Settings page marks it with `.path-missing` in `--err`, `aria-invalid`, and a count on its tab — page tests
+      RUN the page — E5.4, E5.5.
+- [x] The page and coai-mcp agree on which paths are missing — the seam leg green against the real binary — E5.2, E5.6.
+- [x] A NAMED data directory that does not exist is red on the page and said at every start (D3); the default location
+      on a first start is never red; nothing creates a missing named root (E5.7, `test:host` both halves — see E5's
+      deviations for what a host can see).
 - [x] *Export settings* never carries `qconsultRoots` (D4) — E1.6.
 - [ ] Sides seen are recorded, listed and forgettable; `coai.pathFieldsPerSide` declared and documented in five
       languages.
