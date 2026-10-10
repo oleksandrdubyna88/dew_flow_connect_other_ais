@@ -175,11 +175,21 @@ public static class RoundCounts
             .ThenBy(model => model.Model, StringComparer.Ordinal),
     ];
 
+    /// <summary>
+    /// The query behind <see cref="ModelsKnownSince"/>: rounds oldest first through <c>rounds_by_time</c>, each one's
+    /// reviewers looked up by round, stopping at the first that recorded a model. Its cost is the rounds written before
+    /// step 20 — fixed once the step ran — not the whole history, which a <c>MIN</c> over the join read every minute.
+    /// </summary>
+    internal const string ModelsKnownSinceSql =
+        "SELECT r.started_utc FROM rounds r "
+        + "WHERE EXISTS (SELECT 1 FROM reviewers v WHERE v.round_id = r.id AND v.model <> '') "
+        + "ORDER BY r.started_utc LIMIT 1";
+
     /// <summary>The first round, over the whole table, whose reviewer recorded a model — or nothing.</summary>
     private static string? ModelsKnownSince(SqliteConnection db)
     {
         using var read = db.CreateCommand();
-        read.CommandText = "SELECT MIN(r.started_utc) FROM rounds r JOIN reviewers v ON v.round_id = r.id WHERE v.model <> ''";
+        read.CommandText = ModelsKnownSinceSql;
 
         return read.ExecuteScalar() is string since ? since : null;
     }

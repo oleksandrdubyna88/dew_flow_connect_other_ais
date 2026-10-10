@@ -7344,7 +7344,10 @@ says only that some of it was not. The round counts come from `coai-mcp --round-
 - `ledgerTail.ts` — `readTailSince(path, sinceMs, parse)` reads `usage.jsonl` from its END in 64 KiB chunks and stops at
   the first chunk whose oldest whole line is older than the instant asked for (the code round's rule: a year of history
   is one chunk, not a parse per refresh); a line torn across a chunk is carried back and joined; a missing file is no
-  lines. It answers `bytesRead`, which is what the bound is tested by.
+  lines. It answers `bytesRead`, which is what the bound is tested by, and `failure`: empty when the ledger read or does
+  not exist yet (`missingRatherThanBroken` from `notificationsFile.ts`), else why it did not read — a permission error,
+  a directory in the file's place (on Windows that OPENS cleanly with size 0, so it is caught by `isFile()`, not by a read).
+  The loader hands it to the snapshot as `ledgerFailure`; a thrown load sets it too.
 - `roundCountsCache.ts` — **bounded freshness, never a spawn per render.** `current()` never reads; `refresh()` reads
   when the snapshot is older than `ROUNDS_MAX_AGE_MS` (60 s), after `forget()` — a consultation or a question ended
   (`consultations.onChanged`, `questionConsults.onChanged` in `extension.ts`) — or after the session files hold one more
@@ -7365,9 +7368,13 @@ only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A
 (`ranOnOf`). The block names the store it counted (`storeSentence`: *Counted from this side's store only — WSL: Ubuntu,
 <dir>.*) and every other installation's existing store as *not included* — the other side's WAL `coai.db` is never
 opened across the `\\wsl.localhost` / drvfs boundary. Before the first read the block says *Counting…*; an unavailable
-read says *count unavailable* in every count cell, once with the reason, and the ledger's tokens still show. The Models
+read says *count unavailable* in every count cell, once with the reason, and the ledger's tokens still show. A ledger
+that did not read is the mirror case: *Tokens and money: unavailable — the usage ledger could not be read: <why>*, once,
+and *unavailable* in every cell drawn from it (beside, median, tokens, money, per round) while the counts still show —
+never a zero that reads as nothing spent. The Models
 card's foot carries `cardRoundsLine` — `7 days: 14 rounds · 1 consult turns · 5 h: 2` (consult TURNS, since one
-consultation is several ledger lines), `Rounds: count unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
+consultation is several ledger lines; *consult turns unavailable* when the ledger did not read), `Rounds: count
+unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
 the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
 says the product ships no price table.
 

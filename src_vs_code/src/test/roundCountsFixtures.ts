@@ -55,8 +55,8 @@ export function hoursAgo(hours: number): string {
   return at(hours);
 }
 
-export function snapshot(read: RoundCountsRead, ledger: readonly UsageEntry[] = [usageLine()]): RoundsSnapshot {
-  return { read, ledger, atMs: NOW };
+export function snapshot(read: RoundCountsRead, ledger: readonly UsageEntry[] = [usageLine()], ledgerFailure = ''): RoundsSnapshot {
+  return { read, ledger, ledgerFailure, atMs: NOW };
 }
 
 export const NO_CHAT: readonly LedgerLine[] = [];

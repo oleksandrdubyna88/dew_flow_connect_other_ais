@@ -67,6 +67,19 @@ test('an unavailable read says count unavailable in every count cell and never d
   assert.match(cells[8]!, /in 1\.0M/u, 'the ledger\'s tokens still show — they do not depend on the count');
 });
 
+test('AnUnreadableLedger_IsUnavailableSpend_NeverAZero — every spend cell says unavailable; the counts still show', () => {
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [], 'EACCES: permission denied, open usage.jsonl') }));
+  const row = rowCells(html, '<b>codex</b>');
+  const model = rowCells(html, '>gpt-6-luna<');
+
+  assert.match(html, /Tokens and money: unavailable — the usage ledger could not be read: EACCES: permission denied/u);
+  assert.deepEqual(row.slice(1, 4), ['2', '5', '14'], 'the counts come from the database, not the ledger');
+  assert.deepEqual([row[5], row[8], row[9], row[10]], ['unavailable', 'unavailable', 'unavailable', 'unavailable'],
+    'a ledger that would not read was drawn as nothing spent');
+  assert.deepEqual(model.slice(7, 11), ['unavailable', 'unavailable', 'unavailable', 'unavailable']);
+  assert.doesNotMatch(html, /in 0 ·|~\$0(?!\.)|\$0\.00/u, 'a zero stands in for a ledger that did not read');
+});
+
 test('before the first read the block is counting, never zero', () => {
   const html = roundsBlock(input({ snapshot: undefined }));
 
@@ -124,6 +137,13 @@ test('the Models card carries its row\'s line from the cached snapshot (story 2.
   assert.match(withRounds, /<div class="rounds-line">7 days: 14 rounds · 1 consult turns · 5 h: 2<\/div>/u);
   assert.doesNotMatch(without, /rounds-line/u);
   assert.match(unavailable, /<div class="rounds-line">Rounds: count unavailable<\/div>/u);
+});
+
+test('the card line says consult turns are unavailable when the ledger would not read — never 0 consult turns', () => {
+  const codex = { ...DEFAULT_VENDORS[0]!, id: 'codex' };
+  const html = modelsTabHtml({ ...panelState('reviewers'), vendors: [codex], roundsSnapshot: snapshot(counted(), [], 'EACCES') });
+
+  assert.match(html, /<div class="rounds-line">7 days: 14 rounds · consult turns unavailable · 5 h: 2<\/div>/u);
 });
 
 let bundle: BundledLog & { usageTabHtml?: (...args: unknown[]) => string; roundsBlock?: (block: RoundsBlockInput) => string };

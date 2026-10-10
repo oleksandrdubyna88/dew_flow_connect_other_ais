@@ -29,6 +29,8 @@ export function finishedRounds(sessions: readonly SessionFile[]): number {
 export interface RoundsSnapshot {
   readonly read: RoundCountsRead;
   readonly ledger: readonly UsageEntry[];
+  /** Why the ledger did not read — empty when it read or does not exist yet; then its tokens and money are unavailable. */
+  readonly ledgerFailure: string;
   readonly atMs: number;
 }
 
@@ -100,6 +102,7 @@ export class RoundCountsCache {
     const loaded = await this.load(atMs).catch((reason: unknown) => ({
       read: { state: 'unavailable' as const, why: `the read failed: ${String(reason)}` },
       ledger: [],
+      ledgerFailure: `the read failed: ${String(reason)}`,
     }));
     this.snapshot = { ...loaded, atMs };
 

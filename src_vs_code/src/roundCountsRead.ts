@@ -41,7 +41,7 @@ export function roundsLoader(executable: () => string, usagePath: string, run?: 
       readTailSince(usagePath, nowMs - WINDOW_MS['7d'], parseUsageLine),
     ]);
 
-    return { read, ledger: tail.records };
+    return { read, ledger: tail.records, ledgerFailure: tail.failure };
   };
 }
 

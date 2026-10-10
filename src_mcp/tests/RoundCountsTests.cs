@@ -161,6 +161,37 @@ public sealed class RoundCountsTests : IDisposable
         answer.ModelsKnownSince.Should().Be(Now.AddDays(-8).ToString("O"), "the oldest round that recorded a model, over the whole table");
     }
 
+    /// <summary>
+    /// The once-a-minute read must not cost more as the history grows: the oldest modelled round is found by walking
+    /// rounds oldest first through <c>rounds_by_time</c> and stopping at the first one, each looked up through
+    /// <c>reviewers_by_round</c> — so the cost is the rounds written before step 20, a number that never grows. A join
+    /// that aggregates every reviewer row (the first form) scans the whole table on every refresh.
+    /// </summary>
+    [Fact]
+    public void ModelsKnownSince_WalksTheRoundsByTime_AndStopsAtTheFirst_NeverAggregatingEveryReviewer()
+    {
+        Fixture();
+        using var db = new SqliteConnection($"Data Source={Database};Mode=ReadOnly");
+        db.Open();
+        using var explain = db.CreateCommand();
+        explain.CommandText = "EXPLAIN QUERY PLAN " + RoundCounts.ModelsKnownSinceSql;
+        var plan = new List<string>();
+        using (var reader = explain.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                plan.Add(reader.GetString(3));
+            }
+        }
+
+        plan.Should().Contain(step => step.Contains("rounds_by_time", StringComparison.Ordinal), "the walk is in time order, by the index");
+        plan.Should().Contain(step => step.Contains("reviewers_by_round", StringComparison.Ordinal), "each round's reviewers by their round");
+        plan.Should().NotContain(step => step.Contains("TEMP B-TREE", StringComparison.Ordinal), "no sort of the whole table");
+        // The plan text reads the same for a walk and for a full aggregate over the same indexes; what makes it a walk
+        // that stops is the order and the limit, so those are pinned.
+        RoundCounts.ModelsKnownSinceSql.Should().Contain("ORDER BY r.started_utc LIMIT 1", "the walk stops at the first modelled round");
+    }
+
     [Fact]
     public void AWindowNothingRanIn_HasNoRows_AndIsStillAnswered()
     {

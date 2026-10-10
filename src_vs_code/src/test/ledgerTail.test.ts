@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 
 import { readTailSince } from '../ledgerTail';
+import { roundsLoader } from '../roundCountsRead';
 import { parseUsageLine } from '../usage';
 
 /**
@@ -54,8 +55,31 @@ test('a line torn across a chunk boundary is joined, not lost or misread', async
   fs.rmSync(path.dirname(file), { recursive: true, force: true });
 });
 
+test('AnUnreadableLedger_IsAFailureThatSaysWhy_NeverNoLines — a ledger that exists and will not read is not "nothing spent"', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-tail-'));
+
+  const tail = await readTailSince(dir, 0, parseUsageLine); // a directory where the file should be: it exists, it will not read
+
+  assert.deepEqual(tail.records, []);
+  assert.ok(tail.failure.length > 0, 'a ledger that would not read came back as an empty one — the money would read as nothing spent');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the loader hands the ledger\'s failure to the snapshot beside the counts', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-tail-'));
+  const load = roundsLoader(() => 'coai-mcp', dir, async () => ({ code: 64, output: '' }));
+
+  const loaded = await load(NOW);
+
+  assert.ok(loaded.ledgerFailure.length > 0, 'the snapshot lost the reason the ledger did not read');
+  assert.deepEqual(loaded.ledger, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('a ledger that does not exist is no lines; a torn last line costs itself alone', async () => {
-  assert.deepEqual((await readTailSince(path.join(os.tmpdir(), 'no-such-dir-coai', 'usage.jsonl'), 0, parseUsageLine)).records, []);
+  const missing = await readTailSince(path.join(os.tmpdir(), 'no-such-dir-coai', 'usage.jsonl'), 0, parseUsageLine);
+  assert.deepEqual(missing.records, []);
+  assert.equal(missing.failure, '', 'a ledger never written is nothing run yet, not a failure');
   const file = ledgerFile([lineAt(NOW - 1000, 1)]);
   fs.appendFileSync(file, '{"utc":"2026-10-10T11:59:59Z","provi');
 

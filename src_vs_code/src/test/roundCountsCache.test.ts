@@ -19,7 +19,7 @@ class Clock {
 }
 
 /** A stand-in `coai-mcp` that counts its spawns and answers ONE round, five hours deep, as the mode would at `nowMs`. */
-function binary(roundAtMs: number): { spawns: number; load: (nowMs: number) => Promise<{ read: RoundCountsRead; ledger: [] }> } {
+function binary(roundAtMs: number): { spawns: number; load: (nowMs: number) => Promise<{ read: RoundCountsRead; ledger: []; ledgerFailure: string }> } {
   const state = { spawns: 0 };
 
   return Object.assign(state, {
@@ -32,7 +32,7 @@ function binary(roundAtMs: number): { spawns: number; load: (nowMs: number) => P
       const json = JSON.stringify({ nowUtc: new Date(nowMs).toISOString(), windows: [window('5h', inFiveHours), window('24h', 1), window('7d', 1)], modelsKnownSince: null });
       assert.ok(parseRoundCounts(json) !== undefined, 'the stand-in answers outside the contract');
 
-      return { read: roundCountsFrom({ code: 0, output: json }), ledger: [] as [] };
+      return { read: roundCountsFrom({ code: 0, output: json }), ledger: [] as [], ledgerFailure: '' };
     },
   });
 }
@@ -113,15 +113,16 @@ test('a read that throws is a snapshot saying so — stamped, so it is not retri
 
   assert.equal(calls, 1);
   assert.equal(cache.current()?.read.state, 'unavailable');
+  assert.match(cache.current()?.ledgerFailure ?? '', /the read failed: Error: boom/u, 'a thrown load left the money looking like nothing spent');
   assert.equal(cardRoundsLine(cache.current(), 'codex'), 'Rounds: count unavailable');
 });
 
 test('the card counts consult turns from the cached ledger, for its own row only — and an unavailable count stays unavailable', () => {
   const consults = [usageLine({ kind: 'consult' }), usageLine({ kind: 'consult' }), usageLine({ provider: 'gemini', kind: 'consult' }), usageLine()];
 
-  assert.equal(cardRoundsLine({ read: counted(), ledger: consults, atMs: T0 }, 'codex'), '7 days: 14 rounds · 2 consult turns · 5 h: 2');
-  assert.equal(cardRoundsLine({ read: counted(), ledger: consults, atMs: T0 }, 'nobody'), '7 days: 0 rounds · 0 consult turns · 5 h: 0',
+  assert.equal(cardRoundsLine({ read: counted(), ledger: consults, ledgerFailure: '', atMs: T0 }, 'codex'), '7 days: 14 rounds · 2 consult turns · 5 h: 2');
+  assert.equal(cardRoundsLine({ read: counted(), ledger: consults, ledgerFailure: '', atMs: T0 }, 'nobody'), '7 days: 0 rounds · 0 consult turns · 5 h: 0',
     'a row the count names nowhere ran nought rounds — that IS a count');
-  assert.equal(cardRoundsLine({ read: { state: 'unavailable', why: 'x' }, ledger: consults, atMs: T0 }, 'codex'), 'Rounds: count unavailable',
+  assert.equal(cardRoundsLine({ read: { state: 'unavailable', why: 'x' }, ledger: consults, ledgerFailure: '', atMs: T0 }, 'codex'), 'Rounds: count unavailable',
     'an unavailable count is never drawn as rounds beside a consult count');
 });

@@ -1,5 +1,7 @@
 import { open } from 'node:fs/promises';
 
+import { missingRatherThanBroken } from './notificationsFile';
+
 /**
  * The END of an append-only ledger, read back to an instant and no further (story 2.2 of
  * todo/PLAN_every_round_is_counted.md).
@@ -11,8 +13,9 @@ import { open } from 'node:fs/promises';
  * a seven-day window does not notice.</p>
  *
  * <p>`node:fs`, no `vscode`: the data directory is a path, and a test hands in a temp file. A file that does not exist
- * is no lines — nothing has run yet; any other failure is no lines too, because the block must not fail to draw over
- * its money, and the counts beside it come from another source.</p>
+ * is no lines — nothing has run yet. Any other failure is no lines AND a `failure` that says why, so the block draws its
+ * tokens and money as unavailable rather than as nothing spent; the counts beside it come from another source and
+ * still show.</p>
  */
 
 /** How much is read per step back. A week of this machine's ledger is ~0.5 MB; 64 KiB keeps the overshoot small. */
@@ -22,6 +25,8 @@ export const TAIL_CHUNK_BYTES = 64 * 1024;
 export interface Tail<T> {
   readonly records: readonly T[];
   readonly bytesRead: number;
+  /** Why a ledger that exists did not read — empty when it read, or when there is no ledger yet. */
+  readonly failure: string;
 }
 
 /**
@@ -38,13 +43,24 @@ export async function readTailSince<T extends { readonly utc: string }>(
   try {
     const handle = await open(path, 'r');
     try {
-      return await tailOf(handle, (await handle.stat()).size, sinceMs, parse, chunkBytes);
+      const info = await handle.stat();
+      // On Windows a directory in the ledger's place OPENS cleanly with size 0, so nothing would ever fail to read.
+      return info.isFile() ? await tailOf(handle, info.size, sinceMs, parse, chunkBytes) : notAFile(path);
     } finally {
       await handle.close();
     }
-  } catch {
-    return { records: [], bytesRead: 0 };
+  } catch (reason: unknown) {
+    return { records: [], bytesRead: 0, failure: failureOf(reason) };
   }
+}
+
+function notAFile<T>(path: string): Tail<T> {
+  return { records: [], bytesRead: 0, failure: `${path} is not a file` };
+}
+
+/** No ledger yet is nothing run, not a failure; anything else that stopped the read is said, never read as "nothing spent". */
+function failureOf(reason: unknown): string {
+  return missingRatherThanBroken(reason) ? '' : String(reason);
 }
 
 interface Reader {
@@ -72,7 +88,7 @@ async function tailOf<T extends { readonly utc: string }>(
     end = start;
   }
 
-  return { records: found, bytesRead };
+  return { records: found, bytesRead, failure: '' };
 }
 
 /**

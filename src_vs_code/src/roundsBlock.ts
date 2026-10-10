@@ -75,7 +75,21 @@ export function roundsBlock(input: RoundsBlockInput): string {
     return `${head}<p class="hint">Counting…</p></section>`;
   }
 
-  return `${head}${unavailableNote(input.snapshot.read)}${body(input, input.snapshot)}${FOOTNOTE}</section>`;
+  return `${head}${unavailableNote(input.snapshot.read)}${ledgerNote(input.snapshot.ledgerFailure)}${body(input, input.snapshot)}${FOOTNOTE}</section>`;
+}
+
+/** What a cell drawn from the ledger says when the ledger did not read. */
+const LEDGER_UNAVAILABLE = 'unavailable';
+
+function ledgerNote(failure: string): string {
+  return failure.length === 0
+    ? ''
+    : `<p class="warn">Tokens and money: ${LEDGER_UNAVAILABLE} — the usage ledger could not be read: ${escapeHtml(failure)}.</p>`;
+}
+
+/** A cell drawn from the ledger: *unavailable* when the ledger did not read — never a zero standing in for it. */
+function spent(facts: Facts, cell: () => string): string {
+  return facts.ledgerFailure.length > 0 ? LEDGER_UNAVAILABLE : cell();
 }
 
 /** Which store was counted, and which known stores were not. */
@@ -102,6 +116,7 @@ interface Facts {
   readonly groups: readonly MoneyGroup[];
   readonly providers: readonly string[];
   readonly input: RoundsBlockInput;
+  readonly ledgerFailure: string;
 }
 
 function body(input: RoundsBlockInput, snapshot: RoundsSnapshot): string {
@@ -125,7 +140,7 @@ function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
   const window = { fromMs: windowStartMs(snapshot.read, '7d', snapshot.atMs) + 1, toMs: end };
   const groups = moneyGroups([...snapshot.ledger, ...input.chat], window, input.rateOf);
 
-  return { read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input };
+  return { read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure };
 }
 
 function providersOf(read: RoundCountsRead, groups: readonly MoneyGroup[]): readonly string[] {
@@ -149,8 +164,8 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
 
   return tr('row', [
     name, ...WINDOW_NAMES.map((window) => roundsCell(facts.read, window, provider)), stagesCell(facts.read, provider),
-    besideCell(mine), reviewersCell(facts.read, provider), '', tokensCell(all), costText(all.money),
-    perRoundCell(all, rowRounds(facts.read, provider)),
+    spent(facts, () => besideCell(mine)), reviewersCell(facts.read, provider), '', spent(facts, () => tokensCell(all)),
+    spent(facts, () => costText(all.money)), spent(facts, () => perRoundCell(all, rowRounds(facts.read, provider))),
   ]);
 }
 
@@ -239,8 +254,8 @@ function modelLine(facts: Facts, provider: string, model: string, mine: readonly
   return tr('model', [
     `<span class="indent">${escapeHtml(model)}</span>`,
     ...WINDOW_NAMES.map((window) => modelRoundsCell(facts.read, window, provider, model)),
-    '', '', '', medianCell(group), tokensCell(part), costText(part.money),
-    modelPerRoundCell(part, modelRounds(facts.read, '7d', provider, model)),
+    '', '', '', spent(facts, () => medianCell(group)), spent(facts, () => tokensCell(part)), spent(facts, () => costText(part.money)),
+    spent(facts, () => modelPerRoundCell(part, modelRounds(facts.read, '7d', provider, model))),
   ]);
 }
 
@@ -300,7 +315,15 @@ export function cardRoundsLine(snapshot: RoundsSnapshot | undefined, provider: s
   if (snapshot.read.state !== 'counted') {
     return `Rounds: ${COUNT_UNAVAILABLE}`;
   }
-  const consults = snapshot.ledger.filter((one) => one.provider === provider && one.kind === 'consult').length;
 
-  return `7 days: ${rowRounds(snapshot.read, provider) ?? 0} rounds · ${consults} consult turns · 5 h: ${roundsCell(snapshot.read, '5h', provider)}`;
+  return `7 days: ${rowRounds(snapshot.read, provider) ?? 0} rounds · ${consultTurns(snapshot, provider)} · 5 h: ${roundsCell(snapshot.read, '5h', provider)}`;
+}
+
+/** The card's consult turns, from the cached ledger — *unavailable* when it did not read, never 0 standing in. */
+function consultTurns(snapshot: RoundsSnapshot, provider: string): string {
+  if (snapshot.ledgerFailure.length > 0) {
+    return `consult turns ${LEDGER_UNAVAILABLE}`;
+  }
+
+  return `${snapshot.ledger.filter((one) => one.provider === provider && one.kind === 'consult').length} consult turns`;
 }
