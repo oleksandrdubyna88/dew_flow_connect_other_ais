@@ -518,9 +518,10 @@ public sealed class ThePairsThemselvesTests : IDisposable
         // Every column a step AFTER twelve added goes too, or the reopen re-runs a later step against a
         // column it already has: step 14 (issue #131) added two to `rounds`, step 15 (the consultation
         // cadence) three more and three to `consultations`, step 16 (the feature stage's skip reason)
-        // one more to `rounds`, step 18 (the security lane's evidence projection) one to `findings`, and step 19
-        // (why a consultation failed) three more to `consultations`. Step 17 (the question consultant) only
-        // creates tables IF NOT EXISTS, so re-running it needs nothing dropped.
+        // one more to `rounds`, step 18 (the security lane's evidence projection) one to `findings`, step 19
+        // (why a consultation failed) three more to `consultations`, and step 20 (the round counter's model)
+        // one to `reviewers`. Step 17 (the question consultant) only creates tables IF NOT EXISTS, and step
+        // 20's index is CREATE INDEX IF NOT EXISTS, so re-running those needs nothing dropped.
         Execute("""
             ALTER TABLE collect_pairs DROP COLUMN comment;
             ALTER TABLE collect_pairs DROP COLUMN comment_lost;
@@ -537,6 +538,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE consultations DROP COLUMN failure_kind;
             ALTER TABLE consultations DROP COLUMN failure_cure;
             ALTER TABLE consultations DROP COLUMN evidence;
+            ALTER TABLE reviewers DROP COLUMN model;
             PRAGMA user_version = 12;
             """);
         SqliteConnection.ClearAllPools();

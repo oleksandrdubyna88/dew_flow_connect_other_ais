@@ -1,6 +1,7 @@
 # PLAN — every round is counted, and what it cost the subscription is visible
 
-> Status: **plan only, nothing implemented yet, 2026-10-09.** Scope: the Team server's job ledger, `/api/usage` and
+> Status: **in progress, 2026-10-10 — E2 story 2.1 (the local counter: `coai-mcp --round-counts` and schema step 20) is
+> implemented; E1 and the rest of E2–E6 are still plans. Deviations so far are recorded below.** Scope: the Team server's job ledger, `/api/usage` and
 > job claim (`src_server`), the reviewer launch path both halves share (`src_mcp/runners/Reviewers`), `coai-mcp`'s
 > round store (`--log` family), the extension's Spending tab, Team-server block and model cards (`src_vs_code`), and
 > the deploy canary (`deploy/`).
@@ -407,6 +408,22 @@ database is not safely read across the Windows/WSL boundary — 2.2 names the ot
 accepted: the RESULTS table now says which CLI ran each model (and 3.4 records `cli`/`cliVersion`); one ledger line
 per paid launch linked by a `turn` id instead of a folded count; `remainingSeconds` capped at the job's own lifetime;
 the local counter reads the ledger only back to its oldest window.
+
+## Deviations so far (E2)
+
+Recorded as each story lands, so the promotion has them ready; what shipped differently is the part a later reader
+needs. Story 2.1 shipped 2026-10-10 on `feat/round-counter-e2-local-counter` — `src_mcp/src/Store/RoundCounts.cs`,
+`src_mcp/src/Server/RoundCountsMode.cs`, `Schema.TheReviewersModel`, documented in
+[module_server.md](../research/module_server.md) (*`--round-counts` — rounds per vendor row*) and
+[module_tests.md](../research/module_tests.md).
+
+| Story | The plan said | What shipped | Why |
+|---|---|---|---|
+| 2.1 | `--round-counts` answers rounds from `coai.db` AND, from `usage.jsonl` read from the end back to the oldest window, recorded turns, median input/output and outcomes per row × model × kind | **Rounds only, from `coai.db`.** Per window (5 h / 24 h / 7 d) and vendor row: DISTINCT rounds by stage (plan / code / document / feature), the reviewer rows those rounds launched (the "reviewers per round" numerator), and the rounds per reviewer MODEL; `modelsKnownSince` says from when the per-model lines exist. The mode never opens `usage.jsonl`. | Design decision taken before the story (2026-10-10): tokens and money (2.5) are computed in the EXTENSION from the ledger it already parses (`src_vs_code/src/usage.ts`) — one reader of the ledger, not two that drift — and the mode answers the one thing only the database can, which is what a round IS. The code round's rule that the ledger is read only back to the oldest window therefore binds the extension's reader (2.2 / 2.5), not this mode. |
+| 2.1 | `rounds ⨝ reviewers` plus an index on `reviewers(round_id)` | **Schema step 20** `TheReviewersModel`: `reviewers.model TEXT NOT NULL DEFAULT ''` **and** `reviewers_by_round`, in one step; `RoundsDb.RecordRound` fills the model from `ReviewerState.Model`. Rows written before the step are empty and sit on no model line. A read-only reader asks the schema for the column and counts a step-19 file's rounds without models. | The per-model lines ("a model change inside a window is two lines for that row", 2.3) need a model per REVIEWER row, and the table had none; one step because a database at nineteen must gain both or neither. |
+| 2.1 | windows 5 h / 24 h / 7 d, trailing; `--now <utc>` for tests; bad arguments exit with a usage error, never 64 | The same, with the edges fixed as **half-open `(from, to]`**: a round on a window's starting edge is the next window's, one exactly at `now` is in every window, one in the future in none. `--now` takes an ISO-8601 UTC instant through the parse `--since` uses (`Program.TryParseInstant`, widened rather than copied). Exit codes: **0** with the answer — and an EMPTY answer, exit 0, file not created, when `coai.db` does not exist; **65** for an unparseable or repeated `--now`, a dangling `--now`, an unknown flag; **74** for a database that will not read; **never 64**. | The edges had to be decided for the boundary tests; the missing-database answer is the brief's — a machine that has never run a round has nought rounds, and the extension tells a count from "unavailable" by the exit code and the parse. |
+| 2.1 | listed with the other one-shot modes in `AGENTS.md` | Listed in `.agents/PROJECT.md`'s one-shot list — `AGENTS.md` is the pointer to that file, and `ARequestFaultIsNotAnOldBinaryTests` / `TheBinarySaysWhatItAcceptsTests` read the list from there. | Where the list is. |
+| 2.1 (tests) | `RoundCounts_FromAFixtureDb`, `TheLedgerRead_StopsAtTheOldestWindow`, `ConsultationsAndQuestions_AreCountedBesideRounds`, `ABadArgument_IsAUsageErrorNot64` | `RoundCountsTests` (nine, over one fixture of twelve rounds placed on and around every window edge), `RoundCountsCliScenarioTests` (six, the real process — the contract, the real clock, the bad arguments with `--round-countz` → 64 as the control, the missing database, the read-only open on a step-19 file, the help and the list), `TheReviewersModelIsStepTwentyTests` (six: step 20 by position, a step-19 file, the writer, both preview forks, a second open). `TheLedgerRead_StopsAtTheOldestWindow` and `ConsultationsAndQuestions_AreCountedBesideRounds` move with the ledger to the extension's reader (2.2 / 2.5). | The ledger left the mode. |
 
 ## Definition of Done
 

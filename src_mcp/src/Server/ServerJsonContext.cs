@@ -330,6 +330,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(List<DecisionDto>))]
 [JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "ListString")]
 [JsonSerializable(typeof(Store.LoggedLog))]
+[JsonSerializable(typeof(Store.RoundCountsAnswer))]
 [JsonSerializable(typeof(Store.LoggedManyFindings))]
 [JsonSerializable(typeof(Core.Security.SecurityFindingDetails))]
 [JsonSerializable(typeof(List<RoundKeyDto>))]
