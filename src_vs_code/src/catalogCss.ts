@@ -75,6 +75,9 @@ const SHELL = `
     border: 1px solid var(--border-strong); border-radius: 14px; padding: 3px 12px; color: var(--muted);
   }
   .catalog .pane .tabs .tab.on { color: var(--vscode-foreground); border-color: var(--focus); background: var(--secondary); }
+  /* The count of missing paths under a tab, seen without opening it (paths per side, E5.5): the dot and the number in
+     the error colour, after the label — the number carries it where a theme drops the colour. */
+  .catalog .tabs .tab .tab-mark { color: var(--err); margin-left: 6px; font-weight: 600; white-space: nowrap; }
   .settingsHead button { width: auto; margin: 0; }
   .catalog .hint { color: var(--muted); }
   .catalog button { width: auto; }
