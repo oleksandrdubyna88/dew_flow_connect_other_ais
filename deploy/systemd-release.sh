@@ -157,21 +157,29 @@ preflight_token() {
 }
 
 canary() {
-    local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg submit http
+    local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg submit http kind
     cfg=$(mktemp)
     chmod 600 "$cfg"
     printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
     trap 'rm -f "$cfg"' RETURN
 
-    # The status is CAPTURED, not discarded. `-w` appends it on its own line after the body, which
-    # is the one shape that survives an empty body — and an empty body is exactly what a 401 has,
-    # so the failure that most needs naming is the one a body alone cannot name.
-    submit=$(curl -sS --connect-timeout 10 --max-time 30 -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
-        -w $'\n%{http_code}' \
-        -d "{\"vendor\":\"$vendor\",\"model\":\"$model\",\"prompt\":\"Answer with exactly this JSON and nothing else: {\\\"findings\\\":[]}\",\"role\":\"PlanCritique\",\"timeoutSeconds\":$budget}") \
-        || { say "  $vendor: the submit did not come back at all — $(refusal_hint 000)"; return 1; }
-    http=${submit##*$'\n'}
-    body=${submit%$'\n'*}
+    # The canary says it is the deploy's OWN review (story 3.5 of todo/PLAN_every_round_is_counted.md), so a spending
+    # report can tell it from a person's — it used to be an ordinary `review`, told apart only by its token's email.
+    # A server older than the kind refuses it with a 400 that says "'canary' is not a kind of job", before any vendor
+    # starts, so the canary asks once more as a plain review rather than rolling back a release that is fine.
+    for kind in '"kind":"canary",' ''; do
+        # The status is CAPTURED, not discarded. `-w` appends it on its own line after the body, which
+        # is the one shape that survives an empty body — and an empty body is exactly what a 401 has,
+        # so the failure that most needs naming is the one a body alone cannot name.
+        submit=$(curl -sS --connect-timeout 10 --max-time 30 -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
+            -w $'\n%{http_code}' \
+            -d "{\"vendor\":\"$vendor\",\"model\":\"$model\",$kind\"prompt\":\"Answer with exactly this JSON and nothing else: {\\\"findings\\\":[]}\",\"role\":\"PlanCritique\",\"timeoutSeconds\":$budget}") \
+            || { say "  $vendor: the submit did not come back at all — $(refusal_hint 000)"; return 1; }
+        http=${submit##*$'\n'}
+        body=${submit%$'\n'*}
+        [[ "$http" == 400 && "$body" == *"is not a kind of job"* && -n "$kind" ]] || break
+        say "  $vendor: this server does not know the canary kind yet — asking again as a plain review"
+    done
     # `|| true`: a non-JSON body is the interesting case, not an error to abort on — under `set -e`
     # the failing python would take the whole deploy down before this could report anything.
     id=$(printf '%s' "$body" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))' 2>/dev/null || true)

@@ -40,8 +40,14 @@ public static class UsageKinds
     /// </summary>
     public const string Question = "question";
 
+    /// <summary>
+    /// The deploy's own check — one real review per vendor the release script sends after a swap (story 3.5 of
+    /// todo/PLAN_every_round_is_counted.md). A Team-server kind: written by the server, never by this machine.
+    /// </summary>
+    public const string Canary = "canary";
+
     /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question];
+    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question, Canary];
 
     /// <summary>
     /// Kinds the Team server never produces: a consultation and a question row run on this machine
