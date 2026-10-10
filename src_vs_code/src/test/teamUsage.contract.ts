@@ -89,7 +89,7 @@ function state(admin: boolean): TeamServerState {
   };
 }
 
-test('the catalog says an admin is an admin — the flag the tab is shown on (D1)', async () => {
+void test('the catalog says an admin is an admin — the flag the tab is shown on (D1)', async () => {
   const catalog = await fetchCatalog(SERVER, await sessionFor(ADMIN));
   const member = await fetchCatalog(SERVER, await sessionFor(`member@${DOMAIN}`));
 
@@ -98,7 +98,7 @@ test('the catalog says an admin is an admin — the flag the tab is shown on (D1
   assert.strictEqual(member.value.isAdmin, false);
 });
 
-test('an admin\'s company figures come through the real client, and a window change asks again', async () => {
+void test('an admin\'s company figures come through the real client, and a window change asks again', async () => {
   const token = await sessionFor(ADMIN);
   const { cache, asked } = realCache();
 
@@ -122,7 +122,7 @@ test('an admin\'s company figures come through the real client, and a window cha
   assert.ok(pushed.readUtc.length > 0, 'the tab cannot say when it read the answer');
 });
 
-test('a member asking for company is refused 403, and the cache keeps nothing and says why', async () => {
+void test('a member asking for company is refused 403, and the cache keeps nothing and says why', async () => {
   // The catalog said admin a minute ago; the server's list changed since. The server's refusal is the decision.
   const token = await sessionFor(`member@${DOMAIN}`);
   const { cache } = realCache();
@@ -136,7 +136,7 @@ test('a member asking for company is refused 403, and the cache keeps nothing an
   assert.match(pageTree(status).text(), /no longer an admin here/);
 });
 
-test('the same body without what a newer server adds says what it needs — never a zero (D8)', async () => {
+void test('the same body without what a newer server adds says what it needs — never a zero (D8)', async () => {
   const answer = await fetchUsage(SERVER, await sessionFor(ADMIN), 'week', 'company');
   if (!answer.ok) {
     assert.fail(`the company answer was refused: ${answer.status} — ${answer.message}`);
@@ -166,7 +166,7 @@ function namedToken(email: string, name: string): string {
 /** Whether the runner wrote spending into this server's ledger (scripts/run-contract.mjs, seedLedger). */
 const SEEDED = (process.env['COAI_CONTRACT_SEEDED'] ?? '') === '1';
 
-test('an admin is told who is signed in — three fields a row, its own name among them; a member is refused 403', async () => {
+void test('an admin is told who is signed in — three fields a row, its own name among them; a member is refused 403', async () => {
   const signedIn = await createSession(SERVER, namedToken(ADMIN, 'Contract Admin'));
   assert.ok(signedIn.ok, `the admin could not sign in: ${signedIn.ok ? '' : signedIn.message}`);
 
@@ -176,7 +176,7 @@ test('an admin is told who is signed in — three fields a row, its own name amo
   }
   assert.ok(Array.isArray(raw.value) && raw.value.length > 0, 'an admin who has just signed in is not listed — the check would be vacuous');
   for (const row of raw.value as Record<string, unknown>[]) {
-    assert.deepStrictEqual(Object.keys(row).sort(), ['displayName', 'email', 'lastUsedUtc'], `a row carries more than the three fields: ${JSON.stringify(row)}`);
+    assert.deepStrictEqual(Object.keys(row).sort((a, b) => a.localeCompare(b)), ['displayName', 'email', 'lastUsedUtc'], `a row carries more than the three fields: ${JSON.stringify(row)}`);
   }
   const listed = await fetchPeople(SERVER, signedIn.value.token);
   assert.ok(listed.ok);
@@ -190,7 +190,7 @@ test('an admin is told who is signed in — three fields a row, its own name amo
   assert.strictEqual(member.ok ? 200 : member.status, 403, 'a member was shown who is signed in');
 });
 
-test('the company answer names each model under its vendor, lower-cases vendor ids, and counts 30 dense UTC days', async (t) => {
+void test('the company answer names each model under its vendor, lower-cases vendor ids, and counts 30 dense UTC days', async (t) => {
   if (!SEEDED) {
     t.skip('this server\'s ledger was not seeded by scripts/run-contract.mjs, so there are no models or days to read');
     return;
@@ -201,7 +201,7 @@ test('the company answer names each model under its vendor, lower-cases vendor i
   }
   const usage = answer.value;
 
-  assert.deepStrictEqual(usage.vendors.map((one) => one.vendor).sort(), ['codex', 'gemini'], 'a vendor id written "Codex" was not lower-cased');
+  assert.deepStrictEqual(usage.vendors.map((one) => one.vendor).sort((a, b) => a.localeCompare(b)), ['codex', 'gemini'], 'a vendor id written "Codex" was not lower-cased');
   const codex = usage.vendors.find((one) => one.vendor === 'codex');
   assert.deepStrictEqual(codex?.models?.map((one) => [one.model, one.runs]), [['gpt-5.6-sol', 2]]);
   assert.deepStrictEqual(usage.vendors.find((one) => one.vendor === 'gemini')?.models?.map((one) => one.model), [''],
