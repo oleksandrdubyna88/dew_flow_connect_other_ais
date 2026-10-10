@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.10.0...server-v0.11.0) (2026-10-10)
+
+
+### Features
+
+* the Team server tab — who on the team spent what, for an admin ([#737](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/737)) ([3ed2f15](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3ed2f1538bf6285ece2869e8be5711b5e685f899))
+
 ## [0.10.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.9.0...server-v0.10.0) (2026-10-09)
 
 

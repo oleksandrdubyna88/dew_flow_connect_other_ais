@@ -180,6 +180,11 @@ export function familyOf(platform: string): PathFamily {
   return platform === 'win32' ? 'windows' : 'posix';
 }
 
+/** A family as the pages name it (D1): **Windows**, and **WSL / Linux** for every POSIX side — a distro, an SSH remote, a Mac. */
+export function familyLabel(family: PathFamily): string {
+  return family === 'windows' ? 'Windows' : 'WSL / Linux';
+}
+
 /** A stored CLI path as a row holds it — the legacy single value every extension version reads. */
 export interface StoredExecutable {
   readonly executablePath: string;

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.67.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.66.0...extension-v0.67.0) (2026-10-10)
+
+
+### Features
+
+* every path in the settings follows the other-side rule (CLI paths, watched folders, the shared data directory) ([1f2c866](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/1f2c866f81393b2c2758c073852d6ef6bd64a718))
+* **extension:** Settings tabs lay out in two columns on a wide editor ([#724](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/724)) ([bd11f64](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bd11f64a8bab3f1da3d6ffbf076cd4a44e630e77))
+* the Team server tab — who on the team spent what, for an admin ([#737](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/737)) ([3ed2f15](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3ed2f1538bf6285ece2869e8be5711b5e685f899))
+
+
+### Bug Fixes
+
+* a question-consultant root of the other OS is skipped on this side, not refused ([#733](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/733)) ([928ba95](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/928ba95af253bf08c1cc1d4971d87c09fc2d6aa5))
+* **extension:** every Models card shows the catalog price of its own row ([#723](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/723)) ([b299bf8](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b299bf8ea796cc9deb122206f6b2aea30f2e21ee))
+* **extension:** the Settings page says why — a locked card, a model's name, an unpicked consultant, a removed pick ([#748](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/748)) ([31819ab](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/31819ab613452669995aecff08ad02ac86cd75e7))
+
 ## [0.66.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.65.0...extension-v0.66.0) (2026-10-10)
 
 

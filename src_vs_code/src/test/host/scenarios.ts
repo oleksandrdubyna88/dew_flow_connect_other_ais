@@ -15,6 +15,7 @@ import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
 import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
+import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -900,6 +901,12 @@ const SCENARIOS: readonly Scenario[] = [
     // migration waits on, read from the real editor. What it does and does not drive is in `migrationKeysScenario.ts`.
     name: 'every key the catalog migration writes is known to the real settings registry, and an undeclared one is not',
     run: theMigrationKeysAreKnownInARealEditor,
+  },
+  {
+    // todo/PLAN_paths_per_side.md E2.4 (E0.2's release requirement): activation stamps this window's side into the shared
+    // globalState, read back through what activation returns. What it does and does not drive is in `sideSeenScenario.ts`.
+    name: 'activation leaves a coai.sideSeen record for this window\'s side, fresh, with its family and its name',
+    run: activationStampsThisSideInARealEditor,
   },
   {
     // R7 of research/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration

@@ -18,6 +18,12 @@ export const HELP = {
     + 'it had when you switched it on - so nothing changes until you edit something, and switching '
     + 'off and on again does not discard what a side had configured. Your text size and help language '
     + 'stay shared: they belong to you rather than to the work.',
+  pathFieldsPerSide:
+    'How many fields a path setting shows - a CLI path, a question-consultant folder, a watched data folder. VS Code '
+    + 'hands one settings.json to a Windows window and a WSL window on the same machine, so such a path may need one value '
+    + 'for each side. Automatic shows a Windows field and a WSL / Linux field once both sides have been seen within 90 '
+    + 'days (the list above); Always two shows both with one side seen; Always one keeps one field. Yours rather than a '
+    + 'side\'s, so every window reads the same value, and Export settings never carries it.',
   autonomous:
     'The gate tells the assistant to work without interrupting you: a question that does not block it is written down and asked at the END, all of them together; a question that does block it is asked at once — but only after it has re-read what it has written and gathered every other blocking question, so you are interrupted once with all of them instead of five times with one each.',
   splitPlan:

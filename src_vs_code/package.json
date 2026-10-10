@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -593,6 +593,22 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Keep **separate settings for each side of this machine** — a local window, and each WSL distro or remote host on its own. Off (the default) is one set of settings for every window, exactly as before. On, each side keeps its own values, seeded from what it had at the moment you switched it on, so nothing changes until you edit something. For one person working for several companies on one machine: a different proxy (`baseUrl`), a different CLI path and a different vault key per side. Does **not** separate `uiScale` or `helpLanguage` — a text size belongs to you, not to the company. Stored in the extension's own state, not in `settings.json`, because VS Code hands one `settings.json` to every extension host."
+        },
+        "coai.pathFieldsPerSide": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ],
+          "enumDescriptions": [
+            "Two fields once a Windows side and a WSL / Linux side have both been seen within 90 days; one field before that.",
+            "Always two fields, a Windows one and a WSL / Linux one, even with one side seen.",
+            "Always one field, as before."
+          ],
+          "default": "auto",
+          "scope": "application",
+          "markdownDescription": "How many fields a **path setting** shows — a reviewer's CLI path, a question-consultant folder, a watched data folder. VS Code hands one `settings.json` to a Windows window and a WSL window on the same machine, so such a path may need one value for each side. **auto** (the default) shows a Windows field and a WSL / Linux field once both sides have been used within 90 days — *Settings › Setup › This side* lists the sides seen, each with **Forget**; **always** shows both even with one side seen; **never** keeps one field. Yours rather than a side's, so every window reads the same value; never carried by *Export settings*."
         },
         "coai.dataDirectory": {
           "type": "string",
