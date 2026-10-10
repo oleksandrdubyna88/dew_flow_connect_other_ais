@@ -3409,7 +3409,11 @@ red at every start and created by nothing (D3).
   `dataDirFinding`) — asks the probes, publishes to the board, SAYS a path when it APPEARS missing (never on every
   refresh, which would be a ledger row per repaint) and resolves it (`notifyResolved`) when it is back, so going
   missing again is news. It re-asks on a `coai` configuration change (`forget()`) and takes the server's word
-  (`serverSaid`) — see *page and server agree*.
+  (`serverSaid`) — see *page and server agree*. **Only a SETTLED answer resolves a said path** (`settled`,
+  `PathWatch.stillSaid`): the disk saying it is there, the server taking it, or the value leaving the settings — a
+  `pending` or `unknown` answer keeps it said. The first run in a real editor showed why: a settings change drops every
+  answer and asks again, and resolving on that gap said one CLI path sixteen times, once per keystroke in the settings.
+  `pathFindings.asked` / `findingsOf` give the findings and the resolve rule ONE answer per value (`valueSubject`).
 - **The notice** — `setting-path-missing` (a warning, source `pathWatch`, subject `<key>|<value>` so fixing one path
   clears one notice) through the funnel's new door `notify.notifyOnceThen`: `notifyOnce`'s once per run with
   `notifyThen`'s button — **Open in Settings** runs `coai.openSettings` with the finding's place. The census
@@ -3420,13 +3424,21 @@ red at every start and created by nothing (D3).
   window's data root missing": `publishFindings` / `currentFindings` / `onFindings` (the panel repaints on it),
   `expectDataRoot` / `dataRootSettled` (bounded by `SETTLE_CEILING_MS`, 10 s), `missingDataRoot`,
   `refusedDataRoot(path)` (at or under the missing root, case-folded on Windows) and `refuseUnderMissingRoot(path)`,
-  which throws `missingRootRefusal` — the guard every directory-making writer asks first: the ledgers (`jsonlLedger`),
+  which throws `missingRootRefusal` — and `refuseUnderMissingRootOnceSettled(path)`, which WAITS for the first
+  data-root answer (bounded) before it asks. Every async writer asks the waiting one: a write at activation runs beside
+  the probe, and a guard that read the board before the disk had answered let the chat store's heartbeat create the
+  missing root on E5's first run in a real editor; `dataRootKnown()` lets a writer that must decide in the same turn (a
+  render's spawn) skip the wait once the answer is in, and only the sync atomic write keeps the sync guard. The
+  writers: the ledgers (`jsonlLedger`),
   the atomic write (`atomicFile`, both forms), the settings file and its lock (`extension.createDataDirectory`, one
   road for both), the probe cache (`claudeProbeCache`), the token file (`teamServerAuth`), the prompt overrides
   (`consultPromptFile`, `securityPromptEditor`), the import backup (`configTransferCommands`) and the chat store's
   lock (`chatStoreLock`). `everyWriterOfTheDataDirectory.test.ts` derives the inventory of every `mkdir` / `mkdirSync`
   / `createDirectory` site from the source and holds each to the guard or a stated reason (inside an existing store,
-  the folder a person chose, extension storage, a temp folder). `notificationsFile.recordNotification` answers
+  the folder a person chose, extension storage, a temp folder), and holds every async one to the waiting guard. The
+  consultants survey (`consultantsProbe`, `coai-mcp --consultants`) is a writer by proxy — the server writes
+  `consultations/health/consultants.json` with a `CreateDirectory` — and is not started while the named root is
+  missing; the tab reads the refusal as an unanswered probe. `notificationsFile.recordNotification` answers
   `landed | held | lost`: a record refused under a missing root is LOST and counted into the ledger's write gap —
   except the missing-path notice itself, which is HELD in memory (`holdNotice` / `heldNotices`: one per setting key,
   the newest replacing the older, released the moment the path changes or the folder is found again — bounded by the

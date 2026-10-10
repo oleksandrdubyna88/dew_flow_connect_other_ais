@@ -486,6 +486,23 @@ of this OS*, `research/module_server.md` *`--providers` says which setting and w
   is what finds the row. The door is `notify.notifyOnceThen` (once per run + a button) — a fourth once-guard at the
   call site being what the funnel exists to prevent; the census population is 164. The watch runs from activation
   (`pathWatchHost.startPathWatch`), not from the panel.
+- **5.3, found by `test:host` and fixed in E5: only a SETTLED answer resolves a said path.** The first run in a real
+  editor showed sixteen ledger rows for one CLI path: every change to a `coai` setting drops the disk's answers and
+  asks again, the gap read as "no longer missing", the notice was resolved and said again when the answer landed — a
+  toast per keystroke in the settings. `PathWatch.stillSaid` / `settled`: the disk saying it is there, the server
+  taking it, or the value leaving the settings resolve; `pending` and `unknown` keep it said. A unit RED, and a host
+  scenario (`missingPathSaidOnceScenario.ts`: a missing CLI path of this side, three settings changes, the ledger says
+  it once) that is red with the rule broken. The first-start scenario moved first in the host list, because the
+  revision scenario's `D:\old\claude.exe` is rightly said as missing after it.
+- **5.0, found by the host's second launch and fixed in E5: a writer that can wait, waits.** The chat store's heartbeat
+  (`window-<pid>.json`) is written at activation beside the probe, and the guard read the board before the disk had
+  answered — the folder was created. `findingsBoard.refuseUnderMissingRootOnceSettled` waits for the first data-root
+  answer (bounded by the settle ceiling); every async writer asks it (the inventory test holds them to it), the sync
+  atomic write alone keeps the sync guard, and `dataRootKnown()` lets a render's spawn decide in the same turn once the
+  answer is in. The consultants survey is a writer by proxy — the server's `--consultants` writes
+  `consultations/health/consultants.json` with a `CreateDirectory` — and is not started while the named root is
+  missing (said as an unanswered probe). Left: the person-initiated checks (`--check-consultant`, `--check-model`,
+  `--check-security`) may still let the server create the folder, as the choice flow creates the folder it is given.
 - **5.5** the badge's words are *"N missing folders or paths"* (one: *"folder or path"*); a top tab counts every
   sub-place under it, a sub-tab its own.
 - **5.6 the agreement is one-way, by setting**: the server's problems replace this window's own findings for the

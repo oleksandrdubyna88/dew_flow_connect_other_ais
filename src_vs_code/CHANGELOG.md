@@ -26,8 +26,9 @@ path the disk could not answer for is drawn in the warning tone and never counte
 key, value and kind in `--providers` (`settingProblems`, from this release pair), so the generic toast no longer repeats
 a sentence the notice already says, and the page takes the server's word for the folders it judges. **A data folder you
 named that does not exist is red at every start, and nothing creates it** — not the notice, not the server's settings
-file, not a chat or a ledger: what this window would have written is held in its memory and listed on Notifications,
-and the writes resume once the folder is there. The default folder is never red and is still created when first needed.
+file, not a chat or a ledger, and not the consultants survey, which is not run until the folder is there: what this
+window would have written is held in its memory and listed on Notifications, and the writes resume once the folder
+exists. The default folder is never red and is still created when first needed.
 
 ## Extension 0.67.0 — 2026-10-10
 
