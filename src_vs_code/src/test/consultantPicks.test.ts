@@ -110,11 +110,17 @@ function consultWith(stored: Readonly<Record<string, ConsultantChoice>>, rows: r
   return { ...DEFAULT_CONSULT, stored: { ...DEFAULT_CONSULT.stored, ...stored }, byCaller: { ...DEFAULT_CONSULT.byCaller, ...byCaller } };
 }
 
+/** A place's pane, from the page as it is RUN (its script executed by the panel harness). */
+function paneRun(state: PanelState, place: string): PageNode {
+  const page = runPanel(state, { html: catalogHtml(state, 'test-nonce', place) });
+
+  return pageTree(page.html).one((node) => node.dataset['pane'] === place, `${place} pane`);
+}
+
 /** One caller's pick on the Consultant tab, as the page draws it. */
 function pickOn(consult: ConsultSettings, rows: readonly Vendor[], caller: string): PageNode {
   const state: PanelState = { ...panelState('consultant', { settings: { ...DEFAULTS, consult } }), catalogRows: rows };
-  const pane = pageTree(catalogHtml(state, 'test-nonce', 'consultants/consultant'))
-    .one((node) => node.dataset['pane'] === 'consultants/consultant', 'Consultant pane');
+  const pane = paneRun(state, 'consultants/consultant');
 
   return pane.one((node) => node.className === 'field consult-pick' && node.find((one) => one.id === `consult-row-${caller}`).length > 0,
     `${caller}'s pick`);
@@ -168,13 +174,33 @@ test('a caller on the shipped pair, with other rows ticked consultant, is told t
     'GPT-6-Astra and deep-high are ticked consultant on Models, but Another client still asks the shipped pair — pick one here to use it.'));
 });
 
-test('no such word when nothing but the shipped pair\'s own row is ticked, or when the caller has picked a row', () => {
-  // The shipped pair of Claude Code is codex: a codex row ticked consultant is the pair it already asks.
+/** Whether a pick carries the not-asking line. */
+const saysUnpicked = (pick: PageNode): boolean => hintsUnder(pick).some((one) => one.includes('still asks the shipped pair'));
+
+test('no such word when ONLY the shipped pair\'s own row is ticked consultant — it is the pair the caller already asks', () => {
+  // The shipped pair of Claude Code is codex; of Codex, claude. A codex row ticked consultant is Claude Code's own pair.
   const codexTicked = [{ ...DEFAULT_VENDORS[0]!, uses: ['consultant'] as Vendor['uses'] }, DEFAULT_VENDORS[1]!];
+
+  assert.equal(saysUnpicked(pickOn(DEFAULT_CONSULT, codexTicked, 'claude')), false,
+    'Claude Code is told its own shipped pair is a ticked model it is not asking');
+  assert.equal(saysUnpicked(pickOn(DEFAULT_CONSULT, codexTicked, 'codex')), true,
+    'Codex, whose pair is claude, is not told about the ticked codex row — the fixture does not reach the line');
+});
+
+test('no such word once the caller has picked a row', () => {
   const picked = consultWith({ claude: reference('deep-high') }, ROWS);
 
-  assert.ok(!hintsUnder(pickOn(DEFAULT_CONSULT, codexTicked, 'claude')).some((one) => one.includes('still asks the shipped pair')));
-  assert.ok(!hintsUnder(pickOn(picked, ROWS, 'claude')).some((one) => one.includes('still asks the shipped pair')));
-  assert.ok(hintsUnder(pickOn(picked, ROWS, 'codex')).some((one) => one.includes('still asks the shipped pair')),
-    'and a neighbour still on its pair IS told — the check above is looking at the right picks');
+  assert.equal(saysUnpicked(pickOn(picked, ROWS, 'claude')), false, 'a caller that picked a row is still told it asks the shipped pair');
+  assert.equal(saysUnpicked(pickOn(picked, ROWS, 'codex')), true,
+    'a neighbour still on its pair is not told — the fixture does not reach the line');
+});
+
+test('the Question consultant tab never draws the line — it has no shipped pair', () => {
+  // The same catalog that makes the Consultant tab say it, every row ticked for the question consultant too.
+  const both = ROWS.map((one) => (one.uses ?? []).includes('consultant') ? { ...one, uses: [...one.uses!, 'qconsult'] as Vendor['uses'] } : one);
+  const state: PanelState = { ...panelState('consultant'), catalogRows: both };
+
+  assert.equal(saysUnpicked(pickOn(DEFAULT_CONSULT, both, 'claude')), true, 'the fixture does not make the Consultant tab say it');
+  assert.ok(!paneRun(state, 'consultants/qconsult').text().includes('still asks the shipped pair'),
+    'the Question consultant tab says a caller still asks the shipped pair');
 });
