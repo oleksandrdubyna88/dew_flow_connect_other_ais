@@ -1,6 +1,35 @@
 # Changelog
 
-## Unreleased
+## Server 0.46.0 — 2026-10-10
+
+**A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares
+your settings between a WSL window and a Windows one, so a reviewer row's CLI path written on one side (a Windows
+`C:\…\codex.cmd`, or a WSL `/usr/local/bin/codex`) reached the other side's coai-mcp, which probed it as a file there,
+found nothing and reported the CLI as not found — that reviewer dropped out of every round on that side. Now:
+- A path spelled for the other OS that does not exist here is skipped: coai-mcp looks the CLI up on `PATH` by its
+  runtime's name instead, and says once in its log (Information) that it did — never a notice, never a refusal.
+- A path that DOES exist here is still used. On Windows a root-relative `/Program Files/nodejs/node.exe` is a real
+  path: it runs from the system drive (`C:\Program Files\nodejs\node.exe`). When the disk cannot tell, the path is kept.
+- Rows that share one CLI path ask the disk once.
+- The extension already sends this side's value (extension 0.67.0); this is the same rule for a settings file an older
+  extension wrote.
+
+## Extension 0.67.0 — 2026-10-10
+
+**New: a Team server tab, for that server's admins.** On *Review rounds*, an admin of a Team server now sees who on the
+team spent its subscriptions: per person and per vendor — launches, tokens, an approximate list price (`~$`, worked out
+from public prices, never a bill), when each person with a current session was last seen (to the hour; someone who
+spent without one shows a dash there), who signed in without running anything, and a 30-day chart of launches per day. The tab appears only for a server whose admin list names you, asks that server only while
+the tab is in front, and forgets everything it showed the moment you are signed out or are no longer an admin. Against
+a Team server older than 0.11.0 it shows what that server can say and names the version for the rest — never a zero.
+It counts *launches*, not rounds, until a round carries an id of its own.
+
+**Removed: "Show the whole company" on the spending tab.** It did nothing on the *Review rounds* page — its press was
+dropped before it reached anything. The company view is the Team server tab now.
+
+**Fixed: a Team server's figures on Review rounds refresh with the sidebar closed.** They were fetched only when the
+sidebar drew itself, so with it closed they never changed, and pressing a window did not ask the server again. The page
+now asks for itself, once a minute while it is open and at once on a window press.
 
 **Fixed: Consultants › Question consultant says what it offers, and what a removed model means.** Under **Who
 answers** a quiet line now says "Offered: the models ticked question consultant on Models.", with **Change on
@@ -53,6 +82,21 @@ Security lane and Chat lay their cards out in two columns when the editor is wid
 way Models already did, at the same width. On Roles & prompts each role keeps the whole width and its prompts sit side
 by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
 the Models cards.
+
+## Team server 0.11.0 — 2026-10-10
+
+**Who signed in, for admins.** `GET /api/people` answers an admin with each person who holds an unexpired session in
+an allowed domain — email, display name and when they were last seen, to the hour — and nothing else: no token, no
+expiry. Anyone who is not an admin is refused with the same sentence as the company spending view.
+
+**Spending per model, and per day.** `/api/usage` names each model under its vendor, and the company view adds the last
+30 days, day by day, every vendor on every day. A vendor is reported in one spelling everywhere.
+
+**Sessions are swept every hour — and only the provably dead ones.** An expired session file used to stay until the
+server restarted. An hourly sweep removes it now, and keeps any file it could not read this time: deleting on a read
+that merely failed can sign out somebody who is still working, and a test that hammers sign-ins, renewals and sweeps
+together showed exactly that happening to the old logic. A session file with no email is refused rather than failing
+the people list.
 
 ## Server 0.45.1 — 2026-10-10
 

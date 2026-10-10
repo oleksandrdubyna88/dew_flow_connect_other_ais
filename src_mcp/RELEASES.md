@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.45.1...mcp-v0.46.0) (2026-10-10)
+
+
+### Features
+
+* every path in the settings follows the other-side rule (CLI paths, watched folders, the shared data directory) ([1f2c866](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/1f2c866f81393b2c2758c073852d6ef6bd64a718))
+
 ## [0.45.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.45.0...mcp-v0.45.1) (2026-10-10)
 
 
