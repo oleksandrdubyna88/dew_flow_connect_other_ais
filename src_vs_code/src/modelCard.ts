@@ -1,5 +1,5 @@
 import { apiSettingsFields } from './apiSettingsView';
-import { type BinarySays, confirmButton, type FirstSeen, newTag, skew } from './catalogShell';
+import { type BinarySays, confirmButton, describedBy, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
 import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
@@ -89,8 +89,27 @@ function lockOf(facts: ModelCardFacts): string {
   return facts.lastFor.length > 0 ? `the only model switched on for ${facts.lastFor.join(' and ')} review` : '';
 }
 
+/** The id of the card's lock line, unescaped — `describedBy` escapes it where a refused control points at it. */
+function lockLineId(vendor: Vendor): string {
+  return `lock-${vendor.id}`;
+}
+
+/** What each locked stage is called where the lock line says what would free it. */
+const STAGE_WORDS: Readonly<Record<string, string>> = { plan: 'plans', code: 'code' };
+
+/**
+ * The lock said ON the card, under its head (operator, 2026-10-10: the reason lived only in a hover title, and the
+ * switch and ✕ looked broken). Information, not a failure — the quiet hint tone. The words are {@link lockOf}'s.
+ */
+function lockLine(vendor: Vendor, facts: ModelCardFacts, locked: string): string {
+  const reviews = facts.lastFor.map((stage) => STAGE_WORDS[stage] ?? stage).join(' and ');
+
+  return locked.length === 0 ? '' : `<p class="hint lock" id="${escapeHtml(lockLineId(vendor))}">Locked: ${escapeHtml(locked)} — `
+    + `switch on or add another model that reviews ${escapeHtml(reviews)} first.</p>`;
+}
+
 function onSwitch(vendor: Vendor, id: string, locked: string): string {
-  const refused = locked.length > 0 && vendor.enabled ? ` disabled title="${escapeHtml(locked)}"` : '';
+  const refused = locked.length > 0 && vendor.enabled ? ` disabled title="${escapeHtml(locked)}"${describedBy(lockLineId(vendor))}` : '';
 
   return `<input type="checkbox" class="switch" id="on-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}`
     + `${refused} aria-label="${escapeHtml(`${vendor.id} switched on`)}">`;
@@ -110,7 +129,7 @@ function removeBody(vendor: Vendor, references: readonly string[]): string {
 function actions(vendor: Vendor, id: string, facts: ModelCardFacts, locked: string): string {
   const remove = confirmButton({
     label: '✕', command: 'removeModel', id: vendor.id, title: `Remove ${vendor.id}?`, action: 'Remove', danger: true,
-    body: removeBody(vendor, facts.references), ...(locked.length > 0 ? { refused: locked } : {}),
+    body: removeBody(vendor, facts.references), ...(locked.length > 0 ? { refused: locked, describedBy: lockLineId(vendor) } : {}),
   });
 
   return `<div class="actions">${checkButton(id, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
@@ -161,6 +180,7 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const locked = lockOf(facts);
 
   return `<div class="card-top"><div class="card-head">${onSwitch(vendor, id, locked)}${nameBlock(vendor, id)}${actions(vendor, id, facts, locked)}</div>`
+    + lockLine(vendor, facts, locked)
     + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${verdictBadge(vendor.id, facts.context)}`
     + `${cannotRun(vendor.id, facts.context.reported)}${cliBadge(vendor, facts.context.cli)}${healthBadge(facts.check)}</div>`
     + `<div class="world">${worldButtons(vendor, id, facts.context)}</div>`
@@ -169,7 +189,8 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const on = vendor.enabled && facts.context.apiNote.length === 0;
-  const stage = (kind: 'plan' | 'code', text: string): string => stageBox(kind, id, vendor[kind], on && !facts.lastFor.includes(kind), text);
+  const stage = (kind: 'plan' | 'code', text: string): string => stageBox(kind, id, vendor[kind], on && !facts.lastFor.includes(kind), text, '',
+    facts.lastFor.includes(kind) ? lockLineId(vendor) : '');
 
   return `<div class="block"><h4 class="block-title">Use for</h4>`
     + `<div class="field stages">${stage('plan', 'reviews plans')}${stage('code', 'reviews code')}`

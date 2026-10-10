@@ -69,6 +69,8 @@ export interface Confirmed {
   readonly danger: boolean;
   /** Set when the action may not be taken now; the button is drawn disabled with this as its title. */
   readonly refused?: string;
+  /** The id of the line on the page that says why it is refused — a title alone is a hover nobody finds. */
+  readonly describedBy?: string;
 }
 
 /**
@@ -78,12 +80,22 @@ export interface Confirmed {
  * on the first click.
  */
 export function confirmButton(confirmed: Confirmed): string {
-  const refused = confirmed.refused ?? '';
-
   return `<button type="button" class="ask" data-asks="${escapeHtml(confirmed.command)}" data-id="${escapeHtml(confirmed.id)}"`
     + ` data-ask-title="${escapeHtml(confirmed.title)}" data-ask-body="${escapeHtml(confirmed.body)}"`
     + ` data-ask-action="${escapeHtml(confirmed.action)}" data-ask-danger="${confirmed.danger ? 'true' : 'false'}"`
-    + `${refused.length > 0 ? ` disabled title="${escapeHtml(refused)}"` : ''}>${escapeHtml(confirmed.label)}</button>`;
+    + `${refusedAttributes(confirmed)}>${escapeHtml(confirmed.label)}</button>`;
+}
+
+/** A refused button: disabled, the reason as its title, and the line on the page that says it. */
+function refusedAttributes(confirmed: Confirmed): string {
+  const refused = confirmed.refused ?? '';
+
+  return refused.length > 0 ? ` disabled title="${escapeHtml(refused)}"${describedBy(confirmed.describedBy)}` : '';
+}
+
+/** ` aria-describedby="…"` naming the element that says why — '' when nothing does. */
+export function describedBy(id = ''): string {
+  return id.length > 0 ? ` aria-describedby="${escapeHtml(id)}"` : '';
 }
 
 /** The one dialog every confirmed action opens — filled by the page's script from the button that asked. */
