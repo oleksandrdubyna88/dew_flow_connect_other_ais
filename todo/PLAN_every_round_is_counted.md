@@ -1,8 +1,9 @@
 # PLAN — every round is counted, and what it cost the subscription is visible
 
-> Status: **in progress, 2026-10-10 — E2 (the local counter: `coai-mcp --round-counts` and schema step 20, the
-> extension's cached read, the Spending tab's Rounds block, the model card line, tokens and money — stories 2.1–2.5) is
-> implemented on `feat/round-counter-e2-local-counter`; E1 and E3–E6 are still plans. Deviations so far are recorded
+> Status: **in progress — E1 landed 2026-10-10 in part (story 1.2 whole; story 1.1 without three measurements it
+> names — agy in WSL, the Team server slot, the read on an expired token); E2 landed 2026-10-10 whole (the local
+> counter: `coai-mcp --round-counts` and schema step 20, the extension's cached read, the Spending tab's Rounds block,
+> the model card line, tokens and money — stories 2.1–2.5); E3–E6 not built. Deviations so far are recorded
 > below.** Scope: the Team server's job ledger, `/api/usage` and
 > job claim (`src_server`), the reviewer launch path both halves share (`src_mcp/runners/Reviewers`), `coai-mcp`'s
 > round store (`--log` family), the extension's Spending tab, Team-server block and model cards (`src_vs_code`), and
@@ -129,9 +130,16 @@ shipped twin.
     a job ended by the host stopping (`JobRunner.cs:113-120`). Known to fold two launches into one line: a repair
     (`ReviewerExecutor.cs:565`) and a follow-up. Story 3.3 closes what this census lists.
   **Decides E6's scope.** No codex source → E6 is its record story alone, folded into E5.
+  *Done in part 2026-10-10 — three measurements of this scope were NOT made and stay open: agy was not launched in
+  WSL; the Team server slot was not read (a slot read needs the slot's lease on the live host — it moves to 6.1); and
+  the rate-limit read with an EXPIRED access token was deliberately not tried (the refresh risk 6.1 must settle).
+  What was measured — [RESULTS_vendor_quota_gauges.md](../research/RESULTS_vendor_quota_gauges.md): codex HAS a source
+  (`codex app-server` · `account/rateLimits/read`, one weekly window, no 5-hour one on this plan; `exec --json` carries
+  none), the read did not touch `auth.json` while the access token was valid, Gemini has only its refusal, and a fourth
+  consumer — codex used directly outside coai — exists; E6 keeps 6.1 and 6.2 with the constraints its §6 lists.*
 - **1.2 Server ledger bodies as fixtures** (Fable) — one `ok`, one withdrawal-written-as-`TimedOut`, one
   `RateLimited` line from the live server, redacted (no email, no prompt), under `src_server/tests/`, with a check
-  that no fixture line contains `@`.
+  that no fixture line contains `@`. *Done 2026-10-10 — `src_server/tests/fixtures/usage/`, `UsageLedgerFixtureTests`.*
 
 ### E2 — the local counter · `feat/round-counter-e2-local-counter`
 
