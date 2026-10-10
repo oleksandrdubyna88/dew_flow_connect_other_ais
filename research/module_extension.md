@@ -11211,6 +11211,15 @@ table (`qconsultWrite.EDITS.qconsultRowPick` → `rowPicked`): the row becomes a
 '' }`, keeps its id and prompt, and goes OFF as a vendor change does; a row not ticked "question consultant" is refused
 and the control snaps back. It goes through the usual fold, which drops a row only when its question row is REMOVED.
 
+**A row is named by its display name** (2026-10-10, operator report: "Used by: chat-preset-mtwtqr0p-3" for a card
+called "GPT-6-Astra"). `catalogPicks.rowName` is the name edited on the row's Models card, or its id when it has none;
+`rowLabel` is that name with the id beside it when the two differ — "GPT-6-Astra (chat-preset-mtwtqr0p-3)". Every
+`rowPicks` option label (the consultant's callers, the question rows), the stranded option and the "not ticked"
+sentence, and the "Used by" strip above every feature tab (`catalogSections.tickedFor`) use it; an option's VALUE stays
+the id, because the id is what a pick stores. A pick of a row that is gone is still named by its id — there is no name
+left to read. Not yet: the Security lane's Reviewer select draws its options from raw ids (`securityLaneView.select`),
+though its stranded sentence goes through `rowPicks` and is named.
+
 **Fixed on the way (both pages):** the Question consultant section resolved its rows against the panel's `vendors` —
 the current page's reviewers since E1.4 — so a row epic 1 had migrated into a reference to an `ask-<id>` row read as
 having no runtime and its switch was disabled. It resolves against `catalogRows` now

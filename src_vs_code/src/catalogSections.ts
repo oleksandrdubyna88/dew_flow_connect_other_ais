@@ -7,7 +7,7 @@ import {
   cliButtons, consultantSection, gateBody, keysBody, limitsSection, promptsBody, questionConsultantSection, securityLaneSection,
   serverBody, sideBody, teamServersSection, type PanelState,
 } from './panelView';
-import { rowsFor } from './catalogPicks';
+import { rowLabel, rowsFor } from './catalogPicks';
 import { securityTryHtml } from './securityTry';
 import { rolesEmbedded } from './rolesEmbed';
 import { commandsEmbedded } from './commandsEmbed';
@@ -118,7 +118,7 @@ function tickedFor(use: CatalogUse, rows: readonly Vendor[]): string {
     return `No model is ticked for the ${USE_LABELS[use]} yet.${UNTICKED[use] ?? ''}`;
   }
 
-  return `Used by: ${ticked.map((row) => `<b>${escapeHtml(row.id)}</b>${row.enabled ? '' : ' (switched off)'}`).join(', ')}.`;
+  return `Used by: ${ticked.map((row) => `<b>${escapeHtml(rowLabel(row))}</b>${row.enabled ? '' : ' (switched off)'}`).join(', ')}.`;
 }
 
 /** The strip above a feature tab: the rows ticked for it, and the way to change them on Models. */

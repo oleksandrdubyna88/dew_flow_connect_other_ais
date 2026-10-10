@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Fixed: the Consultants tabs name a model the way its Models card does.** A model migrated from a chat preset showed
+up as its raw id — "Used by: chat-preset-mtwtqr0p-3", and the same id in the question consultant's Model picker —
+while its card is called "GPT-6-Astra". The "Used by" line above every feature tab, the consultant and question
+consultant pickers and the "not ticked" note now say "GPT-6-Astra (chat-preset-mtwtqr0p-3)"; a model with no name of its
+own keeps its id.
+
 **Fixed: a Models card that cannot be switched off or removed now says why on the card.** The only model switched on
 for plan or code review keeps its switch, its ✕ and that stage's tick refused, and the reason was only a tooltip, so the
 card looked broken. A quiet line under the card's head now reads, for example, "Locked: the only model switched on for
