@@ -10956,7 +10956,8 @@ Every place of the new page but Models draws the CURRENT page's section for it, 
 `catalogSections.placeBody(place, state)` names the builder of each place (`SPLIT`, and since E5 prerequisite (b)
 `MOVED_SECTIONS` — it used to look the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`), so no
 builder is copied and a control behaves the same on both pages until E5 retires the old one. The page wraps it in a
-`.moved` column (760 px, the width the sections were written for); the MCP server keeps its 1.5× zoom on its new pane.
+`.moved` column (760 px, the width the sections were written for — lifted on a wide editor where a place lays out
+in columns, see *The Settings tabs lay out in two columns*); the MCP server keeps its 1.5× zoom on its new pane.
 
 - **The prompts section is split in two** by one parameter, `promptsBody(state, half)` (`PromptsHalf`): `both` is the
   current page, unchanged; `stages` (Reviews → Stages) is the switches, rounds, thresholds, lens deals and workspace;
@@ -11697,3 +11698,33 @@ Nothing a person sees changes: everything removed here was drawn by nothing sinc
 priced from the reviewers only (`isReviewerRow`, to keep a hidden api consultant from overwriting a reviewer's rate
 for the same model). So a row that is not a reviewer — a consultant-only model — shows no catalog price on Models.
 It predates E5; recorded as a follow-up in the plan.
+
+## The Settings tabs lay out in two columns on a wide editor (2026-10-09)
+
+Asked for by the operator on 0.65.0: Models drew its cards in two columns on a wide editor, and every other tab was the
+760 px `.moved` column with the right half of the screen empty. Reviews (every sub-tab but **Limits**), **Security lane**
+and **Chat** now lay their repeated cards out the way Models does — by the SAME rule, not a copy of it.
+
+- **One class, one rule.** `cardColumns.ts` exports `CARD_COLUMNS` (`card-columns`) and `cardColumns(cards)`, which
+  wraps drawn cards in that class and draws nothing for no cards. Models' rule (`.catalog .cards`, one column, two from
+  `min-width: 1100px`) became the page's `.catalog .card-columns`, in `COLUMNS` at the end of `catalogCss.ts`; Models'
+  container carries both classes. Inside the same media query `.catalog .moved:has(.card-columns)` drops the 760 px
+  cap, so a narrow editor keeps the column it had. The cells' own single-column margins are cleared
+  (`.card-columns > *`; the gap spaces them) and a fieldset gets `min-width: 0`, or its min-content width pushes the track.
+- **What flows, by place.** Stages and Prompts per round: each stage's role boxes (`promptsBody`); the stage's switches
+  and notes span. **Roles & prompts: each role's PROMPTS** (`rolesBlocks.promptBlocks`) — a role spans the page, because
+  a stage often holds one role and two columns of roles left Plan review as narrow as before. The gate: its fields
+  (`catalogSections`, around `gateBody`). Commands: Yours and Shipped, each list's blocks. Security lane: the two numbers,
+  the prompt cards and the pairs; the switch, the legend, each list's count and button and *Try it* span. Chat: the
+  models a chat can open on, the three sending fields, the prompt presets; a stranded choice and a conflict's table span.
+- **Not touched:** Limits (five numbers, one a row), Consultants (a form of single settings with no repeated card),
+  Setup.
+- **Models' card-block rule is the card's.** It was the page-wide `.catalog .block`, and Chat draws its models as
+  `.block` too, so they wore a card block's top line and padding; it is `.catalog .card .block` now.
+- **Tests:** `theSettingsTabsFlowInTwoColumns.test.ts` runs the page on each place. Every card family is drawn exactly
+  as many times as its source of truth says (the state, the shipped catalogue, or the builder's own output — a family
+  drawing nothing would otherwise pass) and each card's PARENT is the shared class (a class written beside the cards
+  instead of around them reads the same to a search); Limits draws none; Models' cards sit in it; the sheet holds
+  exactly one two-column rule — on the shared class, at 1100 px — with the cap lifted there; and no top-border rule
+  reaches a Chat model block while one still reaches a Models card block. Design record:
+  [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
