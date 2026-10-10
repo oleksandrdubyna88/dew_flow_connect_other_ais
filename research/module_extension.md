@@ -7311,6 +7311,22 @@ priced as `flash-medium`. Now:
 - The provider looks up every model the ledger names (`modelPrices(vendors, ledger)`), not only the rows' current
   models, for the spending tab and for the consultations tab — otherwise a past model would be an unpriced floor.
 
+**`roundMoney.ts` — tokens and money per vendor row × model × kind (2026-10-10, story 2.5).** Pure and `vscode`-free,
+over the lines the panel already reads (`parseUsage`; the chat ledger through `chatLedgerLines`, kind `chat`, on the
+vendor `chatRowProvider` names, answered/stopped not failures) and a `RateOf` lookup handed in (`priceOfLine` over the
+rows and lists). `moneyGroups(lines, window, rateOf)` answers, inside a trailing window, per vendor row × model × kind
+(review / consult / question / chat; a Team-server row is its own row): tokens in / cached / out / reasoning — an
+uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `unknown`, never 0 (`tokenText`) — recorded
+turns, failed, the median input and output **per recorded turn** (`MEDIAN_OUTPUT_LABEL`: a repair or a follow-up is two
+launches on one line until story 3.3, so no per-launch figure is claimed), and the money (`Estimate`). `rollUp` makes
+a vendor row or the window from groups (no medians). `perUnit(money, unitDivisor(kind, count, turns))` divides: a
+MODEL line by the rounds that used it when the caller knows them, else per recorded turn; a vendor row or the total by
+every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
+the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
+this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
+says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1); rendering the
+Rounds block, the card line and `readRoundCounts` are stories 2.2–2.4 and not built yet.
+
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
 window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes
