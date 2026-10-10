@@ -1,6 +1,7 @@
 # PLAN — a path in the settings belongs to a side: a missing folder is marked, and two sides get two fields
 
-> Status: **plan only, nothing implemented yet (2026-10-09).** Scope: the extension's path-bearing settings and the
+> Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
+> deviations are under E1); E0, E5, E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
 > pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
@@ -288,30 +289,65 @@ RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/p
 
 ### E1 — one rule for every path setting · `feat/paths-per-side-e1-one-rule`
 
-- **1.1 The registry as code.** `pathSettings.ts`: every path setting, its field, its kind (`folder`, `file`,
+- ✅ **1.1 The registry as code.** `pathSettings.ts`: every path setting, its field, its kind (`folder`, `file`,
   `folderList`), whether it must already exist, and who says it (the table in (e)). RED: a census test that walks
   `package.json`'s `contributes.configuration` and fails on a setting or nested field named `*Path`/`*Directory`/`*Roots`/
   `*Directories` missing from the registry (today: seven fields in six settings; `coai.credsPath` would be the eighth).
-- **1.2 A CLI path of the other OS is skipped, not run.** `pathForThisSide` (rules 2–3 of (c)) in the extension's
+- ✅ **1.2 A CLI path of the other OS is skipped, not run.** `pathForThisSide` (rules 2–3 of (c)) in the extension's
   `COAI_VENDORS` writer and launch paths (`vendorsWire.ts:115`, `chatPresets.ts:470`, `claudeCli.ts:32-41`), and the
   same in coai-mcp's vendor read (`PanelSettings.cs:1270`). RED (TS): a Windows-side reader given
   `executablePath: '/usr/local/bin/codex'` sends it to the server today. RED (C#): the probe of such a row answers
   `CliFound=false`; after, it probes the PATH name and logs one Information line. Vectors in
   `shared/path-family-vectors.json` (`executable` set), read checked by both halves.
-- **1.3 `alsoWatchDataDirectories` reads the other side's entries as the other side's.** On Windows a `/…` entry stops
+- ✅ **1.3 `alsoWatchDataDirectories` reads the other side's entries as the other side's.** On Windows a `/…` entry stops
   being REFUSED (`escalationDirs.ts:84`) and becomes *"the other side's"*; on WSL a `\\wsl.localhost\…` entry stops
   failing as *"could not be read"*. RED: `watchedDirs(own, ['\\\\wsl.localhost\\Ubuntu\\x'], 'linux')` returns it as
   usable today.
-- **1.4 A shared `dataDirectory` of the other OS is not resolved.** `chooseStorage` skips a shared-layer value spelled
+- ✅ **1.4 A shared `dataDirectory` of the other OS is not resolved.** `chooseStorage` skips a shared-layer value spelled
   for the other OS (falls to the default) and `whereData` says so. RED: a `linux` host with shared `Z:\coai` resolves to
   `<cwd>/Z:\coai` today (inject `resolve`/platform).
-- **1.5** The page names every such value *"the other side's — skipped here"* in the quiet hint tone, through the one
+- ✅ **1.5** The page names every such value *"the other side's — skipped here"* in the quiet hint tone, through the one
   `otherSideNote` (`pathFamily.ts:154-158`), generalised by setting. Page test: the Models card of a row with a POSIX path
   on a Windows page shows the note, and no **cannot review** badge is blamed on it.
-- **1.6 *Export settings* leaves `qconsultRoots` out** (decided with the operator, D4) — added to `NEVER_TRANSFERRED`
+- ✅ **1.6 *Export settings* leaves `qconsultRoots` out** (decided with the operator, D4) — added to `NEVER_TRANSFERRED`
   (`configTransfer.ts:29-40`) as *"paths on this machine"*, like `alsoWatchDataDirectories`; an import that carries it
   (an older export) refuses that entry by name and keeps the importer's own roots. RED: `exportedSettings` of a profile
   with roots set contains `qconsultRoots` today; an import of a v2 file holding it overwrites the importer's roots today.
+
+**E1 as built (2026-10-10) — deviations and what is left.** Every story above is done, RED first, with a break-it on
+its deciding line; the observed messages are in the commits and in `research/module_tests.md`.
+
+- **Seven fields in SEVEN settings**, not six: `qconsultRoots`, `vendors[].executablePath`,
+  `consultants.*.executablePath`, `qconsultRows[].executablePath`, `chatModelPresets[].executablePath`,
+  `alsoWatchDataDirectories`, `dataDirectory`. The census can only see what the manifest DECLARES: the
+  `qconsultRows` and `chatModelPresets` item schemas do not declare `executablePath`, so those two are registered by
+  hand and a new undeclared nested path field would not be caught (the census checks properties, items, map entries
+  and the keys of default rows).
+- **1.2 reached more sites than the plan cited.** Besides `vendorsWire.ts` (`rowOnTheWire`), `chatPresets.ts`
+  (`chatRunSpec`) and `claudeCli.ts`: `settingsShape.ts` (a consultant definition on `COAI_CONSULTANTS`),
+  `qconsultSettings.ts` (`COAI_QCONSULT_ROWS`), `vendorTerminal.ts` (`executableFor`, `executableForRuntime`, and a
+  self-update decided on ITS platform), `chatLaunch.ts`, `cliChatLaunch.ts` and the agy model list in
+  `panelProvider.ts`. A scan test (`aCliPathOfTheOtherSideIsSkipped.test.ts`, `UNRESOLVED_READS`) counts every raw
+  read of a stored `executablePath`, so a launch site that skips the rule goes red. `pathForThisSide(stored, family)`
+  implements rules 2-3 only; rule 1 (`executablePathBySide`) is E3's.
+- **1.2 on the server: `ParseVendors` only.** Every `ParseVendors` caller gets the skip (`COAI_VENDORS`, a
+  consultant's or a question row's catalog `row`, `--check-model`); the legacy consultant / question-row
+  `executablePath` fields OUTSIDE a `row` are not skipped server-side — the extension already writes this side's value
+  for them, and only an older extension's file would still carry the other side's.
+- **"No cannot review blamed on it" (1.5) — the research table overstated the symptom.** The card's badge
+  (`cannotRun` → `availabilityOf`) reads `auth` only, and a CLI that is not found is reported `cliFound: false` with
+  `auth: "own auth"`, so the red badge was not drawn for a missing CLI path — the probe's note said "was not found on
+  this machine". The page test therefore asserts the quiet note, no `cannot-run` and no `stale` on that card; the seam
+  leg (`seam-cli-path-other-side.mjs`) reads the row's `cliFound`, version and note from `--providers` instead of the
+  badge. Whether a missing CLI should badge at all is E5's question (5.4), not answered here.
+- **1.3:** `POSIX_ON_WINDOWS` (the refusal) is gone; its advice survives as `WSL_FROM_WINDOWS`, appended to the
+  other-side sentence on Windows. Entries of the other side are de-duplicated like any other.
+- **1.4:** only the SHARED layer is skipped — the environment and this side's own overlay choice are this side's by
+  construction. `chooseStorage` gained a `family` parameter (default: the host's) instead of an injected `resolve`.
+- **1.5:** `otherSideNote(windows, setting)` takes its words from the registry (the roots' sentence is byte-identical);
+  `PanelState.hostFamily` (absent = the host's) and `CardContext.family` let a page test draw both sides on one machine.
+- **Not in E1:** the server's structured `settingProblems`, the missing-path notice and mark (E5), the side registry
+  (E2), the second field (E3/E4).
 
 ### E5 — a missing path of this OS: a notice at every start and a bright mark · `feat/paths-per-side-e5-missing`
 
@@ -471,8 +507,11 @@ The four questions this plan asked were answered the same day; the design above 
 ## Definition of Done
 
 - [ ] E0 measured and recorded in `research/`; the plan says whether "both known" flips live.
-- [ ] Every path setting is in one registry; a census test fails on a new one that is not.
+- [x] Every path setting is in one registry; a census test fails on a new one that is not (E1.1; a nested field the
+      manifest does not declare is registered by hand — see E1's deviations).
 - [ ] A path spelled for the other OS is skipped, never refused and never a toast, on both halves, from one vector file.
+      (E1: every path setting in the extension; on the server the `COAI_VENDORS` / catalog-`row` CLI paths and, from the
+      fix branch, the roots.)
 - [ ] A missing path of this OS raises one `setting-path-missing` notice per window start, with **Open in Settings**,
       and no generic toast for the same folder (RED first, teeth shown).
 - [ ] The Settings page marks it with `.path-missing` in `--err`, `aria-invalid`, and a count on its tab — page tests
@@ -480,7 +519,7 @@ The four questions this plan asked were answered the same day; the design above 
 - [ ] The page and coai-mcp agree on which paths are missing — the seam leg green against the real binary.
 - [ ] A NAMED data directory that does not exist is red on the page and said at every start (D3); the default location
       on a first start is never red; nothing creates a missing named root (E5.7, `test:host` both halves).
-- [ ] *Export settings* never carries `qconsultRoots` (D4).
+- [x] *Export settings* never carries `qconsultRoots` (D4) — E1.6.
 - [ ] Sides seen are recorded, listed and forgettable; `coai.pathFieldsPerSide` declared and documented in five
       languages.
 - [ ] Two labelled fields per path when both sides are known, one otherwise; older extensions and servers unaffected

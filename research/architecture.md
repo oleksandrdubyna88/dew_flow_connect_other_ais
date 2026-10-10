@@ -1112,7 +1112,10 @@ sides' folders. Which ones are the OTHER side's — spelled for the other OS and
 real folder on a Windows drive — is decided twice — the server skips them (`QuestionRoots.OtherSide`),
 the Settings page says so beside them (`pathFamily.ts`) — and held level the capability table's way:
 `shared/path-family-vectors.json`, answered by `QuestionConsultSettingsTests` and `pathFamily.test.ts`
-([module_server.md](module_server.md), [module_extension.md](module_extension.md)).
+([module_server.md](module_server.md), [module_extension.md](module_extension.md)). Since 2026-10-10 the file also holds
+the `executable` set — a reviewer's CLI path of the other OS is skipped (PATH lookup) by the extension's writer
+(`pathForThisSide`) and by the server's vendor read (`ExecutablePaths.Here`) alike, checked against each other by the
+seam leg `seam-cli-path-other-side.mjs` (`todo/PLAN_paths_per_side.md` E1).
 
 ### The question card gained a status and the consultants' answers (2026-10-02, S3 of the question consultant)
 

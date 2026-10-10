@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**Fixed: every path in the settings now follows that rule, not only the question consultant's folders.** A reviewer's
+CLI path written in a Windows window (`C:\…\codex.cmd`) and read in WSL — or a WSL path read on Windows — is the other
+side's: this side looks the CLI up on `PATH` instead of probing a file that is not there, the Models card says so
+quietly under the box, and coai-mcp skips it too in a settings file an older extension wrote. The same goes for a
+consultant's, a question row's and a saved chat model's CLI path. *Questions from another installation* no longer
+refuses a WSL folder in a Windows window, nor reads a `\\wsl.localhost\…` folder as a relative name in WSL: each is listed
+as the other side's and skipped. A shared data directory written for the other OS is not used here; this side falls to
+its next choice and Setup › MCP server says why. **Export config** no longer carries the question consultant's folders
+— they are folders of the machine that wrote them — and an older export that has them leaves yours as they are.
+
 **Fixed: a question-consultant folder from the other side is no longer an error.** VS Code shares your settings
 between a WSL window and a Windows one, so a folder added in WSL (`/home/you/git`) was read on Windows too, and the
 server greeted every Windows start with "is not a directory on this machine". A folder written for the other OS that
