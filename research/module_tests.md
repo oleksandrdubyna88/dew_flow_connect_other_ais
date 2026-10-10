@@ -3133,3 +3133,32 @@ section is declared for the settings surface.
 | `qconsultWrite.test.ts` "choosing another vendor or prompt takes the row off" | "choosing another prompt takes the row off" — a row picks a catalog row; there is no vendor control |
 | `refusedSelect.test.ts`: a `'consultants'` composite write snaps back | a consultant PICK (`savePick`) snaps back |
 | `catalogRow.test.ts`, `theOldPagePricesWhatItShows.test.ts` (since 2026-10-09 `theCardsArePricedFromEveryRow.test.ts`, pinning the per-row prices instead) name `shownOnTheOldPage` | `isReviewerRow` |
+
+## The deployed ledger's own lines as fixtures (2026-10-10, story 1.2 of `todo/PLAN_every_round_is_counted.md`, E1)
+
+Three lines of the Team server's live `usage.jsonl`, copied read-only on 2026-10-10 through the operator's credential
+vault — the last `ok`, the last `TimedOut` under ten seconds, the last `RateLimited` — with the person's email replaced
+by `person@example.invalid` before the bytes left the host, under `src_server/tests/fixtures/usage/` and copied to the
+output by the csproj. They are what the deployed server WRITES, as bytes: the twelve keys `utc … email, kind` and none of
+`tokensCached`, `tokensReasoning`, `usageNote`, `costNote` (the deployed binary predates them), and the 8.4 s withdrawal
+filed as the vendor's `TimedOut` with a free 0/0 — the defects E3 fixes, visible in the fixture rather than composed by
+a test. The measurement they belong to is [RESULTS_vendor_quota_gauges.md](RESULTS_vendor_quota_gauges.md) §8.
+
+| Suite | What it proves | RED observed |
+|---|---|---|
+| `UsageLedgerFixtureTests` (new, 27) — the three shapes | the folder holds exactly `ok.jsonl`, `rate-limited.jsonl`, `timed-out-withdrawal.jsonl`: the companion of every scan below, so a copy rule that forgot the folder cannot pass the theories over nothing | a planted fourth file → `Expected … a collection with 3 item(s), but {"ok.jsonl", "planted.jsonl", …}` |
+| — the four redaction guards, one theory each over every file | only the ledger's own keys (an allow-list of sixteen); no `@` but the placeholder's, and the placeholder present; no IPv4 and no host-name shape (`label.tld`; a model id's `5.6` is digits after the dot and does not match); **no token-like value in ANY string field** — `Bearer` / `Basic` + token, the `sk-` / `ghp_` / `github_pat_` prefixes, a JWT (`eyJ….….…`), a 32+ run of hex / base64 characters, the last exempt only in the `model` field and only for a dashed or dotted id of short lowercase segments | a planted un-redacted line in the OUTPUT folder → 4 red with the real symptoms (`must not carry an IP address … found True`; `to contain "person@example.invalid"`; four fixtures not three; `no outcome is named for fixture 'planted.jsonl'`); a foreign `host` key → `items {"host"} are not part of the superset`. **The hole the E1 code round named**: a `Bearer abc…` in the allow-listed `usageNote` passed all 13 of the first three guards' cases; with the fourth guard it is red — `'usageNote' must not hold a credential, but found "an HTTP credential (Bearer / Basic followed by a token)"` — and a JWT planted in `costNote` is red with `"a JWT (three base64url parts, the first starting eyJ)"`; plant removed → 27 of 27 |
+| — `APlantedSecret_InAnyStringField_IsRefusedByName` (9 rows) and `ALongDashedModelId_IsNotASecret_ButTheSameTextInANoteIs` | the pure `TokenLike(field, value)` — the same function the theory applies — refuses each planted shape in memory and names its rule; a 43-character dashed model id passes in `model` and is refused as a 32+ run anywhere else | — (new behaviour, the shapes are the plant) |
+| — `EveryLine_ReadsThroughTheServersOwnReader` | each fixture copied into a temp data directory as `usage.jsonl` reads through the REAL `UsageReader` as one line, zero unreadable, with the placeholder email, kind `Review` and the outcome its file name promises (`OutcomeOf` throws on a name it does not know, so a mislabelled fixture is caught) | — |
+| — `TheWithdrawal_IsWrittenTimedOutWithNothingCounted_WhichIsTheDefectE3Names` | the deployed server's shape of a withdrawal, asserted as it IS: `TimedOut`, 8.4 s, 0/0, no `usageNote`. Story 3.2 changes the outcome and this test changes with it, on purpose | — |
+
+Run as `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.exe`; the whole server suite was 424 of 424 after the merge
+of `origin/main` (411 before it, 14 of them this class's first form).
+
+**What it does NOT prove.** Three lines of one day on one deployed version are not the ledger's vocabulary: no
+`UnparseableByVendor`, `NonZeroExit` or `NotStarted` line, no `chat` kind, no line carrying the newer fields, no local
+(email-less) line. The guards are SHAPES: a secret that is none of them — a short password, a prose-shaped token — passes,
+a host written as a bare word passes, and the model-field exemption would pass a dashed credential shaped like a
+catalogue id. The reader test proves the deployed server's bytes parse through today's `UsageReader`, not that E3's
+widened reader will — that is `AnOldLedgerLine_StillReads`, owed by E3, and these fixtures are its input. Nothing here
+reaches the live ledger beyond the three lines that were copied.

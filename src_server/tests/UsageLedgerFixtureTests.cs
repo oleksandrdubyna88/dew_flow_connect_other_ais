@@ -17,8 +17,11 @@ namespace CoaiServer.Tests;
 /// reader change in E3 is tested against what is on disk, and the three defects E3 fixes are visible in them —
 /// no cached or reasoning count, no usage note, a withdrawal filed as a timeout.</para>
 /// <para><b>The repository is public.</b> Every line keeps only the ledger's own keys, its one address is a
-/// placeholder, and nothing in it names a host. The tests below hold that for every file in the folder, so a
-/// fourth fixture pasted from the live ledger is refused until it is redacted the same way.</para>
+/// placeholder, nothing in it names a host, and no string field holds anything shaped like a credential — the
+/// E1 code round found that an allow-listed free-text field (<c>usageNote</c>, <c>costNote</c>) would have let a
+/// <c>Bearer …</c>, an <c>sk-…</c> key or a JWT through the first three guards. The tests below hold all four for
+/// every file in the folder, so a fourth fixture pasted from the live ledger is refused until it is redacted the
+/// same way.</para>
 /// </remarks>
 public sealed partial class UsageLedgerFixtureTests
 {
@@ -38,6 +41,14 @@ public sealed partial class UsageLedgerFixtureTests
     private static readonly UsageRange TheDay = new(
         new DateTimeOffset(2026, 10, 9, 0, 0, 0, TimeSpan.Zero),
         new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero));
+
+    /// <summary>The shapes a credential takes in text, each with the rule's name a refusal carries.</summary>
+    private static readonly (Regex Shape, string Rule)[] SecretShapes =
+    [
+        (HttpCredential(), "an HTTP credential (Bearer / Basic followed by a token)"),
+        (KeyPrefix(), "a vendor key prefix (sk-, ghp_, github_pat_)"),
+        (Jwt(), "a JWT (three base64url parts, the first starting eyJ)"),
+    ];
 
     public static TheoryData<string> Fixtures =>
         [.. Directory.EnumerateFiles(Folder, "*.jsonl").Select(path => Path.GetFileName(path)).Order(StringComparer.Ordinal)];
@@ -86,6 +97,22 @@ public sealed partial class UsageLedgerFixtureTests
 
     [Theory]
     [MemberData(nameof(Fixtures))]
+    public void EveryLine_HoldsNoTokenLikeValueInAnyStringField(string file)
+    {
+        // Every STRING value, not only the free-text notes: a key pasted into `role` or `outcome` is the same leak.
+        foreach (var line in Lines(file))
+        {
+            using var document = JsonDocument.Parse(line);
+            foreach (var property in document.RootElement.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.String))
+            {
+                TokenLike(property.Name, property.Value.GetString() ?? string.Empty)
+                    .Should().BeNull($"{file}: '{property.Name}' must not hold a credential");
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Fixtures))]
     public void EveryLine_ReadsThroughTheServersOwnReader(string file)
     {
         var dataDir = Directory.CreateTempSubdirectory("coai-usage-fixture-").FullName;
@@ -121,6 +148,50 @@ public sealed partial class UsageLedgerFixtureTests
         line.TryGetProperty("usageNote", out _).Should().BeFalse("the deployed server writes no usage note yet");
     }
 
+    /// <summary>The planted cases the E1 code round named, each refused by the rule that names its shape.</summary>
+    [Theory]
+    [InlineData("usageNote", "Bearer abcDEF0123456789abcDEF0123456789abcDEF01", "Bearer")]
+    [InlineData("costNote", "basic dXNlcjpwYXNzd29yZA==", "Basic")]
+    [InlineData("outcome", "sk-live-0123456789abcdef", "sk-")]
+    [InlineData("role", "ghp_0123456789abcdefGHIJ", "ghp_")]
+    [InlineData("stage", "github_pat_0123456789abcdef_XYZ", "github_pat_")]
+    [InlineData("usageNote", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl", "JWT")]
+    [InlineData("costNote", "0123456789abcdef0123456789abcdef", "32+")]
+    [InlineData("usageNote", "dGhpcyBpcyBhIGxvbmcgYmFzZTY0IHJ1bg==/+AbCd", "32+")]
+    [InlineData("model", "abcdefghijklmnopqrstuvwxyz0123456789", "32+")]
+    public void APlantedSecret_InAnyStringField_IsRefusedByName(string field, string value, string rule) =>
+        TokenLike(field, value).Should().NotBeNull($"'{value}' in '{field}' is a credential shape").And.Contain(rule);
+
+    [Fact]
+    public void ALongDashedModelId_IsNotASecret_ButTheSameTextInANoteIs()
+    {
+        // The one exemption the 32+ rule has, and only in the field a model id lives in: a catalogue id is short
+        // lowercase segments joined by dashes or dots. A hex or base64 token has no such seams, and the same
+        // text anywhere else is still a run of key-like characters.
+        const string id = "claude-sonnet-5-5-extended-thinking-preview";
+
+        TokenLike("model", id).Should().BeNull("a model id is not a credential");
+        TokenLike("usageNote", id).Should().Contain("32+", "the exemption is the model field's alone");
+    }
+
+    /// <summary>
+    /// Why <paramref name="value"/> looks like a credential, or null when it does not — the rule's name, so a
+    /// refusal says what was seen without repeating the value.
+    /// </summary>
+    internal static string? TokenLike(string field, string value) =>
+        SecretShapes.Select(shape => shape.Shape.IsMatch(value) ? shape.Rule : null).FirstOrDefault(rule => rule is not null)
+        ?? LongKeyLikeRun(field, value);
+
+    /// <summary>A 32+ run of key-like characters — hex, base64, base64url — unless it is the model field's id.</summary>
+    private static string? LongKeyLikeRun(string field, string value) =>
+        LongRun().IsMatch(value) && !IsModelId(field, value)
+            ? "a 32+ run of key-like characters (hex, base64) that is not a known model id shape"
+            : null;
+
+    /// <summary>A model id: lowercase letters and digits in short segments (16 at most) joined by dashes or dots.</summary>
+    private static bool IsModelId(string field, string value) =>
+        field == "model" && ModelIdShape().IsMatch(value) && value.Split('-', '.').All(segment => segment.Length <= 16);
+
     private static IReadOnlyList<string> Lines(string file) =>
         [.. File.ReadAllLines(Path.Combine(Folder, file)).Where(line => line.Trim().Length > 0)];
 
@@ -139,4 +210,19 @@ public sealed partial class UsageLedgerFixtureTests
     /// <summary>A label, a dot, two or more letters — a host name's shape; a model id's <c>5.6</c> is digits after the dot and does not match.</summary>
     [GeneratedRegex(@"\b[a-z0-9-]+\.[a-z]{2,}\b", RegexOptions.IgnoreCase)]
     private static partial Regex HostLike();
+
+    [GeneratedRegex(@"\b(?:Bearer|Basic)\s+[A-Za-z0-9+/=_.\-]{8,}", RegexOptions.IgnoreCase)]
+    private static partial Regex HttpCredential();
+
+    [GeneratedRegex(@"\b(?:sk-[A-Za-z0-9_\-]{8,}|ghp_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,})")]
+    private static partial Regex KeyPrefix();
+
+    [GeneratedRegex(@"\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}")]
+    private static partial Regex Jwt();
+
+    [GeneratedRegex(@"[A-Za-z0-9+/_\-]{32,}")]
+    private static partial Regex LongRun();
+
+    [GeneratedRegex(@"^[a-z0-9]+(?:[.\-][a-z0-9]+)+$")]
+    private static partial Regex ModelIdShape();
 }
