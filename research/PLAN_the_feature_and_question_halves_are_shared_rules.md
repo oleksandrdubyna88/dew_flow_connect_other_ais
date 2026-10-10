@@ -13,8 +13,8 @@
 > matching its exceptions (CodeRabbit); the bounded smoke run of the reads came back **incomplete** (the native trace overflowed the
 > harness cap before a final answer), so read evidence is the resolver's `explain`, not the smoke run.
 > **Step 4**, the pin cascade: four consumers were bumped to `bb022429` the same day (mcp #43,
-> sidecar_rust #51, benchmark #71, creds_for_devs #200). **Open tail:** `dew_flow_rag_qln`, last by
-> design (it pins mcp and benchmark too) — a mechanical bump pull request, no plan of its own.
+> sidecar_rust #51, benchmark #71, creds_for_devs #200) and `dew_flow_rag_qln` last, with its two code pins
+> (#53). **Open tail:** the extension release that carries v17, operator-approved, follows this merge.
 >
 > Scope: `dew_flow_conventions` (`common/`), this repository's snippet (`src_vs_code/src/claudeSnippet.ts`,
 > `src_vs_code/scripts/prepare-gate.mjs`, their tests, `package.json`), then the `.agents/conventions` /
@@ -118,8 +118,8 @@
 
 ## Definition of Done
 
-- [ ] Both rules on conventions `main`, promoted to `release`.
-- [ ] The snippet hands out v17 built from six mounted halves; no product copy of any half remains.
-- [ ] All extension and mcp suites green on the PR's head sha; reviewer threads resolved.
-- [ ] Every consumer's pin at the new release, `pin-check` green; rag_qln's code pins current, its build run.
-- [ ] Release notes drafted for the operator; the release PR left unmerged.
+- [x] Both rules on conventions `main`, promoted to `release`.
+- [x] The snippet hands out v17 built from six mounted halves; no product copy of any half remains.
+- [x] All extension and mcp suites green on the PR's head sha; reviewer threads resolved.
+- [x] Every consumer's pin at the new release, `pin-check` green; rag_qln's code pins current, its build run.
+- [ ] Release notes drafted for the operator; the release (operator-approved on 2026-10-09) follows this merge.
