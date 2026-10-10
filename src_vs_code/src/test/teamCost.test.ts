@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { ModelPrice } from '../modelPrices';
-import { costText, modelCost, totalCost, vendorCost } from '../teamCost';
+import { costText, listPriceFrom, modelCost, totalCost, vendorCost } from '../teamCost';
+import { PriceBook } from '../priceBook';
+import { priceOfLine } from '../usage';
+import { vendorsFrom } from '../vendors';
 import { ModelUsage, VendorUsage } from '../teamServerApi';
 
 /**
@@ -81,6 +84,16 @@ test('a vendor with no per-model breakdown has no estimate — the older server 
   assert.equal(vendorCost(row, price).known, false);
 });
 
+test('an older server\'s vendor-reported cost still wins: it is a bill, and needs no model to be one (D4)', () => {
+  const billed: VendorUsage = { vendor: 'claude', runs: 2, failed: 0, tokensIn: 5, tokensOut: 5, seconds: 0, costUsd: 0.5 };
+  const partly: VendorUsage = { ...billed, costUsd: 0.5, costIsFloor: true };
+  const unpriced = JSON.parse('{"vendor":"codex","runs":1,"failed":0,"tokensIn":1,"tokensOut":1,"seconds":0,"costUsd":null}') as VendorUsage;
+
+  assert.equal(costText(vendorCost(billed, price)), '$0.5000', '0.10.0 sent what the vendor billed, and the tab threw it away');
+  assert.equal(costText(vendorCost(partly, price)), '≥ $0.5000');
+  assert.equal(costText(vendorCost(unpriced, price)), '—', 'a null cost is nothing reported, never $0');
+});
+
 test('a total of estimates and bills is one estimate; of bills alone, a bill; of nothing known, a dash', () => {
   const bill = modelCost(model({ costUsd: 1 }), price);
   const guess = modelCost(model({}), price);
@@ -91,4 +104,19 @@ test('a total of estimates and bills is one estimate; of bills alone, a bill; of
   assert.equal(costText(totalCost([none, none])), '—');
   assert.equal(costText(totalCost([guess, none])), '≥ ~$3.00');
   assert.equal(costText(totalCost([])), '—');
+});
+
+test('the tab prices from the LIST, whatever this machine\'s person typed as their own rate for the same model', async () => {
+  const book = new PriceBook(async (_url, parse) => parse(
+    _url.includes('openrouter') ? { data: [{ id: 'openai/gpt-5.6-sol', pricing: { prompt: '0.000002', completion: '0.00001' } }] } : {}));
+  await book.refresh();
+  const vendors = vendorsFrom([{ id: 'codex', runtime: 'codex', model: 'gpt-5.6-sol', pricePerMillionIn: 99, pricePerMillionOut: 99 }]);
+  assert.equal(vendors[0]?.pricePerMillionIn, 99, 'the fixture row carries no typed rate — the contrast below would prove nothing');
+  const lookup = (model: string) => book.priceOf(model);
+  assert.deepEqual(priceOfLine('codex', 'gpt-5.6-sol', vendors, lookup), { in: 99, out: 99 },
+    'the spending tab\'s rule prefers the typed rate — the one the Team server tab must not take');
+
+  const listed = listPriceFrom(book)('gpt-5.6-sol');
+
+  assert.deepEqual([listed?.inPerMillion, listed?.outPerMillion], [2, 10], 'the Team server tab took a typed row rate or lost the list price');
 });

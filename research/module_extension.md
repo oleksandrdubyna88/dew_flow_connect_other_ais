@@ -3449,16 +3449,23 @@ empty `models`. Every server string goes through `escapeHtml`.
   case-insensitive email, keeping every spender — one with no session is a card with no name — and lists the signed-in
   who spent nothing in the collapsed *Signed in, no recorded runs in this window* (D3, D5). *Last seen* is said at the
   server's one-hour resolution ("within the hour", hours, days). Cards search by name or email, and the box says which
-  (`named` in the push); display names are identity-provider text and escaped.
-- *~$ per model (3.2, D4).* `teamCost.ts`: each model at ITS public list price through `PRICE_BOOK.priceOf` — never the
-  admin's own typed row rates, never a long-context tier on a sum — a vendor-reported `costUsd` winning, a model no list
+  (`named` in the push); display names are identity-provider text and escaped. Where the listing stands is one of
+  four states (`listingOf`: held, asking, failed, older), so a company answer that lands before the listing says
+  *asking <server>…* — and a failure says so in the server's words — rather than an older server's sentence; the push
+  carries `sortWhy`, the reason each unavailable sort is unavailable, and the option's label says it. On an older server
+  a card leaves out *last seen* altogether.
+- *~$ per model (3.2, D4).* `teamCost.ts`: each model at ITS public list price through `listPriceFrom(PRICE_BOOK)` — a
+  named lookup, tested against a vendor row's typed rate, so never the admin's own typed row rates; never a long-context
+  tier on a sum — a vendor-reported `costUsd` winning (on an older server too, which reports it per vendor without models), a model no list
   prices a dash that makes its total a floor (`≥`). Person, vendor and summary totals add those; the note says the
   server's lines carry no cached count, so cache-heavy input is overstated. ~$ and *last seen* become sorts when the
   answer can serve them (`sorts` in the push; the page disables and labels the others).
 - *The chart (3.3, D7).* `teamChart.ts`: an inline SVG of the dense 30 UTC days, stacked by vendor, drawn to one scale,
   its axis labelled *launches*, coloured through the vendor palette (theme colours, no hex), the days the server's
   `yyyy-MM-dd` strings printed as they came (never through `new Date()`), a legend naming each vendor, a summary as the
-  image's label and the numbers as a table under *The numbers*; it says its 30 calendar days are not the Month window.
+  image's label and the numbers as a table under *The numbers*, a fold with its own key (`<server>|chart-data`) refilled
+  the way the cards are, so a push keeps it open; the axis label sits at the plot's left edge, start-anchored, where the
+  svg cannot clip it; it says its 30 calendar days are not the Month window.
 
 **Styled with the Settings design.** Its tokens, chips and badges moved from `catalogCss.ts` into the LEAF
 `catalogSheet.ts` (which imports nothing — `catalogCss.ts` imports `settingsPage`, which would drag `SETTINGS_CSS` onto

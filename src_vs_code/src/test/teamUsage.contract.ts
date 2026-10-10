@@ -116,7 +116,7 @@ test('an admin\'s company figures come through the real client, and a window cha
   const pushed = teamTabPush({
     states: [state(true)], selection: withShown(NO_SELECTION, true),
     cell: (_server, window) => cache.cell('contract', 'company', window), asking: () => false, palette: () => 'var(--c)',
-    people: () => undefined, price: () => undefined, now: Date.now(),
+    people: () => undefined, peopleAsking: () => false, price: () => undefined, now: Date.now(),
   });
   assert.strictEqual(pushed.admin, true);
   assert.ok(pushed.readUtc.length > 0, 'the tab cannot say when it read the answer');

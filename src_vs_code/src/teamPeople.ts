@@ -52,6 +52,8 @@ export interface PeopleView {
   readonly palette: VendorPalette;
   /** Now, UTC milliseconds — what "last seen" is measured from. */
   readonly now: number;
+  /** An older server, which cannot say when anybody was last seen: the card leaves it out rather than showing a dash. */
+  readonly older?: boolean;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -153,7 +155,7 @@ export function personCard(person: JoinedPerson, view: PeopleView): string {
     + `<span class="cost num">${escapeHtml(costText(cost))}</span>`
     + `<span class="line2 num"><span>${shortNumber(total.runs)} launches</span>`
     + `<span>${shortNumber(total.tokensIn)} in · ${shortNumber(total.tokensOut)} out</span>`
-    + `<span>${escapeHtml(lastSeen(person.lastUsedUtc, view.now))}</span></span>`
+    + `${view.older === true ? '' : `<span>${escapeHtml(lastSeen(person.lastUsedUtc, view.now))}</span>`}</span>`
     + `<span class="stack" aria-hidden="true">${stack(person.usage.vendors, view.palette)}</span></summary>`
     + `<div class="detail">${vendorTable(person.usage.vendors, view)}<div class="fails">${failed}</div></div></details>`;
 }

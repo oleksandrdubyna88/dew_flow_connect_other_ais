@@ -54,7 +54,15 @@ export function modelCost(row: ModelUsage, price: ListPrice): Estimate {
 
 /** One vendor's spending, from its models — or unknown when the server is too old to say which models ran. */
 export function vendorCost(row: VendorUsage, price: ListPrice): Estimate {
-  return row.models === undefined ? UNKNOWN : totalCost(row.models.map((one) => modelCost(one, price)));
+  return row.models === undefined ? reported(row) : totalCost(row.models.map((one) => modelCost(one, price)));
+}
+
+/**
+ * What an older server's vendor row says it was BILLED — 0.10.0 already sends `costUsd` and `costIsFloor` per vendor,
+ * and a reported cost wins over any estimate (D4); it needs no model to be a bill. Nothing reported is unknown.
+ */
+function reported(row: VendorUsage): Estimate {
+  return typeof row.costUsd === 'number' ? { usd: row.costUsd, known: true, floor: row.costIsFloor === true, estimated: false } : UNKNOWN;
 }
 
 /** Several figures added up: known when any part is, a floor when any part is unknown or a floor itself. */
@@ -78,4 +86,20 @@ export function costText(estimate: Estimate): string {
   }
 
   return `${estimate.floor ? '≥ ' : ''}${estimate.estimated ? '~' : ''}${money(estimate.usd)}`;
+}
+
+/** The one question the tab asks of a price book: what does this model cost by the public lists. */
+export interface ListedPrices {
+  readonly priceOf: (model: string) => ModelPrice | undefined;
+}
+
+/**
+ * The tab's price lookup over the window's price book: the model's LIST price, and only that.
+ *
+ * <p>Named and kept here, free of \`vscode\`, so that "never the admin's own typed row rates" (D4) is a test rather than a
+ * comment on a lambda in the panel: \`priceOfLine\` — what the spending tab uses — prefers a vendor row's typed rate,
+ * which is a fact about THIS machine's person, not about a colleague's runs on the company's subscription.</p>
+ */
+export function listPriceFrom(book: ListedPrices): ListPrice {
+  return (model) => book.priceOf(model);
 }

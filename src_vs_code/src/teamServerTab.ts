@@ -55,6 +55,8 @@ export interface TeamPush {
   readonly named?: boolean;
   /** Which of the sorts the answer can serve: ~$ needs per-model figures, last seen needs the listing. */
   readonly sorts?: { readonly cost: boolean; readonly seen: boolean };
+  /** Why each unavailable sort is unavailable — empty for one the answer serves — so its label says the truth. */
+  readonly sortWhy?: { readonly cost: string; readonly seen: string };
 }
 
 export interface TeamTabInput {
@@ -66,6 +68,8 @@ export interface TeamTabInput {
   readonly palette: VendorPalette;
   /** The people listing held for a server (`GET /api/people`), or nothing. */
   readonly people: (serverId: string) => UsageCell | undefined;
+  /** Whether the people listing for a server is being asked right now. */
+  readonly peopleAsking: (serverId: string) => boolean;
   /** Each model's public list price — the window's price book, never a person's typed row rate (D4). */
   readonly price: ListPrice;
   /** Now, UTC milliseconds — what "last seen" is measured from. */
@@ -75,6 +79,8 @@ export interface TeamTabInput {
 /** The person card's extra inputs, gathered: the listing, the prices, the clock. */
 export interface PartsExtras {
   readonly people?: UsageCell | undefined;
+  /** Whether the people listing is on its way. */
+  readonly peopleAsking?: boolean;
   readonly price: ListPrice;
   readonly now: number;
 }
@@ -105,12 +111,65 @@ export function teamTabPush(input: TeamTabInput): TeamPush {
     readUtc: readOf(cell),
     parts: teamParts(state, cell, input.asking(selected, window), input.palette, extrasOf(input, selected)),
     ...abilities(cell, input.people(selected)),
+    sortWhy: sortWhy(cell?.usage, listingOf(cell?.usage, extrasOf(input, selected))),
   };
 }
 
 function extrasOf(input: TeamTabInput, serverId: string): PartsExtras {
-  return { people: input.people(serverId), price: input.price, now: input.now };
+  return { people: input.people(serverId), peopleAsking: input.peopleAsking(serverId), price: input.price, now: input.now };
 }
+
+/**
+ * Where the people listing stands: held, on its way, failed, or not served at all by an older server. Three of those
+ * are not "missing" in the same way, and saying the older server's sentence for the other two told a newer server it
+ * was too old — or that this extension cannot show what it was merely still loading (own review of E3).
+ */
+export type Listing =
+  | { readonly kind: 'held'; readonly people: readonly PersonListing[] }
+  | { readonly kind: 'asking' }
+  | { readonly kind: 'failed'; readonly problem: string }
+  | { readonly kind: 'older' };
+
+/** The listing's state, from the company answer it goes with and the cache's cell and flight for it. */
+export function listingOf(usage: Usage | undefined, extras: Pick<PartsExtras, 'people' | 'peopleAsking'>): Listing {
+  if (fromOlderServer(usage)) {
+    return { kind: 'older' };
+  }
+  const held = extras.people?.people;
+
+  return held !== undefined ? { kind: 'held', people: held } : unheld(extras);
+}
+
+function fromOlderServer(usage: Usage | undefined): boolean {
+  return usage !== undefined && isOlderServer(usage);
+}
+
+/** No listing held: on its way (or about to be asked, the tab having just shown), or failed in the server's words. */
+function unheld(extras: Pick<PartsExtras, 'people' | 'peopleAsking'>): Listing {
+  const cell = extras.people;
+
+  return extras.peopleAsking === true || cell === undefined ? { kind: 'asking' } : { kind: 'failed', problem: cell.problem };
+}
+
+/** Why each sort that needs a newer server is unavailable now — empty when the answer serves it. */
+function sortWhy(usage: Usage | undefined, listing: Listing): { readonly cost: string; readonly seen: string } {
+  return { cost: costWhy(usage), seen: LISTING_WHY[listing.kind] };
+}
+
+function costWhy(usage: Usage | undefined): string {
+  if (usage === undefined) {
+    return 'asking…';
+  }
+
+  return isOlderServer(usage) ? `needs Team server ≥ ${TEAM_SERVER_WITH_PEOPLE}` : '';
+}
+
+const LISTING_WHY: Readonly<Record<Listing['kind'], string>> = {
+  held: '',
+  asking: 'asking…',
+  failed: 'the people listing could not be read',
+  older: `needs Team server ≥ ${TEAM_SERVER_WITH_PEOPLE}`,
+};
 
 /** When the shown answer landed, for the page to print in local time — or nothing. */
 function readOf(cell: UsageCell | undefined): string {
@@ -151,7 +210,7 @@ export function teamParts(
   if (usage === undefined) {
     return { ...EMPTY_PARTS, status, badges: badges(state, undefined), notes: NOTES };
   }
-  const view = viewOf(state.server.id, usage, palette, extras);
+  const view = viewOf(state, usage, palette, extras);
   const column = people(view);
 
   return {
@@ -166,15 +225,19 @@ export function teamParts(
   };
 }
 
-function viewOf(serverId: string, usage: Usage, palette: VendorPalette, extras: PartsExtras): View {
+function viewOf(state: TeamServerState, usage: Usage, palette: VendorPalette, extras: PartsExtras): View {
+  const listing = listingOf(usage, extras);
+
   return {
-    serverId,
+    serverId: state.server.id,
+    serverName: state.server.name,
     usage,
     palette,
     price: extras.price,
     now: extras.now,
-    listed: extras.people?.people,
-    listedProblem: extras.people?.problem ?? '',
+    older: isOlderServer(usage),
+    listing,
+    listed: listing.kind === 'held' ? listing.people : undefined,
   };
 }
 
@@ -244,17 +307,22 @@ function tile(key: string, value: string, sub: string): string {
 /** What one server's answer is drawn with: the figures, who is signed in, the prices, the colours and the clock. */
 interface View extends PeopleView {
   readonly usage: Usage;
-  /** The people listing, or undefined when there is none — an older server, or a request that failed. */
+  readonly serverName: string;
+  readonly listing: Listing;
+  /** The people listing when it is held, else undefined. */
   readonly listed: readonly PersonListing[] | undefined;
-  /** Why there is no listing, when a newer server was asked and did not answer. */
-  readonly listedProblem: string;
 }
 
-/** What stands where the people listing would be: who is missing it, said in its own words. */
+/** What stands where the people listing would be — asking, the failure, or the older server's sentence. */
 function listingMissing(view: View): string {
-  return view.listedProblem.length > 0 && !isOlderServer(view.usage)
-    ? `the people listing could not be read: ${view.listedProblem}`
-    : notYet(view.usage);
+  const missing: Readonly<Record<Listing['kind'], () => string>> = {
+    held: () => '',
+    asking: () => `asking ${view.serverName}…`,
+    failed: () => `the people listing could not be read: ${view.listing.kind === 'failed' ? view.listing.problem : ''}`,
+    older: () => notYet(view.usage),
+  };
+
+  return missing[view.listing.kind]();
 }
 
 function summary(view: View): string {
@@ -318,7 +386,7 @@ function chart(view: View): string {
 
   return '<div class="chart"><div class="colhead"><h2>Launches per day</h2><span class="spacer"></span>'
     + '<span class="hint">last 30 UTC days</span></div>'
-    + (daily === undefined ? `<div class="hint">The chart ${escapeHtml(notYet(view.usage))}.</div>` : launchesChart(daily, view.palette))
+    + (daily === undefined ? `<div class="hint">The chart ${escapeHtml(notYet(view.usage))}.</div>` : launchesChart(daily, view.palette, view.serverId))
     + '</div>';
 }
 

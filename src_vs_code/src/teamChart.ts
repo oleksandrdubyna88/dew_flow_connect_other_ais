@@ -72,7 +72,8 @@ function grid(top: number): string {
       + `<text x="${LEFT - 4}" y="${y + 3}" text-anchor="end">${value}</text>`;
   }).join('');
 
-  return `${lines}<text x="${LEFT - 4}" y="${TOP - 6}" text-anchor="end" class="axis">launches</text>`;
+  // At the plot's left edge, anchored at its START: end-anchored at the svg's edge it ran off the drawing and was cut.
+  return `${lines}<text x="${LEFT}" y="${TOP - 6}" text-anchor="start" class="axis">launches</text>`;
 }
 
 function dayLabels(days: readonly DailyBucket[], step: number): string {
@@ -111,14 +112,15 @@ function legend(daily: DailyUsage, palette: VendorPalette): string {
 }
 
 /** The numbers behind the bars, one row per day — the chart's text alternative. */
-function table(daily: DailyUsage): string {
+function table(daily: DailyUsage, serverId: string): string {
   const order = vendorsOf(daily).map((one) => one.vendor);
   const head = `<tr><th scope="col">Day</th>${order.map((vendor) => `<th scope="col">${escapeHtml(vendor)}</th>`).join('')}<th scope="col">All</th></tr>`;
   const rows = daily.days.map((day) => `<tr><td>${escapeHtml(day.day)}</td>`
     + `${order.map((vendor) => `<td class="num">${day.vendors.find((one) => one.vendor === vendor)?.runs ?? 0}</td>`).join('')}`
     + `<td class="num">${dayTotal(day)}</td></tr>`).join('');
 
-  return `<details class="chart-data"><summary>The numbers</summary><div class="tablewrap"><table class="t"><thead>${head}</thead>`
+  // A fold key, so a push keeps it open for whoever is reading it (the page compares it as an attribute value).
+  return `<details class="chart-data" data-fold="${escapeHtml(`${serverId}|chart-data`)}"><summary>The numbers</summary><div class="tablewrap"><table class="t"><thead>${head}</thead>`
     + `<tbody>${rows}</tbody></table></div></details>`;
 }
 
@@ -126,10 +128,10 @@ const NOTE = '<div class="hint">UTC calendar days, today included — not the Mo
   + 'A launch is one run of a vendor CLI; a round launches several.</div>';
 
 /** The chart, its legend, its numbers and its note. */
-export function launchesChart(daily: DailyUsage, palette: VendorPalette): string {
+export function launchesChart(daily: DailyUsage, palette: VendorPalette, serverId = ''): string {
   const quiet = daily.days.every((day) => dayTotal(day) === 0);
 
   return quiet
     ? `<div class="quiet">No launches in these 30 days.</div>${NOTE}`
-    : `${svg(daily, palette)}${legend(daily, palette)}${table(daily)}${NOTE}`;
+    : `${svg(daily, palette)}${legend(daily, palette)}${table(daily, serverId)}${NOTE}`;
 }

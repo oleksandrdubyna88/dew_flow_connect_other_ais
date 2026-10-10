@@ -54,7 +54,7 @@ function push(
 ): TeamPush {
   const cell: UsageCell | undefined = usage === undefined ? undefined : { usage, problem: '', answeredAt: Date.UTC(2026, 9, 9, 10, 0) };
 
-  return teamTabPush({ states, selection, cell: () => cell, asking: () => false, palette, people: () => undefined, price: () => undefined, now: 0 });
+  return teamTabPush({ states, selection, cell: () => cell, asking: () => false, palette, people: () => undefined, peopleAsking: () => false, price: () => undefined, now: 0 });
 }
 
 function send(page: DomPage, team: TeamPush): void {
@@ -289,6 +289,7 @@ function pushNew(usage: Usage = newCompany()): TeamPush {
   return teamTabPush({
     states: [server('acme', 'Acme')], selection: withShown(NO_SELECTION, true), cell: () => cell, asking: () => false, palette,
     people: () => people,
+    peopleAsking: () => false,
     price: (name) => (name === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10, source: 'openrouter' } : undefined),
     now: NOW,
   });
@@ -348,4 +349,19 @@ test('an OLD server after a new one: the sorts it cannot serve go back to saying
   assert.equal(sort.value, 'launches', 'a sort the answer cannot serve stayed chosen');
   assert.equal(page.element('team-q').getAttribute('placeholder'), 'Search email');
   assert.doesNotMatch(page.element('tab-team').textContent, /\$0(\.0+)?\b/, 'an old server rendered a zero price');
+  // The cards too: an older server cannot say when anybody was last seen, so a card does not pretend to with a dash.
+  assert.doesNotMatch(page.element('team-people').textContent, /last seen/, 'an old server\'s card shows a last-seen it cannot know');
+});
+
+test('a push keeps the chart\'s numbers open — they are its text alternative, not decoration', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushNew());
+  const fold = page.element('team-chart').querySelector('details[data-fold]');
+  assert.ok(fold !== null, 'the numbers fold has no fold key, so nothing can keep it open');
+  fold.open = true;
+
+  send(page, pushNew());
+
+  assert.equal(page.element('team-chart').querySelector('details[data-fold]')?.open, true,
+    'a push snapped the chart\'s numbers shut under the person reading them');
 });

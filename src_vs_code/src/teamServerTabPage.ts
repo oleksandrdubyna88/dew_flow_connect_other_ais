@@ -181,13 +181,17 @@ export const TEAM_TAB_SCRIPT = `
     box.setAttribute('aria-label', named ? 'Search people by name or email' : 'Search people by email');
   }
   // Each sort the answer cannot serve is disabled and says why; a chosen one that can no longer be served falls back.
-  function teamSortOffers(sorts) {
+  // The label says WHY, as the push said it — asking, a failure, an older server — never the older server's sentence
+  // for the other two.
+  function teamSortOffers(sorts, why) {
     var select = document.getElementById('team-sort');
     var offers = select.querySelectorAll('option[data-later]');
     for (var i = 0; i < offers.length; i++) {
       var ready = sorts[offers[i].value] === true;
+      var said = why[offers[i].value] || '';
       offers[i].disabled = !ready;
-      offers[i].textContent = offers[i].getAttribute(ready ? 'data-ready' : 'data-later');
+      offers[i].textContent = ready ? offers[i].getAttribute('data-ready')
+        : (said ? offers[i].getAttribute('data-ready') + ' — ' + said : offers[i].getAttribute('data-later'));
       if (!ready && team.sort === offers[i].value) { team.sort = 'launches'; select.value = 'launches'; }
     }
   }
@@ -228,16 +232,17 @@ export const TEAM_TAB_SCRIPT = `
     team.server = message.selected;
     teamMarkWindow(message.window);
     teamSearchSays(message.named === true);
-    teamSortOffers(message.sorts || {});
+    teamSortOffers(message.sorts || {}, message.sortWhy || {});
     document.getElementById('team-read').textContent = message.readUtc ? teamClock(message.readUtc) : '';
   }
   function teamFill(parts) {
-    var plain = ['status', 'badges', 'summary', 'vendors', 'chart', 'notes'];
+    var plain = ['status', 'badges', 'summary', 'vendors', 'notes'];
     for (var i = 0; i < plain.length; i++) {
       document.getElementById('team-' + plain[i]).innerHTML = parts[plain[i]] || '';
     }
     replaceKeepingFolds(document.getElementById('team-people'), parts.people || '');
     replaceKeepingFolds(document.getElementById('team-idle'), parts.idle || '');
+    replaceKeepingFolds(document.getElementById('team-chart'), parts.chart || '');
     teamArrange();
   }
   // The admin flag reveals the tab or takes it away; a page that was SHOWING it when the flag went goes back to Rounds.

@@ -49,13 +49,35 @@ test('a vendor with no launches on a day draws no bar for it — no sliver that 
   assert.ok(bars(tree).every((bar) => Number(bar.attrs['data-runs']) > 0));
 });
 
+/** The labels the chart draws itself: the svg's own <text> nodes — never a bar's <title>, the note or the table. */
+function drawnLabels(tree: PageNode): readonly PageNode[] {
+  const svg = tree.one((node) => node.tagName === 'SVG', 'svg');
+
+  return svg.find((node) => node.tagName === 'TEXT');
+}
+
 test('the axis says it counts launches, and the days are the server\'s strings, never re-dated', () => {
   const data = daily();
-  const text = pageTree(launchesChart(data, palette)).text();
+  const labels = drawnLabels(pageTree(launchesChart(data, palette))).map((node) => node.text());
 
-  assert.match(text, /launches/);
-  assert.ok(text.includes(data.days[0]!.day) && text.includes(data.days[29]!.day),
-    'the first and last days are not printed as the server wrote them');
+  assert.ok(labels.includes('launches'), `the axis does not say what it counts: ${labels.join(' | ')}`);
+  assert.ok(labels.includes(data.days[0]!.day) && labels.includes(data.days[29]!.day),
+    `the chart's own day labels are not the server's strings: ${labels.join(' | ')}`);
+});
+
+test('the axis label starts inside the drawing, where nothing clips it', () => {
+  const axis = drawnLabels(pageTree(launchesChart(daily(), palette))).find((node) => node.text() === 'launches');
+
+  assert.ok(axis !== undefined, 'no axis label');
+  assert.equal(axis.attrs['text-anchor'], 'start', 'an end-anchored label at the left edge runs off the svg and is cut');
+  assert.ok(Number(axis.attrs['x']) >= 0);
+});
+
+test('the numbers fold carries a fold key, so a push can keep it open', () => {
+  const tree = pageTree(launchesChart(daily(), palette, 'acme'));
+  const fold = tree.one((node) => node.tagName === 'DETAILS' && node.className.includes('chart-data'), 'the numbers fold');
+
+  assert.equal(fold.attrs['data-fold'], 'acme|chart-data');
 });
 
 test('a legend names every vendor in words, not by colour alone', () => {

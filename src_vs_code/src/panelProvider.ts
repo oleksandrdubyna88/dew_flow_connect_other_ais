@@ -163,6 +163,7 @@ import {
 import { Catalog, fetchClientConfig, fetchPeople, fetchUsage } from './teamServerApi';
 import { Prepared, TeamUsageCache, USAGE_FRESH_MS, UsageTarget } from './teamUsageCache';
 import { TeamTabHost } from './teamTabHost';
+import { listPriceFrom } from './teamCost';
 import { TeamPush, teamTabPush } from './teamServerTab';
 import { vendorPalette } from './vendorColour';
 import { webviewNonce } from './webviewNonce';
@@ -754,8 +755,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       palette: vendorPalette(this.vendorIds()),
       // Who is signed in (`GET /api/people`, 3.1), asked by the same cache while the tab is in front.
       people: (serverId) => this.teamUsage.cell(serverId, 'people', ''),
+      peopleAsking: (serverId) => this.teamUsage.isAsking(serverId, 'people', ''),
       // Each model at ITS public list price (3.2, D4) — the window's price book; never this person's typed row rates.
-      price: (model) => PRICE_BOOK.priceOf(model),
+      price: listPriceFrom(PRICE_BOOK),
       now: Date.now(),
     });
   }

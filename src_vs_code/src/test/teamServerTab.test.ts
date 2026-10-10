@@ -15,6 +15,7 @@ import {
   DEFAULT_TEAM_WINDOW, NO_SELECTION, selectedServer, usageWants, withPage, withServer, withShown, withWindow,
 } from '../teamTabSelection';
 import { pageTree } from './pageTree';
+import { UsageCell } from '../teamUsageCache';
 
 /**
  * The Team server tab's renderers and its selection, pure (todo/PLAN_team_usage_by_person.md, stories 1.2 and 1.3).
@@ -78,6 +79,32 @@ test('a figure nobody can know yet is never a zero', () => {
   assert.match(text(parts.badges), /2 ledger line\(s\) the server could not read/);
 });
 
+test('a NEWER server whose people listing is still on its way says it is asking — never "not shown by this version"', () => {
+  const asking = teamParts(state(), { usage: NEW_BODY, problem: '', answeredAt: 0 }, false, palette,
+    { price: () => undefined, now: 0, peopleAsking: true });
+  const said = text(asking.summary) + text(asking.idle);
+
+  assert.doesNotMatch(said, /not shown by this version/, 'a listing in flight was reported as a feature this extension lacks');
+  assert.doesNotMatch(said, /needs Team server/, 'a newer server was told it is too old while its listing loaded');
+  assert.match(said, /asking Acme…/i);
+
+  const failed = teamParts(state(), { usage: NEW_BODY, problem: '', answeredAt: 0 }, false, palette,
+    { price: () => undefined, now: 0, people: { problem: 'it did not answer within 10s', answeredAt: 0 } });
+  assert.match(text(failed.idle), /could not be read: it did not answer within 10s/);
+});
+
+test('the push says WHY a sort is unavailable: asking, a failure, or an older server', () => {
+  const push = (people: UsageCell | undefined, peopleAsking: boolean, usage: Usage) => teamTabPush({
+    states: [state()], selection: withShown(NO_SELECTION, true), cell: () => ({ usage, problem: '', answeredAt: 0 }),
+    asking: () => false, palette, people: () => people, peopleAsking: () => peopleAsking, price: () => undefined, now: 0,
+  });
+
+  assert.match(push(undefined, true, NEW_BODY).sortWhy?.seen ?? '', /asking/i);
+  assert.match(push({ problem: 'boom', answeredAt: 0 }, false, NEW_BODY).sortWhy?.seen ?? '', /could not be read/);
+  assert.match(push(undefined, false, OLD_BODY).sortWhy?.seen ?? '', /needs Team server ≥/);
+  assert.equal(push({ people: [], problem: '', answeredAt: 0 }, false, NEW_BODY).sortWhy?.seen, '');
+});
+
 test('a refused company view says the caller is no longer an admin here', () => {
   const html = statusLine(state(), { problem: 'scope=company is for admins.', refused: true, answeredAt: 0 }, false);
 
@@ -98,6 +125,7 @@ test('a non-admin is pushed nothing but the flag — not a single email', () => 
     asking: () => false,
     palette,
     people: () => undefined,
+    peopleAsking: () => false,
     price: () => undefined,
     now: 0,
   });
@@ -108,7 +136,7 @@ test('a non-admin is pushed nothing but the flag — not a single email', () => 
 test('an admin push carries the selected server, its window and when it was read', () => {
   const pushed = teamTabPush({
     states: [state()], selection: withShown(NO_SELECTION, true),
-    cell: () => ({ usage: OLD_BODY, problem: '', answeredAt: Date.UTC(2026, 9, 9, 10, 0) }), asking: () => false, palette, people: () => undefined, price: () => undefined, now: 0,
+    cell: () => ({ usage: OLD_BODY, problem: '', answeredAt: Date.UTC(2026, 9, 9, 10, 0) }), asking: () => false, palette, people: () => undefined, peopleAsking: () => false, price: () => undefined, now: 0,
   });
 
   assert.equal(pushed.admin, true);
