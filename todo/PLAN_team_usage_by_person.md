@@ -1,8 +1,8 @@
 # PLAN — who on the team is spending it: the Team server tab
 
-> Status: **in progress, 2026-10-09 — E2 stories 2.1 and 2.2 (the server half: `GET /api/people`, `models[]`,
-> `daily`) implemented on `feat/team-tab-server`; E1, E3 and 2.3 (contract-over-the-real-server, release, deploy)
-> open.** Scope: a new admin-only **Team server** tab on the
+> Status: **in progress, 2026-10-10 — E1 (the tab on today's server, stories 1.1–1.5) and E2 stories 2.1–2.2 (the
+> server half: `GET /api/people`, `models[]`, `daily`, an hourly session sweep) implemented on `feat/team-server-tab`;
+> open: 2.3 (release and the deploy, which waits for the operator), E3 (the tab uses E2).** Scope: a new admin-only **Team server** tab on the
 > extension's Review rounds page (`src_vs_code`), two additive answers from the Team server (`src_server`), and the
 > removal of the dead *Company* toggle from the spending tab.
 >
@@ -259,6 +259,21 @@ Cases that must exist: an admin sees the tab, a non-admin does not; `Alice@Examp
 person; a `403` after the admin list changed; an older server shows *needs Team server ≥ …*, never 0; search by name
 and by email; a model with no list price is a dash and its person's total a floor; the chart's bars sum to the day's
 launches; `/api/people` returns exactly three fields and refuses a non-admin.
+
+## Deviations so far (E1 and E2, 2026-10-10)
+
+| What the plan said | What was built | Why |
+|---|---|---|
+| three page commands (`teamWindow`, `teamRefresh`, `teamServer`) | a fourth, `teamTab` (`shown` / `hidden`) | the host must know the tab is showing to ask for company figures only then; nothing else carried it |
+| branches `feat/team-tab-e1` / `-e2` | one branch `feat/team-server-tab`, the server half built beside it on `feat/team-tab-server` and merged | the gate's operator command: build this plan as ONE unit |
+| *needs Team server ≥ <version>* | ≥ 0.11.0, one constant (`TEAM_SERVER_WITH_PEOPLE`) | the next minor after 0.10.0; change the constant if the release says otherwise |
+| window chips, no default named | the tab opens on **Week** | as the approved mockup |
+| Refresh re-asks the company figures | it also forces this account's own figures and the catalog | one press should leave nothing stale |
+| the spending tab's server block unchanged | an unanswered window says *Asking <server>…* (or the failure), not *Nothing recorded* | per-window caching would otherwise flash "nothing" after each window press |
+| sessions retired by `Sweep` | `Sweep` runs at boot AND hourly (`SessionSweeper`, a hosted service) | it ran at startup only, so the people listing would read every expired file until a restart (own review) |
+| `/api/people` lists every unexpired session | it also drops a session whose domain left `Coai:AllowedDomains` | a listed person must be one the gate would serve (own review) |
+| a vendor id as the ledger wrote it | lower-cased once in `UsageReader.Parse` | the summary and the chart could otherwise name one vendor two ways (own review) |
+| a held session file is a read hazard | the lazy last-used stamp in `Validate` is non-fatal | on Windows `File.Move(overwrite)` fails while any reader holds the file, whatever share it asks — measured, and pinned by a test |
 
 ## What the plan round changed (2026-10-09)
 
