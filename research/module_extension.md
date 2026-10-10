@@ -10701,9 +10701,10 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh. The page was drawn AND priced from that one list: priced from every
-  row by MODEL, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card. Since
-  2026-10-09 the Models cards are priced per ROW from every row instead (`priceBook.cardPrices`, below the E5.3 section;
+  Display only; every write reads the rows afresh. The page's price map was built from that one list (`isReviewerRow`),
+  keyed by MODEL — so a consultant-only model had no catalog price on its Models card (the page draws `catalogRows`);
+  pricing every row by model instead would have let a hidden `api` consultant with a reviewer's model put its endpoint's
+  rate on the reviewer's card (PR #681's review). Since 2026-10-09 the Models cards are priced per ROW from every row instead (`priceBook.cardPrices`, below the E5.3 section;
   `theCardsArePricedFromEveryRow.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.

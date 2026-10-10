@@ -67,7 +67,7 @@ one rate, which is the bug's other half.
 
 ## Definition of Done
 
-- [ ] A consultant-only row's Models card shows its catalog price (RED first, teeth shown).
-- [ ] Two rows on one model and two endpoints each show their own rate.
-- [ ] The spending and consultation tabs price exactly what they did.
-- [ ] Docs updated; plan promoted when done.
+- [x] A consultant-only row's Models card shows its catalog price (RED first, teeth shown).
+- [x] Two rows on one model and two endpoints each show their own rate.
+- [x] The spending and consultation tabs price exactly what they did.
+- [x] Docs updated; plan promoted when done.
