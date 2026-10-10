@@ -66,7 +66,10 @@ test('an older server is recognised by the absence of daily, never by an empty m
   const older = teamParts(state(), { usage: OLD_BODY, problem: '', answeredAt: 0 }, false, palette);
   const newer = teamParts(state(), { usage: NEW_BODY, problem: '', answeredAt: 0 }, false, palette);
 
-  assert.match(text(older.chart), new RegExp(`needs Team server ≥ ${TEAM_SERVER_WITH_PEOPLE.replace(/\./g, '\\.')}`));
+  assert.ok(
+    text(older.chart).includes(`needs Team server ≥ ${TEAM_SERVER_WITH_PEOPLE}`),
+    'an older server is told which version adds the chart',
+  );
   assert.doesNotMatch(text(newer.chart), /needs Team server/, 'a newer server is not told it is too old');
 });
 
