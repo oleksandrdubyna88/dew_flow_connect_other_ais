@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace CoaiServer.Tests;
@@ -54,6 +55,31 @@ public sealed class PeopleAndUsageAgreeTests
         (await BothAsync(session)).Should().Be((HttpStatusCode.OK, HttpStatusCode.OK));
     }
 
+    /// <summary>
+    /// The two routes consult ONE decision: naming a different admin flips both routes for both people
+    /// in the same direction, and the refusal is one sentence with the route's own name in it.
+    /// </summary>
+    [Fact]
+    public async Task TheAdminList_DecidesBothRoutesAtOnce()
+    {
+        using var server = new TeamServer(new Dictionary<string, string?> { ["Coai__Admins"] = Dev });
+        using var dev = server.ClientFor(Dev);
+        using var boss = server.ClientFor(Boss);
+
+        (await BothAsync(dev)).Should().Be((HttpStatusCode.OK, HttpStatusCode.OK), "the one named is an admin on both");
+        (await BothAsync(boss)).Should().Be((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden), "the one not named is refused by both");
+        (await RefusalOf(boss, PeopleRoute)).Should().Be("/api/people is for admins. Ask an operator to add you to Coai:Admins.");
+        (await RefusalOf(boss, CompanyRoute)).Should().Be("scope=company is for admins. Ask an operator to add you to Coai:Admins.");
+    }
+
+    /// <summary>The sentence a refused caller reads — read off the 403 body, which <c>GetFromJsonAsync</c> would refuse to parse.</summary>
+    private static async Task<string> RefusalOf(HttpClient client, string route)
+    {
+        using var response = await client.GetAsync(route, Ct);
+
+        return (await response.Content.ReadFromJsonAsync<ErrorDto>(Ct))!.Error;
+    }
+
     [Fact]
     public async Task ANonAdmin_IsRefusedOnBothRoutes_ByRawTokenAndBySession()
     {
@@ -100,5 +126,23 @@ public sealed class PeopleAndUsageAgreeTests
 
         (await BothAsync(session)).Should().Be((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden), "the session is still valid, the admin is not");
         (await BothAsync(raw)).Should().Be((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden));
+    }
+}
+
+/// <summary>The one admin decision on its own, without a host.</summary>
+public sealed class AdminOnlyTests
+{
+    [Fact]
+    public void AnAdmin_IsNotRefused() =>
+        AdminOnly.RefusalFor(new Caller($"boss@{TeamServer.Domain}", "", IsAdmin: true), "/api/people").Should().BeNull();
+
+    [Fact]
+    public void ANonAdmin_IsRefusedWith403_AndTheSentenceNamesTheSettingAndWhatWasAsked()
+    {
+        var refusal = AdminOnly.RefusalFor(new Caller($"dev@{TeamServer.Domain}", "", IsAdmin: false), "scope=company");
+
+        refusal.Should().BeAssignableTo<IStatusCodeHttpResult>().Which.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        refusal.Should().BeAssignableTo<IValueHttpResult>().Which.Value
+            .Should().Be(new ErrorDto("scope=company is for admins. Ask an operator to add you to Coai:Admins."));
     }
 }

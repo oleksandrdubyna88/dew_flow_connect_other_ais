@@ -44,14 +44,11 @@ public static class UsageEndpoints
                     StatusCodes.Status400BadRequest);
             }
 
-            if (asked == UsageScope.Company && !caller.IsAdmin)
+            if (asked == UsageScope.Company && AdminOnly.RefusalFor(caller, $"scope={CompanyScope}") is { } refused)
             {
-                // 403 rather than 404: the caller is authenticated and the route exists, so the honest
-                // answer is that this is an admin view — and naming the setting is what lets somebody
-                // ask the right person for it.
-                return Refuse(
-                    "scope=company is for admins. Ask an operator to add you to Coai:Admins.",
-                    StatusCodes.Status403Forbidden);
+                // The ONE admin decision, shared with /api/people — 403 rather than 404, naming the
+                // setting, for the reasons AdminOnly gives. Only this branch asks it: `me` is everyone's.
+                return refused;
             }
 
             return Results.Json(Answer(usage, range, caller, asked, now), ServerJsonContext.Default.UsageDto);

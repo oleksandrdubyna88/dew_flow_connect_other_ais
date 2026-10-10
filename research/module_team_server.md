@@ -766,6 +766,16 @@ model and a month of bars. Nothing here changes what an older client reads.
   every endpoint here answers — was built in-line at each endpoint until `/api/people` would have been
   the third copy; `UsageEndpoints` and the new route go through it. `SessionEndpoints` and the five
   in-line sites in `ReviewEndpoints` still build it by hand and are the next thing to move.
+- **The admin decision is one function too** (code round on E1+E2, 2026-10-10). `AdminOnly.RefusalFor(caller,
+  what)` — null for an admin, otherwise the 403 whose sentence names `Coai:Admins` and what was asked —
+  is the predicate and the sentence in one place. `/api/people` is admin-only as a whole and is
+  registered with `RequireAdmin(gate, "/api/people")` (an endpoint filter after `RequireCaller`, so the
+  handler runs for nobody else); `/api/usage` answers `me` to everyone and asks the same function only
+  from its company branch. Pinned by `PeopleAndUsageAgreeTests`: naming a different admin flips both
+  routes for both people at once, and the two refusals are the one sentence with the route's name in it.
+  The same round made the thirty-day chart count launches by (day, vendor) in ONE pass over the lines in
+  range and build the dense rows as lookups — it used to re-scan each day's lines once per vendor — with
+  the rows byte-identical, guarded by a several-vendors-over-several-days test.
 - **The contract runner seeds one ledger line** (`http/run-contracts.mjs`), the developer's, stamped
   now: with an empty ledger `vendors` is `[]` and an assertion over each vendor's `models` passes over
   nothing. `http/people/people.http` mints its own session first for the same reason — the suite's

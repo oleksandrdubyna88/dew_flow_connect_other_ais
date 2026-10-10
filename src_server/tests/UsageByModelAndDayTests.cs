@@ -84,6 +84,38 @@ public sealed class UsageDailyTests
         daily.Days[0].Vendors.Should().ContainSingle().Which.Runs.Should().Be(1, "the first midnight is the first bucket's");
         daily.Days.Sum(d => d.Vendors.Sum(v => v.Runs)).Should().Be(1, "tomorrow's midnight is not in it");
     }
+
+    /// <summary>
+    /// Several vendors over several days: every bar is THAT day's count for THAT vendor, every day
+    /// carries every vendor in one order, and a vendor spelled two ways is one bar under the spelling
+    /// met first. The guard for the one-pass count (code round on E1+E2, 2026-10-10): the rows must
+    /// not change by a byte.
+    /// </summary>
+    [Fact]
+    public void SeveralVendorsOverSeveralDays_EachBarIsThatDaysCountForThatVendor()
+    {
+        var third = new DateTimeOffset(2026, 9, 3, 10, 0, 0, TimeSpan.Zero);
+        var fourth = third.AddDays(1);
+        var fifth = third.AddDays(2);
+
+        var daily = UsageDaily.Over(
+            [
+                Line(third), Line(third, "claude"), Line(third, "claude"),
+                Line(fourth, "agy"),
+                Line(fifth), Line(fifth), Line(fifth), Line(fifth, "Claude"),
+            ],
+            UsageDaily.Range(Now));
+
+        Rows(daily, "2026-09-03").Should().Equal([("agy", 0), ("claude", 2), ("codex", 1)]);
+        Rows(daily, "2026-09-04").Should().Equal([("agy", 1), ("claude", 0), ("codex", 0)]);
+        Rows(daily, "2026-09-05").Should().Equal([("agy", 0), ("claude", 1), ("codex", 3)], "\"Claude\" is \"claude\", the spelling met first");
+        Rows(daily, "2026-09-06").Should().Equal([("agy", 0), ("claude", 0), ("codex", 0)]);
+        daily.Days.Sum(d => d.Vendors.Sum(v => v.Runs)).Should().Be(8);
+        daily.Days.Should().OnlyContain(d => d.Vendors.Count == 3, "every day carries every vendor, in the same order");
+    }
+
+    private static IEnumerable<(string Vendor, int Runs)> Rows(DailyDto daily, string day) =>
+        daily.Days.Single(d => d.Day == day).Vendors.Select(v => (v.Vendor, v.Runs));
 }
 
 /// <summary>

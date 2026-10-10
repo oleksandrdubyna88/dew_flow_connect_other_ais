@@ -5,10 +5,12 @@ namespace CoaiServer;
 /// <para>Story 2.1 of <c>PLAN_team_usage_by_person.md</c>. The ledger knows who SPENT; only the sessions
 /// know who is signed in, and until this route nothing listed them — so "last seen" and "signed in but
 /// spent nothing" could not be shown.</para>
-/// <para><b>Admin-only, with the same inline check and the same 403 as <c>scope=company</c></b> on
-/// <see cref="UsageEndpoints"/>: the route exists and the caller is authenticated, so the honest answer
-/// names the setting that would open it. A wrong check here hands every colleague's email and activity
-/// to any caller, which is the risk the plan names first; the 403 is the first test.</para>
+/// <para><b>Admin-only, through the ONE decision the company branch of <c>/api/usage</c> also consults</b>
+/// (<see cref="AdminOnly"/>), registered with <see cref="RouteHandlerBuilderExtensions.RequireAdmin"/> so
+/// the handler runs for nobody else and the same 403 names the setting that would open it. A wrong
+/// check here hands every colleague's email and activity to any caller, which is the risk the plan
+/// names first; the 403 is the first test, and it was two identical inline checks until the code
+/// round on E1+E2 asked for one.</para>
 /// <para><b>"People with an unexpired session this server still serves"</b>, which the page says in those
 /// words: a caller on a raw identity-provider token has no session file and is not here, and a session
 /// whose domain has since left <c>Coai:AllowedDomains</c> is refused on every request, so it is not
@@ -19,19 +21,10 @@ public static class PeopleEndpoints
 {
     public static void MapPeopleEndpoints(this WebApplication app, SessionStore sessions, CallerFilter gate)
     {
-        app.MapGet("/api/people", (HttpContext ctx) =>
-        {
-            if (!ctx.CallerOf().IsAdmin)
-            {
-                return Refusal.Json(
-                    "/api/people is for admins. Ask an operator to add you to Coai:Admins.",
-                    StatusCodes.Status403Forbidden);
-            }
-
-            return Results.Json(
+        app.MapGet("/api/people", () => Results.Json(
                 People.From(sessions.Active(DateTimeOffset.UtcNow).Where(s => gate.Admits(s.Email))),
-                ServerJsonContext.Default.IReadOnlyListPersonDto);
-        }).RequireCaller(gate);
+                ServerJsonContext.Default.IReadOnlyListPersonDto))
+            .RequireAdmin(gate, "/api/people");
     }
 }
 

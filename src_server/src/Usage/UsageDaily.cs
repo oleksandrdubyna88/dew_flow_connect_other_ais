@@ -54,6 +54,12 @@ public static class UsageDaily
     }
 
     /// <summary>The chart over <paramref name="range"/>, from whatever lines it is handed.</summary>
+    /// <remarks>
+    /// ONE pass over the lines in range, counting by (day, vendor); the dense rows are then lookups
+    /// into that count. The first version re-scanned each day's lines once per vendor — days × vendors
+    /// passes over the same lines, for a number already known after one (code round on E1+E2,
+    /// 2026-10-10). Byte-identical output, guarded by the daily tests.
+    /// </remarks>
     public static DailyDto Over(IEnumerable<UsageLine> lines, UsageRange range)
     {
         var inRange = lines.Where(l => range.Contains(l.AtUtc)).ToList();
@@ -62,7 +68,11 @@ public static class UsageDaily
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var byDay = inRange.ToLookup(l => DayOf(l.AtUtc), StringComparer.Ordinal);
+        // The spelling each vendor is shown under: the one met first, whatever later lines spelled.
+        var spelling = vendors.ToDictionary(vendor => vendor, vendor => vendor, StringComparer.OrdinalIgnoreCase);
+        var launches = inRange
+            .GroupBy(l => (Day: DayOf(l.AtUtc), Vendor: spelling[l.Vendor]))
+            .ToDictionary(group => group.Key, group => group.Count());
         var dayCount = (int)Math.Ceiling((range.ToUtc - range.FromUtc).TotalDays);
 
         return new DailyDto(
@@ -70,7 +80,7 @@ public static class UsageDaily
             range.ToUtc,
             [.. Enumerable.Range(0, dayCount)
                 .Select(offset => DayOf(range.FromUtc.AddDays(offset)))
-                .Select(day => new DayDto(day, Bars(vendors, byDay[day])))]);
+                .Select(day => new DayDto(day, Bars(vendors, day, launches)))]);
     }
 
     /// <summary>The UTC calendar day an instant falls on, as the client will print it.</summary>
@@ -78,8 +88,7 @@ public static class UsageDaily
         at.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     /// <summary>One row per vendor the chart knows, in the chart's order — zero where the day has none.</summary>
-    private static IReadOnlyList<DayVendorDto> Bars(IReadOnlyList<string> vendors, IEnumerable<UsageLine> day) =>
-        [.. vendors.Select(vendor => new DayVendorDto(
-            vendor,
-            day.Count(l => string.Equals(l.Vendor, vendor, StringComparison.OrdinalIgnoreCase))))];
+    private static IReadOnlyList<DayVendorDto> Bars(
+        IReadOnlyList<string> vendors, string day, IReadOnlyDictionary<(string Day, string Vendor), int> launches) =>
+        [.. vendors.Select(vendor => new DayVendorDto(vendor, launches.GetValueOrDefault((day, vendor))))];
 }
