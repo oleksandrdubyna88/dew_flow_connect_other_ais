@@ -10,6 +10,10 @@
 > `dew_flow_creds_for_devs · todo/PLAN_creds_cli_reachable_from_every_caller.md`, which owns the contract this plan
 > relies on (its §6, *the stable location*). Each plan names the other.
 
+> **Boundary (2026-10-10):** HOW the key is handed to the CLI that is found — on stdin, after a `--help` probe,
+> never as an argument — is [PLAN_creds_config_key_on_stdin.md](../research/PLAN_creds_config_key_on_stdin.md). This plan keeps
+> WHERE the CLI is found. Disjoint; either can land first.
+
 ## 1. The symptom
 
 After **Enable Code Access…** in CredsForDevs, an agent found that `coai` could not read the vault key on the owner's
