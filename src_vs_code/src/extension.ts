@@ -42,7 +42,7 @@ import { ImportReport, describe as describeImport, importLegacyTabs, importSucce
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
-import { onFindings, refuseUnderMissingRootOnceSettled } from './findingsBoard';
+import { onDataRootBack, onFindings, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { startPathWatch } from './pathWatchHost';
 import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
@@ -63,7 +63,8 @@ import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './rounds
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
 import { asText } from './asText';
-import { writeFileAtomically } from './atomicFile';
+import { renameWithRetry, writeFileAtomically } from './atomicFile';
+import { makeDataDirectory } from './dataDirMaker';
 import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRun, serverRunAt } from './roundsDbRead';
@@ -385,6 +386,9 @@ export function activate(context: vscode.ExtensionContext): void {
     () => pathWatch.dataRootMissing(),
   );
   mirrorSettings(settingsSync);
+  // The named data root came back — made again, or its drive mounted — and a probe CONFIRMED it: the mirror, which stood
+  // aside (`no-data-root`), writes now, with no settings edit (E5.7, risk item F).
+  onDataRootBack(() => { mirrorSettings(settingsSync); });
   // When each new control of the Settings page was first seen here, so its "new" mark lasts a week (newTags.ts).
   void context.globalState.update(FIRST_SEEN_KEY, seenNow(context.globalState.get(FIRST_SEEN_KEY), NEW_CONTROLS, Date.now()));
   // Ask once now: the settled answer writes the file again (above) — so a system prompt crosses this session.
@@ -1015,7 +1019,9 @@ async function writeSettingsFile(json: string): Promise<void> {
   // cannot be recovered from, because the original is gone. Raised on story 2.1's plan round.
   const target = vscode.Uri.joinPath(dataDir(), 'settings.json');
   const temp = vscode.Uri.joinPath(dataDir(), `settings.json.${process.pid}.tmp`);
-  await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(json));
+  // Node's write and rename, never VS Code's: those make missing parent folders, so a named data root removed after
+  // `createDataDirectory` asked for it was made again by the write (todo/PLAN_paths_per_side.md E5.7, risk item F).
+  await fsp.writeFile(temp.fsPath, json, 'utf8');
 
   // The last thing before the rename: are we still the holder? A process suspended past the stale
   // window — a laptop closing mid-write is the ordinary way — is broken as dead by another window,
@@ -1023,14 +1029,17 @@ async function writeSettingsFile(json: string): Promise<void> {
   // narrows that to the microseconds between this check and the rename, which is as far as it can be
   // taken without a lease that renews. Raised on this story's plan round.
   if (held.length > 0 && !(await lockHolds(held))) {
-    await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
+    await fsp.rm(temp.fsPath, { force: true }).catch(() => undefined);
     throw new Error(
       'the settings lock was taken over while this write was in flight, so these settings are not on '
         + 'disk; another window is writing and an attempt is scheduled',
     );
   }
 
-  await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+  await renameWithRetry(temp.fsPath, target.fsPath).catch(async (reason: unknown) => {
+    await fsp.rm(temp.fsPath, { force: true }).catch(() => undefined);
+    throw reason;
+  });
 }
 
 /**
@@ -1085,7 +1094,7 @@ async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
  */
 async function createDataDirectory(): Promise<void> {
   await refuseUnderMissingRootOnceSettled(dataDir().fsPath);
-  await vscode.workspace.fs.createDirectory(dataDir());
+  await makeDataDirectory(dataDir().fsPath);
 }
 
 /** The token this window currently holds, or empty. Read by the write, just before it renames. */

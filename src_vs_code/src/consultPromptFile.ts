@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { CONSULT_PROMPT_PATH, type ConsultPromptWrite, consultPromptWrite } from './consultPrompt';
 import { notify } from './notify';
-import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
+import { writeFileAtomically } from './atomicFile';
 
 /**
  * The consultant's prompt override, as a file on disk — read at paint, written on a keystroke pause.
@@ -82,21 +82,11 @@ export class ConsultPromptFile {
         this.promptWriteFailed = '';
         return;
       }
-      const directory = vscode.Uri.joinPath(this.dataDir, this.path[0]!);
-      // Never the missing NAMED data root (E5.0 of paths per side): refused like any write the disk would not take.
-      await refuseUnderMissingRootOnceSettled(directory.fsPath);
-      await vscode.workspace.fs.createDirectory(directory);
-      const temp = vscode.Uri.joinPath(directory, `${this.path[1]}.${process.pid}.tmp`);
-      await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
-      try {
-        await vscode.workspace.fs.rename(temp, target, { overwrite: true });
-      } catch (error) {
-        // The temp name carries the pid, so a rename that keeps failing leaves one more file beside
-        // the one the SERVER reads out of this directory. The settings writer already cleans up on
-        // its own failure path for the same reason. (CodeRabbit, on the pull request.)
-        await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
-        throw error;
-      }
+      // The shared atomic write: beside it and renamed over it, the temporary removed on a failure, and — never the
+      // missing NAMED data root (E5.0/E5.7 of paths per side) — the guard asked and the folder made through the one
+      // maker, which never makes a named root. It replaced VS Code's write and rename here, which make missing parent
+      // folders: a root removed after the guard was made again by the write.
+      await writeFileAtomically(target.fsPath, write.text);
       // The situation is over. A failure after this is news rather than a repeat.
       this.promptWriteFailed = '';
     } catch (e) {

@@ -81,6 +81,15 @@ export class PathProbes {
     return this.freshAnswer(path) ?? this.bounded(path, this.ask(path, kind));
   }
 
+  /**
+   * Asks the disk about `path` again NOW, however fresh the last answer — the watch's recheck of a path it found absent,
+   * so a folder made again is seen without a settings change (todo/PLAN_paths_per_side.md E5.7, risk item F). Still one
+   * outstanding probe per path; a changed answer tells the listeners, as every answer does.
+   */
+  recheck(path: string, kind: ProbeKind): void {
+    void this.ask(path, kind);
+  }
+
   /** A setting changed: what the disk said is dropped, so the next read asks again. Outstanding probes stay outstanding. */
   forget(): void {
     this.said = new Map();

@@ -1,6 +1,7 @@
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { renameSync, rmSync, writeFileSync } from 'node:fs';
+import { rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { makeDataDirectory, makeDataDirectorySync } from './dataDirMaker';
 import { refuseUnderMissingRoot, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
@@ -94,8 +95,12 @@ const pause = (ms: number): Promise<void> => new Promise((resolve) => { setTimeo
  * <p>Anything that is not one of the three transient codes throws at once: a destination on another
  * volume, a path that does not exist, a read-only disk are all facts, and retrying a fact is how a
  * caller waits a hundred milliseconds to be told what it could have been told immediately.</p>
+ *
+ * <p>Shared with the two writers that cannot take the whole atomic write — the settings file, which checks its lock
+ * between the write and the rename, and an answered escalation, which must make no folder at all — so they replace
+ * VS Code's rename, which makes missing parent folders (todo/PLAN_paths_per_side.md E5.7).</p>
  */
-async function renameWithRetry(beside: string, path: string): Promise<void> {
+export async function renameWithRetry(beside: string, path: string): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
     try {
       await rename(beside, path);
@@ -123,7 +128,7 @@ export async function writeFileAtomically(path: string, text: string | Uint8Arra
   // Never the missing NAMED data root (E5.0 of paths per side): the refusal is the finding's own sentence, and it is
   // thrown exactly as a disk that would not take the file is — the callers already turn that into a refusal.
   await refuseUnderMissingRootOnceSettled(dirname(path));
-  await mkdir(dirname(path), { recursive: true });
+  await makeDataDirectory(dirname(path));
   try {
     // BYTES AS WELL AS TEXT since 2026-09-17, and the change is the TYPE alone. A pasted picture is
     // a `Buffer` and wanted exactly this bargain — write beside the destination, rename over it —
@@ -152,7 +157,7 @@ export async function writeFileAtomically(path: string, text: string | Uint8Arra
 export function writeFileAtomicallySync(path: string, text: string): void {
   const beside = besideName(path);
   refuseUnderMissingRoot(dirname(path));
-  mkdirSync(dirname(path), { recursive: true });
+  makeDataDirectorySync(dirname(path));
   try {
     writeFileSync(beside, text, 'utf8');
     for (let attempt = 1; ; attempt += 1) {

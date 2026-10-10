@@ -37,6 +37,12 @@ export function startPathWatch(context: vscode.ExtensionContext): PathWatch {
     platform: process.platform,
     say: sayMissing,
     resolved: (finding) => { notifyResolved(SETTING_PATH_MISSING, findingSubject(finding)); },
+    // The recheck of what was found absent (E5.7, risk item F): a folder made again is seen with no settings edit.
+    every: (work, ms) => {
+      const timer = setInterval(work, ms);
+      timer.unref();
+      context.subscriptions.push({ dispose: () => { clearInterval(timer); } });
+    },
   });
   watch.start();
 

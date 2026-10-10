@@ -1,5 +1,6 @@
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { makeDataDirectory } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import {
   Catalog,
@@ -134,7 +135,7 @@ export async function writeToken(dataDir: string, url: string, token: string): P
   const folder = join(dataDir, 'servers');
   // Never the missing NAMED data root (E5.0 of paths per side): the sign-in flow reports the refusal as it reports any failed write.
   await refuseUnderMissingRootOnceSettled(folder);
-  await mkdir(folder, { recursive: true });
+  await makeDataDirectory(folder);
   // The DIRECTORY is closed before the token is written into it, not after: restricting it
   // afterwards leaves a window in which the file exists under a directory anybody could list.
   if (process.platform !== 'win32') {

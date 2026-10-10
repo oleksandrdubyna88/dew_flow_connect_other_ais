@@ -1,5 +1,6 @@
 import { Dirent } from 'node:fs';
-import { mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
+import { readFile, readdir, rename, rm, stat } from 'node:fs/promises';
+import { makeDataDirectory } from './dataDirMaker';
 import { join } from 'node:path';
 import { abreast } from './abreast';
 import { BESIDE_SUFFIX, writeFileAtomically } from './atomicFile';
@@ -398,7 +399,7 @@ export class ChatStoreKeeper {
       const from = join(this.dir, recordName(id));
       const to = join(this.dir, QUARANTINE_DIR, `${id}-orphan-${now}.json`);
       try {
-        await mkdir(join(this.dir, QUARANTINE_DIR), { recursive: true });
+        await makeDataDirectory(join(this.dir, QUARANTINE_DIR));
         await rename(from, to);
         console.info(`ConnectOtherAIs: a conversation transcript with no index entry was set aside, unchanged, at ${to}`);
 

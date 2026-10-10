@@ -1,5 +1,6 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { makeDataDirectory } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { finishedInTime } from './withinTheClock';
 
@@ -125,7 +126,7 @@ export function appendLine(
       // directory somebody NAMED is what is missing — then nothing here makes it (E5.0 of paths per
       // side): the refusal lands in the catch below, as a disk that would not take the line does.
       await refuseUnderMissingRootOnceSettled(dirname(path));
-      await mkdir(dirname(path), { recursive: true });
+      await makeDataDirectory(dirname(path));
       await appendFile(path, line, 'utf8');
     } catch (reason: unknown) {
       // Said out loud rather than swallowed, per `coding-style.md`. What is lost is one line of

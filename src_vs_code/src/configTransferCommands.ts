@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -14,6 +14,7 @@ import { notify, notifyAndAsk } from './notify';
 import { oneAtATime } from './oneAtATime';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { askPerson } from './personWait';
+import { makeDataDirectory } from './dataDirMaker';
 import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
@@ -156,7 +157,7 @@ async function backedUp(context: vscode.ExtensionContext, path: string): Promise
   try {
     // Never the missing NAMED data root (E5.0 of paths per side): a backup that cannot be kept stops the import.
     await refuseUnderMissingRootOnceSettled(backupsDir());
-    await mkdir(backupsDir(), { recursive: true });
+    await makeDataDirectory(backupsDir());
     await writeExport(context, path, backupSettings);
     await Promise.all(staleBackups(await readdir(backupsDir())).map((name) => rm(join(backupsDir(), name), { force: true })));
 

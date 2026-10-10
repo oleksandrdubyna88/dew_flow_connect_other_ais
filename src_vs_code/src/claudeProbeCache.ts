@@ -8,7 +8,6 @@ import { ConsultSettings } from './consultSettings';
 import { Vendor } from './vendors';
 import { unquoted } from './cliVersions';
 import { writeFileAtomically } from './atomicFile';
-import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
  * What this machine knows about the Claude CLI's models, and how it finds out again.
@@ -241,9 +240,8 @@ export class ClaudeProbeCache {
   private async keepClaudeProbe(probe: ProbeResult): Promise<void> {
     try {
       // Never the missing NAMED data root (E5.0 of paths per side): the probe runs with nobody acting, and a cache
-      // written into a bare mount point would hide the folder being gone.
-      await refuseUnderMissingRootOnceSettled(this.dataDir.fsPath);
-      await vscode.workspace.fs.createDirectory(this.dataDir);
+      // written into a bare mount point would hide the folder being gone. The atomic write asks the guard and makes the
+      // folder through the one maker (`dataDirMaker.ts`), which never makes a named root.
       await writeFileAtomically(vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath, writeProbe(probe));
     } catch (error) {
       // The list on screen is correct either way — this costs a re-probe next week, not an answer.

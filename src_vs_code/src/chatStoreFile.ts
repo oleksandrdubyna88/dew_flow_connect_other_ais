@@ -2,7 +2,8 @@
    The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
+import { readFile, readdir, rename, rm, stat } from 'node:fs/promises';
+import { makeDataDirectory } from './dataDirMaker';
 import { join } from 'node:path';
 import { abreast } from './abreast';
 import { writeFileAtomically } from './atomicFile';
@@ -763,7 +764,7 @@ export class ChatStoreFile {
     // losing what somebody said. (CodeRabbit, on the pull request.)
     const to = join(this.dir, QUARANTINE_DIR, `${id}-forgotten-${randomUUID().slice(0, 8)}-${now}.json`);
     try {
-      await mkdir(join(this.dir, QUARANTINE_DIR), { recursive: true });
+      await makeDataDirectory(join(this.dir, QUARANTINE_DIR));
       await rename(this.recordPath(id), to);
       console.info(`ConnectOtherAIs: a conversation was forgotten; its transcript was set aside, unchanged, at ${to}`);
 

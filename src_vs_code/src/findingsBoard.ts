@@ -73,17 +73,37 @@ export const SETTLE_CEILING_MS = 10_000;
  */
 let absentRoot: PathFinding | undefined;
 
+/** Who is told when a kept absence is lifted by a confirmed root ({@link onDataRootBack}). */
+let backListeners: readonly (() => void)[] = [];
+
 /**
  * The watch's answer about the named data root, on every refresh: `here` lifts a kept absence, another root (or none)
  * drops it, `pending` and `unknown` leave it as it is. Asked BEFORE {@link publishFindings}, which keeps a new absence.
  */
 export function noteDataRoot(root: string | undefined, presence: Presence): void {
-  if (absentRoot === undefined) {
+  if (nothingToLift(root, presence)) {
     return;
   }
-  if (root !== absentRoot.value || presence === 'here') {
-    absentRoot = undefined;
+  absentRoot = undefined;
+  if (presence === 'here') {
+    for (const listener of backListeners) {
+      listener();
+    }
   }
+}
+
+/** Whether no absence is kept, or the answer is about the kept root and does not confirm it. */
+function nothingToLift(root: string | undefined, presence: Presence): boolean {
+  return absentRoot === undefined || (root === absentRoot.value && presence !== 'here');
+}
+
+/**
+ * Told when a kept absence is lifted by a probe that CONFIRMS the root — the folder was made again, the drive mounted.
+ * The settings mirror, which stood aside (`no-data-root`, terminal), writes again from it, so a person recovers by making
+ * the folder, with no settings edit (todo/PLAN_paths_per_side.md E5.7, risk item F).
+ */
+export function onDataRootBack(listener: () => void): void {
+  backListeners = [...backListeners, listener];
 }
 
 /** The host has decided what it knows: the page reads it, the gate reads it, held notices still missing stay held. */
@@ -139,7 +159,7 @@ export function absentDataRoot(): PathFinding | undefined {
 export function refusedDataRoot(path: string): PathFinding | undefined {
   const missing = absentDataRoot();
 
-  return missing !== undefined && under(path, missing.value) ? missing : undefined;
+  return missing !== undefined && isUnder(path, missing.value) ? missing : undefined;
 }
 
 /**
@@ -178,8 +198,11 @@ export function missingRootRefusal(missing: PathFinding): Error {
   return new Error(`${missingTitle(missing)} Nothing is written under it until it exists.`);
 }
 
-/** Whether `path` is `root` or inside it — spelled as the resolver spells both, case folded where the platform folds it. */
-function under(path: string, root: string): boolean {
+/**
+ * Whether `path` is `root` or inside it — spelled as the resolver spells both, case folded where the platform folds it.
+ * The guard and the one maker of data directories (`dataDirMaker.ts`) ask the same question this one way.
+ */
+export function isUnder(path: string, root: string): boolean {
   const child = comparable(path);
   const parent = comparable(root);
 
@@ -228,6 +251,7 @@ export { isAboutAMissingPath };
 export function forgetFindingsBoard(): void {
   published = [];
   absentRoot = undefined;
+  backListeners = [];
   held = [];
   listeners = [];
   settling = Promise.resolve();

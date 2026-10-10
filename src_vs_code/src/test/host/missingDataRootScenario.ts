@@ -13,9 +13,12 @@ import * as vscode from 'vscode';
  *
  * <p><b>The missing named root</b>, in the SECOND launch, whose `COAI_DATA_DIR` names a folder that does not exist: after
  * activation, and after the notice has settled — its toast shown and its record handled, which is exactly the write that
- * used to create the folder — the folder is still absent, with no settings file and no ledger in it. Then the folder is
- * created and a setting changed: the mirror, which stood aside, writes the settings file within seconds — the proof that
- * it was the guard holding it, not a mirror that never ran.</p>
+ * used to create the folder — the folder is still absent, with no settings file and no ledger in it, and a settings change
+ * does not create it either. Then the folder is created and NOTHING ELSE is done — no settings edit (the risk
+ * consultation of story 5.7, item F: the earlier version changed a setting here, which is what re-asked the disk): the
+ * watch's recheck confirms the root, and the mirror, which stood aside, writes the settings file within seconds — the
+ * proof that it was the guard holding it, not a mirror that never ran, and that a person recovers by making the folder.
+ * The recovery that follows a settings edit is a unit value (`pathWatch.test.ts`, a path that comes back is resolved).</p>
  *
  * <p>What a host cannot observe is the toast itself: the held notice is written to no ledger by design, and the extension
  * runs from its bundle, whose module state a scenario cannot read. The notice, its once-per-run and its button are values
@@ -88,11 +91,12 @@ export async function aMissingNamedDataRootStaysAbsent(): Promise<void> {
     await settle(SETTLE_MS);
     assert.equal(fs.existsSync(home), false, 'a settings change wrote the server\'s settings into a folder that is not there');
 
-    // The folder appears: the watch re-asks on the next settings change, the mirror resumes, the file lands.
+    // The folder appears and nothing else happens: no settings edit. The watch's recheck (every 5 s) confirms the root,
+    // the guard lets the writers through, and the mirror — told the root is back — writes the file.
     fs.mkdirSync(home, { recursive: true });
-    await config().update('dealPlanLenses', false, vscode.ConfigurationTarget.Global);
     await until(() => fs.existsSync(path.join(home, 'settings.json')),
-      'the folder was created and a setting changed, and the mirror never wrote the settings file — it was not the guard that held it');
+      'the folder was created — with no settings edit — and the mirror never wrote the settings file: a person who makes the folder again is not recovered',
+      25_000);
   } finally {
     await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
   }

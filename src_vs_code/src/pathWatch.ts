@@ -2,7 +2,7 @@ import { type NamedRoot, dataDirFinding } from './dataDir';
 import { watchedDirs } from './escalationDirs';
 import { absentDataRoot, expectDataRoot, noteDataRoot, publishFindings } from './findingsBoard';
 import { type ExecutableSide, pathForThisSide, qualified } from './pathFamily';
-import { type PathFinding, type PathValue, type Presence, agreed, asked, findingSubject, findingsOf, valueSubject } from './pathFindings';
+import { type PathFinding, type PathValue, type Presence, type ProbeKind, agreed, asked, findingSubject, findingsOf, probeKindOf, valueSubject } from './pathFindings';
 import type { PathProbes } from './pathProbes';
 import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
 import type { SettingProblem } from './providers';
@@ -47,7 +47,22 @@ export interface PathWatchDeps {
   readonly say: (finding: PathFinding) => void;
   /** A missing path came back or was changed: the next time it goes missing is news. */
   readonly resolved: (finding: PathFinding) => void;
+  /**
+   * A repeating timer — the host's `setInterval`, unref'd and disposed with the extension. Absent (a test drives
+   * {@link PathWatch.recheck} by hand), nothing repeats.
+   */
+  readonly every?: (work: () => void, ms: number) => void;
 }
+
+/**
+ * How often a path the disk said is ABSENT is asked again — so a folder made again, or a drive mounted, is seen with no
+ * settings edit: the notice clears, the guard lets the writers through and the settings mirror writes (E5.7, risk item
+ * F). Only absent paths are asked, one outstanding probe each, so a quiet window asks nothing at all.
+ */
+export const RECHECK_MS = 5_000;
+
+/** A path the disk is asked about again, and as what. */
+type Recheck = readonly [string, ProbeKind];
 
 /** One asked value's answer, by the subject the notice is keyed on. */
 type Answer = readonly [string, Presence];
@@ -58,6 +73,8 @@ interface Own {
   readonly answers: ReadonlyMap<string, Presence>;
   /** The named data root and what the disk says of it now — what the storage guard keeps its own state from. */
   readonly root: RootAnswer;
+  /** Every asked path the disk said is absent — what the recheck asks again. */
+  readonly absent: readonly Recheck[];
 }
 
 /** The named data root (none for the default location) and the disk's answer about it. */
@@ -82,13 +99,24 @@ export class PathWatch {
   /** The server's problems, once it has answered and is trusted; `undefined` leaves this window's own findings. */
   private serverProblems: readonly SettingProblem[] | undefined = undefined;
 
+  /** The paths the last refresh found absent — what {@link recheck} asks again. */
+  private absent: readonly Recheck[] = [];
+
   constructor(private readonly deps: PathWatchDeps) {}
 
-  /** Asks, publishes, says — and keeps doing so as the disk answers. */
+  /** Asks, publishes, says — and keeps doing so as the disk answers, rechecking what it found absent. */
   start(): void {
     this.deps.probes.onChange(() => { this.refresh(); });
     expectDataRoot(this.dataRootSettled());
     this.refresh();
+    this.deps.every?.(() => { this.recheck(); }, RECHECK_MS);
+  }
+
+  /** Every path the last refresh found absent, asked of the disk again — an answer that changed refreshes the watch. */
+  recheck(): void {
+    for (const [path, kind] of this.absent) {
+      this.deps.probes.recheck(path, kind);
+    }
   }
 
   /** The settings or the disk's answers changed: decide again from what is known now. */
@@ -98,6 +126,7 @@ export class PathWatch {
       const findings = agreed(own.findings, this.serverProblems, this.deps.side.family);
       // The guard's own state first: only a confirmed root lifts a kept absence, a re-ask or a timeout never does.
       noteDataRoot(own.root.path, own.root.presence);
+      this.absent = own.absent;
       publishFindings(findings);
       this.tell(findings, own.answers);
     } catch (reason) {
@@ -172,8 +201,17 @@ export class PathWatch {
     const answers = asked(this.values(), family, (path, kind) => this.deps.probes.presence(path, kind));
     const root = this.dataRootAnswer();
     const findings = [...findingsOf(answers, family), ...(root.finding === undefined ? [] : [root.finding])];
+    const absent = [
+      ...answers.filter((one) => one.presence === 'absent').map((one): Recheck => [one.value.path, probeKindOf(one.value.setting.kind)]),
+      ...(root.root.presence === 'absent' && root.root.path !== undefined ? [[root.root.path, 'folder'] as const] : []),
+    ];
 
-    return { findings, answers: new Map([...answers.map((one): Answer => [valueSubject(one.value), one.presence]), ...root.answer]), root: root.root };
+    return {
+      findings,
+      answers: new Map([...answers.map((one): Answer => [valueSubject(one.value), one.presence]), ...root.answer]),
+      root: root.root,
+      absent,
+    };
   }
 
   /** The named data root's finding and its answer — none for the default location, which is never asked (D3). */

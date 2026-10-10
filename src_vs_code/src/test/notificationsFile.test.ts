@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { forgetFindingsBoard, heldNotices, publishFindings } from '../findingsBoard';
+import { forgetFindingsBoard, heldNotices, noteDataRoot, publishFindings } from '../findingsBoard';
 import { appendLine, flushLedgers } from '../jsonlLedger';
 import { NotificationRecord, notificationLine } from '../notifications';
 import { familyOf } from '../pathFamily';
@@ -493,8 +493,10 @@ test('a notice about the missing data folder is HELD, not written — its own wr
     assert.match(String(told), /was not found on this machine/u, 'the loss carries the finding\'s own sentence');
     assert.equal(existsSync(gone), false, 'a lost record created the folder');
 
-    // The folder is found again: the board clears, and writes land as they always did.
+    // The folder is found again — a probe CONFIRMS it, which is all that lifts the kept absence (risk item D) — the board
+    // clears, and writes land as they always did.
     mkdirSync(gone, { recursive: true });
+    noteDataRoot(gone, 'here');
     publishFindings([]);
     assert.equal(await recordNotification(gone, record()), 'landed');
     assert.equal((await readNotifications(gone)).length, 1, 'once the folder exists the ledger resumes');
