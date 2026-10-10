@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
 
-import { NOTHING_CHOSEN, dataDirFinding, namedRoot, useStorageSettings } from '../dataDir';
+import { NOTHING_CHOSEN, dataDirFinding, namedRoot, useStorageSettings, whereData } from '../dataDir';
 
 /**
  * A NAMED data directory that does not exist is always red (todo/PLAN_paths_per_side.md E5.7; decided with the operator,
@@ -51,6 +51,18 @@ test('a root the disk could not answer for is UNKNOWN — never missing — and 
   assert.equal(dataDirFinding({ root: ROOT, source: 'environment' }, 'unknown', 'posix')?.state, 'unknown');
   assert.equal(dataDirFinding({ root: ROOT, source: 'environment' }, 'here', 'posix'), undefined);
   assert.equal(dataDirFinding({ root: ROOT, source: 'shared setting' }, 'pending', 'posix'), undefined);
+});
+
+test('a missing NAMED root keeps no quiet "is not there yet" note — the mark says it; a missing side folder inside an existing root keeps the note', () => {
+  withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' }, () => {
+    const rootGone = whereData(() => false);
+    assert.equal(rootGone.notes.some((note) => note.includes('is not there yet')), false,
+      'today a missing named root is a quiet note beside the bright mark — the same folder said twice, in two tones');
+
+    const sideGone = whereData((path) => path === ROOT);
+    assert.equal(sideGone.notes.some((note) => note.includes('is not there yet')), true,
+      'the side folder inside an existing root is created lazily, so its absence stays the quiet note');
+  });
 });
 
 test('the named root is the layer that answered — the environment, this side or the shared setting — and nothing for the default', () => {

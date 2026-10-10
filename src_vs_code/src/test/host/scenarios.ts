@@ -13,6 +13,7 @@ import { aRevisionInARealEditor } from './revisionScenario';
 import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
 import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
+import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -898,7 +899,30 @@ const SCENARIOS: readonly Scenario[] = [
     name: 'an older build\'s edit after the move is raised once, and each choice on it lands in the real settings',
     run: aRevisionInARealEditor,
   },
+  {
+    // todo/PLAN_paths_per_side.md E5.7, the first-start guarantee: an existing named data directory raises no
+    // missing-path notice. What it does and does not drive is in `missingDataRootScenario.ts`.
+    name: 'a first start with an existing named data directory raises no setting-path-missing',
+    run: aFirstStartRaisesNoMissingPathNotice,
+  },
 ];
+
+/**
+ * The SECOND launch's one scenario (todo/PLAN_paths_per_side.md E5.7): its `COAI_DATA_DIR` names a folder that is not
+ * there, so none of the ordinary scenarios — which read and write that directory — can run in it, and this one cannot
+ * run in theirs. The launcher sets `MISSING_ROOT_LAUNCH` for it.
+ */
+const MISSING_ROOT_SCENARIOS: readonly Scenario[] = [
+  {
+    name: 'a missing named data directory is still absent after activation and after the notice has settled, and the mirror resumes once it exists',
+    run: aMissingNamedDataRootStaysAbsent,
+  },
+];
+
+/** The scenarios this launch runs: the ordinary list, or the missing-root launch's own. */
+function scenariosForThisLaunch(): readonly Scenario[] {
+  return process.env[MISSING_ROOT_LAUNCH] === '1' ? MISSING_ROOT_SCENARIOS : SCENARIOS;
+}
 
 /**
  * A chat registered under `key` the way a real one is, carrying only what the way back reads: its store
@@ -926,10 +950,11 @@ function registeredChat(panels: ChatPanels, key: object, saveId: string, source:
  * error, not a pass.</p>
  */
 export async function run(): Promise<void> {
-  assert.ok(SCENARIOS.length > 0, 'no scenario was discovered, and an empty run is not a pass');
+  const scenarios = scenariosForThisLaunch();
+  assert.ok(scenarios.length > 0, 'no scenario was discovered, and an empty run is not a pass');
 
   const failures: string[] = [];
-  for (const scenario of SCENARIOS) {
+  for (const scenario of scenarios) {
     try {
       await scenario.run();
       console.log(`  ok  ${scenario.name}`);
@@ -938,7 +963,7 @@ export async function run(): Promise<void> {
       console.log(`  FAIL ${scenario.name}`);
     }
   }
-  console.log(`  ${SCENARIOS.length - failures.length}/${SCENARIOS.length} scenarios passed`);
+  console.log(`  ${scenarios.length - failures.length}/${scenarios.length} scenarios passed`);
   if (failures.length > 0) {
     throw new Error(`extension-host scenarios failed:\n  - ${failures.join('\n  - ')}`);
   }

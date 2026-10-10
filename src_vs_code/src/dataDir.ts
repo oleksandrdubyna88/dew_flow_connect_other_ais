@@ -421,7 +421,10 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
       + 'Move that database and its sessions into a side directory to keep their history.');
   }
 
-  if (!exists(directory)) {
+  // The quiet note is for a SIDE folder inside a root that exists — it is created lazily, so its absence is ordinary. A
+  // missing named ROOT is not quiet: it is the watch's bright mark and its notice (E5.7, D3), and the same folder said
+  // twice in two tones would be the page disagreeing with itself.
+  if (!exists(directory) && exists(root)) {
     notes.push(
       `${directory} is not there yet, so this side starts with no history. If that is a surprise, `
       + 'check COAI_DATA_DIR for a typo before recording into it.');

@@ -86,6 +86,20 @@ async function main() {
     }),
     bounded(LAUNCH_MS, 'the extension host'),
   ]);
+
+  // A SECOND launch (todo/PLAN_paths_per_side.md E5.7): its data directory is a folder that is NOT there, so the one
+  // scenario that can prove "nothing creates a missing named root" runs with the real activation, the real mirror and the
+  // real notice — and none of the ordinary scenarios, which would write into it. `missingDataRootScenario.ts` says what
+  // it drives; the environment variable is what tells the runner which list this launch is.
+  await Promise.race([
+    runTests({
+      extensionDevelopmentPath: ROOT,
+      extensionTestsPath: join(ROOT, 'out', 'test', 'host', 'scenarios.js'),
+      launchArgs: [workspace, '--disable-extensions'],
+      extensionTestsEnv: { COAI_DATA_DIR: join(dataHome, 'named-but-missing'), COAI_DATA_SIDE: '', COAI_HOST_MISSING_DATA_ROOT: '1' },
+    }),
+    bounded(LAUNCH_MS, 'the extension host, second launch'),
+  ]);
 }
 
 main()

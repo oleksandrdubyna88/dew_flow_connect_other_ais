@@ -381,6 +381,8 @@ export function activate(context: vscode.ExtensionContext): void {
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
     // A catalog field crosses only when the binary lists it; what it last settled on, never a spawn per write.
     () => features.known(),
+    // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
+    () => pathWatch.dataRootMissing(),
   );
   mirrorSettings(settingsSync);
   // When each new control of the Settings page was first seen here, so its "new" mark lasts a week (newTags.ts).
@@ -881,6 +883,7 @@ function tellTheDeletions(outcome: SyncOutcome): void {
 /** What a person is told, per outcome. `STOOD_DOWN` is shared, because a page decides on it. */
 const REASONS: Readonly<Record<string, string>> = {
   'stood-down': STOOD_DOWN,
+  'no-data-root': 'the data folder this window names does not exist, so nothing is written there until it does',
   busy: 'another window kept the settings file busy',
   failed: 'the settings file could not be written',
 };

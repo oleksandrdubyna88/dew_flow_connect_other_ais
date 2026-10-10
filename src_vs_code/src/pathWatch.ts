@@ -1,6 +1,6 @@
 import { type NamedRoot, dataDirFinding } from './dataDir';
 import { watchedDirs } from './escalationDirs';
-import { expectDataRoot, publishFindings } from './findingsBoard';
+import { expectDataRoot, missingDataRoot, publishFindings } from './findingsBoard';
 import { type ExecutableSide, pathForThisSide, qualified } from './pathFamily';
 import { type PathFinding, type PathValue, agreed, findingSubject, pathFindings } from './pathFindings';
 import type { PathProbes } from './pathProbes';
@@ -96,6 +96,16 @@ export class PathWatch {
     if (named !== undefined) {
       await this.deps.probes.settled(named.root, 'folder');
     }
+  }
+
+  /**
+   * Whether the NAMED data root is missing, once the disk has been asked (E5.7): what the settings mirror asks before it
+   * writes — a confirmed absence, never an unknown answer or the default location, which are written as today.
+   */
+  async dataRootMissing(): Promise<boolean> {
+    await this.dataRootSettled();
+
+    return missingDataRoot() !== undefined;
   }
 
   /** Every stored value of this side the disk is asked about, with the path it is asked at. */

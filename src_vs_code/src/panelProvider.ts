@@ -4600,7 +4600,9 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
 function probePaths(): readonly string[] {
   const root = chosenRoot();
 
-  return [join(root, 'coai.db'), coaiDataDir()];
+  // The ROOT itself too (E5.7): `whereData` keeps its quiet "not there yet" note for a side folder inside an existing
+  // root alone — a missing named root is the watch's bright mark, not a note.
+  return [root, join(root, 'coai.db'), coaiDataDir()];
 }
 
 /**
