@@ -2560,7 +2560,8 @@ not three*) and the CHANGELOG — is the next section; the plan's promotion wait
 | **Help in five languages**: *choose-reviewers* names the fourth box and 0.39.0, *teach-your-ai* says the paste teaches `review_feature` for plans of 3 or more epics, *recent-rounds* explains the skipped badge. | `helpContent.ts`, `helpRu.ts`, `helpUk.ts`, `helpDe.ts`, `helpEs.ts` |
 | **The snippet's fifth half, `coai-feature` v1 — product-owned.** `src_vs_code/src/featureRule.md` (marker `<!-- coai-feature v1 -->`, heading *Reviewing the whole FEATURE before release*): WHEN (once, at the end of a plan of THREE or more epics, after every epic is built, before the release — smaller plans are `review_code`'s), WHAT (`repoPath`, `planPath`, `baseRef` = the commit before the first epic, `head`, `epics` with their branches, `lessons` with three non-empty arrays and "none" with a reason), the verdicts (`skipped` does not block — tell the person; `revise` → fixes as NEW pull requests, then again with the new `head`; `call_human` stops the release; `again: true` after done), and `feature: <planPath>` on resolve/status/ask_human. `prepare-gate.mjs` emits it to `generated/featureRule.ts` exactly as the consultant half was emitted before it moved into the conventions (invalidate, verify marker+heading, write; a missing file fails naming itself). `KNOWN_HALVES` gains the row between the document gate and the caller, with a new `mounted` field (`false` only here); `FEATURE_VERSION` 1, `ARTEFACT_VERSION` 12 → 13, the menu title `(v13)`, `SNIPPET_BODY_SHA` re-pinned. | `featureRule.md`, `scripts/prepare-gate.mjs`, `claudeSnippet.ts`, `package.json`, `.gitignore` |
 | **`coai-feature` v2 — the head is the checkout's (2026-09-28, §9.30 of the feature-review plan).** v1 listed `head` — "the branch or commit that holds all of it, `origin/main` included" — among the arguments and said to call again "with the new `head`"; the tool declared no `head`, and the SDK drops an undeclared argument without an error, so a caller on another checkout got a clean review of the wrong tree (found by the D26 live run). v2 says, in the conventions feature-gate rule's words, to run it from the checkout that holds the finished feature — the head reviewed is that checkout's HEAD, only committed work is read — and that the optional `head` only checks it (one naming any other commit is refused; `module_server.md`). `FEATURE_VERSION` 1 → 2, `ARTEFACT_VERSION` 13 → 14, the menu title `(v14)`, `SNIPPET_BODY_SHA` re-pinned; `featureSnippet.test.ts` asserts the where-to-run sentence and the absence of `head` as a thing to pass, `origin/main` and "new `head`" — seen red on the v1 text. | `featureRule.md`, `claudeSnippet.ts`, `package.json`, `test/featureSnippet.test.ts` |
-| **A mount is judged on what a mount can carry.** No mount holds the product-owned half, so `readSnippetStatus` judges a selected MOUNT on the mounted halves only (`MOUNTABLE_HALVES`) and `MOUNTED_SIBLINGS` skips unmounted rows — otherwise every mounting repository would be told, for ever, that it lacks a half no mount can give it, with advice (paste the block over the mount) its own shared-rule check forbids. The instruction reaches such a repository through the `review_feature` tool description (D11). A real paste is still judged on every half. | `claudeSnippet.ts` |
+| **A mount is judged on what a mount can carry** *(superseded by S3.5, the next row)*. No mount holds the product-owned half, so `readSnippetStatus` judges a selected MOUNT on the mounted halves only (`MOUNTABLE_HALVES`) and `MOUNTED_SIBLINGS` skips unmounted rows — otherwise every mounting repository would be told, for ever, that it lacks a half no mount can give it, with advice (paste the block over the mount) its own shared-rule check forbids. The instruction reaches such a repository through the `review_feature` tool description (D11). A real paste is still judged on every half. | `claudeSnippet.ts` |
+| **`coai-feature` v3 — the half is the shared rule (S3.5, 2026-10-09).** Conventions #58 made the feature rule shared: `.agents/conventions/common/coai-feature-gate.md`, pinned here by #726. `prepare-gate.mjs` reads it from the mount (`FEATURE_SOURCE`), strips its frontmatter like every mounted half (`featureBody` = `ruleBody`), and the consultant and feature halves now go through one `prepareMountedHalf` (invalidate → verify → write; a missing file names itself and says to move the pin). `src_vs_code/src/featureRule.md` is deleted — one source per half. v3 is what the server does: one round is the budget, a second only on a reviewer failure, a `blocking` finding or the person's request; `again: true` with a different `baseRef` starts a fresh review — v2 promised a reopen the server refuses over the same base. With every half mounted, the S3.3a exception is gone: `mounted`, `MOUNTABLE_HALVES` and `snippetStatus`'s `judged` parameter are removed, so a mount is judged on all five halves — a mount pinned before #58 is told the feature gate is missing. `FEATURE_VERSION` 2 → 3, `ARTEFACT_VERSION` 15 → 16, the menu title `(v16)`, `SNIPPET_BODY_SHA` re-pinned. | `scripts/prepare-gate.mjs`, `claudeSnippet.ts`, `package.json`, `featureRule.md` (deleted), `test/featureSnippet.test.ts`, `test/snippetVersion.test.ts`, `test/snippetDiscovery.test.ts`, `test/prepareGate.test.mjs` |
 | **The panel harness reads `checked`** from the rendered markup, as a DOM does (and not from a data attribute that happens to say "checked"), with its own test. | `test/panelPageHarness.ts` |
 
 Tests: `featureGate.test.ts` (storage, the wire, the version gate, the defaults comparison, the card RUN),
@@ -2610,6 +2611,20 @@ The risk consultation for this story named the trap in the old test: corrupting 
 it is IN the mount makes the mount dirty, and the resolver — which runs first — refuses it for that
 instead. So the malformed-text case asks `consultantBody` directly, and a clean pinned mount that lacks
 the rule is its own case.
+
+## The question half is read from the mount (2026-10-09)
+
+[PLAN_the_feature_and_question_halves_are_shared_rules.md](PLAN_the_feature_and_question_halves_are_shared_rules.md).
+Conventions #58 added a rule, the question consultant (`common/coai-question-consultant.md`, v1: ask the
+consultants before the person, in every phase). The same release's other two changes reached this
+repository first and separately: the consultant half at v4 with the pin bump (#726, artefact 15) and the
+feature half from the mount at v3 (#730, S3.5, artefact 16, above). This change adds the sixth half.
+
+| what | where |
+|---|---|
+| **The generator emits the question half.** `QUESTION_SOURCE` reads `.agents/conventions/common/coai-question-consultant.md` through `ruleBody` with its own marker and heading, and `prepareMountedHalf` writes it to `generated/questionRule.ts` (git-ignored); a pin from before the rule fails naming the file and the fix. | `scripts/prepare-gate.mjs`, `.gitignore` |
+| **A sixth row, last.** `QUESTION_VERSION` 1, `ARTEFACT_VERSION` 17, the menu title `(v17)`, `SNIPPET_BODY_SHA` re-pinned. A mount from before the release is now `older` on the question half too; the panel still words that as *copy it again and replace the old block*, the wrong cure for a mount (move the pin) — a known gap owned by [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md). | `claudeSnippet.ts`, `package.json` |
+| **Tests.** `questionSnippet.test.ts` (new): the row, the marker, the load-bearing sentences, and a paste or a mount without it is `older` naming it. `prepareGate.test.mjs`: the missing-file case and the body stripped and refused. `snippetDiscovery`/`snippetVersion`/`featureSnippet`: six files. `live-feature-vendor-compat.mjs` expects the halves raised since the last release (consultant, feature, question), both ways. | `src_vs_code/src/test/`, `scripts/` |
 
 ## The consultant's kinds on every card, and a "?" on every consultant setting (2026-09-26)
 
@@ -3598,6 +3613,9 @@ sides need nothing — their token then disagrees with the intent, and the rule 
 
 
 ### The pasted snippet has FOUR halves, and only three of them are shared (2026-09-13, corrected 2026-09-14)
+
+> Superseded twice: the consultant half became a shared rule on 2026-09-25, and the feature half (the
+> fifth) on 2026-10-09 (S3.5 of `todo/PLAN_feature_review.md`). Every half is now a conventions rule.
 
 `claudeSnippet()` used to BE the gate rule: one constant, generated from the conventions submodule at
 build time. It is now four rule files joined in the order an AI should read them — the gate, the
@@ -10939,7 +10957,8 @@ Every place of the new page but Models draws the CURRENT page's section for it, 
 `catalogSections.placeBody(place, state)` names the builder of each place (`SPLIT`, and since E5 prerequisite (b)
 `MOVED_SECTIONS` — it used to look the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`), so no
 builder is copied and a control behaves the same on both pages until E5 retires the old one. The page wraps it in a
-`.moved` column (760 px, the width the sections were written for); the MCP server keeps its 1.5× zoom on its new pane.
+`.moved` column (760 px, the width the sections were written for — lifted on a wide editor where a place lays out
+in columns, see *The Settings tabs lay out in two columns*); the MCP server keeps its 1.5× zoom on its new pane.
 
 - **The prompts section is split in two** by one parameter, `promptsBody(state, half)` (`PromptsHalf`): `both` is the
   current page, unchanged; `stages` (Reviews → Stages) is the switches, rounds, thresholds, lens deals and workspace;
@@ -11697,3 +11716,32 @@ price from `state.modelPrices[model]`, priced from the reviewers only, so a cons
   model show 1.25 and 3 (RED: both 1.25), an unknown model keeps its dash; `theCardsArePricedFromEveryRow.test.ts` pins
   the render's wiring (every row, the one price book). Break-it: reading by model, pricing only the reviewers,
   routing an api row off its endpoint, and the render pricing `shown` each turn a test red.
+## The Settings tabs lay out in two columns on a wide editor (2026-10-09)
+
+Asked for by the operator on 0.65.0: Models drew its cards in two columns on a wide editor, and every other tab was the
+760 px `.moved` column with the right half of the screen empty. Reviews (every sub-tab but **Limits**), **Security lane**
+and **Chat** now lay their repeated cards out the way Models does — by the SAME rule, not a copy of it.
+
+- **One class, one rule.** `cardColumns.ts` exports `CARD_COLUMNS` (`card-columns`) and `cardColumns(cards)`, which
+  wraps drawn cards in that class and draws nothing for no cards. Models' rule (`.catalog .cards`, one column, two from
+  `min-width: 1100px`) became the page's `.catalog .card-columns`, in `COLUMNS` at the end of `catalogCss.ts`; Models'
+  container carries both classes. Inside the same media query `.catalog .moved:has(.card-columns)` drops the 760 px
+  cap, so a narrow editor keeps the column it had. The cells' own single-column margins are cleared
+  (`.card-columns > *`; the gap spaces them) and a fieldset gets `min-width: 0`, or its min-content width pushes the track.
+- **What flows, by place.** Stages and Prompts per round: each stage's role boxes (`promptsBody`); the stage's switches
+  and notes span. **Roles & prompts: each role's PROMPTS** (`rolesBlocks.promptBlocks`) — a role spans the page, because
+  a stage often holds one role and two columns of roles left Plan review as narrow as before. The gate: its fields
+  (`catalogSections`, around `gateBody`). Commands: Yours and Shipped, each list's blocks. Security lane: the two numbers,
+  the prompt cards and the pairs; the switch, the legend, each list's count and button and *Try it* span. Chat: the
+  models a chat can open on, the three sending fields, the prompt presets; a stranded choice and a conflict's table span.
+- **Not touched:** Limits (five numbers, one a row), Consultants (a form of single settings with no repeated card),
+  Setup.
+- **Models' card-block rule is the card's.** It was the page-wide `.catalog .block`, and Chat draws its models as
+  `.block` too, so they wore a card block's top line and padding; it is `.catalog .card .block` now.
+- **Tests:** `theSettingsTabsFlowInTwoColumns.test.ts` runs the page on each place. Every card family is drawn exactly
+  as many times as its source of truth says (the state, the shipped catalogue, or the builder's own output — a family
+  drawing nothing would otherwise pass) and each card's PARENT is the shared class (a class written beside the cards
+  instead of around them reads the same to a search); Limits draws none; Models' cards sit in it; the sheet holds
+  exactly one two-column rule — on the shared class, at 1100 px — with the cap lifted there; and no top-border rule
+  reaches a Chat model block while one still reaches a Models card block. Design record:
+  [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).

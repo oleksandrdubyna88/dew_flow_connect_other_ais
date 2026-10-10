@@ -113,7 +113,7 @@ const SHELL = `
 /**
  * The Models tab (E3.2): the toolbar, the three chip rows, and the cards — two columns from 1100 px, each card four rows
  * of the shared grid through `subgrid`, so the same part of two neighbouring cards starts on the same line and the cards
- * end together (the mockup's check 3).
+ * end together (the mockup's check 3). The columns are {@link COLUMNS}.
  */
 const MODELS = `
   .catalog .lead { margin: 4px 0 10px; }
@@ -132,8 +132,6 @@ const MODELS = `
   .catalog .chip[aria-pressed="true"] { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, transparent); }
   .catalog .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
   .catalog .chip.empty { border-style: dashed; color: var(--warn); }
-  .catalog .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
-  @media (min-width: 1100px) { .catalog .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .catalog .card {
     display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 0; background: var(--card);
     border: 1px solid var(--border); border-left: 3px solid var(--vc, var(--border-strong)); border-radius: 4px; padding: 12px 14px 10px;
@@ -156,7 +154,8 @@ const MODELS = `
   .catalog .badge.health.busy::before { content: "◌ "; color: var(--link); }
   .catalog .world { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
   .catalog .world button { margin: 0; width: auto; }
-  .catalog .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+  /* A model CARD's block: Chat draws its models as .block too, and a page-wide .block gave them this line and space. */
+  .catalog .card .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
   .catalog .block-title { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; opacity: 1; }
   .catalog .boxes { display: flex; flex-wrap: wrap; gap: 4px 14px; }
   .catalog .feat { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
@@ -172,5 +171,25 @@ const MODELS = `
   .catalog .used-by { margin-top: 8px; font-size: 0.9em; color: var(--muted); }
   .catalog .empty-state { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 24px; text-align: center; color: var(--muted); }`;
 
+/**
+ * The columns (`cardColumns.ts`, 2026-10-09): Models' cards, and the repeated cards of Reviews (every sub-tab but Limits),
+ * Security lane and Chat — one column, two from 1100 px. Models' own rule, made the page's: ONE breakpoint for every tab.
+ *
+ * <p>Last in the sheet, so the cells' margins it clears win over the single-column margins the places' own rules give
+ * their cards (`.chat-embed .block`, `.commands-embed .command`, `.roles-embed .prompt` — the same weight, written earlier).
+ * On a wide editor a place with columns leaves the 760 px `.moved` column, which left the right half of the screen
+ * empty; on a narrow one it keeps it.</p>
+ */
+const COLUMNS = `
+  .catalog .card-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
+  @media (min-width: 1100px) {
+    .catalog .card-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .catalog .moved:has(.card-columns) { max-width: none; }
+  }
+  /* The gap spaces the cells. A fieldset keeps its min-content width unless told otherwise and would push its track wide. */
+  .catalog .card-columns > * { margin: 0; min-width: 0; }
+  /* A role's prompts: the space its prompts kept above and below themselves, kept by the grid that holds them now. */
+  .roles-embed .card-columns { margin: 6px 0; }`;
+
 /** The whole sheet the Settings page carries beside the shared one `pageDocument` draws. */
-export const CATALOG_CSS = `${SETTINGS_CSS}${TOKENS}${SHELL}${MODELS}`;
+export const CATALOG_CSS = `${SETTINGS_CSS}${TOKENS}${SHELL}${MODELS}${COLUMNS}`;

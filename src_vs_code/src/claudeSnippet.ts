@@ -1,6 +1,7 @@
 import { CALLER_RULE, DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
 import { CONSULTANT_RULE } from './generated/consultantRule';
 import { FEATURE_RULE } from './generated/featureRule';
+import { QUESTION_RULE } from './generated/questionRule';
 
 /**
  * The instruction text a person pastes into a target repository's CLAUDE.md, teaching that
@@ -39,7 +40,7 @@ import { FEATURE_RULE } from './generated/featureRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = 'c9193e5df422630c';
+export const SNIPPET_BODY_SHA = '7aa91821dcfdf0b8';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -47,7 +48,7 @@ export const SNIPPET_BODY_SHA = 'c9193e5df422630c';
  * <p><b>A different thing from `SNIPPET_VERSION`, which is why the two disagree — and drift further
  * apart with every change to the paste — and must not be “tidied” into agreement.</b> That one is the
  * marker inside `coai-review-gate.md` and is frozen at 5 by the conventions migration baseline; this
- * one numbers the paste as a whole — gate, document, feature, caller and consultant together — and is
+ * one numbers the paste as a whole — gate, document, feature, caller, consultant and question together — and is
  * free to move when any of them does. (A docblock here once said they "differ by one", which was true for a
  * day and false from the next change on; the gap is not a fact about either number.)</p>
  *
@@ -64,7 +65,7 @@ export const SNIPPET_BODY_SHA = 'c9193e5df422630c';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 15;
+export const ARTEFACT_VERSION = 17;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -159,17 +160,33 @@ export const CONSULTANT_VERSION = 4;
 
 /**
  * The FEATURE half's version — when to call `review_feature`, what to pass it, and what its verdicts
- * mean (story S3.3 of `todo/PLAN_feature_review.md`).
+ * mean (stories S3.3 and S3.5 of `todo/PLAN_feature_review.md`).
  *
- * <p><b>A fifth number, and the one half that is NOT a mounted rule.</b> It says when to call one tool
- * of one server, which D11 rules is this product's own material — the ruling the consultant half lived
- * under until 2026-09-25. So its source is <c>src_vs_code/src/featureRule.md</c>, and no mount in any
- * repository carries it; see `mounted` in {@link KNOWN_HALVES}.</p>
+ * <p><b>A fifth number, and a mounted rule like the other four since v3.</b> v1 and v2 were this
+ * product's own file, <c>src_vs_code/src/featureRule.md</c>, under D11's ruling that a rule about one
+ * tool of one server is not shared. Conventions #58 reversed it as 2026-09-25 did for the consultant:
+ * v3 is <c>.agents/conventions/common/coai-feature-gate.md</c>, and it says what the server does — one
+ * round is the budget, a second only on a reviewer failure, a `blocking` finding or the person's
+ * request — where v2 still promised a reopen the server refuses.</p>
  *
  * <p>Not cosmetic: a copy pasted before it carries no feature marker, and the AI obeying it never calls
  * `review_feature` — the whole feature is then released having only ever been reviewed in slices.</p>
  */
-export const FEATURE_VERSION = 2;
+export const FEATURE_VERSION = 3;
+
+/**
+ * The QUESTION half's version — ask the consultants before the person.
+ *
+ * <p><b>A sixth number, a mounted rule from its first version.</b> The server's phase rule lets planning
+ * questions and the first two batches after a plan's `proceed` reach the person directly; the rule sets
+ * a higher bar — every question goes to `ask_consultants` first, and the person gets only what the
+ * answers did not settle and what is theirs to decide. Asked by the operator on 2026-10-09
+ * (research/PLAN_the_feature_and_question_halves_are_shared_rules.md).</p>
+ *
+ * <p>Not cosmetic either: a paste without it never learns the bar, and the person is asked what the
+ * consultants could have settled.</p>
+ */
+export const QUESTION_VERSION = 1;
 
 /**
  * The halves the artefact is made of: the one place that knows which they are, in what order, and
@@ -188,17 +205,16 @@ export const FEATURE_VERSION = 2;
  * conventions repository hashes against a baseline, so it is the one version nobody may raise, and
  * the guard that tells you which numbers to move reads this rather than a hand-typed list.</p>
  *
- * <p>`mounted` says where a half's source lives: a mounted row's `file` is a sibling of the gate rule in
- * a conventions mount; an unmounted row's `file` is under `src_vs_code/src` in THIS repository, and no
- * mount anywhere carries it — so a repository that mounts the rules is never judged on it (see
- * {@link readSnippetStatus}). Only the feature half is unmounted.</p>
+ * <p>`file` is the half's shared rule in a conventions mount — every half is one since S3.5 — and it is
+ * what {@link readSnippetStatus} reads beside a mounted gate rule.</p>
  */
 export const KNOWN_HALVES = [
-  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true, mounted: true, file: 'coai-review-gate.md' },
-  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, frozen: false, mounted: true, file: 'coai-document-gate.md' },
-  { id: 'coai-feature', name: 'the feature gate', version: FEATURE_VERSION, text: FEATURE_RULE, frozen: false, mounted: false, file: 'featureRule.md' },
-  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false, mounted: true, file: 'coai-caller-model.md' },
-  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false, mounted: true, file: 'coai-consultant.md' },
+  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true, file: 'coai-review-gate.md' },
+  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, frozen: false, file: 'coai-document-gate.md' },
+  { id: 'coai-feature', name: 'the feature gate', version: FEATURE_VERSION, text: FEATURE_RULE, frozen: false, file: 'coai-feature-gate.md' },
+  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false, file: 'coai-caller-model.md' },
+  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false, file: 'coai-consultant.md' },
+  { id: 'coai-question', name: 'the question consultant', version: QUESTION_VERSION, text: QUESTION_RULE, frozen: false, file: 'coai-question-consultant.md' },
 ] as const;
 
 /** The ids this build reads, in the order the artefact carries them. */
@@ -272,7 +288,7 @@ export function halvesIn(text: string): readonly { readonly id: string; readonly
 
 /**
  * The shared-rule mounts, and the folder each keeps its rules in. A gate rule found in one of these is
- * one file of four: the other halves are its siblings, not text inside it.
+ * one file of five: the other halves are its siblings, not text inside it.
  */
 const MOUNTED_RULE_FOLDERS: Readonly<Record<string, string>> = {
   '.agents/conventions/common/coai-review-gate.md': '.agents/conventions/common/',
@@ -285,26 +301,21 @@ const MOUNTED_RULE_FOLDERS: Readonly<Record<string, string>> = {
  * keep in step (story 5.2's code round, gemini and codex).
  */
 export const MOUNTED_SIBLINGS: readonly string[] = KNOWN_HALVES
-  .filter((half) => half.mounted && half.id !== 'coai-snippet')
+  .filter((half) => half.id !== 'coai-snippet')
   .map((half) => half.file);
-
-/**
- * The halves a MOUNT can carry — every mounted row. A repository whose selected copy is a mount is
- * judged on these alone: the feature half is this product's own and no mount holds it, so judging a
- * mount on it would tell every mounting repository, for ever, that it lacks something no mount can
- * give it — with advice (paste the whole block over the mount) its own shared-rule check forbids. The
- * instruction reaches such a repository through the `review_feature` tool description (D11).
- */
-const MOUNTABLE_HALVES = KNOWN_HALVES.filter((half) => half.mounted);
 
 /**
  * The first applicable paste wins, using the same reader for the panel and copy command.
  *
  * <p><b>A mount is read with its siblings</b> (research/PLAN_consult_on_a_cadence.md, story 5.2). A repository
- * that mounts the rules and pasted nothing holds its four halves as four files, and reading the gate
- * rule alone told it that it was behind on the three it had. Only the SELECTED location's own mount is
+ * that mounts the rules and pasted nothing holds its halves as separate files, and reading the gate
+ * rule alone told it that it was behind on the ones it had. Only the SELECTED location's own mount is
  * read — a half missing from it is never filled from another mount — and a real paste still wins over
  * any mount, because that is the text the AI in the repository actually reads.</p>
+ *
+ * <p><b>A mount is judged on every half</b>, as a paste is. While the feature half was this product's
+ * own file, no mount could carry it and a mount was judged on the other four (S3.3a); since S3.5 a mount
+ * that lacks `coai-feature-gate.md` is a pin from before conventions #58, and saying so is the point.</p>
  */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
@@ -313,10 +324,7 @@ export async function readSnippetStatus(read: (name: string) => Promise<string>)
     return snippetStatus(undefined);
   }
 
-  const location = SNIPPET_LOCATIONS[at];
-  const judged = MOUNTED_RULE_FOLDERS[location] === undefined ? KNOWN_HALVES : MOUNTABLE_HALVES;
-
-  return snippetStatus(await withMountedSiblings(location, texts[at], read), judged);
+  return snippetStatus(await withMountedSiblings(SNIPPET_LOCATIONS[at], texts[at], read));
 }
 
 /** A mounted gate rule and the sibling rules beside it, as one text; any other location as it is. */
@@ -343,15 +351,8 @@ export function snippetVersionIn(text: string): number | undefined {
  * `unversioned` means "pasted before this existed", which is true of every copy made until today
  * and is not the same as version zero. `ahead` is a real case too: an extension older than the
  * repository, on a machine that has not updated.</p>
- *
- * <p>`judged` is which halves count towards `older`: every one for a paste, and only the mountable
- * ones when the copy is a mount (see {@link MOUNTABLE_HALVES}). A NEWER half is still noticed against
- * every row this build knows, so a mount can never make a known id look like one from the future.</p>
  */
-export function snippetStatus(
-  pasted: string | undefined,
-  judged: readonly { readonly id: string; readonly version: number }[] = KNOWN_HALVES,
-): SnippetStatus {
+export function snippetStatus(pasted: string | undefined): SnippetStatus {
   const current = ARTEFACT_VERSION;
   if (pasted === undefined || !pasted.includes(SNIPPET_MARKER)) {
     return { kind: 'absent', current };
@@ -383,7 +384,7 @@ export function snippetStatus(
   // half existed carries no marker for it, and the AI obeying such a copy never uses what that half
   // describes — it is the same defect for every one of them, which is why absent and behind are one
   // answer here and are named separately in the sentence.
-  const behind = judged.filter((half) => isBehind(pasted, half)).map((half) => half.id);
+  const behind = KNOWN_HALVES.filter((half) => isBehind(pasted, half)).map((half) => half.id);
 
   return behind.length === 0
     ? { kind: 'current', current }
@@ -472,8 +473,8 @@ export function callerVersionIn(text: string): number | undefined {
 
 
 /**
- * All five rules, in the order an AI should read them: the gate, the document gate, the feature gate,
- * the caller, the consultant.
+ * All six rules, in the order an AI should read them: the gate, the document gate, the feature gate,
+ * the caller, the consultant, the question consultant.
  *
  * <p>Several files because the first one is frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`. A
  * person pasting this gets one block either way, and the AI reading it gets every rule, which is
@@ -481,8 +482,8 @@ export function callerVersionIn(text: string): number | undefined {
  *
  * <p>The three gates come first, together, because they are the three ways work is REVIEWED; the caller
  * declaration follows them and the consultant is last on purpose — it is about the assistant asking for
- * help mid-task. Four come from the shared conventions (the consultant since v3, see
- * `CONSULTANT_VERSION`); the feature gate is this product's own (see `FEATURE_VERSION`).</p>
+ * help mid-task. All five come from the shared conventions (the consultant since its v3, see
+ * `CONSULTANT_VERSION`; the feature gate since its v3, see `FEATURE_VERSION`).</p>
  */
 export function claudeSnippet(): string {
   return KNOWN_HALVES.map((half) => half.text).join('\n');

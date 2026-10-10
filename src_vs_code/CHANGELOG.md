@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.66.0 — 2026-10-10
 
 **Fixed: every Models card shows its catalog price.** A model used only as a consultant, a question consultant or for
 the chat showed a dash where the published lists price it, and an `api` model on a reviewer's model showed the
@@ -11,6 +11,37 @@ it had started, moving your models into the catalog could meet settings the wind
 *"Moving the models in your settings into the catalog stopped part way"*. Nothing was written then, and nothing is now:
 the move waits for the window to load them and tries once more — on the next settings change, or ten seconds later. If
 the window still has not loaded them, a warning says so once, with **Reload Window**.
+
+**Settings uses the width of a wide editor.** Reviews (Stages, Roles & prompts, Prompts per round, The gate, Commands),
+Security lane and Chat lay their cards out in two columns when the editor is wide and in one when it is narrow — the
+way Models already did, at the same width. On Roles & prompts each role keeps the whole width and its prompts sit side
+by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
+the Models cards.
+
+**The CLAUDE.md snippet's feature half is the shared rule, and says what the server does (snippet v16).**
+The feature-review instructions in the pasted block now come from the conventions rule
+`coai-feature-gate.md` (v3) instead of this product's own copy (v2). v2 still described a reopen the
+server refuses: v3 says one round is the budget, a second runs only on a reviewer failure, a `blocking`
+finding or the person's request, and `again: true` with a different `baseRef` starts a fresh review. It
+also asks for `callerModel` and never a secret in `lessons`.
+- A paste carrying `coai-feature v2` is reported as older on the feature gate — copy the snippet again.
+- A repository that mounts the conventions is now checked for all five rule files. A mount pinned before
+  the feature rule existed is told the feature gate is missing; move its pin.
+- The consultant half moved to v4 with the same conventions release (snippet v15): a cadence consultation
+  counts only after `close_consult` records its outcome.
+
+**The CLAUDE.md snippet gains a sixth half: ask the consultants before the person (snippet v17).** The
+pasted block now carries the conventions rule `coai-question-consultant.md` (`coai-question` v1): before
+any question reaches you — in every phase, the planning questions the server would let through included —
+the AI sends it to `ask_consultants`, and asks you only what their answers did not settle, plus what is
+yours to decide whatever they say (an action outside the working copy such as an issue or a pull request
+in another owner's repository or a publication, a change to your machine, a pure preference), with the
+consultants' answers and its own recommendation beside each question. The server's phase rule is
+unchanged; the rule only raises the bar above it.
+- A paste without the `coai-question` marker is reported as older — copy the snippet again.
+- A repository that mounts the conventions is now checked for six rule files. A mount pinned before this
+  rule is told the question consultant is missing; move its pin (the panel still says to replace the
+  pasted block — a known gap).
 
 ## Extension 0.65.0 — 2026-10-09
 
@@ -65,8 +96,8 @@ question row — now carries two blocks, because each one alone fails open in a 
 - Both live in a folder coai owns in your own application-data folder (`coai-agy/`), owner-only on Linux and macOS.
   agy runs from there and reaches your checkout through `--add-dir`. Your own agy settings are not touched.
 - If that folder cannot be prepared, agy is not started, and the consultation says which folder to make writable.
-- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on each side, and reads
-  still work, 3 of 3 on each side.
+- Measured live through the product on the branch build (`research/RESULTS_agy_write_block.md`): 0 of 3 writes on
+  each side, and reads still work, 3 of 3 on each side.
 
 **An Antigravity consultant can list and search the checkout.** In `--mode plan` agy can only open a file by its
 exact path, so a question about the disk often got "run this command yourself". Now agy asks coai with a short

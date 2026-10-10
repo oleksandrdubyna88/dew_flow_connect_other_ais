@@ -19,7 +19,8 @@
  *       not block. The released extension then reads that session file, parses this server's `--log`,
  *       and its rounds-log page — bundled and RUN, as it ships — draws the round without throwing.</li>
  *   <li><b>The snippet.</b> This build reads a copy the released one handed out as behind on exactly
- *       the feature half; the released build reads this one's copy as NEWER, and says keep it.</li>
+ *       the halves this build raised (the feature, consultant and question halves since artefact v15);
+ *       the released build reads this one's copy as NEWER on the same halves, and says keep it.</li>
  * </ol>
  *
  * <h2>How to run it</h2>
@@ -285,15 +286,19 @@ if (page !== undefined && key.length > 0) {
 const oldSnippet = released.snippet.claudeSnippet();
 const newSnippet = fresh.snippet.claudeSnippet();
 const behind = fresh.snippet.snippetStatus(oldSnippet);
-say(behind.kind === 'older' && JSON.stringify(behind.behind) === '["coai-feature"]',
-  `this build reads ${oldExtension.tag}'s snippet as behind on the feature half alone`, JSON.stringify(behind));
+// The halves this build moved past the released one: since artefact v15 the feature (v3), the
+// consultant (v4) and the new question half. Edit with every artefact change, as before.
+const raised = JSON.stringify(['coai-consultant', 'coai-feature', 'coai-question']);
+const sorted = (ids) => JSON.stringify([...ids].sort());
+say(behind.kind === 'older' && sorted(behind.behind) === raised,
+  `this build reads ${oldExtension.tag}'s snippet as behind on exactly the halves it raised`, JSON.stringify(behind));
 say(fresh.snippet.snippetNote(behind).includes('the feature gate') && fresh.snippet.snippetNote(behind).includes(`v${fresh.snippet.ARTEFACT_VERSION}`),
   'and tells the person which half, and which version to copy', fresh.snippet.snippetNote(behind));
 const inRepo = await fresh.snippet.readSnippetStatus(async (name) => (name === 'CLAUDE.md' ? `# repo\n\n${oldSnippet}` : ''));
 say(JSON.stringify(inRepo) === JSON.stringify(behind), 'the same when it is read out of a CLAUDE.md');
 const ahead = released.snippet.snippetStatus(newSnippet);
-say(ahead.kind === 'ahead' && JSON.stringify(ahead.newer) === '["coai-feature"]',
-  `${oldExtension.tag} reads this build's snippet as NEWER on the feature half`, JSON.stringify(ahead));
+say(ahead.kind === 'ahead' && sorted(ahead.newer) === raised,
+  `${oldExtension.tag} reads this build's snippet as NEWER on the same halves`, JSON.stringify(ahead));
 say(/Keep what you have/.test(released.snippet.copiedMessage(ahead)), 'and tells the person to keep it rather than paste over it',
   released.snippet.copiedMessage(ahead));
 
