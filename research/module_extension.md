@@ -2612,6 +2612,20 @@ it is IN the mount makes the mount dirty, and the resolver — which runs first 
 instead. So the malformed-text case asks `consultantBody` directly, and a clean pinned mount that lacks
 the rule is its own case.
 
+## The question half is read from the mount (2026-10-09)
+
+[PLAN_the_feature_and_question_halves_are_shared_rules.md](PLAN_the_feature_and_question_halves_are_shared_rules.md).
+Conventions #58 added a rule, the question consultant (`common/coai-question-consultant.md`, v1: ask the
+consultants before the person, in every phase). The same release's other two changes reached this
+repository first and separately: the consultant half at v4 with the pin bump (#726, artefact 15) and the
+feature half from the mount at v3 (#730, S3.5, artefact 16, above). This change adds the sixth half.
+
+| what | where |
+|---|---|
+| **The generator emits the question half.** `QUESTION_SOURCE` reads `.agents/conventions/common/coai-question-consultant.md` through `ruleBody` with its own marker and heading, and `prepareMountedHalf` writes it to `generated/questionRule.ts` (git-ignored); a pin from before the rule fails naming the file and the fix. | `scripts/prepare-gate.mjs`, `.gitignore` |
+| **A sixth row, last.** `QUESTION_VERSION` 1, `ARTEFACT_VERSION` 17, the menu title `(v17)`, `SNIPPET_BODY_SHA` re-pinned. A mount from before the release is now `older` on the question half too; the panel still words that as *copy it again and replace the old block*, the wrong cure for a mount (move the pin) — a known gap owned by [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md). | `claudeSnippet.ts`, `package.json` |
+| **Tests.** `questionSnippet.test.ts` (new): the row, the marker, the load-bearing sentences, and a paste or a mount without it is `older` naming it. `prepareGate.test.mjs`: the missing-file case and the body stripped and refused. `snippetDiscovery`/`snippetVersion`/`featureSnippet`: six files. `live-feature-vendor-compat.mjs` expects the halves raised since the last release (consultant, feature, question), both ways. | `src_vs_code/src/test/`, `scripts/` |
+
 ## The consultant's kinds on every card, and a "?" on every consultant setting (2026-09-26)
 
 Stories 2 and 3 of [PLAN_consult_limits_kinds_and_help.md](PLAN_consult_limits_kinds_and_help.md).
