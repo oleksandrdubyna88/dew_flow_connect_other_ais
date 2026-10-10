@@ -204,8 +204,8 @@ Answers the operator's question for this machine's work from the whole history, 
   - `ReviewAttempt.Answered` (`ReviewLauncher.cs:36`) carries a `Usage`; so do `NonZeroExit` (dropped today at
     `JobRunner.cs:145-146`) and a continuation that ends badly (`ReviewLauncher.cs:155-164`); `JobRecord` carries a
     `Usage` instead of two longs; `JobRunner.Ledger` uses the `Usage` overload (`UsageLedger.cs:258`).
-  - `UsageEntryDto` (`src_server/src/ServerJsonContext.cs:134`) and `UsageReader`'s `UsageLine`
-    (`src_server/src/Usage/UsageReader.cs:121-158`) read cached, reasoning and `usageNote`.
+  - `UsageEntryDto` (`src_server/src/ServerJsonContext.cs:152`) and `UsageReader`'s `UsageLine`
+    (`src_server/src/Usage/UsageReader.cs:16`) read cached, reasoning and `usageNote`.
 - **3.2 How a job ended is said, not guessed** (Fable) — lifecycle and races, after 3.1:
   - `ReviewerExecutor` checks `result.Cancelled` before `result.TimedOut` (`ReviewerExecutor.cs:791`) and returns a
     NEW `ReviewerOutcome.Cancelled` with `Usage.Unknown` — and **keeps `AbandonAsync` in that branch**: it is what
@@ -214,7 +214,7 @@ Answers the operator's question for this machine's work from the whole history, 
   - `JobStore.Cancel` (`:303`) and `JobStore.Expire` (`:469`) both store `FailureKind.Cancelled` today, told apart only
     by a sentence — so a structured **end cause** (`withdrawn` / `abandoned` / `backstop` / `hostStopped`) is set AT
     the transition and carried on the record; the ledger reads it from the STORE's terminal record, not from
-    `JobRunner`'s own recomputed `finished` (`JobRunner.cs:176-177`). A genuine deadline stays `TimedOut`.
+    `JobRunner`'s own recomputed `finished` (`JobRunner.cs:175-176`). A genuine deadline stays `TimedOut`.
   - Both cancellation shapes produce **exactly one** ledger line with any earlier usage kept: a cancelled
     `ProcessResult` and a thrown `OperationCanceledException` (`JobRunner.cs:113-120` writes none today).
 - **3.3 Every paid launch is written, and written whole** (Opus) — closes 1.1's census: the probes write a line of
@@ -230,7 +230,7 @@ Answers the operator's question for this machine's work from the whole history, 
   setting shows as *ignored*; `src_server/src/Jobs/ClientOptions.cs` drops a remote codex effort), with `cli-config`
   read only to LABEL an empty value, never to change it; server lines add `job` and `slot` (the slot name, never the
   account's email) and label the tier from the slot's own config — the request carries none.
-- **3.5 The canary is a canary** (Opus) — `deploy/systemd-release.sh:171` sends `"kind":"canary"` when the target's
+- **3.5 The canary is a canary** (Opus) — `deploy/systemd-release.sh:168` sends `"kind":"canary"` when the target's
   `/api/health` version knows it (a `--canary-only` against an older binary would otherwise be a 400); `JobKind.Canary`
   with its row in `JobKinds.Refusal` (`src_server/src/Jobs/JobKind.cs:109`) and `UsageKinds.Canary` (the parity test
   keeps the two vocabularies level); `/api/usage` reports it by kind and excludes it from rounds AND from
