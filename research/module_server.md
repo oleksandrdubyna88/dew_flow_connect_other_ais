@@ -1574,7 +1574,7 @@ Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI
 start, the key written to its stdin and never in its arguments (2026-10-10,
 [PLAN_creds_config_key_on_stdin.md](PLAN_creds_config_key_on_stdin.md)): first `creds --help` (10 s), and a CLI
 whose help does not name `config-key-stdin` is refused with "update the creds CLI" — a hung or failing `--help` with its
-own sentence — and is never given the key. That refusal is the CLI's answer; only a CLI that cannot be started moves on
+own sentence — and is never given the key; neither launch inherits `COAI_CREDS_KEY` from the server's environment, and `TheRealCredsCliSpeaksTheVaultsMarkerLiveTests` (`COAI_LIVE_CREDS_CLI`) checks a real CLI against the marker. That refusal is the CLI's answer; only a CLI that cannot be started moves on
 to the next place. Since 2026-10-06 the read runs in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
