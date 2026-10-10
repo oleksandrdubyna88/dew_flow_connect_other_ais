@@ -4,8 +4,8 @@
 
 **New: a Team server tab, for that server's admins.** On *Review rounds*, an admin of a Team server now sees who on the
 team spent its subscriptions: per person and per vendor — launches, tokens, an approximate list price (`~$`, worked out
-from public prices, never a bill), when each person was last seen, who signed in without running anything, and a 30-day
-chart of launches per day. The tab appears only for a server whose admin list names you, asks that server only while
+from public prices, never a bill), when each person with a current session was last seen (to the hour; someone who
+spent without one shows a dash there), who signed in without running anything, and a 30-day chart of launches per day. The tab appears only for a server whose admin list names you, asks that server only while
 the tab is in front, and forgets everything it showed the moment you are signed out or are no longer an admin. Against
 a Team server older than 0.11.0 it shows what that server can say and names the version for the rest — never a zero.
 It counts *launches*, not rounds, until a round carries an id of its own.
