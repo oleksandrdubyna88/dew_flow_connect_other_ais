@@ -13,6 +13,7 @@ import {
 } from './panelView';
 import { vaultKeyOf } from './vaultKey';
 import { executableFor } from './vendorTerminal';
+import { type PathFamily } from './pathFamily';
 import { reviewsDocuments, type Vendor } from './vendors';
 
 /**
@@ -217,12 +218,12 @@ function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 }
 
 /** How the row is reached: its endpoint, an api row's dialect, the CLI's path where there is a CLI here. */
-function connectionOf(vendor: Vendor, id: string): string {
+function connectionOf(vendor: Vendor, id: string, family: PathFamily): string {
   const remote = vendor.runtime === 'remote';
   const api = vendor.runtime === 'api';
 
   return endpointField(vendor, id, vendor.runtime === 'local', remote, false) + (api ? dialectField(vendor, id, false) : '')
-    + runtimeFields(vendor, id, remote || api);
+    + runtimeFields(vendor, id, remote || api, family);
 }
 
 function usedLine(references: readonly string[]): string {
@@ -232,7 +233,7 @@ function usedLine(references: readonly string[]): string {
 function foot(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const prices = priceFields(vendor, id, vendor.runtime === 'local', vendor.runtime === 'remote', facts.context.price, '', '', false);
 
-  return `<div class="card-foot">${details('Connection', connectionOf(vendor, id))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
+  return `<div class="card-foot">${details('Connection', connectionOf(vendor, id, facts.context.family))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
 }
 
 function details(title: string, body: string): string {

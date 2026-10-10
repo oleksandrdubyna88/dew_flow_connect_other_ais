@@ -82,6 +82,9 @@ import { vaultKeyOf } from './vaultKey';
 import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
+import { hostFamily } from './hostSide';
+import { otherSideNote, pathForThisSide, type PathFamily } from './pathFamily';
+import { VENDOR_EXECUTABLE } from './pathSettings';
 import { SECURITY_COMMANDS } from './securityLaneState';
 
 /**
@@ -174,6 +177,12 @@ export interface PanelState {
   readonly securityPromptDir?: string | undefined;
   /** Where a disk root may not be on this machine — the data folder, the profile, the system folders (D14 c). */
   readonly qconsultPlaces?: RootPlaces | undefined;
+  /**
+   * The family this window's host spells paths in — what decides which stored paths the page calls the other side's
+   * (todo/PLAN_paths_per_side.md E1.5). Absent is this extension host's own, which is what the panel always draws; a
+   * test names it, so a page is the same on any machine.
+   */
+  readonly hostFamily?: PathFamily | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
   /**
@@ -1076,6 +1085,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   const colour = vendorPalette(state.vendors.map((v) => v.id));
   // Once, not per card: a server that is absent or cannot be versioned is not called old.
   const serverVersion = state.server.kind === 'known' ? state.server.version : '';
+  const family = state.hostFamily ?? hostFamily();
 
   return (v) => ({
     colour: colour(v.id),
@@ -1097,6 +1107,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     featureNote: featureNote(v, serverVersion),
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
+    family,
   });
 }
 
@@ -1189,6 +1200,8 @@ export interface CardContext {
   readonly featureNote: string;
   /** The installed `coai-mcp`'s version, or empty when absent or unknown — which is not old. */
   readonly serverVersion: string;
+  /** The family this window spells paths in — a CLI path of the other one is that side's, said beside the box. */
+  readonly family: PathFamily;
 }
 
 /**
@@ -1254,12 +1267,23 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
+export function runtimeFields(vendor: Vendor, id: string, remote: boolean, family: PathFamily): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
-  </div>`;
+  </div>${otherSidesCli(vendor, family)}`;
+}
+
+/**
+ * The quiet line under a CLI path spelled for the OTHER operating system (todo/PLAN_paths_per_side.md E1.5): VS Code
+ * shares the row with the other side's window, where the path is right; here it is skipped and the CLI looked up on
+ * PATH — the same decision the settings file this window writes (`pathForThisSide`) and coai-mcp's own read make.
+ */
+function otherSidesCli(vendor: Vendor, family: PathFamily): string {
+  return pathForThisSide(vendor, family).otherSide.length === 0
+    ? ''
+    : `<div class="hint path-other-side">${escapeHtml(otherSideNote(family === 'windows', VENDOR_EXECUTABLE))}</div>`;
 }
 
 /**
