@@ -389,7 +389,11 @@ Built right after E1: it is the operator's item 1 and needs no side registry.
   person needs; and writing nothing is the only choice that cannot touch a bare `/mnt/z` mount point. Once the folder
   exists, ledger writes resume as today. Stories: (a) `notify`'s writer refuses to write while `dataDirFinding` says the
   named root is missing and keeps the record in a bounded in-memory list the page shows (RED: the notice's own write
-  creates the folder — injected `mkdir`); (b) **an inventory of every writer that creates the data directory, derived
+  creates the folder — injected `mkdir`). **Lifecycle and cap** (E1's plan round): at most ONE held notice per setting
+  key — a new missing path for the same key replaces it, and it is cleared the moment the path changes or the folder
+  is found again; the list is therefore bounded by the number of path settings (the registry, `pathSettings.ts`), never
+  by how often a person retypes a path. Test: three successive missing values for `dataDirectory` leave one held notice;
+  a recovery clears it; (b) **an inventory of every writer that creates the data directory, derived
   by a scan test**, each either guarded the same way or recorded as creating only the default location or a side folder
   inside an existing root. Found by search on 2026-10-10, to be re-derived by the scan: `jsonlLedger.appendLine` (through
   `notificationsFile`, `notificationsSeen`, `chatUsageFile`, `chatDoorsFile`), `chatStoreFile`, `claudeProbeCache`,
