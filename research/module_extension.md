@@ -11218,6 +11218,16 @@ table (`qconsultWrite.EDITS.qconsultRowPick` → `rowPicked`): the row becomes a
 '' }`, keeps its id and prompt, and goes OFF as a vendor change does; a row not ticked "question consultant" is refused
 and the control snaps back. It goes through the usual fold, which drops a row only when its question row is REMOVED.
 
+**The tab says what it offers, and a removed pick says so** (2026-10-10, operator report: the picker listed only the
+rows ticked question consultant and did not say so; a row whose pick was gone read "'' is not a runtime the question
+consultant can launch for 'disk'"). `catalogPicks.offeredLine(use)` draws "Offered: the models ticked question
+consultant on Models." with the same `data-models-uses` **Change on Models** link as the strip, under **Who answers**.
+`qconsultWrite.rowAdmission` no longer hands an EMPTY runtime to the capability table (`admit`): a row whose vendor has
+no runtime to borrow (gone from the catalog and not a preset) is refused as "<id> is no longer ticked question
+consultant (or was removed) — pick another model" ("this row picks no model — pick one" with no vendor); a real
+runtime this build cannot launch keeps the table's sentence. The server's `CapabilityMatrix.Admit` still words the
+same refusal as a runtime of nothing — a follow-up for `src_mcp`, not changed here.
+
 **A row is named by its display name** (2026-10-10, operator report: "Used by: chat-preset-mtwtqr0p-3" for a card
 called "GPT-6-Astra"). `catalogPicks.rowName` is the name edited on the row's Models card, or its id when it has none;
 `rowLabel` is that name with the id beside it when the two differ — "GPT-6-Astra (chat-preset-mtwtqr0p-3)". Every

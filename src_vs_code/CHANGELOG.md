@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Fixed: Consultants › Question consultant says what it offers, and what a removed model means.** Under **Who
+answers** a quiet line now says "Offered: the models ticked question consultant on Models.", with **Change on
+Models** beside it — the Model pickers list only those. A row whose model was removed from Models said "'' is not a
+runtime the question consultant can launch for 'disk'"; it now names the model and says it is no longer ticked
+question consultant (or was removed), and to pick another model.
+
 **Consultants › Consultant says when a ticked model is not being asked.** Ticking **consultant** on a Models card
 offers the model to every caller; each caller still asks its shipped pair until you pick the model under **Claude Code
 asks** (or another caller). That stays the rule, and now the page says it: under a caller still on its shipped pair, a

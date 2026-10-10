@@ -96,6 +96,15 @@ export function pickRefusal(use: CatalogUse, rowId: string, rows: readonly Vendo
   return rows.some((row) => row.id === rowId && tickedFor(row, use)) ? '' : `${rowId} is not ticked for the ${USE_LABELS[use]} on Models.`;
 }
 
+/**
+ * The quiet line that says what a feature's pickers offer, with the way to change it — a picker listing only the rows
+ * ticked for its use, and not saying so, read as a page that could not see the models at all (operator, 2026-10-10).
+ */
+export function offeredLine(use: CatalogUse): string {
+  return `<div class="hint offered">Offered: the models ticked ${escapeHtml(USE_LABELS[use])} on Models.`
+    + ` <button type="button" class="link" data-models-uses="${use}">Change on Models</button></div>`;
+}
+
 export function optionHtml(option: PickOption, selected: string): string {
   return `<option value="${escapeHtml(option.value)}"${option.value === selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`;
 }
