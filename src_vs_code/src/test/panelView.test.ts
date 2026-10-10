@@ -11,6 +11,7 @@ import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
 import type { TeamServerState } from '../teamServerView';
 import { vendorPalette } from '../vendorColour';
 import { DEFAULT_VENDORS } from '../vendors';
+import { thisSideLabel } from '../consultantSides';
 
 /**
  * The palette the page builds for this fixture — from the vendors it configures, which is the same
@@ -731,7 +732,10 @@ test('the panel names the side it is about to keep settings for', () => {
 test('with the switch off the panel says the settings are shared, and does not tick the box', () => {
   const page = everyPageHtml(state({ side: '', perSide: false }), 'nonce');
 
-  assert.match(page, /This side is <b>this machine<\/b>/, 'a local window has one side and no word for it');
+  // Reversed by todo/PLAN_paths_per_side.md E2.4: a local window is one side among those the profile is used on, so it
+  // names itself by its operating system (thisSideLabel) — "this machine" says nothing once a WSL side is listed beside it.
+  assert.ok(page.includes(`This side is <b>${thisSideLabel(undefined, '', process.platform)}</b>`), 'a local window does not name its side');
+  assert.doesNotMatch(page, /This side is <b>this machine<\/b>/, 'a local window still calls itself "this machine"');
   assert.match(page, /shares its settings with every other side/);
   assert.doesNotMatch(page, /data-setting="perSideSettings"[^>]* checked/);
 });

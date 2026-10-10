@@ -3380,6 +3380,44 @@ to every one of them:
 - **Export settings** — `qconsultRoots` joined `NEVER_TRANSFERRED` (D4): never exported, and an older export that
   carries it is refused by name while the importer keeps its own roots.
 
+### The sides this profile has been used on (2026-10-10, paths per side E2)
+
+Nothing in VS Code tells a window that the profile is also used from the other side of the machine, and the second
+path field of `todo/PLAN_paths_per_side.md` (E3/E4) needs exactly that. E2 is the record (design (a), option A):
+
+- **The registry** — `sidesSeen.ts` (pure): one `globalState` key per side, `coai.sideSeen@<sideKey>` =
+  `{family, label, firstSeen, lastSeen}` (UTC milliseconds). One key per side, so two windows never read-modify-write one
+  value; the list is `Memento.keys()` filtered by the prefix (E0: `keys()` exists on both hosts, and a stamp from one side
+  reaches the other side's already-open window at its next read — `research/RESULTS_side_registry_reaches_the_other_window.md`).
+  `globalState` is not synced by Settings Sync, so another machine's sides never appear. `stampSide` writes at most once a
+  day (`STAMP_EVERY_MS`) and keeps `firstSeen`; `seenSides` lists the sides seen within 90 days (`KNOWN_FOR_MS`, the 90th
+  day included), newest first; `prunedKeys` names the older ones and any value under the prefix that is not a record — a time outside what a `Date` holds, or more than a day ahead of now, makes it no record (it would count as seen in the far future and throw on the page);
+  `knownFamilies` is `{windows, posix}` once both were seen. Families are D1's two (`PathFamily`, `familyLabel`:
+  **Windows** / **WSL / Linux**). The `coai.firstSeenControls` record (`newTags.ts`) is the precedent.
+- **This side's identity** — `sideHereOf(thisSide(storage), process.platform)`: `sideKey` (the key `installedKey` and
+  `overlayKey` already fold), `familyOf`, and `thisSideLabel` — so a local window is **Windows** (or Linux / macOS), never
+  "this machine". One function, called by activation and by the panel, so the row the page marks *(this window)* is the
+  record activation wrote.
+- **The stamp** — `extension.ts` calls `stampThisSide(context.globalState, …)` at activation, `void` (never awaited): this
+  side stamped if due, then every record past 90 days deleted. It never rejects: a store that refuses is handed to the
+  reporter activation gives it — `console.error` into the extension host's log, never a toast — and since a refused write
+  leaves no record, the next start stamps again (the coordinator's accepted finding on E2). `activate` now returns `CoaiExports { sidesSeen }`, read only
+  by the `test:host` scenario, because a host has no other way into this extension's `globalState`.
+- **The switch** — `coai.pathFieldsPerSide` (`auto` / `always` / `never`, `application` scope: the person's, so every
+  window reads one value; not overlaid, not a path field, in `NEVER_TRANSFERRED`). `pathFieldsModeOf` reads anything else
+  as `auto`; `twoPathFields(view)` is the decision E3/E4 will draw from: the switch, or under `auto` both families seen
+  within the window, this window counting as seen now.
+- **The page** — Setup › This side (`sideBody` → `sidesSeenView.sidesSeenHtml`): a `table.map.sides-seen` with one row per
+  side (`data-side` = its key; name, the family it spells paths for, the day last seen as a local `YYYY-MM-DD` inside a
+  `<time datetime>` holding the UTC instant), **Forget** per other side (`data-command="forgetSide"`, `data-id` = the key —
+  a panel button), the segmented switch (`data-setting="pathFieldsPerSide"`, a plain write), and one sentence saying what
+  the switch decides today and which signal decided it. `PanelState.sides` (`SidesView { here, seen, mode, now }`) is
+  read from `globalState` on EVERY render by `panelProvider`; absent (tests, the sidebar) draws the old block without the
+  list, still naming the side. The provider's `forgetSide` case removes the record (`forgetSide` refuses this window's own)
+  and repaints.
+- **Not in E2**: the second field itself (E3 stores it, E4 draws it) — until then the switch and the list are recorded and
+  shown, and nothing reads `twoPathFields` but the page's sentence.
+
 ### Team servers, and the four modules they are split into (2026-09-06)
 
 A **Team server** runs the vendor CLIs on one machine, on one company subscription, and everybody
@@ -4417,6 +4455,8 @@ flowchart LR
 |---|---|
 | `settingsShape.ts` | config → validated `CoaiSettings`; `envBlock`; the defaults pinned to the master plan's table |
 | `consultantWrite.ts` | what an edit in the *Consultant* section STORES — the vendor picker, the three per-caller fields, and a custom endpoint's name and URL with the one-name-one-vault-key check. The write half of `consultSettings.ts`, lifted out of `settingsShape.ts` on 2026-09-15 when that file passed the 800-line rule |
+| `sidesSeen.ts` | pure: the side registry — `coai.sideSeen@<sideKey>` records, the once-a-day stamp, the 90-day window and its pruning, `sideHereOf`, the `coai.pathFieldsPerSide` switch (`pathFieldsModeOf`, `twoPathFields`), and the thin store half (`stampThisSide`, `sidesIn`, `forgetSide`) over a structural `Memento` (paths per side E2) |
+| `sidesSeenView.ts` | pure: Setup › This side's list of the sides seen, **Forget** per side, the path-fields switch and the sentence that says what it decides (E2.4) |
 | `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the MCP server tab states |
 | `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, and `serverOnThisSide` — `stat` every call, the `--version` probe cached against `mtime`+`size` |
 | `versionProbe.ts` | one `askVersion`, 8-second cap, stdout only — used for the vendor CLIs and for the server binary |

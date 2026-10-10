@@ -63,6 +63,15 @@ test('the question consultant\'s roots are paths on this machine, and are never 
   assert.equal(Object.hasOwn(out, 'qconsultRoots'), false, 'the roots were exported');
 });
 
+test('how many fields a path setting shows is never exported — it is about this machine\'s sides (E2.3)', () => {
+  // todo/PLAN_paths_per_side.md E2.3: the switch reads which sides THIS profile has been used on; on another machine it
+  // would decide over sides that machine never had.
+  const out = exportedSettings(shipped(), base({ pathFieldsPerSide: 'always', maxConcurrency: 7 }));
+
+  assert.equal(Object.hasOwn(out, 'maxConcurrency'), true, 'the premise: a changed setting is exported from this manifest');
+  assert.equal(Object.hasOwn(out, 'pathFieldsPerSide'), false, 'the path-fields switch was exported');
+});
+
 test('an older export carrying the roots: that entry is refused by name, the importer keeps its own, the rest applies', () => {
   const text = JSON.stringify({
     format: CONFIG_FORMAT, version: CONFIG_VERSION, exportedAt: 'x', note: '',
