@@ -41,7 +41,7 @@ C4Container
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn as the coai-reader agent (tools: view_file), plan mode, from the read-only folder")
   Rel(gem, mcp, "--agy-hook child before every tool call: allow view_file, deny the rest")
-  Rel(mcp, creds, "creds config <key>, once per start, in the background")
+  Rel(mcp, creds, "creds --help probe, then creds config - with the key on stdin, once per start, in the background")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
   Rel(ext, srv, "Microsoft sign-in, then a session token; and a CHAT turn, as a job with no role")

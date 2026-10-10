@@ -47,11 +47,16 @@ public sealed class KeyVaultProcessTests : IDisposable
 
     private readonly KeyVault _vault = new(new ProcessLauncher(), FakeCliExe);
 
-    public KeyVaultProcessTests() => Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
+    public KeyVaultProcessTests()
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
+        // A current creds CLI: its --help names the stdin marker, so it is given the key.
+        Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", "creds config -  (" + KeyVault.StdinMarker + ")");
+    }
 
     public void Dispose()
     {
-        foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_EXIT", "FAKECLI_STDERR"])
+        foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_EXIT", "FAKECLI_STDERR", "FAKECLI_HELP_STDOUT"])
         {
             Environment.SetEnvironmentVariable(name, null);
         }

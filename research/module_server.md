@@ -203,7 +203,7 @@ trace contains that substring nowhere, so the mode exited 0 and the panel said t
 recorded when nothing could be read at all.
 
 **And the vault is not read on this path.** A close talks to nobody: it reads a record file, writes it
-back and projects a row. Reading the key vault spawns `creds config <key>`, which is a process and a
+back and projects a row. Reading the key vault spawns `creds --help` and `creds config -`, which are processes and a
 wait in the middle of a button a person expects to be instant. `--providers` reads it because it
 REPORTS on keys.
 
@@ -1570,8 +1570,12 @@ front of `ask_human` has let it through — *The door to the person*, above.
 Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI_EXE_*`,
 `COAI_MAX_ROUNDS`, `COAI_GATE_THRESHOLD`, `COAI_ON_EXHAUSTED`, `COAI_MAX_CONCURRENCY`,
 `COAI_MAX_PER_PROVIDER`, `COAI_REVIEWER_TIMEOUT_MINUTES`, `COAI_DATA_DIR`, `COAI_LOG_LEVEL`, and
-`COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config <key>` once per
-start — since 2026-10-06 in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
+`COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config -` once per
+start, the key written to its stdin and never in its arguments (2026-10-10,
+[PLAN_creds_config_key_on_stdin.md](../todo/PLAN_creds_config_key_on_stdin.md)): first `creds --help` (10 s), and a CLI
+whose help does not name `config-key-stdin` is refused with "update the creds CLI" — a hung or failing `--help` with its
+own sentence — and is never given the key. That refusal is the CLI's answer; only a CLI that cannot be started moves on
+to the next place. Since 2026-10-06 the read runs in the background start (`StartingHost`), never in front of `initialize`; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
 **The key is read from the LAYERED configuration, like every other setting (2026-10-01).** The panel

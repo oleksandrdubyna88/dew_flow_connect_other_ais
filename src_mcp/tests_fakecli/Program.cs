@@ -55,7 +55,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <pid>-<guid>.argv there, whole or not at all
 //   FAKECLI_RECORD_GATE  — hold that record open until this file exists, saying so in <gate>.held (a test of the recorder)
-//   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT
+//   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT / FAKECLI_HELP_SLEEP_MS
 //                        — what a bare `--help` prints and exits with (a claude's capability probe); stdin is
 //                          not read for it. Unset: the help prints nothing useful and exits 0
 //   FAKECLI_VERSION_STDOUT / FAKECLI_VERSION_EXIT / FAKECLI_VERSION_SLEEP_MS
@@ -99,6 +99,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     // A claude consultant asks its CLI's --help before every turn; this answers it without touching stdin.
     if (args is ["--help"])
     {
+        // A hung --help is how a test reaches a vault probe's timeout arm.
+        if (int.TryParse(read("FAKECLI_HELP_SLEEP_MS"), out var helpSleep) && helpSleep > 0)
+        {
+            Thread.Sleep(helpSleep);
+        }
+
         Console.Out.Write(read("FAKECLI_HELP_STDOUT") ?? "Usage: fake [options]\n");
         return int.TryParse(read("FAKECLI_HELP_EXIT"), out var helpExit) ? helpExit : 0;
     }

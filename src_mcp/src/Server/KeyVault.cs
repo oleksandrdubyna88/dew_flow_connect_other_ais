@@ -14,10 +14,15 @@ public sealed record VaultKeys(IReadOnlyDictionary<string, string> Keys, string 
 
 /// <summary>
 /// The one sanctioned key path: a CredsForDevs <c>config</c> entry read ONCE at startup via
-/// <c>creds config &lt;key&gt;</c>. An agent is never in this chain — the config route is the
-/// vault's app-reads-its-own-secrets door, authenticated by a key only the person can mint.
+/// <c>creds config -</c>, the key written to its stdin. An agent is never in this chain — the config
+/// route is the vault's app-reads-its-own-secrets door, authenticated by a key only the person can mint.
 /// </summary>
 /// <remarks>
+/// <para><b>The key is never an argument</b> (todo/PLAN_creds_config_key_on_stdin.md). A command line
+/// is readable by every user inside WSL and by every process of the same user on Windows, and this key
+/// unlocks every vendor key the gate uses. So the CLI is first asked for its <c>--help</c>; only one
+/// that names <see cref="StdinMarker"/> is given the key, on stdin. An older CLI reads the key ONLY
+/// from argv, so it is refused with "update the creds CLI" — never fed the key as an argument.</para>
 /// <para>Missing binary, missing key, a 401 (wrong and revoked are indistinguishable by the
 /// vault's own design), a malformed body: each is a named per-vendor unavailability surfaced by
 /// <c>providers</c> — never a crash, never a silent fallback to an unauthenticated CLI, and never
@@ -25,11 +30,25 @@ public sealed record VaultKeys(IReadOnlyDictionary<string, string> Keys, string 
 /// <para>Read once: rotation takes effect when the MCP client restarts the server, and
 /// <c>providers</c> reports when the read happened.</para>
 /// </remarks>
-public sealed class KeyVault(IProcessLauncher launcher, string executable = CredsCli.OnPath, IReadOnlyList<string>? fallbacks = null)
+public sealed class KeyVault(IProcessLauncher launcher, string executable = CredsCli.OnPath, IReadOnlyList<string>? fallbacks = null, TimeSpan? probeTimeout = null)
 {
     public const string KeyVariable = "COAI_CREDS_KEY";
 
+    /// <summary>
+    /// What a <c>creds</c> CLI's <c>--help</c> says when it reads the config key from stdin.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <c>CommandLine.ConfigStdinMarker</c> in <c>dew_flow_creds_for_devs</c>, whose value is pinned
+    /// by a test there: changing it on either side makes every CLI read as too old.
+    /// </remarks>
+    public const string StdinMarker = "config-key-stdin";
+
+    /// <summary>A help text is a few kilobytes; past this it is not one.</summary>
+    private const int MaxHelpChars = 64 * 1024;
+
     private readonly IReadOnlyList<string> _fallbacks = fallbacks ?? [];
+
+    private readonly TimeSpan _probeTimeout = probeTimeout ?? TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// The vault as this machine has it: <c>creds</c> from PATH, then the CLI the CredsForDevs
@@ -66,7 +85,13 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
             return VaultKeys.None($"no {KeyVariable} configured — keyless vendors still work on their own auth");
         }
 
-        if (await RunFirstInstalledAsync(configKey, ct) is not { } result)
+        var read = await RunFirstInstalledAsync(configKey, ct);
+        if (read.Refusal is { Length: > 0 } refusal)
+        {
+            return VaultKeys.None(refusal);
+        }
+
+        if (read.Result is not { } result)
         {
             return VaultKeys.None(NotInstalled());
         }
@@ -84,27 +109,37 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
         return Parse(result.StdOut);
     }
 
+    /// <summary>A read's outcome: the CLI's answer, or why a started CLI was never given the key, or neither (none started).</summary>
+    private sealed record Read(ProcessResult? Result, string Refusal);
+
     /// <summary>
-    /// <c>creds config &lt;key&gt;</c> through the first CLI that exists: PATH's, then each fallback in
-    /// order — or null when none could be started at all.
+    /// <c>creds config -</c>, the key on stdin, through the first CLI that exists: PATH's, then each
+    /// fallback in order — after that CLI's <c>--help</c> has said it reads the key from stdin.
     /// </summary>
     /// <remarks>
-    /// Only "could not be started" moves on to the next place. A CLI that started and refused, timed out
-    /// or printed junk has answered, and that answer is the vault's — asking a second copy would turn one
-    /// refusal into two reads of a person's vault.
+    /// Only "could not be started" moves on to the next place. A CLI that started and refused, timed out,
+    /// printed junk — or turned out too old to be given the key at all — has answered, and that answer is
+    /// the vault's: asking a second copy would turn one refusal into two reads of a person's vault.
     /// </remarks>
-    private async Task<ProcessResult?> RunFirstInstalledAsync(string configKey, CancellationToken ct)
+    private async Task<Read> RunFirstInstalledAsync(string configKey, CancellationToken ct)
     {
         foreach (var candidate in (string[])[executable, .. _fallbacks])
         {
             try
             {
-                return await launcher.RunAsync(
-                    new ProcessRequest(candidate, ["config", configKey], Environment.CurrentDirectory)
+                if (WhyNotStdin(await ProbeAsync(candidate, ct)) is { Length: > 0 } refusal)
+                {
+                    return new Read(null, refusal);
+                }
+
+                var result = await launcher.RunAsync(
+                    new ProcessRequest(candidate, ["config", "-"], Environment.CurrentDirectory)
                     {
+                        StdIn = configKey + "\n",
                         Timeout = TimeSpan.FromSeconds(30),
                     },
                     ct);
+                return new Read(result, string.Empty);
             }
             catch (System.ComponentModel.Win32Exception)
             {
@@ -112,8 +147,35 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
             }
         }
 
-        return null;
+        return new Read(null, string.Empty);
     }
+
+    /// <summary>The CLI's <c>--help</c>, bounded, stdin closed at once. A launch failure throws, as a read's does.</summary>
+    private Task<ProcessResult> ProbeAsync(string candidate, CancellationToken ct) =>
+        launcher.RunAsync(
+            new ProcessRequest(candidate, ["--help"], Environment.CurrentDirectory)
+            {
+                Timeout = _probeTimeout,
+                MaxOutputChars = MaxHelpChars,
+            },
+            ct);
+
+    /// <summary>
+    /// Empty when the help names <see cref="StdinMarker"/>; otherwise the sentence for why this CLI is not
+    /// given the key. Three different cures, so three sentences — none of them contains the key.
+    /// </summary>
+    private string WhyNotStdin(ProcessResult help) =>
+        help switch
+        {
+            { TimedOut: true } =>
+                $"the creds CLI did not answer --help within {_probeTimeout.TotalSeconds:0.#} s, so it was not given the config key — is it hung or broken?",
+            { ExitCode: not 0 } =>
+                $"the creds CLI's --help exited {help.ExitCode}, so it was not given the config key — is it broken?",
+            _ when !help.StdOut.Contains(StdinMarker, StringComparison.Ordinal) =>
+                $"the creds CLI is too old to take the config key on stdin (its --help does not name {StdinMarker}) — "
+                    + "update the creds CLI (CredsForDevs: Install `creds` (terminal CLI)…); the key is never passed as an argument",
+            _ => string.Empty,
+        };
 
     /// <summary>The sentence for a CLI found nowhere, naming where it was looked for.</summary>
     private string NotInstalled() =>
