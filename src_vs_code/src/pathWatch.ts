@@ -1,6 +1,6 @@
 import { type NamedRoot, dataDirFinding } from './dataDir';
 import { watchedDirs } from './escalationDirs';
-import { expectDataRoot, missingDataRoot, publishFindings } from './findingsBoard';
+import { absentDataRoot, expectDataRoot, noteDataRoot, publishFindings } from './findingsBoard';
 import { type ExecutableSide, pathForThisSide, qualified } from './pathFamily';
 import { type PathFinding, type PathValue, type Presence, agreed, asked, findingSubject, findingsOf, valueSubject } from './pathFindings';
 import type { PathProbes } from './pathProbes';
@@ -56,6 +56,14 @@ type Answer = readonly [string, Presence];
 interface Own {
   readonly findings: readonly PathFinding[];
   readonly answers: ReadonlyMap<string, Presence>;
+  /** The named data root and what the disk says of it now — what the storage guard keeps its own state from. */
+  readonly root: RootAnswer;
+}
+
+/** The named data root (none for the default location) and the disk's answer about it. */
+interface RootAnswer {
+  readonly path: string | undefined;
+  readonly presence: Presence;
 }
 
 /**
@@ -88,6 +96,8 @@ export class PathWatch {
     try {
       const own = this.ownFindings();
       const findings = agreed(own.findings, this.serverProblems, this.deps.side.family);
+      // The guard's own state first: only a confirmed root lifts a kept absence, a re-ask or a timeout never does.
+      noteDataRoot(own.root.path, own.root.presence);
       publishFindings(findings);
       this.tell(findings, own.answers);
     } catch (reason) {
@@ -118,13 +128,15 @@ export class PathWatch {
   }
 
   /**
-   * Whether the NAMED data root is missing, once the disk has been asked (E5.7): what the settings mirror asks before it
-   * writes — a confirmed absence, never an unknown answer or the default location, which are written as today.
+   * Whether the NAMED data root is refused, once the disk has been asked (E5.7): what the settings mirror asks before it
+   * writes. An absence the disk SAID is kept until a probe confirms the root is back — the re-ask after a settings change
+   * and a probe past its deadline do not lift it (`findingsBoard.absentDataRoot`, the risk consultation's item D); the
+   * default location is never refused.
    */
   async dataRootMissing(): Promise<boolean> {
     await this.dataRootSettled();
 
-    return missingDataRoot() !== undefined;
+    return absentDataRoot() !== undefined;
   }
 
   /** Every stored value of this side the disk is asked about, with the path it is asked at. */
@@ -161,18 +173,22 @@ export class PathWatch {
     const root = this.dataRootAnswer();
     const findings = [...findingsOf(answers, family), ...(root.finding === undefined ? [] : [root.finding])];
 
-    return { findings, answers: new Map([...answers.map((one): Answer => [valueSubject(one.value), one.presence]), ...root.answer]) };
+    return { findings, answers: new Map([...answers.map((one): Answer => [valueSubject(one.value), one.presence]), ...root.answer]), root: root.root };
   }
 
   /** The named data root's finding and its answer — none for the default location, which is never asked (D3). */
-  private dataRootAnswer(): { readonly finding: PathFinding | undefined; readonly answer: readonly Answer[] } {
+  private dataRootAnswer(): { readonly finding: PathFinding | undefined; readonly answer: readonly Answer[]; readonly root: RootAnswer } {
     const named = this.deps.reads.dataRoot();
     if (named === undefined) {
-      return { finding: undefined, answer: [] };
+      return { finding: undefined, answer: [], root: { path: undefined, presence: 'pending' } };
     }
     const presence = this.deps.probes.presence(named.root, 'folder');
 
-    return { finding: dataDirFinding(named, presence, this.deps.side.family), answer: [[valueSubject({ setting: DATA_DIRECTORY, value: named.root }), presence]] };
+    return {
+      finding: dataDirFinding(named, presence, this.deps.side.family),
+      answer: [[valueSubject({ setting: DATA_DIRECTORY, value: named.root }), presence]],
+      root: { path: named.root, presence },
+    };
   }
 
   /**

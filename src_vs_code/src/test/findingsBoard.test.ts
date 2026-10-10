@@ -14,6 +14,7 @@ import {
   holdNotice,
   keyOfSubject,
   missingDataRoot,
+  noteDataRoot,
   onFindings,
   publishFindings,
   refuseUnderMissingRoot,
@@ -79,12 +80,22 @@ test('a write at or under the missing named root is refused with the finding\'s 
   assert.throws(() => refuseUnderMissingRoot(resolve(ROOT, 'notifications.jsonl')), /was not found on this machine .*Nothing is written under it until it exists/u);
   assert.doesNotThrow(() => refuseUnderMissingRoot(resolve('/tmp/x')));
 
+  // A root the disk could not answer for is not MISSING on the page — but after the disk SAID it is absent, an unknown
+  // answer does not lift the storage guard (the risk consultation of story 5.7, item D): only a confirmed root does.
+  noteDataRoot(ROOT, 'unknown');
   publishFindings([{ ...dataRoot, state: 'unknown' }]);
-  assert.equal(missingDataRoot(), undefined, 'a root the disk could not answer for is not missing — writes go on as today');
-  assert.doesNotThrow(() => refuseUnderMissingRoot(ROOT));
+  assert.equal(missingDataRoot(), undefined, 'a root the disk could not answer for is not drawn as missing');
+  assert.throws(() => refuseUnderMissingRoot(ROOT), /Nothing is written under it until it exists/u, 'an unknown answer after an absence authorised the write');
 
+  noteDataRoot(ROOT, 'here');
   publishFindings([]);
-  assert.equal(refusedDataRoot(ROOT), undefined);
+  assert.equal(refusedDataRoot(ROOT), undefined, 'a confirmed root stayed refused');
+
+  // And a board that never heard of an absence refuses nothing on an unknown answer — a slow share is not a missing one.
+  forgetFindingsBoard();
+  noteDataRoot(ROOT, 'unknown');
+  publishFindings([{ ...dataRoot, state: 'unknown' }]);
+  assert.doesNotThrow(() => refuseUnderMissingRoot(ROOT));
 });
 
 test('the code the gate holds is the code a real call site raises — the notifications census found it', () => {

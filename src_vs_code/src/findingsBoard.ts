@@ -1,6 +1,6 @@
 import { resolve, sep } from 'node:path';
 import type { NotificationRecord } from './notifications';
-import { type PathFinding, isAboutAMissingPath, missingTitle } from './pathFindings';
+import { type PathFinding, type Presence, isAboutAMissingPath, missingTitle } from './pathFindings';
 import { DATA_DIRECTORY } from './pathSettings';
 import { finishedInTime } from './withinTheClock';
 
@@ -62,9 +62,34 @@ let known = true;
 /** How long the ledger gate waits for the first data-root answer at most — the probe's own deadline, with room. */
 export const SETTLE_CEILING_MS = 10_000;
 
+/**
+ * The named root the disk last SAID is absent — the storage guard's own state, kept apart from the published findings.
+ *
+ * <p>Why apart (the risk consultation of story 5.7, item D, measured RED): a settings change drops the disk's answers and
+ * asks again, so the data root reads `pending` — no finding — until the new answer lands, and a probe past its deadline
+ * reads `unknown`, no finding either. A guard that read only the findings let a ledger append or the heartbeat create the
+ * very folder the notice says is missing in that gap. So an absence is kept until a probe CONFIRMS the root is there, or
+ * the setting names another root; a pending or unknown answer never lifts it.</p>
+ */
+let absentRoot: PathFinding | undefined;
+
+/**
+ * The watch's answer about the named data root, on every refresh: `here` lifts a kept absence, another root (or none)
+ * drops it, `pending` and `unknown` leave it as it is. Asked BEFORE {@link publishFindings}, which keeps a new absence.
+ */
+export function noteDataRoot(root: string | undefined, presence: Presence): void {
+  if (absentRoot === undefined) {
+    return;
+  }
+  if (root !== absentRoot.value || presence === 'here') {
+    absentRoot = undefined;
+  }
+}
+
 /** The host has decided what it knows: the page reads it, the gate reads it, held notices still missing stay held. */
 export function publishFindings(findings: readonly PathFinding[]): void {
   published = findings;
+  absentRoot = missingDataRoot() ?? absentRoot;
   held = stillHeld(held, findings);
   for (const listener of listeners) {
     listener();
@@ -102,9 +127,17 @@ export function missingDataRoot(): PathFinding | undefined {
   return published.find((one) => one.key === DATA_DIRECTORY.id && one.state === 'missing');
 }
 
-/** The missing data-root finding when `path` is at or under that root — the write that would create it — or nothing. */
+/**
+ * The named data root the storage guard refuses: missing now, or said absent and not yet CONFIRMED back — a settings
+ * change's re-ask (`pending`) and a probe past its deadline (`unknown`) keep it ({@link noteDataRoot}).
+ */
+export function absentDataRoot(): PathFinding | undefined {
+  return missingDataRoot() ?? absentRoot;
+}
+
+/** The refused data root when `path` is at or under it — the write that would create it — or nothing. */
 export function refusedDataRoot(path: string): PathFinding | undefined {
-  const missing = missingDataRoot();
+  const missing = absentDataRoot();
 
   return missing !== undefined && under(path, missing.value) ? missing : undefined;
 }
@@ -194,6 +227,7 @@ export { isAboutAMissingPath };
 /** For a test: nothing published, nothing held, nothing awaited. */
 export function forgetFindingsBoard(): void {
   published = [];
+  absentRoot = undefined;
   held = [];
   listeners = [];
   settling = Promise.resolve();
