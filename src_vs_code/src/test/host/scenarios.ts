@@ -14,6 +14,7 @@ import { aBugzCollectIsRefusedInARealEditor } from './bugzCollectScenario';
 import { theDefaultPhrasesInARealEditor } from './defaultPhrasesScenario';
 import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
+import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -239,6 +240,14 @@ function workspaceRoot(): string {
 }
 
 const SCENARIOS: readonly Scenario[] = [
+  {
+    // todo/PLAN_paths_per_side.md E5.7, the first-start guarantee: an existing named data directory raises no
+    // missing-path notice. FIRST, before any scenario below names a path that is not there — the revision scenario's
+    // `D:\old\claude.exe` is rightly said as missing, and a ledger read after it would blame the first start for that.
+    // What it does and does not drive is in `missingDataRootScenario.ts`.
+    name: 'a first start with an existing named data directory raises no setting-path-missing',
+    run: aFirstStartRaisesNoMissingPathNotice,
+  },
   {
     name: 'the extension activates, and every command its manifest declares is really registered',
     run: async (): Promise<void> => {
@@ -900,10 +909,10 @@ const SCENARIOS: readonly Scenario[] = [
     run: aRevisionInARealEditor,
   },
   {
-    // todo/PLAN_paths_per_side.md E5.7, the first-start guarantee: an existing named data directory raises no
-    // missing-path notice. What it does and does not drive is in `missingDataRootScenario.ts`.
-    name: 'a first start with an existing named data directory raises no setting-path-missing',
-    run: aFirstStartRaisesNoMissingPathNotice,
+    // todo/PLAN_paths_per_side.md E5.3 in a real editor: the storm the first host run of E5 showed — sixteen ledger rows
+    // for one CLI path, one per settings change. What it drives is in `missingPathSaidOnceScenario.ts`.
+    name: 'a path still missing is said once per window run, however many settings changes follow',
+    run: aStillMissingPathIsSaidOnceAcrossSettingsChanges,
   },
 ];
 

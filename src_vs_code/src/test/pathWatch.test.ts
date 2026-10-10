@@ -166,3 +166,45 @@ test('once the server has answered, its problems replace this window\'s own for 
   await it.settle();
   assert.deepEqual(currentFindings().map((one) => one.value).sort(), ['D:\\gone.exe', 'D:\\server-says-fine'], 'an older server leaves the window\'s own findings');
 });
+
+test('a settings change while a path is still missing re-asks the disk without resolving it or saying it again', async () => {
+  // What a real editor showed on E5's first host run: sixteen ledger rows for ONE CLI path. Every change to a `coai`
+  // setting drops the disk's answers (`forget`) and asks again; the gap between the drop and the answer read as "no
+  // longer missing", the notice was resolved, and the answer landing said it again — a toast per keystroke in the
+  // settings. Only a SETTLED answer may resolve a said path: the disk saying it is there, or the value leaving the list.
+  const it = run({ roots: ['D:\\gone'], vendors: [{ id: 'cli', executablePath: 'D:\\gone.exe' }], disk: {} });
+  it.watch.start();
+  await it.settle();
+  assert.equal(it.said.length, 2);
+
+  for (let change = 0; change < 3; change += 1) {
+    it.watch.forget();
+    await it.settle();
+  }
+  assert.deepEqual([it.said.length, it.resolved.length], [2, 0],
+    `three settings changes re-said the still-missing paths: said ${it.said.length} times, resolved ${it.resolved.length} — a settings change must re-ask the disk without resolving a path that is still missing`);
+  assert.deepEqual(currentFindings().map((one) => one.value).sort(), ['D:\\gone', 'D:\\gone.exe'], 'the page lost the marks');
+});
+
+test('a missing path whose next answer is UNKNOWN stays said — neither resolved nor said again until the disk answers', async () => {
+  const it = run({ roots: ['D:\\flaky'], disk: {} });
+  it.watch.start();
+  await it.settle();
+  assert.equal(it.said.length, 1);
+
+  it.disk['D:\\flaky'] = 'unknown';
+  it.watch.forget();
+  await it.settle();
+  assert.deepEqual([it.said.length, it.resolved.length], [1, 0], 'an answer the disk could not give resolved or re-said the notice');
+  assert.deepEqual(currentFindings().map((one) => one.state), ['unknown'], 'the page shows the unknown tone meanwhile');
+
+  delete it.disk['D:\\flaky'];
+  it.watch.forget();
+  await it.settle();
+  assert.equal(it.said.length, 1, 'the path still missing after an unknown answer was said again');
+
+  it.disk['D:\\flaky'] = 'here';
+  it.watch.forget();
+  await it.settle();
+  assert.deepEqual(it.resolved.map(findingSubject), ['coai.qconsultRoots|D:\\flaky'], 'the folder came back and nothing resolved the notice');
+});

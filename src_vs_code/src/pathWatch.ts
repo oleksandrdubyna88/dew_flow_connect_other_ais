@@ -2,9 +2,9 @@ import { type NamedRoot, dataDirFinding } from './dataDir';
 import { watchedDirs } from './escalationDirs';
 import { expectDataRoot, missingDataRoot, publishFindings } from './findingsBoard';
 import { type ExecutableSide, pathForThisSide, qualified } from './pathFamily';
-import { type PathFinding, type PathValue, agreed, findingSubject, pathFindings } from './pathFindings';
+import { type PathFinding, type PathValue, type Presence, agreed, asked, findingSubject, findingsOf, valueSubject } from './pathFindings';
 import type { PathProbes } from './pathProbes';
-import { QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
+import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
 import type { SettingProblem } from './providers';
 
 /**
@@ -49,6 +49,24 @@ export interface PathWatchDeps {
   readonly resolved: (finding: PathFinding) => void;
 }
 
+/** One asked value's answer, by the subject the notice is keyed on. */
+type Answer = readonly [string, Presence];
+
+/** What one refresh knows of this window's own values: the findings, and every asked value's answer by subject. */
+interface Own {
+  readonly findings: readonly PathFinding[];
+  readonly answers: ReadonlyMap<string, Presence>;
+}
+
+/**
+ * A definitive answer, or no value to answer for any more — what may RESOLVE a said path. `pending` and `unknown` may
+ * not: a settings change drops every answer and asks again, and resolving on that gap re-said every still-missing path
+ * on every keystroke in the settings (sixteen ledger rows for one CLI path, on E5's first run in a real editor).
+ */
+function settled(answer: Presence | undefined): boolean {
+  return answer === undefined || answer === 'here' || answer === 'absent';
+}
+
 export class PathWatch {
   /** The missing paths said in this run, by subject — so a finding is said when it APPEARS, not on every refresh. */
   private said: ReadonlyMap<string, PathFinding> = new Map();
@@ -68,9 +86,10 @@ export class PathWatch {
   /** The settings or the disk's answers changed: decide again from what is known now. */
   refresh(): void {
     try {
-      const findings = agreed(this.ownFindings(), this.serverProblems, this.deps.side.family);
+      const own = this.ownFindings();
+      const findings = agreed(own.findings, this.serverProblems, this.deps.side.family);
       publishFindings(findings);
-      this.tell(findings);
+      this.tell(findings, own.answers);
     } catch (reason) {
       // The detached edge: a probe landing calls this with nobody above it, and a read that threw must not take the
       // watch down in silence.
@@ -136,25 +155,36 @@ export class PathWatch {
       .map((dir) => ({ setting: WATCHED_DIRECTORIES, value: dir.asked, path: dir.path }));
   }
 
-  private ownFindings(): readonly PathFinding[] {
-    const probes = this.deps.probes;
-    const own = pathFindings(this.values(), this.deps.side.family, (path, kind) => probes.presence(path, kind));
-    const named = this.deps.reads.dataRoot();
-    const data = dataDirFinding(named, named === undefined ? 'pending' : probes.presence(named.root, 'folder'), this.deps.side.family);
+  private ownFindings(): Own {
+    const family = this.deps.side.family;
+    const answers = asked(this.values(), family, (path, kind) => this.deps.probes.presence(path, kind));
+    const root = this.dataRootAnswer();
+    const findings = [...findingsOf(answers, family), ...(root.finding === undefined ? [] : [root.finding])];
 
-    return data === undefined ? own : [...own, data];
+    return { findings, answers: new Map([...answers.map((one): Answer => [valueSubject(one.value), one.presence]), ...root.answer]) };
+  }
+
+  /** The named data root's finding and its answer — none for the default location, which is never asked (D3). */
+  private dataRootAnswer(): { readonly finding: PathFinding | undefined; readonly answer: readonly Answer[] } {
+    const named = this.deps.reads.dataRoot();
+    if (named === undefined) {
+      return { finding: undefined, answer: [] };
+    }
+    const presence = this.deps.probes.presence(named.root, 'folder');
+
+    return { finding: dataDirFinding(named, presence, this.deps.side.family), answer: [[valueSubject({ setting: DATA_DIRECTORY, value: named.root }), presence]] };
   }
 
   /**
-   * Say what is NEWLY missing, resolve what no longer is. Said when a finding appears rather than on every refresh: the
-   * funnel records every arrival, and a repaint-driven re-say would be a ledger row per repaint — the storm this product
-   * bounds elsewhere. A resolved path going missing again is said again: the situation ended, so its return is news.
+   * Say what is NEWLY missing, resolve what no longer is — on a settled answer. Said when a finding appears rather than on
+   * every refresh: the funnel records every arrival, and a repaint-driven re-say would be a ledger row per repaint — the
+   * storm this product bounds elsewhere. A resolved path going missing again is said again: the situation ended, so its
+   * return is news.
    */
-  private tell(findings: readonly PathFinding[]): void {
+  private tell(findings: readonly PathFinding[], answers: ReadonlyMap<string, Presence>): void {
     const missing = new Map(findings.filter((one) => one.state === 'missing').map((one) => [findingSubject(one), one] as const));
     this.sayNew(missing);
-    this.resolveGone(missing);
-    this.said = missing;
+    this.said = new Map([...this.stillSaid(missing, answers), ...missing]);
   }
 
   private sayNew(missing: ReadonlyMap<string, PathFinding>): void {
@@ -165,12 +195,25 @@ export class PathWatch {
     }
   }
 
-  private resolveGone(missing: ReadonlyMap<string, PathFinding>): void {
+  /**
+   * Resolves a said path that is no longer missing on a SETTLED answer — the disk says it is there, the server took it, or
+   * the value left the settings — and keeps one whose answer is pending or unknown, so a settings change re-asks the disk
+   * without a resolve-and-say-again for every path that is still missing (`settled`).
+   */
+  private stillSaid(missing: ReadonlyMap<string, PathFinding>, answers: ReadonlyMap<string, Presence>): ReadonlyMap<string, PathFinding> {
+    const kept = new Map<string, PathFinding>();
     for (const [subject, finding] of this.said) {
-      if (!missing.has(subject)) {
+      if (missing.has(subject)) {
+        continue;
+      }
+      if (settled(answers.get(subject))) {
         this.deps.resolved(finding);
+      } else {
+        kept.set(subject, finding);
       }
     }
+
+    return kept;
   }
 }
 

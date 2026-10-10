@@ -111,15 +111,31 @@ const STATE_OF: Readonly<Record<Presence, FindingState | undefined>> = {
   unknown: 'unknown',
 };
 
-/** Every finding over the stored values of this side, from what the disk has said so far. */
-export function pathFindings(values: readonly PathValue[], family: PathFamily, presenceOf: PresenceOf): readonly PathFinding[] {
+/** One value the disk is asked about, with what it says now — the findings and the watch's resolve rule read ONE answer. */
+export interface Asked {
+  readonly value: PathValue;
+  readonly presence: Presence;
+}
+
+/** Every value of this side the disk is asked about (`probeable`), with its answer so far. */
+export function asked(values: readonly PathValue[], family: PathFamily, presenceOf: PresenceOf): readonly Asked[] {
   return values
     .filter((one) => probeable(one.value, family))
-    .flatMap((one) => {
-      const finding = findingOf(one, family, presenceOf(one.path, probeKindOf(one.setting.kind)));
+    .map((one) => ({ value: one, presence: presenceOf(one.path, probeKindOf(one.setting.kind)) }));
+}
 
-      return finding === undefined ? [] : [finding];
-    });
+/** The findings among the answers — a path that is there, or not yet answered, is none. */
+export function findingsOf(answers: readonly Asked[], family: PathFamily): readonly PathFinding[] {
+  return answers.flatMap(({ value, presence }) => {
+    const finding = findingOf(value, family, presence);
+
+    return finding === undefined ? [] : [finding];
+  });
+}
+
+/** Every finding over the stored values of this side, from what the disk has said so far. */
+export function pathFindings(values: readonly PathValue[], family: PathFamily, presenceOf: PresenceOf): readonly PathFinding[] {
+  return findingsOf(asked(values, family, presenceOf), family);
 }
 
 /**
@@ -170,6 +186,11 @@ export function missingAt(findings: readonly PathFinding[], place: string): numb
 /** The notice's subject: one counter per path, so fixing one clears one (`notifyOnce` keys on `(code, subject)`). */
 export function findingSubject(finding: Pick<PathFinding, 'key' | 'value'>): string {
   return `${finding.key}|${finding.value}`;
+}
+
+/** The same subject from a value before it is a finding — what the watch keys the disk's answers on. */
+export function valueSubject(one: Pick<PathValue, 'setting' | 'value'>): string {
+  return findingSubject({ key: one.setting.id, value: one.value });
 }
 
 /** How a family is named to a person (decided with the operator, D1). */

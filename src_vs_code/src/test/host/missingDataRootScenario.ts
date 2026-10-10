@@ -27,15 +27,16 @@ export const MISSING_ROOT_LAUNCH = 'COAI_HOST_MISSING_DATA_ROOT';
 
 const SETTLE_MS = 4_000;
 
-const settle = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+/** Shared with the other E5 scenario (`missingPathSaidOnceScenario.ts`): a wait, the activation, and a bounded until. */
+export const settle = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
 
-async function activated(): Promise<void> {
+export async function activated(): Promise<void> {
   const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
   assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
   await extension.activate();
 }
 
-async function until(ready: () => boolean, whatDidNotHappen: string, ms = 15_000): Promise<void> {
+export async function until(ready: () => boolean, whatDidNotHappen: string, ms = 15_000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (ready()) {
