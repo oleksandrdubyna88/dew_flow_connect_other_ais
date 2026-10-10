@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Fixed: a Models card that cannot be switched off or removed now says why on the card.** The only model switched on
+for plan or code review keeps its switch, its ✕ and that stage's tick refused, and the reason was only a tooltip, so the
+card looked broken. A quiet line under the card's head now reads, for example, "Locked: the only model switched on for
+plan and code review — switch on or add another model that reviews plans and code first." Screen readers read the same
+line from the switch, the ✕ and the tick.
+
 **Fixed: a question-consultant folder from the other side is no longer an error.** VS Code shares your settings
 between a WSL window and a Windows one, so a folder added in WSL (`/home/you/git`) was read on Windows too, and the
 server greeted every Windows start with "is not a directory on this machine". A folder written for the other OS that

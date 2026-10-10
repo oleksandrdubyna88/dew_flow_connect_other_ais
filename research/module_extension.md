@@ -11115,6 +11115,15 @@ flowchart LR
   a use toggled in the catalog's order — Bugz moves to the one row ticked and `coai.bugzModel` with it (D7); a
   duplicate copies everything (`vaultKeyName` too) under the next free id, right after its source; a remove after the
   page's confirm (no second modal), refused for the last model of a stage. The card locks the same rule (`lastStagesOf`).
+  **The lock is said on the card, not only in a hover** (2026-10-10, operator report): a locked card draws
+  `<p class="hint lock" id="lock-<row>">` under its head — "Locked: the only model switched on for plan and code
+  review — switch on or add another model that reviews plans and code first." — its words built from `lockOf` (the
+  same phrase the switch's and the ✕'s `title` keep). The refused switch, the refused ✕ (`confirmButton`'s
+  `describedBy`) and each locked stage tick (`stageBox`'s `why`) carry `aria-describedby` to that line, through the one
+  `describedBy` helper in `catalogShell.ts`. Quiet hint tone (`.catalog .hint`), never the error colour — it is
+  information. A card that is not last draws no line and no `aria-describedby`. A stage tick on the last model is drawn
+  disabled, so no refusal toast arises from the card; the write path's refusal (`lastStageMessage`) stays for any
+  other caller.
 - **Add a model** is the existing picker, grouped by where a model runs (`addModelGroups.ts`: a CLI here, an API key,
   this machine's GPU, a Team server — with a line saying where to add a server when none is signed in).
 - **This coai-mcp ignores…** on a card through `skew` by capability (`systemPrompt`, `timeoutMinutes`, `cliEffort`).
