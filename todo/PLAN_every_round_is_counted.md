@@ -148,6 +148,8 @@ Answers the operator's question for this machine's work from the whole history, 
     appears only for lines written after 3.3 (one line per launch) that carry 4.1's round.
   - Team-server rows (`<server>-<vendor>`) are their own lines, labelled *ran on <server>*, never added to the
     server's own totals.
+  - The mode is listed with the other one-shot modes in `AGENTS.md`; bad arguments to it (an unparseable `--now`, an
+    unknown flag) exit with a usage error, never 64 — 64 means "this build has no such mode" to the extension.
 - **2.2 The extension reads it** (Opus) — `readRoundCounts` in `roundsDbRead.ts` through its existing spawn helper;
   exit 64 / timeout / unparseable → *count unavailable*, never 0. **Bounded freshness**, not "until a round ends": the
   answer is reused for at most 60 s and refreshed early when a round, consultation or question ends — a
@@ -160,7 +162,9 @@ Answers the operator's question for this machine's work from the whole history, 
   inside the owning OS is the open tail, not this story.
 - **2.3 Spending tab, first block: Rounds** (Opus) — a pure `roundsBlock` renderer (vendor row · model lines · 5 h ·
   24 h · 7 d by stage · consultations / questions / chat · per-round figure · median output per launch · the store
-  sentence). A model change inside a window is two lines for that row, so the step of 2026-10-02 is visible the day it
+  sentence) — the output figure is the median **per recorded turn**, labelled so: until story 3.3 writes one line per
+  launch, a repair or a follow-up is two launches summed on one line, so a per-launch median cannot be computed from the
+  ledger and is not claimed (a fixture with a repaired turn pins the label). A model change inside a window is two lines for that row, so the step of 2026-10-02 is visible the day it
   happens. **A bundled-page test** (`src_vs_code/src/test/bundledPage.test.ts` on `roundsLogPageHarness.ts`) RUNS the
   Review rounds page and asserts the block appears with counts, and with an unavailable read shows *count unavailable*
   and no zero.
@@ -181,7 +185,8 @@ Answers the operator's question for this machine's work from the whole history, 
     round in the window — each labelled for what it is. The denominator is never only the priced rounds; when any line inside
     them is unpriced or not captured, the per-round figure carries the same floor mark as the total (`≥ ~$0.31 per
     round`) and the tooltip says how many of the N rounds were fully priced; when none was, it is a dash, never an
-    average of the priced few.
+    average of the priced few. A window with priced usage but ZERO rounds (consultations only) shows a dash for the
+    per-round figure, labelled *no rounds in this window* — never a division by zero.
   Two defects in today's spending tab are fixed on the way, each RED first: `totalsByVendor` prices a row's whole
   history at the row's CURRENT model (`priceOf(provider, …)`, `src_vs_code/src/usage.ts:174`) — after the Gemini row
   moved to `flash-medium`, every earlier `flash-low` line is priced as `flash-medium` (`APastLine_IsPricedAtItsOwnModel`);
@@ -354,6 +359,7 @@ records that failure).
 | `ConsultationsAndQuestions_AreCountedBesideRounds` | 2.1 |
 | `roundsBlock` renderer cases, and the bundled-page run of the Review rounds page (counts shown; unavailable ≠ 0; the store sentence) | 2.3 |
 | `APastLine_IsPricedAtItsOwnModel`, `CachedInput_IsPricedAtTheCachedRate`, `TheParser_KeepsCachedReasoningAndKind`, `AReportedCost_IsNeverReEstimated`, `AnUnpricedLine_MakesTheTotalAFloor`, `ALongContextTier_AppliesPerLine` | 2.5 |
+| `AConsultationOnlyWindow_ShowsNoPerRoundFigure`, `ARepairedTurn_IsOneRecordedTurn_NotOneLaunch`, `ABadArgument_IsAUsageErrorNot64` | 2.1 / 2.3 / 2.5 |
 | `APerRoundFigure_CountsEveryRound_AndCarriesTheFloor`, `AModelLine_DividesByTheRoundsThatUsedIt`, `AnUncapturedLine_MakesATokenTotalAFloor_NeverZero` | 2.5 |
 | `ASubscriptionShare_NeedsAGaugeReading`, `ASubscriptionShare_IsNeverSummedWithAnEstimate`, `ANegativeOrNonFinitePlanPrice_IsRefusedAtTheCard`, `OnePlanPrice_ServesEveryModelOfTheAccount` | 6.2 |
 | `TheCardLine_DoesNotSpawnPerRender`, `AConsultationOnlySession_RefreshesTheCount`, `AnIdleWindow_FallsOnAFakeClock`, `TheOtherSidesStore_IsNamedNotOpened` | 2.2 / 2.4 |
