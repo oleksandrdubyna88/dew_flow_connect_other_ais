@@ -1,4 +1,6 @@
-import { type PathFamily } from './pathFamily';
+import { sideKey, type Side } from './coaiInstall';
+import { thisSideLabel } from './consultantSides';
+import { familyOf, type PathFamily } from './pathFamily';
 
 /**
  * The sides this profile has been used on (todo/PLAN_paths_per_side.md, design (a) option A, E2.1).
@@ -55,6 +57,19 @@ export interface SideHere {
   readonly key: string;
   readonly family: PathFamily;
   readonly label: string;
+}
+
+/**
+ * This window's side as the registry records it: the key every per-side record already uses (`sideKey` — `installedKey`
+ * and `overlayKey` fold the same one), the family `platform` spells paths in, and the name the This side page says
+ * (`thisSideLabel`: `WSL: Ubuntu`, or `Windows` in a local window rather than "this machine"). ONE place, called by
+ * activation's stamp and by the Settings page, so the row the page marks as this window is the row activation wrote.
+ *
+ * @param side `installer.thisSide(context.globalStorageUri)` in the host
+ * @param platform `process.platform` in the host
+ */
+export function sideHereOf(side: Side, platform: string): SideHere {
+  return { key: sideKey(side), family: familyOf(platform), label: thisSideLabel(side.remoteName, side.distro ?? '', platform) };
 }
 
 /** The `globalState` key of one side's record. */
@@ -138,4 +153,51 @@ function isFamily(value: unknown): value is PathFamily {
 
 function isTime(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+// ---------------------------------------------------------------- the store
+
+/** The part of a `vscode.Memento` the registry uses — `context.globalState` is one. */
+export interface SideStore {
+  keys(): readonly string[];
+  get(key: string): unknown;
+  /** `undefined` deletes the key, as `Memento.update` does. */
+  update(key: string, value: unknown): PromiseLike<void>;
+}
+
+/** The sides seen within the window, read from the store now — every render reads this afresh (E0: a stamp lands live). */
+export function sidesIn(store: SideStore, now: number): readonly SeenSide[] {
+  return seenSides(entriesOf(store), now);
+}
+
+/**
+ * What activation does (E2.2): this side's record, written at most once a day, then every record past the window removed.
+ * Never awaited by activation — a slow store must not delay a window's start.
+ */
+export async function stampThisSide(store: SideStore, here: SideHere, now: number): Promise<void> {
+  const stamp = stampSide(store.get(sideSeenKey(here.key)), here.key, here.family, here.label, now);
+  if (stamp !== undefined) {
+    await store.update(stamp.key, stamp.record);
+  }
+  for (const key of prunedKeys(entriesOf(store), now)) {
+    await store.update(key, undefined);
+  }
+}
+
+/**
+ * **Forget** on Setup › This side: another side's record removed, so a side gone for good stops counting before its 90
+ * days are up. This window's own is refused — it is in use now — and would only be stamped again at the next start.
+ */
+export async function forgetSide(store: SideStore, side: string, here: string): Promise<boolean> {
+  if (side === here) {
+    return false;
+  }
+  await store.update(sideSeenKey(side), undefined);
+
+  return true;
+}
+
+/** The store's registry keys with their values — the registry's slice of `Memento.keys()`. */
+function entriesOf(store: SideStore): readonly (readonly [string, unknown])[] {
+  return store.keys().filter((key) => key.startsWith(SIDE_SEEN_PREFIX)).map((key) => [key, store.get(key)] as const);
 }

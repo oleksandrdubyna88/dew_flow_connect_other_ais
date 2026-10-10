@@ -47,7 +47,7 @@ import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installedVersion, installLatest, knownServerVersion, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
+import { installedVersion, installLatest, knownServerVersion, latestServerVersion, serverExists, serverOnThisSide, serverPath, thisSide } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { QuestionConsultWatcher } from './questionConsultWatcher';
@@ -67,6 +67,7 @@ import { DbLog } from './roundsDb';
 import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
+import { sideHereOf, sidesIn, stampThisSide, type SeenSide } from './sidesSeen';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -85,6 +86,15 @@ import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
 /**
+ * What activation hands back. Read-only, and read by the `test:host` scenarios — a host cannot reach this extension's
+ * `globalState` any other way (todo/PLAN_paths_per_side.md E2.4: activation leaves a `coai.sideSeen@` record).
+ */
+export interface CoaiExports {
+  /** The sides this profile has been used on, as Setup › This side lists them. */
+  readonly sidesSeen: () => readonly SeenSide[];
+}
+
+/**
  * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
  * review itself lives in `coai-mcp`, which an MCP client owns and starts.
  *
@@ -94,7 +104,7 @@ import { askPerson } from './personWait';
  * a person — arrives as a FILE in the data directory this extension already reads, which is why
  * there is still nothing listening on a socket.</p>
  */
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(context: vscode.ExtensionContext): CoaiExports {
   // One per window, kept for the window's life: the page is cheap to redraw and expensive to
   // rebuild, and `retainContextWhenHidden` means a reopened tab keeps its scroll and its tab.
   const notifications = new NotificationsPanel();
@@ -374,6 +384,9 @@ export function activate(context: vscode.ExtensionContext): void {
   mirrorSettings(settingsSync);
   // When each new control of the Settings page was first seen here, so its "new" mark lasts a week (newTags.ts).
   void context.globalState.update(FIRST_SEEN_KEY, seenNow(context.globalState.get(FIRST_SEEN_KEY), NEW_CONTROLS, Date.now()));
+  // The sides this profile has been used on (todo/PLAN_paths_per_side.md E2.2): this side stamped at most once a day,
+  // the sides gone for 90 days pruned — never awaited, so a slow store never delays a window's start.
+  void stampThisSide(context.globalState, sideHereOf(thisSide(context.globalStorageUri), process.platform), Date.now());
   // Ask once now: the settled answer writes the file again (above) — so a system prompt crosses this session.
   void askFeatures();
   // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
@@ -772,6 +785,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   void offerUpdate(context);
+
+  return { sidesSeen: () => sidesIn(context.globalState, Date.now()) };
 }
 
 export async function deactivate(): Promise<void> {
