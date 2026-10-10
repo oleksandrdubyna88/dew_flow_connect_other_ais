@@ -58,6 +58,8 @@ const REPO = path.join(__dirname, '..', '..', '..');
 
 /** The server's modes, as `Program.Classify` maps them: `"--bugs-json" => Startup.Bugs`. */
 function serverModes(): ReadonlySet<string> {
+  // reads-another-program: the server's mode list is the subject of this inventory, and the read fails LOUDLY — the
+  // first test asserts the parse found --bugs-json, --providers and more than twenty modes, so a changed shape is red.
   const program = fs.readFileSync(path.join(REPO, 'src_mcp', 'src', 'Program.cs'), 'utf8');
 
   return new Set([...program.matchAll(/"(--[a-z-]+)"(?: or "[^"]+")* => Startup\./gu)].map((match) => match[1]!));
@@ -83,6 +85,8 @@ test('every coai-mcp mode the extension launches is classified — a new launch 
 });
 
 test('every READER is run by the server\'s test against a missing data directory', () => {
+  // reads-another-program: a positive assertion per reader — each named mode must appear in the server's own test, so a
+  // renamed or emptied file turns this red, never quiet.
   const held = fs.readFileSync(path.join(REPO, 'src_mcp', 'tests', 'AReaderModeNeverMakesTheDataDirectoryTests.cs'), 'utf8');
   const covered = new Set([...held.matchAll(/"(--[a-z-]+)"/gu)].map((match) => match[1]!));
 
