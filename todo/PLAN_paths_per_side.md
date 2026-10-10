@@ -66,7 +66,9 @@ their words:
    quietly — for every path setting, not only question-consultant roots.
 3. Once a Windows side and a WSL side have both been seen, every path setting shows a **Windows** field and a **WSL**
    field, the other side's one clearly labelled; with one side seen, one field, exactly as today.
-4. Older extensions and older coai-mcp builds keep working on the values they already read.
+4. Older extensions and older coai-mcp builds keep working on the values they already read — no worse than one shared
+   value today; an older extension on the OTHER side still reads the one legacy value (see *What it cannot do — mixed
+   versions*, design (c)).
 
 ## Research — every setting that holds a path
 
@@ -167,19 +169,34 @@ an other-OS root, and the page says so through the existing skew line by capabil
 `pathForThisSide(stored, family)` in `pathFamily.ts`, answered by new rows of `shared/path-family-vectors.json` so the
 C# reads the same table:
 
-1. `executablePathBySide[family]`, when non-empty;
+1. `executablePathBySide[family]`, when the key is **PRESENT** (a string) — an explicitly empty value is a PATH lookup and
+   is final: it never falls through to the legacy value (amended by the cadence consultation for epics 4-6, below);
+   unless an older extension has saved since (the `mirrored` check below);
 2. else the legacy `executablePath`, unless it is spelled for the other OS;
 3. else empty — a PATH lookup — **and** a finding `otherSide` naming the skipped value.
 
-Writes: with two fields shown, a field writes `executablePathBySide[<its family>]` **and, when it is THIS side's field,
-mirrors the same value into the legacy `executablePath`** (the plan round, finding 0): an older extension reads the
-legacy value only, so it keeps launching what this side last saved — exactly what it does today, never a stale or
-empty value invented by the new storage. Editing the OTHER side's field writes only `BySide` (the other side's newer
-extension reads it first; an older one there keeps today's behaviour). With one field (one side known), the field writes
-the legacy value exactly as today. Two-field mode therefore never makes an older reader worse than today; it makes a
-newer reader on each side right. The server applies rule 3 itself as defence in depth (an older extension still
-sends the legacy value): an `ExecutablePath` spelled for the other OS is treated as empty, with an Information log line
-— never a refusal.
+**Writes — the same rule in every mode** (amended, cadence consultation 4-6, finding a; the first version wrote only the
+legacy value in one-field mode, so after `always → never`, a **Forget**, or the other side's 90 days running out, a save
+of B still resolved to the older `BySide` A). Every save of a CLI-path field writes `executablePathBySide[<its family>]` —
+in one-field mode the one field IS this side's — **and, when it is THIS side's field, mirrors the same value into the
+legacy `executablePath`** (the plan round, finding 0) and records it as `executablePathBySide.mirrored`. Editing the
+OTHER side's field writes only `BySide[<that family>]`. Hiding a field (one-field mode) never deletes the other side's
+value. **Clearing** a field writes `""` (present, empty → PATH lookup), never deletes the key: deleting it would resurrect
+the legacy value, and a legacy `//server/share/codex` is spelled for neither OS, so it would be run on both sides.
+**An older extension's save is detected, not lost**: when the stored legacy value differs from `mirrored`, something
+that does not know `BySide` saved since — the legacy value then wins for the family it is spelled for (and, spelled for
+neither, for this side), until the next new-extension save rewrites both. So what a side resolves is always what was
+last saved for it, whatever the mode was at either moment. The server applies rule 3 itself as defence in depth (an
+older extension still sends the legacy value): an `ExecutablePath` spelled for the other OS is treated as empty, with an
+Information log line — never a refusal.
+
+**What it cannot do — mixed versions** (cadence consultation 4-6, finding b, verified: extension-v0.65.0's
+`vendorsWire.ts:115` sends `executablePath: v.executablePath` unchanged). There is ONE shared legacy value, so two
+older readers on two sides cannot each keep their own choice: an older WSL extension reads the Windows path a newer
+Windows save mirrored, and sends it to its server — coai-mcp ≥ 0.46.0 skips it as the other side's (a PATH lookup), an
+older server probes it and reports the CLI not found. That is exactly what one shared value does today, so nothing gets
+worse, but it is not fixed for an older reader: the cure is updating the extension on that side. Said in the help and
+in the CHANGELOG when E3 ships.
 
 ### (d) The page: two fields when both sides are known, one otherwise
 
@@ -492,29 +509,80 @@ break-it on its deciding line; the observed messages are in the commits and in `
   English as everywhere; `helpCoverage.test.ts` asks each language for them.
 - **Not in E2:** the second path field (E3 stores it, E4 draws it), so the switch and the list are shown and recorded
   but change no field yet.
+- **A refused stamp is logged, never an unobserved rejection** (the coordinator's accepted finding on E2's code):
+  `stampThisSide` never rejects; a store that refuses goes to a reporter that activation wires to `console.error` in the
+  extension host's log (never a toast), and since a refused write leaves no record the next start stamps again.
+
+**Cadence consultation 4-6 (2026-10-10, before E3's plan round — design only, no E3/E4 code).** Three claims, each
+checked against the plan and the code before the plan was amended; all three held.
+
+- **(a) Storage depended on field visibility — held.** Design (c) preferred a non-empty `BySide[family]` while one-field
+  mode wrote only the legacy value, so after `always → never`, a Forget or the 90 days running out, a save of B still
+  resolved to the older `BySide` A; and an emptied `BySide` fell through to a legacy `//server/share/codex`, which
+  `spelledForTheOtherOs` calls neither side's. Amended: one write rule in every mode (every save writes
+  `BySide[<its family>]`, this side's also mirrors into the legacy value and `mirrored`), a present key wins and `""`
+  means a PATH lookup, and an older extension's save is detected through `mirrored`. E3.2 gained the save → resolve tests.
+- **(b) Two older readers cannot each keep their choice — held** (`vendorsWire.ts:115` at `extension-v0.65.0` sends the
+  legacy `executablePath` unchanged). Stated plainly in design (c), the goal's item 4 and risk 2; E3.5 gained the
+  mixed-version test.
+- **(c) Ambiguous spellings landed in this window's group on both sides — held** (`otherSideHere` is false on both
+  platforms for `//server/share` and relative paths). Amended: three groups in E3.3/E4.2 (this side's, the other
+  side's, both sides / unclear — never hidden), an admission rule for text typed into the other side's box, and the
+  E3.3-stat vs E4-never-stat question decided (this host's disk at this machine's own spelling, never across).
 
 ### E3 — two values, stored and resolved · `feat/paths-per-side-e3-two-values`
 
 - **3.1** `executablePathBySide` read and written (`vendors.ts:386`, `catalogEdit.ts`), carried by the catalog
   migration and by *Export settings* **without** its values (`configTransfer.ts:44`'s `MACHINE_PATH_FIELD` widened to
   both names). RED: a row with `executablePathBySide.posix` set still sends the legacy value to a WSL server today.
-- **3.2** `pathForThisSide` rule 1, with the write rules of (c): two fields write `BySide` and this side's field also
-  mirrors into the legacy value; one field writes the legacy value. REDs: a two-field save of THIS side's field leaves the
-  legacy value stale for an older reader; a save of the OTHER side's field must not touch the legacy value.
-- **3.3** Lists grouped by family through `otherSideHere` (O1). Unit: `/work` that exists on Windows groups as
-  Windows'; `/home/jinx/git` groups as WSL / Linux's.
+- **3.2** `pathForThisSide` rule 1 (a PRESENT key wins, empty included), with the write rules of (c), the same in every
+  mode: every save writes `BySide[<its family>]`, this side's field also mirrors into the legacy value and `mirrored`.
+  REDs: a two-field save of THIS side's field leaves the legacy value stale for an older reader; a save of the OTHER
+  side's field must not touch the legacy value. **Save → resolve, across modes** (cadence consultation 4-6, finding a):
+  `always` save A → `never` → save B → resolves B; `never` save B → `always` → this side's field shows and resolves B;
+  two fields with the other side's value P → **Forget** the other side (or its 90 days run out) → save B → resolves B
+  and P is still stored; **clearing** this side's field → resolves `""` (a PATH lookup) even with a legacy
+  `//server/share/codex` stored, and the other side's value untouched; the RED for each is today's design resolving the
+  older value or the legacy one.
+- **3.3** Lists grouped through `otherSideHere` (O1) into **three** groups, never two (cadence consultation 4-6,
+  finding c, verified: `spelledForTheOtherOs` is false on both platforms for `//server/share/x` and for a relative
+  path, so a two-way split put them in THIS window's group on each side): **this side's**, **the other side's**, and
+  **both sides / unclear** — an entry spelled for neither OS (`//server/share`), a relative entry (still refused
+  visibly by `rootRefusal`, its refusal shown in that group), and an entry whose `stat` here answered `unknown`. Nothing
+  is ever hidden. The group is THIS window's verdict, so the two windows may group a root-relative `/work` differently
+  (Windows' where `C:\work` exists, WSL / Linux's in WSL) — each is right for the server on its own side. Unit: `/work`
+  that exists on Windows groups as Windows'; `/home/jinx/git` groups as WSL / Linux's; `//nas/share/x` and `work` group as
+  both / unclear on both platforms; an `unknown` stat groups as unclear, never as the other side's.
+  **The `stat` here vs E4's "never stat the other side" — not a conflict, decided:** the grouping asks THIS host's disk
+  about THIS machine's own spelling of an entry (`qualified`: a root-relative path on the system drive on Windows, the
+  literal name in WSL) — the disk this side's server reads. It never reaches across to the other side's disk
+  (`\\wsl.localhost\…`, `/mnt/<drive>`), which is what E4's rule forbids (it wakes a stopped distro, or an unmounted drive
+  answers nothing).
 - **3.4** `dataDirectory`: the other side's value read from its overlay via the registry, never written from here.
 - **3.5** Compatibility pinned: a settings file written by an older extension (legacy only) resolves identically; a
   server settings file written by the new extension parses in the oldest supported coai-mcp (the existing
-  `live-*-compat` pattern, `package.json` scripts).
+  `live-*-compat` pattern, `package.json` scripts). **Mixed versions** (cadence consultation 4-6, finding b): a row a
+  newer Windows extension saved in two-field mode (`BySide.windows` W, `BySide.posix` P, legacy W) consumed by the
+  extension-v0.65.0 wire logic (`vendorsWire.ts:115` at that tag, run as a fixture) sends W — the limitation, pinned and
+  named in the test — and coai-mcp ≥ 0.46.0 skips W on a POSIX side; then that older extension's next save (legacy P′,
+  `BySide` untouched) is resolved as P′ by a newer WSL reader through the `mirrored` check, and still as W by the newer
+  Windows reader.
 
 ### E4 — the page draws two fields · `feat/paths-per-side-e4-two-fields`
 
 - **4.1** The Models card: two CLI-path fields when both are known, this side's first, the other in a
   `fieldset`/`legend` with its caption; one field otherwise. Page test, RUN: with two families known the card holds two
   inputs whose labels name *Windows* and *WSL / Linux*; the other side's input has no Browse; with one family, one input.
-- **4.2** Question consultant: two folder groups; Add a folder adds to this side's; the other group accepts typed text,
-  refused when spelled for the wrong OS (the refusal shown beside the box, not as a toast).
+- **4.2** Question consultant: the three groups of 3.3 (this side's, the other side's, both sides / unclear — never
+  hidden); Add a folder adds to this side's; the other group accepts typed text (the refusal shown beside the box, not
+  as a toast). **Admission into the other side's box** (cadence consultation 4-6, finding c): accepted only when THIS
+  window would group the typed text as the other side's — an unambiguous absolute path of that OS (a drive letter or
+  `\\server\share` for the Windows box; a single-slash `/…` for the WSL / Linux box) — so an entry never jumps groups on
+  the next render. Refused beside the box, with the reason: a spelling of this OS ("that is this side's — add it
+  above"); a relative path (`rootRefusal`'s words); on Windows, a `/…` whose `C:\…` exists here ("on this machine that is
+  C:\…, this side's folder"); in WSL, a root-relative `\…` (no drive). `//server/share/…` is accepted into the both /
+  unclear group rather than either side's. Page test, RUN: each admission and each refusal, and the typed entry landing
+  in the group it was typed into.
 - **4.3** MCP server: watched folders in two groups; the data directory with the other side's value read-only (D2) —
   page test: the other side's data directory is text, not an input, and offers no save.
 - **4.4** `coai.pathFieldsPerSide = never` restores one field everywhere; `always` draws two with a single side seen
@@ -554,7 +622,8 @@ Each epic is one branch and one pull request, gated per epic.
 
 - `coai.sideSeen@<sideKey>`: one record (~200 bytes) per side ever opened on this profile — a handful; pruned 90 days
   after `lastSeen`, and on **Forget**.
-- `executablePathBySide`: at most two short strings per catalog row; retired with the row.
+- `executablePathBySide`: at most three short strings per catalog row (the two families and `mirrored`); retired with
+  the row.
 - Notices: `notifyOnce` records every arrival in the existing bounded ledger; one key per `(key, value)`.
 - The findings cache: one entry per value list, replaced on change — the `RootExistence` bound.
 
@@ -564,9 +633,11 @@ Each epic is one branch and one pull request, gated per epic.
    appears one restart late; if it never does, the fallback of E0.2 turns two fields on from the first other-OS path
    seen. Said on the This side page either way.
 2. **Two extension versions on two sides** (a WSL remote installs its own copy): an older one keeps writing the legacy
-   `executablePath`; the newer one reads `BySide` first, so it is not affected, and the older reads what it always read
-   — and a two-field save mirrors this side's value into the legacy field, so the older reader on this side is never
-   left with a stale value (E3.2's RED covers it).
+   `executablePath`, and a newer one notices that save through `mirrored` and resolves it for its family (E3.5); a
+   two-field save mirrors this side's value into the legacy field, so the older reader on THIS side is never left with
+   a stale value (E3.2's RED covers it). **Not fixable without updating it:** an older reader on the OTHER side reads
+   the one legacy value, i.e. the last value any side mirrored — exactly today's single shared value, and coai-mcp ≥
+   0.46.0 skips it there as the other side's (design (c), *What it cannot do*).
 3. **Settings Sync** carries `executablePathBySide` to another machine like it carries `executablePath` today — no worse;
    the paths are skipped or marked missing there.
 4. **A slow or offline share** (`Z:\` not mounted): one `stat` at a time, never awaited by a render, `unknown` never
