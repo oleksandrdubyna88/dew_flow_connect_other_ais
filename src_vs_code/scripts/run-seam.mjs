@@ -850,5 +850,5 @@ console.log(`seam: and a consultation the binary RAN was read back out of --log 
 console.log(`seam: and a consultant DEFINED with no reviewer row answered through its own CLI path — "${String(throughDefinition.advice).slice(0, 60)}…"`);
 console.log(`seam: and a REAL refusal carrying a secret was written with it taken out, read back by the extension's own reader, and survived its parser byte for byte — "${refusal.title.slice(0, 90)}…" (${refusal.logs} log file(s) checked too)`);
 console.log(`seam: and the question consultant's roots — kept ${qroots.kept}, skipped ${qroots.skipped}, the page agreeing on both`);
-console.log(`seam: and a reviewer's CLI path of the other side — ${clipath.skipped} skipped by the page and by the server`);
+console.log(`seam: and a reviewer's CLI path of the other side — ${clipath.skipped} skipped by the page and by the server; an existing one spelled without its drive: ${clipath.kept}`);
 console.log(`seam: asked ${binary}`);

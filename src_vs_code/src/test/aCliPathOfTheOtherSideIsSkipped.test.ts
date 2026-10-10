@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { statSync as statSyncForProbe } from 'node:fs';
+import { fileAt, useFileProbe } from '../pathFamily';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -7,9 +9,13 @@ import { chatModelPresetsFrom, chatRunSpec } from '../chatPresets';
 import { claudeExecutableFor } from '../claudeCli';
 import { CALLER_KINDS, DEFAULT_CONSULT, resolveConsultant, type ConsultSettings } from '../consultSettings';
 import { hostFamily } from '../hostSide';
+import { type FilePresence } from '../pathFamily';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 import { rowOnTheWire } from '../vendorsWire';
 import { executableFor, executableForRuntime } from '../vendorTerminal';
+
+// The host's disk, as activation installs it (paths per side, E1.2) — the rule asks it about other-OS spellings.
+useFileProbe(fileAt(statSyncForProbe));
 
 /**
  * A CLI path spelled for the OTHER operating system is skipped — the runtime's CLI is looked up on PATH — never launched
@@ -21,8 +27,9 @@ import { executableFor, executableForRuntime } from '../vendorTerminal';
 const row = (executablePath: string, extra: Record<string, unknown> = {}): Vendor =>
   vendorsFrom([{ ...DEFAULT_VENDORS[0]!, id: 'codex', runtime: 'codex', enabled: true, executablePath, ...extra }])[0]!;
 
-const wired = (vendor: Vendor, family: 'windows' | 'posix'): unknown =>
-  rowOnTheWire(vendor, '', () => undefined, [], family)['executablePath'];
+/** The wire as a side with this family writes it, the disk answering `presence` for every path it is asked about. */
+const wired = (vendor: Vendor, family: 'windows' | 'posix', presence: FilePresence = 'absent'): unknown =>
+  rowOnTheWire(vendor, '', () => undefined, [], { family, systemDrive: 'C:', fileAt: () => presence })['executablePath'];
 
 /** A CLI path spelled for the OS this host does NOT run — the other side's, wherever the suite runs. */
 const otherSides = hostFamily() === 'windows' ? '/usr/local/bin/claude' : 'C:\\Users\\jinx\\AppData\\Roaming\\npm\\claude.cmd';
@@ -34,6 +41,12 @@ test('a Windows-side writer given a POSIX CLI path sends the server nothing — 
   assert.equal(wired(row('/usr/local/bin/codex'), 'posix'), '/usr/local/bin/codex', 'kept on the side it was written for');
   assert.equal(wired(row('C:\\tools\\codex.exe'), 'windows'), 'C:\\tools\\codex.exe');
   assert.equal(wired(row(''), 'windows'), '', 'nothing set stays the PATH lookup');
+});
+
+test('an EXISTING root-relative CLI on Windows crosses qualified with the system drive — this side\'s, never a PATH install', () => {
+  // The cadence consultant (E1): `/Program Files/nodejs/node.exe` is a legal Windows path; skipping it lexically ran another installation.
+  assert.equal(wired(row('/Program Files/nodejs/node.exe'), 'windows', 'here'), 'C:\\Program Files\\nodejs\\node.exe');
+  assert.equal(wired(row('/Program Files/nodejs/node.exe'), 'windows', 'unknown'), 'C:\\Program Files\\nodejs\\node.exe', 'skipped on a guess');
 });
 
 test('a reviewer row\'s other-side path launches the runtime\'s own name; this side\'s path launches as written', () => {

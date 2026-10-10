@@ -1,4 +1,4 @@
-import { hostFamily } from './hostSide';
+import { hostExecutableSide } from './hostSide';
 import { executableHere } from './pathFamily';
 import { Vendor } from './vendors';
 import { Runtime } from './models';
@@ -470,7 +470,7 @@ export function chatRunSpec(preset: ModelPreset): Vendor {
     code: false,
     baseUrl: preset.baseUrl,
     // THIS side's CLI: a saved path spelled for the other OS is skipped and the runtime's name runs from PATH.
-    executablePath: executableHere(preset.executablePath, hostFamily()),
+    executablePath: executableHere(preset.executablePath, hostExecutableSide()),
     pricePerMillionIn: 0,
     pricePerMillionOut: 0,
     ...carriedOf(preset),

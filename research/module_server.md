@@ -1108,8 +1108,10 @@ planner's refusal stands when nothing is set at all, and a pair the matrix refus
 **A reviewer's CLI path of the other operating system (2026-10-10, `todo/PLAN_paths_per_side.md` E1.2).** The same
 sharing carries a reviewer row's `executablePath` across sides: a Windows `C:\…\codex.cmd` in `COAI_VENDORS` on a WSL
 server was probed as a file, `CliFound=false`. `PanelSettings.ParseVendors(json, windows)` now reads the path through
-`ExecutablePaths.Here(path, windows)` (`ExecutablePaths.cs`): spelled for the other OS (`QuestionRoots.OtherSide`, the
-spelling alone — no disk check), it becomes empty, so the probe and every launch use `COAI_EXE_<ID>` or the runtime's
+`ExecutablePaths.Here(path, windows)` (`ExecutablePaths.cs`), once per row after the distinct: spelled for the other OS
+(`QuestionRoots.OtherSide`) AND confirmed absent as a FILE at its qualified path (`QuestionRoots.Qualified` — on Windows
+`/Program Files/nodejs/node.exe` is legal and runs as `C:\Program Files\nodejs\node.exe`; `FilePresenceOf` =
+`QuestionRoots.PresenceOf(…, wantsDirectory: false)`, an unknown answer keeping the path), it becomes empty, so the probe and every launch use `COAI_EXE_<ID>` or the runtime's
 own name on PATH, and the stored value is kept on `ProviderSettings.OtherSideExecutable`; `StartupNotices` says it once
 at Information (`ExecutablePaths.SkippedSentence`) — never a notice, never a refusal. The extension already writes
 this side's value (`pathForThisSide`), so this is the defence for a file an older extension wrote. Every

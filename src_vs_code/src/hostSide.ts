@@ -1,4 +1,4 @@
-import { familyOf, type PathFamily } from './pathFamily';
+import { familyOf, installedFileProbe, systemDriveOf, type ExecutableSide, type PathFamily } from './pathFamily';
 import { runningUnderWsl } from './wslNetwork';
 
 /**
@@ -63,6 +63,14 @@ export function hostPlatform(raw: string = process.platform): Platform {
  */
 export function hostFamily(raw: string = process.platform): PathFamily {
   return familyOf(raw);
+}
+
+/**
+ * The side a CLI path is judged on, as THIS host is: its family (or the one named — a self-update shown for a platform,
+ * a page drawn for a test), its system drive and the file probe activation installed (`useFileProbe`).
+ */
+export function hostExecutableSide(raw: string = process.platform): ExecutableSide {
+  return { family: familyOf(raw), systemDrive: systemDriveOf(process.env['SystemDrive']), fileAt: installedFileProbe };
 }
 
 /** How this host can reach a live Windows session to run something only Windows can run. */

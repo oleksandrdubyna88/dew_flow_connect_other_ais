@@ -2,9 +2,9 @@ import { FEATURES } from './binaryFeatures';
 import { apiRuntimeOnServer } from './apiRuntime';
 import { apiSettingsOnTheWire } from './apiSettings';
 import { featureOnServer, reviewsFeatures } from './featureGate';
-import { hostFamily } from './hostSide';
+import { hostExecutableSide } from './hostSide';
 import { ModelPrice } from './modelPrices';
-import { executableHere, type PathFamily } from './pathFamily';
+import { executableHere, type ExecutableSide } from './pathFamily';
 import { saidText } from './saidText';
 import { Vendor } from './vendors';
 
@@ -122,7 +122,7 @@ export function rowOnTheWire(
   installedServerVersion: string,
   priceOf: RowPriceLookup,
   features: readonly string[],
-  family: PathFamily = hostFamily(),
+  side: ExecutableSide = hostExecutableSide(),
 ): Record<string, unknown> {
   return {
     id: v.id,
@@ -131,7 +131,7 @@ export function rowOnTheWire(
     baseUrl: v.baseUrl,
     // THIS side's CLI (todo/PLAN_paths_per_side.md E1.2): a path spelled for the other OS crosses as empty, so the
     // server looks the runtime's CLI up on PATH instead of probing a file that is the other side's.
-    executablePath: executableHere(v.executablePath, family),
+    executablePath: executableHere(v.executablePath, side),
     ...saidOnTheWire(v),
     ...featureOnTheWire(v, installedServerVersion),
     ...apiOnTheWire(v, priceOf),

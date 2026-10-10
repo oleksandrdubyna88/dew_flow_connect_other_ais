@@ -36,13 +36,49 @@ public sealed class ACliPathOfTheOtherSideIsSkippedTests
         var vectors = SharedVectors.Rows("executable");
 
         vectors.Should().HaveCountGreaterThan(5, "the file is read, not an empty array");
+        vectors.Should().Contain(v => v.Flag("existsHere") && !v.Flag("otherSide"), "an existing root-relative file is pinned in the file");
         foreach (var vector in vectors)
         {
-            var answer = ExecutablePaths.Here(vector.Text("path"), vector.Flag("windows"));
-            var said = $"{(vector.Flag("windows") ? "windows" : "posix")}: '{vector.Text("path")}' — {vector.Text("why")}";
+            var windows = vector.Flag("windows");
+            var presence = vector.Flag("existsHere") ? RootPresence.Present : vector.OptionalFlag("unknownHere") ? RootPresence.Unknown : RootPresence.Absent;
+            var qualified = QuestionRoots.Qualified(vector.Text("path"), windows, vector.Text("systemDrive"));
+            var asked = new List<string>();
+            var answer = ExecutablePaths.Here(vector.Text("path"), Places(windows, vector.Text("systemDrive")), full => { asked.Add(full); return presence; });
+            var said = $"{(windows ? "windows" : "posix")}: '{vector.Text("path")}' — {vector.Text("why")}";
             answer.Path.Should().Be(vector.Text("here"), said);
             answer.OtherSide.Should().Be(vector.Flag("otherSide") ? vector.Text("path").Trim() : string.Empty, said);
+            asked.Where(full => full != qualified).Should().BeEmpty($"{said}: the disk is asked about the qualified path alone");
         }
+    }
+
+    private static SystemPlaces Places(bool windows, string systemDrive) => new(string.Empty, []) { Windows = windows, SystemDrive = systemDrive };
+
+    [Fact]
+    public void TheConsultantsCase_AnExistingRootRelativeCliOnWindows_RunsQualifiedWithTheSystemDrive_NeverAPathInstall()
+    {
+        // E1's cadence consultation: `/Program Files/nodejs/node.exe --version` launches from C:\ — skipping it lexically ran
+        // a different installation. The disk is injected, so this is the same test on any machine.
+        RootPresence On(string full, RootPresence there) => full == @"Q:\Program Files\nodejs\node.exe" ? there : RootPresence.Absent;
+
+        ExecutablePaths.Here("/Program Files/nodejs/node.exe", Places(true, "Q:"), full => On(full, RootPresence.Present))
+            .Should().Be(new ThisSidePath(@"Q:\Program Files\nodejs\node.exe", string.Empty));
+        ExecutablePaths.Here("/Program Files/nodejs/node.exe", Places(true, "Q:"), full => On(full, RootPresence.Unknown))
+            .Should().Be(new ThisSidePath(@"Q:\Program Files\nodejs\node.exe", string.Empty), "never skipped on a guess");
+        ExecutablePaths.Here("/Program Files/nodejs/node.exe", Places(true, "Q:"), full => On(full, RootPresence.Absent))
+            .Should().Be(new ThisSidePath(string.Empty, "/Program Files/nodejs/node.exe"));
+    }
+
+    [Fact]
+    public void TheFileProbe_TellsAFileADirectoryAndNothingApart_OnTheRealDisk()
+    {
+        using var dir = TempDir.For("coai-clipath-");
+        var file = Path.Combine(dir.Path, "codex.exe");
+        File.WriteAllText(file, "x");
+
+        ExecutablePaths.FilePresenceOf(file).Should().Be(RootPresence.Present);
+        ExecutablePaths.FilePresenceOf(dir.Path).Should().Be(RootPresence.Absent, "a directory where the CLI should be is no CLI");
+        ExecutablePaths.FilePresenceOf(Path.Combine(dir.Path, "gone.exe")).Should().Be(RootPresence.Absent);
+        QuestionRoots.PresenceOf(dir.Path).Should().Be(RootPresence.Present, "the roots' folder probe is unchanged");
     }
 
     [Fact]

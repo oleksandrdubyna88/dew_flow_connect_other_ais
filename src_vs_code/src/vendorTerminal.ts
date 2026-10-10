@@ -1,6 +1,6 @@
 import { CliStatus, updateAvailable } from './cliVersions';
-import { Platform, hostFamily } from './hostSide';
-import { executableHere, familyOf, type PathFamily } from './pathFamily';
+import { Platform, hostExecutableSide } from './hostSide';
+import { executableHere, type ExecutableSide } from './pathFamily';
 import { Vendor } from './vendors';
 
 /**
@@ -77,7 +77,7 @@ export function vendorUpdate(vendor: Vendor, platform: Platform, installed = '')
 function selfUpdate(vendor: Vendor, subcommand: string, platform: Platform): VendorInstall {
   return {
     // On the platform the update is FOR: its own CLI path, or the runtime's name when the path is the other OS's.
-    command: `${quoteIfNeeded(executableFor(vendor, familyOf(platform)))} ${subcommand}`,
+    command: `${quoteIfNeeded(executableFor(vendor, hostExecutableSide(platform)))} ${subcommand}`,
     prerequisite: '',
     docs: DOCS[vendor.runtime] ?? DOCS['codex']!,
     note: '',
@@ -157,16 +157,16 @@ function updatesItself(runtime: string, installed: string): boolean {
  * set a path because PATH could not answer must not have that path ignored for this one question.
  * A row that sets one wins; otherwise the runtime's own name, exactly as a row with no path gets.</p>
  */
-export function executableForRuntime(runtime: string, vendors: readonly Vendor[], family: PathFamily = hostFamily()): string {
+export function executableForRuntime(runtime: string, vendors: readonly Vendor[], side: ExecutableSide = hostExecutableSide()): string {
   // A path spelled for the other OS is that side's CLI and is skipped here (todo/PLAN_paths_per_side.md E1.2).
-  const said = vendors.find((v) => v.runtime === runtime && executableHere(v.executablePath, family).length > 0);
+  const said = vendors.find((v) => v.runtime === runtime && executableHere(v.executablePath, side).length > 0);
 
-  return said === undefined ? (EXECUTABLE[runtime] ?? 'codex') : executableHere(said.executablePath, family);
+  return said === undefined ? (EXECUTABLE[runtime] ?? 'codex') : executableHere(said.executablePath, side);
 }
 
 /** The binary a ROW runs: this side's own CLI path, else its runtime's name — a path of the other OS is skipped. */
-export function executableFor(vendor: Vendor, family: PathFamily = hostFamily()): string {
-  const path = executableHere(vendor.executablePath, family);
+export function executableFor(vendor: Vendor, side: ExecutableSide = hostExecutableSide()): string {
+  const path = executableHere(vendor.executablePath, side);
 
   return path.length > 0 ? path : (EXECUTABLE[vendor.runtime] ?? 'codex');
 }

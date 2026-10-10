@@ -192,22 +192,90 @@ export interface ThisSidePath {
   readonly otherSide: string;
 }
 
-/**
- * The CLI path THIS side runs (todo/PLAN_paths_per_side.md, design (c), rules 2-3): the stored `executablePath`
- * trimmed, unless it is spelled for the other operating system — then nothing, so the runtime's own name is looked up
- * on PATH, and the skipped value is named so a page can say whose it is. Never refused: a Windows `codex.cmd` read in a
- * WSL window is the Windows side's CLI, not a broken setting. The spelling alone decides — a CLI path is not asked of
- * the disk. Answered by the `executable` vectors, which coai-mcp's `ExecutablePaths.Here` answers too.
- */
-export function pathForThisSide(stored: StoredExecutable, family: PathFamily): ThisSidePath {
-  const value = stored.executablePath.trim();
+/** What the disk said about a FILE: there, confirmed absent (none, a directory, an unspellable name), or it could not tell. */
+export type FilePresence = 'here' | 'absent' | 'unknown';
 
-  return spelledForTheOtherOs(value, family === 'windows') ? { path: '', otherSide: value } : { path: value, otherSide: '' };
+/**
+ * The side a CLI path is judged on: its family, the drive a root-relative Windows path is qualified with, and the disk,
+ * asked about a FILE synchronously — the wire writers are synchronous, and the only paths ever asked are this machine's
+ * own spellings of the other OS's (`C:\usr\local\bin\codex` on Windows, a relative name in WSL), never a share.
+ */
+export interface ExecutableSide {
+  readonly family: PathFamily;
+  readonly systemDrive: string;
+  readonly fileAt: (path: string) => FilePresence;
+}
+
+/**
+ * The CLI path THIS side runs (todo/PLAN_paths_per_side.md, design (c), rules 2-3) — the question-consultant roots' rule
+ * (`otherSideHere`) applied to a FILE: the stored `executablePath` trimmed, unless it is spelled for the other operating
+ * system AND the disk confirms there is no such file here — then nothing, so the runtime's own name is looked up on
+ * PATH, and the skipped value is named so a page can say whose it is. On Windows `/Program Files/nodejs/node.exe` is a
+ * legal root-relative path; one that exists — qualified with the SYSTEM drive (`qualified`), the base both halves use
+ * — is this side's and runs qualified, and one the disk could not answer for is kept too: never skipped on a guess (the
+ * cadence consultant, E1's code round). Never refused. Answered by the `executable` vectors, which coai-mcp's
+ * `ExecutablePaths.Here` answers too.
+ */
+export function pathForThisSide(stored: StoredExecutable, side: ExecutableSide): ThisSidePath {
+  const value = stored.executablePath.trim();
+  if (!spelledForTheOtherOs(value, side.family === 'windows')) {
+    return { path: value, otherSide: '' };
+  }
+  const here = qualified(value, side.family === 'windows', side.systemDrive);
+
+  return side.fileAt(here) === 'absent' ? { path: '', otherSide: value } : { path: here, otherSide: '' };
+}
+
+/**
+ * The ids of the rows whose CLI path this side skips as the other side's — decided by the HOST, which can ask the disk,
+ * and handed to the page (`PanelState.otherSideClis`), which must not: the Settings page's modules bundle without the
+ * host and reach no `node:fs`.
+ */
+export function otherSideClis(rows: readonly (StoredExecutable & { readonly id: string })[], side: ExecutableSide): readonly string[] {
+  return rows.filter((row) => pathForThisSide(row, side).otherSide.length > 0).map((row) => row.id);
 }
 
 /** {@link pathForThisSide}'s path alone — for a launch or a wire field that needs only what to run. */
-export function executableHere(path: string, family: PathFamily): string {
-  return pathForThisSide({ executablePath: path }, family).path;
+export function executableHere(path: string, side: ExecutableSide): string {
+  return pathForThisSide({ executablePath: path }, side).path;
+}
+
+/**
+ * The disk probe {@link ExecutableSide.fileAt} uses on THIS host — installed by activation (`useFileProbe`), the
+ * `useStorageSettings` pattern: the Settings page's modules bundle without the host, so no module they reach may import
+ * `node:fs`. Before it is installed every path is `unknown` — and an unknown path is KEPT, never skipped on a guess.
+ */
+let fileProbe: (path: string) => FilePresence = () => 'unknown';
+
+/** Install how this host asks the disk about a file — `fileAt(statSync)` at activation; a test installs its own. */
+export function useFileProbe(probe: (path: string) => FilePresence): void {
+  fileProbe = probe;
+}
+
+/** The installed probe's answer for one path. */
+export function installedFileProbe(path: string): FilePresence {
+  return fileProbe(path);
+}
+
+/**
+ * Whether a path is a FILE, by a synchronous `stat`: `here` for a file, `absent` when the disk SAID there is none — not
+ * found, not a directory on the way, a directory where the file should be, or a name no file system can spell — and
+ * `unknown` for anything it could not tell (EACCES, EBUSY, EIO), which is never read as absent. {@link directoryAt}'s
+ * contract, for a file.
+ */
+export function fileAt(statSync: (path: string) => { isFile(): boolean }): (path: string) => FilePresence {
+  return (path) => {
+    try {
+      return statSync(path).isFile() ? 'here' : 'absent';
+    } catch (failure) {
+      return presenceOnFailure(failure);
+    }
+  };
+}
+
+/** A failed `stat`: absent when the disk SAID there is nothing there, unknown for anything else. */
+function presenceOnFailure(failure: unknown): FilePresence {
+  return ABSENT.has(String((failure as { code?: unknown }).code ?? '')) ? 'absent' : 'unknown';
 }
 
 /**

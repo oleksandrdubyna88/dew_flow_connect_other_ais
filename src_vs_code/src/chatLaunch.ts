@@ -20,7 +20,7 @@ import { coaiDataDir } from './dataDir';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
 import { chatProcessFor } from './chatProcess';
 import { resolvedExecutable } from './versionProbe';
-import { hostFamily } from './hostSide';
+import { hostExecutableSide } from './hostSide';
 import { executableHere } from './pathFamily';
 import { Vendor } from './vendors';
 import { notify } from './notify';
@@ -129,7 +129,7 @@ export async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusa
     return { resolved: '', refusal: '' };
   }
   // A CLI path of the other OS is that side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
-  const own = executableHere(vendor.executablePath, hostFamily());
+  const own = executableHere(vendor.executablePath, hostExecutableSide());
   const asked = own.length > 0 ? own : defaultExecutableFor(vendor.runtime);
   const resolved = await resolvedExecutable(asked);
 

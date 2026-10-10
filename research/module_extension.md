@@ -3335,11 +3335,17 @@ to every one of them:
   `contributes.configuration` (properties, items, map entries, default rows) and fails on a `*Path` / `*Directory` /
   `*Roots` / `*Directories` field missing from it; a companion test pins that the census still finds the known ones.
   `configTransfer.test.ts` derives from it that every WHOLE path setting is in `NEVER_TRANSFERRED`.
-- **A CLI path** — `pathForThisSide(stored, family)` / `executableHere` (design (c) rules 2-3; rule 1, the per-side
+- **A CLI path** — `pathForThisSide(stored, side)` / `executableHere` (design (c) rules 2-3; rule 1, the per-side
   field, is E3's): the stored `executablePath` trimmed, or nothing — the runtime's name looked up on PATH — when it is
-  spelled for the other OS, with the skipped value named. The SPELLING alone decides (no disk check), answered by the
-  `executable` vectors of `shared/path-family-vectors.json`. `PathFamily` is `windows` | `posix` (D1);
-  `hostSide.hostFamily()` is this host's. Applied where a CLI path crosses to coai-mcp — `vendorsWire.rowOnTheWire`
+  spelled for the other OS AND the disk confirms no such FILE here, with the skipped value named. The roots' rule for a
+  file (the gate's cadence consultant): on Windows `/Program Files/nodejs/node.exe` is legal, so a spelling of the other
+  OS is qualified with the system drive (`qualified`) and asked of the disk — there, or unknown, it runs qualified.
+  `ExecutableSide { family, systemDrive, fileAt }`; `hostSide.hostExecutableSide()` is this host's, with a SYNCHRONOUS
+  `stat` (`fileAt`, `directoryAt`'s mapping for a file) that activation INSTALLS (`useFileProbe` — the Settings page's
+  modules bundle without the host, so none may import `node:fs`; uninstalled, every path is `unknown` and kept), because the wire writers are synchronous — and only this machine's
+  own spelling of an other-OS path is ever asked, never a share. Answered by the `executable` vectors of
+  `shared/path-family-vectors.json` (`existsHere`, `unknownHere`, `systemDrive`). `PathFamily` is `windows` | `posix`
+  (D1); `hostSide.hostFamily()` is this host's. Applied where a CLI path crosses to coai-mcp — `vendorsWire.rowOnTheWire`
   (`COAI_VENDORS`, a consultant's or a question row's `row`, `--check-model`), `settingsShape`'s consultant
   `wireEntry`, `qconsultSettings`' `rowsOnTheWire` — and where one is launched: `claudeCli.claudeExecutableFor`,
   `vendorTerminal.executableFor` / `executableForRuntime` (a self-update on ITS platform), `chatPresets.chatRunSpec`,
@@ -3354,8 +3360,9 @@ to every one of them:
   directory when it is spelled for the other OS (`ChosenStorage.skippedShared`) and falls to the next choice; the
   environment and this side's own choice are never skipped. `whereData` adds the note.
 - **The page** — one `otherSideNote(windows, setting)`, its words from the registry (the roots' sentence unchanged).
-  The Models card draws it under the CLI-path box (`hint path-other-side`, `panelView.runtimeFields`), decided by
-  `pathForThisSide` over `CardContext.family` (`PanelState.hostFamily`, absent = this host's).
+  The Models card draws it under the CLI-path box (`hint path-other-side`, `panelView.runtimeFields`), decided by the HOST
+  (`otherSideClis(rows, hostExecutableSide())` into `PanelState.otherSideClis`) and drawn by the card from
+  `CardContext.otherSideCli`; `PanelState.hostFamily` (absent = this host's) only words the note.
 - **Export settings** — `qconsultRoots` joined `NEVER_TRANSFERRED` (D4): never exported, and an older export that
   carries it is refused by name while the importer keeps its own roots.
 

@@ -5,7 +5,8 @@
 **Fixed: every path in the settings now follows that rule, not only the question consultant's folders.** A reviewer's
 CLI path written in a Windows window (`C:\…\codex.cmd`) and read in WSL — or a WSL path read on Windows — is the other
 side's: this side looks the CLI up on `PATH` instead of probing a file that is not there, the Models card says so
-quietly under the box, and coai-mcp skips it too in a settings file an older extension wrote. The same goes for a
+quietly under the box, and coai-mcp skips it too in a settings file an older extension wrote. A path that does exist
+here is still used — on Windows `/Program Files/nodejs/node.exe` runs from the system drive. The same goes for a
 consultant's, a question row's and a saved chat model's CLI path. *Questions from another installation* no longer
 refuses a WSL folder in a Windows window, nor reads a `\\wsl.localhost\…` folder as a relative name in WSL: each is listed
 as the other side's and skipped. A shared data directory written for the other OS is not used here; this side falls to

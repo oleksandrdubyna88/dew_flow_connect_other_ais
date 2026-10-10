@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { catalogHtml } from '../catalogPage';
 import { type PanelState } from '../panelView';
-import { type PathFamily } from '../pathFamily';
+import { otherSideClis, type ExecutableSide, type PathFamily } from '../pathFamily';
 import { parseProviderNotes } from '../providers';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 import { panelState, runPanel } from './panelPageHarness';
@@ -19,11 +19,18 @@ import { type PageNode, pageTree } from './pageTree';
 const row = (id: string, executablePath: string): Vendor =>
   vendorsFrom([{ ...DEFAULT_VENDORS[0]!, id, runtime: 'codex', model: 'gpt-6.1-sol', enabled: true, executablePath }])[0]!;
 
-function modelsPage(vendors: readonly Vendor[], family: PathFamily): PageNode {
+/**
+ * The page as the host draws it: the host decides which rows' CLI paths are the other side's with the disk
+ * (`otherSideClis` over `pathForThisSide`) — injected here, every path absent unless named in `existing` — and the page
+ * draws what it was told.
+ */
+function modelsPage(vendors: readonly Vendor[], family: PathFamily, existing: readonly string[] = []): PageNode {
+  const side: ExecutableSide = { family, systemDrive: 'C:', fileAt: (path) => (existing.includes(path) ? 'here' : 'absent') };
   const state: PanelState = {
     ...panelState('reviewers'),
     vendors,
     hostFamily: family,
+    otherSideClis: otherSideClis(vendors, side),
     server: { kind: 'known', version: '0.50.0', remembered: false, updateOffered: false },
     // What a server that skips the other side's path answers: it looked the CLI up on PATH and found it.
     providers: {
@@ -54,7 +61,7 @@ test('on a Windows page a POSIX CLI path says it is the other side\'s CLI, quiet
 
   assert.ok(note !== undefined, 'the card of the WSL path says nothing about it');
   assert.ok(note.className.split(' ').includes('hint'), `drawn as ${note.className}, not the quiet hint`);
-  assert.match(note.text(), /^a Linux, WSL or macOS path — the other side's CLI: the server on that side runs it, and this Windows side skips it and looks the CLI up on PATH$/);
+  assert.match(note.text(), /^a Linux, WSL or macOS path and no CLI on this machine — the other side's CLI: the server on that side runs it, and this Windows side skips it and looks the CLI up on PATH$/);
   assert.equal(theirs.find((node) => node.className.split(' ').includes('cannot-run')).length, 0, 'a "cannot review" badge on the card');
   assert.equal(theirs.find((node) => node.className.split(' ').includes('stale')).length, 0, 'the path is drawn as a refusal');
   assert.equal(notes(cardOf(tree, 'win-codex')).length, 0, 'this side\'s own path is called the other side\'s');
@@ -64,5 +71,12 @@ test('on a WSL page it is the Windows path that is the other side\'s', () => {
   const tree = modelsPage([row('wsl-codex', '/usr/local/bin/codex'), row('win-codex', 'C:\\tools\\codex.exe')], 'posix');
 
   assert.equal(notes(cardOf(tree, 'wsl-codex')).length, 0);
-  assert.match(notes(cardOf(tree, 'win-codex'))[0]?.text() ?? '', /^a Windows path — the other side's CLI: .*, and this side skips it and looks the CLI up on PATH$/);
+  assert.match(notes(cardOf(tree, 'win-codex'))[0]?.text() ?? '', /^a Windows path and no CLI on this machine — the other side's CLI: .*, and this side skips it and looks the CLI up on PATH$/);
+});
+
+test('on a Windows page a root-relative CLI path that EXISTS on the system drive is this side\'s — no note', () => {
+  // The cadence consultant (E1): `/Program Files/nodejs/node.exe` is a legal Windows path; the host found the file.
+  const tree = modelsPage([row('node-cli', '/Program Files/nodejs/node.exe')], 'windows', ['C:\\Program Files\\nodejs\\node.exe']);
+
+  assert.equal(notes(cardOf(tree, 'node-cli')).length, 0, 'an existing file of this machine is called the other side\'s');
 });

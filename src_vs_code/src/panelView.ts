@@ -83,7 +83,7 @@ import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
-import { otherSideNote, pathForThisSide, type PathFamily } from './pathFamily';
+import { otherSideNote, type PathFamily } from './pathFamily';
 import { VENDOR_EXECUTABLE } from './pathSettings';
 import { SECURITY_COMMANDS } from './securityLaneState';
 
@@ -183,6 +183,11 @@ export interface PanelState {
    * test names it, so a page is the same on any machine.
    */
   readonly hostFamily?: PathFamily | undefined;
+  /**
+   * The ids of the reviewer rows whose CLI path this side skips as the other side's — `otherSideClis`, decided by the host
+   * with the disk (`pathForThisSide`), because this page's modules ask none. Absent draws no note.
+   */
+  readonly otherSideClis?: readonly string[] | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
   /**
@@ -1085,7 +1090,9 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   const colour = vendorPalette(state.vendors.map((v) => v.id));
   // Once, not per card: a server that is absent or cannot be versioned is not called old.
   const serverVersion = state.server.kind === 'known' ? state.server.version : '';
+  // The host's disk and drive, in the family the page is drawn for (a test names it; absent is this host's).
   const family = state.hostFamily ?? hostFamily();
+  const otherSides = state.otherSideClis ?? [];
 
   return (v) => ({
     colour: colour(v.id),
@@ -1107,7 +1114,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     featureNote: featureNote(v, serverVersion),
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
-    family,
+    otherSideCli: otherSides.includes(v.id) ? family : undefined,
   });
 }
 
@@ -1200,8 +1207,8 @@ export interface CardContext {
   readonly featureNote: string;
   /** The installed `coai-mcp`'s version, or empty when absent or unknown — which is not old. */
   readonly serverVersion: string;
-  /** The family this window spells paths in — a CLI path of the other one is that side's, said beside the box. */
-  readonly family: PathFamily;
+  /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
+  readonly otherSideCli: PathFamily | undefined;
 }
 
 /**
@@ -1267,12 +1274,12 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean, family: PathFamily): string {
+export function runtimeFields(vendor: Vendor, id: string, remote: boolean, otherSide: PathFamily | undefined): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
-  </div>${otherSidesCli(vendor, family)}`;
+  </div>${otherSidesCli(otherSide)}`;
 }
 
 /**
@@ -1280,8 +1287,8 @@ export function runtimeFields(vendor: Vendor, id: string, remote: boolean, famil
  * shares the row with the other side's window, where the path is right; here it is skipped and the CLI looked up on
  * PATH — the same decision the settings file this window writes (`pathForThisSide`) and coai-mcp's own read make.
  */
-function otherSidesCli(vendor: Vendor, family: PathFamily): string {
-  return pathForThisSide(vendor, family).otherSide.length === 0
+function otherSidesCli(family: PathFamily | undefined): string {
+  return family === undefined
     ? ''
     : `<div class="hint path-other-side">${escapeHtml(otherSideNote(family === 'windows', VENDOR_EXECUTABLE))}</div>`;
 }

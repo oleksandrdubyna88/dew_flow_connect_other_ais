@@ -1,8 +1,8 @@
 import { CHAT } from './featureAvailability.generated';
 import * as fs from 'node:fs';
 import { expandedByTheShell, needsShell } from './cliVersions';
-import { Platform } from './hostSide';
-import { executableHere, familyOf } from './pathFamily';
+import { Platform, hostExecutableSide } from './hostSide';
+import { executableHere } from './pathFamily';
 import { ChatAccess, ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
 import { effortRefusal } from './featureAvailability';
 import { rowHasFastTier } from './fastTier';
@@ -280,7 +280,7 @@ export function launchSpecFor(
     return { executable: '', args: [], cwd: '', shell: false, env: {}, refusal };
   }
   // The row's CLI path only when it is THIS side's — one spelled for the other OS is skipped (paths per side, E1.2).
-  const executable = [resolved, executableHere(vendor.executablePath, familyOf(platform)), known.executable].find((name) => name.length > 0) ?? '';
+  const executable = [resolved, executableHere(vendor.executablePath, hostExecutableSide(platform)), known.executable].find((name) => name.length > 0) ?? '';
   const shell = needsShell(executable, platform);
   // From the adapter, because the command line and the wire protocol are one decision: a vendor
   // launched with another's flags answers in a shape nobody here can read.

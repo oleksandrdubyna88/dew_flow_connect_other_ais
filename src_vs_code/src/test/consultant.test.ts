@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { statSync as statSyncForProbe } from 'node:fs';
+import { fileAt, useFileProbe } from '../pathFamily';
 import {
   CALLER_KINDS,
   CHOICE_FIELDS,
@@ -23,6 +25,9 @@ import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
 import { hostFamily } from '../hostSide';
 import { Vendor, vendorsFrom } from '../vendors';
+
+// The host's disk, as activation installs it (paths per side, E1.2) — the rule asks it about other-OS spellings.
+useFileProbe(fileAt(statSyncForProbe));
 
 /**
  * The Consultant section: who answers each kind of caller, the caps, and the prompt box.

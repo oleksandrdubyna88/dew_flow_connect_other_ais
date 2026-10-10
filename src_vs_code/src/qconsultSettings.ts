@@ -1,6 +1,6 @@
 import { compareVersions } from './coaiInstall';
 import { positive } from './consultSettings';
-import { hostFamily } from './hostSide';
+import { hostExecutableSide } from './hostSide';
 import { executableHere } from './pathFamily';
 import { Vendor, vendorsFrom } from './vendors';
 
@@ -271,12 +271,12 @@ export type CatalogRowOnTheWire = (catalogId: string) => Readonly<Record<string,
  * binary that does not take a row reads the bytes it always did.
  */
 function rowsOnTheWire(s: QconsultSettings, rowOf: CatalogRowOnTheWire): string {
-  const family = hostFamily();
+  const side = hostExecutableSide();
 
   return JSON.stringify(s.rows.map((stored) => {
     const catalog = rowOf(s.catalogRows[stored.id] ?? '');
     // The CLI path this SIDE runs, in the row's own key order: one spelled for the other OS crosses empty (E1.2).
-    const row = { ...stored, executablePath: executableHere(stored.executablePath, family) };
+    const row = { ...stored, executablePath: executableHere(stored.executablePath, side) };
 
     return catalog === undefined ? row : { ...row, row: catalog };
   }));

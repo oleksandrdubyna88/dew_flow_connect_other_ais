@@ -21,15 +21,33 @@ public sealed record ThisSidePath(string Path, string OtherSide);
 /// </remarks>
 public static class ExecutablePaths
 {
-    /// <summary>The path this side runs for a stored <paramref name="path"/>, on a host that is or is not Windows.</summary>
-    public static ThisSidePath Here(string? path, bool windows)
+    /// <summary>The path this side runs for a stored <paramref name="path"/>, on a host that is or is not Windows, asking this disk.</summary>
+    public static ThisSidePath Here(string? path, bool windows) =>
+        Here(path, SystemPlaces.Current with { Windows = windows }, FilePresenceOf);
+
+    /// <summary>
+    /// The roots' rule (<see cref="QuestionRoots.OtherSideHere"/>) for a FILE: a path spelled for the other operating system
+    /// is the other side's only when the disk CONFIRMS no such file here. On Windows <c>/Program Files/nodejs/node.exe</c> is
+    /// a legal root-relative path — looked for qualified with the system drive (<see cref="QuestionRoots.Qualified"/>), and
+    /// when it is there, or when the disk cannot tell, it runs qualified: never skipped on a guess (the cadence consultant,
+    /// E1's code round). <paramref name="presence"/> is <see cref="FilePresenceOf"/> in production, injected in a test.
+    /// </summary>
+    public static ThisSidePath Here(string? path, SystemPlaces places, Func<string, RootPresence> presence)
     {
         var value = path?.Trim() ?? string.Empty;
+        if (!QuestionRoots.OtherSide(value, places.Windows))
+        {
+            return new ThisSidePath(value, string.Empty);
+        }
+        var here = QuestionRoots.Qualified(value, places.Windows, places.SystemDrive);
 
-        return QuestionRoots.OtherSide(value, windows)
+        return presence(here) == RootPresence.Absent
             ? new ThisSidePath(string.Empty, value)
-            : new ThisSidePath(value, string.Empty);
+            : new ThisSidePath(here, string.Empty);
     }
+
+    /// <summary>What the disk says about a FILE — <see cref="QuestionRoots.PresenceOf(string, Func{string, FileAttributes}, bool)"/>'s three answers, a directory being no CLI.</summary>
+    public static RootPresence FilePresenceOf(string full) => QuestionRoots.PresenceOf(full, File.GetAttributes, wantsDirectory: false);
 
     /// <summary>The Information line that says a row's CLI path was the other side's — the operator's terminal reads it.</summary>
     public static string SkippedSentence(string provider, string path, bool windows) => windows

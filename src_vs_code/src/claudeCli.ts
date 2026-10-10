@@ -1,6 +1,6 @@
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
-import { hostFamily } from './hostSide';
-import { executableHere, type PathFamily } from './pathFamily';
+import { hostExecutableSide } from './hostSide';
+import { executableHere, type ExecutableSide } from './pathFamily';
 import { executableForRuntime } from './vendorTerminal';
 import { Vendor } from './vendors';
 
@@ -30,10 +30,10 @@ type Placed = Extract<ResolvedConsultant, { kind: 'definition' }>;
  * <p>An entry the rule could NOT place has no runtime and no path to offer, so it is passed over
  * rather than read — reading a field off it would be reading one that is not there.</p>
  */
-export function claudeExecutableFor(vendors: readonly Vendor[], consult: ConsultSettings, family: PathFamily = hostFamily()): string {
+export function claudeExecutableFor(vendors: readonly Vendor[], consult: ConsultSettings, side: ExecutableSide = hostExecutableSide()): string {
   // Only THIS side's paths count (todo/PLAN_paths_per_side.md E1.2): a CLI path spelled for the other OS is skipped,
   // so the next candidate — or the PATH name — is asked, never a file that is the other side's.
-  const here = (path: string): string => executableHere(path, family);
+  const here = (path: string): string => executableHere(path, side);
   const row = vendors.find((v) => v.runtime === 'claude' && here(v.executablePath).length > 0);
   if (row !== undefined) {
     return here(row.executablePath);
@@ -43,7 +43,7 @@ export function claudeExecutableFor(vendors: readonly Vendor[], consult: Consult
     .filter((one): one is Placed => one !== undefined && one.kind === 'definition' && one.runtime === 'claude')
     .find((one) => here(one.executablePath).length > 0);
 
-  return caller === undefined ? executableForRuntime('claude', vendors, family) : here(caller.executablePath);
+  return caller === undefined ? executableForRuntime('claude', vendors, side) : here(caller.executablePath);
 }
 
 /**

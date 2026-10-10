@@ -1258,6 +1258,7 @@ public sealed record PanelSettings
     /// <summary>The vendor list as a host that is, or is not, Windows reads it — the platform injected for a test.</summary>
     internal static List<ProviderSettings> ParseVendors(string json, bool windows)
     {
+        // (THIS side's CLI path: WithThisSidesCli, after the distinct — the disk is asked once per row.)
         try
         {
             var vendors = System.Text.Json.JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ListVendorDto);
@@ -1277,10 +1278,8 @@ public sealed record PanelSettings
                         // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
                         // row id is ours to normalise; this one is not. Caught on the code round.
                         RemoteVendor = v.RemoteVendor?.Trim() ?? string.Empty,
-                        // THIS side's CLI: a path spelled for the other OS is the other side's, skipped (PATH lookup)
-                        // and named for the startup log — never probed, never refused (paths per side, E1.2).
-                        ExecutablePath = ExecutablePaths.Here(v.ExecutablePath, windows).Path,
-                        OtherSideExecutable = ExecutablePaths.Here(v.ExecutablePath, windows).OtherSide,
+                        // Trimmed here; THIS side's CLI is decided once, below (WithThisSidesCli).
+                        ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
                         // Absent is TRUE on both, so a vendor list written by an older extension
                         // keeps reviewing both stages rather than silently reviewing neither.
                         Plan = v.Plan != false,
@@ -1309,12 +1308,25 @@ public sealed record PanelSettings
                     // hand-edited settings file is how one reaches the server. The id is the
                     // provider/role key of every reviewer launch, so two rows sharing it would
                     // collide in the round's dictionary before any model ran.
-                    .DistinctBy(v => v.Provider)];
+                    .DistinctBy(v => v.Provider)
+                    .Select(v => WithThisSidesCli(v, windows))];
         }
         catch (System.Text.Json.JsonException)
         {
             return [];
         }
+    }
+
+    /// <summary>
+    /// THIS side's CLI (paths per side, E1.2): a path spelled for the other OS that is no file here is the other side's —
+    /// skipped (the PATH lookup) and named for the startup log, never refused; one that exists here, or that the disk could
+    /// not answer for, runs qualified (<see cref="ExecutablePaths.Here(string?, bool)"/>).
+    /// </summary>
+    private static ProviderSettings WithThisSidesCli(ProviderSettings vendor, bool windows)
+    {
+        var cli = ExecutablePaths.Here(vendor.ExecutablePath, windows);
+
+        return vendor with { ExecutablePath = cli.Path, OtherSideExecutable = cli.OtherSide };
     }
 
     /// <summary>

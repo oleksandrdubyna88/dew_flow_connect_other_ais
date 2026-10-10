@@ -49,7 +49,9 @@ export interface PathSetting {
   readonly instead: string;
   /**
    * Whether the other-side decision also asks the disk: a question-consultant root spelled like the other OS that IS a
-   * folder here is this side's (`otherSideHere`). Every other path is decided by its spelling alone.
+   * folder here is this side's (`otherSideHere`), and so is a CLI path that IS a file here (`pathForThisSide` — on Windows
+   * `/Program Files/nodejs/node.exe` is legal; the cadence consultant, E1). The watched folders and the shared data
+   * directory are decided by their spelling alone: they are never statted on the other side's spelling.
    */
   readonly asksDisk: boolean;
 }
@@ -58,7 +60,7 @@ export interface PathSetting {
 function legacyCli(id: string, setting: string): PathSetting {
   return {
     id, setting, kind: 'file', mustExist: true, saidBy: 'nobody', place: '', noun: 'CLI',
-    there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: false,
+    there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: true,
   };
 }
 
@@ -71,7 +73,7 @@ export const QCONSULT_ROOTS: PathSetting = {
 /** A reviewer row's CLI — the one scalar path still drawn, on its Models card. */
 export const VENDOR_EXECUTABLE: PathSetting = {
   id: 'coai.vendors[].executablePath', setting: 'coai.vendors', kind: 'file', mustExist: true, saidBy: 'extension',
-  place: 'Models', noun: 'CLI', there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: false,
+  place: 'Models', noun: 'CLI', there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: true,
 };
 
 /** Another installation's data folder, whose questions this window also answers. */
