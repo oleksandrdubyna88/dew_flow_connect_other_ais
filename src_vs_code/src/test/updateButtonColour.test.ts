@@ -39,7 +39,7 @@ function css(): string {
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

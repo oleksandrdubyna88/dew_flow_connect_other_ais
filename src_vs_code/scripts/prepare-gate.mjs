@@ -67,6 +67,23 @@ export function featureBody(source) {
   return ruleBody(source, FEATURE_SOURCE, FEATURE_MARKER);
 }
 
+/**
+ * The QUESTION half — ask the consultants before the person (conventions #58, 2026-10-09;
+ * research/PLAN_the_feature_and_question_halves_are_shared_rules.md). A sixth rule file for the reason
+ * there is a fourth and a fifth: each half carries its own marker, so a paste made before it existed
+ * is recognised as older.
+ */
+export const QUESTION_SOURCE = '.agents/conventions/common/coai-question-consultant.md';
+export const QUESTION_OUTPUT = 'src_vs_code/src/generated/questionRule.ts';
+
+/** The question half's marker and heading. */
+const QUESTION_MARKER = /^<!-- coai-question v\d+ -->\n## Before you ask the person, ask the consultants/;
+
+/** The question rule, stripped and held the same way. */
+export function questionBody(source) {
+  return ruleBody(source, QUESTION_SOURCE, QUESTION_MARKER);
+}
+
 /** The marker this file is recognised by, so a truncated or wrong file fails the build. */
 const CONSULTANT_MARKER = /^<!-- coai-consultant v\d+ -->\n## When you are stuck, ask another vendor/;
 
@@ -179,6 +196,8 @@ export function prepareGate(repo) {
     half: 'the consultant half', since: '2026-09-25', body: consultantBody });
   prepareMountedHalf(repo, { source: FEATURE_SOURCE, output: FEATURE_OUTPUT, constant: 'FEATURE_RULE',
     half: 'the feature half', since: 'conventions #58 (2026-10-09)', body: featureBody });
+  prepareMountedHalf(repo, { source: QUESTION_SOURCE, output: QUESTION_OUTPUT, constant: 'QUESTION_RULE',
+    half: 'the question half', since: 'conventions #58 (2026-10-09)', body: questionBody });
 
   return body;
 }

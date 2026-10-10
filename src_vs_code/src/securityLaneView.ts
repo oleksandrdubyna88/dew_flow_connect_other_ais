@@ -1,3 +1,4 @@
+import { cardColumns } from './cardColumns';
 import { rowPicks } from './catalogPicks';
 import { escapeHtml as esc } from './escapeHtml';
 import { SECURITY_SEED } from './securityLane.generated';
@@ -12,7 +13,8 @@ import type { Vendor } from './vendors';
 
 /**
  * The Security lane tab (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): the switches, the tag legend in two
- * columns, one card per prompt in the order the person reads them, and the reviewer / prompt pairs with real buttons.
+ * columns, one card per prompt in the order the person reads them, and the reviewer / prompt pairs with real buttons —
+ * the cards and the pairs in the Settings page's columns, two on a wide editor (2026-10-09).
  */
 
 /** What the host read about the prompt files: each prompt's text state, and the folder they live in. */
@@ -48,20 +50,22 @@ export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[],
     + (!allRows.some(v => v.enabled && (v.code || v.feature)) ? '<p class="stale">Enable an ordinary code or feature reviewer too: the security lane cannot replace the ordinary gate.</p>' : '')
     + `<p>Additional security reviews beside the ordinary gate. Prompt text stays in your prompt files.</p>
       <p>${check('enabled', lane.enabled, 'Enable security lane', old)}</p>
-      <label>Allowed major/blocking findings ${count('threshold', lane.threshold, 0, 100)}</label>
-      <label>Maximum rounds ${count('maxRounds', lane.maxRounds, 1, 10)}</label>
+      ${cardColumns(`<label>Allowed major/blocking findings ${count('threshold', lane.threshold, 0, 100)}</label>
+      <label>Maximum rounds ${count('maxRounds', lane.maxRounds, 1, 10)}</label>`)}
       <h3>Prompts</h3>
       <p>Pair a prompt with a reviewer by ticking the reviewer on its card. Its conditions decide whether it runs: a shipped
       preset runs when changed code matches one of them, and redteam-general runs on every code change. Your own prompt is
       made with + New custom prompt, and its text lives in the file its card names.</p>`
     + legend()
-    + promptsInOrder(lane).map(p => promptCard({
+    // The prompt cards and the pairs in the page's columns (`cardColumns.ts`), as the two numbers above them are — an
+    // input as wide as a wide editor is a bar, not a field; the switch, the legend and each list's count and button span both.
+    + cardColumns(promptsInOrder(lane).map(p => promptCard({
       prompt: p, state: promptState(p, files.text[p.id] ?? 'none'), text: files.text[p.id] ?? 'none', vendors, old,
       paired: vendor => lane.runs.some(r => r.vendor === vendor && r.prompt === p.id), promptsDir: files.promptsDir,
-    })).join('')
+    })).join(''))
     + promptsFooter(lane)
     + '<h3>Reviewer / prompt pairs</h3>'
-    + lane.runs.map((r, i) => runBody(r, i, lane, vendors, strandedNote(r.vendor, vendors, allRows))).join('')
+    + cardColumns(lane.runs.map((r, i) => runBody(r, i, lane, vendors, strandedNote(r.vendor, vendors, allRows))).join(''))
     + runsFooter(lane, vendors);
 }
 

@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  consultantBody, featureBody, gateBody, prepareGate, CONSULTANT_OUTPUT, CONSULTANT_SOURCE, FEATURE_OUTPUT, FEATURE_SOURCE, OUTPUT,
+  consultantBody, featureBody, gateBody, prepareGate, questionBody, CONSULTANT_OUTPUT, CONSULTANT_SOURCE, FEATURE_OUTPUT, FEATURE_SOURCE,
+  OUTPUT, QUESTION_OUTPUT, QUESTION_SOURCE,
 } from '../../scripts/prepare-gate.mjs';
 
 test('only leading metadata is removed and a later delimiter remains in the gate body', () => {
@@ -67,10 +68,14 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   const output = path.join(root, OUTPUT);
   const consultantOutput = path.join(root, CONSULTANT_OUTPUT);
   const featureOutput = path.join(root, FEATURE_OUTPUT);
+  const questionOutput = path.join(root, QUESTION_OUTPUT);
   const body = prepareGate(root);
   assert.equal(await exported(featureOutput, 'FEATURE_RULE'),
     featureBody(fs.readFileSync(path.join(root, FEATURE_SOURCE), 'utf8')),
     'the generated feature module exports the block');
+  assert.equal(await exported(questionOutput, 'QUESTION_RULE'),
+    questionBody(fs.readFileSync(path.join(root, QUESTION_SOURCE), 'utf8')),
+    'the generated question module exports the block');
   // EXECUTED, not string-matched: generated code that is only searched for a substring can be
   // syntactically broken and still pass, which is what the shared rule on generated code forbids.
   // Both files are ES modules whose TypeScript is also valid JavaScript, so importing a copy runs
@@ -141,11 +146,13 @@ test('a consultant rule without its marker is refused, with and without delivery
 });
 
 /**
- * A clean, correctly pinned mount that LACKS the consultant rule fails the build naming it.
+ * A clean, correctly pinned mount that LACKS one of the halves with an output of their own fails the
+ * build naming it.
  *
  * <p>The case a consumer meets when its pin predates the move: nothing is dirty and nothing
  * mismatches, the file is simply not there — and a bare ENOENT would not say which half is missing
- * or why.</p>
+ * or why. One case per half, because each is read by its own call and a refusal proved for one says
+ * nothing about the next.</p>
  */
 test('a pinned mount without the consultant rule fails naming it', async t => {
   const root = pinnedMountWithout(t, 'coai-consultant.md', 'common.coai-consultant');
@@ -215,4 +222,27 @@ test('the feature half is the shared rule without its delivery metadata, refused
   assert.throws(() => featureBody(body), /coai-feature/, 'a shared rule without its delivery metadata is not the mounted file');
   assert.throws(() => featureBody(front + '## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n'), /coai-feature/);
   assert.throws(() => featureBody(front + '<!-- coai-feature v3 -->\n## Something else entirely\n'), /coai-feature/);
+});
+
+test('a pinned mount without the question rule fails naming it, and says to move the pin', async t => {
+  const root = pinnedMountWithout(t, 'coai-question-consultant.md', 'common.coai-question-consultant');
+
+  assert.throws(() => prepareGate(root), (error) => error instanceof Error
+    && error.message.includes(QUESTION_SOURCE) && /question/i.test(error.message) && /pin/.test(error.message));
+  assert.equal(fs.existsSync(path.join(root, QUESTION_OUTPUT)), false, 'no question constant is left from a previous build');
+});
+
+/**
+ * The QUESTION half (research/PLAN_the_feature_and_question_halves_are_shared_rules.md) is stripped and
+ * held exactly as the feature half is.
+ */
+test('the question half is the shared rule without its delivery metadata, refused without its marker or heading', () => {
+  const body = '<!-- coai-question v1 -->\n## Before you ask the person, ask the consultants (ConnectOtherAIs)\n\nFirst.\n';
+  const front = '---\nid: "common.coai-question-consultant"\nload: "conditional"\n---\n';
+
+  assert.equal(questionBody(front + body), body);
+  assert.equal(questionBody((front + body).replaceAll('\n', '\r\n')), body, 'a CRLF checkout emits the same bytes as an LF one');
+  assert.throws(() => questionBody(body), /coai-question/, 'a shared rule without its delivery metadata is not the mounted file');
+  assert.throws(() => questionBody(front + '## Before you ask the person, ask the consultants\n'), /coai-question/);
+  assert.throws(() => questionBody(front + '<!-- coai-question v1 -->\n## Something else entirely\n'), /coai-question/);
 });

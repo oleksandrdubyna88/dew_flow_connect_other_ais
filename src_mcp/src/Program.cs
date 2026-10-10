@@ -566,7 +566,7 @@ internal static class Program
             var launcher = new Runners.Processes.ProcessLauncher();
             // NO VAULT READ. Recording how a consultation ended talks to nobody — it reads a record
             // file, writes it back and projects a row — and a key belongs to a vendor launch. The
-            // read is not free: it spawns `creds config <key>`, which on a machine with the vault
+            // read is not free: it spawns `creds config -` (and its --help probe), which on a machine with the vault
             // configured is a process, a socket and a prompt-shaped wait in the middle of a button
             // the person expects to be instant, and on a machine without one is a failure to
             // rediscover on every click. `--providers` reads the vault because it REPORTS on keys.
