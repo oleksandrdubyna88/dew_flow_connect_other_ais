@@ -1,7 +1,8 @@
 # PLAN — a path in the settings belongs to a side: a missing folder is marked, and two sides get two fields
 
 > Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
-> deviations are under E1); E0, E5, E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
+> deviations are under E1); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
+> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E5, E2, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
 > pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
@@ -270,9 +271,14 @@ is replaced by it for that case. What counts, decided here so the first start is
 Each story: RED first, the failure message recorded, then green, then break-it on the line that decides. Page tests
 RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/pageTree.ts` — never a regex over HTML.
 
-### E0 — measure before building (no product code) · `plan/paths-per-side-e0-measure`
+### E0 — measure before building (no product code) — ✅ measured 2026-10-10
 
-- **0.1** On the operator's machine, a `test:host`-style probe: a stamp written to `globalState` in a WSL window — is it
+**Result** ([RESULTS_side_registry_reaches_the_other_window.md](../research/RESULTS_side_registry_reaches_the_other_window.md)):
+a stamp written in a WSL window was visible to an already-open Windows window at its next read (≤ 23 s), and the
+reverse (≤ 20 s), without a reload; `Memento.keys()` is available in both hosts. "Both known" therefore flips live;
+the E0.2 fallback stays a person's override (`coai.pathFieldsPerSide = always`), not a detection signal.
+
+- ✅ **0.1** On the operator's machine, a `test:host`-style probe: a stamp written to `globalState` in a WSL window — is it
   visible to an already-open Windows window through `Memento.keys()`/`get`, and how soon (reload / focus / live)?
   Recorded in `research/RESULTS_side_registry_reaches_the_other_window.md`. It needs both kinds of window on the
   operator's machine, so it runs when the operator is present; **nothing in E1–E5 waits on it**.
@@ -284,8 +290,8 @@ RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/p
   window that sees a path spelled for the other OS in the shared settings (option D used to SWITCH, not to guess — a
   person can turn it back to `never`), and the This side page says which signal turned two fields on. Release
   requirement for E2: one of the two signals is proven by a `test:host` scenario.
-- **0.3** The VS Code floor (`engines.vscode ^1.85.0`) has `Memento.keys()` — confirm against `@types/vscode`; if not,
-  the registry is one record under one key with per-side entries (races lose at most a `lastSeen`).
+- ✅ **0.3** The VS Code floor (`engines.vscode ^1.85.0`) has `Memento.keys()` — confirmed: `@types/vscode` ^1.85 declares
+  `keys(): readonly string[]` on `Memento`, and both hosts answered it in the measurement.
 
 ### E1 — one rule for every path setting · `feat/paths-per-side-e1-one-rule`
 
@@ -565,7 +571,7 @@ The four questions this plan asked were answered the same day; the design above 
 
 ## Definition of Done
 
-- [ ] E0 measured and recorded in `research/`; the plan says whether "both known" flips live.
+- [x] E0 measured and recorded in `research/`; the plan says whether "both known" flips live (it does).
 - [x] Every path setting is in one registry; a census test fails on a new one that is not (E1.1; a nested field the
       manifest does not declare is registered by hand — see E1's deviations).
 - [ ] A path spelled for the other OS is skipped, never refused and never a toast, on both halves, from one vector file.
