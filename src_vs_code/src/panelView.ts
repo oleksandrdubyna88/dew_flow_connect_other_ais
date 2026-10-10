@@ -6,7 +6,6 @@ import {
   TeamServerState,
   teamServersBody,
   teamUsageBlock,
-  usageScopeControl,
 } from './teamServerView';
 import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
@@ -138,12 +137,6 @@ export interface PanelState {
    * NOTHING. The panel displays this decision; it does not make it.</p>
    */
   readonly providers?: ProvidersAnswer | undefined;
-  /**
-   * Whose spending the usage section is showing. `company` is offered only to an admin.
-   *
-   * <p>Optional, like {@link teamServers}, and absent means the same as `me`.</p>
-   */
-  readonly usageScope?: 'me' | 'company' | undefined;
   /**
    * The consultant's prompt override as it is ON DISK, or empty for the shipped one.
    *
@@ -2447,7 +2440,6 @@ function reviewersRegion(
   vendors: readonly Vendor[],
   prices: Readonly<Record<string, ModelPrice>>,
   teamServers: readonly TeamServerState[] = [],
-  usageScope: 'me' | 'company' = 'me',
 ): Half {
   // What each Team server says was spent ON IT, under this machine's own totals. The server keeps
   // that ledger — a review that ran there left no line in this machine's — so the two are shown
@@ -2456,14 +2448,13 @@ function reviewersRegion(
     .filter((s) => s.email.length > 0)
     .map((s) => teamUsageBlock(s, shortNumber))
     .join('\n');
-  const scope = usageScopeControl(teamServers, usageScope);
   // The same canonical list the cards are drawn from, so a vendor is one colour on both.
   const colour = vendorPalette(vendors.map((v) => v.id));
   const rows = totalsByVendor(within(usage, window, new Date()), vendors, (modelId) => prices[modelId]);
   if (rows.length === 0) {
     return {
       html: `<div class="empty">Nothing recorded on this machine in this window yet.</div>
-${team}${scope}`,
+${team}`,
       totals: { tokens: 0, cost: null, guess: null, seconds: 0 },
     };
   }
@@ -2668,10 +2659,9 @@ export function usageRegion(
   vendors: readonly Vendor[],
   prices: Readonly<Record<string, ModelPrice>>,
   teamServers: readonly TeamServerState[] = [],
-  usageScope: 'me' | 'company' = 'me',
   chat: ChatLedgers = { turns: [], doors: [] },
 ): string {
-  const reviewers = reviewersRegion(usage, window, vendors, prices, teamServers, usageScope);
+  const reviewers = reviewersRegion(usage, window, vendors, prices, teamServers);
   const chats = chatRegion(chat, window, prices, vendorPalette(vendors.map((v) => v.id)));
   const tokens = reviewers.totals.tokens + chats.totals.tokens;
   const money = total(
@@ -3283,9 +3273,6 @@ export const PANEL_COMMANDS = [
   'signInTeamServer',
   'signOutTeamServer',
   'removeTeamServer',
-  // The Company/Me control on the spending section, which only an admin is shown. Without it that
-  // control would be a button wired to nothing, which is the exact trap this list exists to prevent.
-  'teamUsageScope',
   // The Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
   // row duplicated, and a row removed after the page's own confirm — so the host asks no second question.
   'toggleUse',

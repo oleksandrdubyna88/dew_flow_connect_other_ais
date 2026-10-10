@@ -64,7 +64,7 @@ export interface TeamServerState {
   readonly busy?: string | undefined;
 }
 
-/** Whether anybody signed in here is an admin — the only people offered *Company*. */
+/** Whether anybody signed in here is an admin — the only people shown the Team server tab. */
 export function anyAdmin(states: readonly TeamServerState[]): boolean {
   return states.some((s) => s.catalog?.isAdmin === true);
 }
@@ -80,7 +80,10 @@ export function teamUsageBlock(
   state: TeamServerState,
   shortNumber: (n: number) => string,
 ): string {
-  const rows = state.usage?.vendors ?? [];
+  if (state.usage === undefined) {
+    return unanswered(state);
+  }
+  const rows = state.usage.vendors;
   if (rows.length === 0) {
     return `<div class="ts-usage"><b>${escape(state.server.name)}</b>`
       + `<div class="empty">Nothing recorded on this server in this window.</div></div>`;
@@ -103,6 +106,17 @@ export function teamUsageBlock(
 ${cards}
 ${kindLine(state.usage?.kinds ?? [], shortNumber)}
 </div>`;
+}
+
+/**
+ * A server with no answer for this window: being asked, or — when the last attempt failed — why not. Never "nothing
+ * recorded": the figures are cached per window (teamUsageCache.ts), so a window just chosen has no answer for a moment,
+ * and an empty answer would be a measurement nobody took.
+ */
+function unanswered(state: TeamServerState): string {
+  const said = state.problem.length > 0 ? state.problem : `Asking ${state.server.name}…`;
+
+  return `<div class="ts-usage"><b>${escape(state.server.name)}</b><div class="empty">${escape(said)}</div></div>`;
 }
 
 /**
@@ -149,23 +163,6 @@ const KIND_NAMES: Readonly<Record<string, string>> = {
 
 function named(kind: string): string {
   return KIND_NAMES[kind] ?? kind;
-}
-
-/**
- * The Me / Company control, and why it is only sometimes there.
- *
- * <p>The SERVER refuses `scope=company` for anybody who is not an admin, so rendering the control
- * for everybody would be offering a button that answers 403. It is shown when a server this machine
- * is signed in to says this account is an admin.</p>
- */
-export function usageScopeControl(states: readonly TeamServerState[], scope: 'me' | 'company'): string {
-  if (!anyAdmin(states)) {
-    return '';
-  }
-
-  return `<button class="link" data-command="teamUsageScope">`
-    + `${scope === 'company' ? 'Showing the whole company — show just me' : 'Show the whole company'}`
-    + `</button>`;
 }
 
 /**

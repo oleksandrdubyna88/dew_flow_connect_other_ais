@@ -3,6 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { DomDocument, DomElement } from './pageDom';
+
 /**
  * The Review rounds page as it SHIPS — bundled, minified, rendered and RUN over a stub DOM — for any
  * test that asserts on what the page does rather than on its source text (`.agents/PROJECT.md`).
@@ -83,7 +85,13 @@ export const LOG = {
 export const PRICES = (model: string) =>
   model === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10 } : undefined;
 
-export function bundledPage(sessions: unknown[] = [SESSION], log: unknown = LOG): { html: string; script: string } {
+/** The page module as it SHIPS: bundled and minified, its two page-building exports mapped back to their names. */
+export interface BundledLog {
+  roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
+  rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[], log?: unknown) => unknown[];
+}
+
+export function bundledLogModule(): BundledLog {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
@@ -104,17 +112,19 @@ export function bundledPage(sessions: unknown[] = [SESSION], log: unknown = LOG)
   // any attempt to evaluate the text directly.
   const shim = { exports: {} as Record<string, unknown> };
   new Function('module', 'exports', bundle)(shim, shim.exports);
-  const module_ = shim.exports as unknown as {
-    roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string) => string;
-    rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[], log?: unknown) => unknown[];
-  };
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  return shim.exports as unknown as BundledLog;
+}
+
+export function bundledPage(sessions: unknown[] = [SESSION], log: unknown = LOG): { html: string; script: string } {
+  const module_ = bundledLogModule();
   // WITH a row, and a priced one. This helper used to render an empty page, and an empty page never
   // calls the functions that format a row — which is exactly how 0.29.12 shipped "R is not defined":
   // `cost3` is embedded by its source text and CALLED `money`, a module-level binding the minifier
   // had renamed to `R`. The page defines `money`, so nothing looked missing until a row asked for
   // its cost.
   const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], log), [], 'n0nce');
-  fs.rmSync(dir, { recursive: true, force: true });
 
   return { html, script: html.slice(html.indexOf('<script'), html.lastIndexOf('</script>')) };
 }
@@ -208,4 +218,51 @@ export function firstRenderedKey(html: string): string {
   assert.notEqual(found, null, 'the page rendered no Export button at all');
 
   return found?.[1] ?? '';
+}
+
+/** The page RUN on a document built from its own html (`pageDom.ts`): what it shows, what it sent, and its timers. */
+export interface DomPage {
+  readonly document: DomDocument;
+  readonly sent: Array<Record<string, unknown>>;
+  /** A message from the host, as `postMessage` delivers it. */
+  message: (data: unknown) => void;
+  /** An element the page drew — a test fails here, by name, when the page did not draw it. */
+  element: (id: string) => DomElement;
+  /** Run every timer the page set, once — the fifteen-second watchdog among them. */
+  runTimers: () => void;
+}
+
+/**
+ * The shipped page, run on a real tree of its own markup. Its timers are held, not run — a test turns them by hand —
+ * and nothing else is in reach: the document, the window's listener, the VS Code bridge and the two timer functions.
+ */
+export function runningDomPage(module_: BundledLog = bundledLogModule(), sessions: unknown[] = [SESSION]): DomPage {
+  const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], LOG), [], 'n0nce');
+  const document_ = new DomDocument(html);
+  const sent: Array<Record<string, unknown>> = [];
+  const heard: Array<(event: { data: unknown }) => void> = [];
+  const timers: Array<() => void> = [];
+  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+  new Function('document', 'window', 'acquireVsCodeApi', 'setTimeout', 'clearTimeout', script.slice(script.indexOf('>') + 1))(
+    document_,
+    { addEventListener(type: string, fn: (event: { data: unknown }) => void) { if (type === 'message') { heard.push(fn); } } },
+    () => ({ postMessage: (message: Record<string, unknown>) => sent.push(message), setState() {}, getState: () => undefined }),
+    (fn: () => void) => { timers.push(fn); return timers.length; },
+    () => undefined,
+  );
+  const failed = document_.getElementById('failed');
+  assert.ok(failed !== null && failed.hidden, `the page stopped on an error: ${failed?.textContent ?? ''}`);
+
+  return {
+    document: document_,
+    sent,
+    message: (data) => { for (const fn of heard) { fn({ data }); } },
+    element: (id) => {
+      const found = document_.getElementById(id);
+      assert.ok(found !== null, `the page draws no #${id}`);
+
+      return found;
+    },
+    runTimers: () => { for (const fn of timers.splice(0)) { fn(); } },
+  };
 }

@@ -54,7 +54,7 @@ const CHAT = { turns: [TURN], doors: [] };
 
 /** The spending tab, with both ledgers on it. */
 function spendingTab(chat: { turns: readonly ChatTurnRecord[]; doors: readonly never[] } = CHAT): string {
-  return usageTabHtml([REVIEWER], 'day', [], PRICES, [], 'me', chat);
+  return usageTabHtml([REVIEWER], 'day', [], PRICES, { chat });
 }
 
 /** What the page does when it is run: the listener it registered, and what it has posted so far. */

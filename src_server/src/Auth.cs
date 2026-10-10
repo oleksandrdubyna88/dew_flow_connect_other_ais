@@ -195,12 +195,13 @@ public static class Auth
     /// </summary>
     /// <remarks>
     /// The order is fixed and is the whole authorisation model: the email comes from a verified
-    /// token, the domain decides, and no route carries a user id for anyone to tamper with.
+    /// token, the domain decides, and no route carries a user id for anyone to tamper with. WHICH
+    /// domains are served is <paramref name="admits"/>'s answer — <see cref="CallerFilter.Admits"/>,
+    /// the one method the admin roster consults too, so the gate and the roster cannot drift apart.
+    /// This used to compose the allow-list itself, a second copy of that method (final code round on
+    /// E1+E2, 2026-10-10).
     /// </remarks>
-    public static (string Email, string Name)? RequireCaller(
-        HttpContext ctx,
-        IReadOnlyCollection<string> allowedDomains,
-        bool allowAnyDomain)
+    public static (string Email, string Name)? RequireCaller(HttpContext ctx, Func<string, bool> admits)
     {
         var email = TokenIdentity.Email(ctx.User);
         if (email is null)
@@ -210,7 +211,7 @@ public static class Auth
             return null;
         }
 
-        if (!allowAnyDomain && !TokenIdentity.DomainAllowed(email, allowedDomains))
+        if (!admits(email))
         {
             ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
 
