@@ -4483,7 +4483,8 @@ async function probeWatched(own: string): Promise<readonly WatchedDir[]> {
   const asked = watchedDirs(own, alsoWatchDataDirectories(), process.platform);
 
   return Promise.all(asked.map(async (dir, at) => (
-    at === 0 || dir.refusal.length > 0 || await reachable(dir.path)
+    // Never the window's own, never a refused one, never the other side's (no path at all): nothing to probe there.
+    at === 0 || dir.path.length === 0 || await reachable(dir.path)
       ? dir
       : {
         ...dir,

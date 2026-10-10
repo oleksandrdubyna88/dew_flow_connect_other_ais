@@ -1,3 +1,5 @@
+import { QCONSULT_ROOTS, type PathSetting } from './pathSettings';
+
 /**
  * Which operating system an absolute path is SPELLED for — and so whether a folder stored in settings this window
  * shares with another is the other side's.
@@ -208,9 +210,19 @@ export function executableHere(path: string, family: PathFamily): string {
   return pathForThisSide({ executablePath: path }, family).path;
 }
 
-/** The sentence beside a stored root of the other side — said, never drawn as a refusal. */
-export function otherSideNote(windows: boolean): string {
-  return windows
-    ? 'a Linux, WSL or macOS path and no folder on this machine — the other side\'s folder: its server reads it there, and this Windows side skips it'
-    : 'a Windows path and no folder on this machine — the other side\'s folder: its server reads it there, and this side skips it';
+/**
+ * The sentence beside a stored value of the other side — said in the quiet hint tone, never drawn as a refusal
+ * (todo/PLAN_paths_per_side.md E1.5). One sentence for every path setting, its words taken from the registry
+ * (`pathSettings.ts`): what the value is, what the other side does with it, and what this side does instead. A setting
+ * whose decision also asked the disk (a question-consultant root) says there is no such folder here.
+ */
+export function otherSideNote(windows: boolean, setting: PathSetting = QCONSULT_ROOTS): string {
+  const side = windows ? ON_WINDOWS : ELSEWHERE;
+  const absent = setting.asksDisk ? ` and no ${setting.noun} on this machine` : '';
+
+  return `${side.spelling}${absent} — the other side's ${setting.noun}: ${setting.there}, and ${side.thisSide} skips it${setting.instead}`;
 }
+
+/** How each side names the other's spelling, and itself, in {@link otherSideNote}. */
+const ON_WINDOWS = { spelling: 'a Linux, WSL or macOS path', thisSide: 'this Windows side' } as const;
+const ELSEWHERE = { spelling: 'a Windows path', thisSide: 'this side' } as const;

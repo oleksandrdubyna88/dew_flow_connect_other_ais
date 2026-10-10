@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { POSIX_ON_WINDOWS, answerPaths, dirKey, usableDirs, watchedDirs } from '../escalationDirs';
+import { WSL_FROM_WINDOWS, answerPaths, dirKey, usableDirs, watchedDirs } from '../escalationDirs';
 
 /**
  * Which directories are watched for questions.
@@ -28,20 +28,34 @@ test('a named directory is watched beside the window’s own', () => {
   assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own', '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp']);
 });
 
-test('a WSL path named from a Windows window is refused with the shape that works', () => {
-  // THE trap this whole feature would otherwise walk into. `/home/...` resolved by a Windows host is
-  // `C:\home\...`, which does not exist — and an absent directory contributes nothing and says
-  // nothing, which is the original symptom with extra steps. (gemini, the plan round.)
+test('a WSL path in a Windows window is the other side\'s — never refused, never watched, said with the shape that works here', () => {
+  // todo/PLAN_paths_per_side.md E1.3. The list is shared with the WSL window, where `/home/...` is right; a refusal here
+  // made one list unable to hold both sides' values. Still never handed to the watcher: `/home/...` resolved by a
+  // Windows host is `C:\home\...`, which is not that folder.
   const dirs = watchedDirs('C:\\Own', ['/home/user/.local/share/coai-mcp'], 'win32');
 
-  assert.strictEqual(dirs[1]?.refusal, POSIX_ON_WINDOWS, 'a POSIX path was accepted on Windows');
-  assert.strictEqual(dirs[1]?.asked, '/home/user/.local/share/coai-mcp', 'the panel cannot name what to correct');
-  assert.strictEqual(dirs[1]?.path, '', 'a refused directory was still handed to the watcher');
-  assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own'], 'the refused directory was watched anyway');
+  assert.strictEqual(dirs[1]?.refusal, '', 'the WSL window\'s folder was refused in the Windows window');
+  assert.match(dirs[1]?.otherSide ?? '', /the other side's data folder/, 'it is not named the other side\'s');
+  assert.ok((dirs[1]?.otherSide ?? '').endsWith(WSL_FROM_WINDOWS), 'the shape a Windows window names it by is not said');
+  assert.strictEqual(dirs[1]?.asked, '/home/user/.local/share/coai-mcp', 'the panel cannot name it');
+  assert.strictEqual(dirs[1]?.path, '', 'the other side\'s directory was handed to the watcher');
+  assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own'], 'the other side\'s directory was watched anyway');
 
-  // And NO distribution is invented: the refusal names the shape, it does not guess a path.
-  assert.doesNotMatch(dirs[1]?.refusal ?? '', /Ubuntu|Debian|wsl\.localhost\\[A-Za-z]+\\home\\user/,
+  // And NO distribution is invented: the sentence names the shape, it does not guess a path.
+  assert.doesNotMatch(dirs[1]?.otherSide ?? '', /Ubuntu|Debian|wsl\.localhost\\[A-Za-z]+\\home\\user/,
     'a distribution was guessed rather than asked for');
+});
+
+test('a Windows window\'s name for a WSL folder, read in WSL, is the other side\'s — not a relative name that "could not be read"', () => {
+  // The other direction (E1.3): `\\wsl.localhost\Ubuntu\x` written from Windows was handed to the WSL watcher as a
+  // relative path and failed as "could not be read".
+  const dirs = watchedDirs('/home/user/.local/share/coai-mcp', ['\\\\wsl.localhost\\Ubuntu\\x', 'C:\\Users\\user\\AppData\\Local\\coai-mcp'], 'linux');
+
+  assert.deepStrictEqual(usableDirs(dirs), ['/home/user/.local/share/coai-mcp'], 'a Windows spelling was watched in WSL');
+  for (const dir of dirs.slice(1)) {
+    assert.strictEqual(dir.refusal, '', `${dir.asked} was refused rather than called the other side's`);
+    assert.match(dir.otherSide, /^a Windows path — the other side's data folder: .*, and this side skips it$/, dir.asked);
+  }
 });
 
 test('the same POSIX path is fine on the platform it belongs to', () => {

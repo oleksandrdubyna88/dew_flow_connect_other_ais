@@ -1840,14 +1840,24 @@ function watchedElsewhere(dirs: readonly WatchedDir[]): string {
   if (extra.length === 0) {
     return '';
   }
-  const rows = extra
-    .map((dir) => (dir.refusal.length === 0
-      ? `<div class="status">${escapeHtml(dir.asked)}</div>`
-      : `<div class="stale">${escapeHtml(dir.asked)} — ${escapeHtml(dir.refusal)}</div>`))
-    .join('\n');
+  const rows = extra.map(watchedLine).join('\n');
 
   return `<div class="hint">Questions from another installation are also answered here:</div>
 ${rows}`;
+}
+
+/**
+ * One named directory's line: the other side's said in the quiet hint tone (todo/PLAN_paths_per_side.md E1.3), a
+ * refusal in the worth-noticing one, a directory this window reads plainly.
+ */
+function watchedLine(dir: WatchedDir): string {
+  if (dir.otherSide.length > 0) {
+    return `<div class="hint watched-other-side">${escapeHtml(dir.asked)} — ${escapeHtml(dir.otherSide)}</div>`;
+  }
+
+  return dir.refusal.length === 0
+    ? `<div class="status">${escapeHtml(dir.asked)}</div>`
+    : `<div class="stale">${escapeHtml(dir.asked)} — ${escapeHtml(dir.refusal)}</div>`;
 }
 
 function storageBlock(storage: DataLocation | undefined): string {
