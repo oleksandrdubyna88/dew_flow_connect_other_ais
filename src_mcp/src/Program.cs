@@ -808,10 +808,13 @@ internal static class Program
     /// the pairs table. 74 when the file will not open, because an empty list and a success would
     /// read as "there is nothing to review".
     /// </remarks>
-    internal static int PairsJson(string[] args)
+    internal static int PairsJson(string[] args) => PairsJson(args, File.GetAttributes);
+
+    /// <summary>The mode over an injected attribute read — the database's presence, three-valued (<see cref="Store.RoundsDb.PresenceOf(string, Func{string, FileAttributes})"/>).</summary>
+    internal static int PairsJson(string[] args, Func<string, FileAttributes> attributesOf)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
-        if (!Store.RoundsDb.IsThere(settings.DataDir))
+        if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) == Server.RootPresence.Absent)
         {
             // No database yet, so nothing has been collected: an empty list — and the data directory is NOT made, because
             // a reader must never create the folder it reads (todo/PLAN_paths_per_side.md E5.7, D3).
@@ -961,7 +964,7 @@ internal static class Program
     /// byte-identical before and after.</para>
     /// </remarks>
     internal static Task<int> RealMethodAsync(string[] args) =>
-        AnswerOnePairAsync("--real-method", args, RealMethodOfAsync, Server.ServerJsonContext.Default.RealMethod);
+        AnswerOnePairAsync("--real-method", args, RealMethodOfAsync, Server.ServerJsonContext.Default.RealMethod, File.GetAttributes);
 
     /// <summary>One pair's file as it was at the commit the reviewers read, on stdout.</summary>
     /// <remarks>
@@ -977,8 +980,11 @@ internal static class Program
     /// the machine. <c>TheCoordinatesComeFromTheStore_AndNothingOnArgvCanRedirectThem</c> pins it.</para>
     /// <para>Nothing is written on this path — not a row, not a column.</para>
     /// </remarks>
-    internal static Task<int> FileAtAsync(string[] args) =>
-        AnswerOnePairAsync("--file-at", args, FileAtOfAsync, Server.ServerJsonContext.Default.FileAtRevision);
+    internal static Task<int> FileAtAsync(string[] args) => FileAtAsync(args, File.GetAttributes);
+
+    /// <summary>The mode over an injected attribute read, as <see cref="PairsJson(string[], Func{string, FileAttributes})"/>.</summary>
+    internal static Task<int> FileAtAsync(string[] args, Func<string, FileAttributes> attributesOf) =>
+        AnswerOnePairAsync("--file-at", args, FileAtOfAsync, Server.ServerJsonContext.Default.FileAtRevision, attributesOf);
 
     /// <summary>One pair's whole repository, checked out at the commit the reviewers read, on stdout.</summary>
     /// <remarks>
@@ -994,7 +1000,7 @@ internal static class Program
     /// <para>Nothing is written to the rounds database on this path — not a row, not a column.</para>
     /// </remarks>
     internal static Task<int> TreeAtAsync(string[] args) =>
-        AnswerOnePairAsync("--tree-at", args, TreeAtOfAsync, Server.ServerJsonContext.Default.ReviewTree);
+        AnswerOnePairAsync("--tree-at", args, TreeAtOfAsync, Server.ServerJsonContext.Default.ReviewTree, File.GetAttributes);
 
     /// <summary>
     /// The shape every one-pair mode shares: <c>--id</c> to a row, the row to an answer, the answer to
@@ -1014,7 +1020,8 @@ internal static class Program
         string mode,
         string[] args,
         Func<long, Store.ReviewPair?, Task<T>> answer,
-        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape)
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape,
+        Func<string, FileAttributes> attributesOf)
     {
         if (!FindingId(Flags(args), out var findingId))
         {
@@ -1023,7 +1030,7 @@ internal static class Program
         }
 
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
-        if (!Store.RoundsDb.IsThere(settings.DataDir))
+        if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) == Server.RootPresence.Absent)
         {
             // No database, so no such pair — answered as the pair that is not there, and NOTHING is made: a reader must
             // never create the data directory it reads (todo/PLAN_paths_per_side.md E5.7, D3).
@@ -1343,7 +1350,10 @@ internal static class Program
         return 0;
     }
 
-    internal static int BugsJson(string[] args)
+    internal static int BugsJson(string[] args) => BugsJson(args, File.GetAttributes);
+
+    /// <summary>The mode over an injected attribute read, as <see cref="PairsJson(string[], Func{string, FileAttributes})"/>.</summary>
+    internal static int BugsJson(string[] args, Func<string, FileAttributes> attributesOf)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
         try
@@ -1351,7 +1361,9 @@ internal static class Program
             // Only a database that is THERE is migrated and swept: opening one that is not would create the data
             // directory this reader reads — a missing NAMED one included (todo/PLAN_paths_per_side.md E5.7, D3). With no
             // file the read below answers an empty corpus, which is the truth about a machine that never ran a round.
-            if (Store.RoundsDb.IsThere(settings.DataDir) && !MigratedAndSwept(settings.DataDir))
+            // CONFIRMED absent alone skips the open: a database the disk would not describe (access denied, busy) goes on to
+            // the open, which fails and is reported 74 — never answered as an empty corpus (the E5 code round).
+            if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) != Server.RootPresence.Absent && !MigratedAndSwept(settings.DataDir))
             {
                 Note("the rounds database could not be opened; no corpus can be read from it");
                 return 74; // EX_IOERR

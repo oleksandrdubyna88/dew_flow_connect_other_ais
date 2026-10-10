@@ -129,6 +129,37 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         JsonDocument.Parse(pairs).RootElement.GetProperty("items").GetArrayLength().Should().Be(0);
     }
 
+    /// <summary>An attribute read that is refused — the database may be there; the disk would not say.</summary>
+    private static FileAttributes Denied(string path) => throw new UnauthorizedAccessException($"Access to the path '{path}' is denied.");
+
+    /// <summary>
+    /// The empty answer is for a database CONFIRMED absent only (the E5 code round): <c>File.Exists</c> answers false on an
+    /// access or I/O error as well, so a reader reported an empty corpus — "no material" — for a database it merely could
+    /// not read. "Cannot tell" keeps the I/O failure every one of these modes already has: 74.
+    /// </summary>
+    [Fact]
+    public async Task ADatabaseTheDiskWillNotDescribeIsAnIoFailure_NotAnEmptyAnswer()
+    {
+        var (bugs, bugsCode) = Stdout.Of(() => Program.BugsJson(["--bugs-json"], Denied));
+        var (pairs, pairsCode) = Stdout.Of(() => Program.PairsJson(["--pairs-json"], Denied));
+        var (fileAt, fileAtCode) = await Stdout.OfAsync(() => Program.FileAtAsync(["--file-at", "--id", "7"], Denied));
+
+        (bugsCode, pairsCode, fileAtCode).Should().Be((74, 74, 74),
+            $"a database the disk would not describe was answered as one that is not there: --bugs-json said {bugs.Trim()}, --pairs-json {pairs.Trim()}, --file-at {fileAt.Trim()}");
+        Directory.Exists(Missing).Should().BeFalse("an unanswered question about the database is no licence to make the folder");
+    }
+
+    /// <summary>The presence itself: there, confirmed absent, cannot tell — the one mapping, asked for a FILE.</summary>
+    [Fact]
+    public void TheDatabasesPresenceIsThreeValued()
+    {
+        Store.RoundsDb.PresenceOf(Missing, File.GetAttributes).Should().Be(Server.RootPresence.Absent);
+        Store.RoundsDb.PresenceOf(Missing, Denied).Should().Be(Server.RootPresence.Unknown);
+        Store.RoundsDb.PresenceOf(Missing, _ => throw new IOException("busy")).Should().Be(Server.RootPresence.Unknown);
+        Store.RoundsDb.PresenceOf(Missing, _ => FileAttributes.Normal).Should().Be(Server.RootPresence.Present);
+        Store.RoundsDb.PresenceOf(Missing, _ => FileAttributes.Directory).Should().Be(Server.RootPresence.Absent, "a folder named coai.db is no database");
+    }
+
     private string Inside()
     {
         try
