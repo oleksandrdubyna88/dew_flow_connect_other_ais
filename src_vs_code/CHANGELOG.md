@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**Fixed: every Models card shows its catalog price.** A model used only as a consultant, a question consultant or for
+the chat showed a dash where the published lists price it, and an `api` model on a reviewer's model showed the
+reviewer's rate instead of its own endpoint's. Each card now shows the price of its own model on its own endpoint.
+
+**Settings uses the width of a wide editor.** Reviews (Stages, Roles & prompts, Prompts per round, The gate, Commands),
+Security lane and Chat lay their cards out in two columns when the editor is wide and in one when it is narrow — the
+way Models already did, at the same width. On Roles & prompts each role keeps the whole width and its prompts sit side
+by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
+the Models cards.
+
 ## Extension 0.66.0 — 2026-10-10
 
 **Fixed: the first start after an update in place no longer shows an error.** When VS Code updated the extension before
@@ -7,12 +19,6 @@ it had started, moving your models into the catalog could meet settings the wind
 *"Moving the models in your settings into the catalog stopped part way"*. Nothing was written then, and nothing is now:
 the move waits for the window to load them and tries once more — on the next settings change, or ten seconds later. If
 the window still has not loaded them, a warning says so once, with **Reload Window**.
-
-**Settings uses the width of a wide editor.** Reviews (Stages, Roles & prompts, Prompts per round, The gate, Commands),
-Security lane and Chat lay their cards out in two columns when the editor is wide and in one when it is narrow — the
-way Models already did, at the same width. On Roles & prompts each role keeps the whole width and its prompts sit side
-by side. Limits, Consultants and Setup are unchanged. The models on Chat no longer carry a stray top line borrowed from
-the Models cards.
 
 **The CLAUDE.md snippet's feature half is the shared rule, and says what the server does (snippet v16).**
 The feature-review instructions in the pasted block now come from the conventions rule

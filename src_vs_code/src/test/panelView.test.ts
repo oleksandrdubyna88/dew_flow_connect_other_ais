@@ -37,7 +37,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   usage: [],
   usageWindow: 'week',
   cliStatus: {},
-  modelPrices: {},
+  cardPrices: {},
   snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   latestServerVersion: '',
   ...over,

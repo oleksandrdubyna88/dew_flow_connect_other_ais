@@ -306,7 +306,7 @@ export function panelState(openSection: string, overrides: Partial<PanelState> =
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
     latestServerVersion: '',
     ...overrides,

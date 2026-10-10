@@ -5,7 +5,7 @@
 > (a/b/c) when its premise proved wrong — the consultant health block was drawn only by the old page; `SURFACE_IDS` keeps
 > `settings` as the page census; the five-language help was rewritten in E5.2 rather than with each tab; E5.3 also
 > fixed a pick being read as an endpoint holder. **Open tail:** the feature review did not run (no model ticked for
-> features); a Models card prices non-reviewer rows from nothing ([todo](../todo/PLAN_models_card_prices_every_row.md));
+> features); a Models card priced non-reviewer rows from nothing (fixed the same day: [PLAN_models_card_prices_every_row.md](PLAN_models_card_prices_every_row.md));
 > what is kept for one release — the redirect commands, the restore command, `coai.migratedFrom`
 > ([todo](../todo/PLAN_catalog_after_one_release.md)); the operator's live checks of POST_DEPLOY item 12 (13 when it was written).
 > The design is accepted: the clickable mockup in
@@ -1389,7 +1389,7 @@ user layer for this key unless a side's overlay holds it); `savedModels` keeps `
    that hold their behaviour: `research/module_tests.md`, *E5.3*; four gained ones (own vendor, unplaceable caller,
    Team server not a consultant, caller names). Sweeps: no new dead export, no orphaned doc block. **Found, not fixed:**
    a Models card prices from `modelPrices[model]`, built from the reviewers only, so a consultant-only row shows no
-   catalog price — it predates E5; follow-up `todo/PLAN_models_card_prices_every_row.md`. **Code round:** the first saw
+   catalog price — it predates E5; follow-up `research/PLAN_models_card_prices_every_row.md`. **Code round:** the first saw
    only the mockup's deletion (the diff budget), so it was split into its own commit and the code reviewed again over the
    rest: four findings, one defect — `endpointConflict` read a caller's PICK as an endpoint holder with none, refusing a
    picked row at its own URL (RED: "the row's own endpoint was refused because a caller picked the row"; fixed, teeth

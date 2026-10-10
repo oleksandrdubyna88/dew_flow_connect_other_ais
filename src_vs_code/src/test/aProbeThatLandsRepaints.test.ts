@@ -60,7 +60,7 @@ function state(over: Partial<PanelState> = {}): PanelState {
     usageWindow: 'day',
     latestServerVersion: '0.40.2',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: 14 },
     teamServers: [],
     ...over,
@@ -84,7 +84,7 @@ const DRAWN: ReadonlyArray<readonly [string, Partial<PanelState>]> = [
   }],
   ['the Claude probe starts', { askingClaude: true }],
   ['Antigravity answers which models it has', { agyModels: [{ id: 'gemini-3.5-flash', label: 'gemini-3.5-flash' }] }],
-  ['the price tables arrive', { modelPrices: { 'gpt-5.6': { inPerMillion: 1.25, outPerMillion: 10, source: 'openrouter' } } }],
+  ['the price tables arrive', { cardPrices: { codex: { inPerMillion: 1.25, outPerMillion: 10, source: 'openrouter' } } }],
   ['the pasted snippet turns out to be older', { snippetStatus: { kind: 'older', behind: ['13'], current: 14 } }],
   ['the per-side switch is on', { perSide: true }],
 ];

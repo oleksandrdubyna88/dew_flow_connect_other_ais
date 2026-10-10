@@ -31,7 +31,7 @@ function html(vendors: readonly Vendor[]): string {
     side: '',
     perSide: false, latestServerVersion: '', questions: [], sessions: [],
     openSections: ['reviewers'],
-    usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
+    usage: [], usageWindow: 'week', cliStatus: {}, cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

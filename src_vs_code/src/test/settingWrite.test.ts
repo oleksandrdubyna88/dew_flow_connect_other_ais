@@ -76,7 +76,7 @@ test('no control that writes a role-keyed setting is labelled as a vendor', () =
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 
@@ -110,7 +110,7 @@ test('every role id the panel writes to is a role, and no vendor shares the name
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 
@@ -157,7 +157,7 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
       usage: [],
       usageWindow: 'week',
     cliStatus: {},
-    modelPrices: {},
+    cardPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
     }, 'nonce');
 
