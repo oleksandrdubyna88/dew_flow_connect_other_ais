@@ -838,7 +838,7 @@ const clipath = await cliPathOtherSideSeam({
   providersIn, fakeCli: cli,
   fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
 });
-console.log('  ok  a reviewer\'s CLI path of the other OS is skipped by both halves, and the card does not say cannot review');
+console.log('  ok  a reviewer\'s CLI path of the other OS is skipped by both halves: the server looks the CLI up instead of probing the path');
 
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
