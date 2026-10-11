@@ -99,8 +99,12 @@ public sealed class TheServerRecordsTheRoundTests : IDisposable
         accepted.Dropped.Should().ContainSingle("only the malformed field is dropped, and it is SAID")
             .Which.Field.Should().Be(field);
         accepted.Dropped![0].Reason.Length.Should().BeLessThan(300, "a note names what was wrong; it never echoes a 4 KiB value back");
-        (job.Round, job.ClientAttempt, job.RemainingSeconds).Should().Be((string.Empty, string.Empty, 0),
+        (job.Round, job.ClientAttempt, job.StatedBudget.Seconds).Should().Be((string.Empty, string.Empty, 0),
             "a dropped value is stored EMPTY — never a guess at what the client meant");
+        job.StatedBudget.State.Should().Be(field == "remainingSeconds" ? StatedBudgetState.Dropped : StatedBudgetState.Absent,
+            "a dropped budget is its own fact on the record, not the same 0 an absent one is (the epic-4 code round)");
+        job.StatedBudget.Reason.Should().Be(field == "remainingSeconds" ? accepted.Dropped[0].Reason : string.Empty,
+            "the record keeps WHY it was dropped — the sentence the request's note carried");
     }
 
     [Theory]
@@ -117,7 +121,8 @@ public sealed class TheServerRecordsTheRoundTests : IDisposable
         var (accepted, job) = await Post(server, value.Length == 0 ? string.Empty : $"\"{field}\": {value}");
 
         accepted.Dropped.Should().BeNullOrEmpty("a client older than the field sent nothing, and must not be told on every review that it was dropped");
-        (job.Round, job.ClientAttempt, job.RemainingSeconds).Should().Be((string.Empty, string.Empty, 0), "absent is stored empty, never defaulted");
+        (job.Round, job.ClientAttempt).Should().Be((string.Empty, string.Empty), "absent is stored empty, never defaulted");
+        job.StatedBudget.Should().Be(StatedBudget.Absent, "an absent or null budget is an old client's — no deadline, no reason");
     }
 
     [Theory]
@@ -137,8 +142,9 @@ public sealed class TheServerRecordsTheRoundTests : IDisposable
         var (accepted, job) = await Post(server, $"\"{field}\": {value}");
 
         accepted.Dropped.Should().BeNullOrEmpty();
-        (job.Round, job.ClientAttempt, job.RemainingSeconds).Should().Be((round, attempt, remaining),
+        (job.Round, job.ClientAttempt, job.StatedBudget.Seconds).Should().Be((round, attempt, remaining),
             "a round id is kept in its canonical lower case, so one round is never two in a count");
+        job.StatedBudget.State.Should().Be(remaining > 0 ? StatedBudgetState.Stated : StatedBudgetState.Absent);
     }
 
     [Fact]

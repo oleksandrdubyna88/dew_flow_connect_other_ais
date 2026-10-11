@@ -1378,7 +1378,7 @@ than them skips them as unknown members (`ServerJsonContext` sets no `UnmappedMe
 |---|---|---|---|
 | `round` | the round's id: 128 random bits, 32 hex characters, the same on every launch of the round | a JSON string of exactly 32 hex characters, either case | `JobRecord.Round`, **lower case** — one round is never two in a count |
 | `attempt` | `first` / `retry` / `repair` / `followUp` — what this request is inside the client's turn | one of those four words, as spelt (`RoundFields.ClientAttempts`; `rotated` is the server's own, not a client's) | `JobRecord.ClientAttempt` |
-| `remainingSeconds` | the seconds left on the client's own deadline at submit — relative, never an instant | a JSON number that is a whole, positive `int` — no fraction, no exponent, no string | `JobRecord.RemainingSeconds`, and from it `JobRecord.ClientDeadlineUtc` — the budget rule, *No start without budget* below (story 4.3) |
+| `remainingSeconds` | the seconds left on the client's own deadline at submit — relative, never an instant | a JSON number that is a whole, positive `int` — no fraction, no exponent, no string | `JobRecord.StatedBudget` — `Absent`, `Stated(seconds)` or `Dropped(reason)` (`StatedBudget.cs`), and from a STATED one only `JobRecord.ClientDeadlineUtc` — the budget rule, *No start without budget* below (story 4.3) |
 
 **Bound tolerantly, read by hand (risk amendment 3).** `ReviewRequestDto` binds the three as `JsonElement?`, and
 `RoundFields.Take` (`src/Jobs/RoundFields.cs`) reads them. A typed `string?`/`int?` refuses `"oops"`, `{}`, `1.5` or an
@@ -1387,7 +1387,9 @@ overflow while the body is BOUND — measured on this story's first red run, the
 serializer defaults read numbers from strings. Now every value is accepted:
 
 - **Malformed → dropped with a note**, in the same `dropped` list `ClientOptions` fills (`FieldNoteDto`: field + reason),
-  and stored empty (`""` / `0`). The note says what arrived — a short printable value quoted, anything longer than 40
+  and stored empty (`""`; a dropped budget is `StatedBudget.Dropped` carrying the note's own reason — a different fact
+  from an absent one, though neither makes a deadline: the epic-4 code round, the family rule that "not captured" and
+  "empty" are never the same value). The note says what arrived — a short printable value quoted, anything longer than 40
   characters by its length, an object or an array by its shape — never a long value echoed back. Nothing is minted in
   place of a dropped round: a server-made id would count a round the client never had.
 - **Absent, or JSON `null` → an old client**: stored empty, never defaulted, and **no note** (the same reading
@@ -1415,8 +1417,8 @@ does not use.
 flowchart LR
   R["POST /api/reviews<br/>round, attempt, remainingSeconds<br/>(bound as JsonElement?)"] --> T[RoundFields.Take]
   T -->|"absent / null"| E["stored empty — no note"]
-  T -->|"well-formed"| J["JobRecord.Round (lower case)<br/>ClientAttempt, RemainingSeconds"]
-  T -->|"malformed"| D["stored empty + dropped note"]
+  T -->|"well-formed"| J["JobRecord.Round (lower case)<br/>ClientAttempt, StatedBudget = Stated(s)"]
+  T -->|"malformed"| D["stored empty + dropped note<br/>StatedBudget = Dropped(reason)"]
   D --> A["202: dropped"]
   J --> L["JobRunner.Ledger — every line:<br/>round, clientAttempt beside attempt"]
   J -->|"story 4.3"| B["ClientDeadlineUtc — the budget rule below"]

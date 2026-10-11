@@ -3456,3 +3456,15 @@ claiming a job (no slot is signed in on the host's registry in any server test �
 over `ClientDeadlineUtc` (none exists, by decision); the extension's `remoteAsk.ts` on the new name (remote CHAT, not
 reviews — read: it renders any `failure` string inside a sentence; no test added, `src_vs_code` untouched); the
 deployed server (the rule ships with E5's deploy).
+
+## Epic 4's code round (2026-10-11, `todo/PLAN_every_round_is_counted.md`)
+
+One gating finding, accepted: `JobRecord.RemainingSeconds = 0` meant both "the request sent no budget" and "it sent a
+malformed one that was dropped" — two facts as one value. `StatedBudget` (`src_server/src/Jobs/StatedBudget.cs`) is now
+`Absent`, `Stated(seconds)` or `Dropped(reason)`, the reason being the request's own note; only a STATED budget makes
+`ClientDeadlineUtc`, so behaviour is unchanged.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheServerRecordsTheRoundTests` (changed on purpose) | the malformed matrix also asserts `StatedBudget.State` `Dropped` (for `remainingSeconds`) with the note's reason, `Absent` otherwise; absent/null asserts `StatedBudget.Absent`; a well-formed value asserts `Stated` with its seconds | RED on the inert shape (the type wired through, `RoundFields` always answering `Absent`): `Expected job.StatedBudget.State to be StatedBudgetState.Dropped {value: 2} … but found StatedBudgetState.Absent {value: 0}` for every malformed `remainingSeconds` row; GREEN 65/65 with the budget tests, server suite 530/530 |
+| `NoStartWithoutBudgetTests` (helper only) | its job builder states a budget through `StatedBudget.Of`, `Absent` for none | — unchanged behaviour |

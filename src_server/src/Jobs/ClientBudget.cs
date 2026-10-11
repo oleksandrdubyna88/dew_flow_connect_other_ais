@@ -58,20 +58,22 @@ public sealed record ClientBudgetPolicy(TimeSpan SafetyMargin, TimeSpan MinStart
 /// is right.</para>
 /// <para><b>Capped at the job's own lifetime.</b> A client cannot buy a longer-lived job than one without the field:
 /// the stated number is capped at the job's <c>timeoutSeconds</c> plus its queue window (the code round of 2026-10-09).</para>
-/// <para><b>Absent is an old client</b> — <see cref="JobRecord.RemainingSeconds"/> of 0 — and gets no deadline at all:
-/// the rule never refuses a request that did not state a budget.</para>
+/// <para><b>Only a STATED budget makes a deadline.</b> An absent one is an old client and a dropped one runs as one
+/// (<see cref="JobRecord.StatedBudget"/>): neither gets a deadline, so the rule never refuses a request that did not
+/// state a usable budget.</para>
 /// </remarks>
 public static class ClientBudget
 {
-    /// <summary>When the caller's budget ends on this clock — or null for a request that stated none.</summary>
+    /// <summary>When the caller's budget ends on this clock — or null for a request that stated none it could use.</summary>
     public static DateTimeOffset? DeadlineOf(JobRecord job, TimeSpan safetyMargin) =>
-        job.RemainingSeconds <= 0 ? null : job.SubmittedUtc + Stated(job) - safetyMargin;
+        job.StatedBudget is { State: StatedBudgetState.Stated, Seconds: var seconds }
+            ? job.SubmittedUtc + Capped(job, TimeSpan.FromSeconds(seconds)) - safetyMargin
+            : null;
 
     /// <summary>The stated budget, capped at the job's own lifetime: its vendor budget plus its queue window.</summary>
-    private static TimeSpan Stated(JobRecord job)
+    private static TimeSpan Capped(JobRecord job, TimeSpan stated)
     {
         var lifetime = (job.QueueDeadlineUtc - job.SubmittedUtc) + job.RunBudget;
-        var stated = TimeSpan.FromSeconds(job.RemainingSeconds);
 
         return stated < lifetime ? stated : lifetime;
     }

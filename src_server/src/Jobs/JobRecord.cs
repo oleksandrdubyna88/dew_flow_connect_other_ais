@@ -130,12 +130,6 @@ public sealed record JobRecord(
     string ClientAttempt = "",
 
     /// <summary>
-    /// The seconds the client said were left on its deadline at submit — <see cref="TakenRound.RemainingSeconds"/>, <c>0</c>
-    /// when it sent none or one that was dropped. <see cref="ClientDeadlineUtc"/> is what the store makes of it.
-    /// </summary>
-    int RemainingSeconds = 0,
-
-    /// <summary>
     /// When the caller's stated budget ends, on THIS server's clock — <see cref="ClientBudget.DeadlineOf"/>, stamped by the
     /// store at submit (story 4.3 of todo/PLAN_every_round_is_counted.md). Null for a request that stated none: an old
     /// client, which the budget rule never refuses.
@@ -147,6 +141,14 @@ public sealed record JobRecord(
     /// todo/PLAN_every_round_is_counted.md). It replaced two longs, which is where the server ledger lost the rest.
     /// </summary>
     public Usage Usage { get; init; } = Usage.None;
+
+    /// <summary>
+    /// What the client said about the seconds left on its deadline at submit — <see cref="TakenRound.Budget"/>: absent,
+    /// stated, or dropped with its reason. <see cref="ClientDeadlineUtc"/> is what the store makes of a STATED one; the
+    /// other two get no deadline. A property, not a positional default, because a record cannot default to a non-constant
+    /// value and this repository does not use null for "nothing".
+    /// </summary>
+    public StatedBudget StatedBudget { get; init; } = StatedBudget.Absent;
 
     /// <summary>
     /// WHY a <see cref="FailureKind.Cancelled"/> job was cancelled — one of <see cref="EndCauses"/> — and empty for

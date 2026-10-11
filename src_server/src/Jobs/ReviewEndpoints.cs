@@ -89,7 +89,7 @@ public static class ReviewEndpoints
                 {
                     Round = round.Round,
                     ClientAttempt = round.Attempt,
-                    RemainingSeconds = round.RemainingSeconds,
+                    StatedBudget = round.Budget,
                 },
                 now);
 

@@ -249,7 +249,7 @@ public sealed class NoStartWithoutBudgetTests : IDisposable
         {
             Round = Round,
             ClientAttempt = LaunchAttempts.Repair,
-            RemainingSeconds = remainingSeconds,
+            StatedBudget = remainingSeconds > 0 ? StatedBudget.Of(remainingSeconds) : StatedBudget.Absent,
         };
     }
 

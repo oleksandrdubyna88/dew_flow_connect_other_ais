@@ -6,12 +6,12 @@ namespace CoaiServer;
 /// <summary>What the server TOOK from a request's round fields, and what it dropped, with the reason for each.</summary>
 /// <param name="Round">The client's round id in lower case — empty when the request sent none, or sent one that was dropped.</param>
 /// <param name="Attempt">The client's word for the request inside its turn (<see cref="RoundFields.ClientAttempts"/>) — empty likewise.</param>
-/// <param name="RemainingSeconds">
-/// The seconds the client said were left on its own deadline at submit — <c>0</c> when it sent none or sent one that was
-/// dropped. Positive otherwise; nothing here caps it or acts on it (story 4.3 of todo/PLAN_every_round_is_counted.md).
+/// <param name="Budget">
+/// What the client said about the seconds left on its own deadline at submit — absent, stated, or dropped with its reason
+/// (<see cref="StatedBudget"/>). Nothing here caps it or acts on it (story 4.3 of todo/PLAN_every_round_is_counted.md).
 /// </param>
 /// <param name="Dropped">One note per field that was SENT and not taken — never one for a field that was absent.</param>
-public sealed record TakenRound(string Round, string Attempt, int RemainingSeconds, IReadOnlyList<FieldNoteDto> Dropped);
+public sealed record TakenRound(string Round, string Attempt, StatedBudget Budget, IReadOnlyList<FieldNoteDto> Dropped);
 
 /// <summary>
 /// The server's reading of a request's counting fields — <c>round</c>, <c>attempt</c>, <c>remainingSeconds</c> — story 4.2
@@ -51,8 +51,16 @@ public static class RoundFields
         var attempt = Read(request.Attempt, AttemptField, AttemptOf, string.Empty);
         var remaining = Read(request.RemainingSeconds, RemainingField, RemainingOf, 0);
 
-        return new TakenRound(round.Value, attempt.Value, remaining.Value, [.. round.Dropped, .. attempt.Dropped, .. remaining.Dropped]);
+        return new TakenRound(round.Value, attempt.Value, BudgetOf(remaining), [.. round.Dropped, .. attempt.Dropped, .. remaining.Dropped]);
     }
+
+    /// <summary>The three facts a <c>remainingSeconds</c> reading can be — never one bare <c>0</c> for two of them.</summary>
+    private static StatedBudget BudgetOf(Reading<int> remaining) => remaining switch
+    {
+        { Dropped: [var note, ..] } => StatedBudget.DroppedFor(note.Reason),
+        { Value: > 0 } => StatedBudget.Of(remaining.Value),
+        _ => StatedBudget.Absent,
+    };
 
     /// <summary>One field's value, and the note when it was sent and not taken.</summary>
     private readonly record struct Reading<T>(T Value, FieldNoteDto[] Dropped);
