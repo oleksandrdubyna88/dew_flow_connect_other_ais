@@ -3225,6 +3225,21 @@ catalogue id. The reader test proves the deployed server's bytes parse through t
 widened reader will — that is `AnOldLedgerLine_StillReads`, owed by E3, and these fixtures are its input. Nothing here
 reaches the live ledger beyond the three lines that were copied.
 
+## The server reads a stated duration (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`)
+
+The scenario reaches as deep as the Team server's harness goes without a product seam: the real `JobRunner`,
+`ReviewLauncher`, antigravity adapter and `SlotRegistry` on disk, with a fake `IProcessLauncher` standing in for the
+paid agy process. Run: `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.exe --filter-class "*CooldownParserTests"
+--filter-class "*AStatedResetParksTheSlotTests"`.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `CooldownParserTests` (+8) | `AStatedWaitInWords_ErrsLong_AndWeeklyStillWinsWhenLonger` — `Resets in one hour` errs long to `MaxGuess`, and a line that also says "weekly" takes the longer day (CodeRabbit on #754; RED: `… but <… 12:30:00 +0h>`, the 30-minute retry). `ASpacedDuration_IsReadWhole_NeverAsItsFirstPart` — `2h 30m` and `1h 2m 3s.` read whole, `2h 30 minutes` errs long to `MaxGuess` (CodeRabbit on #754; RED: `2h 30m` read as two hours, `… but <… 14:00:00 +0h>`; break-it: the trailing `(?!\s*\d)` removed → `2h 30 minutes` read as two hours again); and `2h, 30m` / `2h; 30m` err long while `2h, then try again` is two hours (CodeRabbit on #754 again; RED: `Expected CooldownParser.Until("Resets in 2h, 30m", Now) … <… 17:00:00 +0h> … but <… 14:00:00 +0h> does not` — the cooldown would end 30 minutes before the stated reset; the trailing check widened to `(?![\s,;]*\d)`). `ADurationWithTextGluedToItsUnit_IsNoDuration` — `Resets in 2seconds` and `1hgarbage` err long to `MaxGuess`, not a short wait; a full stop is a boundary (the code round; RED: `… but <2026-09-06 12:00:02 +0h> does not`). `CooldownParser_ReadsResetsIn88h49m9s` and `…33m52s` on the two verbatim agy lines (RESULTS §3.1, the fixture); a duration of one part (`5h.`, `45s`, `12m`); `ADurationNoVendorWindowCouldMean_IsTheFallback_NeverAThrow` — `999999999999999999h` and `9999h` err long to `MaxGuess` (a wait was stated), `336h` is exactly the 14-day ceiling; `ADurationIsNotMistakenForAClockTime` — `Resets in 9h30m` is nine and a half hours, `resets 9:30pm (UTC)` still a clock time | RED: every duration read as the 30-minute guess (`… but <2026-09-06 12:30:00 +0h> does not`). Break-it: the duration branch disabled in `NamedInstant` → the same five red |
+| `AStatedResetParksTheSlotTests` (2) | the verbatim refusal through the real runner parks the slot for 88h49m9s, READ BACK FROM DISK, and a second queued job launches nothing; with `Resets in 2s` the next job waits, then launches once the two seconds pass — the positive control the cadence consultation asked for, so a slot parked for good cannot pass | RED: `parked!.Value to be within 30s from <… +88h49m9s> … but <… +30 min> was off by 3d, 16h…`; `Expected launched to be True because after the stated two seconds the account is used again — not parked on a 30-minute guess, but found False`. Break-it: the same plant → both red |
+
+**NOT covered:** the HTTP host (`Program.cs` builds the launcher inline — a vendor double there needs a product seam);
+a real agy refusal on the deployed box — checked live at the next deploy.
+
 ## The server ledger tells the truth — the whole usage, and the canary's own kind (2026-10-10, stories 3.1 and 3.5 of `todo/PLAN_every_round_is_counted.md`)
 
 The seam rule of the plan's test plan: a defect BELOW `IReviewLauncher` is tested through the real `ReviewLauncher` with
