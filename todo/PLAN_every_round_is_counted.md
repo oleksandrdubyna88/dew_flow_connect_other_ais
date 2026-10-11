@@ -308,7 +308,10 @@ Answers the operator's question for this machine's work from the whole history, 
   from the last refusal; the server catalog adds the earliest reset per vendor (no account names). **Display only:**
   the local scheduler still retries from phrase classification (`BoundedScheduler.cs:585`), so "parks the slot on both
   halves" (what-must-be-true 7) needs local PERSISTENCE and ADMISSION of the reset — its own story (**5.3c**), or item
-  7 narrows to "shown locally, enforced on the server". Decided with 5.3b's plan round.
+  7 narrows to "shown locally, enforced on the server". Decided with 5.3b's plan round. **Also owed here** (5.3a's code
+  round, 2026-10-11): a job queued behind a parked slot hears nothing about when it can run — `SlotSelector.Explain`
+  (`src_server/src/Slots/AccountSlot.cs:69`) says *comes back at …* and no status path calls it; wire it into the
+  queued job's status beside the catalog's per-vendor reset.
 - **5.4 Release and the live count** (Opus) — the client halves release first; then ONE manual `deploy-server.yml`
   dispatch carrying E3–E5's server, with the owner's approval, after 4.1's body was measured against the old server.
   Live: one round through the Team server → that vendor's `rounds` +1 exactly, its launches as made.

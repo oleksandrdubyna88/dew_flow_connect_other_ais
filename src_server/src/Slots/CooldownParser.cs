@@ -186,7 +186,8 @@ public static partial class CooldownParser
     // Captured 2026-10-10 from agy 1.3.x on a Gemini quota refusal (research/RESULTS_vendor_quota_gauges.md §3.1):
     //   "… Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s."
     // and the fixture src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt: "… Resets in 33m52s".
-    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)h)?(?:(?<m>\d+)m)?(?:(?<s>\d+)s)?", RegexOptions.IgnoreCase)]
+    // The trailing boundary is the code round's: "2seconds" or "1hgarbage" must not read as a short wait.
+    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)h)?(?:(?<m>\d+)m)?(?:(?<s>\d+)s)?(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
     private static partial Regex Duration();
 
     // "weekly limit reached" with no date attached — a day is the smallest wait that can help.

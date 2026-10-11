@@ -218,6 +218,16 @@ public sealed class CooldownParserTests
     }
 
     [Fact]
+    public void ADurationWithTextGluedToItsUnit_IsNoDuration()
+    {
+        // The code round's finding: a reworded or truncated line must not read as a SHORT wait — "2seconds" read as
+        // two seconds would put the slot straight back into the refusal. Unusable text is the fallback.
+        CooldownParser.Until("Resets in 2seconds", Now).Should().Be(Now + CooldownParser.Unparseable);
+        CooldownParser.Until("Resets in 1hgarbage", Now).Should().Be(Now + CooldownParser.Unparseable);
+        CooldownParser.Until("Resets in 88h49m9s.", Now).Should().Be(Now + new TimeSpan(88, 49, 9), "a sentence's full stop is a boundary");
+    }
+
+    [Fact]
     public void ADurationIsNotMistakenForAClockTime()
     {
         // "resets" is the word the clock-time form starts with; "in" must keep the two apart.
