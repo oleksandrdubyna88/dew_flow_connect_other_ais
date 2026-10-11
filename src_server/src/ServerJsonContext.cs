@@ -237,7 +237,14 @@ public sealed record UsageDto(
     /// <i>needs Team server ≥ …</i>, never a zero). A <c>"daily": null</c> on every personal answer
     /// would have been a third meaning for the same key.
     /// </remarks>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DailyDto? Daily = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DailyDto? Daily = null,
+    /// <summary>The windows a <c>?windows=</c> list asked for, each over its own range, from the same scan (story 5.1).</summary>
+    /// <remarks>
+    /// Nullable AND omitted when null, for the reason <see cref="Daily"/> is: an answer to <c>?window=</c> alone — every
+    /// client older than story 5.2 — is today's shape with no new key at the top, and a client that ASKED for windows
+    /// tells an older server (which ignores the parameter and answers 200 with today's range) by the ABSENCE of this key.
+    /// </remarks>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<UsageWindowDto>? Windows = null)
 {
     /// <summary>Never null, whatever a deserialiser did with the property.</summary>
     /// <remarks>
@@ -247,6 +254,16 @@ public sealed record UsageDto(
     /// </remarks>
     public IReadOnlyList<KindTotal> Kinds { get; init; } = Kinds ?? [];
 }
+
+/// <summary>One window of a several-window answer: its name, the range it counted, its vendors — and each person's, for an admin.</summary>
+/// <param name="Window">The name as the server spells it (<c>5h</c>, <c>24h</c>, <c>week</c> …), whatever casing was asked.</param>
+/// <param name="People">Empty unless the scope is company — the personal view is not a directory of colleagues.</param>
+public sealed record UsageWindowDto(
+    string Window,
+    DateTimeOffset FromUtc,
+    DateTimeOffset ToUtc,
+    IReadOnlyList<VendorTotal> Vendors,
+    IReadOnlyList<PersonTotal> People);
 
 /// <summary>One account's persisted state, in its own directory.</summary>
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>
