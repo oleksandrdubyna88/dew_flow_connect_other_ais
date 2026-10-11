@@ -361,6 +361,21 @@ Answers the operator's question for this machine's work from the whole history, 
   dispatch carrying E3–E5's server, with the owner's approval, after 4.1's body was measured against the old server.
   Live: one round through the Team server → that vendor's `rounds` +1 exactly, its launches as made.
   `module_team_server.md`, `module_server.md`, `module_extension.md`, `module_runners.md`.
+- **What E5's plan round decided (2026-10-11, codex, `proceed`)** — binding on the build:
+  - **5.3c is built, narrowed: a stated reset is never waited out locally.** The ladder
+    (`BoundedScheduler.LadderAsync`) asks the moved `CooldownParser` for a STATED reset in the refusal; one that lies
+    beyond what is left of the reviewer's own budget makes the refusal hopeless (no retry), as a spent daily allowance
+    is today. Measured basis: agy's verbatim *"Individual quota reached … Resets in 88h49m9s"* matches none of
+    `RateLimit.Spent`'s words, so today a local agy row climbs the whole ladder into a reset days away. A short stated
+    reset inside the budget is still waited out. **Not built: a local park persisted across rounds** — a local CLI's
+    account can change under it (a re-login), a parked row would then refuse a working account, and what a park saves
+    is one refusal launch per round (seconds, no tokens). What-must-be-true item 7 therefore reads: *parked on the
+    SERVER; locally never waited out, and shown.*
+  - **A pre-release live contract check of the new `/api/usage` fields** (the round's one finding): a new leg of
+    `npm run test:seam` starts the REAL server built from the tree over a seeded ledger, asks
+    `/api/usage?windows=5h,24h,week` (and `scope=company`), and reads the answer through the extension's OWN parser
+    (`teamServerApi.ts`), asserting every new field by its value — so a field serialised under a name the extension
+    does not read fails before release, not after the deploy. The post-deploy round count stays as the release smoke.
 
 ### E6 — the vendor's own gauge (scope = 1.1's finding) · `feat/round-counter-e6-vendor-gauge`
 
