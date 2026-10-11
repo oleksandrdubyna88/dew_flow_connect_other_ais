@@ -1219,6 +1219,30 @@ and terminates no TLS. `coai.remsoft.dev` has its own site file and its own cert
 binds `127.0.0.1:8090` and nothing else can reach it. See the plan's *Deployment* section for the
 topology and for why the box's 3.8 GB of RAM is a design input rather than a footnote.
 
+### The container image installs its CLIs checked (2026-10-11)
+
+The image (`src_server/Dockerfile`, for a host that has no CLIs of its own — `coai.remsoft.dev` does not run it) installs
+codex and claude through `src_server/install-cli.sh` (fetched to a file, accepted only behind a shebang, three bounded
+attempts) and agy through `src_server/install-agy.sh`, which reads Google's release manifest
+(`…us-central1.run.app/manifests/<platform>.json` → `{version, url, sha512}`), checks the tarball's SHA-512 and installs
+the `antigravity` binary as `~/.local/bin/agy` — never the `antigravity.google` install page, which answered HTML on a
+GitHub runner and broke a release (run 38075423539). Google's final `agy install` (shell start-up set-up) is not run: the
+image sets `PATH` with `ENV`. Each CLI's `--version` runs in the build. `.github/workflows/server-image.yml` builds the
+image (amd64 + arm64, no push, no cache) on pull requests that touch those three files, so a runner proves the installs
+before a release does. Detail and reasons: [PLAN_team_server.md](PLAN_team_server.md) *Deployment*; tests
+`TheImageChecksEachInstallerTests` and `TheImageInstallsAgyFromItsManifestTests`.
+
+```mermaid
+flowchart LR
+  P["install-agy.sh<br/>platform linux_amd64 / linux_arm64 (+_musl)"] --> M["manifest JSON<br/>url + 128-hex sha512?"]
+  M -- "no (page, missing): retry x3, show first bytes" --> F["build fails"]
+  M -- yes --> D["download payload<br/>(retry x3)"]
+  D --> H{"SHA-512 matches?"}
+  H -- no --> F
+  H -- yes --> X["extract antigravity<br/>install ~/.local/bin/agy 0755"]
+  X --> V["Dockerfile: agy --version"]
+```
+
 ### The server knows a chat from a review, and outlives the client that asked (2026-09-09)
 
 Three fields and one expiry rule. No new endpoint and no second queue: a chat turn is a job, and

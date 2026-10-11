@@ -1,0 +1,73 @@
+name: server image
+
+# Builds the Team server's container image on a pull request, both architectures, and pushes NOTHING.
+#
+# Until now the image was built only by release.yml's image legs, so the first GitHub runner ever to
+# install the three vendor CLIs inside it was the release itself. On 2026-10-10 that is how a release
+# broke: agy's install page answered an HTML page on a runner (release run 38075423539) while it served
+# the script everywhere anyone had looked. `src_server/install-cli.sh` and `install-agy.sh` are tested
+# against fixtures in the server suite; THIS is where a real runner proves the real installs, before a
+# tag rather than during one.
+#
+# PATH-FILTERED, on purpose: the build publishes Native AOT (clang, a full link) and downloads three
+# CLIs, minutes per leg, and ci.yml already explains why that is not paid on every pull request. It runs
+# when what the image installs, or how, changes — and when this file does.
+#
+# NOT a required check, and it must not become one while it is path-filtered: a required check that a
+# filter skipped never reports, and the pull request waits for it forever (.github/branch-protection.json).
+#
+# No cache, unlike the release legs' `type=gha`: a cached CLI layer would answer this job from the last
+# build and prove nothing about today's installers, which is the whole question it is here to ask.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src_server/Dockerfile
+      - src_server/install-cli.sh
+      - src_server/install-agy.sh
+      - .github/workflows/server-image.yml
+  workflow_dispatch:
+
+concurrency:
+  group: server-image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: coai-server image builds (${{ matrix.arch }})
+    # Both legs report: a failure on one architecture is exactly what server-v0.11.0 had, and
+    # cancelling the other would hide whether the answer was the runner or the installer.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    # The same native runners the release legs use: AOT does not cross-compile inside qemu, and the
+    # installers fetch a per-architecture build (agy's manifest is linux_amd64 or linux_arm64).
+    runs-on: ${{ matrix.runner }}
+    # The release legs are given 15 minutes WITH a warm cache; this one has none.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # The Dockerfile runs each CLI's `--version` in the build, so a green build is an image whose
+      # three CLIs were installed AND start — the same check the release relies on.
+      - name: Build the image, pushing nothing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          # The repository ROOT, as in release.yml: central package management, the SDK pin and the
+          # feed list live there.
+          context: .
+          file: src_server/Dockerfile
+          push: false
