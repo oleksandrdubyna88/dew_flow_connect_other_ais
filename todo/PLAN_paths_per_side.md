@@ -829,10 +829,10 @@ compiling break-it on its deciding line; the observed messages are in the commit
 - **Where an edit of the other side's value is saved** (E4's plan round, finding 0 — accepted). Nothing of the other side
   lives in an overlay except its data directory, so: a **CLI path** typed into the other side's box goes through the
   panel's one vendor write, `vendorFieldWrite`, with THAT side's family as the field — `savedCliPath(stored, value,
-  <other family>, here)` writes only `executablePathBySide[<other family>]` into the shared `coai.vendors` (never the
-  legacy value, never `mirrored`; this side's member pinned as E3 pins it); a **list root** typed into the other side's
-  group is appended to the one shared list (`qconsultRoots` / `alsoWatchDataDirectories`, design (b) O1 — the spelling is
-  the side); the other side's **data directory** has no input at all (D2). Page tests save and RE-RENDER: the other
+  <other family>, here)` writes only `executablePathBySide[<other family>]` into the shared `coai.vendors` (it never
+  changes the legacy value; `mirrored` is set to that unchanged legacy value; this side's member pinned as E3 pins it);
+  a **list root** typed into the other side's group is appended to the one shared list (`qconsultRoots` /
+  `alsoWatchDataDirectories`, design (b) O1 — the spelling is the side); the other side's **data directory** has no input at all (D2). Page tests save and RE-RENDER: the other
   side's box shows what was typed, this side's box is unchanged, and `pathForThisSide` for each family resolves what its
   box shows. The plan round's minor finding — a WSL `/tmp/project` refused on Windows because `C:\tmp\project` exists
   there — was rejected: a list holds one string, which the Windows server would read as that existing folder.

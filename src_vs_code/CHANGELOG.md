@@ -22,7 +22,8 @@ that side and the day it was last seen — *Used by the server on that side. Thi
 as text (there is no browsing: this window cannot see that disk) and saved only as that side's value; a path spelled for
 this side's own system is refused beside the box, never in a pop-up. The question consultant's folders are listed in
 three groups — this side's (with *Add a folder…*), the other side's (type one in, then press Enter; only a path this
-window would call the other side's is taken) and *Both sides / unclear* (a `//server/share`, a relative name) — and
+window would call the other side's is taken, and a typed `//server/share/…` goes to *Both sides / unclear*) and *Both
+sides / unclear* (a `//server/share`, a relative name) — and
 the watched data folders on *Setup › MCP server* in the same groups; that place also shows the other side's data
 directory, read-only: change it from a window on that side. While a previously saved CLI path is missing, **Restore**
 sits beside the field as well as in the notice. *Always one* keeps one field everywhere. Nothing of the other side is

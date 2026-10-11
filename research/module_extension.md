@@ -3678,9 +3678,9 @@ names in its `aria-describedby`. Nothing of the other side is ever `stat`ed from
   side's box first (`data-setting="executablePath"`, labelled, with the help mark), then the other side's
   (`data-setting="executablePath.<family>"`, text only — no Browse — showing `storedForThisSide(row, other)`). The box
   posts through the panel's ONE vendor write: `vendorFieldWrite` reads the box's family from the key (`cliBoxFamily`)
-  and saves through `savedCliPath`, so the other side's box writes only `executablePathBySide[<other>]` — never the
-  legacy value or `mirrored` (E4's plan round, finding 0). A path spelled for THIS side's OS typed into the other box is
-  refused by the host before the write (`cliPathRefusal`, `panelProvider.refusedBesideTheBox`) and drawn BESIDE the box —
+  and saves through `savedCliPath`, so the other side's box writes only `executablePathBySide[<other>]` — it never
+  changes the legacy value; `mirrored` is set to that unchanged legacy value (E4's plan round, finding 0). A path
+  spelled for THIS side's OS typed into the other box is refused by the host before the write (`cliPathRefusal`, `panelProvider.refusedBesideTheBox`) and drawn BESIDE the box —
   the text kept, `aria-invalid`, the reason in its `aria-describedby` — never a toast (`typedRefusals.ts`, a
   per-window, in-memory record, replaced and never changed in place, forgotten when the box is saved). **Restore** is a
   panel button beside the field while the row's per-side value is dropped (`droppedFor` over `CliPathKeeper.dropped()`,
@@ -4769,7 +4769,7 @@ flowchart LR
 | `consultantWrite.ts` | what an edit in the *Consultant* section STORES — the vendor picker, the three per-caller fields, and a custom endpoint's name and URL with the one-name-one-vault-key check. The write half of `consultSettings.ts`, lifted out of `settingsShape.ts` on 2026-09-15 when that file passed the 800-line rule |
 | `sidesSeen.ts` | pure: the side registry — `coai.sideSeen@<sideKey>` records, the once-a-day stamp, the 90-day window and its pruning, `sideHereOf`, the `coai.pathFieldsPerSide` switch (`pathFieldsModeOf`, `twoPathFields`), and the thin store half (`stampThisSide`, `sidesIn`, `forgetSide`) over a structural `Memento` (paths per side E2) |
 | `sidesSeenView.ts` | pure: Setup › This side's list of the sides seen, **Forget** per side, the path-fields switch and the sentence that says what it decides (E2.4) |
-| `cliPathSave.ts` | pure: the one write rule for a catalog row's CLI path — `savedCliPath` (this side's field mirrored into the legacy value and `mirrored`, the other side's never; other families pinned) and `vendorFieldWrite`, the panel's vendor write (paths per side E3.2) |
+| `cliPathSave.ts` | pure: the one write rule for a catalog row's CLI path — `savedCliPath` (this side's field mirrored into the legacy value and `mirrored`; the other side's never changes the legacy value, and `mirrored` is set to that unchanged value; other families pinned) and `vendorFieldWrite`, the panel's vendor write (paths per side E3.2) |
 | `cliPathKeep.ts` | pure: the kept copy of each user-layer row's per-side CLI path — `keptKey` (layer + id + runtime + model), `keepPlan` (copy, prune, the dropped rows), `restoredRows` (the copy back, legacy untouched, `mirrored` caught up only for a legacy value spelled for neither OS, a stale click refused) and the notice's words (paths per side, E3 as built) |
 | `cliPathKeeper.ts` | vscode-free: `CliPathKeeper` — one look per settings change, a dropped member said once per run, **Restore** only on a click (paths per side, E3 as built) |
 | `cliPathKeepHost.ts` | the vscode around the keeper: `globalState`, the user layer's `coai.vendors`, the `cli-path-value-dropped` / `cli-path-restore-refused` notices, the one settings write |
