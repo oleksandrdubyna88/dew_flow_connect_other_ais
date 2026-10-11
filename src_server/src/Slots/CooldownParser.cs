@@ -200,8 +200,9 @@ public static partial class CooldownParser
     [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)\s?h)?\s?(?:(?<m>\d+)\s?m)?\s?(?:(?<s>\d+)\s?s)?(?![A-Za-z0-9])(?!\s*\d)", RegexOptions.IgnoreCase)]
     private static partial Regex Duration();
 
-    // A wait the vendor STATED that the duration form could not read whole — what makes the guess err long.
-    [GeneratedRegex(@"resets\s+in\s+\d", RegexOptions.IgnoreCase)]
+    // A wait the vendor STATED that the duration form could not read whole — what makes the guess err long. Any word
+    // after "resets in", not only a digit: "Resets in one hour" is a stated wait too (CodeRabbit on #754).
+    [GeneratedRegex(@"resets\s+in\s+\w", RegexOptions.IgnoreCase)]
     private static partial Regex StatedButUnread();
 
     // "weekly limit reached" with no date attached — a day is the smallest wait that can help.

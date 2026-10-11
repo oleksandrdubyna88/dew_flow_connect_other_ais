@@ -239,6 +239,15 @@ public sealed class CooldownParserTests
     }
 
     [Fact]
+    public void AStatedWaitInWords_ErrsLong_AndWeeklyStillWinsWhenLonger()
+    {
+        // CodeRabbit on #754: a wait stated in words is still a stated wait — never the 30-minute retry into it.
+        CooldownParser.Until("Resets in one hour", Now).Should().Be(Now + CooldownParser.MaxGuess);
+        // And "weekly" is checked first because it is the LONGER guess (a day): both err long, the longer wins.
+        CooldownParser.Until("weekly limit reached. Resets in 9999h", Now).Should().Be(Now + CooldownParser.WeeklyWithoutDate);
+    }
+
+    [Fact]
     public void ADurationIsNotMistakenForAClockTime()
     {
         // "resets" is the word the clock-time form starts with; "in" must keep the two apart.
