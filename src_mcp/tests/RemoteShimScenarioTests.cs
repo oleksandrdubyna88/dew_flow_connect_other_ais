@@ -179,16 +179,23 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         TeamServerAuth.WriteToken(TeamServerAuth.TokenPath(_dataDir, _prefix), token);
 
     /// <summary>Run what the ADAPTER says to run — argv included, so the command line is under test too.</summary>
+    /// <param name="shaped">
+    /// What the executor decides after <c>Build</c> and before the launch — the round, the attempt, a shortened
+    /// timeout — applied to the built invocation; the adapter's <c>ForLaunch</c> then rebuilds the argv as the
+    /// executor would (story 4.1 of todo/PLAN_every_round_is_counted.md). Null runs the invocation as built.
+    /// </param>
     private async Task<(int Exit, string StdOut, string StdErr, ReviewerInvocation Invocation)> RunAsync(
-        TimeSpan timeout, ReviewerSettings? row = null)
+        TimeSpan timeout, ReviewerSettings? row = null, Func<ReviewerInvocation, ReviewerInvocation>? shaped = null)
     {
-        var invocation = new RemoteRuntime("codex", _prefix).Build(
+        var adapter = new RemoteRuntime("codex", _prefix);
+        var built = adapter.Build(
             RoleCatalog.ArchitectureRole,
             "review this",
             _outputDir,
             Path.Combine(_outputDir, "schema.json"),
             _outputDir,
             (row ?? new ReviewerSettings("codex") { Model = "m" }) with { DataDir = _dataDir, Timeout = timeout });
+        var invocation = shaped is null ? built : ((IReviewerRuntime)adapter).ForLaunch(shaped(built));
 
         // The adapter names this binary through the dotnet host when it is running from a dll; the
         // test runs the published exe directly, so only the arguments are taken from it.
@@ -259,6 +266,41 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         posted.Should().Contain("\"effort\":\"high\"").And.Contain("\"systemPrompt\":\"MARKER-shim be terse\"");
         new RemoteRuntime("codex", _prefix).NotApplied(invocation, new Runners.Processes.ProcessResult(exit, stdout, stderr, false))
             .Should().Be("the Team server did not apply systemPrompt: the switch is off");
+    }
+
+    [Fact]
+    public async Task TheRoundTheAttemptAndTheSecondsLeft_GoOut_WithTheRealBinary()
+    {
+        // Story 4.1 of todo/PLAN_every_round_is_counted.md, through the real binary: a repair of a round, launched with
+        // forty seconds of its reviewer's six hundred left, tells the server its round, what it is, and the seconds left on
+        // the shim's OWN deadline — thirty less the start-up, never the five hundred and ninety it was built with.
+        SignIn();
+        var posted = string.Empty;
+        _answer = context =>
+        {
+            if (context.Request.HttpMethod != "POST")
+            {
+                return (200, """{"id":"job-1","status":"done","position":0,"answer":"{}","tokensIn":3,"tokensOut":4}""");
+            }
+
+            using var reader = new StreamReader(context.Request.InputStream);
+            posted = reader.ReadToEnd();
+
+            return (202, """{"id":"job-1","position":0}""");
+        };
+        const string key = "0123456789abcdef0123456789abcdef";
+
+        var (exit, _, stderr, invocation) = await RunAsync(
+            TimeSpan.FromSeconds(600),
+            shaped: built => RetryLadder.Lesser(TimeSpan.FromSeconds(40), built with { Round = key, Attempt = LaunchAttempts.Repair }));
+
+        exit.Should().Be(RemoteAsk.Ok, $"stderr said: {stderr}");
+        invocation.Request.Arguments.Should().ContainInConsecutiveOrder("--timeout-seconds", "30");
+        using var body = System.Text.Json.JsonDocument.Parse(posted);
+        body.RootElement.GetProperty("round").GetString().Should().Be(key);
+        body.RootElement.GetProperty("attempt").GetString().Should().Be(LaunchAttempts.Repair);
+        body.RootElement.GetProperty("remainingSeconds").GetInt32().Should().BeInRange(20, 30, "the seconds left on the shim's own deadline, after a cold .NET start");
+        body.RootElement.GetProperty("timeoutSeconds").GetInt32().Should().Be(40);
     }
 
     [Fact]

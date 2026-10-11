@@ -606,9 +606,10 @@ public sealed class BoundedScheduler(
 
             attempts += 1;
             var started = watch.Elapsed;
-            // What is LEFT of the deadline, never the whole of it again.
+            // What is LEFT of the deadline, never the whole of it again — and the launch stamped as the retry it is
+            // (story 4.1 of todo/PLAN_every_round_is_counted.md); its repair stays a repair, which the executor stamps.
             var next = await executor.RunAsync(
-                RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget),
+                RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget) with { Attempt = LaunchAttempts.Retry },
                 w.Repair is null ? null : RetryLadder.WithinRemaining(w.Repair, watch.Elapsed, budget),
                 ct);
             launches = [.. launches, .. LaunchLines.StepOf(next, watch.Elapsed - started, LaunchAttempts.Retry)];

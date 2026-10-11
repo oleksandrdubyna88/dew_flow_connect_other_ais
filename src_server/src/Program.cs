@@ -85,6 +85,12 @@ var minimumContract = config.GetValue("Coai:MinimumClientContract", ContractVers
 var acceptedRoles = AcceptedRoles.From(
     SplitCsv(config["Coai:ExtraRoles"]),
     config.GetValue("Coai:AllowAnyRole", false));
+// The budget rule's two numbers (story 4.3 of todo/PLAN_every_round_is_counted.md), refused at boot for the same reason
+// as the roles above: a negative margin or a start-up allowance of nought is a server that starts work for callers who
+// have already gone, and nobody would see why.
+var clientBudget = ClientBudgetPolicy.From(
+    config.GetValue("Coai:DeadlineSafetyMarginSeconds", ClientBudgetPolicy.DefaultSafetyMarginSeconds),
+    config.GetValue("Coai:MinStartSeconds", ClientBudgetPolicy.DefaultMinStartSeconds));
 
 var msTenant = config["Auth:Microsoft:Tenant"];
 var msAudiences = SplitCsv(config["Auth:Microsoft:Audiences"]);
@@ -176,7 +182,8 @@ var vendorHealth = new VendorHealthCache(new ProcessLauncher());
 // stops with it; an in-flight review dies with the container, which is what `lost` exists to report.
 var jobs = new JobStore(
     config.GetValue("Coai:PerCallerQueued", 20),
-    config.GetValue("Coai:PerCallerRunning", 3));
+    config.GetValue("Coai:PerCallerRunning", 3),
+    budget: clientBudget);
 var jobRunner = new JobRunner(
     jobs,
     catalog,

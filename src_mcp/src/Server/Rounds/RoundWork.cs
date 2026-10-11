@@ -41,4 +41,19 @@ internal sealed record RoundWork(
         : this(reviewers, notAsked, [])
     {
     }
+
+    /// <summary>
+    /// This work with every launch stamped as <paramref name="key"/>'s round — each reviewer's first launch and its
+    /// repair, the security lane's included (story 4.1 of todo/PLAN_every_round_is_counted.md). A retry launches the
+    /// same invocation, a follow-up is derived from it, and a conversation's later turn is stamped by the turn loop, so
+    /// this ONE stamp reaches every launch the round makes.
+    /// </summary>
+    internal RoundWork InRound(string key) => this with
+    {
+        Reviewers = [.. Reviewers.Select(w => w with
+        {
+            Invocation = w.Invocation with { Round = key },
+            Repair = w.Repair is null ? null : w.Repair with { Round = key },
+        })],
+    };
 }

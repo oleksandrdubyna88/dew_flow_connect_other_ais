@@ -47,10 +47,18 @@ internal sealed class ApiEndpointStub : IDisposable
     /// <summary>The OpenAI-compatible base this stub answers on — <c>http://127.0.0.1:port/v1</c>.</summary>
     public string Endpoint { get; }
 
+    /// <summary>
+    /// The bare origin — <c>http://127.0.0.1:port</c> — for a stub standing in for something that is not an OpenAI
+    /// endpoint: a Team server, whose shim posts to <c>{origin}/api/reviews</c> (<c>ARoundHasAnIdOnTheWireTests</c>).
+    /// The stub answers every path alike; only the test's <see cref="Answers"/> reads it.
+    /// </summary>
+    public string Origin { get; }
+
     private ApiEndpointStub(HttpListener server, string prefix)
     {
         _server = server;
-        Endpoint = prefix.TrimEnd('/') + "/v1";
+        Origin = prefix.TrimEnd('/');
+        Endpoint = Origin + "/v1";
         _ = Task.Run(ServeAsync);
     }
 

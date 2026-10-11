@@ -223,7 +223,31 @@ public sealed record UsageEntry(
     /// column to ask. Empty on a line older than the field, on every ending but a cancellation, and on a local line,
     /// where nothing above the executor records which token fired. Trailing and defaulted like the rest.
     /// </remarks>
-    string EndCause = "")
+    string EndCause = "",
+
+    /// <summary>
+    /// The id of the ROUND this launch belongs to — 32 hex characters the client mints per round, carried by every launch
+    /// of it (retries, repairs and follow-ups included) — or empty.
+    /// </summary>
+    /// <remarks>
+    /// Story 4.2 of todo/PLAN_every_round_is_counted.md: the Team server writes the round its request carried, so a round
+    /// is counted from the lines as one round however many launches it took. Empty on a line older than the field, on a
+    /// line from a client that sent none, and where a malformed id was dropped — never minted in its place. Trailing and
+    /// defaulted like the rest.
+    /// </remarks>
+    string Round = "",
+
+    /// <summary>
+    /// What the CLIENT called the request this launch served — <c>first</c>, <c>retry</c>, <c>repair</c>, <c>followUp</c> —
+    /// or empty. Written by the Team server beside its own <paramref name="Attempt"/>, never over it.
+    /// </summary>
+    /// <remarks>
+    /// Story 4.2: on a server line <paramref name="Attempt"/> is the server's word for the launch inside the JOB
+    /// (<c>first</c> / <c>rotated</c> / <c>followUp</c>), and a client's repair is a whole new job whose first launch is
+    /// still the server's <c>first</c> — one field cannot say both. Empty on a local line, whose own
+    /// <paramref name="Attempt"/> already IS the client's word, and on every line older than the field.
+    /// </remarks>
+    string ClientAttempt = "")
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -401,9 +425,15 @@ public sealed class UsageLedger(string dataDir)
             turn: string.Empty, attempt: string.Empty, ranWith: LaunchOptions.None, job: string.Empty, slot: string.Empty);
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
+    /// <remarks>
+    /// <paramref name="round"/> and <paramref name="clientAttempt"/> are what the job's REQUEST carried (story 4.2 of
+    /// todo/PLAN_every_round_is_counted.md) — the client's round id and its own word for the request — each empty when the
+    /// request sent none or sent one the server dropped.
+    /// </remarks>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "") =>
+        string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "",
+        string round = "", string clientAttempt = "") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
@@ -425,7 +455,9 @@ public sealed class UsageLedger(string dataDir)
             Attempt: attempt,
             Job: job,
             Slot: slot,
-            EndCause: endCause).RanWith(ranWith));
+            EndCause: endCause,
+            Round: round,
+            ClientAttempt: clientAttempt).RanWith(ranWith));
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;
