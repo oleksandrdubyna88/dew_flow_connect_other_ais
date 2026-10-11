@@ -35,7 +35,6 @@ dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
 
 # Tests — ALWAYS the MTP executable, NEVER `dotnet test` (no VSTest host here; it aborts)
 node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
-node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-method "*SomeTest*"
 
 # Extension (once src_vs_code exists)
 cd src_vs_code && npm ci && npm test
