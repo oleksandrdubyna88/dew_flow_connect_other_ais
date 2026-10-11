@@ -1,4 +1,4 @@
-import { bySideOf, familyLabel, type ExecutableBySide, type PathFamily, type StoredExecutable } from './pathFamily';
+import { bySideOf, familyLabel, spelledForTheOtherOs, type ExecutableBySide, type PathFamily, type StoredExecutable } from './pathFamily';
 
 /**
  * A kept copy of every catalog row's per-side CLI path, and the one-click way back when a save drops it
@@ -85,7 +85,9 @@ export interface KeepPlan {
 /**
  * One look at a layer's rows: a row that carries its member has it copied (written only when it differs from the copy); a
  * row without it whose copy exists is DROPPED; a copy no row of the layer carries any more is deleted — a removed row, or
- * one whose runtime or model changed, never inherits it.
+ * one whose runtime or model changed, never inherits it. The limit: a copy is deleted only when a window of this version
+ * LOOKS while its row is gone, so a row removed and re-added with the same id, runtime and model while no such window was
+ * open is offered the old copy — still only on a click, and only for the same model.
  */
 export function keepPlan(store: Pick<KeptStore, 'keys' | 'get'>, layer: string, rows: readonly KeptRow[]): KeepPlan {
   const looks = rows.map((row) => lookAt(store, layer, row));
@@ -130,7 +132,8 @@ function ordered(member: ExecutableBySide): readonly (string | undefined)[] {
 
 /**
  * The rows after **Restore**, decided on the rows as they are AT THE CLICK — or the reason nothing is written. The copy goes
- * back into the one row it was taken from, exactly as kept, and the legacy `executablePath` is left as it is: a later save
+ * back into the one row it was taken from, as kept ({@link restoredMember}: its `mirrored` caught up only when the legacy
+ * value is spelled for neither OS), and the legacy `executablePath` is left as it is: a later save
  * by an extension that does not know the member is then still DETECTED (legacy ≠ the kept `mirrored`) and still wins for the
  * family it is spelled for, so restoring the Windows value after a WSL save of P′ leaves the WSL side running P′ and the
  * legacy value P′ (a save of the Windows field would have mirrored the Windows value into it — never this).
@@ -144,7 +147,22 @@ export function restoredRows<R extends KeptRow>(rows: readonly R[], offer: Dropp
   const row = rows.find((one) => sameIdentity(one, offer));
   const refusal = row === undefined ? 'the model is no longer in the list' : staleness(row, offer, keptNow);
 
-  return refusal.length > 0 ? refusal : rows.map((one) => (one === row ? { ...one, executablePathBySide: offer.kept } : one));
+  return refusal.length > 0 ? refusal : rows.map((one) => (one === row ? { ...one, executablePathBySide: restoredMember(offer.kept, one.executablePath) } : one));
+}
+
+/**
+ * The member a restore writes: the copy exactly — unless the legacy value the older save left is spelled for NEITHER OS
+ * (a cleared path, a bare name, a share). Such a value reads as that older save on BOTH sides (`olderSaveFor`), so the
+ * exact copy would change nothing either side runs; its `mirrored` is then set to that legacy value, and both sides run
+ * their kept values again. The legacy value itself is never touched, so an older reader keeps what the older save wrote
+ * (the E3 code round's own review).
+ */
+function restoredMember(kept: ExecutableBySide, legacy: string): ExecutableBySide {
+  return spelledForNeither(legacy) ? { ...kept, mirrored: legacy.trim() } : kept;
+}
+
+function spelledForNeither(path: string): boolean {
+  return !spelledForTheOtherOs(path, true) && !spelledForTheOtherOs(path, false);
 }
 
 function sameIdentity(row: KeptRow, offer: DroppedValue): boolean {

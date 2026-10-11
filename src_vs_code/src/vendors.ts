@@ -462,9 +462,9 @@ function featureField(v: Record<string, unknown>): { feature?: true } {
 /**
  * The row's CLI path: the legacy `executablePath` every extension reads, and the per-side pair only when a row said one
  * (`bySideOf`: the string members by name, trimmed) — so a row an older extension wrote stays byte-identical (paths per
- * side E3.1).
+ * side E3.1). Also what a catalog rewrite reads of a stored row (`catalogLaunch.withLaunch`).
  */
-function cliPathFields(v: Record<string, unknown>): { executablePath: string; executablePathBySide?: ExecutableBySide } {
+export function cliPathFields(v: Record<string, unknown>): { executablePath: string; executablePathBySide?: ExecutableBySide } {
   const executablePath = typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '';
   const executablePathBySide = bySideOf(v['executablePathBySide']);
 

@@ -142,6 +142,24 @@ test('Restore puts the kept value back and leaves the legacy value the older sav
   assert.equal(resolved(after, 'posix'), P2, 'the WSL side keeps what its older save meant');
 });
 
+test('Restore after an older save of a value spelled for NEITHER OS gives both sides their kept values back — a press that changes nothing is no restore', async () => {
+  // The E3 code round's own review: an older extension that CLEARED the path (or saved a bare name) left a legacy value
+  // that reads as that older save on BOTH sides, so restoring the copy exactly made no side run anything else — the
+  // notice went away and nothing changed. The legacy value stays as the older save wrote it, for older readers.
+  for (const older of ['', 'codex.cmd']) {
+    const w = world([BOTH()]);
+    await w.keeper.check();
+    w.set([row(older)]);
+    await w.keeper.check();
+    await w.keeper.restore(w.said[0]!);
+
+    const after = vendorsFrom(JSON.parse(JSON.stringify(w.writes[0])) as unknown)[0]!;
+    assert.equal(after.executablePath, older, `the legacy value is the older save's (${JSON.stringify(older)})`);
+    assert.deepEqual({ windows: resolved(after, 'windows'), posix: resolved(after, 'posix') }, { windows: W, posix: P },
+      `Restore after an older save of ${JSON.stringify(older)} gave no side its value back`);
+  }
+});
+
 test('an explicitly empty kept value is restored as empty — the PATH lookup — never as absent', async () => {
   const w = world([row('//server/share/codex', { windows: '', posix: P, mirrored: '//server/share/codex' })]);
   await w.keeper.check();

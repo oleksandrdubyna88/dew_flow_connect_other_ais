@@ -190,7 +190,7 @@ value. **Clearing** a field writes `""` (present, empty → PATH lookup), never 
 the legacy value, and a legacy `//server/share/codex` is spelled for neither OS, so it would be run on both sides.
 **An older extension's save is detected, not lost**: when the stored legacy value differs from `mirrored`, something
 that does not know `BySide` saved since — the legacy value then wins for the family it is spelled for (and, spelled for
-neither, for this side), until the next new-extension save rewrites both. So what a side resolves is always what was
+neither OS, for BOTH families — the save cannot say whose it was), until the next new-extension save rewrites both. So what a side resolves is always what was
 last saved for it, whatever the mode was at either moment. The server applies rule 3 itself as defence in depth (an
 older extension still sends the legacy value): an `ExecutablePath` spelled for the other OS is treated as empty, with an
 Information log line — never a refusal.
@@ -757,10 +757,41 @@ compiling break-it on its deciding line; the observed messages are in the commit
     notice's **Restore** is the action.
   - **Said to people:** the help's settings paragraph (five languages) and the CHANGELOG's *Unreleased* paragraph now say
     the notice and **Restore**; `helpCoverage.test.ts` asks every language for `**Restore**` (RED on `en`; break-it:
-    the Ukrainian label un-bolded → red). The CHANGELOG also records finding c as a fix.
+    the Ukrainian label un-bolded → red). Finding c is NOT in the CHANGELOG: it fixed E3's own unreleased save rule, a
+    defect no release had (dropped when main's extension 0.68.0 was merged in).
   - `scripts/live-paths-per-side-compat.mjs` still shows the release DROPPING the member (that is the release's
     behaviour); that the drop is now SAID is pinned by `cliPathKeep.test.ts` over the same shape (a row without the
     member after a copy was kept) — the script was not extended (it drives the released halves, not this build's host).
+- **The code round (2026-10-11): the gate (codex, 4 reviewers, `proceed`) and this repository's own reviewer, run at
+  once.** The gate: the German help paragraph — rejected (the owner keeps help in five languages); a test fixture cast
+  — accepted, `catalogEdit.test.ts` widens a row through `isRecord` (`withRowFields`), its older twin too; a chat preset
+  converted from a row dropping the other side's path — rejected, verified false (`chatModelsOf` is a read-time view
+  built on each side from that side's reader and family; nothing persists it); quadratic grouping — rejected (a
+  person's handful of folders). **The own reviewer found two real defects the gate did not:**
+  - **A question-row or consultant edit on one side took the other side's CLI path away, silently.** A definition is
+    written back RESOLVED for its side (`storedForThisSide`), while `catalogLaunch.sameLaunch` compared the LEGACY value
+    and `withLaunch` wrote it into the legacy field alone — `mirrored` fell behind, the write read as an older
+    extension's save, and with a value spelled for neither OS (`""`, a bare name) the legacy value won on BOTH sides; the
+    member stayed, so the keeper said nothing. RED (`catalogEdit.test.ts`, the Windows window's write passed as
+    `editThroughCatalog(…, 'windows')` so the test is the same on every host): a Windows switch flip on a question row
+    and a Windows model edit on a consultant each left WSL running `''` in place of `/home/u/.local/bin/codex`. **Fix:**
+    `Launch.family` (absent = this host's) names whose value the definition carries; `sameLaunch` compares
+    `storedForThisSide(row, family)`; `withLaunch` leaves the path untouched when that side already runs the value, and
+    otherwise saves it as that side's field through `savedCliPath` (`vendors.cliPathFields`, exported, reads the stored
+    row). A bare name typed on Windows now moves nothing on WSL. Break-its (each compiles): `sameLaunch` on the legacy
+    value → *the Windows-resolved definition did not match its own row*; the rewrite writing the legacy value alone →
+    *a bare name typed on Windows took the WSL side's CLI path away* (`posix: 'codex.cmd'`); the rewrite always saving
+    → the per-side member lost (`{ windows: '', posix: '', mirrored: '' }`).
+  - **Restore changed nothing after an older save of a value spelled for neither OS.** Such a legacy value (a cleared
+    path, a bare name) reads as the older save on BOTH sides, so the exact copy left both sides running it and the
+    notice went away. RED (`cliPathKeep.test.ts`): after an older save of `""`, both sides ran `''` after Restore.
+    **Fix:** `restoredMember` sets the copy's `mirrored` to that legacy value in this one case, so both sides run their
+    kept values again; the legacy value is still never touched (older readers keep the older save). A spelled legacy
+    value keeps the exact restore (the older save's own side keeps it). Break-it: the case disabled → red.
+  - Also from the own review: the reused-id limit stated where `keepPlan` overclaimed (a copy is deleted only when a
+    window of this version looks while its row is gone), and design (c)'s sentence corrected — a legacy value spelled for
+    neither OS wins for BOTH families. The literal `code:` beside `DROPPED` in `cliPathKeepHost.ts` stays: the
+    notification-sites census reads the literal at each call site.
 - **Not in E3:** any page change — the two fields (E4.1), the three folder groups (E4.2) and the other side's data
   directory (E4.3) are stored and decided here and drawn there; and the panel's **Restore** button (E4.1).
 
