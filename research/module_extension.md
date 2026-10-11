@@ -3439,7 +3439,11 @@ red at every start and created by nothing (D3).
   the folder a person chose, extension storage, a temp folder), and holds every async one to the waiting guard. The
   consultants survey (`consultantsProbe`, `coai-mcp --consultants`) is a writer by proxy — the server writes
   `consultations/health/consultants.json` with a `CreateDirectory` — and is not started while the named root is
-  missing; the tab reads the refusal as an unanswered probe. `notificationsFile.recordNotification` answers
+  missing; the tab reads the refusal as an unanswered probe. So are the paid checks since 2026-10-11
+  (`research/PLAN_names_and_a_missing_root.md` story 3.3): `consultantCheckRun.runConsultantCheck` asks the board the
+  same way before it spawns `--check-consultant` / `--check-model` (whose lock writes `consultations/health`) and
+  answers a held check as `crashed` with the finding's sentence and *"The check was not started — nothing was sent."*;
+  the server refuses the same folder on its own too (exit 74, `module_server.md`). `notificationsFile.recordNotification` answers
   `landed | held | lost`: a record refused under a missing root is LOST and counted into the ledger's write gap —
   except the missing-path notice itself, which is HELD in memory (`holdNotice` / `heldNotices`: one per setting key,
   the newest replacing the older, released the moment the path changes or the folder is found again — bounded by the
@@ -11772,8 +11776,8 @@ called "GPT-6-Astra"). `catalogPicks.rowName` is the name edited on the row's Mo
 `rowPicks` option label (the consultant's callers, the question rows), the stranded option and the "not ticked"
 sentence, and the "Used by" strip above every feature tab (`catalogSections.tickedFor`) use it; an option's VALUE stays
 the id, because the id is what a pick stores. A pick of a row that is gone is still named by its id — there is no name
-left to read. Not yet: the Security lane's Reviewer select draws its options from raw ids (`securityLaneView.select`),
-though its stranded sentence goes through `rowPicks` and is named.
+left to read. The Security lane's Reviewer select, which drew raw ids here, is named the same way since 2026-10-11
+(below, "The Security lane names its reviewers").
 
 **Fixed on the way (both pages):** the Question consultant section resolved its rows against the panel's `vendors` —
 the current page's reviewers since E1.4 — so a row epic 1 had migrated into a reference to an `ask-<id>` row read as
@@ -12504,3 +12508,38 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   exactly one two-column rule — on the shared class, at 1100 px — with the cap lifted there; and no top-border rule
   reaches a Chat model block while one still reaches a Models card block. Design record:
   [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
+
+## The Security lane names its reviewers (2026-10-11, story 1 of `todo/PLAN_names_and_a_missing_root.md`)
+
+Each pair's Reviewer select (`securityLaneView.reviewerSelect`) is built from `catalogPicks.rowPicks('security', pick,
+allRows, 'This pair')` through `optionHtml` — the question consultant's naming since #748, reused, not a second one: a
+row by its card's name with its id beside it (`GPT-6-Astra (chat-preset-…)`; the option's VALUE stays the id),
+`(switched off)` for a row that is off, `(stranded)` for a pick the list does not hold. A pair that names no reviewer (a
+hand edit — `securityLane.ts` accepts `vendor: ''`) gets a leading option *no reviewer — pick one*, selected and
+disabled, never an empty one, and the warning *This pair names no reviewer — pick one.* A pick of a row on Models but
+not ticked keeps `rowPicks`'s sentence (*… is not ticked for the security lane on Models. This pair keeps it until you
+pick another.*); a pick whose row is GONE gets the lane's own (`securityLaneView.strandedNote`): *<id> is no longer on
+Models. The server drops this pair until you pick another reviewer.* — the server drops a pair whose reviewer is not a
+row (`SecurityLaneSetting.Pair`), so it does not "keep asking" for it as a question row does; the question consultant's
+wording is unchanged. A switched-off reviewer's warning names it (`rowLabel`): *Reviewer GPT-6-Astra (…) is switched
+off; switch it on, on Models, or select an enabled reviewer.* — where it used to say `Reviewer  is unavailable` with no
+name at all for an empty pick. The prompt cards' reviewer ticks (`securityPromptCard`) are named by `rowLabel`, and an
+*Offered:* line (`offeredLine('security')`, with **Change on Models**) sits under *Reviewer / prompt pairs*. Help: the
+`security-lane` article in five languages (`helpCoverage.test.ts` asks each for the marks). Tests: the page RUN in
+`aSecurityPairNamesItsReviewer.test.ts`; `securityLane.test.ts`'s removed-reviewer sentence moved to the new wording.
+
+## A missing named data folder: the paid checks are held too (2026-10-11, story 3.3 of `todo/PLAN_names_and_a_missing_root.md`)
+
+`consultantCheckRun.runConsultantCheck` — the one road of the Consultant tab's **Check** and the Models tab's ✓ Check —
+reads the findings board before it spawns, as `consultantsProbe.asked` does (at once once the board has its first
+data-root answer, so the spawn still starts in the same turn; otherwise after `refusedDataRootOnceSettled`, bounded): a
+missing named root holds the check, answered as `crashed` with the finding's own sentence and *"The check was not started
+— nothing was sent."* (the server's lock would have made `<root>/consultations/health`, and the root with it). The
+server refuses the same folder by itself as well (`module_server.md`, exit 74), so a check started another way makes
+nothing either. `everyServerModeTheExtensionLaunches.test.ts` classifies `--check-consultant` / `--check-model` as *a
+person acts, held by the extension* — and requires the server's `AWriterModeRefusesAMissingNamedRootTests.cs` to run
+them — and `--check-security` as *touches no data directory*, held by the server's reader inventory. The data article
+(`where-your-data-lives`) says in five languages that the MCP server creates no missing named folder either. The two
+halves are held level by the seam leg `scripts/seam-missing-named-root.mjs` (`npm run test:seam`): the extension's own
+decision (`namedRoot()` + the page's probes + `dataDirFinding`) against the real binary's `--check-model` and a served
+`providers` call, for a missing root, an existing root with a missing side folder, and no `COAI_DATA_DIR`.

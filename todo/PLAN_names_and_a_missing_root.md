@@ -1,6 +1,7 @@
 # PLAN — the Security lane names its reviewers, the server words a stranded pick, and a missing named data folder is never created by the server
 
-> Status: **plan only, nothing implemented yet (2026-10-11).** Scope: `src_vs_code` (`securityLaneView.ts`,
+> Status: **built on `feat/names-and-a-missing-root` (2026-10-11), not yet merged — the operator promotes it after the
+> merge; see "As built" for the deviations.** Scope: `src_vs_code` (`securityLaneView.ts`,
 > `securityPromptCard.ts`, `consultantHealthPanel.ts`), `src_mcp` (`QuestionAdmission.cs`, `CapabilityMatrix.cs`,
 > `Program.cs` start-up, `ConsultantCheckMode.cs`, the writer modes that open `RoundsDb`, `PanelSettings.cs`).
 >
@@ -159,8 +160,42 @@ the family checks (`plan-lifecycle`, `pin-check`, `gate-snippet-check`).
 
 ## Definition of Done
 
-- [ ] The Security lane's select, warning, prompt ticks and *Offered:* line name every row; no empty option text; RUN page tests.
-- [ ] The server's stranded-row sentence matches the extension's; no server sentence shows `''`; tests pin both.
-- [ ] No coai-mcp mode creates a confirmed-absent named root; serve answers every tool with the named refusal; the default location and `<root>/<side>` are still made; tests prove each.
-- [ ] The extension does not launch the health checks under a missing root; the mode census reclassified.
-- [ ] Help (five languages) for any new user-visible words; CHANGELOG under Unreleased; `module_extension.md`, `module_server.md`, `module_tests.md`; the paths plan's "Left" note corrected; this plan promoted when done.
+- [x] The Security lane's select, warning, prompt ticks and *Offered:* line name every row; no empty option text; RUN page tests.
+- [x] The server's stranded-row sentence matches the extension's; no server sentence shows `''`; tests pin both.
+- [x] No coai-mcp mode creates a confirmed-absent named root; serve answers every tool with the named refusal; the default location and `<root>/<side>` are still made; tests prove each.
+- [x] The extension does not launch the health checks under a missing root; the mode census reclassified.
+- [ ] Help (five languages) for any new user-visible words; CHANGELOG under Unreleased; `module_extension.md`, `module_server.md`, `module_tests.md`; the paths plan's "Left" note corrected; this plan promoted when done. *(All but the promotion, which the operator does after the merge.)*
+
+## As built (2026-10-11)
+
+Seven commits on `feat/names-and-a-missing-root`, one per story plus the seam leg and the docs. Every story went RED
+first with the real symptom (the rows of [module_tests.md](../research/module_tests.md), "Names and a missing root",
+carry each message), then GREEN, then compiling break-its on the deciding lines, restored in `finally`.
+
+**What shipped as planned:** story 1 through `catalogPicks` (`rowPicks` + `optionHtml`, `rowLabel`, `offeredLine`) — no
+second naming; story 2's sentence; the three-state `NamedRootMissing` (only `Absent` refuses; `Unknown`, the default
+location and `<root>/<side>` never); the writer modes' exit 74; serve's refusal-only branch before the logger (decision
+B); the checks held by the extension; the census reclassified; the seam leg in `npm run test:seam`.
+
+**The consultant's advice, verified first.** `TheServerRefusesAMissingNamedRootTests` was RED on today's binary
+(`initialize made the missing data folder, holding: consultations, logs, runs, …`), GREEN with the branch, and the break-it
+that throws an `InvalidOperationException` instead of an `McpException` reached the client as *"An error occurred
+invoking 'providers'."* — so the SDK keeps an `McpException`'s message in the error tool result (`isError: true`) and
+hides any other, exactly as advised. Nothing was written past a sweep's beat (12 s at `COAI_SWEEP_SECONDS=10`).
+
+**Deviations:**
+
+| # | Planned | Built | Why |
+|---|---|---|---|
+| 1 | 2.1: "a bare id that is not a catalog id keeps the runtime list as its tail" | A vendor that is a RUNTIME's own name this build knows (`ReviewerRuntimeSelector.RuntimeNames`, e.g. `gemini`, `remote`) keeps the old sentence with the runtime list; any other id gets the extension's sentence; an empty pick says *"this row picks no model — pick one, in …"* (the extension's own words) | The server cannot tell a catalog id from any other id — it is never sent the catalog's ids for a stranded row. The runtime-name set is a fact it has. |
+| 2 | 3.1: the check "at the top of every writer mode" | Once in `Program.RunAsync` for `Program.WriterModes`, AND inside `ConsultantCheckMode.AnswerAsync` / `AnswerModelAsync` (the entry points the plan's test drives) | One list instead of seven copies; the inner guard is the plan's test path. The seam break-it showed the redundancy is real: the dispatch guard alone disabled stays green because the entry guard still refuses. |
+| 3 | 3.1: helper `NamedRootMissing(env, presence)` | `NamedRootMissing(env, Func<string, FileAttributes> attributesOf)` + `PanelSettings.NamedDataRoot` / `NamedRootRefusal(attributesOf)` for code holding settings | The attribute read is what `QuestionRoots.PresenceOf` takes, so the three-state mapping stays that one function's; a test injects a read that throws `UnauthorizedAccessException` / `IOException`. |
+| 4 | Unknown "not refused, in every mode and in serve" | Proved on the helper, on the dispatch decision (`Program.MissingRootRefusal`) and on serve's (`Program.ServeRefusal`) with an injected read — not by running each mode with one | The modes read `File.GetAttributes` themselves; the decision every one of them takes is the one tested. |
+| 5 | 3.2: "console logging to stderr only" | No logger at all in the refusal-only server: the reason is written once to stderr (`Program.Note`), and the end is exit 74 | Nothing else happens in that process worth a log line, and no Serilog sink can then make a file by accident. |
+| 6 | 3.3: `consultantHealthPanel.runCheck` refuses | The guard is in `consultantCheckRun.runConsultantCheck`, which `runCheck` calls; a held check is `crashed` with the finding's sentence + *"The check was not started — nothing was sent."* | `runCheck` is `vscode` wiring no unit test can load; the module it calls is. `crashed` is the shape the existing *model removed* hold already uses, so no new result kind (and no new table words). The board is read at once when it has its first answer — `consultantsProbe.asked`'s own one-line expression, repeated rather than wrapped, because an `await` on a wrapper would move the spawn out of the turn the existing tests pin. |
+| 7 | 3.3: `--check-security` "touching no data directory" | A census kind of its own (*touches no data directory*), held by the server's reader inventory; the two checks' kind (*a person acts, held by the extension*) is held by a new census test that requires them in the server's writer test | The plan named the reclassification; this is how each new kind is held. |
+| 8 | Seam (c): a served `initialize` + tool call with no `COAI_DATA_DIR` | Served only on POSIX (`XDG_DATA_HOME` moves the default into a temp folder); on Windows (c) asks `--check-model` alone, which writes nothing for an unavailable row | On Windows .NET reads `%LOCALAPPDATA%` from the shell, not the environment: a served run would write logs, a run marker and sweeps into the developer's own data. |
+| 9 | Help | Two additions in five languages: the `security-lane` article (the marks) and `where-your-data-lives` (the server creates no missing named folder either); both held by `helpCoverage.test.ts` | — |
+
+**Left (not in this plan):** `--tree-remove`, `--close-consult` and `--probe-api` under a missing named root were not
+measured or changed; `module_server.md` says so where it lists them.
