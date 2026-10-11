@@ -1558,6 +1558,12 @@ flowchart LR
   the launch's own usage and seconds (the last line takes what is left of the turn's, so the seconds add up too);
   its outcome — `ok`, `unparseable: …`, `rate limited (after 1 attempt): …`, and on the last line the turn's own
   ending.
+- **The round, on a Team-server line (story 4.2, 2026-10-11).** `UsageEntry` gains two trailing, defaulted fields after
+  `EndCause`: `Round` (the client's 32-hex round id) and `ClientAttempt` (the client's word for the request — `first`,
+  `retry`, `repair`, `followUp`), written by the Team server through `RecordJob`'s two new trailing parameters, the
+  client's word BESIDE the server's own `attempt` (`first` / `rotated` / `followUp` inside the job), never over it. A
+  local line leaves both empty here — its own `attempt` already is the client's word; whether a local line carries the
+  round is story 4.1's ([module_team_server.md](module_team_server.md), *The round on the wire*).
 - **The guard.** `LaunchLines.Of` writes the parts only when their usage adds up to the turn's exactly; otherwise the
   turn is the one line it always was. A ledger whose lines summed to something the round total did not would be a
   second answer to "what did this cost".
