@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
@@ -112,11 +113,13 @@ public sealed class JobRunner(
         }
         catch (OperationCanceledException)
         {
-            // A cancel or the deadline. The store already wrote the terminal state and the reason,
-            // and Finish ignores a job that is already finished — so this only covers the case where
-            // the HOST is stopping, where nothing else will.
-            jobs.Finish(JobTransitions.Fail(
-                job, FailureKind.Cancelled, "stopped before it finished", DateTimeOffset.UtcNow));
+            // The THROWN shape of a cancellation — a launcher that throws rather than reporting
+            // `ProcessResult.Cancelled` — recorded exactly as the returned shape is: one road, so a cancel,
+            // an expiry and a host stop each write their one ledger line here too (story 3.2 of
+            // todo/PLAN_every_round_is_counted.md; this arm used to finish the job and write nothing).
+            // The store already wrote the terminal state and its cause when it fired the token, and `Finish`
+            // hands that record back; the runner's own `hostStopped` stands only when nothing else ended it.
+            Record(vendor, slot, job, new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled()));
         }
         catch (Exception e)
         {
@@ -142,40 +145,45 @@ public sealed class JobRunner(
             ReviewAttempt.Answered answered => Succeeded(slot, job, answered, now),
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.RateLimited limited } =>
                 RateLimited(vendor, slot, job, limited, now),
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.NonZeroExit exit } =>
-                JobTransitions.Fail(job, FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode), now),
-            // Its own sentence rather than the expiry one. This is the reviewer's OWN timeout firing,
-            // which is the case the server's backstop exists to be later than — and since abandonment
-            // joined the expiry reasons, borrowing that sentence could have described a job nobody
-            // was polling as one the vendor was too slow for. Two different events, two sentences.
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.TimedOut } =>
-                JobTransitions.Fail(
-                    job,
-                    FailureKind.TimedOut,
-                    $"the vendor did not answer within the {job.RunBudget.TotalSeconds:0}s it was given",
-                    now),
-            // The tokens travel with THIS one. It is the failure that ran and was billed, and
-            // dropping its usage wrote a spending line saying a broken vendor cost nothing.
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable bad } =>
-                JobTransitions.Fail(
-                    job, FailureKind.UnparseableByVendor, bad.Reason, now,
-                    bad.Usage.TokensIn, bad.Usage.TokensOut),
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.NotStarted missing } =>
-                JobTransitions.Fail(job, FailureKind.NotStarted, missing.Reason, now),
+            // The usage travels with EVERY failure — whatever the launch reported, the attempt carries
+            // (story 3.1 of todo/PLAN_every_round_is_counted.md). It used to travel with Unparseable alone,
+            // so a vendor that crashed after it was billed was written as one that cost nothing.
+            ReviewAttempt.Failed failed => Failed(job, failed, now),
             _ => JobTransitions.Fail(
                 job, FailureKind.NotStarted, "the executor returned a verdict this server cannot read", now),
         };
 
         if (finished is null)
         {
-            // Requeued onto another account. Nothing terminal happened, so nothing is recorded: a
-            // usage line per rate-limited attempt would count one review several times.
+            // Requeued onto another account. The JOB is not over, but this attempt is: it ran on an account and was
+            // refused there, so it is written as a launch of its own — `RateLimited`, `rotated` — and the attempt that
+            // finally runs the job is another line of the same turn. It used to write nothing, on the reasoning that a
+            // line per refused attempt would count one review several times; a REVIEW is counted by its turn (the job's
+            // id, on every line), and what one line counts now is one launch (story 3.3 of
+            // todo/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
+            Ledger(new(vendor, slot, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated);
+
             return;
         }
 
-        jobs.Finish(finished);
-        Ledger(vendor, job, finished);
+        // The ledger line is written from the record the STORE kept, not from this method's own `finished`: a cancel or
+        // an expiry that fired the token wrote its cause first, under the store's lock, and `Finish` hands that back —
+        // carrying what the attempt REPORTED, because a vendor that answered a second before the withdrawal was billed
+        // for the answer nobody collected (story 3.2 of todo/PLAN_every_round_is_counted.md).
+        var kept = jobs.Finish(finished);
+        Ledger(new(vendor, slot, job, attempt), kept, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
     }
+
+    /// <summary>What every line of one attempt shares: the vendor, the account it ran on, the job, and the attempt itself.</summary>
+    private sealed record AttemptOn(VendorConfig Vendor, AccountSlot Slot, JobRecord Job, ReviewAttempt Attempt);
+
+    /// <summary>
+    /// The refused attempt as a terminal record of its own, for its ledger line only — never stored: the job itself went
+    /// back to the queue. Its seconds run from its claim to now, and its usage is what the refused launch reported —
+    /// usually nothing, which reads as 0/0 with whatever note the usage carries.
+    /// </summary>
+    private static JobRecord Refused(JobRecord job, ReviewAttempt attempt, DateTimeOffset now) =>
+        JobTransitions.Fail(job, FailureKind.RateLimited, "requeued", now, attempt is ReviewAttempt.Failed failed ? failed.Usage : Usage.None);
 
     private JobRecord Succeeded(
         AccountSlot slot, JobRecord job, ReviewAttempt.Answered answered, DateTimeOffset now)
@@ -184,8 +192,44 @@ public sealed class JobRunner(
         // three refusals into an exponential wait.
         slots.MarkSucceeded(slot);
 
-        return JobTransitions.Succeed(job, answered.Raw, answered.TokensIn, answered.TokensOut, now);
+        return JobTransitions.Succeed(job, answered.Raw, answered.Usage, now);
     }
+
+    /// <summary>The runner's own sentence for a launch the token killed when no store transition said why.</summary>
+    private const string StoppedReason = "stopped before it finished";
+
+    /// <summary>A failure the vendor decided — or a launch the caller's token killed — with what its launches reported beside it.</summary>
+    /// <remarks>
+    /// A cancelled launch is the one ending the runner does not name by itself: the store that fired the token wrote
+    /// WHY (withdrawn, abandoned, the backstop) on its own record first, and <c>JobStore.Finish</c> hands that record
+    /// back over this one. <c>hostStopped</c> is this record's word for the case nothing else ended — the host's own
+    /// token — and it stands only then (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </remarks>
+    private static JobRecord Failed(JobRecord job, ReviewAttempt.Failed failed, DateTimeOffset now)
+    {
+        if (failed.Outcome is ReviewerOutcome.Cancelled)
+        {
+            return JobTransitions.Cancel(job, EndCauses.HostStopped, StoppedReason, now, failed.Usage);
+        }
+
+        var (kind, reason) = WhyItFailed(job, failed.Outcome);
+
+        return JobTransitions.Fail(job, kind, reason, now, failed.Usage);
+    }
+
+    private static (FailureKind Kind, string Reason) WhyItFailed(JobRecord job, ReviewerOutcome outcome) => outcome switch
+    {
+        ReviewerOutcome.NonZeroExit exit => (FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode)),
+        // Its own sentence rather than the expiry one. This is the reviewer's OWN timeout firing,
+        // which is the case the server's backstop exists to be later than — and since abandonment
+        // joined the expiry reasons, borrowing that sentence could have described a job nobody
+        // was polling as one the vendor was too slow for. Two different events, two sentences.
+        ReviewerOutcome.TimedOut =>
+            (FailureKind.TimedOut, $"the vendor did not answer within the {job.RunBudget.TotalSeconds:0}s it was given"),
+        ReviewerOutcome.Unparseable bad => (FailureKind.UnparseableByVendor, bad.Reason),
+        ReviewerOutcome.NotStarted missing => (FailureKind.NotStarted, missing.Reason),
+        _ => (FailureKind.NotStarted, "the executor returned a verdict this server cannot read"),
+    };
 
     /// <summary>
     /// The account said no. Park it, and give the job back to the queue if another one could serve it.
@@ -225,7 +269,23 @@ public sealed class JobRunner(
                 : "every account for this vendor is rate-limited",
             now);
     }
-    private void Ledger(VendorConfig vendor, JobRecord job, JobRecord finished)
+    /// <summary>
+    /// The job's lines: one per launch of the attempt that ended it — a follow-up is its own — every one carrying the
+    /// job's id as its turn and saying which attempt it was (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <param name="firstAttempt">
+    /// What the attempt's first launch is called: <c>first</c> when this account was the only one the job met, else
+    /// <c>rotated</c> — on a refused attempt and on the one that finally ran a job other accounts had refused.
+    /// </param>
+    /// <remarks>
+    /// <para>The job id is the turn on this server, and deliberately: a job IS one reviewer turn — the client's whole request,
+    /// whichever accounts it took and whatever its adapter continued — and the id is already unique, already in the
+    /// server's log beside the job, and what a person asking "what happened to this review" holds.</para>
+    /// <para>Every line also says what its launch ran with, which job it was and which account SLOT carried it — by the
+    /// slot's name from <c>vendors.json</c>, which <c>VendorConfig.Refusal</c> holds to letters, digits, <c>-</c> and
+    /// <c>_</c>; the account's own sign-in is never named (story 3.4 of todo/PLAN_every_round_is_counted.md).</para>
+    /// </remarks>
+    private void Ledger(AttemptOn on, JobRecord finished, string firstAttempt)
     {
         if (ledger is null)
         {
@@ -234,17 +294,18 @@ public sealed class JobRunner(
 
         try
         {
-            ledger.RecordJob(
-                finished.Email,
-                vendor.Id,
-                job.Model,
-                job.Role,
-                finished.Status == JobStatus.Done ? "ok" : finished.Failure.ToString(),
-                finished.Elapsed,
-                finished.TokensIn,
-                finished.TokensOut,
-                costUsd: null,
-                kind: JobKinds.Wire(job.Kind));
+            // The whole-Usage overload: cached and reasoning tokens, a missing price and a usage nobody
+            // captured are written as a reviewer's local line writes them (story 3.1).
+            foreach (var line in LaunchLines.Of(on.Attempt.Launches, finished.Usage, finished.Elapsed, OutcomeOf(finished), firstAttempt))
+            {
+                ledger.RecordJob(
+                    finished.Email, on.Vendor.Id, on.Job.Model, on.Job.Role, line.Outcome, line.Elapsed, line.Usage,
+                    kind: JobKinds.Wire(on.Job.Kind), stage: "TeamServer", turn: on.Job.Id, attempt: line.Attempt,
+                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot.Name,
+                    // WHY the store killed it, on the line that says Cancelled — a follow-up pair's first launch ended on
+                    // its own and says so (story 3.2 of todo/PLAN_every_round_is_counted.md).
+                    endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty);
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -254,6 +315,10 @@ public sealed class JobRunner(
             _report($"the usage line for job {finished.Id} could not be written", e);
         }
     }
+
+    /// <summary>The ledger's word for how a job ended: <c>ok</c>, or its failure kind's name.</summary>
+    private static string OutcomeOf(JobRecord finished) =>
+        finished.Status == JobStatus.Done ? LaunchLines.Answered : finished.Failure.ToString();
 
     private static string Tail(string stdErr, int exitCode) =>
         stdErr.Length > 0 ? stdErr.Trim() : $"the vendor exited {exitCode} without saying why";

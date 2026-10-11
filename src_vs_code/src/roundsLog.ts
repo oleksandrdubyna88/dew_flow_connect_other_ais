@@ -669,8 +669,11 @@ function uncounted(round: RoundRecord): boolean {
 /** What the server writes for a metered run whose row has no rate (`CostText.NoPriceSet`). */
 const NO_PRICE_SET = 'no price set';
 
-/** What the server writes for a call that ended before its vendor reported usage (`CostText.UsageNotCaptured`). */
-const USAGE_NOT_CAPTURED = 'usage not captured';
+/**
+ * What the server writes for a call that ended before its vendor reported usage (`CostText.UsageNotCaptured`) — and
+ * what the extension's own probe ledger writes for the same case (`probeUsageFile.ts`), so one word means one thing.
+ */
+export const USAGE_NOT_CAPTURED = 'usage not captured';
 
 /**
  * The ledger lines that belong to this round: written while it ran, and of its own stage.

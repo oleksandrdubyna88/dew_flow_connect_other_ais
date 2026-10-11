@@ -79,6 +79,7 @@ import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { finishedRounds, RoundCountsCache } from './roundCountsCache';
 import { otherStores, roundsLoader } from './roundCountsRead';
+import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
 import { chatLedgerLines } from './roundMoney';
 import { seedIfEmpty } from './sideSettings';
@@ -551,10 +552,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
   }
 
-  /** The round counts' cache: this side's `coai-mcp --round-counts`, and `usage.jsonl` read from its end (story 2.2). */
+  /**
+   * The round counts' cache: this side's `coai-mcp --round-counts`, and `usage.jsonl` read from its end (story 2.2) —
+   * with the extension's probe ledger beside it, so a billed model probe is spending the Rounds block shows (3.3).
+   */
   private roundCountsOf(dataDir: vscode.Uri): RoundCountsCache {
     return new RoundCountsCache(roundsLoader(
-      () => serverPath(this.context.globalStorageUri)?.fsPath ?? '', join(dataDir.fsPath, 'usage.jsonl')));
+      () => serverPath(this.context.globalStorageUri)?.fsPath ?? '', join(dataDir.fsPath, 'usage.jsonl'), undefined,
+      [probeUsagePath(dataDir.fsPath)]));
   }
 
   /** The consultant and model checks' host: the caller kinds' checks, and each catalog row's (PLAN_one_model_catalog.md E3.3). */
@@ -4596,9 +4601,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * it can be edited by hand or by another window, and a cache would show a person their own edit
    * from two minutes ago with nothing saying so.</p>
    */
+  /** Every spending line on this side: `coai-mcp`'s ledger, and the extension's probe ledger beside it (story 3.3). */
   private async readUsage(): Promise<UsageEntry[]> {
+    return [...await this.readUsageFile('usage.jsonl'), ...await this.readUsageFile(PROBE_USAGE_FILE)];
+  }
+
+  private async readUsageFile(name: string): Promise<UsageEntry[]> {
     try {
-      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, 'usage.jsonl'));
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, name));
       return parseUsage(new TextDecoder().decode(bytes));
     } catch {
       return []; // nothing has run yet, which the chart says in words

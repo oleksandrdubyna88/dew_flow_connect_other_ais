@@ -650,6 +650,95 @@ sequenceDiagram
 - **One ledger, not two.** `UsageLedger` gained an email column and a `RecordJob` overload rather
   than `src_server` growing its own JSONL writer — a second writer is how two spending records come
   to disagree.
+- **The whole usage travels (2026-10-10, story 3.1 of `todo/PLAN_every_round_is_counted.md`).** Every one of the 4 091
+  lines on the live server held 0 cached and 0 reasoning tokens, and a crashed vendor's tokens were dropped: two longs
+  carried the usage from the launcher to the ledger. Now `ReviewAttempt.Answered` and `ReviewAttempt.Failed` carry the
+  launch's whole `Usage` — after a follow-up, both launches together, a terminal outcome included — `JobRecord.Usage`
+  replaced `TokensIn`/`TokensOut` (both stay as read-only views for the status DTO), `JobTransitions.Succeed/Fail` take
+  a `Usage`, `JobRunner` keeps it for EVERY failure (it used to for `Unparseable` alone), and `Ledger` writes through
+  `RecordJob`'s `Usage` overload — cached, reasoning, *no price set* and *usage not captured* as a local line writes
+  them. `UsageReader` reads the three fields back (`UsageEntryDto`, `UsageLine`); a line from before them reads 0 / 0 /
+  empty, which is what it always meant. A `Failed` built from an outcome alone carries `ReviewerOutcome.TotalUsage`.
+- **Every launch is a line (2026-10-10, story 3.3 of `todo/PLAN_every_round_is_counted.md`).** Row 10 of the paid-path
+  census (`research/RESULTS_vendor_quota_gauges.md` §5.1): a follow-up folded into the first launch's line, and an
+  attempt a rate-limited slot handed back to the queue wrote NOTHING (`RateLimited` returned null and `Record` returned
+  before the ledger). Now:
+  - `ReviewAttempt.Launches` — the first launch and its follow-up in the same conversation (#515), each with what IT
+    reported and how long it took (`ReviewLauncher.Launches`); the attempt's own usage stays the sum the job reports.
+  - `JobRunner.Ledger` writes one line per launch through `LaunchLines.Of` (the same rule as the local ledger: the
+    parts only when they add up to the job's usage exactly), every line carrying the **job's id as its `turn`** — a job
+    IS one reviewer turn, and its id is already in the server's log — and its **`attempt`**: `first` when the job met
+    one account, `rotated` when another had refused it, `followUp` for the continuation. The first launch of a
+    follow-up pair says `UnparseableByVendor` (it ended with an empty answer, which is what a follow-up is asked
+    after); the last line says the job's own ending.
+  - A requeued attempt writes its own line before the job goes back to the queue: `RateLimited`, `rotated`, its usage
+    (usually none — 0/0 with whatever note the usage carries), its seconds from the claim (`JobRunner.Refused`, a
+    terminal record built for the line only, never stored). A review is counted by its turn, so this adds a launch,
+    not a review.
+  - `UsageEntryDto` and `UsageLine` read `turn` and `attempt`; a line older than the fields reads both empty.
+  Still NOT written: a job ended by an infrastructure throw (the runner's broad catch — `NotStarted`, no line), and the
+  cumulative difference of an agy follow-up (each line carries its own launch's report —
+  `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`). A job ended by the host stopping IS written since story 3.2 (below).
+- **Each line says what it ran with (2026-10-11, story 3.4 of `todo/PLAN_every_round_is_counted.md`).** A server line
+  said who, which vendor and model and what it cost — not which CLI release ran it, whether the request's effort was
+  applied, what tier the launch was told, or which account carried it. Now every line of a job carries:
+  - `cli` — the vendor's runtime — and `cliVersion`: the first line of what that CLI last said to the catalog's health
+    probe (`VendorHealthCache.LastSeenVersion`, handed to `ReviewLauncher` as `versionOf` in `Program.cs`). Never a
+    `--version` per job: a server nobody's panel has asked since it started writes it empty.
+  - `effort` / `effortFrom` as the launch's argv carried it: the request's effort taken as asked → `row`; lowered to
+    `Coai:MaxEffort` → `server`; refused (`ClientOptions`' `Dropped` — every codex effort) → `dropped`, effort empty.
+    `ClientOptions.Take` reads that off the same notes the 202 answers with (`TakenOptions.EffortFrom`), and the job
+    carries it (`JobRecord.EffortFrom`) to its line. A request that asked none: what the SLOT's own codex
+    `config.toml` names (`cli-config`), read through the launch's own environment — `CODEX_HOME`/`HOME` are the slot's.
+  - `tier` / `tierFrom` as the argv carried it, labelled `server`: the request carries no tier, and a server launch is
+    built with fast mode Off, so a codex job is told `service_tier=default` — whatever the slot's configuration says.
+    A claude job on this server is handed no fast-mode file (no data folder) and claude's own settings are not read,
+    so its tier is empty.
+  - `job` (the job's id, which its `turn` also carries) and `slot` — the slot's NAME from `vendors.json`, which
+    `VendorConfig.Refusal` holds to letters, digits, `-` and `_`; the account's sign-in is never named.
+  `ReviewLauncher.RanWith` labels the confined launch after it is built (`ReviewAttempt.RanWith`), `JobRunner.Ledger`
+  writes it on every line of the attempt — a requeued one's included — through `RecordJob`'s new `ranWith`, `job`
+  and `slot`. `UsageEntryDto` and `UsageLine` (`RanWith`, `Job`, `Slot`) read the eight fields back; a line older than
+  them reads `LaunchOptions.None` and empty.
+- **How a job ended is said, not guessed (2026-10-11, story 3.2 of `todo/PLAN_every_round_is_counted.md`).** The
+  deployed server's own ledger line for a review its client withdrew after 8.4 s said `TimedOut` and a free 0/0
+  (`tests/fixtures/usage/timed-out-withdrawal.jsonl`): the executor read only the launcher's `TimedOut` flag
+  ([module_runners.md](module_runners.md)); `JobStore.Cancel` and `JobStore.Expire` both stored `FailureKind.Cancelled`,
+  told apart only by a sentence; `JobRunner` wrote its ledger line from its OWN recomputed record, so a cancel that landed
+  while `Finish` ran was written as whatever the runner thought (an `ok`); and a thrown `OperationCanceledException`
+  finished the job and wrote nothing. Now:
+  - **A withdrawn launch is `Cancelled`, with its usage not captured.** `ReviewerExecutor` returns the new
+    `ReviewerOutcome.Cancelled` (launch usage `Unknown`), `ReviewLauncher.Read` carries it, `JobRunner.Failed` maps it to
+    `FailureKind.Cancelled`. A kill with only `TimedOut` set is still `TimedOut` — the reviewer's own deadline, the
+    server's backstop exists to be later than.
+  - **The cause is a WORD, set at the transition.** `JobRecord.EndCause`, one of `EndCauses` (in the runners library, so
+    the ledger and the extension spell it the same): `JobStore.Cancel` → `withdrawn`; `JobStore.Expire` →
+    `abandoned` / `backstop` / `queueExpired` from `JobTransitions.Expiry`, which pairs the cause with the sentence
+    `ExpiryReason` always gave so the two cannot disagree; the runner's own `hostStopped` only when no store transition
+    ended the job (the host's token). `JobTransitions.Cancel` is the one transition that writes the kind.
+  - **The ledger reads the STORE's terminal record.** `JobStore.Finish` returns the record the store keeps — the one
+    given, or the earlier cancel/expiry record carrying the late attempt's `Usage` (a billed first launch under a
+    cancelled follow-up, an answer that landed a second before the DELETE: a status answering 0 for it would move the
+    free-withdrawal lie from the ledger to the wire) — and `JobRunner.Ledger` writes from that, with `endCause` on the
+    line that says `Cancelled` (`RecordJob`'s new parameter; a follow-up pair's first line ended on its own). The
+    races: a cancel BEFORE `Finish` — the store's record wins, the attempt's usage rides on it; a cancel AFTER —
+    `Cancel` finds a terminal job and answers null; the store's lock orders the two, and `Expire` fires the token
+    before it writes but never releases the lock in between.
+  - **Both shapes, exactly one line.** A launcher that reports `Cancelled` and one that throws converge:
+    `JobRunner.RunAsync`'s catch records `new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled())` through the same
+    `Record`, and `ReviewLauncher.FollowedUpAsync` turns a cancellation thrown out of the FOLLOW-UP into a `Cancelled`
+    launch so the denied, billed first launch keeps its line (a first launch that throws has nothing earlier to keep).
+  - **On the wire, a NEW optional field, never a new failure name.** `ReviewStatusDto.EndCause` (trailing, defaulted);
+    `failure` stays `cancelled`. Measured before choosing: `coai-mcp --ask-remote` and the extension's `remoteAsk.ts`
+    both branch on `status` and only render `failure` inside a sentence, and `RemoteStatus` sets no
+    `UnmappedMemberHandling`, so an older client ignores the field — a new failure NAME would have been shown verbatim
+    by every shipped client, harmless but unmeasured. `http/reviews/happy.http` asserts both.
+  - `UsageEntryDto`, `UsageLine.EndCause` and the extension's parser (`usage.ts`, `endCauseOf`) read it back; a line
+    older than the field, every other ending and a local line say nothing. Nothing renders it yet.
+  Not changed: a queued job that expires writes no line (nothing was sent); the local executor's line has no cause (the
+  round's clock and the MCP client's own cancellation reach it as one token); `ReviewerOutcome.TimedOut`'s launch usage
+  stays `Usage.None` on the server's attempt (a deadline line still reads 0/0 — not this story's defect, listed in the
+  plan's open tail).
 
 ### Story 2.4 — the money, and the contract suite
 
@@ -1134,7 +1223,8 @@ roles. `JobKinds` is now that statement as a table:
 | `review` | absent | refused, naming the roles: a client that made a claim is held to it |
 | `chat` | absent | accepted |
 | `chat` | present | refused — dropping a role silently is how a field comes to mean something else |
-| anything else | — | refused, naming both kinds |
+| `canary` | as `review` | judged exactly as a review — the deploy's own check, named apart (2026-10-10, below) |
+| anything else | — | refused, naming the kinds |
 
 The first row is why the field is `string?` rather than defaulted to `review`. A default collapses
 *said nothing* into *said review* and refuses every installed copy of `coai-mcp --ask-remote` and of
@@ -1149,6 +1239,16 @@ the vendor rows use, so an unknown price is never zero here either. That is the 
 total answers neither. **A line with no kind folds as a review**, because everything written before
 the field existed was one — and a kind from a server NEWER than this one is also counted as a
 review rather than dropped, since that line already happened and already cost money.
+
+**`canary` (2026-10-10, story 3.5 of `todo/PLAN_every_round_is_counted.md`).** The release script's canary — one real
+`PlanCritique` review per vendor after a swap — was written as an ordinary `review`, told apart from a person's only by
+its token's email. It now says `"kind":"canary"`: `JobKind.Canary` is judged exactly as a review (a role is required),
+`UsageKinds.Canary` keeps the ledger's vocabulary level with the server's (the parity test), and `UsageDto.kinds`
+reports it as its own row, which the extension names *deploy canaries* (`teamServerView.ts` `KIND_NAMES`). Keeping it
+out of the ROUND count is epic 5's, when rounds exist here. **The script asks once more without the kind** when the
+server answers 400 *"'canary' is not a kind of job"* — an older server refuses the word before any vendor starts, and
+rolling back a healthy release over a field it did not know would be the canary failing for its own sake. Measured
+against stubbed `curl` and `python3`: an old server gets two submits, the second plain; a new one gets one.
 
 **Abandonment, on two clocks rather than one.** A client can die without saying so, and no promise
 survives that — the extension's cancel-on-close is best-effort by construction. So a job nobody has

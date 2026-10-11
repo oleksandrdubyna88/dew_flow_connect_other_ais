@@ -24,6 +24,11 @@ public enum StandardTier
 /// Whether the INSTALLED codex can be told the standard tier — and why we believe it.
 /// </summary>
 /// <param name="Reason">One sentence for the log and for <c>providers</c>.</param>
+/// <param name="Printed">
+/// The release the <c>--version</c> answer named, in the CLI's spelling — <c>codex-cli 0.160.0</c> — else empty. It is
+/// the one version of a local launch's CLI this machine already asks for, so a ledger line names it rather than spawn a
+/// second <c>--version</c> per launch (story 3.4 of todo/PLAN_every_round_is_counted.md).
+/// </param>
 /// <remarks>
 /// <para><b>Why the argv has to ask.</b> Measured 2026-10-07 (research/RESULTS_codex_service_tier_versions_2026-10-07.md):
 /// codex 0.110.0 through 0.130.0 take only <c>fast</c> or <c>flex</c> for <c>service_tier</c>, and the
@@ -42,7 +47,7 @@ public enum StandardTier
 /// printed, which only a FUTURE release could, and those accept <c>default</c>. If the refusal is met anyway,
 /// <see cref="VendorDiagnosis"/> names it with its cure.</para>
 /// </remarks>
-public sealed partial record CodexTierSupport(StandardTier Answer, string Reason)
+public sealed partial record CodexTierSupport(StandardTier Answer, string Reason, string Printed = "")
 {
     /// <summary>The default of <see cref="ReviewerSettings.CodexTier"/>: nothing changes until a site asks.</summary>
     public static CodexTierSupport Unprobed { get; } = new(StandardTier.Unprobed, "the installed codex was never asked");
@@ -101,7 +106,8 @@ public sealed partial record CodexTierSupport(StandardTier Answer, string Reason
     /// <summary><see cref="OfVersion(string)"/> against a range of the caller's — pure, so every edge is a unit test.</summary>
     internal static CodexTierSupport OfVersion(string printed, ReleaseRange refuses) => ReleasesIn(printed) switch
     {
-        [var release] => Judged(release, refuses),
+        // The release as read, in the CLI's own spelling — not the answer's first line, which a wrapper's banner can be.
+        [var release] => Judged(release, refuses) with { Printed = $"codex-cli {release}" },
         [] => Unknown($"codex --version did not name a release ('{FirstLineOf(printed)}')"),
         // The code round: a wrapper that prints its own banner before the CLI answers would otherwise be read as the
         // banner. Two releases in one answer cannot be told apart, so neither is believed.

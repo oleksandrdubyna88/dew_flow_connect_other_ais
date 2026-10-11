@@ -187,8 +187,8 @@ public sealed class RemoteCancellationTests : IDisposable
 /// </summary>
 public sealed class ExecutorAbandonsRemoteWorkTests
 {
-    /// <summary>Records that it was asked to clean up, and what for.</summary>
-    private sealed class SpyRuntime : IReviewerRuntime
+    /// <summary>Records that it was asked to clean up, and what for — shared with <c>HowAJobEndedIsSaidTests</c> (story 3.2).</summary>
+    internal sealed class SpyRuntime : IReviewerRuntime
     {
         public int Abandoned { get; private set; }
 

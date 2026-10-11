@@ -65,8 +65,14 @@ function serverOf(row: Vendor): string {
   return id.length > 0 ? id : 'a Team server';
 }
 
-/** The kinds that spend a vendor beside its rounds, and what one of their lines is called. */
-const BESIDE: readonly (readonly [string, string])[] = [['consult', 'consult'], ['question', 'question'], ['chat', 'chat']];
+/**
+ * The kinds that spend a vendor beside its rounds, and what one of their lines is called.
+ *
+ * <p>`probe` since story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
+ * paid completion. Its money is the row's — a row's total holds every kind — and it is said here as its own kind, so it
+ * is never read as a round: it has no model line and no round.</p>
+ */
+const BESIDE: readonly (readonly [string, string])[] = [['consult', 'consult'], ['question', 'question'], ['chat', 'chat'], ['probe', 'probe']];
 
 /** The block, whole. */
 export function roundsBlock(input: RoundsBlockInput): string {

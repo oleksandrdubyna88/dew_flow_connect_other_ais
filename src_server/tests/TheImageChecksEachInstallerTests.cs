@@ -126,32 +126,11 @@ public sealed class TheImageChecksEachInstallerTests : IDisposable
         return (process.ExitCode, stderr.Result);
     }
 
-    /// <summary>bash on PATH, else Git for Windows' — empty when neither exists.</summary>
-    private static string Bash()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            return "bash";
-        }
+    private static string Bash() => ShellScripts.Bash();
 
-        var git = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
-
-        return File.Exists(git) ? git : string.Empty;
-    }
-
-    /// <summary>A path as bash and curl read it: forward slashes (Git for Windows takes <c>D:/…</c>).</summary>
-    private static string Posix(string path) => path.Replace('\\', '/');
+    private static string Posix(string path) => ShellScripts.Posix(path);
 
     private static string FileUrl(string path) => "file:///" + Posix(path).TrimStart('/');
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src_vs_code")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("the repository root was not found from the test binary");
-    }
+    private static string RepoRoot() => ShellScripts.RepoRoot();
 }
