@@ -201,8 +201,10 @@ test('the Settings sheet is byte-identical after its tokens, chips and badges mo
   // that comment and rule taken out still hashes to the lock line's pin, a7f97106…2aa5. Re-pinned 2026-10-11 when
   // paths per side E5 (`.tab-mark`, `.path-missing`/`.path-unknown` sharing `.skew`'s shape) met it on main: main's
   // sheet alone pinned e6185fd3…f4ab, E5's alone ddad3645…a103; this sheet carries both changes and nothing else.
+  // Re-pinned 2026-10-11 for paths per side E4 (`fieldset.other-side` and its legend, one comment and two rules added
+  // after `.path-mark` in catalogCss.ts): the sheet with them taken out still hashes to E5's pin, becbdd07…877c.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    'becbdd070102f3198a6bd2f0a27b71207a4f4fa995d1894999ca5601e916877c');
+    'bddeea711addca6f5c9d1a16e39435bd4d0deaceed1247706ab6fa91d2ce4791');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }

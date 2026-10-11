@@ -98,11 +98,12 @@ const UNRESOLVED_READS: Readonly<Record<string, { readonly count: number; readon
   'chatModelEdits.ts': { count: 1, why: 'an edit of the stored value' },
   'chatPresetMove.ts': { count: 1, why: 'moves a stored preset into the catalog' },
   'chatPresets.ts': { count: 1, why: 'turns a reviewer row into a stored preset' },
+  'cliPathFields.ts': { count: 1, why: 'names the shared legacy value in the hint beside an other side\'s box drawn empty (E4\'s own review, item 2) — a display, never run' },
   'cliPathSave.ts': { count: 2, why: 'the write rule: keeps the legacy value on the other side\'s save, and sees whether a save replaces it — stored, never run' },
   'cliPathKeep.ts': { count: 3, why: 'the keeper records the legacy value an offer was made against, refuses a restore after it changed, and reads whether it is spelled for neither OS to catch `mirrored` up — stored, never run' },
   'consultSettings.ts': { count: 1, why: 'matches a stored definition\'s value to a row\'s — the stored value' },
   'setupTab.ts': { count: 2, why: 'draws a CLI group\'s path — already this side\'s stored value — in the vendor-keys table' },
-  'pathFamily.ts': { count: 3, why: 'the side rule itself, and whether an older extension saved since' },
+  'pathFamily.ts': { count: 4, why: 'the side rule itself, whether an older extension saved since, and whether the shared value is spelled for the other OS (E4\'s own review, item 2)' },
   'pathFindings.ts': { count: 3, why: 'names the setting coai.vendors[].executablePath in the words of its notice and mark (E5) — strings, never a row' },
 };
 

@@ -383,3 +383,19 @@ export function otherSideNote(windows: boolean, setting: PathSetting = QCONSULT_
 /** How each side names the other's spelling, and itself, in {@link otherSideNote}. */
 const ON_WINDOWS = { spelling: 'a Linux, WSL or macOS path', thisSide: 'this Windows side' } as const;
 const ELSEWHERE = { spelling: 'a Windows path', thisSide: 'this side' } as const;
+
+/**
+ * Whether a family's field would show only the SHARED legacy value, and that value is spelled for the other OS — so it
+ * is not the value that family runs (todo/PLAN_paths_per_side.md, E4's own review, item 2). In a Windows window the
+ * WSL / Linux box of a row holding only `C:\tools\codex.exe` would show that path, which the WSL side skips (a PATH
+ * lookup) and which the box's own rule (`cliPathRefusal`) would refuse if edited; the box is drawn empty instead, with
+ * {@link sharedValueNote}. Decided by the SPELLING alone: the other side's disk is never this window's to ask.
+ */
+export function sharedValueOfTheOtherOs(stored: StoredExecutable, family: PathFamily): boolean {
+  return stored.executablePathBySide?.[family] === undefined && spelledForTheOtherOs(stored.executablePath, family === 'windows');
+}
+
+/** The quiet hint beside a box drawn empty by {@link sharedValueOfTheOtherOs} — in {@link otherSideNote}'s words. */
+export function sharedValueNote(value: string, setting: PathSetting): string {
+  return `The shared value ${value.trim()} is this side's ${setting.noun}; that side skips it${setting.instead}.`;
+}

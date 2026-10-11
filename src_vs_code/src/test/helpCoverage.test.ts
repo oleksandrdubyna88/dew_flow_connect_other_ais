@@ -74,6 +74,32 @@ test('every language says a CLI path is kept per side, and names the older-exten
   }
 });
 
+test('every language describes the two fields the pages draw, by the labels the pages carry (paths per side E4)', () => {
+  // The labels and the caption are English on the page in every language, as every control name here is — so they are what
+  // all five are asked for: this side's field, the other side's caption, the third group of folders, and the read-only
+  // data directory's "from a window on that side".
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const label of ['**This side — Windows**', '*Used by the server on that side. This window does not check it.*', '*Both sides / unclear*', 'Setup › MCP server']) {
+      assert.ok(said.includes(label), `the ${language} settings article never says ${label} — the two fields are undocumented there`);
+    }
+    assert.equal(said.includes('comes in a following release'), false, `the ${language} settings article still promises the other side's field for a later release`);
+  }
+});
+
+test('every language says why the other side\'s boxes are gone while each side keeps its own settings (paths per side E4, own review)', () => {
+  // The sentence the page draws in their place is English in every language, as every control text here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    assert.ok(said.includes('*This side keeps its own settings — set the other side\'s value from a window on that side.*'),
+      `the ${language} settings article never says why the other side's CLI path and folder box are not shown while each side keeps its own settings`);
+  }
+});
+
 test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
   // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
   // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).

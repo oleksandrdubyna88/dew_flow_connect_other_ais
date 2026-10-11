@@ -23,12 +23,21 @@ export function markClass(finding: PathFinding | undefined): string {
 
 /** The id of the sentence an `aria-describedby` points at — stable for one `(key, value)`, so two renders agree. */
 export function markId(finding: PathFinding): string {
+  return stableId('path-note', `${finding.key}|${finding.value}`);
+}
+
+/**
+ * An element id made from a text — the same text gives the same id on every render, so an `aria-describedby` drawn in
+ * one paint still names its sentence in the next. Shared by the path mark and the refusal beside a typed box
+ * (`typedRefusals.ts`).
+ */
+export function stableId(prefix: string, text: string): string {
   let hash = 5381;
-  for (const char of `${finding.key}|${finding.value}`) {
+  for (const char of text) {
     hash = ((hash * 33) ^ char.codePointAt(0)!) >>> 0;
   }
 
-  return `path-note-${hash.toString(36)}`;
+  return `${prefix}-${hash.toString(36)}`;
 }
 
 /** The attributes the marked control carries: invalid and described for a missing path, described for an unknown one. */
