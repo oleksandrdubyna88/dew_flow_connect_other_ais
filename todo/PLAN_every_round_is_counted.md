@@ -279,6 +279,33 @@ Answers the operator's question for this machine's work from the whole history, 
     as today;
   - refusals are counted: a ledger line with outcome `NoBudget` and an honest zero, so the effect of this story can
     be seen.
+- **What the risk consultation for 4 changed (2026-10-11, verified in code before E4 is built)** — binding on E4's plan
+  round:
+  - **The 60-second floor would refuse healthy short reviews.** A 60 s reviewer's shim advertises at most 50 s
+    (`LocalAsk.ShimDeadlineSeconds`, reviewer timeout − 10, `src_mcp/runners/Reviewers/LocalAsk.cs:42`) before any
+    server margin, and the server accepts budgets below 60 s. Bounding the floor by the job's budget does NOT fix it
+    (the consultation's second turn: a fresh 60 s reviewer still arrives with 50 s minus the margin). The rule is
+    therefore **"the caller can no longer wait"**, not "less than our preferred useful run": a job is ended only when
+    the caller's remaining time, after the margin, cannot hold even a launch's start-up (a small fixed number, e.g.
+    10 s, configurable). Tested through the REAL path — `RemoteRuntime` → captured POST → immediate claim — for fresh
+    30 s and 60 s reviewers and a repair with 40 s left, each stated as MUST LAUNCH; a hand-built server request would
+    miss the shim's own 10 s. An exhausted effective budget prevents the SUBMIT on the client (serialising 0 and having
+    it dropped would quietly switch enforcement off).
+  - **A repair or follow-up advertises a stale budget.** The shim's `--timeout-seconds` is fixed when the invocation
+    is built (`RemoteRuntime.cs:98`); `RetryLadder.Lesser` (`RetryLadder.cs:180`) later shortens only
+    `Request.Timeout`. 4.1 computes `remainingSeconds` from the EFFECTIVE timeout of the launch being submitted (the
+    argv rebuilt from `Request.Timeout`, or the value passed separately), with a test that shortens a 600 s invocation
+    to 40 s and reads the captured POST — and shows the shim's own WAITING deadline (`--timeout-seconds`) shortened
+    with it, not only the advertised number. A stale large value over-admits; it never refuses.
+  - **"Malformed → dropped" needs tolerant binding.** A plain nullable `int` in `ReviewRequestDto` rejects `"oops"`,
+    `{}`, `1.5` or an overflow during JSON binding — a 400 before any `Dropped` note runs. The three fields bind
+    tolerantly (a `JsonElement`, read by hand), and an endpoint test sends omitted, `null`, `0`, negative, `"oops"`,
+    `{}`, fractional and oversized values: each accepted with a `Dropped` note, never refused.
+  - **New client → old server enforces nothing.** Contract 2 cannot tell the client the server reads the fields; the
+    full poll/cancel path is tested against the old server and nothing claims budget enforcement there.
+  - **POST then DELETE is not zero-spend.** The runner can claim and launch between the two. The live measurement of
+    the new body must prevent dispatch (a probe the catalog cannot run, or a vendor whose only slot is parked), with
+    a counting fake launcher proving the interleaving in the suite; which probe is decided at E4's plan round.
 
 ### E5 — the server counts rounds, and the fleet gets it · `feat/round-counter-e5-server-counts`
 
