@@ -81,7 +81,7 @@ test('editing a migrated consultant\'s model rewrites its row and keeps the refe
 });
 
 test('rewriting a row in place keeps its per-side CLI paths — a field the definition does not carry is not a field the edit drops', () => {
-  // todo/PLAN_paths_per_side.md E3.1: the fold rewrites only the launch fields; `executablePathBySide` rides along.
+  // research/PLAN_paths_per_side.md E3.1: the fold rewrites only the launch fields; `executablePathBySide` rides along.
   const bySide = { windows: 'C:\\tools\\codex.cmd', posix: '/opt/codex', mirrored: 'C:\\tools\\codex.cmd' };
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
   const withSides = withRowFields(state, 'consult-codex', { executablePathBySide: bySide });
@@ -92,7 +92,7 @@ test('rewriting a row in place keeps its per-side CLI paths — a field the defi
   assert.deepEqual(row?.executablePathBySide, bySide);
 });
 
-// todo/PLAN_paths_per_side.md, E3 as built — the code round's own review: a definition comes back RESOLVED for the side
+// research/PLAN_paths_per_side.md, E3 as built — the code round's own review: a definition comes back RESOLVED for the side
 // that wrote it (`storedForThisSide`), so comparing or writing it as the LEGACY value let one side's edit of a switch
 // or a prompt take the other side's CLI path away, silently (the member stayed, so no keeper notice either).
 

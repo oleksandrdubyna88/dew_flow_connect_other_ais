@@ -47,7 +47,7 @@ import {
 } from './commandModels';
 import { chatProvidersFromPresets, type ChatProviderList } from './chatModels';
 import { mainPrompt } from './chatPresets';
-import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
 import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
@@ -84,12 +84,18 @@ import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
-import { otherSideNote, storedForThisSide, type PathFamily } from './pathFamily';
+import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
 import { DATA_DIRECTORY, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
 import { type SidesView } from './sidesSeen';
 import { sidesSeenHtml } from './sidesSeenView';
+import { droppedFor, type DroppedValue } from './cliPathKeep';
+import type { TypedRefusals } from './typedRefusals';
+import type { OtherSideDataDirectory } from './otherSideValues';
+import { otherSideDataHtml, watchedGroupsHtml } from './serverPathsView';
+import { cliPathFieldsHtml, type CliPathFacts } from './cliPathFields';
+import { pathSidesOf, type PathSides } from './pathSides';
 import { thisSideLabel } from './consultantSides';
 import { SECURITY_COMMANDS } from './securityLaneState';
 import { cardColumns } from './cardColumns';
@@ -180,7 +186,7 @@ export interface PanelState {
   readonly qconsultPlaces?: RootPlaces | undefined;
   /**
    * The family this window's host spells paths in — what decides which stored paths the page calls the other side's
-   * (todo/PLAN_paths_per_side.md E1.5). Absent is this extension host's own, which is what the panel always draws; a
+   * (research/PLAN_paths_per_side.md E1.5). Absent is this extension host's own, which is what the panel always draws; a
    * test names it, so a page is the same on any machine.
    */
   readonly hostFamily?: PathFamily | undefined;
@@ -191,10 +197,26 @@ export interface PanelState {
   readonly otherSideClis?: readonly string[] | undefined;
   /**
    * The paths of this side that are not where the settings say they are — missing, or unanswerable — as the path watch
-   * last published them (`findingsBoard.currentFindings`, todo/PLAN_paths_per_side.md E5.4): what the marks on the
+   * last published them (`findingsBoard.currentFindings`, research/PLAN_paths_per_side.md E5.4): what the marks on the
    * Question consultant, Models and MCP server places and the counts on their tabs are drawn from. Absent draws none.
    */
   readonly pathFindings?: readonly PathFinding[] | undefined;
+  /**
+   * The rows whose per-side CLI path an older save dropped while a copy is kept (`CliPathKeeper.dropped`,
+   * research/PLAN_paths_per_side.md E4.1): each card draws **Restore** beside its CLI-path field. Absent draws none.
+   */
+  readonly droppedCliPaths?: readonly DroppedValue[] | undefined;
+  /**
+   * Text typed into the OTHER side's box and refused, by box (`typedRefusals.ts`, E4.1 / E4.2) — drawn beside the box,
+   * never as a toast. Absent draws none.
+   */
+  readonly typedRefusals?: TypedRefusals | undefined;
+  /**
+   * The data directory each side of the OTHER family chose for itself, read from its overlay in `globalState` through the
+   * side registry (`otherSideValues.ts`, E3.4) — drawn READ-ONLY on Setup › MCP server once both sides are known (E4.3,
+   * D2). Never written from here, never `stat`ed. Absent draws none.
+   */
+  readonly otherSideData?: readonly OtherSideDataDirectory[] | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
   /**
@@ -230,7 +252,7 @@ export interface PanelState {
    */
   readonly perSide: boolean;
   /**
-   * The sides this profile has been used on, this window's own and the switch (todo/PLAN_paths_per_side.md E2.4) — read
+   * The sides this profile has been used on, this window's own and the switch (research/PLAN_paths_per_side.md E2.4) — read
    * from `globalState` on every render, so a side another window stamps appears at the next repaint. Absent (a test, the
    * sidebar) draws Setup › This side without the list.
    */
@@ -567,6 +589,11 @@ export function questionConsultantSection(state: PanelState, pickFrom: readonly 
     promptOverrides: state.qconsultPromptOverrides,
     places: state.qconsultPlaces,
     findings: state.pathFindings,
+    // The folders in three groups once both sides are known, the typed box's refusal beside it (paths per side E4.2).
+    sides: pathSidesOf(state.sides, state.hostFamily ?? hostFamily()),
+    refusals: state.typedRefusals,
+    // While this side keeps its own folders the other side's typed box is not drawn (E4's own review, item 1).
+    ownSettings: keptPerSide(state.perSide, 'qconsultRoots'),
   });
 }
 
@@ -1113,6 +1140,8 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   // The host's disk and drive, in the family the page is drawn for (a test names it; absent is this host's).
   const family = state.hostFamily ?? hostFamily();
   const otherSides = state.otherSideClis ?? [];
+  // Once for the page: every card draws one field or two by the same decision (E4.1, E2's `twoPathFields`).
+  const sides = pathSidesOf(state.sides, family);
 
   return (v) => ({
     colour: colour(v.id),
@@ -1139,6 +1168,10 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     // The mark by THIS side's STORED value — what the box draws and the watch keys its finding on (paths per side,
     // E5.4; E3.1: the per-side value for this family when one was saved, else the legacy value).
     missingCli: findingFor(state.pathFindings ?? [], VENDOR_EXECUTABLE.id, storedForThisSide(v, family)),
+    sides,
+    dropped: droppedFor(state.droppedCliPaths ?? [], v),
+    refusals: state.typedRefusals,
+    ownSettings: keptPerSide(state.perSide, 'vendors'),
   });
 }
 
@@ -1234,12 +1267,20 @@ export interface CardContext {
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
   /**
-   * The family the page is drawn for. The one CLI-path field is THIS side's (todo/PLAN_paths_per_side.md E3.1), so it
+   * The family the page is drawn for. The one CLI-path field is THIS side's (research/PLAN_paths_per_side.md E3.1), so it
    * draws the row's per-side value for this family when one was saved, else the legacy value.
    */
   readonly family: PathFamily;
   /** The finding about this row's CLI path — missing, or unanswerable — when the watch has one (E5.4); else undefined, no mark. */
   readonly missingCli: PathFinding | undefined;
+  /** Both sides, when a path setting shows two fields (research/PLAN_paths_per_side.md E4.1) — undefined draws one. */
+  readonly sides?: PathSides | undefined;
+  /** This row's previously saved per-side CLI path that is missing — **Restore** is drawn beside the field (E4.1). */
+  readonly dropped?: DroppedValue | undefined;
+  /** Text typed into an other side's box and refused, by box — drawn beside the box (E4.1). */
+  readonly refusals?: TypedRefusals | undefined;
+  /** Whether `vendors` is saved into THIS side's own settings — the other side's box is then not drawn (E4's own review, item 1). */
+  readonly ownSettings?: boolean | undefined;
 }
 
 /**
@@ -1305,28 +1346,16 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-/** What the card's one CLI-path box is drawn from, beside the row: the other side's note, the missing mark, and the family. */
-export type CliFieldFacts = Pick<CardContext, 'otherSideCli' | 'missingCli' | 'family'>;
-
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean, cli: CliFieldFacts): string {
-  // The mark (E5.4): the field takes the class, the box is invalid and described by the sentence under it. The box is
-  // THIS side's field (paths per side E3.1): the row's per-side value for this family when one was saved, else the legacy.
-  return remote ? '' : `
-  <div class="field${markClass(cli.missingCli)}">
-    <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
-           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(storedForThisSide(vendor, cli.family))}"${markAttributes(cli.missingCli)}>${markNote(cli.missingCli)}
-  </div>${otherSidesCli(cli.otherSideCli)}`;
-}
+/** What the card's CLI-path field(s) are drawn from, beside the row (`cliPathFields.ts`). */
+export type CliFieldFacts = CliPathFacts;
 
 /**
- * The quiet line under a CLI path spelled for the OTHER operating system (todo/PLAN_paths_per_side.md E1.5): VS Code
- * shares the row with the other side's window, where the path is right; here it is skipped and the CLI looked up on
- * PATH — the same decision the settings file this window writes (`pathForThisSide`) and coai-mcp's own read make.
+ * The CLI path of a row that runs a CLI here: THIS side's box — the row's per-side value for this family when one was
+ * saved, else the legacy (paths per side E3.1), marked when missing (E5.4) — and, once both sides are known, the other
+ * side's box beside it (E4.1). `cliPathFields.ts` draws them.
  */
-function otherSidesCli(family: PathFamily | undefined): string {
-  return family === undefined
-    ? ''
-    : `<div class="hint path-other-side">${escapeHtml(otherSideNote(family === 'windows', VENDOR_EXECUTABLE))}</div>`;
+export function runtimeFields(vendor: Vendor, remote: boolean, cli: CliFieldFacts): string {
+  return remote ? '' : cliPathFieldsHtml(vendor, cli);
 }
 
 /**
@@ -1548,7 +1577,7 @@ export function sideBody(state: PanelState): string {
 }
 
 /**
- * This window's side by name — never "this machine" (todo/PLAN_paths_per_side.md E2.4): the name the side registry
+ * This window's side by name — never "this machine" (research/PLAN_paths_per_side.md E2.4): the name the side registry
  * records it under (`thisSideLabel`), or, on a page drawn without the registry, the remote's label or this host's
  * operating system.
  */
@@ -1880,7 +1909,7 @@ export function serverBody(state: PanelState): string {
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu of the ConnectOtherAIs sidebar is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>
-${storageBlock(state.storage, state.pathFindings ?? [])}`;
+${storageBlock(state.storage, storagePathsOf(state))}`;
 }
 
 /**
@@ -1913,19 +1942,21 @@ ${storageBlock(state.storage, state.pathFindings ?? [])}`;
  *
  * <p>Nothing at all when the setting is unset, which is every installation that has one side.</p>
  */
-function watchedElsewhere(dirs: readonly WatchedDir[], findings: readonly PathFinding[]): string {
+function watchedElsewhere(dirs: readonly WatchedDir[], findings: readonly PathFinding[], sides: PathSides | undefined): string {
   const extra = dirs.slice(1);
   if (extra.length === 0) {
     return '';
   }
-  const rows = extra.map((dir) => watchedLine(dir, findingFor(findings, WATCHED_DIRECTORIES.id, dir.asked))).join('\n');
+  const line = (dir: WatchedDir): string => watchedLine(dir, findingFor(findings, WATCHED_DIRECTORIES.id, dir.asked));
+  // In the groups of their spelling once both sides are known (paths per side E4.3); one list otherwise, as before.
+  const rows = sides === undefined ? extra.map(line).join('\n') : watchedGroupsHtml(extra, sides, line);
 
   return `<div class="hint">Questions from another installation are also answered here:</div>
 ${rows}`;
 }
 
 /**
- * One named directory's line: the other side's said in the quiet hint tone (todo/PLAN_paths_per_side.md E1.3), a
+ * One named directory's line: the other side's said in the quiet hint tone (research/PLAN_paths_per_side.md E1.3), a
  * refusal in the worth-noticing one, a directory this window reads plainly.
  */
 function watchedLine(dir: WatchedDir, missing: PathFinding | undefined): string {
@@ -1950,7 +1981,18 @@ function dataDirectoryLine(storage: DataLocation, findings: readonly PathFinding
   return `<div class="status${markClass(missing)}"${markAttributes(missing)}>${escapeHtml(storage.directory)}${markNote(missing)}</div>`;
 }
 
-function storageBlock(storage: DataLocation | undefined, findings: readonly PathFinding[]): string {
+/** What Setup › MCP server draws about paths beside the storage: the marks (E5.4), and the other side (E4.3). */
+interface StoragePaths {
+  readonly findings: readonly PathFinding[];
+  readonly sides: PathSides | undefined;
+  readonly otherSideData: readonly OtherSideDataDirectory[];
+}
+
+function storagePathsOf(state: PanelState): StoragePaths {
+  return { findings: state.pathFindings ?? [], sides: pathSidesOf(state.sides, state.hostFamily ?? hostFamily()), otherSideData: state.otherSideData ?? [] };
+}
+
+function storageBlock(storage: DataLocation | undefined, paths: StoragePaths): string {
   if (storage === undefined) {
     return '';
   }
@@ -1974,11 +2016,12 @@ function storageBlock(storage: DataLocation | undefined, findings: readonly Path
     .join('\n');
 
   return `<h3>Where this window keeps its data</h3>
-${dataDirectoryLine(storage, findings)}
+${dataDirectoryLine(storage, paths.findings)}
 ${cameFrom(storage.source)}
 ${side}
 ${notes}
-${watchedElsewhere(storage.alsoWatched, findings)}
+${otherSideDataHtml(paths.sides, paths.otherSideData)}
+${watchedElsewhere(storage.alsoWatched, paths.findings, paths.sides)}
 <div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
 <button class="link" type="button" data-command="changeDataDirectory">Change where your data lives…</button>
 <button class="link" type="button" data-command="moveDataDirectory">Move what is here to another folder…</button>
@@ -3368,9 +3411,12 @@ export const PANEL_COMMANDS = [
   'moveDataDirectory',
   // And deleting what a VERIFIED move left behind, offered on the Settings page's MCP server tab after a reload (E4.5).
   'deleteOldDataFolder',
-  // Setup › This side: one side's record dropped from the side registry (todo/PLAN_paths_per_side.md E2.4). Its id is the
+  // Setup › This side: one side's record dropped from the side registry (research/PLAN_paths_per_side.md E2.4). Its id is the
   // side's key; the host refuses this window's own.
   'forgetSide',
+  // A Models card's Restore of a per-side CLI path a save dropped (research/PLAN_paths_per_side.md E4.1) — the panel button
+  // E3's notice duplicates. Its id is the kept copy's key; the keeper re-reads the row at the click.
+  'restoreCliPath',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;
   // Review opens what it collected; and the server address is asked for in a dialog rather than
   // typed into the section, because a free-text control here would be rebuilt under the caret on

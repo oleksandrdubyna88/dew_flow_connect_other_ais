@@ -158,7 +158,7 @@ function updatesItself(runtime: string, installed: string): boolean {
  * A row that sets one wins; otherwise the runtime's own name, exactly as a row with no path gets.</p>
  */
 export function executableForRuntime(runtime: string, vendors: readonly Vendor[], side: ExecutableSide = hostExecutableSide()): string {
-  // This side's value of the row (todo/PLAN_paths_per_side.md E1.2, E3.1): a path spelled for the other OS is skipped here.
+  // This side's value of the row (research/PLAN_paths_per_side.md E1.2, E3.1): a path spelled for the other OS is skipped here.
   const said = vendors.find((v) => v.runtime === runtime && executableOf(v, side).length > 0);
 
   return said === undefined ? (EXECUTABLE[runtime] ?? 'codex') : executableOf(said, side);

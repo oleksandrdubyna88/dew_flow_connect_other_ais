@@ -151,7 +151,7 @@ export interface ChosenStorage extends StorageChoice {
   readonly source: StorageSource;
   /**
    * The SHARED setting's directory when it was skipped because it is spelled for the other operating system — empty
-   * otherwise (todo/PLAN_paths_per_side.md E1.4). `Z:\coai` written from Windows is `<cwd>/Z:\coai` to a WSL window.
+   * otherwise (research/PLAN_paths_per_side.md E1.4). `Z:\coai` written from Windows is `<cwd>/Z:\coai` to a WSL window.
    */
   readonly skippedShared: string;
 }
@@ -205,7 +205,7 @@ function ignoredSideOf(layers: readonly (readonly [StorageSource, StorageChoice]
 }
 
 /**
- * The shared layer as THIS side may use it (todo/PLAN_paths_per_side.md E1.4): a directory spelled for the other
+ * The shared layer as THIS side may use it (research/PLAN_paths_per_side.md E1.4): a directory spelled for the other
  * operating system is the other side's — written from a Windows window, `Z:\coai` read in WSL resolved to a relative
  * path under the host's working directory — so this side does not resolve it and falls to the next choice, the
  * default. Only the SHARED layer: the environment and this side's own choice are this side's by construction. Its side
@@ -330,7 +330,7 @@ export function namedRoot(): NamedRoot | undefined {
 }
 
 /**
- * The finding about a NAMED data root that is not there (todo/PLAN_paths_per_side.md E5.7, D3): `missing` when the disk
+ * The finding about a NAMED data root that is not there (research/PLAN_paths_per_side.md E5.7, D3): `missing` when the disk
  * SAID the root is absent, `unknown` when it could not tell; nothing for the default location, and nothing while the
  * probe has not answered. The side folder INSIDE an existing root (`<root>/<side>`) is not this finding's business — it
  * is created lazily by the server and the move flow, so its absence keeps `whereData`'s quiet note.

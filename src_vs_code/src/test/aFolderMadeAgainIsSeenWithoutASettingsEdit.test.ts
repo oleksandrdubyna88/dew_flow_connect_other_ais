@@ -14,7 +14,7 @@ import { PathWatch, RECHECK_MS } from '../pathWatch';
 import { stat } from 'node:fs/promises';
 
 /**
- * Recovery WITHOUT a settings edit (todo/PLAN_paths_per_side.md E5.7, the risk consultation's item F): a person whose
+ * Recovery WITHOUT a settings edit (research/PLAN_paths_per_side.md E5.7, the risk consultation's item F): a person whose
  * named data folder is gone makes it again — or the drive is mounted — and that is all. The next probe confirms the root,
  * the notice clears, the guard lets the writers through and the settings mirror writes. The host scenario that proved
  * recovery before also changed a setting, which is the one thing that re-asked the disk; this one changes nothing.

@@ -81,7 +81,7 @@ internal static class StartupNotices
 
     /// <summary>
     /// A reviewer's CLI path of the OTHER operating system, said at Information and nowhere louder — the root rule's twin
-    /// (todo/PLAN_paths_per_side.md E1.2): one side always holds the other's paths, and this side looks the CLI up on PATH.
+    /// (research/PLAN_paths_per_side.md E1.2): one side always holds the other's paths, and this side looks the CLI up on PATH.
     /// </summary>
     private static void OtherSideExecutables(PanelSettings settings, Serilog.ILogger log)
     {

@@ -270,7 +270,7 @@ export class EscalationWatcher {
       }
       // Node's write and rename, never VS Code's: those make missing parent folders, so an answer typed after the
       // question's folder went away (a share unmounted) made the folder again — a data directory recreated by a reply
-      // (todo/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which is the failure handled below.
+      // (research/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which is the failure handled below.
       await writeFile(temp.fsPath, bytes);
       await renameWithRetry(temp.fsPath, target.fsPath);
     } catch (reason) {

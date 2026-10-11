@@ -253,7 +253,7 @@ function connectionOf(vendor: Vendor, id: string, cli: CliFieldFacts): string {
   const api = vendor.runtime === 'api';
 
   return endpointField(vendor, id, vendor.runtime === 'local', remote, false) + (api ? dialectField(vendor, id, false) : '')
-    + runtimeFields(vendor, id, remote || api, cli);
+    + runtimeFields(vendor, remote || api, cli);
 }
 
 function usedLine(references: readonly string[]): string {

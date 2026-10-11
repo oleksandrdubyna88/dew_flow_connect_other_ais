@@ -13,7 +13,7 @@ import { PathProbes, type ProbeOptions } from '../pathProbes';
 import { PathWatch } from '../pathWatch';
 
 /**
- * A settings change must not switch the storage guard off (todo/PLAN_paths_per_side.md E5.0/E5.7, the risk consultation
+ * A settings change must not switch the storage guard off (research/PLAN_paths_per_side.md E5.0/E5.7, the risk consultation
  * of story 5.7, item D).
  *
  * <p><b>What the consultation suspected and this measured.</b> Every change to a `coai` setting calls `PathWatch.forget`:

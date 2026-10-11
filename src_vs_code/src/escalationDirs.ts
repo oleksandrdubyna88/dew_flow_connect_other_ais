@@ -29,7 +29,7 @@ export interface WatchedDir {
   readonly refusal: string;
   /**
    * Empty for a directory of this side. For one spelled for the OTHER operating system, the sentence saying it is that
-   * side's — skipped here, never refused (todo/PLAN_paths_per_side.md E1.3): VS Code shares this setting between a WSL
+   * side's — skipped here, never refused (research/PLAN_paths_per_side.md E1.3): VS Code shares this setting between a WSL
    * window and a Windows window, so each side's right value is the other side's wrong one.
    */
   readonly otherSide: string;
@@ -39,7 +39,7 @@ export interface WatchedDir {
  * How a Windows window names a WSL folder — said beside a WSL path in the list, because `/home/x` resolved by a Windows
  * host is `C:\home\x`, which is not that folder.
  *
- * <p>A WSL path in this list is no longer REFUSED on Windows (todo/PLAN_paths_per_side.md E1.3): the list is shared with
+ * <p>A WSL path in this list is no longer REFUSED on Windows (research/PLAN_paths_per_side.md E1.3): the list is shared with
  * the WSL window, where it is right, and that window answers its own questions. This sentence stays for a person who
  * wants THIS window to answer them too. <b>No distribution is guessed</b>: turning `/home/x` into
  * `\\wsl.localhost\<distro>\home\x` needs a distro name, and inventing one means watching a path nobody chose.</p>

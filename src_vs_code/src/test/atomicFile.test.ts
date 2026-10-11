@@ -233,7 +233,7 @@ test('a write that fails leaves the file that was already there', async (t) => {
     'a failed replacement destroyed the file that was already attached');
 });
 
-// ---------- the storage-write policy (todo/PLAN_paths_per_side.md E5.0) ----------
+// ---------- the storage-write policy (research/PLAN_paths_per_side.md E5.0) ----------
 
 test('a write under a missing named data root is refused with the finding\'s sentence, and makes no folder', async () => {
   // The shared atomic write is how the chat store, the probe cache, the roles and commands pages and a backup reach the

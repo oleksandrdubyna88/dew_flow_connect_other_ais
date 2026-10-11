@@ -527,8 +527,9 @@ sequenceDiagram
   "resets in" is never offered to the clock-time form that also starts at "resets"; it is believed like a named
   instant (`MaxGuess` caps only the guess) up to `MaxStatedWait`, fourteen days — longer than any window these vendors
   state. **It is read whole or not at all:** text glued to a unit (`2seconds`) or a spaced number after it
-  (`2h 30 minutes`) refuses the match, because its first part alone is a SHORTER wait than the one stated (CodeRabbit
-  on #754). A wait that was stated and could not be read — such a form, a wait in words (`Resets in one hour`), a
+  (`2h 30 minutes`) refuses the match, and so does a punctuation separator before more digits (`2h, 30m`, `2h; 30m`),
+  because its first part alone is a SHORTER wait than the one stated (CodeRabbit on #754, twice); a comma that ENDS
+  the duration (`2h, then try again`) still reads it. A wait that was stated and could not be read — such a form, a wait in words (`Resets in one hour`), a
   number past the ceiling, one too large to be an instant — errs LONG, to `MaxGuess` (5 h), never the 30-minute retry
   and never a throw that fails the job. **"Weekly" is checked first**, because its guess is the longer one (a day): a
   line saying both errs to the day.

@@ -10,7 +10,7 @@ import { forgetFindingsBoard } from '../findingsBoard';
 import { appendLine } from '../jsonlLedger';
 
 /**
- * No writer recreates a NAMED data root — not even one the board believes is there (todo/PLAN_paths_per_side.md E5.7,
+ * No writer recreates a NAMED data root — not even one the board believes is there (research/PLAN_paths_per_side.md E5.7,
  * D3; the risk consultation of story 5.7, items E and F).
  *
  * <p><b>The race (F).</b> The guard asks the board, then the writer makes the directory: a root removed — a drive

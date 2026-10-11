@@ -24,7 +24,9 @@ jobs:
   sonar:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 25, not 15: on 2026-10-11 a passing run on main took ~14.5 min (the .NET tests with coverage alone ~8 min,
+    # the scanner's end step ~2.5 min), so the old cap cancelled a main run and a large PR at 15:00 with nothing wrong.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -186,7 +186,7 @@ export function familyLabel(family: PathFamily): string {
 }
 
 /**
- * A row's CLI path PER SIDE (todo/PLAN_paths_per_side.md E3.1, design (b) O2): one value per family, each PRESENT only when
+ * A row's CLI path PER SIDE (research/PLAN_paths_per_side.md E3.1, design (b) O2): one value per family, each PRESENT only when
  * a save wrote it — an explicitly empty one is the PATH lookup — and `mirrored`, the legacy `executablePath` as the last
  * save by an extension that knows this field left it. Additive on the row: an older extension ignores it (and drops it
  * when it saves the list), and coai-mcp never sees it — the extension resolves this side's value before it writes the
@@ -230,7 +230,7 @@ function ownSidePath(stored: StoredExecutable, family: PathFamily): string | und
 
 /**
  * Whether an extension that does not know `executablePathBySide` saved the legacy value since a newer one last wrote it
- * — the legacy value is not what the newer one recorded as `mirrored` (todo/PLAN_paths_per_side.md design (c), the
+ * — the legacy value is not what the newer one recorded as `mirrored` (research/PLAN_paths_per_side.md design (c), the
  * cadence consultation for epics 4-6) — AND that save is this family's: spelled for it, or for neither OS. Decided by
  * the SPELLING alone, so the page (which asks no disk) and the host draw and run the same value. A row no newer
  * extension saved has no `mirrored` and nothing to compare.
@@ -272,7 +272,7 @@ export interface ExecutableSide {
 }
 
 /**
- * The CLI path THIS side runs (todo/PLAN_paths_per_side.md, design (c), rules 1-3) — the value this side's field holds
+ * The CLI path THIS side runs (research/PLAN_paths_per_side.md, design (c), rules 1-3) — the value this side's field holds
  * (rule 1, {@link storedForThisSide}: the per-side member when it is present, else the legacy value), judged by ONE rule
  * wherever it is stored. A member is judged exactly as the legacy value is, so a save that pins a family's value into its
  * member never moves what that family runs (the risk consultant, 2026-10-11, finding c: `/tools/codex.exe` saved
@@ -369,7 +369,7 @@ export function presenceOnFailure(failure: unknown): FilePresence {
 
 /**
  * The sentence beside a stored value of the other side — said in the quiet hint tone, never drawn as a refusal
- * (todo/PLAN_paths_per_side.md E1.5). One sentence for every path setting, its words taken from the registry
+ * (research/PLAN_paths_per_side.md E1.5). One sentence for every path setting, its words taken from the registry
  * (`pathSettings.ts`): what the value is, what the other side does with it, and what this side does instead. A setting
  * whose decision also asked the disk (a question-consultant root) says there is no such folder here.
  */
@@ -383,3 +383,19 @@ export function otherSideNote(windows: boolean, setting: PathSetting = QCONSULT_
 /** How each side names the other's spelling, and itself, in {@link otherSideNote}. */
 const ON_WINDOWS = { spelling: 'a Linux, WSL or macOS path', thisSide: 'this Windows side' } as const;
 const ELSEWHERE = { spelling: 'a Windows path', thisSide: 'this side' } as const;
+
+/**
+ * Whether a family's field would show only the SHARED legacy value, and that value is spelled for the other OS — so it
+ * is not the value that family runs (research/PLAN_paths_per_side.md, E4's own review, item 2). In a Windows window the
+ * WSL / Linux box of a row holding only `C:\tools\codex.exe` would show that path, which the WSL side skips (a PATH
+ * lookup) and which the box's own rule (`cliPathRefusal`) would refuse if edited; the box is drawn empty instead, with
+ * {@link sharedValueNote}. Decided by the SPELLING alone: the other side's disk is never this window's to ask.
+ */
+export function sharedValueOfTheOtherOs(stored: StoredExecutable, family: PathFamily): boolean {
+  return stored.executablePathBySide?.[family] === undefined && spelledForTheOtherOs(stored.executablePath, family === 'windows');
+}
+
+/** The quiet hint beside a box drawn empty by {@link sharedValueOfTheOtherOs} — in {@link otherSideNote}'s words. */
+export function sharedValueNote(value: string, setting: PathSetting): string {
+  return `The shared value ${value.trim()} is this side's ${setting.noun}; that side skips it${setting.instead}.`;
+}

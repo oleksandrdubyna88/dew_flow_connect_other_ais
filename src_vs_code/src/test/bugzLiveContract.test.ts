@@ -41,7 +41,7 @@ const built = fs.existsSync(server());
 
 /**
  * The mode that makes the database a seed fills: a WRITER. `--bugs-json` did it until E5.7, when every mode the
- * extension launches to READ stopped creating the database and its folder (todo/PLAN_paths_per_side.md, risk item C;
+ * extension launches to READ stopped creating the database and its folder (research/PLAN_paths_per_side.md, risk item C;
  * `AReaderModeNeverMakesTheDataDirectoryTests.cs`). `--requeue-refused` opens for writing — creating and migrating — and
  * on an empty database changes nothing.
  */

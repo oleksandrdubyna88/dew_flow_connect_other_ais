@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { activated, settle, until } from './missingDataRootScenario';
 
 /**
- * A path that is STILL missing is said once per window run, however many settings changes follow (todo/PLAN_paths_per_side.md
+ * A path that is STILL missing is said once per window run, however many settings changes follow (research/PLAN_paths_per_side.md
  * E5.3, in a real editor).
  *
  * <p>Written after what the first host run of E5 showed: sixteen ledger rows for one CLI path. Every change to a `coai`

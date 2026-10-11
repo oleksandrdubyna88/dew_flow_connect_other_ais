@@ -89,7 +89,7 @@ public sealed record ProvidersAnswer(
 
     /// <summary>
     /// The settings this build refused whose problem has a KIND the extension can mark on its page — today the
-    /// question consultant's roots that are missing or could not be checked (todo/PLAN_paths_per_side.md E5.2).
+    /// question consultant's roots that are missing or could not be checked (research/PLAN_paths_per_side.md E5.2).
     /// </summary>
     /// <remarks>
     /// Additive, like <see cref="VaultKeyNames"/>: an older extension reads <see cref="Unrecognised"/> as before

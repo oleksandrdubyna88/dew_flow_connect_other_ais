@@ -80,7 +80,7 @@ function newBody(overrides: Record<string, unknown> = {}): Record<string, unknow
   };
 }
 
-test('TheNewBody_IsAcceptedByTheLiveServer — the probe is refused by its kind, so the new members were bound past, and no job was made', async () => {
+void test('TheNewBody_IsAcceptedByTheLiveServer — the probe is refused by its kind, so the new members were bound past, and no job was made', async () => {
   const token = await sessionFor(`contract@${DOMAIN}`);
 
   const result = await ask<unknown>(SERVER, 'api/reviews', { method: 'POST', token, body: newBody() });
@@ -95,7 +95,7 @@ test('TheNewBody_IsAcceptedByTheLiveServer — the probe is refused by its kind,
   assert.match(result.message, new RegExp(PROBE_KIND));
 });
 
-test('the control: a malformed KNOWN member is the binding error, never the kind refusal', async () => {
+void test('the control: a malformed KNOWN member is the binding error, never the kind refusal', async () => {
   const token = await sessionFor(`contract@${DOMAIN}`);
 
   const result = await ask<unknown>(SERVER, 'api/reviews', { method: 'POST', token, body: newBody({ timeoutSeconds: 'x' }) });

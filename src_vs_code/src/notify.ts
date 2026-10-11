@@ -282,7 +282,7 @@ export async function notifyOnce(notice: Notice): Promise<void> {
  * Record every occurrence; show — with its button — only the first of each `(code, subject)` in this run, and react to
  * the button without making the caller wait.
  *
- * <p>`notifyOnce`'s once-per-run and `notifyThen`'s button, in one door (todo/PLAN_paths_per_side.md E5.3): the notice
+ * <p>`notifyOnce`'s once-per-run and `notifyThen`'s button, in one door (research/PLAN_paths_per_side.md E5.3): the notice
  * about a missing path is raised at every start and again whenever the paths or the disk's answers change, and it
  * offers **Open in Settings**. A once-guard at the call site would be the fourth copy of the guard this funnel exists to
  * hold once; a `notifyThen` would toast on every refresh. The answer is recorded against the first record as

@@ -7,7 +7,7 @@ public sealed record ThisSidePath(string Path, string OtherSide);
 
 /// <summary>
 /// A CLI path spelled for the OTHER operating system is the other side's CLI: skipped here, never probed, never refused
-/// (todo/PLAN_paths_per_side.md E1.2).
+/// (research/PLAN_paths_per_side.md E1.2).
 /// </summary>
 /// <remarks>
 /// <para><b>Why.</b> VS Code's user settings are shared by a WSL window and a plain Windows window on one machine, and each

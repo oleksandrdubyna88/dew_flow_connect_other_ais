@@ -7,7 +7,7 @@ import { heldArrival, snapshotOf, type LedgerRead } from '../notificationsSnapsh
 import { SETTING_PATH_MISSING } from '../pathFindings';
 
 /**
- * A notice held in memory (todo/PLAN_paths_per_side.md E5.0) reaches the notifications page for this window run: it was
+ * A notice held in memory (research/PLAN_paths_per_side.md E5.0) reaches the notifications page for this window run: it was
  * written to no ledger — a write would create the missing data folder it reports — so the page is the one place it can
  * be read after the toast has gone, and it says there that it was never written down.
  */

@@ -1105,7 +1105,7 @@ planner's refusal stands when nothing is set at all, and a pair the matrix refus
 `shared/path-family-vectors.json` holds the spelling (`vectors`) and the decision (`existence`), answered by
 `QuestionConsultSettingsTests` and by the extension's `pathFamily.test.ts`, so the Settings page names exactly the roots the server skips.
 
-**A reviewer's CLI path of the other operating system (2026-10-10, `todo/PLAN_paths_per_side.md` E1.2).** The same
+**A reviewer's CLI path of the other operating system (2026-10-10, `research/PLAN_paths_per_side.md` E1.2).** The same
 sharing carries a reviewer row's `executablePath` across sides: a Windows `C:\…\codex.cmd` in `COAI_VENDORS` on a WSL
 server was probed as a file, `CliFound=false`. `PanelSettings.ParseVendors(json, windows)` now reads the path through
 `ExecutablePaths.Here(path, windows)` (`ExecutablePaths.cs`), once per row after the distinct: spelled for the other OS
@@ -1120,7 +1120,7 @@ consultant / question-row `executablePath` fields outside a `row` are left to th
 Answered by the `executable` vectors of `shared/path-family-vectors.json` (`ACliPathOfTheOtherSideIsSkippedTests`;
 the checked vector reader `SharedVectors` is a test file of its own now).
 
-**`--providers` says which setting and which value a refusal is about (2026-10-10, `todo/PLAN_paths_per_side.md`
+**`--providers` says which setting and which value a refusal is about (2026-10-10, `research/PLAN_paths_per_side.md`
 E5.2).** `UnrecognisedSetting(Key, Sentence, Kind, Value)` (`StartupNotes.cs`) gained the kind and the stored value,
 both default empty so every earlier construction reads as it did; `SettingProblemKinds` names the two that carry one —
 `missing-folder` (the root is not there) and `unreadable-folder` (it could not be checked). `QuestionRoots.Validate`
@@ -1136,7 +1136,7 @@ complaint.Kind to be "missing-folder" … but "" has a length of 0`); the extens
 produced with one existing and one missing root; the seam leg `seam-path-missing.mjs` holds the page's own findings
 level with this list as the same `key|value|kind` set.
 
-**A reader never makes the data directory (2026-10-10, `todo/PLAN_paths_per_side.md` E5.7, the risk consultation's
+**A reader never makes the data directory (2026-10-10, `research/PLAN_paths_per_side.md` E5.7, the risk consultation's
 item C).** The extension refuses to create a NAMED data directory that is missing, but it launches this binary to
 read. Measured with `COAI_DATA_DIR` naming a missing child of a temp folder: `--bugs-json`, `--pairs-json`,
 `--real-method`, `--file-at` and `--tree-at` created it with `coai.db` (`RoundsDb.Open`'s first line is

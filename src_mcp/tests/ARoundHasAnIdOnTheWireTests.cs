@@ -145,8 +145,9 @@ public sealed class ARoundHasAnIdOnTheWireTests : IDisposable
 
         // The follow-up road: a continuation is derived from the first launch and keeps the key (agy's denied command,
         // the one follow-up this build makes), and a remote launch stamped as one says so on the wire.
-        var agy = new AntigravityRuntime().Build("Architecture", "review this", _dir, "schema.json", _dir,
-            new ReviewerSettings("antigravity") { Timeout = TimeSpan.FromMinutes(1) }) with { Round = Key };
+        var built = new AntigravityRuntime().Build("Architecture", "review this", _dir, "schema.json", _dir,
+            new ReviewerSettings("antigravity") { Timeout = TimeSpan.FromMinutes(1) });
+        var agy = built with { Round = Key };
         var followUp = agy.Adapter!.FollowUp(agy, ADeniedCommandIsAskedAgainTests.Transcript(ADeniedCommandIsAskedAgainTests.DeniedStream, ADeniedCommandIsAskedAgainTests.Denied));
         followUp!.Round.Should().Be(Key, "a follow-up continues the first launch's round");
         Flag(AdapterOf(first).ForLaunch(first with { Attempt = LaunchAttempts.FollowUp }), "--attempt").Should().Be(LaunchAttempts.FollowUp);
