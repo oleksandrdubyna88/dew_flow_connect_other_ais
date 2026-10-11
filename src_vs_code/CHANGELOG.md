@@ -15,7 +15,7 @@ I/O failure (exit 74), never an empty answer.
 trailing 5 hours, 24 hours and 7 days, by stage, with reviewers per round — read from `coai.db`, for the
 extension's Spending tab and Models cards. Schema step 20 records each reviewer's model, so rounds can be counted per model.
 
-## Unreleased
+## Extension 0.68.0 — 2026-10-11
 
 **New: Settings › Setup › This side lists the sides this profile has been used on.** VS Code shares your settings between
 a Windows window and a WSL window on the same machine, and until now nothing recorded that both were in use. Every
