@@ -958,14 +958,18 @@ vendor may take, which is the caller's own `timeoutSeconds`),
 and `Coai:AllowAnyRole` (accept any well-formed role id at all);
 `Coai:AcceptClientSystemPrompt` (false — whether a client's system prompt is taken at all, contract 2) and
 `Coai:MaxEffort` (empty — the highest effort a request may ask for; a level past it runs at it);
+`Coai:DeadlineSafetyMarginSeconds` (5 — taken off a client's stated `remainingSeconds` at receipt; also the transit
+allowance) and `Coai:MinStartSeconds` (10 — the least a launch's start-up needs; a job whose caller cannot wait that
+long after the margin is ended at claim, never started — see *No start without budget* below);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 
 **Startup refuses** when no scheme is configured, when a Microsoft tenant has no audiences, **when
 Google is enabled with no audiences**, when the domain list is empty without the explicit override,
 when a Local signing key is under 32 bytes, when `SessionTtlDays` is not positive, when `DataDir`
-cannot be written, **or when a `Coai:ExtraRoles` entry could never be a role id** — each with the
-sentence that names the cure. A misconfiguration that starts is a
+cannot be written, **when a `Coai:ExtraRoles` entry could never be a role id**, or when
+`Coai:DeadlineSafetyMarginSeconds` is negative or `Coai:MinStartSeconds` is not positive
+(`ClientBudgetPolicy.From`) — each with the sentence that names the cure. A misconfiguration that starts is a
 server that answers 401 or 403 to everything with nothing in the log connecting the two.
 
 ### `AcceptedRoles`: which roles this server runs, decided once (2026-09-13)
@@ -1374,7 +1378,7 @@ than them skips them as unknown members (`ServerJsonContext` sets no `UnmappedMe
 |---|---|---|---|
 | `round` | the round's id: 128 random bits, 32 hex characters, the same on every launch of the round | a JSON string of exactly 32 hex characters, either case | `JobRecord.Round`, **lower case** — one round is never two in a count |
 | `attempt` | `first` / `retry` / `repair` / `followUp` — what this request is inside the client's turn | one of those four words, as spelt (`RoundFields.ClientAttempts`; `rotated` is the server's own, not a client's) | `JobRecord.ClientAttempt` |
-| `remainingSeconds` | the seconds left on the client's own deadline at submit — relative, never an instant | a JSON number that is a whole, positive `int` — no fraction, no exponent, no string | `JobRecord.RemainingSeconds`; **nothing acts on it yet** — story 4.3 caps it and decides the budget rule |
+| `remainingSeconds` | the seconds left on the client's own deadline at submit — relative, never an instant | a JSON number that is a whole, positive `int` — no fraction, no exponent, no string | `JobRecord.RemainingSeconds`, and from it `JobRecord.ClientDeadlineUtc` — the budget rule, *No start without budget* below (story 4.3) |
 
 **Bound tolerantly, read by hand (risk amendment 3).** `ReviewRequestDto` binds the three as `JsonElement?`, and
 `RoundFields.Take` (`src/Jobs/RoundFields.cs`) reads them. A typed `string?`/`int?` refuses `"oops"`, `{}`, `1.5` or an
@@ -1415,5 +1419,88 @@ flowchart LR
   T -->|"malformed"| D["stored empty + dropped note"]
   D --> A["202: dropped"]
   J --> L["JobRunner.Ledger — every line:<br/>round, clientAttempt beside attempt"]
-  J -.->|"story 4.3"| B["budget rule (not built)"]
+  J -->|"story 4.3"| B["ClientDeadlineUtc — the budget rule below"]
+```
+
+## No start without budget (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+
+A job was claimed whenever an account came free, however long its caller had been gone: the shim gives up on its own
+deadline and DELETEs, but a launch that won a slot a second before that DELETE ran on the company's account for an answer
+nobody collected (symptom 6 of the plan). Now the server does not start a launch its caller can no longer wait for, and
+says so in a form the client reads without matching a sentence.
+
+**The rule, in three places, all the store's.**
+
+1. **At submit** (`JobStore.Submit`): from the validated `remainingSeconds` (story 4.2), `ClientBudget.DeadlineOf`
+   stamps `JobRecord.ClientDeadlineUtc = SubmittedUtc + min(remainingSeconds, timeoutSeconds + queue window) −
+   Coai:DeadlineSafetyMarginSeconds`. `SubmittedUtc` is the endpoint's receipt stamp, from THIS process's clock; no
+   instant a client sends is ever read, so a client clock ten minutes off gets the same deadline
+   (`AClientClockTenMinutesOff_GetsTheSameDeadline` sends four of them in the body). The cap means a client cannot buy a
+   longer-lived job than one without the field (`AHugeRemainingSeconds_IsCappedAtTheJobsOwnLifetime`: `int.MaxValue`
+   becomes sixty seconds plus ten minutes). A request that stated none — an old client, or a dropped value — keeps no
+   deadline, and the rule never touches it.
+2. **At claim** (`JobStore.TryClaim`, under the claim's own lock): the vendor's queued jobs are walked oldest first; one
+   whose caller's remaining time is **less than `Coai:MinStartSeconds`** is ENDED there — `FailureKind.NoBudget`, its
+   reason interpolating the configured allowance (`ClientBudget.NoBudgetReason`), its poller woken, nothing launched —
+   and the pass **moves on** to the next queued job, so a free account is not left idle for a tick. `TryClaim` answers
+   a `ClaimOutcome(Job?, Token, Refused)`: the job it started, if any, and every job it ended on the way. The rule is
+   "the caller can no longer wait", a small start-up allowance — **not** the plan's first "least useful run" of sixty
+   seconds, which would have refused every healthy short review: a 60 s reviewer's shim advertises at most 50 s before
+   any margin, a 30 s one at most 20 (the risk consultation for epic 4; measured in the break-it round — a fresh 30 s
+   reviewer that advertised 19 s was refused under a 60 s floor).
+3. **The run budget** of a claimed job is its own, capped at what is left before `ClientDeadlineUtc`
+   (`JobTransitions.Start` → `ClientBudget.RunBudgetOf`); the record keeps the capped number, so the timeout's and the
+   backstop's sentences name the budget that ran.
+
+**The numbers.** `Coai:DeadlineSafetyMarginSeconds` (default 5) and `Coai:MinStartSeconds` (default 10), read in
+`Program.cs` into `ClientBudgetPolicy.From`, which refuses a negative margin or a non-positive allowance at boot with the
+cure in the sentence, and handed to the `JobStore`. In `deploy/docker-compose.yml` as `DEADLINE_SAFETY_MARGIN_SECONDS`
+and `MIN_START_SECONDS`. The edge: a job is refused when `remainingSeconds − margin < minStart` at the claim and launches
+at `remainingSeconds − margin ≥ minStart` (`AJobAtTheEdge_IsRefused_AndOneJustAboveItLaunches`: 14 s refused, 15 s
+launched, on a fixed clock).
+
+**Transit time is the margin's to absorb — a stated limit** (E4's plan round). The server anchors `remainingSeconds` at
+RECEIPT and cannot see how long the request travelled; a client timestamp would bring clock skew back. So the margin is
+the transit allowance as well as the safety margin: a request delayed in transit by MORE than the margin can still be
+claimed after its caller gave up — and is then withdrawn by the caller's own DELETE, the existing withdrawal path
+(`Cancelled` / `withdrawn`), which is what a claim-then-DELETE race already does today.
+
+**The refusal is counted.** `JobRunner.RefusedForBudget` writes ONE ledger line per job the claim pass ended, from the
+record the store ended: outcome `NoBudget`, `0/0` with no usage note (nothing launched, so nothing is uncaptured — a true
+zero), `0` seconds, an empty `slot` (no account carried it), `attempt` `first` — or `rotated` when a rate-limited account
+had handed the job back earlier — and the job's `kind`, `round`, `clientAttempt`, `turn` and `job` as every line of the
+job carries them; no launch options, because nothing ran with anything. So the effect of the rule is visible in the same
+ledger as what it saves.
+
+**On the wire, by name.** `GET /api/reviews/{id}` answers `status: failed`, `failure: "no_budget"`, an empty `endCause`
+(a refusal is not a cancellation) and the reason. The shim reads the NAME — `RemoteAsk.NoBudgetFailure` — into its own
+exit, `RemoteAsk.NoBudget` (79), with `RemoteAsk.NoBudgetMessage`; a shim older than the name exits 70 with the name inside
+its failure sentence, as it renders every name, and nothing throws ([module_runners.md](module_runners.md)). Neither
+sentence, nor the server's reason, matches a phrase the client's rate-limit ladder reads
+(`TheNoBudgetReason_MatchesNoRateLimitPhrase`), so a refusal that cannot clear is never waited out.
+
+**What the rule does not do.** The sweep does not read `ClientDeadlineUtc`: a queued job past it waits for the next claim
+pass on its vendor — where it is ended and counted — or its queue window ends it as before (`queueExpired`, no line); a
+sweep that ended it would lose the count the story exists to make. A DELETE before the claim is still the zero-spend
+path: the cancelled job is terminal and no claim pass sees it (`ADeleteBeforeTheClaim_LaunchesNothing`, through a
+counting launcher). Nothing is logged for a refusal beyond the ledger line.
+
+Tests: `NoStartWithoutBudgetTests` (the store's and the runner's half, a counting `IReviewLauncher`),
+`TheCallerCanStillWaitTests` (the wire half: the real `--ask-remote` code in-process, its POST captured by `ShimCapture`
+and replayed to the real `POST /api/reviews`, then claimed at once — the MUST LAUNCH set), the mcp side's
+`TheServerRefusesForBudgetByNameTests` — listed in [module_tests.md](module_tests.md).
+
+```mermaid
+flowchart TD
+  P["POST /api/reviews<br/>remainingSeconds (4.2: validated)"] --> S["JobStore.Submit<br/>ClientDeadlineUtc = SubmittedUtc + min(stated, timeout + queue window) − margin<br/>(none when nothing was stated)"]
+  S --> Q[(queued)]
+  Q --> C["JobStore.TryClaim — an account is free<br/>oldest first"]
+  C -->|"no deadline, or MinStart or more left"| L["JobTransitions.Start<br/>RunBudget capped at what is left"]
+  L --> R["JobRunner.RunAsync → the vendor"]
+  C -->|"less than MinStart left"| N["ended: FailureKind.NoBudget<br/>poller woken, nothing launched"]
+  N --> M["the pass moves on to the next queued job"]
+  M --> C
+  N --> G["JobRunner.RefusedForBudget<br/>one ledger line: NoBudget, 0/0, no note"]
+  N --> W["GET /api/reviews/{id}: failure no_budget"]
+  W --> H["shim: exit 79 by NAME<br/>(an old shim: 70, the name in its sentence)"]
 ```

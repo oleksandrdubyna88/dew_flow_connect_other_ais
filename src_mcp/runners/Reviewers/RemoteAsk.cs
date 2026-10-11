@@ -67,6 +67,21 @@ public static class RemoteAsk
     /// </remarks>
     public const int TooSlow = 78;
 
+    /// <summary>
+    /// The Team server ended the review before anything launched: by the time an account was free, this reviewer could
+    /// no longer wait for a launch's start-up (story 4.3 of todo/PLAN_every_round_is_counted.md). Nothing was spent.
+    /// </summary>
+    /// <remarks>
+    /// Read off the status BY NAME — <see cref="NoBudgetFailure"/> — never off the server's sentence; and its own code
+    /// rather than <see cref="VendorFailed"/>, because the vendor was never asked: the cure is the same as
+    /// <see cref="TooSlow"/>'s (a longer reviewer timeout, or more accounts), not a look at the vendor. One past the end
+    /// of sysexits, where no system meaning can be mistaken for it.
+    /// </remarks>
+    public const int NoBudget = 79;
+
+    /// <summary>The server's wire name for that ending (<c>FailureKind.NoBudget</c> on the server).</summary>
+    public const string NoBudgetFailure = "no_budget";
+
     /// <summary>How long to leave between polls while a review is queued or running.</summary>
     /// <remarks>
     /// The server long-polls up to 25 seconds and returns the moment the state changes, so this is
@@ -268,6 +283,19 @@ public static class RemoteAsk
     public static string UnknownStateMessage(string serverUrl, string status) =>
         $"the Team server at {serverUrl} reported a review status this client does not know "
         + $"('{Trim(status, 60)}') — update coai-mcp from ConnectOtherAIs > MCP server";
+
+    /// <summary>
+    /// The server did not start the review: this reviewer could no longer wait (<see cref="NoBudget"/>). Nothing spent.
+    /// </summary>
+    /// <remarks>
+    /// Worded clear of every phrase <c>RateLimit</c> reads as a refusal worth waiting out — and the server's own reason is
+    /// held to the same by a test on its side — so the ladder never retries a review whose caller is out of time.
+    /// </remarks>
+    public static string NoBudgetMessage(string vendor, string serverUrl, string reason) =>
+        $"the Team server at {serverUrl} did not start this {vendor} review: by the time an account was free, this "
+        + "reviewer could no longer wait for a launch"
+        + (reason.Length > 0 ? $" ({Trim(reason, 400)})" : string.Empty)
+        + ". Nothing was spent. Raise COAI_REVIEWER_TIMEOUT_MINUTES, or ask the operator for more accounts on that vendor.";
 
     /// <summary>The vendor itself failed, in its own words.</summary>
     public static string FailedMessage(string vendor, string failure, string reason) =>

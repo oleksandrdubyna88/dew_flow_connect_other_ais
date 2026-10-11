@@ -105,7 +105,7 @@ public sealed class IdempotencyTests
         var jobs = new JobStore();
         jobs.Submit(Job("a", "turn-1"), Now);
         var claimed = jobs.TryClaim("codex", "slot", Now);
-        jobs.Finish(JobTransitions.Succeed(claimed!.Value.Job, "the answer", new Usage(1, 2, null), Now));
+        jobs.Finish(JobTransitions.Succeed(claimed.Job!, "the answer", new Usage(1, 2, null), Now));
 
         var (again, refusal, _) = jobs.Submit(Job("b", "turn-1"), Now);
 

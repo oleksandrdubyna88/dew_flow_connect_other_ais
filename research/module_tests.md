@@ -3412,3 +3412,47 @@ the probe: `cd src_vs_code && npm run test:contract` (starts the server this tre
 stamp through a spy adapter, the wire through the real executor and the real shim — the two are not joined in one run);
 the local ledger line (carries no round yet); a feature-stage follow-up turn through the real stage (`OneMoreTurn`
 stands in for `SourceConversation`); the server's reading of the fields and its refusal (stories 4.2 / 4.3).
+
+## No start without budget (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+
+The rule is the store's (`JobStore.TryClaim`) and the line is the runner's, so the fakes sit at `IReviewLauncher` — a
+launcher that COUNTS, because the guarantee is that nothing launched. The wire half goes through the REAL client code:
+`RemoteRuntime.Build` → `ForLaunch` → `AskRemote.RunAsync` over `Program.Flags` in-process (the server tests now reference
+`CoaiMcp.csproj`, with `InternalsVisibleTo`) → its POST captured by `ShimCapture`, a loopback `HttpListener` in the server
+tests → the captured body replayed to the real `POST /api/reviews` → `TryClaim` at once. Capture-and-replay rather than a
+socket on the in-process host: the in-process host has none, and "`RemoteRuntime` → captured POST → immediate claim" is
+E4's plan round's own wording. Every behaviour was RED on the inert shapes first (the enum value, the policy, the
+deadline field and the claim result present, nothing wired), then GREEN, then RED again under three plant rounds from
+byte copies, each file hash-checked and TOUCHED on restore (a `Copy-Item` keeps the backup's timestamp) and the binaries
+rebuilt before the final green. Run:
+`./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.exe --filter-class "*NoStartWithoutBudgetTests" --filter-class "*TheCallerCanStillWaitTests"`
+and `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*TheServerRefusesForBudgetByNameTests"`.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `NoStartWithoutBudgetTests` (10, server) | `AJobWithoutBudget_IsEndedWithoutStartingTheVendor` (12 s stated, 5 off, 7 left, 10 needed: the pump returns false, the counting launcher saw nothing, `Failed`/`NoBudget`, the reason names *at least 10s*, a long poll started before the pump completes within 2 s, and exactly ONE ledger line — `NoBudget`, 0/0, no `usageNote`, 0 s, `kind: review`, the round and `clientAttempt: repair` kept, `turn` the job id, `attempt: first`, empty `slot` and `endCause`); `TheClaimMovesOnToTheNextJob` (a spent job and a fine one: one pump launches the second only, two lines `NoBudget`/`ok`); `AnOldClient_IsNeverRefusedForBudget` (an hour's allowance, `remainingSeconds` 0: no deadline, launched); `ADeleteBeforeTheClaim_LaunchesNothing` (amendment 5, through the counting launcher: the cancelled job is never claimed, no file); `TheRunBudget_IsCappedAtWhatIsLeft` (600 s asked, 100 stated, claimed 20 s later → 75 s, `RunDeadlineUtc` from it); `AStatedBudgetLongerThanTheJobsOwn_LeavesTheRunBudgetAlone`; `AHugeRemainingSeconds_IsCappedAtTheJobsOwnLifetime` (`int.MaxValue` → 60 s + 10 min − 5 s); `AJobAtTheEdge_IsRefused_AndOneJustAboveItLaunches` (14 s refused, 15 s launched, fixed clock); `TheNoBudgetReason_MatchesNoRateLimitPhrase` (the store's own reason inside the new shim's sentence at exit 79 and the old shim's at exit 70: `RateLimit.Hit` false, `Hopeless` false); `TheSettings_AreRefusedAtBoot_WhenTheyCouldNeverBeRight` (`From(-1, 10)`, `From(5, 0)` throw naming the key; `From(0, 1)` is a decision; the default is 5/10) | RED on the inert shapes: `Expected (runner.PumpAsync(…)) to be False because nothing could be started, but found True`; `Expected launcher.Launches to be equal to {<the fine job>} … but {<the spent job>} differs at index 0`; `Expected 1m and 15s … but found 10m`; `Expected job!.ClientDeadlineUtc to represent the same point in time as <2026-10-11 12:10:55 +0h> … but found a <null> DateTimeOffset`; `Expected refused.Job to be <null>, but found CoaiServer.JobRecord`; the phrase test `System.InvalidOperationException : Sequence contains no elements` (no refusal to read). The old-client, the DELETE, the longer-budget and the settings tests passed from the start (guards) |
+| `TheCallerCanStillWaitTests` (3, server, collection `coai-server`) | `AClientClockTenMinutesOff_GetsTheSameDeadline` (two real POSTs, the second carrying `submittedAtUtc`, `clientNowUtc`, `deadlineUtc` and `utc` ten minutes off: both deadlines inside `[before, after] + 50 s − 5 s` of the server's clock); `AFreshThirtySecondReviewer_AFreshSixtySecondReviewer_AndARepairWithFortySecondsLeft_EachLaunch` (the MUST LAUNCH set: three real shim runs, three captured bodies, each submitted to the real endpoint and claimed at once — `Refused` empty, the job claimed, a positive run budget); `TheConfiguredAllowance_IsWhatTheClaimReads` (the host with `Coai__MinStartSeconds=3600`: a 50 s budget is refused, the reason names *at least 3600s*, `GET /api/reviews/{id}` says `failed` / `no_budget` / empty `endCause`) | RED: `Expected plain.ClientDeadlineUtc to have a value because a stated budget gets a deadline, but found <null>`; `Expected claim.Job to be <null>, but found CoaiServer.JobRecord`. The MUST LAUNCH set passed from the start — its teeth are plant S-B's |
+| `TheServerRefusesForBudgetByNameTests` (4, mcp) | `TheShim_ReadsNoBudgetByName_AndExitsItsOwnCode` (the stub answers `failed` / `no_budget`: exit 79, the sentence, no DELETE); `TheShim_ReadsTheName_NotTheSentence` (the server's sentence under `timed_out` → 70; the name under any sentence → 79); `AnOlderShim_RendersTheNameInItsSentence_AndNothingThrows` (`ReadPoll` → `Failed`, `Decide` → `Finish`, `FailedMessage` carries *(no_budget)*); `NeitherShimsSentence_IsReadAsARateLimit` | RED: `Expected exit to be 79 … but found 70 (difference of -9)` (twice). Plant M-A (the name test made unreachable) → the same two |
+| `JobStoreTests`, `AbandonedJobTests`, `IdempotencyTests` (changed on purpose) | `TryClaim` answers a `ClaimOutcome` — `.Job` / `.Token` / `.Refused` — where a nullable tuple stood; ten call sites rewritten, no behaviour changed | — |
+| `http/reviews/happy.http` | `@uncovered` for `failure: "no_budget"`: a claim needs a signed-in account and the suite's stack has none, by design; the in-process host test above proves the name on the wire | — |
+
+**Break-it, from byte copies.** Round S-A (`CanStart` → `true`; the lifetime cap removed; the run budget not capped) →
+7 red: the five refusal tests as on the inert shapes, `AHugeRemainingSeconds` `… but <2094-10-29 15:14:02 +0h> does
+not` (sixty-eight years of `int.MaxValue`), `TheRunBudget` `found 10m`. Round S-B (`DefaultMinStartSeconds` 60 — the
+plan's refuted floor; the pass returning after its first refusal; `RefusedForBudget` writing nothing; the margin not
+subtracted; *(quota)* appended to the reason) → 9 red: the MUST LAUNCH set `Expected claim.Refused to be empty because a
+fresh 30 s reviewer MUST LAUNCH; it advertised 19 s and was refused, but found at least one item` — the consultation's
+prediction, measured; `TheClaimMovesOnToTheNextJob` `… to be True because the second job could start, in the same pass,
+but found False`; `AJobWithoutBudget` `FileNotFoundException : Could not find file '…\usage.jsonl'`; the clock test `…
+to be on or before <… 16:37:58> … but it was <… 16:38:03>` and `AHuge` `<… 12:11:00>` (five seconds, the margin);
+`TheRunBudget` `found 1m and 20s`; `TheNoBudgetReason` `Expected RateLimit.Hit(…) to be False … but found True`; the
+edge and the settings tests. Round M-A (the shim's name branch made unreachable) → the two shim tests. Every file
+restored, hash-checked against its copy, touched, both test projects rebuilt → 13/13 and 4/4.
+
+**NOT covered:** the real `coai-mcp` BINARY against the real server (the shim runs in-process, as 4.1's tests run it;
+the binary's own cold start — up to ten seconds under load on this machine — is what makes a fresh 30 s reviewer's
+advertised budget vary between runs, and the rule's margin is sized for the in-process number); the host's OWN pump
+claiming a job (no slot is signed in on the host's registry in any server test — the claim is the test's); a sweep
+over `ClientDeadlineUtc` (none exists, by decision); the extension's `remoteAsk.ts` on the new name (remote CHAT, not
+reviews — read: it renders any `failure` string inside a sentence; no test added, `src_vs_code` untouched); the
+deployed server (the rule ships with E5's deploy).

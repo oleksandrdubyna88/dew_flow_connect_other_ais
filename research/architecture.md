@@ -850,8 +850,12 @@ an instant, so no clock crosses the seam; never 0 — an exhausted budget is ref
 Additive and optional, each left out when empty, so the number did not move: the deployed server's `ServerJsonContext`
 sets no `UnmappedMemberHandling` and skips what it does not know, measured live by the contract suite's zero-spend
 probe (a body with those members and `"kind":"probe-no-such-kind"` is refused by its KIND, which the server judges only
-after binding — nothing queued, nothing spent). Reading them, and ending a job whose caller can no longer wait, are the
-server's stories (4.2, 4.3).
+after binding — nothing queued, nothing spent). The server reads them (4.2) and, from `remainingSeconds`, ends a job
+whose caller can no longer wait for a launch's start-up — at claim, nothing launched, counted in its ledger — with a
+failure NAME of its own on the wire, `no_budget` (4.3). The shim reads that name, never the sentence beside it, into its
+own exit (`RemoteAsk.NoBudget`, 79); a shim older than the name renders it inside its failure sentence as it renders
+every name, and nothing on either side matches a sentence
+([module_team_server.md](module_team_server.md), [module_runners.md](module_runners.md)).
 
 ### A setting whose ABSENCE must mean something (2026-09-08)
 

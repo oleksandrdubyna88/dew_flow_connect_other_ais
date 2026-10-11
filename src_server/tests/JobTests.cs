@@ -124,7 +124,7 @@ public sealed class JobStoreTests
         var store = new JobStore();
         store.Submit(Job(queueWait: TimeSpan.FromMinutes(1)));
 
-        store.TryClaim("codex", "a", Now.AddMinutes(2)).Should().BeNull("it ran out of queue time");
+        store.TryClaim("codex", "a", Now.AddMinutes(2)).Job.Should().BeNull("it ran out of queue time");
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class JobStoreTests
 
         // Telling somebody their review was cancelled and then paying for it anyway is the one
         // outcome a cancel must not produce. (Plan round.)
-        store.TryClaim("codex", "a", Now).Should().BeNull();
+        store.TryClaim("codex", "a", Now).Job.Should().BeNull();
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class JobStoreTests
         store.Submit(second);
         store.Submit(first);
 
-        store.TryClaim("codex", "a", Now.AddSeconds(6))!.Value.Job.Id.Should().Be(first.Id);
+        store.TryClaim("codex", "a", Now.AddSeconds(6)).Job!.Id.Should().Be(first.Id);
     }
 
     [Fact]
@@ -174,8 +174,8 @@ public sealed class JobStoreTests
         store.Submit(Job());
         store.Submit(Job()).Refusal.Should().Be(SubmitRefusal.None, "it is accepted, not refused");
 
-        store.TryClaim("codex", "a", Now).Should().NotBeNull();
-        store.TryClaim("codex", "b", Now).Should().BeNull("this caller already has one running");
+        store.TryClaim("codex", "a", Now).Job.Should().NotBeNull();
+        store.TryClaim("codex", "b", Now).Job.Should().BeNull("this caller already has one running");
     }
 
     [Fact]
@@ -188,9 +188,9 @@ public sealed class JobStoreTests
         // Found by running the suite repeatedly rather than once.
         store.Submit(Job(at: Now));
         store.Submit(Job(email: "other@example.com", at: Now.AddSeconds(1)));
-        store.TryClaim("codex", "a", Now.AddSeconds(2)).Should().NotBeNull();
+        store.TryClaim("codex", "a", Now.AddSeconds(2)).Job.Should().NotBeNull();
 
-        store.TryClaim("codex", "b", Now.AddSeconds(2))!.Value.Job.Email.Should().Be("other@example.com");
+        store.TryClaim("codex", "b", Now.AddSeconds(2)).Job!.Email.Should().Be("other@example.com");
     }
 
     [Fact]
@@ -267,10 +267,10 @@ public sealed class JobStoreTests
         // against the account, and the slot is held the whole time. (Blocking, code round.)
         var store = new JobStore();
         store.Submit(Job());
-        var claimed = store.TryClaim("codex", "a", Now)!.Value;
+        var claimed = store.TryClaim("codex", "a", Now);
         claimed.Token.IsCancellationRequested.Should().BeFalse();
 
-        store.Cancel(claimed.Job.Id, claimed.Job.Email, Now);
+        store.Cancel(claimed.Job!.Id, claimed.Job.Email, Now);
 
         claimed.Token.IsCancellationRequested.Should().BeTrue();
     }
@@ -280,7 +280,7 @@ public sealed class JobStoreTests
     {
         var store = new JobStore();
         store.Submit(Job());
-        var claimed = store.TryClaim("codex", "a", Now)!.Value;
+        var claimed = store.TryClaim("codex", "a", Now);
 
         store.Sweep(Now.AddMinutes(5));
 

@@ -28,6 +28,13 @@ public enum FailureKind
     NotStarted,
     Cancelled,
     Lost,
+
+    /// <summary>
+    /// Ended at claim, before anything launched: the caller's stated budget could no longer hold a launch's start-up
+    /// (story 4.3 of todo/PLAN_every_round_is_counted.md). Its OWN name, on the wire as <c>no_budget</c>, so the client
+    /// reads it by name and never by sentence.
+    /// </summary>
+    NoBudget,
 }
 
 /// <summary>One review, as the server knows it.</summary>
@@ -124,9 +131,16 @@ public sealed record JobRecord(
 
     /// <summary>
     /// The seconds the client said were left on its deadline at submit — <see cref="TakenRound.RemainingSeconds"/>, <c>0</c>
-    /// when it sent none or one that was dropped. Recorded only; story 4.3 is the one that acts on it.
+    /// when it sent none or one that was dropped. <see cref="ClientDeadlineUtc"/> is what the store makes of it.
     /// </summary>
-    int RemainingSeconds = 0)
+    int RemainingSeconds = 0,
+
+    /// <summary>
+    /// When the caller's stated budget ends, on THIS server's clock — <see cref="ClientBudget.DeadlineOf"/>, stamped by the
+    /// store at submit (story 4.3 of todo/PLAN_every_round_is_counted.md). Null for a request that stated none: an old
+    /// client, which the budget rule never refuses.
+    /// </summary>
+    DateTimeOffset? ClientDeadlineUtc = null)
 {
     /// <summary>
     /// What the vendor reported for this job — the whole usage, cached and reasoning included (story 3.1 of
@@ -229,14 +243,33 @@ public static class JobTransitions
         !job.IsTerminal && nowUtc - job.HeardFromUtc >= AbandonedAfter(job.Status);
 
     /// <summary>The job starts on a slot: the run clock begins HERE, not at submit.</summary>
-    public static JobRecord Start(JobRecord job, string slot, DateTimeOffset nowUtc) =>
-        job with
+    /// <remarks>
+    /// The budget it runs with is its own, capped at what is left before its caller's deadline
+    /// (<see cref="ClientBudget.RunBudgetOf"/>, story 4.3 of todo/PLAN_every_round_is_counted.md): a vendor given
+    /// ten minutes for a caller that leaves in one would spend nine on an answer nobody collects. The record keeps the
+    /// capped number, so every sentence that names the budget — the timeout's, the backstop's — names the one that ran.
+    /// </remarks>
+    public static JobRecord Start(JobRecord job, string slot, DateTimeOffset nowUtc)
+    {
+        var budget = ClientBudget.RunBudgetOf(job, nowUtc);
+
+        return job with
         {
             Status = JobStatus.Running,
             Slot = slot,
             StartedUtc = nowUtc,
-            RunDeadlineUtc = nowUtc + job.RunBudget + RunSlack,
+            RunBudget = budget,
+            RunDeadlineUtc = nowUtc + budget + RunSlack,
         };
+    }
+
+    /// <summary>
+    /// The job is ended at claim because its caller can no longer wait for a launch's start-up — nothing launched, so it
+    /// carries no usage; its own <see cref="FailureKind.NoBudget"/>, and a reason naming the configured allowance
+    /// (story 4.3 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    public static JobRecord WithoutBudget(JobRecord job, TimeSpan minStart, DateTimeOffset nowUtc) =>
+        Fail(job, FailureKind.NoBudget, ClientBudget.NoBudgetReason(job, nowUtc, minStart), nowUtc);
 
     public static JobRecord Succeed(JobRecord job, string answer, Usage usage, DateTimeOffset nowUtc) =>
         job with

@@ -372,6 +372,9 @@ public static class ReviewEndpoints
         FailureKind.NotStarted => "not_started",
         FailureKind.Cancelled => "cancelled",
         FailureKind.Lost => "lost",
+        // Its own name (story 4.3 of todo/PLAN_every_round_is_counted.md): the client's shim reads it by name — exit
+        // `RemoteAsk.NoBudget` — and an older shim renders it inside its failure sentence, as it does every name here.
+        FailureKind.NoBudget => "no_budget",
         _ => string.Empty,
     };
 }

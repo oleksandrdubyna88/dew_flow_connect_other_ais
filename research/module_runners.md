@@ -2550,7 +2550,8 @@ repair with forty seconds left still told the Team server it could wait six hund
 
 Not done here: the LOCAL ledger line does not carry the round (story 4.2 adds the server line's `Round`; the local
 writer can take it from `ReviewerInvocation.Round` once the field is there); the server's reading of the three fields
-(4.2) and its refusal of a job whose caller can no longer wait (4.3) are the server stories'.
+(4.2) and its refusal of a job whose caller can no longer wait (4.3) are the server stories' — the shim's half of the
+refusal is the next section.
 
 ```mermaid
 sequenceDiagram
@@ -2573,3 +2574,43 @@ sequenceDiagram
 Tests: `ARoundHasAnIdOnTheWireTests`, `ARoundIsMintedAKeyTests`, `TheRoundKeyIsStepTwentyOneTests`,
 `RemoteShimScenarioTests.TheRoundTheAttemptAndTheSecondsLeft_GoOut_WithTheRealBinary`, `reviewBody.contract.ts` —
 listed in [module_tests.md](module_tests.md).
+
+## The shim reads a refusal by name — exit 79 (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+
+The Team server now ends a job whose caller can no longer wait for a launch's start-up — at claim, nothing launched,
+counted in its ledger ([module_team_server.md](module_team_server.md), *No start without budget*) — and says so with a
+failure NAME of its own on `GET /api/reviews/{id}`: `failure: "no_budget"`. The shim's half:
+
+- **Read by name, never by sentence.** `AskRemote.Ended` compares `failure` with `RemoteAsk.NoBudgetFailure` by ordinal
+  equality and answers **`RemoteAsk.NoBudget` (79)** with `RemoteAsk.NoBudgetMessage` — *the Team server at … did not
+  start this codex review: by the time an account was free, this reviewer could no longer wait for a launch (…). Nothing
+  was spent. Raise COAI_REVIEWER_TIMEOUT_MINUTES, or ask the operator for more accounts on that vendor.* The server's
+  sentence under any other name is the vendor's failure (70) as before, and the name under any sentence is 79. Its own
+  code rather than `VendorFailed`, because the vendor was never asked: the cure is `TooSlow`'s, not a look at the vendor;
+  one past the end of sysexits, where no system meaning can be mistaken for it. The job is already terminal, so no DELETE.
+- **An older shim** — one built before the name — takes the road every unknown name takes: `RemotePoll.Failure` holds
+  it, `Decide` finishes, `FailedMessage` renders *(no_budget)* inside its sentence, exit 70. Nothing throws; the person
+  reads the server's reason. The extension's `remoteAsk.ts` (remote CHAT) renders any `failure` string inside a sentence
+  the same way, and was not changed.
+- **Above the shim** the executor sees a `NonZeroExit(79, …)`; no `ReviewerOutcome` case was added — every switch over
+  outcomes would widen for one server ending. What matters above is that the ladder does NOT retry it: neither the new
+  shim's sentence nor the old one's, nor the server's reason inside either, matches a phrase `RateLimit.Hit` reads
+  (`TheNoBudgetReason_MatchesNoRateLimitPhrase` on the server side, `NeitherShimsSentence_IsReadAsARateLimit` here), so a
+  refusal that cannot clear is never waited out into the same refusal.
+
+```mermaid
+sequenceDiagram
+  participant H as --ask-remote shim
+  participant T as Team server
+  H->>T: POST /api/reviews (remainingSeconds)
+  T-->>H: 202
+  loop poll
+    H->>T: GET /api/reviews/{id}?wait=25
+    T-->>H: queued …
+  end
+  Note over T: an account comes free; the caller cannot wait MinStart more — ended at claim, nothing launched
+  T-->>H: failed, failure "no_budget", reason
+  H->>H: Ended: the NAME equals no_budget → exit 79 (an older shim: 70, the name in its sentence)
+```
+
+Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).

@@ -195,6 +195,13 @@ Authorization: Bearer {{token}}
 
 ###
 
+# @uncovered `failure: "no_budget"` on GET /api/reviews/{id} (story 4.3 of todo/PLAN_every_round_is_counted.md) — the
+#            server ends a job whose caller can no longer wait AT CLAIM, and a claim needs a signed-in account, which
+#            this suite's stack deliberately has none of (nothing may reach a vendor). The in-process host proves the
+#            name on the wire: `TheCallerCanStillWaitTests.TheConfiguredAllowance_IsWhatTheClaimReads`.
+
+###
+
 # @name a_model_the_allowlist_does_not_have_is_refused_naming_what_it_does
 POST {{baseUrl}}/api/reviews
 Authorization: Bearer {{token}}

@@ -451,9 +451,10 @@ internal static class AskRemote
     {
         if (state.State == RemoteState.Failed)
         {
-            note(RemoteAsk.FailedMessage(job.Vendor, state.Failure, state.Reason));
+            var (exit, said) = Ended(job, state);
+            note(said);
 
-            return RemoteAsk.VendorFailed;
+            return exit;
         }
 
         try
@@ -473,6 +474,17 @@ internal static class AskRemote
 
         return RemoteAsk.Ok;
     }
+
+    /// <summary>
+    /// A failed review's exit and sentence, read off the failure's NAME: a server that ended the job before anything
+    /// launched because this reviewer could no longer wait (story 4.3 of todo/PLAN_every_round_is_counted.md) is its own
+    /// exit, <see cref="RemoteAsk.NoBudget"/>; every other name is the vendor's failure, rendered as it always was — which
+    /// is also what a shim older than the name does with it.
+    /// </summary>
+    private static (int Exit, string Said) Ended(Job job, RemotePoll state) =>
+        string.Equals(state.Failure, RemoteAsk.NoBudgetFailure, StringComparison.Ordinal)
+            ? (RemoteAsk.NoBudget, RemoteAsk.NoBudgetMessage(job.Vendor, job.Server, state.Reason))
+            : (RemoteAsk.VendorFailed, RemoteAsk.FailedMessage(job.Vendor, state.Failure, state.Reason));
 
     /// <summary>Best effort. A cancel that fails costs one queued job the server will expire anyway.</summary>
     private static async Task CancelAsync(Job job, string id, HttpClient http)
