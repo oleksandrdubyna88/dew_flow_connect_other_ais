@@ -87,6 +87,53 @@ test('every language says what the Team server tab shows from a newer server —
   }
 });
 
+test('every language says the spending tab prices each line at its own model and marks a floor ≥', () => {
+  // Story 2.5 of todo/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
+  // be priced. Same blind spot as above — a translation a release out of date is not a MISSING one — so the one string
+  // every language carries, the mark and its example figure, is asked for in all five.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['**≥**', '`≥ ~$2.40`']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+  }
+});
+
+test('every language says the Rounds block comes first on the spending tab, and that a count nobody has is words, never 0', () => {
+  // Stories 2.2–2.4 of todo/PLAN_every_round_is_counted.md: the tab's FIRST block counts rounds per vendor row over
+  // 5 h / 24 h / 7 d, and a read that failed (an older coai-mcp, a database that would not open) says *count unavailable*
+  // rather than drawing a zero. The block's own words are English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['**Rounds**', '*count unavailable*', '**5 h**', '**7 d**', '--round-counts']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+  }
+});
+
+test('no language still says the product ships no price table — every one names the list the default price comes from', () => {
+  // Untrue since the list prices (research/PLAN_models_card_prices_every_row.md): a model is priced at its public list
+  // price unless a rate is typed, so "leave it empty and it stays a dash" sent a reader to type a rate the tab no
+  // longer needs. The stale sentence is a different sentence in each language, so each is named; the list's own name is
+  // the one word all five share.
+  const stale: Readonly<Record<string, string>> = {
+    en: 'ships no price table', de: 'keine Preistabelle', es: 'no incluye tabla de precios',
+    ru: 'Прайс-лист продукт не поставляет', uk: 'Прайс-листа цей продукт навмисно не постачає',
+  };
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    assert.ok(stale[language] !== undefined, `${language} has no stale phrase on record — add the one its article used`);
+    assert.ok(!said.includes(stale[language]!), `the ${language} spending article still says “${stale[language]}”, which has been untrue since the list prices`);
+    assert.ok(said.includes('OpenRouter'), `the ${language} spending article never names the list the default price comes from`);
+  }
+});
+
 test('every language’s chat article names both copy controls and the reserved reply tag', () => {
   // The same blind spot as the test above, on the change that introduced a SECOND copy control. Three
   // English strings every language has to carry: the two labels, whose difference is the entire point

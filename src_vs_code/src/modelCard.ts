@@ -39,6 +39,11 @@ export interface ModelCardFacts {
   /** When each new control was first seen, and the clock its "new" mark is measured against. */
   readonly firstSeen: FirstSeen;
   readonly now: number;
+  /**
+   * `7 days: 214 rounds · 31 consult turns · 5 h: 12` — from the CACHED round counts, never a read per render (story 2.4
+   * of todo/PLAN_every_round_is_counted.md, `cardRoundsLine`); empty before the first read, and then nothing is drawn.
+   */
+  readonly roundsLine?: string;
 }
 
 interface Access {
@@ -254,7 +259,11 @@ function usedLine(references: readonly string[]): string {
 function foot(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const prices = priceFields(vendor, id, vendor.runtime === 'local', vendor.runtime === 'remote', facts.context.price, '', '', false);
 
-  return `<div class="card-foot">${details('Connection', connectionOf(vendor, id, facts.context.otherSideCli))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
+  return `<div class="card-foot">${roundsLineOf(facts.roundsLine)}${details('Connection', connectionOf(vendor, id, facts.context.otherSideCli))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
+}
+
+function roundsLineOf(line: string | undefined): string {
+  return line === undefined || line.length === 0 ? '' : `<div class="rounds-line">${escapeHtml(line)}</div>`;
 }
 
 function details(title: string, body: string): string {

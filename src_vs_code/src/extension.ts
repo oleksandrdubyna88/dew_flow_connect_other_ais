@@ -326,6 +326,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   consultations.onChanged = () => {
     // A consultation that closed may be the one a plan's cadence was waiting on — ask again before painting.
     panel.forgetCadence();
+    // And the round counts: a consultation-only session ends no round, and its turns must still move the numbers.
+    panel.forgetRoundCounts();
     void panel.render();
     // And the LOG, which draws the same consultations on its own tab. Repainting only the sidebar
     // left an open Consultations tab showing history from before the conversation started, advanced
@@ -337,7 +339,11 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   consultations.start();
 
   panel.questionConsults = questionConsults;
-  questionConsults.onChanged = () => void panel.render();
+  questionConsults.onChanged = () => {
+    // A question row that ended spent its vendor too: the round counts' ledger is read again on the next refresh.
+    panel.forgetRoundCounts();
+    void panel.render();
+  };
   questionConsults.start();
 
   // The settings the server reads, mirrored from activation — never from the panel.
