@@ -196,8 +196,10 @@ public static partial class CooldownParser
     // and the fixture src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt: "… Resets in 33m52s".
     // The trailing boundary is the code round's: "2seconds" or "1hgarbage" must not read as a short wait. One space is
     // allowed inside ("2h 30m" is read whole), and a spaced number after the match refuses it (CodeRabbit on #754):
-    // "2h 30 minutes" read as its first part would be a SHORTER wait than the one stated.
-    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)\s?h)?\s?(?:(?<m>\d+)\s?m)?\s?(?:(?<s>\d+)\s?s)?(?![A-Za-z0-9])(?!\s*\d)", RegexOptions.IgnoreCase)]
+    // "2h 30 minutes" read as its first part would be a SHORTER wait than the one stated. The same for a punctuation
+    // separator before more digits ("2h, 30m", "2h; 30m" — CodeRabbit on #754 again); a comma that ends the duration
+    // ("2h, then try again") still reads it.
+    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)\s?h)?\s?(?:(?<m>\d+)\s?m)?\s?(?:(?<s>\d+)\s?s)?(?![A-Za-z0-9])(?![\s,;]*\d)", RegexOptions.IgnoreCase)]
     private static partial Regex Duration();
 
     // A wait the vendor STATED that the duration form could not read whole — what makes the guess err long. Any word

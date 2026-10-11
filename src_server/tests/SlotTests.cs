@@ -236,6 +236,13 @@ public sealed class CooldownParserTests
         CooldownParser.Until("Resets in 1h 2m 3s.", Now).Should().Be(Now + new TimeSpan(1, 2, 3));
         CooldownParser.Until("Resets in 2h 30 minutes", Now).Should().Be(Now + CooldownParser.MaxGuess,
             "the first part alone is a SHORTER wait than the one stated");
+        // CodeRabbit on #754 again: a punctuation separator is the same partial match — "2h" read alone would end the
+        // cooldown 30 minutes before the stated reset.
+        CooldownParser.Until("Resets in 2h, 30m", Now).Should().Be(Now + CooldownParser.MaxGuess,
+            "a comma-separated duration read as its first part is a SHORTER wait than the one stated");
+        CooldownParser.Until("Resets in 2h; 30m", Now).Should().Be(Now + CooldownParser.MaxGuess);
+        CooldownParser.Until("Resets in 2h, then try again", Now).Should().Be(Now + TimeSpan.FromHours(2),
+            "a comma that is not followed by more of the duration ends it");
     }
 
     [Fact]
