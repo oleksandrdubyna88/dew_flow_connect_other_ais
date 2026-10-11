@@ -21,21 +21,23 @@ internal static class ShellScripts
     }
 
     /// <summary>
-    /// A Python 3 a script can call as <c>python3</c>: the one on PATH off Windows; on Windows the first real
-    /// <c>python.exe</c> on PATH — never the Store's <c>WindowsApps</c> alias, which prints an advert and exits 9009.
-    /// Empty when there is none.
+    /// The ABSOLUTE path of a Python 3 a script can call as <c>python3</c>: the first <c>python3</c> on PATH off
+    /// Windows; on Windows the first real <c>python.exe</c> — never the Store's <c>WindowsApps</c> alias, which prints an
+    /// advert and exits 9009. Empty when there is none.
     /// </summary>
+    /// <remarks>
+    /// Absolute, never the bare name: a test puts a <c>python3</c> shim FIRST on PATH that execs this, and a shim
+    /// that execs <c>python3</c> finds itself and loops for ever — which is how <c>TheCanaryFallbackRunsTests</c> held
+    /// CI's Linux and macOS legs to their 30-minute limit on PR #761.
+    /// </remarks>
     public static string Python()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return "python3";
-        }
+        var name = OperatingSystem.IsWindows() ? "python.exe" : "python3";
 
         return (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Where(dir => !dir.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
-            .Select(dir => Path.Combine(dir, "python.exe"))
+            .Select(dir => Path.Combine(dir, name))
             .FirstOrDefault(File.Exists) ?? string.Empty;
     }
 

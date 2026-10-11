@@ -3320,6 +3320,15 @@ table says which).
 a question row and a probe; the full one for the Team server with a non-null `LaunchOptions`) — no behaviour changed,
 so no test was added; every existing caller compiles against the overload it meant.
 
+**A hang the first CI run found (PR #761).** On Linux and macOS `ShellScripts.Python()` answered the bare name
+`python3`, and the suite's `python3` shim — first on PATH — ran `exec 'python3'`, which found the shim itself: an
+endless exec, and `TheCanaryFallbackRunsTests` held both CI legs to their 30-minute limit (the log shows the old-server
+case active for the whole half hour). Reproduced here in Git bash (a shim that execs its own name: `timeout 5` → exit
+124). Fixed two ways: `Python()` now answers an ABSOLUTE path on every OS (a PATH search for `python3`, or a real
+`python.exe` on Windows), and the helper asserts that before anything runs and reads both streams without blocking, with
+a 60 s bound that kills the tree. Break-it: `Python()` planted to return `python3` → all three red in 1 s, `Expected
+Path.IsPathRooted(python) to be True … but found False` — a failure, no longer a hang.
+
 ## The server image checks each installer before it runs it (2026-10-11)
 
 | Suite | What it holds | Seen red as |
