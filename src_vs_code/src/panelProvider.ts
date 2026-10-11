@@ -98,6 +98,7 @@ import { promptChosen } from './promptsPerRound';
 import { hostExecutableSide, hostFamily, hostPlatform, Platform } from './hostSide';
 import { cliBoxFamily, cliPathRefusal, vendorFieldWrite } from './cliPathSave';
 import type { DroppedValue } from './cliPathKeep';
+import { otherSideDataDirectories } from './otherSideValues';
 import { NO_REFUSALS, cliBoxKey, withRefusal, withoutRefusal, type TypedRefusals } from './typedRefusals';
 import { currentFindings } from './findingsBoard';
 import { executableOf, otherSideClis } from './pathFamily';
@@ -1435,6 +1436,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // What each Models card offers back with Restore, and what was refused beside an other side's box (E4.1).
       droppedCliPaths: this.cliPathKeep?.dropped() ?? [],
       typedRefusals: this.typedRefusals,
+      // The other side's data directory, read-only, from that side's overlay through the registry (E4.3, D2) — never stat'ed.
+      otherSideData: otherSideDataDirectories(this.context.globalState, this.sideHere(), Date.now()),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html

@@ -92,6 +92,8 @@ import { type SidesView } from './sidesSeen';
 import { sidesSeenHtml } from './sidesSeenView';
 import { droppedFor, type DroppedValue } from './cliPathKeep';
 import type { TypedRefusals } from './typedRefusals';
+import type { OtherSideDataDirectory } from './otherSideValues';
+import { otherSideDataHtml, watchedGroupsHtml } from './serverPathsView';
 import { cliPathFieldsHtml, type CliPathFacts } from './cliPathFields';
 import { pathSidesOf, type PathSides } from './pathSides';
 import { thisSideLabel } from './consultantSides';
@@ -209,6 +211,12 @@ export interface PanelState {
    * never as a toast. Absent draws none.
    */
   readonly typedRefusals?: TypedRefusals | undefined;
+  /**
+   * The data directory each side of the OTHER family chose for itself, read from its overlay in `globalState` through the
+   * side registry (`otherSideValues.ts`, E3.4) — drawn READ-ONLY on Setup › MCP server once both sides are known (E4.3,
+   * D2). Never written from here, never `stat`ed. Absent draws none.
+   */
+  readonly otherSideData?: readonly OtherSideDataDirectory[] | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
   /**
@@ -1896,7 +1904,7 @@ export function serverBody(state: PanelState): string {
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu of the ConnectOtherAIs sidebar is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>
-${storageBlock(state.storage, state.pathFindings ?? [])}`;
+${storageBlock(state.storage, storagePathsOf(state))}`;
 }
 
 /**
@@ -1929,12 +1937,14 @@ ${storageBlock(state.storage, state.pathFindings ?? [])}`;
  *
  * <p>Nothing at all when the setting is unset, which is every installation that has one side.</p>
  */
-function watchedElsewhere(dirs: readonly WatchedDir[], findings: readonly PathFinding[]): string {
+function watchedElsewhere(dirs: readonly WatchedDir[], findings: readonly PathFinding[], sides: PathSides | undefined): string {
   const extra = dirs.slice(1);
   if (extra.length === 0) {
     return '';
   }
-  const rows = extra.map((dir) => watchedLine(dir, findingFor(findings, WATCHED_DIRECTORIES.id, dir.asked))).join('\n');
+  const line = (dir: WatchedDir): string => watchedLine(dir, findingFor(findings, WATCHED_DIRECTORIES.id, dir.asked));
+  // In the groups of their spelling once both sides are known (paths per side E4.3); one list otherwise, as before.
+  const rows = sides === undefined ? extra.map(line).join('\n') : watchedGroupsHtml(extra, sides, line);
 
   return `<div class="hint">Questions from another installation are also answered here:</div>
 ${rows}`;
@@ -1966,7 +1976,18 @@ function dataDirectoryLine(storage: DataLocation, findings: readonly PathFinding
   return `<div class="status${markClass(missing)}"${markAttributes(missing)}>${escapeHtml(storage.directory)}${markNote(missing)}</div>`;
 }
 
-function storageBlock(storage: DataLocation | undefined, findings: readonly PathFinding[]): string {
+/** What Setup › MCP server draws about paths beside the storage: the marks (E5.4), and the other side (E4.3). */
+interface StoragePaths {
+  readonly findings: readonly PathFinding[];
+  readonly sides: PathSides | undefined;
+  readonly otherSideData: readonly OtherSideDataDirectory[];
+}
+
+function storagePathsOf(state: PanelState): StoragePaths {
+  return { findings: state.pathFindings ?? [], sides: pathSidesOf(state.sides, state.hostFamily ?? hostFamily()), otherSideData: state.otherSideData ?? [] };
+}
+
+function storageBlock(storage: DataLocation | undefined, paths: StoragePaths): string {
   if (storage === undefined) {
     return '';
   }
@@ -1990,11 +2011,12 @@ function storageBlock(storage: DataLocation | undefined, findings: readonly Path
     .join('\n');
 
   return `<h3>Where this window keeps its data</h3>
-${dataDirectoryLine(storage, findings)}
+${dataDirectoryLine(storage, paths.findings)}
 ${cameFrom(storage.source)}
 ${side}
 ${notes}
-${watchedElsewhere(storage.alsoWatched, findings)}
+${otherSideDataHtml(paths.sides, paths.otherSideData)}
+${watchedElsewhere(storage.alsoWatched, paths.findings, paths.sides)}
 <div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
 <button class="link" type="button" data-command="changeDataDirectory">Change where your data lives…</button>
 <button class="link" type="button" data-command="moveDataDirectory">Move what is here to another folder…</button>
