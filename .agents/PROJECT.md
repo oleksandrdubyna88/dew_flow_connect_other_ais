@@ -30,13 +30,8 @@ build order, each with its deviations recorded). **Session start:** read `resear
 ## Commands
 
 ```bash
-# Local builds and test runs are capped and lowered — the family rule common.local-cpu-budget:
-# at most 8 workers, BelowNormal (Windows) / nice 19 (elsewhere), through the mount's wrapper.
-# The four xUnit projects cap themselves at 8 threads (xunit.runner.json); npm test and
-# test:contract cap node --test at 8 and lower themselves (scripts/lower-priority.mjs).
-
-# Build everything (-m:4 per csharp.dotnet-build)
-node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
+# Build everything
+dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
 
 # Tests — ALWAYS the MTP executable, NEVER `dotnet test` (no VSTest host here; it aborts)
 node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
