@@ -3698,6 +3698,21 @@ names in its `aria-describedby`. Nothing of the other side is ever `stat`ed from
   spelling, a relative path (`rootRefusal`'s words), on Windows a `/…` whose `C:\…` exists here (or could not be told), in
   WSL a root-relative `\…`, and every root's own rules. An admitted root is appended to the one shared list by
   `rootAdded`.
+- **While this side keeps its own settings (E4's own review, item 1)** — with `coai.perSideSettings` on, `vendors` and
+  `qconsultRoots` are saved into THIS side's own settings, which the other side never reads, so the other side's CLI box
+  and its typed folder box are NOT drawn: `pathSides.keepsItsOwnLine` stands in their place (*This side keeps its own
+  settings — set the other side's value from a window on that side.*), with a refusal still drawn beside it. The page
+  asks `settingsShape.keptPerSide(perSide, key)` — the `vscode`-free half `sideConfig.writesTheOverlay` now calls —
+  through `CliPathFacts.ownSettings` and `QconsultViewState.ownSettings`. The host refuses such a write from a page drawn
+  before the switch moved: `refusedBesideTheBox(write, from, config)` hands `cliPathRefusal` a fourth argument,
+  `writesTheOverlay(config, 'vendors')`, and `QconsultHost.typedRoot` refuses before the disk is asked while
+  `QconsultWriteHooks.keptHere('qconsultRoots')` — both with `pathSides.keepsItsOwnRefusal(typed)`, which names what
+  was typed, since the box it was typed into is gone. One-field mode and the read-only data directory are unchanged.
+- **A shared value of this side's spelling (E4's own review, item 2)** — the other side's CLI box no longer shows
+  `storedForThisSide(row, other)` when that falls back to a legacy value spelled for THIS window's OS (which that side
+  skips): `pathFamily.sharedValueOfTheOtherOs` — no member of that family, and `spelledForTheOtherOs(legacy, other)` —
+  draws the box EMPTY with `sharedValueNote` beside it (*The shared value C:\tools\codex.exe is this side's CLI; that
+  side skips it and looks the CLI up on PATH.*), in the box's `aria-describedby`. By spelling only, never a disk.
 - **Setup › MCP server (E4.3)** — `serverPathsView.ts`: the watched folders (`alsoWatchDataDirectories`) in the same
   groups, by spelling alone (`NOTHING_ASKED`, the rule `escalationDirs.ts` reads them by) — display only, the list has no
   editor on this page; and the other side's data directory READ-ONLY (D2): `PanelState.otherSideData` is

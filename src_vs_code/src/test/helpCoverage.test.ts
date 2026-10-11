@@ -89,6 +89,17 @@ test('every language describes the two fields the pages draw, by the labels the 
   }
 });
 
+test('every language says why the other side\'s boxes are gone while each side keeps its own settings (paths per side E4, own review)', () => {
+  // The sentence the page draws in their place is English in every language, as every control text here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    assert.ok(said.includes('*This side keeps its own settings — set the other side\'s value from a window on that side.*'),
+      `the ${language} settings article never says why the other side's CLI path and folder box are not shown while each side keeps its own settings`);
+  }
+});
+
 test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
   // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
   // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).

@@ -827,8 +827,9 @@ compiling break-it on its deciding line; the observed messages are in the commit
 - ✅ **4.5** `test:host` scenario: seed a WSL side record, open Settings › Models in the real editor, see two CLI-path
   fields; type the WSL path, and the settings file this side writes for its server still carries this side's value.
 - **Where an edit of the other side's value is saved** (E4's plan round, finding 0 — accepted). Nothing of the other side
-  lives in an overlay except its data directory, so: a **CLI path** typed into the other side's box goes through the
-  panel's one vendor write, `vendorFieldWrite`, with THAT side's family as the field — `savedCliPath(stored, value,
+  lives in an overlay except its data directory (while the sides SHARE their settings — with `coai.perSideSettings` on,
+  the other side's boxes are not drawn at all; see *E4 as built*), so: a **CLI path** typed into the other side's box
+  goes through the panel's one vendor write, `vendorFieldWrite`, with THAT side's family as the field — `savedCliPath(stored, value,
   <other family>, here)` writes only `executablePathBySide[<other family>]` into the shared `coai.vendors` (it never
   changes the legacy value; `mirrored` is set to that unchanged legacy value; this side's member pinned as E3 pins it);
   a **list root** typed into the other side's group is appended to the one shared list (`qconsultRoots` /
@@ -879,6 +880,46 @@ broken by a compiling break-it that went red; the observed messages are in the c
 - **Help and CHANGELOG** — the help's "comes in a following release" sentence is replaced in five languages, and
   `helpCoverage.test.ts` asks every language for the page's labels; the CHANGELOG's *Unreleased* gains the paragraph.
 - **CSS** — `fieldset.other-side` (`min-width: 0`, so a long path wraps) in `catalogCss.ts`; `CATALOG_CSS` re-pinned.
+- **The code round (2026-10-11): the gate (codex, 4 reviewers, `proceed`) and this repository's own review, run at
+  once.** The gate: the German (and other) help — rejected: the help is full translations in five languages, English
+  only in quoted control labels, and the owner keeps all five; the host scenario bypassing the panel's save path —
+  accepted, closed by `cliBoxWiring.test.ts`, a wiring scan of the provider's `vendor` case (the page test runs the
+  box's message and the host scenario runs the mirror; neither reaches the case in between, which imports `vscode`).
+  Its two compiling break-its went red: the refusal not returning → *a refused box falls through to the save*; the
+  save going around `vendorFieldWrite` → *the vendor case saves a field around the one vendor write — the other side's
+  box would reach the legacy value*. Restore published before the copy is durable — rejected, verified false: a row is
+  dropped only when its copy is already stored (`keepPlan.lookAt`). Quadratic root checks — rejected: a handful of
+  typed folders, and the probes are cached (`RootExistence`).
+- **This repository's own review found two real defects the gate did not:**
+  - **With `coai.perSideSettings` on, the other side's boxes saved into THIS side's own settings**, which the other
+    side never reads, while the page showed them saved (`vendors` and the question consultant's keys are overlaid).
+    RED: *with coai.perSideSettings on the card draws 2 CLI-path boxes* and *… the other side's group draws 1 typed
+    box*; the host's refusal (`cliPathRefusal`'s new `ownSettings`) returned `''`; the wiring scans
+    (`ownSettingsWiring.test.ts`) found neither the vendor case nor `QconsultHost.typedRoot` asking. **Fix:** in their
+    place a read-only sentence, *This side keeps its own settings — set the other side's value from a window on that
+    side.*; the host refuses those writes beside where the box was (never a toast) — `executablePath.<other family>` in
+    the vendor case before saving, the typed root in `QconsultHost` before the disk is asked. The page and the host
+    decide by one rule, `settingsShape.keptPerSide` (the `vscode`-free half of `writesTheOverlay`). One-field mode and
+    the other side's data directory are unchanged. Seven compiling break-its, each red (the card and the folders ignoring
+    the switch, the pure refusal ignoring it, the provider / the question consultant / the page asking the wrong key,
+    `keptPerSide` ignoring the switch).
+  - **A legacy-only row showed THIS side's path in the other side's box**: `C:\tools\codex.exe` in the WSL / Linux box
+    of a Windows window — a value the WSL side skips (a PATH lookup) and the box's own rule would refuse if edited.
+    RED: *the WSL / Linux box shows 'C:\tools\codex.exe'* and, from WSL, *the Windows box of a WSL window shows
+    '/usr/bin/codex'*. **Fix**, by spelling only: when the other family has no member and the shared value is spelled
+    for this window's OS (`pathFamily.sharedValueOfTheOtherOs`), the box is drawn empty with a quiet hint in
+    `otherSideNote`'s words — *The shared value C:\tools\codex.exe is this side's CLI; that side skips it and looks
+    the CLI up on PATH.*; otherwise it shows what is stored. Four compiling break-its, each red (the member ignored, the
+    spelling judged for the wrong family, the value shown anyway, the hint on the wrong boxes).
+  - Also: the hashes above named the pre-rebase commits; `sideHere`'s doc comment had been left above
+    `refusedBesideTheBox`; the CHANGELOG now says a typed `//server/share/…` goes to *Both sides / unclear*; and the
+    "never `mirrored`" sentence (here and in `research/module_extension.md`) now says what `savedCliPath` does — it never
+    changes the legacy value, and `mirrored` is set to that unchanged legacy value. The help says the sentence in five
+    languages (`helpCoverage.test.ts`; RED on `en`, break-it: the Ukrainian sentence un-italicised → red).
+- **Known limits (not built):** a typed root equal to a stored one under this window's case-folding is dropped
+  silently (`rootAdded` de-duplicates; no refusal is drawn); a typed other-side root is checked against THIS side's
+  profile and system folders (`rootRefusal` has only this side's places); the vendor write has no key allow-list — any
+  `data-setting` a page posts is written onto the row (pre-existing, not E4's).
 - **Left open:** a typed box for the watched folders (above); a file picker for this side's CLI path (never existed).
 
 ## Build order

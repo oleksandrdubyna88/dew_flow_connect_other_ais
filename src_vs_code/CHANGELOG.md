@@ -26,8 +26,12 @@ window would call the other side's is taken, and a typed `//server/share/…` go
 sides / unclear* (a `//server/share`, a relative name) — and
 the watched data folders on *Setup › MCP server* in the same groups; that place also shows the other side's data
 directory, read-only: change it from a window on that side. While a previously saved CLI path is missing, **Restore**
-sits beside the field as well as in the notice. *Always one* keeps one field everywhere. Nothing of the other side is
-ever checked on the disk from this window.
+sits beside the field as well as in the notice. *Always one* keeps one field everywhere. With **Separate settings for each
+side** on, the other side's CLI path and folder box are not shown — this side's settings are its own, which that side
+never reads — and *This side keeps its own settings — set the other side's value from a window on that side.* stands in
+their place. A shared CLI path spelled for this side's system is not shown as the other side's: that box stays empty,
+with a note that the other side looks its CLI up on PATH. Nothing of the other side is ever checked on the disk from
+this window.
 
 ## Server 0.47.0 — 2026-10-11
 
