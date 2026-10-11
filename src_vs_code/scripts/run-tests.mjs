@@ -70,8 +70,23 @@ export function batches(root) {
   return [compiled, ...sources.map((one) => [one])].filter((batch) => batch.length > 0);
 }
 
+/**
+ * The most test files `node --test` may run at once — the family rule `common.local-cpu-budget`.
+ * Node's own default is one per CPU minus one, which on a 24-thread workstation was 23 processes
+ * holding the CPU at 100 % while every other session lagged (measured 2026-10-10).
+ */
+export const TEST_CONCURRENCY = 8;
+
+/**
+ * The arguments of every `node --test` this package starts, so the cap is written in one place:
+ * `run-contract.mjs` builds its command here too, and `localCpuBudget.test.mjs` pins it.
+ */
+export function nodeTestArgs(files, extra = []) {
+  return ['--test', `--test-concurrency=${TEST_CONCURRENCY}`, ...extra, ...files];
+}
+
 function run(files) {
-  const result = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit' });
+  const result = spawnSync(process.execPath, nodeTestArgs(files), { stdio: 'inherit' });
   return result.status ?? 1;
 }
 
@@ -112,5 +127,9 @@ function main() {
 
 // Importable for its own test; still a script when node is pointed at it.
 if (process.argv[1]?.endsWith('run-tests.mjs')) {
+  // Lowered before anything is spawned, so every test process inherits it (BelowNormal on Windows,
+  // nice 19 elsewhere; nothing under CI). Only the script lowers itself — importing this module
+  // from a test does not.
+  await import('./lower-priority.mjs');
   main();
 }

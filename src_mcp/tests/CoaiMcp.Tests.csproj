@@ -36,4 +36,11 @@
     <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- At most 8 test threads (common.local-cpu-budget). The file must reach the output folder:
+         measured 2026-10-11 on xunit.v3 4.0.1, an uncopied xunit.runner.json is never read and the
+         runner takes one thread per CPU (24). A command-line max-threads switch still overrides it. -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

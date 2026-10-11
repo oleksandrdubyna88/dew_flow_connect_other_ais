@@ -35,6 +35,9 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+// Lowers this runner, the server it starts and the tests it runs (common.local-cpu-budget).
+import './lower-priority.mjs';
+import { nodeTestArgs } from './run-tests.mjs';
 
 const DOMAIN = process.env.COAI_CONTRACT_DOMAIN ?? 'contract.test';
 // The admin persona the Team server tab's contract needs (teamUsage.contract.ts): an email in Coai:Admins. Pointed at
@@ -279,7 +282,7 @@ function runTests(env) {
   return new Promise((ok) => {
     const child = spawn(
       process.execPath,
-      ['--test', `--test-timeout=${TEST_TIMEOUT_MS}`, ...contractTests()],
+      nodeTestArgs(contractTests(), [`--test-timeout=${TEST_TIMEOUT_MS}`]),
       { stdio: 'inherit', env: { ...process.env, ...env } });
 
     // A whole-run deadline as well as --test-timeout: a child that hangs before any test starts —
