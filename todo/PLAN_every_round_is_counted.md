@@ -3,9 +3,9 @@
 > Status: **in progress, 2026-10-11 — E1 landed 2026-10-10 in part (story 1.2 whole; story 1.1 without three
 > measurements it names — agy in WSL, the Team server slot, the read on an expired token); E2 landed 2026-10-10 whole
 > (the local counter: `coai-mcp --round-counts` and schema step 20, the extension's cached read, the Spending tab's
-> Rounds block, the model card line, tokens and money — stories 2.1–2.5); E3 is implemented whole on
-> `feat/round-counter-e3-ledger-truth` (stories 3.1–3.5, 3.2 last on 2026-10-11); E4–E6 not built. Deviations so far
-> are recorded below.** Scope: the Team server's job ledger, `/api/usage` and
+> Rounds block, the model card line, tokens and money — stories 2.1–2.5); E3 is implemented whole
+> (stories 3.1–3.5, PR #761); story 5.3a (the server reads a stated duration) landed 2026-10-11 ahead of E4; the rest
+> of E4–E6 not built. Deviations so far are recorded below.** Scope: the Team server's job ledger, `/api/usage` and
 > job claim (`src_server`), the reviewer launch path both halves share (`src_mcp/runners/Reviewers`), `coai-mcp`'s
 > round store (`--log` family), the extension's Spending tab, Team-server block and model cards (`src_vs_code`), and
 > the deploy canary (`deploy/`).
@@ -280,6 +280,33 @@ Answers the operator's question for this machine's work from the whole history, 
     as today;
   - refusals are counted: a ledger line with outcome `NoBudget` and an honest zero, so the effect of this story can
     be seen.
+- **What the risk consultation for 4 changed (2026-10-11, verified in code before E4 is built)** — binding on E4's plan
+  round:
+  - **The 60-second floor would refuse healthy short reviews.** A 60 s reviewer's shim advertises at most 50 s
+    (`LocalAsk.ShimDeadlineSeconds`, reviewer timeout − 10, `src_mcp/runners/Reviewers/LocalAsk.cs:42`) before any
+    server margin, and the server accepts budgets below 60 s. Bounding the floor by the job's budget does NOT fix it
+    (the consultation's second turn: a fresh 60 s reviewer still arrives with 50 s minus the margin). The rule is
+    therefore **"the caller can no longer wait"**, not "less than our preferred useful run": a job is ended only when
+    the caller's remaining time, after the margin, cannot hold even a launch's start-up (a small fixed number, e.g.
+    10 s, configurable). Tested through the REAL path — `RemoteRuntime` → captured POST → immediate claim — for fresh
+    30 s and 60 s reviewers and a repair with 40 s left, each stated as MUST LAUNCH; a hand-built server request would
+    miss the shim's own 10 s. An exhausted effective budget prevents the SUBMIT on the client (serialising 0 and having
+    it dropped would quietly switch enforcement off).
+  - **A repair or follow-up advertises a stale budget.** The shim's `--timeout-seconds` is fixed when the invocation
+    is built (`RemoteRuntime.cs:98`); `RetryLadder.Lesser` (`RetryLadder.cs:180`) later shortens only
+    `Request.Timeout`. 4.1 computes `remainingSeconds` from the EFFECTIVE timeout of the launch being submitted (the
+    argv rebuilt from `Request.Timeout`, or the value passed separately), with a test that shortens a 600 s invocation
+    to 40 s and reads the captured POST — and shows the shim's own WAITING deadline (`--timeout-seconds`) shortened
+    with it, not only the advertised number. A stale large value over-admits; it never refuses.
+  - **"Malformed → dropped" needs tolerant binding.** A plain nullable `int` in `ReviewRequestDto` rejects `"oops"`,
+    `{}`, `1.5` or an overflow during JSON binding — a 400 before any `Dropped` note runs. The three fields bind
+    tolerantly (a `JsonElement`, read by hand), and an endpoint test sends omitted, `null`, `0`, negative, `"oops"`,
+    `{}`, fractional and oversized values: each accepted with a `Dropped` note, never refused.
+  - **New client → old server enforces nothing.** Contract 2 cannot tell the client the server reads the fields; the
+    full poll/cancel path is tested against the old server and nothing claims budget enforcement there.
+  - **POST then DELETE is not zero-spend.** The runner can claim and launch between the two. The live measurement of
+    the new body must prevent dispatch (a probe the catalog cannot run, or a vendor whose only slot is parked), with
+    a counting fake launcher proving the interleaving in the suite; which probe is decided at E4's plan round.
 
 ### E5 — the server counts rounds, and the fleet gets it · `feat/round-counter-e5-server-counts`
 
@@ -290,14 +317,29 @@ Answers the operator's question for this machine's work from the whole history, 
   `http/usage/usage.http` asserts them.
 - **5.2 The Team-server block** (Opus) — `VendorUsage` (`src_vs_code/src/teamServerApi.ts:134`) gains the optional
   fields; `teamUsageBlock` shows server rounds per vendor (5 h / 24 h / 7 d), `runsWithoutRound` apart, retries,
-  repairs, cancelled, budget refusals. A server too old for the windows answers 400 → *count unavailable* in that
-  column, never 0. The bundled-page harness asserts the line.
-- **5.3 A stated reset is read** (Opus) — `CooldownParser` moves to the shared runners library (the dependency runs
-  server → mcp, so `src_mcp` cannot reach it where it is) and gains the duration form; the RED test uses 1.1's
-  verbatim agy line and today's fixture `src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt`
-  (`Resets in 33m52s`). Locally: `gemini: quota out — resets in 110 h (Tue 07:20)` from the last refusal; the server
-  catalog adds the earliest reset per vendor (no account names). Ships with E5's deploy because the server is
-  re-asking an exhausted account every 30 min → 5 h today.
+  repairs, cancelled, budget refusals. **A server too old for the windows is judged by the SHAPE of its answer, not its
+  status** — today's `/api/usage` binds only `window` and answers `?windows=5h,24h,week` with **200 and today's range**
+  (`UsageEndpoints.cs:23`, `UsageWindow.Range(null)` → `today`; the E4–E6 cadence consultation, verified 2026-10-11):
+  an answer without the requested windows and count fields is *count unavailable* in those columns, never 0, and the
+  test runs against that 200-without-them, not against a 400. The bundled-page harness asserts the line.
+- **5.3a The server reads a stated duration** (Opus) — **extracted and shipped AHEAD of E4** (the cadence consultation,
+  2026-10-11): it needs neither round ids nor usage aggregation, and the server re-asks an exhausted Gemini slot on its
+  doubling 30-minute guess for the whole ~110 h of a stated reset today. `CooldownParser` (where it is,
+  `src_server/src/Slots/CooldownParser.cs`) gains the duration form (`Resets in 88h49m9s`, `Resets in 33m52s` — 1.1's
+  verbatim agy line and the fixture `src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt`); `SlotRegistry.MarkCoolingDown`
+  already persists what it parses. Behavioural test through the real `JobRunner`: the verbatim refusal parks the slot
+  until the stated instant (state reloaded from disk), a second queued job launches NOTHING before it, and — the
+  positive control — DOES launch once the stated instant has passed. Ships as a server patch with the deploy already
+  waiting for the Gemini reset.
+- **5.3b A stated reset is read locally** (Opus) — `CooldownParser` moves to the shared runners library (the dependency
+  runs server → mcp, so `src_mcp` cannot reach it where it is); locally: `gemini: quota out — resets in 110 h (Tue 07:20)`
+  from the last refusal; the server catalog adds the earliest reset per vendor (no account names). **Display only:**
+  the local scheduler still retries from phrase classification (`BoundedScheduler.cs:585`), so "parks the slot on both
+  halves" (what-must-be-true 7) needs local PERSISTENCE and ADMISSION of the reset — its own story (**5.3c**), or item
+  7 narrows to "shown locally, enforced on the server". Decided with 5.3b's plan round. **Also owed here** (5.3a's code
+  round, 2026-10-11): a job queued behind a parked slot hears nothing about when it can run — `SlotSelector.Explain`
+  (`src_server/src/Slots/AccountSlot.cs:69`) says *comes back at …* and no status path calls it; wire it into the
+  queued job's status beside the catalog's per-vendor reset.
 - **5.4 Release and the live count** (Opus) — the client halves release first; then ONE manual `deploy-server.yml`
   dispatch carrying E3–E5's server, with the owner's approval, after 4.1's body was measured against the old server.
   Live: one round through the Team server → that vendor's `rounds` +1 exactly, its launches as made.
@@ -308,13 +350,20 @@ Answers the operator's question for this machine's work from the whole history, 
 - **6.1 Capture** (Fable) — per launch (if `--json` carries it) or per slot after each job INSIDE the lease (if only
   the app-server read does): `quota5hPct`, `quotaWeekPct`, `quotaResetsUtc` on the ledger line (trailing, defaulted)
   and the slot's `state.json` (one overwritten snapshot, the existing atomic write); locally the same into the local
-  ledger. Test: a fixture gauge event → captured → stored → rendered.
+  ledger. Test: a fixture gauge event → captured → stored → rendered. **Split by the cadence consultation
+  (2026-10-11):** 1.1 found the source (`codex app-server` · `account/rateLimits/read`, RESULTS §6), so E6 is not
+  reduced — but **6.1a server capture** (inside the slot's lease, after the expired-token measurement 1.1 still owes)
+  ships first, and **6.1b local capture** waits until a read is shown to be excluded from a concurrent launch of the
+  SAME store: `BoundedScheduler`'s semaphores belong to one process, and two coai processes (or direct codex use)
+  sharing one `CODEX_HOME` are not covered by an "idle" check.
 - **6.2 Show and derive** (Opus) — `codex: 5 h 37 % · week 81 % · resets Thu 07:00` beside the counter, and rounds per
   1 % of the weekly window, trailing over the last N gauge readings, computed ONCE in the shared runners library and
   answered by `--round-counts` and `/api/usage`. **Scope rule:** the derived number sums every consumer 1.1 recorded
   for that account (both local stores, plus the server rounds of that account's slot via `slot`); when a known
   consumer cannot be counted, the number is hidden and the tab says which consumer is missing. Tests: a reset boundary,
-  a missing reading, an unchanged reading, a missing consumer.
+  a missing reading, an unchanged reading, a missing consumer. **For codex today the number IS hidden:** direct use
+  outside coai is a recorded consumer that cannot be counted (RESULTS §2.4, §6.3) — so is the price per round derived
+  from it; showing it as an upper bound instead is the owner's call, not this plan's.
   **A subscription's share** (the operator's "price" for a flat plan): an optional monthly plan price the person types
   ONCE per vendor account — one subscription serves every model on it, so it lives with the account (the vendor's
   card on the Settings page), not on each model card — never looked up; a finite number ≥ 0, anything else refused at the card with the reason and
@@ -332,6 +381,8 @@ E1 → E2 → E3 → E4 → E5 → E6, each from the previous epic's commit.
 - E3 needs 1.2's fixtures. E4 writes its fields beside 3.3's and 3.4's on E3's reshaped ledger call.
 - E5 needs E4's fields on the wire and in the ledger and E3's outcomes and canary kind.
 - E6 needs E1's scope and E5's counter to sit beside.
+- **5.3a ships ahead of E4** as a server patch (it depends on nothing in E3–E5) and rides the deploy already waiting for
+  the Gemini reset of 2026-10-14.
 - **Server deploys:** once after E5 (after E4 instead if E5 slips — every undeployed day is a day of
   `runsWithoutRound`), and once more after E6 only if 6.1 exists. Client halves always release first.
 
@@ -391,7 +442,7 @@ records that failure).
 | `AJobWithoutBudget_IsEndedWithoutStartingTheVendor` (zero launches), `TheClaimMovesOnToTheNextJob`, `TheRunBudget_IsCappedAtWhatIsLeft`, `AClientClockTenMinutesOff_GetsTheSameDeadline`, `AHugeRemainingSeconds_IsCappedAtTheJobsOwnLifetime`, `TheNoBudgetReason_MatchesNoRateLimitPhrase`, `AnOldClient_IsNeverRefusedForBudget` | 4.3 |
 | `FourRolesOfOneRound_CountAsOneRound`, `ARetryAndARepair_AddNoRound`, `LinesWithoutARound_AreCountedApart`, `TheFiveHourWindow_IsTrailing`, `SeveralWindows_OneScan` | 5.1 |
 | `AnOlderServer_ShowsUnavailable_NotZero` | 5.2 |
-| `CooldownParser_ReadsResetsIn110h25m`, `…ReadsResetsIn33m52s` (verbatim) | 5.3 |
+| `CooldownParser_ReadsResetsIn88h49m9s`, `…ReadsResetsIn33m52s` (verbatim), `AStatedReset_ParksTheSlot_UntilThen_AndNotAfter` (the real `JobRunner`, state reloaded, nothing launched before the instant, a launch after it) | 5.3a |
 | a gauge fixture captured → stored → rendered; rounds per 1 % across a reset, with a missing reading, an unchanged reading, a missing consumer | 6.1 / 6.2 |
 
 Then every suite, not only the ones near the change: the `src_mcp` and `src_server` test executables, `npm test`,
@@ -473,6 +524,8 @@ needs. Story 2.1 shipped 2026-10-10 on `feat/round-counter-e2-local-counter` —
 | 3.2 (tests) | the five named tests, and the 1.2 fixture test changed on purpose | `HowAJobEndedIsSaidTests` (7, mcp — the local names differ: `AWithdrawnLaunch_IsItsOwnEnding_NotTheVendorsTimeout`, `ARealDeadline_IsStillATimeout`, `AWithdrawnRemoteReviewer_StillSendsTheDelete`, `ACancelledEnding_HasItsOwnSentence_AndItsOwnNotice`, `AConsultationLaunchKilledByItsCaller_IsStillWhatTheCallerDecided`, `ACancelledTurn_IsOneLedgerLine_…`, `ACancelledRepair_KeepsTheFirstLaunchsLine`) and `HowAJobEndedIsSaidTests` (8, server — `AWithdrawnLaunch_IsRecordedAsCancelled_WithUsageNotCaptured` through the real `ReviewLauncher`, `ARealDeadline_IsStillATimeout`, `AWithdrawalAbandonmentBackstopAndHostStop_EachCarryTheirCause`, `AJobThatExpiredInTheQueue_…`, `AThrownCancellation_WritesExactlyOneLine` and `…OfAFollowUp_KeepsTheFirstLaunchsUsage` — the planned `AThrownCancellation_WritesExactlyOneLine_KeepingEarlierUsage` split in two, because the first-launch shape has no earlier usage to keep, `ACancelThatLandsWhileFinishRuns_…`, `AnOldLedgerLine_StillReads_AndANewOneKeepsItsEndCause`); `UsageLedgerFixtureTests.TheDeployedWithdrawal_WasWrittenTimedOut_AndThisServerWritesItWithdrawn` (renamed from `TheWithdrawal_IsWrittenTimedOutWithNothingCounted_WhichIsTheDefectE3Names`: the deployed bytes stay asserted as history, the same event through this server beside them, via the shared `WithdrawnJob`); `ReviewEndpointTests` (+1 assertion), `usagePricing.test.ts` (+1), `TheReviewerFailuresAreWrittenDownTests.Built` (+1 builder). `ScriptedResults` extracted from `EveryPaidLaunchIsWrittenTests` rather than a fourth private copy (three exist: `ConsultantTurnTests`, `TheVaultKeyTravelsOnStdinTests`, and the extracted one — the other two are left as found). Listed in [module_tests.md](../research/module_tests.md). | — |
 | E3 (code round) | — | The gate's code round for epic 3/6 (codex, four reviewers, `proceed`, 4 gating): **accepted** — (1) a cancellation while the rate-limit ladder WAITS no longer throws: the turn ends as the refusal it last saw, its paid launches kept (`BoundedScheduler.WaitedOut`); (2) `UsageLedger.RecordJob`'s `LaunchOptions? ranWith = null` became two overloads, the Team server's with a non-null `LaunchOptions`; (3) the deploy canary's old-server fallback is RUN by the suite (`TheCanaryFallbackRunsTests`: `deploy/systemd-release.sh` stops after its functions when sourced, and the real `canary` meets a stub curl). **Rejected** — a consultation's / question row's continued turn as one line (census rows 2/4, already this table's open tail; the line carries the turn's correct sum), and caching the codex config read per round (minor; one small local file per row). | — |
 | 3.2 | help text in five languages if a person sees the new words | **No help change**: nothing renders `endCause` yet (as with 3.4's fields), and the one word a person can meet — `cancelled` as a reviewer's note where `timeout` stood — is English in every language, as every outcome word there is. | — |
+| 5.3a | part of 5.3, shipped with E5's deploy | **Extracted and shipped ahead of E4**, server only; the move to the shared library, the local display and local enforcement stay in 5.3b / 5.3c. A stated duration is believed up to `MaxStatedWait` = **14 days**, read whole or not at all (one space allowed inside, `2h 30m`); a stated wait it cannot read — past the ceiling, too large to be an instant, glued text, a spaced trailing number, a wait in words — errs long to `MaxGuess` (5 h), never the 30-minute retry and never a throw; a line that also says "weekly" takes the weekly day, the longer guess. | The E4–E6 cadence consultation (verified in code): it needs neither round ids nor aggregation, and the server re-asked an exhausted Gemini slot every 30 min → 5 h for ~110 h. The bound is the plan round's finding (a malformed refusal must not fail the job); "whole or not at all" and "err long, to MaxGuess not MaxStatedWait" are CodeRabbit's on #754, the second narrowed: a fortnight's park over one malformed sentence was the other wrong direction. |
+| 5.3a (tests) | a scenario-harness case through the product | The scenario as deep as the Team server's harness reaches without a product seam: the real `JobRunner`, `ReviewLauncher`, antigravity adapter and `SlotRegistry` on disk, a fake `IProcessLauncher` for the paid vendor — `AStatedResetParksTheSlotTests`. The HTTP host is not used: the cooldown is set after the claim, and `Program.cs` builds the launcher inline, so a vendor double there would need a product seam this story does not add. A real refusal on the deployed box is checked live at the deploy. | The plan round's second finding, accepted at the depth the harness has. |
 
 ## Definition of Done
 
