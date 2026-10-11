@@ -19,15 +19,18 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ADeniedCommandIsAskedAgainTests
 {
-    private const string Denied =
+    /// <summary>agy's denial on stderr, verbatim — shared with <c>ARoundHasAnIdOnTheWireTests</c>, whose follow-up is the same one.</summary>
+    internal const string Denied =
         "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot "
         + "prompt for, so it was auto-denied.";
 
-    private static readonly string DeniedStream =
+    /// <inheritdoc cref="Denied"/>
+    internal static readonly string DeniedStream =
         """{"event":"init","conversation_id":"conv-7","init":{"model":"gemini-3.8-flash-low"}}""" + "\n"
         + """{"event":"result","result":{"conversation_id":"conv-7","status":"SUCCESS","response":""}}""" + "\n";
 
-    private static string Transcript(string stdout, string stderr) => $"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}";
+    /// <inheritdoc cref="Denied"/>
+    internal static string Transcript(string stdout, string stderr) => $"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}";
 
     private static ReviewerInvocation First() =>
         new AntigravityRuntime().Build("Architecture", "review this", Path.GetTempPath(), "schema.json", Path.GetTempPath(),

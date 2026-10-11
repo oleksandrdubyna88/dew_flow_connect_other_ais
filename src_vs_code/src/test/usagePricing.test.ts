@@ -75,7 +75,26 @@ test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it w
   assert.equal(old?.endCause, undefined, 'an old line says nothing of why');
 });
 
-test('TheParser_KeepsWhatTheLaunchRanWith — a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
+test('TheParser_KeepsTheRoundAndTheClientAttempt — a Team-server line keeps the round its request carried and the client\'s word beside the server\'s; an old line has neither', () => {
+  // Story 4.2 of todo/PLAN_every_round_is_counted.md: the server writes the client's round id and its own word for the
+  // request (`clientAttempt`) on every line of the job, beside — never over — its own `attempt`.
+  const [server, noRound, old] = parseUsage([
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":3,"tokensOut":1,"outcome":"ok",'
+    + '"turn":"1760090400-def","attempt":"rotated","round":"0123456789abcdef0123456789abcdef","clientAttempt":"repair"}',
+    '{"utc":"2026-10-11T10:00:01Z","provider":"codex","model":"gpt-6-luna","tokensIn":3,"tokensOut":1,"outcome":"ok","attempt":"first","round":"","clientAttempt":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.equal(server?.round, '0123456789abcdef0123456789abcdef', 'the round the line holds was dropped on the way in');
+  assert.equal(server?.clientAttempt, 'repair', 'the client\'s word for the request was dropped on the way in');
+  assert.equal(server?.attempt, 'rotated', 'the server\'s own attempt keeps its own meaning');
+  assert.equal(noRound?.round, undefined, 'an empty round is absent — never an id every old client\'s line would share');
+  assert.equal(noRound?.clientAttempt, undefined);
+  assert.equal(old?.round, undefined, 'an old line names no round');
+  assert.equal(old?.clientAttempt, undefined);
+});
+
+test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
   // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
   const [server, local, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'

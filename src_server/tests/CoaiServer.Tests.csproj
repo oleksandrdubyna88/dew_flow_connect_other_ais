@@ -18,6 +18,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\CoaiServer.csproj" />
+    <!-- The client's shim, in-process: the budget rule (story 4.3 of todo/PLAN_every_round_is_counted.md) is tested
+         against the POST the real ask-remote shim code builds for a launch, never against a hand-built request: the
+         shim's own ten seconds are the number a hand-built one misses. -->
+    <ProjectReference Include="..\..\src_mcp\src\CoaiMcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

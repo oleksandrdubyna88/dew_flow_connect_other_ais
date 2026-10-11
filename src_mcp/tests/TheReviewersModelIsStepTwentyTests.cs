@@ -80,7 +80,8 @@ public sealed class TheReviewersModelIsStepTwentyTests : IDisposable
     {
         ModelStep.Should().Be(19, "step 20 by position: step 19 is why a consultation failed, and a step is never inserted ahead of one that shipped");
         Schema.Steps[19].Should().Contain("CREATE INDEX IF NOT EXISTS reviewers_by_round ON reviewers (round_id)", "the counter joins rounds to reviewers by round, and Tables has no such index");
-        Schema.Steps.Length.Should().Be(20);
+        // Changed on purpose with step 21 (the round's key, story 4.1): the head is that step's own test to pin.
+        Schema.Steps.Length.Should().BeGreaterThanOrEqualTo(20);
     }
 
     [Fact]

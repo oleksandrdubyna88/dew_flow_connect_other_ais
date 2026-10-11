@@ -59,7 +59,9 @@ internal sealed class TurnLoop(
                 return Terminal(answered with { InputCoverage = InputCoverage.Of(work, answered) }, turn);
             }
 
-            work = next.Work;
+            // A later turn belongs to the round its first turn did (story 4.1 of todo/PLAN_every_round_is_counted.md):
+            // the stage builds it fresh, from the roster's settings, and the round's key is the engine's to stamp.
+            work = InRound(next.Work, first.Invocation.Round);
             _served = _served.Add(next.Note);
             Report(work.Invocation, $"turn {turn} answered; asking turn {turn + 1} — {next.Note}");
         }
@@ -115,6 +117,13 @@ internal sealed class TurnLoop(
             Served = string.Join("; ", _served),
             EarlierTurns = _earlier,
         };
+
+    /// <summary>The next turn's launch and repair, each in the round the conversation started in.</summary>
+    private static ReviewerWork InRound(ReviewerWork work, string round) => work with
+    {
+        Invocation = work.Invocation with { Round = round },
+        Repair = work.Repair is null ? null : work.Repair with { Round = round },
+    };
 
     /// <summary>The launch and its repair, each bounded by what is left of the conversation's cap.</summary>
     private static ReviewerWork Within(ReviewerWork work, TimeSpan left) => work with
