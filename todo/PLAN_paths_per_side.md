@@ -838,7 +838,7 @@ compiling break-it on its deciding line; the observed messages are in the commit
   there — was rejected: a list holds one string, which the Windows server would read as that existing folder.
 
 **E4 as built (2026-10-11) — deviations and what is left.** Every story above is done on
-`feat/paths-per-side-e4-two-fields` (be0ac12c, 5394349e, 2daf0401, af7baf64, cfee466d), RED first, each deciding line
+`feat/paths-per-side-e4-two-fields` (e289e4ea, 72d37eeb, 1c42cc0f, 157db833, 2524af82; the docs 1e74bab4), RED first, each deciding line
 broken by a compiling break-it that went red; the observed messages are in the commits and in `research/module_tests.md`.
 
 - **One decision, one shape, every place** — `pathSides.ts`: `pathSidesOf(view, family)` over E2's `twoPathFields` names
