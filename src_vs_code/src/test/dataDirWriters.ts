@@ -73,5 +73,5 @@ export function sitesIn(file: string): number {
 
 /** Every shipped source file, as the census of CLI-path reads walks them. */
 export function shippedSources(): readonly string[] {
-  return fs.readdirSync(SOURCE).filter((name) => name.endsWith('.ts') && !name.endsWith('.generated.ts')).sort();
+  return fs.readdirSync(SOURCE).filter((name) => name.endsWith('.ts') && !name.endsWith('.generated.ts')).sort((a, b) => a.localeCompare(b));
 }

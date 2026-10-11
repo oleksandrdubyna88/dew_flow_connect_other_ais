@@ -27,7 +27,9 @@ const TIMEOUT_MS = 30_000;
 /** `dotnet <coai-mcp.dll> --providers` over a data directory, as the panel's probe runs it. */
 function providersIn(binary: string, dataDir: string): Promise<string> {
   return new Promise((done, broke) => {
-    const child = spawn('dotnet', [binary, '--providers'], {
+    // The developer's own dotnet runs the locally built coai-mcp, as every seam and contract leg does; no PATH from
+    // outside this machine reaches it (Sonar S4036). NOSONAR
+    const child = spawn('dotnet', [binary, '--providers'], { // NOSONAR
       env: { ...process.env, COAI_DATA_DIR: dataDir, COAI_VENDORS: '', COAI_PROVIDERS: '' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -52,7 +54,7 @@ function providersIn(binary: string, dataDir: string): Promise<string> {
   });
 }
 
-test('--providers names a missing root as a settingProblem of the wire shape — key, kind, value, sentence — and the parser reads it back', async () => {
+void test('--providers names a missing root as a settingProblem of the wire shape — key, kind, value, sentence — and the parser reads it back', async () => {
   const binary = coaiMcpBinary();
   assert.ok(binary.length > 0, 'no coai-mcp build found. Run: dotnet build src_mcp/src/CoaiMcp.csproj — a contract check that quietly passes without its binary is the green tick this file exists to refuse');
 
@@ -79,7 +81,7 @@ test('--providers names a missing root as a settingProblem of the wire shape —
     const problems = answer.settingProblems as Record<string, unknown>[];
     assert.equal(problems.length, 1, `one missing root is one problem; the server said ${JSON.stringify(problems)}`);
     const [problem] = problems;
-    assert.deepEqual(Object.keys(problem!).sort(), ['key', 'kind', 'sentence', 'value'], 'the wire shape is these four fields and no other');
+    assert.deepEqual(Object.keys(problem!).sort((a, b) => a.localeCompare(b)), ['key', 'kind', 'sentence', 'value'], 'the wire shape is these four fields and no other');
     assert.equal(problem!['key'], 'COAI_QCONSULT_ROOTS');
     assert.equal(problem!['kind'], 'missing-folder');
     assert.equal(problem!['value'], gone, 'the STORED spelling, as the extension wrote it');
