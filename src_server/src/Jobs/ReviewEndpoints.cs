@@ -346,7 +346,11 @@ public static class ReviewEndpoints
             job.TokensIn,
             job.TokensOut,
             job.Failure == FailureKind.None ? string.Empty : Wire(job.Failure),
-            job.Reason);
+            job.Reason,
+            // A NEW optional field rather than a new failure name (story 3.2 of todo/PLAN_every_round_is_counted.md): every
+            // shipped client branches on `status` and only renders `failure` inside a sentence, and a field an older client
+            // never reads is a field it cannot misread — `failure` stays `cancelled`, as it has been.
+            job.EndCause);
 
     /// <summary>The failure name a client already renders.</summary>
     private static string Wire(FailureKind kind) => kind switch

@@ -201,7 +201,20 @@ public sealed record UsageEntry(
     /// The Team server account slot the launch ran on, by its NAME from <c>vendors.json</c> — never the account's email,
     /// which nothing on this line may carry but <paramref name="Email"/>, the caller's. Empty on a local line.
     /// </summary>
-    string Slot = "")
+    string Slot = "",
+
+    /// <summary>
+    /// WHY a launch the caller's token killed was killed — one of <see cref="EndCauses"/> — or empty.
+    /// </summary>
+    /// <remarks>
+    /// Story 3.2 of todo/PLAN_every_round_is_counted.md. Written by the Team server from the STORE's terminal record
+    /// (the store fires the token at the transition and is the only thing that knows why), never from the runner's own
+    /// recomputation; the line's <paramref name="Outcome"/> stays the failure's name (<c>Cancelled</c>), so a reader
+    /// that groups by outcome is unchanged and one that asks "how many withdrawals against how many backstops" has a
+    /// column to ask. Empty on a line older than the field, on every ending but a cancellation, and on a local line,
+    /// where nothing above the executor records which token fired. Trailing and defaulted like the rest.
+    /// </remarks>
+    string EndCause = "")
 {
     /// <summary>This line with the six fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -365,10 +378,12 @@ public sealed class UsageLedger(string dataDir)
     /// <para><paramref name="ranWith"/>, <paramref name="job"/> and <paramref name="slot"/> are the Team server's too
     /// (story 3.4): what the job's launch ran with, the job, and the account slot by its name. A consultation and a question
     /// row label nothing yet and leave them empty, which the line then says.</para>
+    /// <para><paramref name="endCause"/> is the Team server's as well (story 3.2): why the store killed a cancelled job —
+    /// one of <see cref="EndCauses"/> — read off the store's own terminal record; empty for every other ending.</para>
     /// </remarks>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string turn = "", string attempt = "", LaunchOptions? ranWith = null, string job = "", string slot = "") =>
+        string turn = "", string attempt = "", LaunchOptions? ranWith = null, string job = "", string slot = "", string endCause = "") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
@@ -389,7 +404,8 @@ public sealed class UsageLedger(string dataDir)
             Turn: turn,
             Attempt: attempt,
             Job: job,
-            Slot: slot).RanWith(ranWith ?? LaunchOptions.None));
+            Slot: slot,
+            EndCause: endCause).RanWith(ranWith ?? LaunchOptions.None));
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;

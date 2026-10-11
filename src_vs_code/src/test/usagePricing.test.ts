@@ -59,6 +59,22 @@ test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it sh
   assert.equal(old?.attempt, undefined);
 });
 
+test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it was cancelled; an old line and any other ending have none', () => {
+  // Story 3.2 of todo/PLAN_every_round_is_counted.md: the store that fired the token writes the cause, the outcome stays
+  // `Cancelled`, and this side reads the column rather than dropping it — so a withdrawal can be told from the backstop.
+  const [withdrawn, deadline, old] = parseUsage([
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":0,"tokensOut":0,"outcome":"Cancelled",'
+    + '"usageNote":"usage not captured","turn":"1760090400-def","attempt":"first","endCause":"withdrawn"}',
+    '{"utc":"2026-10-11T10:00:01Z","provider":"codex","model":"gpt-6-luna","tokensIn":0,"tokensOut":0,"outcome":"TimedOut","endCause":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.equal(withdrawn?.endCause, 'withdrawn', 'why the store killed it was dropped on the way in');
+  assert.equal(withdrawn?.outcome, 'Cancelled', 'the outcome is still the failure\'s name');
+  assert.equal(deadline?.endCause, undefined, 'an empty cause is absent — a real deadline has none');
+  assert.equal(old?.endCause, undefined, 'an old line says nothing of why');
+});
+
 test('TheParser_KeepsWhatTheLaunchRanWith — a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
   // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
   const [server, local, old] = parseUsage([

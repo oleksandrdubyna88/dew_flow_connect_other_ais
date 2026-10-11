@@ -80,7 +80,7 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
     [Fact]
     public async Task ARepair_WritesTwoLinesSharingATurn()
     {
-        var launcher = new Scripted(Exited(0, ProseWithUsage), Exited(0, CleanWithUsage));
+        var launcher = new ScriptedResults(Exited(0, ProseWithUsage), Exited(0, CleanWithUsage));
 
         var outcome = await new ReviewerExecutor(launcher).RunAsync(Bare(), Bare(), TestContext.Current.CancellationToken);
 
@@ -116,7 +116,7 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
     [Fact]
     public async Task ARetryAfterARateLimit_WritesItsOwnLine()
     {
-        var launcher = new Scripted(Exited(1, string.Empty, "429 Too Many Requests"), Exited(0, CleanWithUsage));
+        var launcher = new ScriptedResults(Exited(1, string.Empty, "429 Too Many Requests"), Exited(0, CleanWithUsage));
 
         var results = await new BoundedScheduler(retryLadder: [TimeSpan.FromMilliseconds(1)])
             .RunAllAsync([new ReviewerWork(Bare())], new ReviewerExecutor(launcher), TestContext.Current.CancellationToken);
@@ -135,7 +135,7 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
     [Fact]
     public async Task ARepairThatExitsNonZero_IsBilledOnce()
     {
-        var launcher = new Scripted(Exited(0, ProseWithUsage), Exited(3, """{"input_tokens":200,"output_tokens":5}""", "the model fell over"));
+        var launcher = new ScriptedResults(Exited(0, ProseWithUsage), Exited(3, """{"input_tokens":200,"output_tokens":5}""", "the model fell over"));
 
         var outcome = await new ReviewerExecutor(launcher).RunAsync(Bare(), Bare(), TestContext.Current.CancellationToken);
 
@@ -202,7 +202,7 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
     [Fact]
     public async Task AVendorReason_IsNotClipped()
     {
-        var launcher = new Scripted(Exited(3, string.Empty, AgyQuotaLine + "\n" + AgyErrorLine));
+        var launcher = new ScriptedResults(Exited(3, string.Empty, AgyQuotaLine + "\n" + AgyErrorLine));
 
         var outcome = await new ReviewerExecutor(launcher).RunAsync(Bare("antigravity"), null, TestContext.Current.CancellationToken);
 
@@ -221,7 +221,7 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
     public async Task ALongExitReason_IsNotClipped()
     {
         var reason = "error: " + string.Join(' ', Enumerable.Repeat("the vendor explained itself at length", 16));
-        var launcher = new Scripted(Exited(1, string.Empty, reason));
+        var launcher = new ScriptedResults(Exited(1, string.Empty, reason));
 
         var outcome = await new ReviewerExecutor(launcher).RunAsync(Bare("codex"), null, TestContext.Current.CancellationToken);
 
@@ -250,19 +250,6 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
 
         said.Should().NotContain(bearer, "a vendor's stderr is written down whole only after it is redacted")
             .And.Contain("which then explained at length why it refused it", "and redaction is not a cut");
-    }
-
-    /// <summary>Answers each launch with the next result in order.</summary>
-    private sealed class Scripted(params ProcessResult[] results) : IProcessLauncher
-    {
-        private int _launched;
-
-        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            var at = Interlocked.Increment(ref _launched);
-
-            return Task.FromResult(results[Math.Min(at, results.Length) - 1]);
-        }
     }
 
     /// <summary>An agy conversation whose first launch was auto-denied, continued once and answered — each with usage.</summary>

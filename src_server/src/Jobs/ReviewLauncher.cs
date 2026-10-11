@@ -181,9 +181,31 @@ public sealed class ReviewLauncher(
         }
 
         // The schema file and the job's TMPDIR are still there for it: the caller's finally deletes them after BOTH launches.
-        var second = await executor.LaunchAsync(Within(followUp, left), ct);
+        var second = await FollowedUpAsync(executor, Within(followUp, left), ct);
 
         return Continued(launch, second) with { Launches = Launches(launch, firstTook, second, spent.Elapsed - firstTook) };
+    }
+
+    /// <summary>
+    /// The follow-up launch — and, when its launcher THROWS the cancellation rather than reporting it, the same
+    /// <see cref="ReviewerOutcome.Cancelled"/> launch the real launcher's <c>ProcessResult.Cancelled</c> becomes.
+    /// </summary>
+    /// <remarks>
+    /// The first launch has answered and been billed by the time this runs; a cancellation that escaped from here took
+    /// its usage with it, and the runner's catch could write a line for the kill but not for the launch that preceded
+    /// it. Caught HERE and nowhere earlier: a first launch that throws has nothing earlier to keep, and the runner's
+    /// own catch records it (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </remarks>
+    private static async Task<ReviewerLaunch> FollowedUpAsync(ReviewerExecutor executor, ReviewerInvocation followUp, CancellationToken ct)
+    {
+        try
+        {
+            return await executor.LaunchAsync(followUp, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return new ReviewerLaunch(new ReviewerOutcome.Cancelled(), null, Usage.Unknown, string.Empty);
+        }
     }
 
     /// <summary>

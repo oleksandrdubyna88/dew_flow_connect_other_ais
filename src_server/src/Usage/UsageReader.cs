@@ -53,6 +53,12 @@ public sealed record UsageLine(
 
     /// <summary>The account slot the launch ran on, by its name — empty like <see cref="Job"/>.</summary>
     public string Slot { get; init; } = string.Empty;
+
+    /// <summary>
+    /// WHY a <c>Cancelled</c> line was cancelled — one of <c>EndCauses</c> — empty on every other ending and on a line
+    /// older than the field (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    public string EndCause { get; init; } = string.Empty;
 }
 
 /// <summary>What a read of the ledger produced, including what it could not read.</summary>
@@ -206,6 +212,9 @@ public sealed class UsageReader(string dataDir)
                     entry.TierFrom ?? string.Empty),
                 Job = entry.Job ?? string.Empty,
                 Slot = entry.Slot ?? string.Empty,
+                // Read, not dropped (story 3.2): why the store killed a cancelled job. An older line, and every
+                // other ending, says nothing.
+                EndCause = entry.EndCause ?? string.Empty,
             };
         }
         catch (JsonException)

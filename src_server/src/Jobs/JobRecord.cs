@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
 
@@ -112,6 +113,20 @@ public sealed record JobRecord(
     /// todo/PLAN_every_round_is_counted.md). It replaced two longs, which is where the server ledger lost the rest.
     /// </summary>
     public Usage Usage { get; init; } = Usage.None;
+
+    /// <summary>
+    /// WHY a <see cref="FailureKind.Cancelled"/> job was cancelled — one of <see cref="EndCauses"/> — and empty for
+    /// every other ending (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <remarks>
+    /// Set AT the transition, by whoever fired the token: <c>JobStore.Cancel</c> says <c>withdrawn</c>,
+    /// <c>JobStore.Expire</c> says <c>abandoned</c>, <c>backstop</c> or <c>queueExpired</c> from the clock that ran
+    /// out, and <c>JobRunner</c> says <c>hostStopped</c> only when the store kept no cause of its own. Until this field
+    /// the two store transitions both wrote <c>Cancelled</c>, told apart by a sentence nobody could count by. The
+    /// ledger reads it from the record the STORE kept, never from the runner's recomputation, which is why
+    /// <c>JobStore.Finish</c> hands that record back.
+    /// </remarks>
+    public string EndCause { get; init; } = string.Empty;
 
     /// <summary>The input count the status endpoint reports.</summary>
     public long TokensIn => Usage.TokensIn;
@@ -232,6 +247,18 @@ public static class JobTransitions
             FinishedUtc = nowUtc,
         };
 
+    /// <summary>
+    /// A job somebody's token killed, saying WHY as a word and not only as a sentence — the one transition that writes
+    /// <see cref="FailureKind.Cancelled"/> (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <param name="cause">One of <see cref="EndCauses"/>: the store's word for the token it fired.</param>
+    /// <param name="usage">
+    /// What the attempt reported before it was stopped, when the runner is the one ending it; the store's own
+    /// transitions carry none, because they fire the token before the vendor has said anything.
+    /// </param>
+    public static JobRecord Cancel(JobRecord job, string cause, string reason, DateTimeOffset nowUtc, Usage? usage = null) =>
+        Fail(job, FailureKind.Cancelled, reason, nowUtc, usage ?? Usage.None) with { EndCause = cause };
+
     /// <summary>Has this job run out of the clock that currently applies to it?</summary>
     /// <remarks>
     /// Which clock depends on the state, and conflating them is the defect the plan round caught: a
@@ -255,7 +282,13 @@ public static class JobTransitions
     /// because a job that is both abandoned and out of clock was abandoned earlier — the deadline
     /// merely arrived while nobody was watching.
     /// </remarks>
-    public static string ExpiryReason(JobRecord job, DateTimeOffset nowUtc)
+    public static string ExpiryReason(JobRecord job, DateTimeOffset nowUtc) => Expiry(job, nowUtc).Reason;
+
+    /// <summary>
+    /// The clock that ran out, as the cause the record keeps AND the sentence a person reads — decided once, so the
+    /// two cannot disagree (story 3.2 of todo/PLAN_every_round_is_counted.md). Abandonment first, as above.
+    /// </summary>
+    public static (string Cause, string Reason) Expiry(JobRecord job, DateTimeOffset nowUtc)
     {
         if (IsAbandoned(job, nowUtc))
         {
@@ -263,13 +296,14 @@ public static class JobTransitions
             // sentence beginning "nobody asked about this" is answered to somebody doing exactly
             // that, and reads as the server contradicting them. It says when it gave up instead.
             // (gemini, code round.)
-            return $"this review went {AbandonedAfter(job.Status).TotalMinutes:0} minutes with nobody "
-                + "asking about it, so it was dropped and its account freed — send it again if you still want it";
+            return (EndCauses.Abandoned, $"this review went {AbandonedAfter(job.Status).TotalMinutes:0} minutes with nobody "
+                + "asking about it, so it was dropped and its account freed — send it again if you still want it");
         }
 
         return job.Status == JobStatus.Queued
-            ? $"expired in the queue after {(job.QueueDeadlineUtc - job.SubmittedUtc).TotalMinutes:0} minutes "
-                + "without a free account — nothing was sent to the vendor"
-            : $"the vendor was still running {job.RunBudget.TotalSeconds:0}s after it started and was stopped";
+            ? (EndCauses.QueueExpired, $"expired in the queue after {(job.QueueDeadlineUtc - job.SubmittedUtc).TotalMinutes:0} minutes "
+                + "without a free account — nothing was sent to the vendor")
+            // The server's own deadline — the budget plus RunSlack — which the reviewer's own timeout should have beaten.
+            : (EndCauses.Backstop, $"the vendor was still running {job.RunBudget.TotalSeconds:0}s after it started and was stopped");
     }
 }

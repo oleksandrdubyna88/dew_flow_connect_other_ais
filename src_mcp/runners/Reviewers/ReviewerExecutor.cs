@@ -154,6 +154,30 @@ public abstract record ReviewerOutcome
         protected override Usage OwnUsage => Usage;
     }
 
+    /// <summary>
+    /// The launch was killed because the CALLER's token fired — a job somebody withdrew, a round that ended, a Team
+    /// server that stopped it — and never because the reviewer ran out of its own deadline, which is
+    /// <see cref="TimedOut"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own ending since story 3.2 of todo/PLAN_every_round_is_counted.md. <c>ProcessLauncher</c> has told the
+    /// two apart since <c>ProcessResult.Cancelled</c> — a budget that ran out and a caller that withdrew arrive as the
+    /// same kill and mean opposite things — and the executor read only <see cref="TimedOut"/>, so a withdrawal the
+    /// Team server's client gave up on after 8.4 s was written down as the vendor's timeout, and a person reading the
+    /// ledger was sent to look at a vendor that was never slow. The deployed server's own line says so:
+    /// <c>src_server/tests/fixtures/usage/timed-out-withdrawal.jsonl</c>.</para>
+    /// <para>What it consumed is <see cref="Usage.Unknown"/>, for <see cref="TimedOut"/>'s reason: a process killed
+    /// before it answered never reported, and the vendor may well have read and billed the request. WHY the caller
+    /// fired — withdrawn, abandoned, the server's backstop, the host stopping — is not this type's to know: the token
+    /// does not say, and only the store that fired it does (<c>JobStore</c> on the Team server, <c>JobRecord.EndCause</c>).</para>
+    /// </remarks>
+    public sealed record Cancelled : ReviewerOutcome
+    {
+        public Usage Usage { get; init; } = Usage.Unknown;
+
+        protected override Usage OwnUsage => Usage;
+    }
+
     /// <param name="Usage">
     /// What the run consumed anyway. An unparseable answer is the one FAILURE whose process
     /// completed and reported its usage, and dropping it under-reported a round by roughly half
@@ -823,6 +847,18 @@ public sealed class ReviewerExecutor(
                 null,
                 Usage.None,
                 string.Empty);
+        }
+
+        // `Cancelled` BEFORE `TimedOut` (story 3.2 of todo/PLAN_every_round_is_counted.md): a kill by the caller's
+        // token sets both flags, a kill on the launch's own budget sets only the second, and reading the second alone
+        // filed every withdrawal as the vendor's timeout. The courtesy DELETE is kept on this branch — it is what stops
+        // a withdrawn Team-server job, and an early return without it leaves the job running on the company's
+        // subscription for an answer nobody will collect. What the launch consumed is unknown, never a free 0/0.
+        if (result.Cancelled)
+        {
+            await AbandonAsync(invocation);
+
+            return new ReviewerLaunch(new ReviewerOutcome.Cancelled(), null, Usage.Unknown, string.Empty, result);
         }
 
         if (result.TimedOut)

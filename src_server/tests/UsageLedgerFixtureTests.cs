@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using CoaiMcp.Core.Findings;
+using CoaiMcp.Runners.Reviewers;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -13,9 +15,10 @@ namespace CoaiServer.Tests;
 /// <remarks>
 /// <para>One <c>ok</c>, one withdrawal the server wrote as <c>TimedOut</c> with zero tokens (8.4 s — the client
 /// gave up, the vendor was not slow; <c>ProcessLauncher</c> marks it <c>Cancelled</c> and <c>ReviewerExecutor</c>
-/// reads only <c>TimedOut</c>), one <c>RateLimited</c>. They are history, not a shape this suite composed: a
-/// reader change in E3 is tested against what is on disk, and the three defects E3 fixes are visible in them —
-/// no cached or reasoning count, no usage note, a withdrawal filed as a timeout.</para>
+/// read only <c>TimedOut</c> until story 3.2), one <c>RateLimited</c>. They are history, not a shape this suite
+/// composed: a reader change in E3 is tested against what is on disk, and the three defects E3 fixes are visible in
+/// them — no cached or reasoning count, no usage note, a withdrawal filed as a timeout. The withdrawal test below
+/// holds the deployed bytes beside what THIS server now writes for the same event (<c>WithdrawnJob</c>).</para>
 /// <para><b>The repository is public.</b> Every line keeps only the ledger's own keys, its one address is a
 /// placeholder, nothing in it names a host, and no string field holds anything shaped like a credential — the
 /// E1 code round found that an allow-listed free-text field (<c>usageNote</c>, <c>costNote</c>) would have let a
@@ -133,19 +136,39 @@ public sealed partial class UsageLedgerFixtureTests
     }
 
     [Fact]
-    public void TheWithdrawal_IsWrittenTimedOutWithNothingCounted_WhichIsTheDefectE3Names()
+    public async Task TheDeployedWithdrawal_WasWrittenTimedOut_AndThisServerWritesItWithdrawn()
     {
-        // What the deployed server writes TODAY, named honestly rather than fixed here: a launch the client
-        // withdrew after 8.4 s is filed as the vendor's own timeout, and its usage as a free 0/0 instead of
-        // "not captured". Story 3.2 changes the outcome; this test changes with it, on purpose.
+        // Changed with story 3.2 of todo/PLAN_every_round_is_counted.md, on purpose. Until then this test was named
+        // `TheWithdrawal_IsWrittenTimedOutWithNothingCounted_WhichIsTheDefectE3Names` and asserted ONLY the deployed
+        // shape: a launch the client withdrew after 8.4 s, filed as the vendor's own timeout with a free 0/0 instead of
+        // "not captured". The deployed bytes are history and still say that; the same event through THIS server — the
+        // real ReviewLauncher, JobRunner and JobStore, a child killed by the caller's token — says what happened.
         using var document = JsonDocument.Parse(Lines("timed-out-withdrawal.jsonl").Single());
-        var line = document.RootElement;
+        var deployed = document.RootElement;
 
-        line.GetProperty("outcome").GetString().Should().Be("TimedOut");
-        line.GetProperty("seconds").GetDouble().Should().BeLessThan(10, "a withdrawal, not a vendor that took its whole budget");
-        line.GetProperty("tokensIn").GetInt64().Should().Be(0);
-        line.GetProperty("tokensOut").GetInt64().Should().Be(0);
-        line.TryGetProperty("usageNote", out _).Should().BeFalse("the deployed server writes no usage note yet");
+        deployed.GetProperty("outcome").GetString().Should().Be("TimedOut", "the deployed server read only the launcher's TimedOut flag");
+        deployed.GetProperty("seconds").GetDouble().Should().BeLessThan(10, "a withdrawal, not a vendor that took its whole budget");
+        deployed.GetProperty("tokensIn").GetInt64().Should().Be(0);
+        deployed.GetProperty("tokensOut").GetInt64().Should().Be(0);
+        deployed.TryGetProperty("usageNote", out _).Should().BeFalse("the deployed server wrote no usage note");
+
+        var dataDir = Directory.CreateTempSubdirectory("coai-usage-withdrawn-").FullName;
+        try
+        {
+            var (job, written) = await WithdrawnJob.RunAsync(dataDir);
+
+            job.EndCause.Should().Be(EndCauses.Withdrawn, "the store that fired the token says why, at the transition");
+            written.GetProperty("outcome").GetString().Should().Be(nameof(FailureKind.Cancelled), "a withdrawal is not the vendor's slowness");
+            written.GetProperty("endCause").GetString().Should().Be(EndCauses.Withdrawn);
+            written.GetProperty("usageNote").GetString().Should().Be(CostText.UsageNotCaptured, "a killed launch's usage is unknown, never a free 0/0");
+            written.GetProperty("seconds").GetDouble().Should().BeLessThan(10);
+            written.EnumerateObject().Select(property => property.Name)
+                .Should().Contain(deployed.EnumerateObject().Select(property => property.Name), "the same ledger shape, widened — never a second one");
+        }
+        finally
+        {
+            Directory.Delete(dataDir, recursive: true);
+        }
     }
 
     /// <summary>The planted cases the E1 code round named, each refused by the rule that names its shape.</summary>

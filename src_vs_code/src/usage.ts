@@ -60,6 +60,13 @@ export interface UsageEntry {
   readonly tierFrom?: string;
   readonly job?: string;
   readonly slot?: string;
+  /**
+   * WHY a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — `withdrawn`,
+   * `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in `src_mcp/runners/Reviewers/EndCauses.cs`).
+   * Absent on a line older than the field, on every other ending, and on a local line, which does not know which
+   * token fired. The outcome stays `Cancelled`; this is the column that tells a withdrawal from the server's backstop.
+   */
+  readonly endCause?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -123,6 +130,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...ledgerExtras(parsed),
       ...launchFields(parsed),
       ...ranWithFields(parsed),
+      ...endCauseOf(parsed.endCause),
     };
   } catch {
     return undefined;
@@ -164,6 +172,15 @@ function turnOf(value: unknown): Pick<UsageEntry, 'turn'> {
 
 function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
   return saidText(value) ? { attempt: value } : {};
+}
+
+/**
+ * Why a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — present only
+ * when the line says it, by `launchFields`' rule: an older line, every other ending and a local line say nothing, and an
+ * empty value is absent rather than a cause.
+ */
+function endCauseOf(value: unknown): Pick<UsageEntry, 'endCause'> {
+  return saidText(value) ? { endCause: value } : {};
 }
 
 /** The eight text fields story 3.4 of todo/PLAN_every_round_is_counted.md added — what the launch ran with. */

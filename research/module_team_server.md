@@ -676,8 +676,9 @@ sequenceDiagram
     terminal record built for the line only, never stored). A review is counted by its turn, so this adds a launch,
     not a review.
   - `UsageEntryDto` and `UsageLine` read `turn` and `attempt`; a line older than the fields reads both empty.
-  Still NOT written: a job ended by the host stopping or by an infrastructure throw (story 3.2's), and the cumulative
-  difference of an agy follow-up (each line carries its own launch's report — `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`).
+  Still NOT written: a job ended by an infrastructure throw (the runner's broad catch — `NotStarted`, no line), and the
+  cumulative difference of an agy follow-up (each line carries its own launch's report —
+  `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`). A job ended by the host stopping IS written since story 3.2 (below).
 - **Each line says what it ran with (2026-10-11, story 3.4 of `todo/PLAN_every_round_is_counted.md`).** A server line
   said who, which vendor and model and what it cost — not which CLI release ran it, whether the request's effort was
   applied, what tier the launch was told, or which account carried it. Now every line of a job carries:
@@ -699,6 +700,45 @@ sequenceDiagram
   writes it on every line of the attempt — a requeued one's included — through `RecordJob`'s new `ranWith`, `job`
   and `slot`. `UsageEntryDto` and `UsageLine` (`RanWith`, `Job`, `Slot`) read the eight fields back; a line older than
   them reads `LaunchOptions.None` and empty.
+- **How a job ended is said, not guessed (2026-10-11, story 3.2 of `todo/PLAN_every_round_is_counted.md`).** The
+  deployed server's own ledger line for a review its client withdrew after 8.4 s said `TimedOut` and a free 0/0
+  (`tests/fixtures/usage/timed-out-withdrawal.jsonl`): the executor read only the launcher's `TimedOut` flag
+  ([module_runners.md](module_runners.md)); `JobStore.Cancel` and `JobStore.Expire` both stored `FailureKind.Cancelled`,
+  told apart only by a sentence; `JobRunner` wrote its ledger line from its OWN recomputed record, so a cancel that landed
+  while `Finish` ran was written as whatever the runner thought (an `ok`); and a thrown `OperationCanceledException`
+  finished the job and wrote nothing. Now:
+  - **A withdrawn launch is `Cancelled`, with its usage not captured.** `ReviewerExecutor` returns the new
+    `ReviewerOutcome.Cancelled` (launch usage `Unknown`), `ReviewLauncher.Read` carries it, `JobRunner.Failed` maps it to
+    `FailureKind.Cancelled`. A kill with only `TimedOut` set is still `TimedOut` — the reviewer's own deadline, the
+    server's backstop exists to be later than.
+  - **The cause is a WORD, set at the transition.** `JobRecord.EndCause`, one of `EndCauses` (in the runners library, so
+    the ledger and the extension spell it the same): `JobStore.Cancel` → `withdrawn`; `JobStore.Expire` →
+    `abandoned` / `backstop` / `queueExpired` from `JobTransitions.Expiry`, which pairs the cause with the sentence
+    `ExpiryReason` always gave so the two cannot disagree; the runner's own `hostStopped` only when no store transition
+    ended the job (the host's token). `JobTransitions.Cancel` is the one transition that writes the kind.
+  - **The ledger reads the STORE's terminal record.** `JobStore.Finish` returns the record the store keeps — the one
+    given, or the earlier cancel/expiry record carrying the late attempt's `Usage` (a billed first launch under a
+    cancelled follow-up, an answer that landed a second before the DELETE: a status answering 0 for it would move the
+    free-withdrawal lie from the ledger to the wire) — and `JobRunner.Ledger` writes from that, with `endCause` on the
+    line that says `Cancelled` (`RecordJob`'s new parameter; a follow-up pair's first line ended on its own). The
+    races: a cancel BEFORE `Finish` — the store's record wins, the attempt's usage rides on it; a cancel AFTER —
+    `Cancel` finds a terminal job and answers null; the store's lock orders the two, and `Expire` fires the token
+    before it writes but never releases the lock in between.
+  - **Both shapes, exactly one line.** A launcher that reports `Cancelled` and one that throws converge:
+    `JobRunner.RunAsync`'s catch records `new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled())` through the same
+    `Record`, and `ReviewLauncher.FollowedUpAsync` turns a cancellation thrown out of the FOLLOW-UP into a `Cancelled`
+    launch so the denied, billed first launch keeps its line (a first launch that throws has nothing earlier to keep).
+  - **On the wire, a NEW optional field, never a new failure name.** `ReviewStatusDto.EndCause` (trailing, defaulted);
+    `failure` stays `cancelled`. Measured before choosing: `coai-mcp --ask-remote` and the extension's `remoteAsk.ts`
+    both branch on `status` and only render `failure` inside a sentence, and `RemoteStatus` sets no
+    `UnmappedMemberHandling`, so an older client ignores the field — a new failure NAME would have been shown verbatim
+    by every shipped client, harmless but unmeasured. `http/reviews/happy.http` asserts both.
+  - `UsageEntryDto`, `UsageLine.EndCause` and the extension's parser (`usage.ts`, `endCauseOf`) read it back; a line
+    older than the field, every other ending and a local line say nothing. Nothing renders it yet.
+  Not changed: a queued job that expires writes no line (nothing was sent); the local executor's line has no cause (the
+  round's clock and the MCP client's own cancellation reach it as one token); `ReviewerOutcome.TimedOut`'s launch usage
+  stays `Usage.None` on the server's attempt (a deadline line still reads 0/0 — not this story's defect, listed in the
+  plan's open tail).
 
 ### Story 2.4 — the money, and the contract suite
 

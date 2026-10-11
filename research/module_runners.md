@@ -535,6 +535,25 @@ Twelve reviewers of twelve answered; thirty-five findings, and these are the one
   too slow for its budget and belongs in the retry ladder, the other is a job nobody is waiting for and
   must never be retried. The token's STATE decides, never the exception's type. `Truncated` lets a
   caller tell a cut answer from a bad one without parsing an English sentence.
+  **And the executor reads it, since story 3.2 of `todo/PLAN_every_round_is_counted.md` (2026-10-11).**
+  `ReviewerExecutor.LaunchAsync` checked only `TimedOut` for a year, so a kill by the caller's token — which
+  sets BOTH flags — was filed as the vendor's timeout: the deployed Team server's own line for a review its
+  client withdrew after 8.4 s says `TimedOut` (`src_server/tests/fixtures/usage/timed-out-withdrawal.jsonl`).
+  `Cancelled` is read FIRST now and is its own ending, `ReviewerOutcome.Cancelled` (the sixth sealed subtype:
+  `Usage = Usage.Unknown`, like `TimedOut`'s), with `AbandonAsync` kept on that branch — it is what DELETEs a
+  withdrawn Team-server job, and an early return without it would leave the job running on the company's
+  subscription. A kill with only `TimedOut` set is still `TimedOut`. Every switch over the endings has a word for
+  it: `ReviewerSummaryFactory.Describe` says `cancelled`, `ReviewerNotices.ByType` maps it to a new
+  `reviewer-cancelled` code (the reflection census in `TheReviewerFailuresAreWrittenDownTests` went red on the day
+  the type was added, as it was built to), `ConsultFailures.Ended` reads it as a killed launch exactly like
+  `TimedOut` (the consultation decides from the TOKENS what killed it, and hands that in), and the ledger writes it
+  as one line saying `cancelled` with `usageNote: usage not captured`, a billed first launch kept beside it on its
+  own line (`AfterTheRepair` folds a terminal second launch the same way for every failure). WHY the token fired is
+  not the executor's to know — see `EndCauses` and the Team server's `JobRecord.EndCause`
+  ([module_team_server.md](module_team_server.md)). The question row is the one caller whose word changes: a row
+  killed by the caller's cancellation now ends `failed` / `cancelled` rather than `timed_out` "ran past its budget",
+  which was never true of it; a row past its OWN budget is still `timed_out`, because its launch's timeout fires
+  before the row's token (`ConsultationDeadline.For` is the budget plus a grace).
 - **The truncation sentence carries the count.** "Cut at 8 Mi characters" says nothing about whether
   one character was lost or two hundred megabytes; it is composed when the stream ends, which is the
   first moment that number exists.
@@ -1037,8 +1056,11 @@ Four things about it are not obvious from the shape:
   abandoned child, and a killed process runs no cleanup, so the polite `DELETE` on the way out never
   happens and the review runs to completion on the team's subscription for an answer nobody will
   collect. The shim writes a claim to a job file the moment the server accepts, and the executor calls
-  `IReviewerRuntime.AbandonAsync` on **both** kill paths — its own timeout, and cancellation — which
-  is where `RemoteRuntime` reads that claim and sends the `DELETE`.
+  `IReviewerRuntime.AbandonAsync` on **every** kill path — its own timeout, a cancellation the launcher
+  reports (`ProcessResult.Cancelled`, its own `Cancelled` ending since story 3.2 of
+  `todo/PLAN_every_round_is_counted.md`), and a cancellation a launcher throws — which is where
+  `RemoteRuntime` reads that claim and sends the `DELETE`. `AWithdrawnRemoteReviewer_StillSendsTheDelete`
+  pins the reported branch: the one a withdrawal actually takes, and the one an early return would skip.
 
   The seam is on the interface with a `Task.CompletedTask` default, so no CLI adapter changed: a
   vendor process dies with its tree and has nothing to clean up. `ReviewerExecutor.LaunchAsync` is the
@@ -1754,9 +1776,13 @@ key's vendor — so its cost is worked out here, from the rates the row carried.
 - **A call that ended before its vendor reported usage is "usage not captured", never 0 tokens or $0**
   (2026-09-27, the plan round's accepted finding on the calibration branch). `Usage.NotCaptured` — the flag
   beside `NoPriceSet`, OR-ed by `Usage.Add`, so a total that folds one in is a FLOOR and says so;
-  `Usage.Unknown` is the value. Two sources set it: `ReviewerOutcome.TimedOut` (a launch killed on its
-  deadline, or by a cancellation the launcher reports the same way) now carries `Usage = Usage.Unknown` —
-  `Usage.None` only for the turn `TurnLoop` never launched because the conversation's cap was spent — and
+  `Usage.Unknown` is the value. Three sources set it: `ReviewerOutcome.TimedOut` (a launch killed on its
+  own deadline) carries `Usage = Usage.Unknown` — `Usage.None` only for the turn `TurnLoop` never launched
+  because the conversation's cap was spent; `ReviewerOutcome.Cancelled` (a launch the caller's token killed,
+  its own ending since story 3.2 of `todo/PLAN_every_round_is_counted.md`) carries it too, and the
+  executor's `ReviewerLaunch.Usage` for that branch is `Unknown` as well, so the Team server's attempt —
+  which reads the LAUNCH's usage, not the outcome's — says *usage not captured* where the deployed server
+  wrote a free 0/0; and
   `ApiRuntime.ReadUsage` answers `Usage.Unknown` for an exit `ApiRuntime.EndedBeforeAnAnswerExit` (69 — a
   dropped connection, an unreachable endpoint or the shim's own deadline; `AskApiMode.Unavailable` is that
   constant) with no usage line. Every other lineless exit (65 never sent, 70/75/77 a refusal the vendor

@@ -338,16 +338,25 @@ public sealed class ReviewLauncherTests
     }
 
     [Fact]
-    public async Task AFollowUpCancelled_Propagates_AndTheDirectoryIsStillDeleted()
+    public async Task AFollowUpCancelled_IsTheAttemptsOwnEnding_KeepingTheFirstLaunch_AndTheDirectoryIsStillDeleted()
     {
+        // Changed with story 3.2 of todo/PLAN_every_round_is_counted.md, on purpose: this test was
+        // `AFollowUpCancelled_Propagates_AndTheDirectoryIsStillDeleted` and pinned the cancellation ESCAPING — which took
+        // the denied, billed first launch's usage with it, so the runner's catch could write a line for the kill and
+        // none for the launch that preceded it. The thrown shape now becomes the same `Cancelled` launch the real
+        // launcher's `ProcessResult.Cancelled` becomes (`FollowedUpAsync`), and the job runner still owns what it means.
         var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false))
         {
             SecondThrows = new OperationCanceledException("the job was abandoned"),
         };
 
-        var run = () => RunAgy(scripted);
+        var attempt = await RunAgy(scripted);
 
-        await run.Should().ThrowAsync<OperationCanceledException>("the job runner owns a cancellation, not this launcher");
+        var failed = attempt.Should().BeOfType<ReviewAttempt.Failed>().Subject;
+        failed.Outcome.Should().BeOfType<ReviewerOutcome.Cancelled>("a cancellation thrown out of the follow-up is the attempt's own ending, never an escape");
+        failed.Usage.NotCaptured.Should().BeTrue("the follow-up's own share is unknown");
+        failed.Usage.TokensIn.Should().BeGreaterThan(0, "the denied first launch was billed, and the escape used to take it with it");
+        failed.Launches.Select(part => part.Attempt).Should().Equal(LaunchAttempts.First, LaunchAttempts.FollowUp);
         Directory.Exists(JobDirectory(scripted.Requests[0])).Should().BeFalse("the finally covers the continuation too");
     }
 

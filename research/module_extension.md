@@ -7484,6 +7484,15 @@ each present only when the line says it, so an empty value ("not recorded") and 
 renders them yet, so no help article changed; they are kept so a later surface reads them rather than drops them
 (`TheParser_KeepsWhatTheLaunchRanWith`).
 
+**Story 3.2 (2026-10-11): the parser keeps why a cancelled Team-server launch was cancelled.** `UsageEntry` gains
+`endCause` — `withdrawn`, `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in
+`src_mcp/runners/Reviewers/EndCauses.cs`) — and `endCauseOf` reads it by `launchFields`' rule: present only when the
+line says it, so an old line, every other ending and a local line (which does not know which token fired) read as
+absent. The line's `outcome` stays `Cancelled`, so every reader that groups by outcome is unchanged; a reader asking
+"how many withdrawals against how many backstops" has a column. Nothing renders it yet, so no help article changed
+(`TheParser_KeepsTheEndCause`). The Team server's status answer carries the same word as a new optional `endCause`
+field beside the unchanged `failure: cancelled`; `remoteAsk.ts` branches on `status` alone and is untouched.
+
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
 window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes

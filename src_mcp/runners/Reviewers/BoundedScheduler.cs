@@ -685,6 +685,9 @@ public static class ReviewerSummaryFactory
     private static string Described(ReviewerOutcome outcome, int cap) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
+        // Its own word (story 3.2 of todo/PLAN_every_round_is_counted.md): the caller's token killed it, and "timeout"
+        // sent a person to look at a vendor that was never slow.
+        ReviewerOutcome.Cancelled => "cancelled",
         // The real number, because after the ladder it is not always one — and a round that says
         // "one retry" over four launches is a sentence a person would plan around.
         ReviewerOutcome.RateLimited r =>

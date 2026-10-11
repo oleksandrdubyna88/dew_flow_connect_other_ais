@@ -113,11 +113,13 @@ public sealed class JobRunner(
         }
         catch (OperationCanceledException)
         {
-            // A cancel or the deadline. The store already wrote the terminal state and the reason,
-            // and Finish ignores a job that is already finished — so this only covers the case where
-            // the HOST is stopping, where nothing else will.
-            jobs.Finish(JobTransitions.Fail(
-                job, FailureKind.Cancelled, "stopped before it finished", DateTimeOffset.UtcNow));
+            // The THROWN shape of a cancellation — a launcher that throws rather than reporting
+            // `ProcessResult.Cancelled` — recorded exactly as the returned shape is: one road, so a cancel,
+            // an expiry and a host stop each write their one ledger line here too (story 3.2 of
+            // todo/PLAN_every_round_is_counted.md; this arm used to finish the job and write nothing).
+            // The store already wrote the terminal state and its cause when it fired the token, and `Finish`
+            // hands that record back; the runner's own `hostStopped` stands only when nothing else ended it.
+            Record(vendor, slot, job, new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled()));
         }
         catch (Exception e)
         {
@@ -164,8 +166,12 @@ public sealed class JobRunner(
             return;
         }
 
-        jobs.Finish(finished);
-        Ledger(new(vendor, slot, job, attempt), finished, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
+        // The ledger line is written from the record the STORE kept, not from this method's own `finished`: a cancel or
+        // an expiry that fired the token wrote its cause first, under the store's lock, and `Finish` hands that back —
+        // carrying what the attempt REPORTED, because a vendor that answered a second before the withdrawal was billed
+        // for the answer nobody collected (story 3.2 of todo/PLAN_every_round_is_counted.md).
+        var kept = jobs.Finish(finished);
+        Ledger(new(vendor, slot, job, attempt), kept, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
     }
 
     /// <summary>What every line of one attempt shares: the vendor, the account it ran on, the job, and the attempt itself.</summary>
@@ -189,9 +195,23 @@ public sealed class JobRunner(
         return JobTransitions.Succeed(job, answered.Raw, answered.Usage, now);
     }
 
-    /// <summary>A failure the vendor decided, with what its launches reported beside it.</summary>
+    /// <summary>The runner's own sentence for a launch the token killed when no store transition said why.</summary>
+    private const string StoppedReason = "stopped before it finished";
+
+    /// <summary>A failure the vendor decided — or a launch the caller's token killed — with what its launches reported beside it.</summary>
+    /// <remarks>
+    /// A cancelled launch is the one ending the runner does not name by itself: the store that fired the token wrote
+    /// WHY (withdrawn, abandoned, the backstop) on its own record first, and <c>JobStore.Finish</c> hands that record
+    /// back over this one. <c>hostStopped</c> is this record's word for the case nothing else ended — the host's own
+    /// token — and it stands only then (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </remarks>
     private static JobRecord Failed(JobRecord job, ReviewAttempt.Failed failed, DateTimeOffset now)
     {
+        if (failed.Outcome is ReviewerOutcome.Cancelled)
+        {
+            return JobTransitions.Cancel(job, EndCauses.HostStopped, StoppedReason, now, failed.Usage);
+        }
+
         var (kind, reason) = WhyItFailed(job, failed.Outcome);
 
         return JobTransitions.Fail(job, kind, reason, now, failed.Usage);
@@ -281,7 +301,10 @@ public sealed class JobRunner(
                 ledger.RecordJob(
                     finished.Email, on.Vendor.Id, on.Job.Model, on.Job.Role, line.Outcome, line.Elapsed, line.Usage,
                     kind: JobKinds.Wire(on.Job.Kind), stage: "TeamServer", turn: on.Job.Id, attempt: line.Attempt,
-                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot.Name);
+                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot.Name,
+                    // WHY the store killed it, on the line that says Cancelled — a follow-up pair's first launch ended on
+                    // its own and says so (story 3.2 of todo/PLAN_every_round_is_counted.md).
+                    endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
