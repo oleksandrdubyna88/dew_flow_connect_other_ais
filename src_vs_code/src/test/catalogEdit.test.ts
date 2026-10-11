@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CatalogState, editThroughCatalog } from '../catalogEdit';
+import { isRecord } from '../catalogLaunch';
 import { CatalogLayer, migrateLayer } from '../catalogMigration';
 import { qconsultSettingsFrom } from '../qconsultSettings';
 import { envBlock, settingsFrom } from '../settingsShape';
@@ -21,6 +22,13 @@ const REVIEWERS = [{ id: 'codex', runtime: 'codex', model: 'gpt-x', enabled: tru
 const GLM = { vendor: 'glm', runtime: 'codex', model: 'glm-5.3', baseUrl: 'https://glm.example/v1', executablePath: '' };
 /** The migrated GLM consultant with its model edited to glm-6, as the old page stored it: a definition again. */
 const GLM_6 = { vendor: 'glm', runtime: 'codex', model: 'glm-6', baseUrl: 'https://glm.example/v1' };
+
+/** The state with one catalog row given more raw fields — through a type guard, where a cast would stop the compiler checking. */
+function withRowFields(state: CatalogState, id: string, extra: Record<string, unknown>): CatalogState {
+  const rows: readonly unknown[] = Array.isArray(state.vendors) ? state.vendors : [];
+
+  return { ...state, vendors: rows.map((raw) => (isRecord(raw) && raw['id'] === id ? { ...raw, ...extra } : raw)) };
+}
 
 /** A layer after the migration: what every test starts from. */
 function migrated(layer: CatalogLayer): CatalogState {
@@ -63,7 +71,7 @@ test('rewriting a row in place keeps its per-side CLI paths — a field the defi
   // todo/PLAN_paths_per_side.md E3.1: the fold rewrites only the launch fields; `executablePathBySide` rides along.
   const bySide = { windows: 'C:\\tools\\codex.cmd', posix: '/opt/codex', mirrored: 'C:\\tools\\codex.cmd' };
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
-  const withSides = { ...state, vendors: (state.vendors as Record<string, unknown>[]).map((raw) => (raw['id'] === 'consult-codex' ? { ...raw, executablePathBySide: bySide } : raw)) };
+  const withSides = withRowFields(state, 'consult-codex', { executablePathBySide: bySide });
   const after = saved(withSides, 'consultants', { codex: GLM_6 });
   const row = vendorsFrom(after.vendors).find((one) => one.id === 'consult-codex');
 
@@ -139,7 +147,7 @@ test('an edit of an entry that never referred to the catalog passes through unto
 test('a rewritten row is the definition\'s launch, whole: a dialect the definition never carried is not kept', () => {
   const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
   // A person hand-gave the consultant's row a dialect; the old page's definition has no field for one.
-  const withDialect = { ...state, vendors: (state.vendors as Record<string, unknown>[]).map((raw) => (raw['id'] === 'consult-codex' ? { ...raw, dialect: 'anthropic' } : raw)) };
+  const withDialect = withRowFields(state, 'consult-codex', { dialect: 'anthropic' });
   const row = vendorsFrom(saved(withDialect, 'consultants', { codex: GLM_6 }).vendors).find((one) => one.id === 'consult-codex');
 
   assert.equal(row?.model, 'glm-6');
