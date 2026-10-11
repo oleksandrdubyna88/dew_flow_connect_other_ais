@@ -391,10 +391,19 @@ public sealed class UsageLedger(string dataDir)
     /// row label nothing yet and leave them empty, which the line then says.</para>
     /// <para><paramref name="endCause"/> is the Team server's as well (story 3.2): why the store killed a cancelled job —
     /// one of <see cref="EndCauses"/> — read off the store's own terminal record; empty for every other ending.</para>
+    /// <para>An overload rather than defaulted parameters for the Team server's fields, because C# cannot default a
+    /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
+    /// is an EMPTY value, never a null (the epic-3 code round).</para>
     /// </remarks>
     public void RecordJob(
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage) =>
+        RecordJob(email, provider, model, role, outcome, elapsed, usage, kind, stage,
+            turn: string.Empty, attempt: string.Empty, ranWith: LaunchOptions.None, job: string.Empty, slot: string.Empty);
+
+    /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
+    public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string turn = "", string attempt = "", LaunchOptions? ranWith = null, string job = "", string slot = "", string endCause = "") =>
+        string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
@@ -416,7 +425,7 @@ public sealed class UsageLedger(string dataDir)
             Attempt: attempt,
             Job: job,
             Slot: slot,
-            EndCause: endCause).RanWith(ranWith ?? LaunchOptions.None));
+            EndCause: endCause).RanWith(ranWith));
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;

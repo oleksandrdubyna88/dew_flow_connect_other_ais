@@ -262,6 +262,10 @@ take_the_lock() {
     flock -n 9 || die "another release or rollback is running (it holds $RELEASES/.lock)"
 }
 
+# SOURCED rather than run — by the server suite's `TheCanaryFallbackRunsTests`, which drives the real `canary` above
+# against a stub curl — the functions are all a caller gets: nothing below may parse arguments, release or roll back.
+[[ "${BASH_SOURCE[0]}" == "$0" ]] || return 0
+
 # ── commands ─────────────────────────────────────────────────────────────────────────────
 # ── where the artefact comes from ────────────────────────────────────────────────────────
 # Empty means BUILD it here, which is how this script started and stays the default: an offline

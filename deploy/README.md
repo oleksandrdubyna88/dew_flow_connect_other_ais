@@ -79,6 +79,9 @@ builds nothing and is **one command**, and a look inside the artefact before it 
 | `systemd-release.sh --rollback` | pop one deployment off the trail. No build. Seconds. |
 | `systemd-release.sh --list` | what is live and what is retained |
 
+`source`d rather than run, the script defines its functions and stops — nothing is parsed, released or rolled
+back. That is how the server suite runs the real canary against a stub curl (`TheCanaryFallbackRunsTests`).
+
 ### From CI — `deploy the Team server`
 
 Since the `server-v*` release line publishes binaries, the ordinary way to update this host is the

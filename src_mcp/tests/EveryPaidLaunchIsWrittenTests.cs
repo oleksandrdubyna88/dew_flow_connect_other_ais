@@ -132,6 +132,36 @@ public sealed class EveryPaidLaunchIsWrittenTests : IDisposable
         Summed(lines).Should().Be(Folded(outcome));
     }
 
+    /// <summary>
+    /// The epic-3 code round: a cancellation that lands while the ladder WAITS used to throw out of the ladder, and the
+    /// launches it had already paid for lived only in its locals — the turn reached the ledger as nothing.
+    /// </summary>
+    [Fact]
+    public async Task ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid()
+    {
+        // A first launch that answered prose and billed 1000, whose repair was refused — a refusal worth waiting out.
+        var launcher = new ScriptedResults(Exited(0, ProseWithUsage), Exited(1, string.Empty, "429 Too Many Requests"));
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var results = await new BoundedScheduler(retryLadder: [TimeSpan.FromSeconds(30)])
+            .RunAllAsync([new ReviewerWork(Bare(), Bare())], new ReviewerExecutor(launcher), cts.Token,
+                onProgress: progress =>
+                {
+                    if (progress.Note.Contains("waiting", StringComparison.Ordinal))
+                    {
+                        cts.Cancel();
+                    }
+                });
+
+        var outcome = results.Single().Outcome;
+        outcome.LastTurnUsage.TokensIn.Should().Be(1000, "the malformed first launch billed 1000 before the wait was cancelled");
+        var lines = Recorded(outcome, "cancelled-wait");
+        lines.Select(l => l.Attempt).Should().Equal(LaunchAttempts.First, LaunchAttempts.Repair);
+        lines.Select(l => l.TokensIn).Should().Equal([1000, 0], "each paid launch keeps its own line, the refused repair included");
+        lines[1].Outcome.Should().StartWith("rate limited", "the repair's refusal is what the turn last saw — no launch was cancelled");
+        Summed(lines).Should().Be(Folded(outcome));
+    }
+
     [Fact]
     public async Task ARepairThatExitsNonZero_IsBilledOnce()
     {

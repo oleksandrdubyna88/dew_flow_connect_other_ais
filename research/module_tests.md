@@ -3227,8 +3227,9 @@ stream), because a fake launcher above the defect cannot fail for the right reas
 The script's fallback was also run against stubbed `curl` and `python3` (a harness outside the suite): an old server
 answered the kind with its 400 and got a second, plain submit; a new one got one submit carrying the kind.
 
-**NOT covered by the suite:** the script's fallback as an executed behaviour (the suite asserts the script's TEXT, like
-every deploy-script test here; the stub run above is the behaviour, recorded once).
+**Covered since epic 3's code round:** the script's fallback as an executed behaviour — `TheCanaryFallbackRunsTests`
+(below, *Epic 3's code round*) runs the real `canary` against a stub curl in the ordinary suite; until then the suite
+asserted only the script's TEXT and the stub run above was the behaviour, recorded once.
 
 ## Every paid launch is written, and written whole (2026-10-10, story 3.3 of `todo/PLAN_every_round_is_counted.md`)
 
@@ -3303,6 +3304,21 @@ infrastructure throw (no line, as before); `TimedOut`'s launch usage on the serv
 
 **NOT covered:** `ClaudeProbeCache` and `PanelProvider.readUsage` passing the probe ledger (thin `vscode` wiring over the
 tested wrapper and loader).
+
+## Epic 3's code round (2026-10-11, `todo/PLAN_every_round_is_counted.md`)
+
+Three accepted findings of the gate's code round for epic 3/6; two were rejected with reasons (the plan's deviation
+table says which).
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `EveryPaidLaunchIsWrittenTests.ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid` (mcp) | a first launch that billed 1000 and a rate-limited repair, then the round cancelled while the ladder WAITS (cancelled from the progress note that announces the wait — no timing): the turn keeps 1000, two lines `first`/`repair`, the repair's line *rate limited*, the lines summing to the turn | RED before the fix: `Expected outcome.LastTurnUsage.TokensIn to be 1000L … but found 0L` (the cancellation threw out of `Task.Delay` and the paid launches went with the ladder's locals) |
+| `TheCanaryFallbackRunsTests` (3, server) | the REAL `canary` function of `deploy/systemd-release.sh`, SOURCED (the script now stops after its functions when sourced), against a stub `curl` first on PATH and the real Python 3: an old server refusing the kind is asked twice, the second time without `"kind"`; a new server once; any other 400 once, and the canary fails. Needs bash and a Python 3 (`ShellScripts.Python` skips the Store's `WindowsApps` alias); skipped where either is missing | Break-it, one plant at a time from a byte copy, restored and hash-checked: the retry condition never matching → `Expected code to be 0 because … HTTP 400`; every 400 retried → `Expected posts to contain a single item … but found {…canary…, …plain…}`; the sourcing guard removed → all three red, `release: usage: …` (sourcing ran the release) |
+| `TheImageChecksEachInstallerTests` (behaviour unchanged) | its bash, path and repo-root helpers moved into `ShellScripts`, shared with the canary suite rather than copied | — a refactor; the four tests pass as before |
+
+`UsageLedger.RecordJob` lost its `LaunchOptions? ranWith = null` for two overloads (the short one for a consultation,
+a question row and a probe; the full one for the Team server with a non-null `LaunchOptions`) — no behaviour changed,
+so no test was added; every existing caller compiles against the overload it meant.
 
 ## The server image checks each installer before it runs it (2026-10-11)
 

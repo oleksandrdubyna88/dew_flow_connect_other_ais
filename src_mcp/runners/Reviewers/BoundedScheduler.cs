@@ -597,7 +597,13 @@ public sealed class BoundedScheduler(
             // exactly like a model that is thinking.
             Report(onProgress, w.Invocation, "running", elapsed: watch.Elapsed,
                 note: $"rate limited on attempt {attempts} — waiting {wait.Value.TotalSeconds:F0}s before the next");
-            await Task.Delay(wait.Value, ct);
+            if (!await WaitedOut(wait.Value, ct))
+            {
+                // Cancelled while WAITING: no launch was killed, so the turn ends as the refusal it last saw — the
+                // ladder's own ending when its budget runs out — and every launch already paid for rides out on it.
+                return limited with { Attempts = attempts };
+            }
+
             attempts += 1;
             var started = watch.Elapsed;
             // What is LEFT of the deadline, never the whole of it again.
@@ -616,6 +622,24 @@ public sealed class BoundedScheduler(
         return outcome is ReviewerOutcome.RateLimited hopeless
             ? hopeless with { Attempts = attempts }
             : outcome;
+    }
+
+    /// <summary>
+    /// Waits out one step of the ladder; <c>false</c> when the round ended first. Never throws the cancellation — the
+    /// launches the turn already paid for live only in the ladder's locals, and a throw would drop them from the ledger
+    /// (the epic-3 code round of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    private static async Task<bool> WaitedOut(TimeSpan wait, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(wait, ct);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
 }

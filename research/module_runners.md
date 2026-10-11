@@ -226,6 +226,10 @@ sequenceDiagram
   ten. And the wait is **said out loud** — the ladder can hold a reviewer for over three minutes,
   where "running" reads exactly like a model that is thinking, so each wait reports the attempt and
   how long it will be. Both found by codex reviewing this very change.
+  **A cancellation that lands during a WAIT ends the turn as the refusal it last saw** — the ladder's own ending
+  when its budget runs out — and never throws (`BoundedScheduler.WaitedOut`): no launch was killed, and the launches
+  the turn had already paid for live only in the ladder's locals, so a throw dropped them from the ledger (the
+  epic-3 code round of `todo/PLAN_every_round_is_counted.md`; `ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid`).
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
   finding schema straight into `result.response`, the same envelope carries `usage`, and the model
   ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as
