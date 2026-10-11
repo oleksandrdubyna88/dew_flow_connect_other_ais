@@ -100,6 +100,22 @@ test('every language says why the other side\'s boxes are gone while each side k
   }
 });
 
+test('every language says how a Security lane pair names its reviewer, by the page\'s own English words (names and a missing root, story 1)', () => {
+  // research/PLAN_names_and_a_missing_root.md: the pair's Reviewer now reads like the question consultant's picker — a
+  // row by its card's name, `(switched off)`, `(stranded)`, "no reviewer — pick one", and a removed row whose pair the
+  // server DROPS. The marks are English in every language, as every control text here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'security-lane');
+  assert.ok(article !== undefined, 'the security lane article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} security lane article is missing`);
+    for (const words of ['*(switched off)*', '*(stranded)*', '*no reviewer — pick one*', '**Change on Models**']) {
+      assert.ok(said.includes(words), `the ${language} security lane article never says ${words} — how a pair names its reviewer is undocumented there`);
+    }
+  }
+});
+
 test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
   // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
   // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).
