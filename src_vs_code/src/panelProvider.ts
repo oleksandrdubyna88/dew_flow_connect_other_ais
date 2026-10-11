@@ -83,7 +83,7 @@ import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
 import { chatLedgerLines } from './roundMoney';
 import { seedIfEmpty } from './sideSettings';
-import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
+import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer, writesTheOverlay } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
 import { consultantPickWrites } from './consultantPicks';
@@ -2125,8 +2125,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     switch (write.kind) {
       case 'vendor': {
-        // Text typed into the OTHER side's CLI-path box and spelled for this side's OS: refused beside the box (E4.1).
-        if (await this.refusedBesideTheBox(write, from)) {
+        // Text typed into the OTHER side's CLI-path box and spelled for this side's OS — or any, while this side keeps its
+        // own settings: refused beside the box (E4.1; E4's own review, item 1).
+        if (await this.refusedBesideTheBox(write, from, config)) {
           return;
         }
         // Refused BEFORE it is saved: a prompt past 8 KiB, an effort the runtime refuses, the last
@@ -2262,16 +2263,18 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** This window's side as the side registry records it — the one activation stamps (`sideHereOf`). */
   /**
    * A value typed into the OTHER side's CLI-path box that is spelled for this side's OS (`cliPathRefusal`): kept with its
-   * reason and drawn beside the box by the repaint, never a toast (todo/PLAN_paths_per_side.md E4.1). Any write of a
-   * CLI-path box that is not refused forgets that box's refusal. True when the write was refused.
+   * reason and drawn beside the box by the repaint, never a toast (todo/PLAN_paths_per_side.md E4.1). Every write of the
+   * other side's box is refused while this side keeps its own settings: it would land in this side's own `vendors`, which
+   * the other side never reads (E4's own review, item 1). Any write of a CLI-path box that is not refused forgets that
+   * box's refusal. True when the write was refused.
    */
-  private async refusedBesideTheBox(write: Extract<SettingWrite, { kind: 'vendor' }>, from: SurfaceSlot): Promise<boolean> {
+  private async refusedBesideTheBox(write: Extract<SettingWrite, { kind: 'vendor' }>, from: SurfaceSlot, config: vscode.WorkspaceConfiguration): Promise<boolean> {
     const family = cliBoxFamily(write.key, hostFamily());
     if (family === undefined) {
       return false;
     }
     const box = cliBoxKey(write.vendor, family);
-    const reason = cliPathRefusal(write.key, write.value, hostFamily());
+    const reason = cliPathRefusal(write.key, write.value, hostFamily(), writesTheOverlay(config, 'vendors'));
     this.typedRefusals = reason.length === 0 ? withoutRefusal(this.typedRefusals, box) : withRefusal(this.typedRefusals, box, { typed: String(write.value), reason });
     if (reason.length > 0) {
       await afterTheWrite(() => this.snapBack(from))();
@@ -2409,6 +2412,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       besideTheBox: (box, refusal) => {
         this.typedRefusals = refusal === undefined ? withoutRefusal(this.typedRefusals, box) : withRefusal(this.typedRefusals, box, refusal);
       },
+      // A key saved into this side's own settings is one the other side never reads: its typed box is refused (E4's own review, item 1).
+      keptHere: (key) => writesTheOverlay(config, key),
     };
   }
 

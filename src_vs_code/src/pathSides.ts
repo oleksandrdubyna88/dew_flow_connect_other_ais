@@ -31,6 +31,30 @@ export interface PathSides {
 export const OTHER_SIDE_CAPTION = 'Used by the server on that side. This window does not check it.';
 
 /**
+ * What stands where the other side's box would be while this side keeps its own settings (`coai.perSideSettings`, for
+ * that key — `settingsShape.keptPerSide`): a value typed here would be saved into THIS side's own settings, which the
+ * other side never reads (todo/PLAN_paths_per_side.md, E4's own review, item 1). The data directory's group says the
+ * same thing in its own words, since it is read-only at every setting of the switch.
+ */
+export const KEEPS_ITS_OWN = 'This side keeps its own settings — set the other side\'s value from a window on that side.';
+
+/** {@link KEEPS_ITS_OWN} as a line of the other side's group — read-only, no control. */
+export function keepsItsOwnLine(): string {
+  return `<div class="hint keeps-its-own">${escapeHtml(KEEPS_ITS_OWN)}</div>`;
+}
+
+/**
+ * Why a write to the other side's box is refused while this side keeps its own settings — the page draws no such box,
+ * so only a page drawn before the switch moved can post one. Says what was typed: the box it was typed into is gone on
+ * the repaint, and the refusal beside the sentence is the only place the text is still seen.
+ */
+export function keepsItsOwnRefusal(typed: string): string {
+  const what = typed.trim().length === 0 ? 'Clearing the box' : `'${typed.trim()}'`;
+
+  return `${what} was not saved — this side keeps its own settings; set the other side's value from a window on that side.`;
+}
+
+/**
  * The two sides, or `undefined` — ONE field, as every place looked before E4 — when the switch or the registry says one
  * (`twoPathFields`), or when the page is drawn without the registry (the sidebar, a test that names none).
  *

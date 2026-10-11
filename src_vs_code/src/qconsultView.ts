@@ -6,7 +6,7 @@ import { help, segmentedRadio } from './panelControls';
 import { familyLabel, otherSideHere, otherSideNote, type Existence, type PathFamily } from './pathFamily';
 import { NOTHING_ASKED, groupedPaths } from './pathGroups';
 import { groupCaptionId, pathGroupsHtml } from './pathGroupsView';
-import type { PathSides } from './pathSides';
+import { keepsItsOwnLine, type PathSides } from './pathSides';
 import { TYPED_ROOT_KEY } from './typedRoots';
 import { refusalAttributes, refusalNote as typedRefusalNote, rootBoxKey, type TypedRefusal, type TypedRefusals } from './typedRefusals';
 import { type PathFinding, findingFor } from './pathFindings';
@@ -54,6 +54,11 @@ export interface QconsultViewState {
   readonly sides?: PathSides | undefined;
   /** What was typed into the other side's folder box and refused — drawn beside the box. */
   readonly refusals?: TypedRefusals | undefined;
+  /**
+   * Whether `qconsultRoots` is saved into THIS side's own settings (`coai.perSideSettings`, `settingsShape.keptPerSide`):
+   * the other side's typed box is then not drawn — a sentence stands in its place (E4's own review, item 1).
+   */
+  readonly ownSettings?: boolean | undefined;
 }
 
 /** One option of a row's prompt picker: the prompt, and — when this row's runtime cannot run it — why. */
@@ -298,8 +303,19 @@ function rootGroups(settings: QconsultSettings, state: QconsultViewState, sides:
 
   return pathGroupsHtml(QCONSULT_ROOTS_LIST, grouped, sides, (root) => rootLine(root, state), {
     thisSide: `${noneOnThisSide(settings.roots, state.places)}\n${ADD_A_FOLDER}`,
-    otherSide: typedRootBox(sides, state.refusals?.[rootBoxKey(QCONSULT_ROOTS_LIST, 'otherSide')]),
+    otherSide: otherSideAdds(sides, state),
   });
+}
+
+/**
+ * What the other side's group adds after its folders: the typed box — or, while this side keeps its own folders, the
+ * sentence that says why there is none, with a refusal of a write a page drawn before the switch moved still posted.
+ */
+function otherSideAdds(sides: PathSides, state: QconsultViewState): string {
+  const box = rootBoxKey(QCONSULT_ROOTS_LIST, 'otherSide');
+  const refusal = state.refusals?.[box];
+
+  return state.ownSettings === true ? keepsItsOwnLine() + typedRefusalNote(refusal, box) : typedRootBox(sides, refusal);
 }
 
 /** The list the typed box appends to — the one shared setting (design (b) O1: the spelling IS the side). */

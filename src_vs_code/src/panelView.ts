@@ -47,7 +47,7 @@ import {
 } from './commandModels';
 import { chatProvidersFromPresets, type ChatProviderList } from './chatModels';
 import { mainPrompt } from './chatPresets';
-import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, keptPerSide, roleIsOn } from './settingsShape';
 import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
@@ -592,6 +592,8 @@ export function questionConsultantSection(state: PanelState, pickFrom: readonly 
     // The folders in three groups once both sides are known, the typed box's refusal beside it (paths per side E4.2).
     sides: pathSidesOf(state.sides, state.hostFamily ?? hostFamily()),
     refusals: state.typedRefusals,
+    // While this side keeps its own folders the other side's typed box is not drawn (E4's own review, item 1).
+    ownSettings: keptPerSide(state.perSide, 'qconsultRoots'),
   });
 }
 
@@ -1169,6 +1171,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     sides,
     dropped: droppedFor(state.droppedCliPaths ?? [], v),
     refusals: state.typedRefusals,
+    ownSettings: keptPerSide(state.perSide, 'vendors'),
   });
 }
 
@@ -1276,6 +1279,8 @@ export interface CardContext {
   readonly dropped?: DroppedValue | undefined;
   /** Text typed into an other side's box and refused, by box — drawn beside the box (E4.1). */
   readonly refusals?: TypedRefusals | undefined;
+  /** Whether `vendors` is saved into THIS side's own settings — the other side's box is then not drawn (E4's own review, item 1). */
+  readonly ownSettings?: boolean | undefined;
 }
 
 /**

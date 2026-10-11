@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import type { PanelState } from '../panelView';
 import { rootAdded, type RootPlaces } from '../qconsultWrite';
-import { DEFAULTS, settingMessageFrom, settingWrite } from '../settingsShape';
+import { DEFAULTS, keptPerSide, settingMessageFrom, settingWrite } from '../settingsShape';
 import { type SeenSide, type SidesView } from '../sidesSeen';
 import { seenDay } from '../sidesSeenView';
 import { TYPED_ROOT_KEY, typedRootRefusal } from '../typedRoots';
@@ -175,4 +175,37 @@ test('a WSL window draws the Windows folders as the other side\'s', () => {
   assert.deepEqual(rootsIn(group(pane, 'thisSide')), ['/home/me/git']);
   assert.deepEqual(rootsIn(group(pane, 'otherSide')), ['D:\\rsd\\work']);
   assert.match(group(pane, 'otherSide').one((node) => node.tagName === 'LEGEND', 'its legend').text(), /^The other side — Windows \(last seen /u);
+});
+
+const KEEPS_ITS_OWN = 'This side keeps its own settings — set the other side\'s value from a window on that side.';
+
+test('while this side keeps its own settings the other side\'s typed box is not drawn: a read-only sentence stands in its place, the groups and Remove stay', () => {
+  const { pane } = opened(stateOf(STORED, WINDOWS_ASKED, BOTH_FROM_WINDOWS, { perSide: true }));
+  const boxes = pane.find((node) => node.tagName === 'INPUT' && node.dataset['setting'] === TYPED_ROOT_KEY);
+
+  assert.equal(boxes.length, 0, `with coai.perSideSettings on the other side's group draws ${boxes.length} typed box — a folder typed there is saved into THIS side's own settings, which that side never reads, and the page shows it saved`);
+  const theirs = group(pane, 'otherSide');
+  assert.ok(theirs.text().includes(KEEPS_ITS_OWN), 'no read-only sentence stands where the typed box was');
+  assert.deepEqual(rootsIn(theirs), ['/home/me/git'], 'the other side\'s group no longer lists what is stored');
+  assert.equal(theirs.find((node) => node.dataset['command'] === 'qconsultRemoveRoot').length, 1, 'Remove went with the typed box');
+  // What the host asks (`hooks.keptHere`, `writesTheOverlay`) — the same decision, by the switch.
+  assert.equal(keptPerSide(true, 'qconsultRoots'), true, 'with coai.perSideSettings on, qconsultRoots is not called this side\'s own');
+  assert.equal(keptPerSide(false, 'qconsultRoots'), false, 'with coai.perSideSettings off, qconsultRoots is called this side\'s own');
+});
+
+test('a folder refused while this side keeps its own settings is drawn beside the sentence, the typed text said', () => {
+  const reason = '\'/home/me/new\' was not saved — this side keeps its own settings; set the other side\'s value from a window on that side.';
+  const refusals = withRefusal({}, rootBoxKey('qconsultRoots', 'otherSide'), { typed: '/home/me/new', reason });
+  const { pane } = opened(stateOf(STORED, WINDOWS_ASKED, BOTH_FROM_WINDOWS, { perSide: true, typedRefusals: refusals }));
+  const alert = group(pane, 'otherSide').find((node) => node.attrs['role'] === 'alert');
+
+  assert.equal(alert.length, 1, 'a refusal of the other side\'s typed box is not drawn beside where the box was');
+  assert.equal(alert[0]!.text(), reason, 'the refusal beside the sentence is not the host\'s reason');
+});
+
+test('with this side keeping its own settings and ONE side known the folders are one list, exactly as before', () => {
+  const { pane } = opened(stateOf(STORED, WINDOWS_ASKED, undefined, { perSide: true }));
+
+  assert.equal(pane.find((node) => node.dataset['group'] !== undefined).length, 0);
+  assert.ok(!pane.text().includes(KEEPS_ITS_OWN), 'one-field mode says the two-field sentence');
 });

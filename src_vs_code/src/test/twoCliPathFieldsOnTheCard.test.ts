@@ -6,7 +6,7 @@ import { keptKey, type DroppedValue } from '../cliPathKeep';
 import { cliPathRefusal, vendorFieldWrite } from '../cliPathSave';
 import { type PanelState } from '../panelView';
 import { pathForThisSide, type ExecutableSide, type PathFamily } from '../pathFamily';
-import { settingMessageFrom, settingWrite } from '../settingsShape';
+import { keptPerSide, settingMessageFrom, settingWrite } from '../settingsShape';
 import { type SeenSide, type SidesView } from '../sidesSeen';
 import { seenDay } from '../sidesSeenView';
 import { cliBoxKey, withRefusal } from '../typedRefusals';
@@ -181,4 +181,52 @@ test('a previously saved value that is missing draws Restore beside the field, w
     assert.deepEqual(work(page).map((sent) => [sent['command'], sent['id']]), [['restoreCliPath', dropped.key]]);
   }
   assert.equal(opened(stateOf([plain], 'windows', BOTH_FROM_WINDOWS)).tree.find((node) => node.dataset['command'] === 'restoreCliPath').length, 0, 'Restore drawn with nothing missing');
+});
+
+const KEEPS_ITS_OWN = 'This side keeps its own settings — set the other side\'s value from a window on that side.';
+
+test('while this side keeps its own settings the other side\'s CLI box is not drawn: a read-only sentence stands in its place, in the other side\'s group', () => {
+  const { tree } = opened(stateOf([row()], 'windows', BOTH_FROM_WINDOWS, { perSide: true }));
+  const boxes = boxesOf(tree, 'codex-a');
+
+  assert.deepEqual(boxes.map((box) => box.dataset['setting']), ['executablePath'],
+    `with coai.perSideSettings on the card draws ${boxes.length} CLI-path boxes — the other side's saves into THIS side's own settings, which that side never reads, and the page shows it saved`);
+  assert.equal(labelOf(tree, boxes[0]!), 'This side — Windows', 'this side\'s box lost its side');
+  const group = cardOf(tree, 'codex-a').one((node) => node.tagName === 'FIELDSET', 'the other side\'s group');
+  assert.ok(group.text().includes(KEEPS_ITS_OWN), 'no read-only sentence stands where the other side\'s box was');
+  assert.equal(group.find((node) => node.tagName === 'INPUT' || node.tagName === 'BUTTON').length, 0, 'the other side\'s group still offers a control');
+});
+
+test('a CLI path refused while this side keeps its own settings is drawn beside the sentence', () => {
+  const reason = '\'/home/me/.local/bin/codex\' was not saved — this side keeps its own settings; set the other side\'s value from a window on that side.';
+  const refusals = withRefusal({}, cliBoxKey('codex-a', 'posix'), { typed: '/home/me/.local/bin/codex', reason });
+  const { tree } = opened(stateOf([row()], 'windows', BOTH_FROM_WINDOWS, { perSide: true, typedRefusals: refusals }));
+  const alert = cardOf(tree, 'codex-a').find((node) => node.attrs['role'] === 'alert');
+
+  assert.equal(alert.length, 1, 'a refusal of the other side\'s box is not drawn beside where the box was');
+  assert.equal(alert[0]!.text(), reason, 'the refusal beside the sentence is not the host\'s reason');
+});
+
+test('with this side keeping its own settings and ONE side known the card draws one box, exactly as before', () => {
+  const { tree } = opened(stateOf([row()], 'windows', ONLY_WINDOWS, { perSide: true }));
+
+  assert.equal(boxesOf(tree, 'codex-a').length, 1);
+  assert.ok(!cardOf(tree, 'codex-a').text().includes(KEEPS_ITS_OWN), 'one-field mode says the two-field sentence');
+});
+
+test('the host refuses the other side\'s box while this side keeps its own settings, whatever was typed; this side\'s box and shared settings are not touched', () => {
+  const refuse = cliPathRefusal;
+  const refused = /^'\/home\/me\/\.local\/bin\/codex' was not saved — this side keeps its own settings; set the other side's value from a window on that side\.$/u;
+
+  assert.match(refuse('executablePath.posix', '/home/me/.local/bin/codex', 'windows', true), refused,
+    'a WSL path typed into the WSL / Linux box of a Windows window that keeps its own settings would be saved into this side\'s own settings');
+  assert.match(refuse('executablePath.windows', 'C:\\tools\\codex.exe', 'posix', true), /^'C:\\tools\\codex\.exe' was not saved — this side keeps its own settings/u, 'the mirror, from a WSL window');
+  assert.match(refuse('executablePath.posix', '  ', 'windows', true), /^Clearing the box was not saved — this side keeps its own settings/u, 'clearing the other side\'s box is a write too');
+  assert.equal(refuse('executablePath', 'C:\\tools\\codex.exe', 'windows', true), '', 'this side\'s own box was refused');
+  assert.equal(refuse('model', 'gpt', 'windows', true), '', 'a field that is no CLI path was refused');
+  assert.equal(refuse('executablePath.posix', '/home/me/.local/bin/codex', 'windows', false), '', 'shared settings refuse a WSL path in the WSL box');
+
+  // What the provider hands in — `writesTheOverlay(config, 'vendors')` — by the switch.
+  assert.equal(keptPerSide(true, 'vendors'), true, 'with coai.perSideSettings on, vendors is not called this side\'s own');
+  assert.equal(keptPerSide(false, 'vendors'), false, 'with coai.perSideSettings off, vendors is called this side\'s own');
 });

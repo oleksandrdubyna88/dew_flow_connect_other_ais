@@ -7,8 +7,8 @@ import { familyLabel, otherSideNote, storedForThisSide, type PathFamily } from '
 import type { PathFinding } from './pathFindings';
 import { markAttributes, markClass, markNote, stableId } from './pathMark';
 import { VENDOR_EXECUTABLE } from './pathSettings';
-import { otherSideFieldset, thisSideCaption, type PathSides } from './pathSides';
-import { cliBoxKey, refusalAttributes, refusalNote, type TypedRefusals } from './typedRefusals';
+import { keepsItsOwnLine, otherSideFieldset, thisSideCaption, type PathSides } from './pathSides';
+import { cliBoxKey, refusalAttributes, refusalNote, type TypedRefusal, type TypedRefusals } from './typedRefusals';
 import type { Vendor } from './vendors';
 
 /**
@@ -21,6 +21,10 @@ import type { Vendor } from './vendors';
  * saves only that side's member (`savedCliPath`). A path of this side's OS typed into it is refused by the host
  * (`cliPathRefusal`) and drawn BESIDE the box with what was typed (`typedRefusals.ts`). While a previously saved per-side
  * value is missing (`CliPathKeeper.dropped`), **Restore** sits under the field — the panel button E3's notice duplicates.</p>
+ *
+ * <p>While this side keeps its own settings (`coai.perSideSettings`, so `vendors` is saved into this side's own copy) the
+ * other side's box is NOT drawn: what it saved would be read by no one on that side. A read-only sentence stands in its
+ * place, and the host refuses a write a page drawn before the switch moved still posts (E4's own review, item 1).</p>
  */
 
 /** What the CLI-path field(s) are drawn from, beside the row. */
@@ -37,6 +41,11 @@ export interface CliPathFacts {
   readonly dropped?: DroppedValue | undefined;
   /** What was typed into an other side's box and refused, by box. */
   readonly refusals?: TypedRefusals | undefined;
+  /**
+   * Whether `vendors` is saved into THIS side's own settings (`coai.perSideSettings`, `settingsShape.keptPerSide`): the
+   * other side's box is then not drawn — a sentence stands in its place (E4's own review, item 1).
+   */
+  readonly ownSettings?: boolean | undefined;
 }
 
 /** The CLI-path field(s) of a row whose runtime runs a CLI here. */
@@ -73,7 +82,10 @@ function otherSidesNote(family: PathFamily | undefined): string {
     : `<div class="hint path-other-side">${escapeHtml(otherSideNote(family === 'windows', VENDOR_EXECUTABLE))}</div>`;
 }
 
-/** The other side's box, in its group: the value that side's field holds, or the text a refusal kept. */
+/**
+ * The other side's group: its box — or, while this side keeps its own settings, the sentence that says why there is none,
+ * with a refusal of a write a page drawn before the switch moved still posted (E4's own review, item 1).
+ */
 function otherSideField(vendor: Vendor, cli: CliPathFacts): string {
   if (cli.sides === undefined) {
     return '';
@@ -82,15 +94,26 @@ function otherSideField(vendor: Vendor, cli: CliPathFacts): string {
   const box = cliBoxKey(vendor.id, other);
   const refusal = cli.refusals?.[box];
   const id = boxId(vendor.id, other);
-  const caption = `${id}-caption`;
+  const body = cli.ownSettings === true ? keepsItsOwnLine() + refusalNote(refusal, box) : otherSideBox(vendor, other, refusal, id);
+
+  return `\n  ${otherSideFieldset(cli.sides, captionOf(id), body)}`;
+}
+
+/** The id of the other side's caption, unescaped — the box points at it. */
+function captionOf(id: string): string {
+  return `${id}-caption`;
+}
+
+/** The other side's box: the value that side's field holds, or the text a refusal kept. */
+function otherSideBox(vendor: Vendor, other: PathFamily, refusal: TypedRefusal | undefined, id: string): string {
+  const box = cliBoxKey(vendor.id, other);
   const attributes = refusalAttributes(refusal, box);
   const value = refusal === undefined ? storedForThisSide(vendor, other) : refusal.typed;
-  const field = `<div class="field"><label for="${escapeHtml(id)}">CLI path on ${familyLabel(other)}</label>`
+
+  return `<div class="field"><label for="${escapeHtml(id)}">CLI path on ${familyLabel(other)}</label>`
     + `<input type="text" id="${escapeHtml(id)}" data-setting="${otherSideCliKey(other)}" data-vendor="${escapeHtml(vendor.id)}"`
     + ` placeholder="CLI path on that side — empty means that side looks it up on PATH" value="${escapeHtml(value)}"`
-    + ` aria-describedby="${escapeHtml(caption)}${attributes.describedBy}"${attributes.invalid}>${refusalNote(refusal, box)}</div>`;
-
-  return `\n  ${otherSideFieldset(cli.sides, caption, field)}`;
+    + ` aria-describedby="${escapeHtml(captionOf(id))}${attributes.describedBy}"${attributes.invalid}>${refusalNote(refusal, box)}</div>`;
 }
 
 /** **Restore** and what it puts back — while a previously saved value of the row is missing. */

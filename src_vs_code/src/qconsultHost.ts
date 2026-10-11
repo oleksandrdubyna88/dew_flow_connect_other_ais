@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
 import { notify } from './notify';
 import { RootExistence, directoryAt, systemDriveOf } from './pathFamily';
+import { keepsItsOwnRefusal } from './pathSides';
 import { askPerson } from './personWait';
 import { type QconsultSettings, qconsultSettingsFrom } from './qconsultSettings';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
@@ -47,6 +48,11 @@ interface TypedVerdict {
 
 const NOTHING_TYPED: TypedVerdict = {};
 
+/** A typed root while this side keeps its own folders: refused, whatever it says — an empty box saves nothing either. */
+function keptHere(root: string): TypedVerdict {
+  return root.length === 0 ? NOTHING_TYPED : { refusal: { typed: root, reason: keepsItsOwnRefusal(root) } };
+}
+
 /** What a write is handed by the panel: the side-aware reader, the vendor rows, and how to store or refuse. */
 export interface QconsultWriteHooks {
   readonly read: (section: string) => unknown;
@@ -57,6 +63,8 @@ export interface QconsultWriteHooks {
   readonly snapBack: () => Promise<void>;
   /** Keeps (or forgets, with undefined) what was typed into a box and refused, so the next paint draws it beside the box. */
   readonly besideTheBox: (box: string, refusal: TypedRefusal | undefined) => void;
+  /** Whether a key is saved into THIS side's own settings (`sideConfig.writesTheOverlay`) — which the other side never reads. */
+  readonly keptHere: (key: string) => boolean;
 }
 
 /**
@@ -142,12 +150,20 @@ export class QconsultHost {
    * A folder typed into the OTHER side's box (todo/PLAN_paths_per_side.md E4.2): admitted only when this window would
    * group it as the other side's (`typedRootRefusal`, the disk asked only at this machine's own spelling of it) and then
    * appended to the one shared list; refused BESIDE the box — the text kept, the reason under it — never as a toast.
+   *
+   * <p>While this side keeps its own folders (`coai.perSideSettings`) every typed root is refused before the disk is asked:
+   * it would be saved into THIS side's own settings, which the other side never reads (E4's own review, item 1). The page
+   * draws no typed box then; only a page drawn before the switch moved can post one.</p>
    */
   private async typedRoot(value: unknown, settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {
     const root = typeof value === 'string' ? value.trim() : '';
-    const verdict = root.length === 0 ? NOTHING_TYPED : await this.admitted(root, settings);
+    const verdict = hooks.keptHere('qconsultRoots') ? keptHere(root) : await this.typedVerdict(root, settings);
     hooks.besideTheBox(TYPED_BOX, verdict.refusal);
     await (verdict.roots === undefined ? hooks.snapBack() : this.addTyped(verdict.roots, hooks));
+  }
+
+  private async typedVerdict(root: string, settings: QconsultSettings): Promise<TypedVerdict> {
+    return root.length === 0 ? NOTHING_TYPED : this.admitted(root, settings);
   }
 
   private async admitted(root: string, settings: QconsultSettings): Promise<TypedVerdict> {
