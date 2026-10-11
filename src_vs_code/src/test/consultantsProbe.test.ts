@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { CONSULTANTS_CAP_MS, CONSULTANTS_TTL_MS, ConsultantsProbe, type ConsultantsProbeHost } from '../consultantsProbe';
+import { coaiDataDir } from '../dataDir';
+import { forgetFindingsBoard, publishFindings } from '../findingsBoard';
 
 /**
  * `coai-mcp --consultants`, asked by a render and NEVER awaited by one (E5.4).
@@ -59,6 +61,26 @@ function kit(): Kit {
     },
   };
 }
+
+test('while the NAMED data root is missing the survey is not run — the server would write consultants.json and create the folder', async () => {
+  // E5.0's policy (todo/PLAN_paths_per_side.md): nothing this window starts creates a missing named data root. The survey
+  // is a writer by proxy — coai-mcp --consultants writes `consultations/health/consultants.json` with a CreateDirectory.
+  const one = kit();
+  const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+  forgetFindingsBoard();
+  publishFindings([{ key: 'coai.dataDirectory', place: 'setup/mcp', value: coaiDataDir(), family: process.platform === 'win32' ? 'windows' : 'posix', state: 'missing', owner: '' }]);
+  try {
+    assert.deepEqual(one.probe.shown(), { kind: 'asking' });
+    await tick();
+    await tick();
+    assert.equal(one.box.runs.length, 0, 'the survey was spawned while the data folder it writes into is missing — the server creates it');
+    const shown = one.probe.shown();
+    assert.equal(shown.kind, 'unanswered', 'the tab is not told why there is no survey');
+    assert.match(shown.kind === 'unanswered' ? shown.why : '', /Nothing is written under it until it exists/u);
+  } finally {
+    forgetFindingsBoard();
+  }
+});
 
 test('with no server installed nothing is spawned, and the tab says so', () => {
   const one = kit();

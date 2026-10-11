@@ -39,8 +39,17 @@ export interface PathSetting {
    */
   readonly mustExist: boolean;
   readonly saidBy: SaidBy;
-  /** Where on the Settings page the value is drawn, or empty when no page draws it. */
+  /**
+   * Where on the Settings page the value is drawn — a PLACE of `catalogPlaces.ts` (`models`, `consultants/qconsult`,
+   * `setup/mcp`), so the tab strip can count the findings under each tab (E5.5) — or empty when no page draws it.
+   * `placeLabel` names it in a sentence.
+   */
   readonly place: string;
+  /**
+   * The key the server's settings file carries the value under, when coai-mcp reads it — what its `settingProblems`
+   * name a problem by (E5.2) — or empty for a setting the server never sees.
+   */
+  readonly wireKey: string;
   /** How the value is named in a sentence — `folder`, `CLI`, `data folder`. */
   readonly noun: string;
   /** What the other side does with it, said in the "the other side's" note — `its server reads it there`. */
@@ -59,7 +68,7 @@ export interface PathSetting {
 /** A CLI path in a legacy definition: no page draws it, and the catalog migration retires it. */
 function legacyCli(id: string, setting: string): PathSetting {
   return {
-    id, setting, kind: 'file', mustExist: true, saidBy: 'nobody', place: '', noun: 'CLI',
+    id, setting, kind: 'file', mustExist: true, saidBy: 'nobody', place: '', wireKey: '', noun: 'CLI',
     there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: true,
   };
 }
@@ -67,26 +76,26 @@ function legacyCli(id: string, setting: string): PathSetting {
 /** The question consultant's disk roots — the setting the rule was first written for. */
 export const QCONSULT_ROOTS: PathSetting = {
   id: 'coai.qconsultRoots', setting: 'coai.qconsultRoots', kind: 'folderList', mustExist: true, saidBy: 'server',
-  place: 'Consultants › Question consultant', noun: 'folder', there: 'its server reads it there', instead: '', asksDisk: true,
+  place: 'consultants/qconsult', wireKey: 'COAI_QCONSULT_ROOTS', noun: 'folder', there: 'its server reads it there', instead: '', asksDisk: true,
 };
 
 /** A reviewer row's CLI — the one scalar path still drawn, on its Models card. */
 export const VENDOR_EXECUTABLE: PathSetting = {
   id: 'coai.vendors[].executablePath', setting: 'coai.vendors', kind: 'file', mustExist: true, saidBy: 'extension',
-  place: 'Models', noun: 'CLI', there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: true,
+  place: 'models', wireKey: 'COAI_VENDORS', noun: 'CLI', there: 'the server on that side runs it', instead: ' and looks the CLI up on PATH', asksDisk: true,
 };
 
 /** Another installation's data folder, whose questions this window also answers. */
 export const WATCHED_DIRECTORIES: PathSetting = {
   id: 'coai.alsoWatchDataDirectories', setting: 'coai.alsoWatchDataDirectories', kind: 'folderList', mustExist: true,
-  saidBy: 'extension', place: 'Setup › MCP server', noun: 'data folder', there: 'a window on that side answers its questions',
+  saidBy: 'extension', place: 'setup/mcp', wireKey: '', noun: 'data folder', there: 'a window on that side answers its questions',
   instead: '', asksDisk: false,
 };
 
 /** Where this window keeps its data — the SHARED layer is the one another side's value can reach. */
 export const DATA_DIRECTORY: PathSetting = {
   id: 'coai.dataDirectory', setting: 'coai.dataDirectory', kind: 'folder', mustExist: true, saidBy: 'extension',
-  place: 'Setup › MCP server', noun: 'data folder', there: 'a window on that side keeps its data there',
+  place: 'setup/mcp', wireKey: 'COAI_DATA_DIR', noun: 'data folder', there: 'a window on that side keeps its data there',
   instead: ' and uses the next choice', asksDisk: false,
 };
 

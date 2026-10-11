@@ -4,6 +4,9 @@ import { escapeHtml } from './escapeHtml';
 import type { HelpKey } from './help';
 import { help, segmentedRadio } from './panelControls';
 import { otherSideHere, otherSideNote } from './pathFamily';
+import { type PathFinding, findingFor } from './pathFindings';
+import { markAttributes, markClass, markNote } from './pathMark';
+import { QCONSULT_ROOTS } from './pathSettings';
 import { MAX_ACTIVE_ROWS, type QconsultSettings, type QuestionRowSetting, qconsultSkewNote } from './qconsultSettings';
 import {
   type QuestionPromptView,
@@ -38,6 +41,8 @@ export interface QconsultViewState {
   readonly promptOverrides?: Readonly<Record<string, string>> | undefined;
   /** Where a disk root may not be on this machine; absent draws no refusal beside a root. */
   readonly places?: RootPlaces | undefined;
+  /** The paths of this side the watch found missing or unanswerable (E5.4); absent draws no mark beside a root. */
+  readonly findings?: readonly PathFinding[] | undefined;
   /** The catalog rows a question row picks from — those ticked "question consultant" among them (PLAN_one_model_catalog.md E4.2). */
   readonly pickFrom: readonly Vendor[];
 }
@@ -255,7 +260,7 @@ function promptAction(prompt: QuestionPromptView, overridden: boolean): string {
 function rootsBlock(settings: QconsultSettings, state: QconsultViewState): string {
   const listed = settings.roots.length === 0
     ? '<div class="hint">No folder yet — a disk row reads nothing until one is here.</div>'
-    : settings.roots.map((root) => rootHtml(root, state.places)).join('\n');
+    : settings.roots.map((root) => rootHtml(root, state.places, findingFor(state.findings ?? [], QCONSULT_ROOTS.id, root))).join('\n');
 
   return `<h3>${help('qconsultRoots')}Folders a disk row may read</h3>
 ${listed}${noneOnThisSide(settings.roots, state.places)}
@@ -265,10 +270,11 @@ ${listed}${noneOnThisSide(settings.roots, state.places)}
 
 /**
  * A stored root's line: the folder, its Remove, and what this side makes of it — the other side's folder SAID (the
- * server skips it, operator 2026-10-09), a refused one drawn as broken.
+ * server skips it, operator 2026-10-09), a refused one drawn as broken, a MISSING one of this side marked bright
+ * (E5.4: the line takes the mark's class and `aria-invalid`, and the sentence under it).
  */
-function rootHtml(root: string, places: RootPlaces | undefined): string {
-  return `<div class="field qconsult-root"><code>${escapeHtml(root)}</code> <button type="button" class="link" data-command="qconsultRemoveRoot" data-id="${escapeHtml(root)}">Remove</button>${rootNote(root, places)}</div>`;
+function rootHtml(root: string, places: RootPlaces | undefined, missing: PathFinding | undefined): string {
+  return `<div class="field qconsult-root${markClass(missing)}"${markAttributes(missing)}><code>${escapeHtml(root)}</code> <button type="button" class="link" data-command="qconsultRemoveRoot" data-id="${escapeHtml(root)}">Remove</button>${markNote(missing)}${rootNote(root, places)}</div>`;
 }
 
 function rootNote(root: string, places: RootPlaces | undefined): string {

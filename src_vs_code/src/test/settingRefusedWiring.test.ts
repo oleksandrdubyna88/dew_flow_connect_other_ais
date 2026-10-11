@@ -151,7 +151,7 @@ test('the repaint is in a then BEFORE the catch, never a finally', () => {
   assert.doesNotMatch(queue, /\.finally\(/u, 'a finally would repaint on the failure path too');
 });
 
-test('the three doors nobody waits for keep their promise, and the one that IS waited on does not', () => {
+test('the four doors nobody waits for keep their promise, and the one that IS waited on does not', () => {
   // Over a hundred call sites write `void notify(...)`, and the funnel exists so that none of them
   // has to remember anything. But `void` on a promise is not "ignore the result", it is "nobody
   // will ever hear about a rejection": `coaiDataDir()` throws on a COAI_DATA_SIDE that is set and
@@ -168,8 +168,8 @@ test('the three doors nobody waits for keep their promise, and the one that IS w
 
   assert.equal(
     funnel.split('await kept(async () => {').length - 1,
-    3,
-    'the three doors that return nothing - notify, notifyOnce and notifyThen - must ALL be netted',
+    4,
+    'the four doors that return nothing - notify, notifyOnce, notifyThen and notifyOnceThen - must ALL be netted',
   );
   assert.doesNotMatch(
     funnel,

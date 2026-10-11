@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
+import { heldNotices } from './findingsBoard';
 import {
   NOTIFICATIONS_FILE,
   SERVER_NOTICES_FILE,
@@ -217,6 +218,8 @@ export class NotificationsPanel {
       generation: this.generation,
       notice: this.notice,
       waitedSeconds: Math.round(READ_CEILING_MS / 1000),
+      // The notices this window holds in memory while its named data folder is missing (paths per side, E5.0).
+      held: heldNotices(),
     });
     // Before the html, so a `shown` posted the instant it loads cannot find a stale window.
     this.loaded = snapshot.loaded;

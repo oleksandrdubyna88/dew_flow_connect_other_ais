@@ -34,7 +34,8 @@ public sealed class TheWordListIsLoadedBeforeTheTransportTests
     /// Where <c>args[0]</c> is read. <c>Main</c> itself only wraps this in the last-resort catch since
     /// story 3.2 — the catch is not a startup obligation, so it may stand in front of <c>args[0]</c>.
     /// </summary>
-    private const string Dispatch = "private static async Task<int> RunAsync(string[] args)";
+    // `internal` since E5.7: `AReaderModeNeverMakesTheDataDirectoryTests` drives every reader mode through this one dispatch.
+    private const string Dispatch = "internal static async Task<int> RunAsync(string[] args)";
 
     private static readonly string[] Program = File.ReadAllLines(Path.Combine(
         NoSourceFileCarriesAControlByteTests.RepositoryRoot(), "src_mcp", "src", "Program.cs"));

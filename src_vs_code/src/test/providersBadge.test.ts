@@ -205,3 +205,30 @@ test('a binary that was never asked says nothing — that section already says t
 
   assert.ok(!html.includes('could not report its reviewers'));
 });
+
+test('the problems the server names by kind are read whole — key, kind and value — and an older server\'s answer reads as none (paths per side, E5.2)', () => {
+  // The operator's case: a deleted root was one sentence in `unrecognised`, its key and value lost on the wire. The
+  // structured list carries them beside the same sentence, so the page can mark the folder and the toast can drop the line.
+  const notes = parseProviderNotes(JSON.stringify({
+    providers: [],
+    unrecognised: ["COAI_QCONSULT_ROOTS: 'D:\\old-project' is not a directory on this machine — a disk row needs a folder that exists"],
+    settingProblems: [
+      { key: 'COAI_QCONSULT_ROOTS', kind: 'missing-folder', value: 'D:\\old-project', sentence: "COAI_QCONSULT_ROOTS: 'D:\\old-project' is not a directory on this machine — a disk row needs a folder that exists" },
+      { key: 'COAI_QCONSULT_ROOTS', kind: 'unreadable-folder', value: 'Z:\\share', sentence: '' },
+      { key: '', kind: 'missing-folder', value: 'x' },
+      { key: 'COAI_QCONSULT_ROOTS', kind: 'missing-folder' },
+      'not a row',
+      null,
+    ],
+  }));
+
+  assert.deepEqual(notes.settingProblems, [
+    { key: 'COAI_QCONSULT_ROOTS', kind: 'missing-folder', value: 'D:\\old-project', sentence: "COAI_QCONSULT_ROOTS: 'D:\\old-project' is not a directory on this machine — a disk row needs a folder that exists" },
+    { key: 'COAI_QCONSULT_ROOTS', kind: 'unreadable-folder', value: 'Z:\\share', sentence: '' },
+  ], 'a row missing its key, kind or value is dropped, never kept as a half');
+  assert.equal(notes.unrecognised.length, 1, 'the sentence is still read for an older page');
+
+  assert.deepEqual(parseProviderNotes('{"providers":[]}').settingProblems, [], 'a server before the field names no problems');
+  assert.deepEqual(parseProviderNotes('{"providers":[],"settingProblems":"no"}').settingProblems, [], 'a field that is not a list is none');
+  assert.deepEqual(NO_NOTES.settingProblems, []);
+});

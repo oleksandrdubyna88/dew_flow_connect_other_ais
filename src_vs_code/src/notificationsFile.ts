@@ -1,7 +1,9 @@
 import { FileHandle, open, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { dataRootSettled, holdNotice, isAboutAMissingPath, missingRootRefusal, refusedDataRoot } from './findingsBoard';
 import { appendLine, readLedger } from './jsonlLedger';
 import { NotificationRecord, notificationLine, parseNotifications } from './notifications';
+import type { PathFinding } from './pathFindings';
 
 /**
  * The notifications ledgers' world-facing half: two files, appended to and read back.
@@ -59,17 +61,44 @@ export function serverNoticesPath(dataDir: string): string {
  * true of a promise nobody waits for: a host that dies in between showed a message the ledger never
  * had, which is this feature's own definition of the defect.</p>
  */
-export function recordNotification(
+export async function recordNotification(
   dataDir: string,
   record: NotificationRecord,
   onFailure?: (reason: unknown) => void,
-): Promise<void> {
-  return appendLine(
+): Promise<LedgerOutcome> {
+  // The storage-write policy (todo/PLAN_paths_per_side.md E5.0): while this window's NAMED data root is missing, this
+  // ledger writes nothing under it — the append's own mkdir would create the folder the notice reports missing, and
+  // hide the condition. The notice about a missing path is HELD in memory; anything else is a lost record, counted into
+  // the gap exactly as a disk that refused would be. Decided once the data root has been asked about, never before.
+  await dataRootSettled();
+  const missing = refusedDataRoot(dataDir);
+  if (missing !== undefined) {
+    return heldOrLost(record, missing, onFailure);
+  }
+  let landed = true;
+  await appendLine(
     notificationsPath(dataDir),
     notificationLine(record),
     'a notification',
-    { chain: 'notifications', ...(onFailure === undefined ? {} : { onFailure }) },
+    { chain: 'notifications', onFailure: (reason) => { landed = false; onFailure?.(reason); } },
   );
+
+  return landed ? 'landed' : 'lost';
+}
+
+/** What became of one record: on disk, held in memory for this window run, or lost — and counted. */
+export type LedgerOutcome = 'landed' | 'held' | 'lost';
+
+/** A record the ledger would not take while the data root is missing: the missing-path notice is held, anything else lost. */
+function heldOrLost(record: NotificationRecord, missing: PathFinding, onFailure?: (reason: unknown) => void): LedgerOutcome {
+  if (isAboutAMissingPath(record)) {
+    holdNotice(record);
+
+    return 'held';
+  }
+  onFailure?.(missingRootRefusal(missing));
+
+  return 'lost';
 }
 
 /** Everything this side ever recorded, or nothing at all. */

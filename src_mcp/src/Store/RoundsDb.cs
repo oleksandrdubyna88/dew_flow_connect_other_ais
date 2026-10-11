@@ -64,22 +64,8 @@ public sealed class RoundsDb : IDisposable
         try
         {
             Directory.CreateDirectory(dataDir);
-            // Pooling off: a pooled connection keeps the file handle open after Dispose, and this
-            // opens for one write and closes. It cost a test suite nine red cleanups to learn.
-            //
-            // The busy timeout is stated rather than assumed, and what it is worth was MEASURED
-            // rather than argued: the gate said a concurrent write would return SQLITE_BUSY at once
-            // and a best-effort write would swallow it. It does not — with a second server holding
-            // a write transaction, the test passes with this setting and without it, because
-            // Microsoft.Data.Sqlite already retries a busy database until CommandTimeout (30 s).
-            // So this is a statement of intent that outlives that default, not the fix it looked
-            // like; the loss the gate feared does not reproduce.
-            var db = new SqliteConnection(
-                $"Data Source={Path.Combine(dataDir, FileName)};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
-            db.Open();
-            Migrate(db);
 
-            return new RoundsDb(db, time ?? TimeProvider.System);
+            return Connect(dataDir, "ReadWriteCreate", time);
         }
         catch (Exception e)
         {
@@ -90,6 +76,72 @@ public sealed class RoundsDb : IDisposable
 
             return null;
         }
+    }
+
+    /// <summary>
+    /// What the disk says about the database file, three-valued — what a reading mode asks before it opens: there, CONFIRMED
+    /// absent, or <see cref="RootPresence.Unknown"/> when it could not tell (access denied, a sharing violation, an I/O
+    /// failure). Only a confirmed absence is answered empty; <c>File.Exists</c>, which this replaced, answers false for all
+    /// three alike, so a database a reader merely could not read was reported as no material (the E5 code round). Through
+    /// <see cref="QuestionRoots.PresenceOf(string, Func{string, FileAttributes}, bool)"/> — the one exception mapping, asked
+    /// for a FILE — over an injected attribute read (<c>File.GetAttributes</c> in production).
+    /// </summary>
+    public static RootPresence PresenceOf(string dataDir, Func<string, FileAttributes> attributesOf) =>
+        QuestionRoots.PresenceOf(Path.Combine(dataDir, FileName), attributesOf, wantsDirectory: false);
+
+    /// <summary>
+    /// Opens (and migrates) the database ONLY if its file is already there — for a mode that reads — or answers null.
+    /// </summary>
+    /// <remarks>
+    /// <para>No <c>Directory.CreateDirectory</c> and no create mode: a mode the extension launches to READ must never make
+    /// the data directory it reads (todo/PLAN_paths_per_side.md E5.7, D3). <see cref="Open"/>'s first line makes it, so
+    /// <c>--bugs-json</c>, <c>--pairs-json</c> and the three pair reads created a NAMED data directory that was missing —
+    /// into a bare mount point when a drive was not mounted — and hid the condition the extension reports. The caller asks
+    /// <see cref="PresenceOf"/> first and answers empty only when the file is CONFIRMED absent; a file removed between that
+    /// question and this open — or one the disk would not describe — fails to open here (<c>Mode=ReadWrite</c> never
+    /// creates) and is reported, never recreated.</para>
+    /// </remarks>
+    public static RoundsDb? OpenExisting(string dataDir, Serilog.ILogger log, TimeProvider? time = null)
+    {
+        try
+        {
+            return Connect(dataDir, "ReadWrite", time);
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "the rounds database could not be opened for reading");
+
+            return null;
+        }
+    }
+
+    /// <summary>The one connection both opens make, in the SQLite <paramref name="mode"/> each needs, migrated.</summary>
+    private static RoundsDb Connect(string dataDir, string mode, TimeProvider? time)
+    {
+        // Pooling off: a pooled connection keeps the file handle open after Dispose, and this
+        // opens for one write and closes. It cost a test suite nine red cleanups to learn.
+        //
+        // The busy timeout is stated rather than assumed, and what it is worth was MEASURED
+        // rather than argued: the gate said a concurrent write would return SQLITE_BUSY at once
+        // and a best-effort write would swallow it. It does not — with a second server holding
+        // a write transaction, the test passes with this setting and without it, because
+        // Microsoft.Data.Sqlite already retries a busy database until CommandTimeout (30 s).
+        // So this is a statement of intent that outlives that default, not the fix it looked
+        // like; the loss the gate feared does not reproduce.
+        var db = new SqliteConnection(
+            $"Data Source={Path.Combine(dataDir, FileName)};Mode={mode};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
+        try
+        {
+            db.Open();
+            Migrate(db);
+        }
+        catch
+        {
+            db.Dispose();
+            throw;
+        }
+
+        return new RoundsDb(db, time ?? TimeProvider.System);
     }
 
     /// <summary>

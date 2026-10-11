@@ -42,6 +42,8 @@ import { ImportReport, describe as describeImport, importLegacyTabs, importSucce
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
+import { onDataRootBack, onFindings, refuseUnderMissingRootOnceSettled } from './findingsBoard';
+import { startPathWatch } from './pathWatchHost';
 import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
@@ -61,7 +63,8 @@ import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './rounds
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
 import { asText } from './asText';
-import { writeFileAtomically } from './atomicFile';
+import { renameWithRetry, writeFileAtomically } from './atomicFile';
+import { makeDataDirectory, refusalError } from './dataDirMaker';
 import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRun, serverRunAt } from './roundsDbRead';
@@ -117,6 +120,10 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // And how this host asks the disk whether a CLI path of the other OS's spelling is a file HERE (paths per side, E1.2):
   // before this every such path is "unknown" and kept. Installed, not imported, because the page's modules may not reach node:fs.
   useFileProbe(fileAt(statSync));
+  // The paths of THIS side, asked of the disk and said when missing (paths per side, E5.3) — started here, before the
+  // settings mirror below writes the data directory, because the mirror and every ledger ask the watch's answer first
+  // (E5.0): a named data root that is missing is never created by them.
+  const pathWatch = startPathWatch(context);
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
@@ -278,6 +285,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   // Made before the sidebar, which hands the review page's bugs to it (issue #487).
   const chatPanels = new ChatPanels();
+  // The page draws what the watch publishes, and repaints when it changes; the server's answer about the roots reaches
+  // the watch through the panel's probe (paths per side, E5.3 / E5.6).
+  onFindings(() => { void panelRef.render(); });
   const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
     const question = watcher.openQuestions.find((q) => q.id === id);
     if (question !== undefined) {
@@ -302,6 +312,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
       mirrorSettings(mirroring);
     }
   });
+  // What coai-mcp said about its settings by kind reaches the path watch through the panel's probe (paths per side, E5.6).
+  panel.onServerProblems = (problems) => { pathWatch.serverSaid(problems); };
   // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
   context.subscriptions.push({ dispose: () => { panel.dispose(); } });
   // A Team-server answer landing repaints the rounds log too, not only the sidebar — the page is where the company
@@ -386,8 +398,13 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
     // A catalog field crosses only when the binary lists it; what it last settled on, never a spawn per write.
     () => features.known(),
+    // Never written into a NAMED data root that is missing (E5.7): the watch's answer, waited for (bounded).
+    () => pathWatch.dataRootMissing(),
   );
   mirrorSettings(settingsSync);
+  // The named data root came back — made again, or its drive mounted — and a probe CONFIRMED it: the mirror, which stood
+  // aside (`no-data-root`), writes now, with no settings edit (E5.7, risk item F).
+  onDataRootBack(() => { mirrorSettings(settingsSync); });
   // When each new control of the Settings page was first seen here, so its "new" mark lasts a week (newTags.ts).
   void context.globalState.update(FIRST_SEEN_KEY, seenNow(context.globalState.get(FIRST_SEEN_KEY), NEW_CONTROLS, Date.now()));
   // The sides this profile has been used on (todo/PLAN_paths_per_side.md E2.2): this side stamped at most once a day,
@@ -557,6 +574,8 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
         // Re-read WHERE first: `mirrorSettings` writes the settings file into the data directory, so
         // a changed `coai.dataDirectory` has to be in effect before that write chooses its path.
         storageReadsThisSide(context);
+        // And the paths are asked of the disk again, the data root among them, before the mirror decides (E5.3).
+        pathWatch.forget();
         mirrorSettings(settingsSync);
         void panel.render();
       }
@@ -892,6 +911,7 @@ function tellTheDeletions(outcome: SyncOutcome): void {
 /** What a person is told, per outcome. `STOOD_DOWN` is shared, because a page decides on it. */
 const REASONS: Readonly<Record<string, string>> = {
   'stood-down': STOOD_DOWN,
+  'no-data-root': 'the data folder this window names does not exist, so nothing is written there until it does',
   busy: 'another window kept the settings file busy',
   failed: 'the settings file could not be written',
 };
@@ -1016,14 +1036,16 @@ function readCoaiConfiguration(context: vscode.ExtensionContext) {
  * after it.</p>
  */
 async function writeSettingsFile(json: string): Promise<void> {
-  await vscode.workspace.fs.createDirectory(dataDir());
+  await createDataDirectory();
   // Written beside it and renamed over it, the way an answered escalation already is. `writeFile`
   // truncates before it fills, so a host killed between the two leaves every other window — and the
   // server — reading a truncated file. That is worse than the revert this epic is about, and it
   // cannot be recovered from, because the original is gone. Raised on story 2.1's plan round.
   const target = vscode.Uri.joinPath(dataDir(), 'settings.json');
   const temp = vscode.Uri.joinPath(dataDir(), `settings.json.${process.pid}.tmp`);
-  await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(json));
+  // Node's write and rename, never VS Code's: those make missing parent folders, so a named data root removed after
+  // `createDataDirectory` asked for it was made again by the write (todo/PLAN_paths_per_side.md E5.7, risk item F).
+  await fsp.writeFile(temp.fsPath, json, 'utf8');
 
   // The last thing before the rename: are we still the holder? A process suspended past the stale
   // window — a laptop closing mid-write is the ordinary way — is broken as dead by another window,
@@ -1031,14 +1053,17 @@ async function writeSettingsFile(json: string): Promise<void> {
   // narrows that to the microseconds between this check and the rename, which is as far as it can be
   // taken without a lease that renews. Raised on this story's plan round.
   if (held.length > 0 && !(await lockHolds(held))) {
-    await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
+    await fsp.rm(temp.fsPath, { force: true }).catch(() => undefined);
     throw new Error(
       'the settings lock was taken over while this write was in flight, so these settings are not on '
         + 'disk; another window is writing and an attempt is scheduled',
     );
   }
 
-  await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+  await renameWithRetry(temp.fsPath, target.fsPath).catch(async (reason: unknown) => {
+    await fsp.rm(temp.fsPath, { force: true }).catch(() => undefined);
+    throw reason;
+  });
 }
 
 /**
@@ -1060,7 +1085,7 @@ async function writeSettingsFile(json: string): Promise<void> {
  * person happened to change something else.</p>
  */
 async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
-  await vscode.workspace.fs.createDirectory(dataDir());
+  await createDataDirectory();
   const token = await takeLock();
   if (token === '') {
     return false;
@@ -1080,6 +1105,24 @@ async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * The ONE road by which this file makes the data directory — for the settings file and for its lock.
+ *
+ * <p>It makes the default location, and a side folder inside a named root that exists; it REFUSES a named root that is
+ * missing (todo/PLAN_paths_per_side.md E5.7, decided with the operator as D3): creating `/mnt/z/coai` while the drive is
+ * not mounted wrote the server's settings into a bare mount point, and hid the one condition the page and the notice
+ * now report. The refusal is the finding's sentence; the mirror reads it as a write it must not retry
+ * (`no-data-root`), and the person is told once per start by the notice, never twice for one folder.</p>
+ */
+async function createDataDirectory(): Promise<void> {
+  await refuseUnderMissingRootOnceSettled(dataDir().fsPath);
+  const made = await makeDataDirectory(dataDir().fsPath);
+  if (!made.made) {
+    // The settings write's contract is to throw what it could not do; the mirror reads the refusal from there.
+    throw refusalError(made);
+  }
 }
 
 /** The token this window currently holds, or empty. Read by the write, just before it renames. */

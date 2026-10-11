@@ -85,7 +85,9 @@ import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
 import { otherSideNote, type PathFamily } from './pathFamily';
-import { VENDOR_EXECUTABLE } from './pathSettings';
+import { type PathFinding, findingFor } from './pathFindings';
+import { markAttributes, markClass, markNote } from './pathMark';
+import { DATA_DIRECTORY, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
 import { type SidesView } from './sidesSeen';
 import { sidesSeenHtml } from './sidesSeenView';
 import { thisSideLabel } from './consultantSides';
@@ -187,6 +189,12 @@ export interface PanelState {
    * with the disk (`pathForThisSide`), because this page's modules ask none. Absent draws no note.
    */
   readonly otherSideClis?: readonly string[] | undefined;
+  /**
+   * The paths of this side that are not where the settings say they are — missing, or unanswerable — as the path watch
+   * last published them (`findingsBoard.currentFindings`, todo/PLAN_paths_per_side.md E5.4): what the marks on the
+   * Question consultant, Models and MCP server places and the counts on their tabs are drawn from. Absent draws none.
+   */
+  readonly pathFindings?: readonly PathFinding[] | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
   /**
@@ -558,6 +566,7 @@ export function questionConsultantSection(state: PanelState, pickFrom: readonly 
     serverVersion: state.server.version,
     promptOverrides: state.qconsultPromptOverrides,
     places: state.qconsultPlaces,
+    findings: state.pathFindings,
   });
 }
 
@@ -1126,6 +1135,8 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
     otherSideCli: otherSides.includes(v.id) ? family : undefined,
+    // The mark by the STORED value, which is what the watch keys its finding on (paths per side, E5.4).
+    missingCli: findingFor(state.pathFindings ?? [], VENDOR_EXECUTABLE.id, v.executablePath),
   });
 }
 
@@ -1220,6 +1231,8 @@ export interface CardContext {
   readonly serverVersion: string;
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
+  /** The finding about this row's CLI path — missing, or unanswerable — when the watch has one (E5.4); else undefined, no mark. */
+  readonly missingCli: PathFinding | undefined;
 }
 
 /**
@@ -1285,11 +1298,12 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean, otherSide: PathFamily | undefined): string {
+export function runtimeFields(vendor: Vendor, id: string, remote: boolean, otherSide: PathFamily | undefined, missing: PathFinding | undefined): string {
+  // The mark (E5.4): the field takes the class, the box is invalid and described by the sentence under it.
   return remote ? '' : `
-  <div class="field">
+  <div class="field${markClass(missing)}">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
-           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
+           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}"${markAttributes(missing)}>${markNote(missing)}
   </div>${otherSidesCli(otherSide)}`;
 }
 
@@ -1855,7 +1869,7 @@ export function serverBody(state: PanelState): string {
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu of the ConnectOtherAIs sidebar is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>
-${storageBlock(state.storage)}`;
+${storageBlock(state.storage, state.pathFindings ?? [])}`;
 }
 
 /**
@@ -1888,12 +1902,12 @@ ${storageBlock(state.storage)}`;
  *
  * <p>Nothing at all when the setting is unset, which is every installation that has one side.</p>
  */
-function watchedElsewhere(dirs: readonly WatchedDir[]): string {
+function watchedElsewhere(dirs: readonly WatchedDir[], findings: readonly PathFinding[]): string {
   const extra = dirs.slice(1);
   if (extra.length === 0) {
     return '';
   }
-  const rows = extra.map(watchedLine).join('\n');
+  const rows = extra.map((dir) => watchedLine(dir, findingFor(findings, WATCHED_DIRECTORIES.id, dir.asked))).join('\n');
 
   return `<div class="hint">Questions from another installation are also answered here:</div>
 ${rows}`;
@@ -1903,9 +1917,14 @@ ${rows}`;
  * One named directory's line: the other side's said in the quiet hint tone (todo/PLAN_paths_per_side.md E1.3), a
  * refusal in the worth-noticing one, a directory this window reads plainly.
  */
-function watchedLine(dir: WatchedDir): string {
+function watchedLine(dir: WatchedDir, missing: PathFinding | undefined): string {
   if (dir.otherSide.length > 0) {
     return `<div class="hint watched-other-side">${escapeHtml(dir.asked)} — ${escapeHtml(dir.otherSide)}</div>`;
+  }
+  // The watch's finding outranks the panel's own "cannot read" refusal: it says missing or could not be checked, in the
+  // mark's tone, with the sentence (E5.4); the refusal stays for a folder the watch has nothing against.
+  if (missing !== undefined) {
+    return `<div class="status${markClass(missing)}"${markAttributes(missing)}>${escapeHtml(dir.asked)}${markNote(missing)}</div>`;
   }
 
   return dir.refusal.length === 0
@@ -1913,7 +1932,14 @@ function watchedLine(dir: WatchedDir): string {
     : `<div class="stale">${escapeHtml(dir.asked)} — ${escapeHtml(dir.refusal)}</div>`;
 }
 
-function storageBlock(storage: DataLocation | undefined): string {
+/** The data directory's own line: the folder this window reads — marked when its NAMED root is missing (D3, E5.4). */
+function dataDirectoryLine(storage: DataLocation, findings: readonly PathFinding[]): string {
+  const missing = findings.find((one) => one.key === DATA_DIRECTORY.id);
+
+  return `<div class="status${markClass(missing)}"${markAttributes(missing)}>${escapeHtml(storage.directory)}${markNote(missing)}</div>`;
+}
+
+function storageBlock(storage: DataLocation | undefined, findings: readonly PathFinding[]): string {
   if (storage === undefined) {
     return '';
   }
@@ -1937,11 +1963,11 @@ function storageBlock(storage: DataLocation | undefined): string {
     .join('\n');
 
   return `<h3>Where this window keeps its data</h3>
-<div class="status">${escapeHtml(storage.directory)}</div>
+${dataDirectoryLine(storage, findings)}
 ${cameFrom(storage.source)}
 ${side}
 ${notes}
-${watchedElsewhere(storage.alsoWatched)}
+${watchedElsewhere(storage.alsoWatched, findings)}
 <div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
 <button class="link" type="button" data-command="changeDataDirectory">Change where your data lives…</button>
 <button class="link" type="button" data-command="moveDataDirectory">Move what is here to another folder…</button>

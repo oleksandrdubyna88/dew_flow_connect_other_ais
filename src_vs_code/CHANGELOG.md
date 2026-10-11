@@ -28,6 +28,24 @@ found nothing and reported the CLI as not found — that reviewer dropped out of
 - The extension already sends this side's value (extension 0.67.0); this is the same rule for a settings file an older
   extension wrote.
 
+## Unreleased
+
+**A folder or a CLI path of this side that is not found now is said once, marked bright, and counted.** A
+question-consultant folder, a reviewer's CLI path or a watched data folder of this operating system that is gone — the
+drive not mounted, the folder deleted — used to be a generic *server did not understand a setting* toast, or nothing.
+Now the extension asks the disk itself, with a deadline and one probe per path, and says it once per window with
+**Open in Settings** (*not found now*, never *deleted*: a sleeping share reads the same); the Settings page marks the
+value in red with the word *missing* and `aria-invalid`, and the tab that holds it counts them after its label (● 1). A
+path the disk could not answer for is drawn in the warning tone and never counted. coai-mcp names the same folders by
+key, value and kind in `--providers` (`settingProblems`, from this release pair), so the generic toast no longer repeats
+a sentence the notice already says, and the page takes the server's word for the folders it judges. **A data folder you
+named that does not exist is red at every start, and nothing creates it** — not the notice, not the server's settings
+file, not a chat or a ledger, not coai-mcp when the panel only reads from it (the Bugz pairs, the providers check), and
+not the consultants survey, which is not run until the folder is there — not even when the folder goes away between a
+check and a write: what this window would have written is held in its memory and listed on Notifications, and the
+writes resume within seconds of the folder being made or the drive mounted, with no setting to change. The default
+folder is never red and is still created when first needed.
+
 ## Extension 0.67.0 — 2026-10-10
 
 **New: a Team server tab, for that server's admins.** On *Review rounds*, an admin of a Team server now sees who on the
