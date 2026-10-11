@@ -752,6 +752,9 @@ sequenceDiagram
   round's clock and the MCP client's own cancellation reach it as one token); `ReviewerOutcome.TimedOut`'s launch usage
   stays `Usage.None` on the server's attempt (a deadline line still reads 0/0 — not this story's defect, listed in the
   plan's open tail).
+- **Each line names its round (2026-10-11, story 4.2 of `todo/PLAN_every_round_is_counted.md`).** Every line of a job
+  carries the `round` its request sent and the client's own word for the request (`clientAttempt`) beside the server's
+  `attempt` — see *The round on the wire, as the server records it* below for how the request's fields are read.
 
 ### Story 2.4 — the money, and the contract suite
 
@@ -1360,4 +1363,57 @@ flowchart LR
   T -->|"switch off / too long / no heading"| D
   E --> L["ReviewLauncher.Confined<br/>ReasoningEffort"]
   D --> A["202: dropped / clamped"]
+```
+
+## The round on the wire, as the server records it (2026-10-11, story 4.2 of `todo/PLAN_every_round_is_counted.md`)
+
+A request may carry three more fields, all optional and additive — **`ContractVersion` stays 2**, and a server older
+than them skips them as unknown members (`ServerJsonContext` sets no `UnmappedMemberHandling`):
+
+| Field | What the client sends (story 4.1) | Taken when | Kept as |
+|---|---|---|---|
+| `round` | the round's id: 128 random bits, 32 hex characters, the same on every launch of the round | a JSON string of exactly 32 hex characters, either case | `JobRecord.Round`, **lower case** — one round is never two in a count |
+| `attempt` | `first` / `retry` / `repair` / `followUp` — what this request is inside the client's turn | one of those four words, as spelt (`RoundFields.ClientAttempts`; `rotated` is the server's own, not a client's) | `JobRecord.ClientAttempt` |
+| `remainingSeconds` | the seconds left on the client's own deadline at submit — relative, never an instant | a JSON number that is a whole, positive `int` — no fraction, no exponent, no string | `JobRecord.RemainingSeconds`; **nothing acts on it yet** — story 4.3 caps it and decides the budget rule |
+
+**Bound tolerantly, read by hand (risk amendment 3).** `ReviewRequestDto` binds the three as `JsonElement?`, and
+`RoundFields.Take` (`src/Jobs/RoundFields.cs`) reads them. A typed `string?`/`int?` refuses `"oops"`, `{}`, `1.5` or an
+overflow while the body is BOUND — measured on this story's first red run, the in-process host answered **500**
+(`{"error":"internal error"}`) for each, before any note could be written — and took `"60"` as 60, because the web
+serializer defaults read numbers from strings. Now every value is accepted:
+
+- **Malformed → dropped with a note**, in the same `dropped` list `ClientOptions` fills (`FieldNoteDto`: field + reason),
+  and stored empty (`""` / `0`). The note says what arrived — a short printable value quoted, anything longer than 40
+  characters by its length, an object or an array by its shape — never a long value echoed back. Nothing is minted in
+  place of a dropped round: a server-made id would count a round the client never had.
+- **Absent, or JSON `null` → an old client**: stored empty, never defaulted, and **no note** (the same reading
+  `effort: null` gets) — a client older than the fields would otherwise be told on every review that something it
+  never sent was dropped. A `JsonElement?` receives JSON `null` as a C# `null`.
+- **Not in the idempotency fingerprint**: a retry of a lost submit carries the same round and less time left, and it is
+  the same request (`ARepeatedSubmit_WithLessTimeLeft_IsTheSameJob`).
+- **Not echoed on `GET /api/reviews/{id}`**: the client minted the round and holds it; the status describes the JOB, and
+  a field no client reads is wire surface without a reader.
+
+**On the ledger.** `JobRunner.Ledger` writes `round` and `clientAttempt` (`RecordJob`'s two new trailing parameters,
+`UsageEntry`'s two new trailing fields after `endCause`) on **every line of the job** — a requeued launch's and a
+follow-up's included — so a round is counted once however many launches it took (story 5.1 counts by it). The client's
+word sits BESIDE the server's own `attempt` (`first` / `rotated` / `followUp` inside the job), never over it: a client's
+repair is a whole new job here, whose first launch is still the server's `first`, so one field cannot say both.
+`UsageEntryDto`, `UsageLine.Round` / `UsageLine.ClientAttempt` and the extension's parser (`usage.ts`, `roundFields`)
+read them back; a line older than the fields, and one whose request sent none, say nothing.
+
+Tests: `TheServerRecordsTheRoundTests` (src_server/tests) — the value matrix through the real `POST /api/reviews`, the
+job and its lines through the real `JobRunner`, the reader; `http/reviews/happy.http` — a well-formed set taken with
+nothing dropped and a malformed one dropped with three notes, through the source-generated binding the in-process host
+does not use.
+
+```mermaid
+flowchart LR
+  R["POST /api/reviews<br/>round, attempt, remainingSeconds<br/>(bound as JsonElement?)"] --> T[RoundFields.Take]
+  T -->|"absent / null"| E["stored empty — no note"]
+  T -->|"well-formed"| J["JobRecord.Round (lower case)<br/>ClientAttempt, RemainingSeconds"]
+  T -->|"malformed"| D["stored empty + dropped note"]
+  D --> A["202: dropped"]
+  J --> L["JobRunner.Ledger — every line:<br/>round, clientAttempt beside attempt"]
+  J -.->|"story 4.3"| B["budget rule (not built)"]
 ```

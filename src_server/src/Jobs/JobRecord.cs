@@ -106,7 +106,27 @@ public sealed record JobRecord(
     string SystemPromptSha = "",
 
     /// <summary>What became of the request's effort — <see cref="TakenOptions.EffortFrom"/> — for the job's ledger line.</summary>
-    string EffortFrom = "")
+    string EffortFrom = "",
+
+    /// <summary>
+    /// The client's id for the round this review belongs to — <see cref="TakenRound.Round"/>, empty from an old client or
+    /// when it was dropped (story 4.2 of todo/PLAN_every_round_is_counted.md). Every ledger line of the job carries it.
+    /// </summary>
+    string Round = "",
+
+    /// <summary>
+    /// What the CLIENT called this request inside its turn — <c>first</c>, <c>retry</c>, <c>repair</c>, <c>followUp</c> —
+    /// or empty. Kept apart from the server's own launch attempt (<c>first</c> / <c>rotated</c> / <c>followUp</c> on the
+    /// line's <c>attempt</c>): a client's repair is a whole new job here, whose first launch is still the server's
+    /// <c>first</c>, so one word cannot say both.
+    /// </summary>
+    string ClientAttempt = "",
+
+    /// <summary>
+    /// The seconds the client said were left on its deadline at submit — <see cref="TakenRound.RemainingSeconds"/>, <c>0</c>
+    /// when it sent none or one that was dropped. Recorded only; story 4.3 is the one that acts on it.
+    /// </summary>
+    int RemainingSeconds = 0)
 {
     /// <summary>
     /// What the vendor reported for this job — the whole usage, cached and reasoning included (story 3.1 of

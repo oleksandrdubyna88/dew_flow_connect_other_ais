@@ -304,7 +304,11 @@ public sealed class JobRunner(
                     ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot.Name,
                     // WHY the store killed it, on the line that says Cancelled — a follow-up pair's first launch ended on
                     // its own and says so (story 3.2 of todo/PLAN_every_round_is_counted.md).
-                    endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty);
+                    endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty,
+                    // What the REQUEST carried, on every line of the job — a requeued launch's included — so a round is
+                    // counted once however many launches it took; the client's word beside the server's own attempt,
+                    // never over it (story 4.2 of todo/PLAN_every_round_is_counted.md).
+                    round: on.Job.Round, clientAttempt: on.Job.ClientAttempt);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

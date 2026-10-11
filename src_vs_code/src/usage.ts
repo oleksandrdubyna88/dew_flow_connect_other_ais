@@ -70,6 +70,18 @@ export interface UsageEntry {
    * token fired. The outcome stays `Cancelled`; this is the column that tells a withdrawal from the server's backstop.
    */
   readonly endCause?: string;
+  /**
+   * The id of the ROUND the launch belonged to (story 4.2 of todo/PLAN_every_round_is_counted.md) — 32 hex characters the
+   * client mints per round, written by the Team server on every line of a job whose request carried one. Absent on a line
+   * older than the field, on one whose request sent none, and where the server dropped a malformed id.
+   */
+  readonly round?: string;
+  /**
+   * What the CLIENT called the request — `first`, `retry`, `repair`, `followUp` — beside the server's own `attempt`
+   * (`first`, `rotated`, `followUp` inside the job), never over it. Absent like `round`, and on a local line, whose
+   * `attempt` already is the client's word.
+   */
+  readonly clientAttempt?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -134,6 +146,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...launchFields(parsed),
       ...ranWithFields(parsed),
       ...endCauseOf(parsed.endCause),
+      ...roundFields(parsed),
     };
   } catch {
     return undefined;
@@ -184,6 +197,18 @@ function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
  */
 function endCauseOf(value: unknown): Pick<UsageEntry, 'endCause'> {
   return saidText(value) ? { endCause: value } : {};
+}
+
+/**
+ * The round a Team-server launch belonged to and the client's word for its request (story 4.2 of
+ * todo/PLAN_every_round_is_counted.md) — each present only when the line says it, by `launchFields`' rule: an empty round
+ * is absent rather than an id every old client's line would share.
+ */
+function roundFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, 'round' | 'clientAttempt'> {
+  return {
+    ...(saidText(parsed.round) ? { round: parsed.round } : {}),
+    ...(saidText(parsed.clientAttempt) ? { clientAttempt: parsed.clientAttempt } : {}),
+  };
 }
 
 /**

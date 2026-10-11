@@ -59,6 +59,18 @@ public sealed record UsageLine(
     /// older than the field (story 3.2 of todo/PLAN_every_round_is_counted.md).
     /// </summary>
     public string EndCause { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The client's id for the round the line's launch belonged to — empty on a line older than the field and on one whose
+    /// request sent none (story 4.2 of todo/PLAN_every_round_is_counted.md). What story 5.1 counts rounds by.
+    /// </summary>
+    public string Round { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What the CLIENT called the request — <c>first</c> / <c>retry</c> / <c>repair</c> / <c>followUp</c> — beside the
+    /// server's own <see cref="Attempt"/>; empty like <see cref="Round"/>.
+    /// </summary>
+    public string ClientAttempt { get; init; } = string.Empty;
 }
 
 /// <summary>What a read of the ledger produced, including what it could not read.</summary>
@@ -217,6 +229,9 @@ public sealed class UsageReader(string dataDir)
                 // Read, not dropped (story 3.2): why the store killed a cancelled job. An older line, and every
                 // other ending, says nothing.
                 EndCause = entry.EndCause ?? string.Empty,
+                // Read, not dropped (story 4.2): the client's round and its word for the request. An older line has neither.
+                Round = entry.Round ?? string.Empty,
+                ClientAttempt = entry.ClientAttempt ?? string.Empty,
             };
         }
         catch (JsonException)
