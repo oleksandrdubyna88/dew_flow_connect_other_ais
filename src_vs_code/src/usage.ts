@@ -1,3 +1,4 @@
+import { PriceTier } from './modelPrices';
 import { Vendor } from './vendors';
 /**
  * What each AI has consumed, read from the server's append-only ledger.
@@ -30,6 +31,12 @@ export interface UsageEntry {
    * UNKNOWN, which a zero priced from a list would render as `$0`.
    */
   readonly usageNote?: string;
+  /** How many of `tokensIn` the vendor served from its prompt cache — a SUBSET of the input, never added to it. */
+  readonly tokensCached?: number;
+  /** How many of `tokensOut` the vendor reported as reasoning — for the record; the bill is `tokensOut`. */
+  readonly tokensReasoning?: number;
+  /** What the line WAS — `review`, `consult`, `question`, `chat`; a line older than the field is a review. */
+  readonly kind?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -58,6 +65,11 @@ export interface VendorTotals {
    * charged.</p>
    */
   readonly estimatedUsd: number | null;
+  /**
+   * The money is AT LEAST what is shown: a line no rate prices, or a line whose usage was not captured, adds nothing
+   * to it and is not free. Rendered `≥`.
+   */
+  readonly floor: boolean;
   readonly seconds: number;
   readonly averageSeconds: number;
 }
@@ -85,10 +97,26 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       outcome: typeof parsed.outcome === 'string' ? parsed.outcome : 'ok',
       ...(typeof parsed.costNote === 'string' && parsed.costNote.length > 0 ? { costNote: parsed.costNote } : {}),
       ...(typeof parsed.usageNote === 'string' && parsed.usageNote.length > 0 ? { usageNote: parsed.usageNote } : {}),
+      ...ledgerExtras(parsed),
     };
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The three fields the panel did not read until story 2.5 of todo/PLAN_every_round_is_counted.md, though `coai-mcp` has
+ * written them for months: without the cached subset every input token was priced at the full rate, and without the
+ * kind a consultation could not be told from a review. An old line has none of them: no cache count is zero — the
+ * vendor did not say — and no kind is a review, because a review was all a line could be before the field existed
+ * (`UsageKinds` in `src_mcp/runners/Reviewers/UsageLedger.cs` reads it the same way).
+ */
+function ledgerExtras(parsed: Partial<UsageEntry>): Required<Pick<UsageEntry, 'tokensCached' | 'tokensReasoning' | 'kind'>> {
+  return {
+    tokensCached: number(parsed.tokensCached),
+    tokensReasoning: number(parsed.tokensReasoning),
+    kind: typeof parsed.kind === 'string' && parsed.kind.length > 0 ? parsed.kind : 'review',
+  };
 }
 
 function number(value: unknown): number {
@@ -164,30 +192,135 @@ export function totalsByVendor(
     byProvider.set(e.provider, [...(byProvider.get(e.provider) ?? []), e]);
   }
 
+  const rateOf = (line: UsageEntry): LineRate | undefined => priceOfLine(line.provider, line.model, vendors, listed);
+
   return [...byProvider.entries()]
-    .map(([provider, rows]) => {
-      const priced = rows.filter((r) => typeof r.costUsd === 'number');
-      const seconds = sum(rows.map((r) => r.seconds));
-      const tokensIn = sum(rows.map((r) => r.tokensIn));
-      const tokensOut = sum(rows.map((r) => r.tokensOut));
-      const reported = priced.length === 0 ? null : sum(priced.map((r) => r.costUsd as number));
-      const price = priceOf(provider, vendors, listed);
-      return {
-        provider,
-        runs: rows.length,
-        failed: rows.filter((r) => r.outcome !== 'ok').length,
-        tokensIn,
-        tokensOut,
-        costUsd: reported,
-        estimatedUsd:
-          reported !== null || price === undefined
-            ? null
-            : round4((tokensIn / 1_000_000) * price.in + (tokensOut / 1_000_000) * price.out),
-        seconds,
-        averageSeconds: rows.length === 0 ? 0 : seconds / rows.length,
-      };
-    })
+    .map(([provider, rows]) => vendorTotals(provider, rows, rateOf))
     .sort((a, b) => b.tokensIn + b.tokensOut - (a.tokensIn + a.tokensOut));
+}
+
+/**
+ * One vendor row's totals, its money priced LINE BY LINE (story 2.5 of todo/PLAN_every_round_is_counted.md).
+ *
+ * <p>It priced the row's whole history at the row's CURRENT model, all input at the full rate and never at a
+ * long-context tier: after the Gemini row moved to `flash-medium` on 2026-10-02, every earlier `flash-low` line was
+ * priced as `flash-medium`. Each line now goes through {@link lineCost} at its own model's rate, and the halves stay
+ * apart — what vendors billed in `costUsd`, what the lists work out in `estimatedUsd` — because a sum of the two is a
+ * number nobody can check. A line that could not be priced makes the row a floor.</p>
+ */
+function vendorTotals(provider: string, rows: readonly UsageEntry[], rateOf: (line: UsageEntry) => LineRate | undefined): VendorTotals {
+  const costs = rows.map((row) => lineCost(row, rateOf(row)));
+  const billed = costs.filter((one) => one.known && !one.estimated);
+  const guessed = costs.filter((one) => one.estimated);
+  const seconds = sum(rows.map((r) => r.seconds));
+
+  return {
+    provider,
+    runs: rows.length,
+    failed: rows.filter((r) => r.outcome !== 'ok').length,
+    tokensIn: sum(rows.map((r) => r.tokensIn)),
+    tokensOut: sum(rows.map((r) => r.tokensOut)),
+    costUsd: billed.length === 0 ? null : sum(billed.map((one) => one.usd)),
+    estimatedUsd: guessed.length === 0 ? null : round4(sum(guessed.map((one) => one.usd))),
+    floor: costs.some((one) => one.floor),
+    seconds,
+    averageSeconds: rows.length === 0 ? 0 : seconds / rows.length,
+  };
+}
+
+/** One figure, and what it is: known at all, a floor, and whether any of it is an estimate rather than a bill. */
+export interface Estimate {
+  readonly usd: number;
+  readonly known: boolean;
+  readonly floor: boolean;
+  readonly estimated: boolean;
+}
+
+/** Nothing priced it: a dash, and — when added to something that is priced — a floor. */
+export const UNKNOWN: Estimate = { usd: 0, known: false, floor: true, estimated: false };
+
+/** Nothing was spent and nothing priced it: neither a figure nor a floor — a line that consumed no tokens. */
+const NOTHING: Estimate = { usd: 0, known: false, floor: false, estimated: false };
+
+/** Several figures added up: known when any part is, a floor when any part is unknown or a floor itself. */
+export function totalCost(parts: readonly Estimate[]): Estimate {
+  if (parts.length === 0) {
+    return UNKNOWN;
+  }
+
+  return {
+    usd: parts.reduce((total, part) => total + part.usd, 0),
+    known: parts.some((part) => part.known),
+    floor: parts.some((part) => part.floor),
+    estimated: parts.some((part) => part.estimated),
+  };
+}
+
+/** `~$3.00` for an estimate, `$0.4200` for a bill, `≥ ` before a floor, and a dash for nothing known. */
+export function costText(estimate: Estimate): string {
+  if (!estimate.known) {
+    return '—';
+  }
+
+  return `${estimate.floor ? '≥ ' : ''}${estimate.estimated ? '~' : ''}${money(estimate.usd)}`;
+}
+
+/** The ledger fields one line is priced from — a `UsageEntry`, or a chat turn read into the same shape. */
+export type PricedLine = Pick<UsageEntry, 'tokensIn' | 'tokensOut' | 'costUsd' | 'usageNote' | 'tokensCached'>;
+
+/**
+ * What one ledger line cost: what its vendor BILLED, else its own model's rate applied to its own tokens, else unknown.
+ *
+ * <p>A reported cost is never re-estimated — it is the fact. A line whose usage was not captured adds nothing and is a
+ * floor: its counted tokens are whatever arrived before it ended, usually nothing, and the rest is unknown rather than
+ * free. A line no rate prices is a floor too — unless it consumed nothing, which is neither a figure nor a floor.</p>
+ */
+export function lineCost(line: PricedLine, rate: LineRate | undefined): Estimate {
+  if (typeof line.costUsd === 'number') {
+    return { usd: line.costUsd, known: true, floor: uncaptured(line), estimated: false };
+  }
+  if (uncaptured(line)) {
+    return UNKNOWN;
+  }
+
+  return rate === undefined ? unpriced(line) : { usd: estimateUsd(line, rate), known: true, floor: false, estimated: true };
+}
+
+/** Whether the line's launch ended before its vendor reported what it consumed (`usage not captured`). */
+export function uncaptured(line: Pick<UsageEntry, 'usageNote'>): boolean {
+  return line.usageNote !== undefined;
+}
+
+function unpriced(line: PricedLine): Estimate {
+  return line.tokensIn + line.tokensOut > 0 ? UNKNOWN : NOTHING;
+}
+
+/**
+ * `(in − cached)·in + cached·cached + out·out`, per million, at the long-context tier's rates once THIS line's input
+ * reaches it — `TokenPrice.CostOf` in `src_mcp/core/Findings/TokenPrice.cs`, the same arithmetic on both halves.
+ *
+ * <p>The cached count is a SUBSET of the input (codex's `cached_input_tokens`, measured in `UsageAccountingTests`; the
+ * parser files claude's cache reads inside the input too), so it is taken out of the fresh input and clamped to it. A
+ * rate that states no cached price prices cached input at the input rate: the list did not say, and nothing is not
+ * what it said. The tier is per REQUEST — one line is one request — so it is never applied to a sum.</p>
+ */
+function estimateUsd(line: PricedLine, rate: LineRate): number {
+  const rates = ratesAt(rate, line.tokensIn);
+  const cached = Math.min(Math.max(line.tokensCached ?? 0, 0), Math.max(line.tokensIn, 0));
+  const fresh = Math.max(0, line.tokensIn - cached);
+  const cachedRate = rates.cached > 0 ? rates.cached : rates.in;
+
+  return (fresh * rates.in + cached * cachedRate + line.tokensOut * rates.out) / 1_000_000;
+}
+
+/** The rates one request is billed at: the tier's from its threshold on, else the base ones. Cached 0 = not stated. */
+function ratesAt(rate: LineRate, tokensIn: number): { readonly in: number; readonly out: number; readonly cached: number } {
+  const tier = rate.tier;
+  if (tier !== undefined && tokensIn >= tier.fromTokens) {
+    return { in: tier.inPerMillion, out: tier.outPerMillion, cached: tier.cachedPerMillion };
+  }
+
+  return { in: rate.in, out: rate.out, cached: rate.cached ?? 0 };
 }
 
 function sum(values: readonly number[]): number {
@@ -248,20 +381,67 @@ export function priceOf(
   provider: string,
   vendors: readonly Vendor[],
   listed: PriceLookup = () => undefined,
-): { readonly in: number; readonly out: number } | undefined {
+): LineRate | undefined {
   const vendor = vendors.find((v) => v.id === provider);
-  if (vendor === undefined) {
+
+  return vendor === undefined ? undefined : rateFrom(vendor, listed(vendor.model));
+}
+
+/**
+ * Dollars per million tokens for one line: input, output, the CACHED input rate when one is stated, and a long-context
+ * tier. `cached` and `tier` are present only when known — absent means "not said", which is never zero.
+ */
+export interface LineRate {
+  readonly in: number;
+  readonly out: number;
+  readonly cached?: number;
+  readonly tier?: PriceTier;
+}
+
+/**
+ * A row's typed rate over a list price, per field — or the list price alone.
+ *
+ * <p>A TYPED rate is a fact about this account — a flat subscription, a negotiated rate, a free tier — and a published
+ * list price is a general estimate. The specific statement wins over the general one, per field: somebody who filled
+ * in only the input rate keeps it, and the output rate falls back rather than the whole vendor going dark. A typed
+ * row takes no tier and no list cached rate: those describe the list's own prices, not the ones somebody typed.</p>
+ */
+function rateFrom(vendor: Vendor | undefined, published: ListedRate | undefined): LineRate | undefined {
+  return vendor !== undefined && typedAtAll(vendor) ? typedOver(vendor, published) : listRate(published);
+}
+
+function typedAtAll(vendor: Vendor): boolean {
+  return vendor.pricePerMillionIn > 0 || vendor.pricePerMillionOut > 0;
+}
+
+function typedOver(vendor: Vendor, published: ListedRate | undefined): LineRate {
+  return {
+    in: typedOr(vendor.pricePerMillionIn, published?.inPerMillion),
+    out: typedOr(vendor.pricePerMillionOut, published?.outPerMillion),
+    ...cachedPart(vendor.pricePerMillionCached),
+  };
+}
+
+function typedOr(typed: number, listed: number | undefined): number {
+  return typed > 0 ? typed : (listed ?? 0);
+}
+
+/** The cached rate, only when one is stated: absent means "not said", which is not zero. */
+function cachedPart(rate: number | undefined): { readonly cached?: number } {
+  return rate !== undefined && rate > 0 ? { cached: rate } : {};
+}
+
+function listRate(published: ListedRate | undefined): LineRate | undefined {
+  if (published === undefined) {
     return undefined;
   }
-  // A TYPED rate is a fact about this account — a flat subscription, a negotiated rate, a free
-  // tier — and a published list price is a general estimate. The specific statement wins over the
-  // general one, per field: somebody who filled in only the input rate keeps it, and the output
-  // rate falls back rather than the whole vendor going dark.
-  const published = listed(vendor.model);
-  const inRate = vendor.pricePerMillionIn > 0 ? vendor.pricePerMillionIn : (published?.inPerMillion ?? 0);
-  const outRate = vendor.pricePerMillionOut > 0 ? vendor.pricePerMillionOut : (published?.outPerMillion ?? 0);
 
-  return inRate === 0 && outRate === 0 ? undefined : { in: inRate, out: outRate };
+  return {
+    in: published.inPerMillion,
+    out: published.outPerMillion,
+    ...cachedPart(published.cachedPerMillion),
+    ...(published.tier === undefined ? {} : { tier: published.tier }),
+  };
 }
 
 /**
@@ -275,25 +455,29 @@ export function priceOf(
  * and cannot be edited afterwards, so it is what answers when the row is gone. (codex, the second
  * code round.)</p>
  *
- * <p>A row that still exists still wins, and that order is deliberate: a typed rate is a fact about
- * THIS account — a flat subscription, a negotiated rate, a local engine no list has heard of — and a
+ * <p>A row's TYPED rate still wins, and that order is deliberate: a typed rate is a fact about THIS
+ * account — a flat subscription, a negotiated rate, a local engine no list has heard of — and a
  * published list price is a general estimate about a model.</p>
+ *
+ * <p><b>The list price is the LINE's model, never the row's current one</b> (story 2.5 of
+ * todo/PLAN_every_round_is_counted.md). It used to fall back to the row's current model whenever the
+ * row still existed, so a row that changed model re-priced its whole history at the new one.</p>
  */
 export function priceOfLine(
   provider: string,
   model: string,
   vendors: readonly Vendor[],
   listed: PriceLookup = () => undefined,
-): { readonly in: number; readonly out: number } | undefined {
-  const typed = priceOf(provider, vendors, listed);
-  if (typed !== undefined) {
-    return typed;
-  }
-  const published = listed(model);
+): LineRate | undefined {
+  return rateFrom(vendors.find((v) => v.id === provider), listed(model));
+}
 
-  return published === undefined
-    ? undefined
-    : { in: published.inPerMillion, out: published.outPerMillion };
+/** A list's rates for one model — `ModelPrice`, or anything with its shape; the cached rate and tier when it states them. */
+export interface ListedRate {
+  readonly inPerMillion: number;
+  readonly outPerMillion: number;
+  readonly cachedPerMillion?: number;
+  readonly tier?: PriceTier;
 }
 
 /**
@@ -302,7 +486,7 @@ export function priceOfLine(
  * <p>A function rather than a table so this file stays free of the fetching: the panel holds the
  * lists, `usage.ts` holds the arithmetic, and a test can answer for one model without a network.</p>
  */
-export type PriceLookup = (modelId: string) => { inPerMillion: number; outPerMillion: number } | undefined;
+export type PriceLookup = (modelId: string) => ListedRate | undefined;
 
 /**
  * What a consultation's Cost column says: the money, a marked estimate, or a dash.

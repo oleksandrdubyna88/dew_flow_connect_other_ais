@@ -196,11 +196,13 @@ test('the Settings sheet is byte-identical after its tokens, chips and badges mo
   // hash of CATALOG_CSS as main's UNEXTRACTED catalogCss.ts produces it. Re-pinned at the merge of main's #724 (the
   // Settings tabs' two columns, bd11f64a) from main's own file — built against this tree's settingsPage, never from
   // the merged sheet — so it still proves the extraction changed nothing. A deliberate change re-pins it, on purpose:
-  // re-pinned 2026-10-10 for the Models card's lock line (`.catalog .card .lock`, one rule added in catalogCss.ts);
-  // re-pinned 2026-10-10 again for a missing path of this OS (todo/PLAN_paths_per_side.md E5.4/E5.5: `.tab-mark`, and
-  // `.skew` sharing its shape with `.path-missing`/`.path-unknown` through `--mark`), when E5 was replayed onto main.
+  // re-pinned 2026-10-10 for the Models card's lock line (`.catalog .card .lock`, one rule added in catalogCss.ts),
+  // and again for the card's `.rounds-line` rule (story 2.4 of todo/PLAN_every_round_is_counted.md): the sheet with
+  // that comment and rule taken out still hashes to the lock line's pin, a7f97106…2aa5. Re-pinned 2026-10-11 when
+  // paths per side E5 (`.tab-mark`, `.path-missing`/`.path-unknown` sharing `.skew`'s shape) met it on main: main's
+  // sheet alone pinned e6185fd3…f4ab, E5's alone ddad3645…a103; this sheet carries both changes and nothing else.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    'ddad36453ca71912fc0a9e84767e1ef822b0260ff5e5738442f54b8349e5a103');
+    'becbdd070102f3198a6bd2f0a27b71207a4f4fa995d1894999ca5601e916877c');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }

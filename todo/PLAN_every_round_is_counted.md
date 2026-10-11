@@ -1,7 +1,10 @@
 # PLAN — every round is counted, and what it cost the subscription is visible
 
 > Status: **in progress — E1 landed 2026-10-10 in part (story 1.2 whole; story 1.1 without three measurements it
-> names — agy in WSL, the Team server slot, the read on an expired token); E2–E6 not built.** Scope: the Team server's job ledger, `/api/usage` and
+> names — agy in WSL, the Team server slot, the read on an expired token); E2 landed 2026-10-10 whole (the local
+> counter: `coai-mcp --round-counts` and schema step 20, the extension's cached read, the Spending tab's Rounds block,
+> the model card line, tokens and money — stories 2.1–2.5); E3–E6 not built. Deviations so far are recorded
+> below.** Scope: the Team server's job ledger, `/api/usage` and
 > job claim (`src_server`), the reviewer launch path both halves share (`src_mcp/runners/Reviewers`), `coai-mcp`'s
 > round store (`--log` family), the extension's Spending tab, Team-server block and model cards (`src_vs_code`), and
 > the deploy canary (`deploy/`).
@@ -156,6 +159,8 @@ Answers the operator's question for this machine's work from the whole history, 
     appears only for lines written after 3.3 (one line per launch) that carry 4.1's round.
   - Team-server rows (`<server>-<vendor>`) are their own lines, labelled *ran on <server>*, never added to the
     server's own totals.
+  - The mode is listed with the other one-shot modes in `AGENTS.md`; bad arguments to it (an unparseable `--now`, an
+    unknown flag) exit with a usage error, never 64 — 64 means "this build has no such mode" to the extension.
 - **2.2 The extension reads it** (Opus) — `readRoundCounts` in `roundsDbRead.ts` through its existing spawn helper;
   exit 64 / timeout / unparseable → *count unavailable*, never 0. **Bounded freshness**, not "until a round ends": the
   answer is reused for at most 60 s and refreshed early when a round, consultation or question ends — a
@@ -168,7 +173,9 @@ Answers the operator's question for this machine's work from the whole history, 
   inside the owning OS is the open tail, not this story.
 - **2.3 Spending tab, first block: Rounds** (Opus) — a pure `roundsBlock` renderer (vendor row · model lines · 5 h ·
   24 h · 7 d by stage · consultations / questions / chat · per-round figure · median output per launch · the store
-  sentence). A model change inside a window is two lines for that row, so the step of 2026-10-02 is visible the day it
+  sentence) — the output figure is the median **per recorded turn**, labelled so: until story 3.3 writes one line per
+  launch, a repair or a follow-up is two launches summed on one line, so a per-launch median cannot be computed from the
+  ledger and is not claimed (a fixture with a repaired turn pins the label). A model change inside a window is two lines for that row, so the step of 2026-10-02 is visible the day it
   happens. **A bundled-page test** (`src_vs_code/src/test/bundledPage.test.ts` on `roundsLogPageHarness.ts`) RUNS the
   Review rounds page and asserts the block appears with counts, and with an unavailable read shows *count unavailable*
   and no zero.
@@ -189,7 +196,8 @@ Answers the operator's question for this machine's work from the whole history, 
     round in the window — each labelled for what it is. The denominator is never only the priced rounds; when any line inside
     them is unpriced or not captured, the per-round figure carries the same floor mark as the total (`≥ ~$0.31 per
     round`) and the tooltip says how many of the N rounds were fully priced; when none was, it is a dash, never an
-    average of the priced few.
+    average of the priced few. A window with priced usage but ZERO rounds (consultations only) shows a dash for the
+    per-round figure, labelled *no rounds in this window* — never a division by zero.
   Two defects in today's spending tab are fixed on the way, each RED first: `totalsByVendor` prices a row's whole
   history at the row's CURRENT model (`priceOf(provider, …)`, `src_vs_code/src/usage.ts:174`) — after the Gemini row
   moved to `flash-medium`, every earlier `flash-low` line is priced as `flash-medium` (`APastLine_IsPricedAtItsOwnModel`);
@@ -362,6 +370,7 @@ records that failure).
 | `ConsultationsAndQuestions_AreCountedBesideRounds` | 2.1 |
 | `roundsBlock` renderer cases, and the bundled-page run of the Review rounds page (counts shown; unavailable ≠ 0; the store sentence) | 2.3 |
 | `APastLine_IsPricedAtItsOwnModel`, `CachedInput_IsPricedAtTheCachedRate`, `TheParser_KeepsCachedReasoningAndKind`, `AReportedCost_IsNeverReEstimated`, `AnUnpricedLine_MakesTheTotalAFloor`, `ALongContextTier_AppliesPerLine` | 2.5 |
+| `AConsultationOnlyWindow_ShowsNoPerRoundFigure`, `ARepairedTurn_IsOneRecordedTurn_NotOneLaunch`, `ABadArgument_IsAUsageErrorNot64` | 2.1 / 2.3 / 2.5 |
 | `APerRoundFigure_CountsEveryRound_AndCarriesTheFloor`, `AModelLine_DividesByTheRoundsThatUsedIt`, `AnUncapturedLine_MakesATokenTotalAFloor_NeverZero` | 2.5 |
 | `ASubscriptionShare_NeedsAGaugeReading`, `ASubscriptionShare_IsNeverSummedWithAnEstimate`, `ANegativeOrNonFinitePlanPrice_IsRefusedAtTheCard`, `OnePlanPrice_ServesEveryModelOfTheAccount` | 6.2 |
 | `TheCardLine_DoesNotSpawnPerRender`, `AConsultationOnlySession_RefreshesTheCount`, `AnIdleWindow_FallsOnAFakeClock`, `TheOtherSidesStore_IsNamedNotOpened` | 2.2 / 2.4 |
@@ -409,6 +418,29 @@ database is not safely read across the Windows/WSL boundary — 2.2 names the ot
 accepted: the RESULTS table now says which CLI ran each model (and 3.4 records `cli`/`cliVersion`); one ledger line
 per paid launch linked by a `turn` id instead of a folded count; `remainingSeconds` capped at the job's own lifetime;
 the local counter reads the ledger only back to its oldest window.
+
+## Deviations so far (E2)
+
+Recorded as each story lands, so the promotion has them ready; what shipped differently is the part a later reader
+needs. Story 2.1 shipped 2026-10-10 on `feat/round-counter-e2-local-counter` — `src_mcp/src/Store/RoundCounts.cs`,
+`src_mcp/src/Server/RoundCountsMode.cs`, `Schema.TheReviewersModel`, documented in
+[module_server.md](../research/module_server.md) (*`--round-counts` — rounds per vendor row*) and
+[module_tests.md](../research/module_tests.md).
+
+| Story | The plan said | What shipped | Why |
+|---|---|---|---|
+| 2.1 | `--round-counts` answers rounds from `coai.db` AND, from `usage.jsonl` read from the end back to the oldest window, recorded turns, median input/output and outcomes per row × model × kind | **Rounds only, from `coai.db`.** Per window (5 h / 24 h / 7 d) and vendor row: DISTINCT rounds by stage (plan / code / document / feature), the reviewer rows those rounds launched (the "reviewers per round" numerator), and the rounds per reviewer MODEL; `modelsKnownSince` says from when the per-model lines exist. The mode never opens `usage.jsonl`. | Design decision taken before the story (2026-10-10): tokens and money (2.5) are computed in the EXTENSION from the ledger it already parses (`src_vs_code/src/usage.ts`) — one reader of the ledger, not two that drift — and the mode answers the one thing only the database can, which is what a round IS. The code round's rule that the ledger is read only back to the oldest window therefore binds the extension's reader (2.2 / 2.5), not this mode. |
+| 2.1 | `rounds ⨝ reviewers` plus an index on `reviewers(round_id)` | **Schema step 20** `TheReviewersModel`: `reviewers.model TEXT NOT NULL DEFAULT ''` **and** `reviewers_by_round`, in one step; `RoundsDb.RecordRound` fills the model from `ReviewerState.Model`. Rows written before the step are empty and sit on no model line. A read-only reader asks the schema for the column and counts a step-19 file's rounds without models. | The per-model lines ("a model change inside a window is two lines for that row", 2.3) need a model per REVIEWER row, and the table had none; one step because a database at nineteen must gain both or neither. |
+| 2.1 | windows 5 h / 24 h / 7 d, trailing; `--now <utc>` for tests; bad arguments exit with a usage error, never 64 | The same, with the edges fixed as **half-open `(from, to]`**: a round on a window's starting edge is the next window's, one exactly at `now` is in every window, one in the future in none. `--now` takes an ISO-8601 UTC instant through the parse `--since` uses (`Program.TryParseInstant`, widened rather than copied). Exit codes: **0** with the answer — and an EMPTY answer, exit 0, file not created, when `coai.db` does not exist; **65** for an unparseable or repeated `--now`, a dangling `--now`, an unknown flag; **74** for a database that will not read; **never 64**. | The edges had to be decided for the boundary tests; the missing-database answer is the brief's — a machine that has never run a round has nought rounds, and the extension tells a count from "unavailable" by the exit code and the parse. |
+| 2.1 | listed with the other one-shot modes in `AGENTS.md` | Listed in `.agents/PROJECT.md`'s one-shot list — `AGENTS.md` is the pointer to that file, and `ARequestFaultIsNotAnOldBinaryTests` / `TheBinarySaysWhatItAcceptsTests` read the list from there. | Where the list is. |
+| 2.1 (tests) | `RoundCounts_FromAFixtureDb`, `TheLedgerRead_StopsAtTheOldestWindow`, `ConsultationsAndQuestions_AreCountedBesideRounds`, `ABadArgument_IsAUsageErrorNot64` | `RoundCountsTests` (nine, over one fixture of twelve rounds placed on and around every window edge), `RoundCountsCliScenarioTests` (six, the real process — the contract, the real clock, the bad arguments with `--round-countz` → 64 as the control, the missing database, the read-only open on a step-19 file, the help and the list), `TheReviewersModelIsStepTwentyTests` (six: step 20 by position, a step-19 file, the writer, both preview forks, a second open). `TheLedgerRead_StopsAtTheOldestWindow` and `ConsultationsAndQuestions_AreCountedBesideRounds` move with the ledger to the extension's reader (2.2 / 2.5). | The ledger left the mode. |
+| 2.2 | `readRoundCounts` in `roundsDbRead.ts`, through its existing spawn helper | `readRoundCounts` in **`roundCountsRead.ts`**, through `serverRun` from `roundsDbRead.ts` — the one door that hands the child this window's data directory (issue #115). Beside it: the contract's parser and types in `roundCounts.ts` (page-importable: no `node:child_process`), the cache in `roundCountsCache.ts`, the tail read in `ledgerTail.ts`. Exit 64 → *older than --round-counts — update it in Setup › MCP server*; 65, 74, -1 (timeout or a spawn that failed), an exit-0 answer that does not parse, a thrown load → `unavailable` with its reason; rows `[]` on exit 0 is a count of nought. | `roundsDbRead.ts` stands at 796 of its 800 lines; and the page module imports the types, which a spawn in the same file would drag into the webview bundle (the `require is not defined` the bundled-page test caught once already). |
+| 2.2 | the answer reused ≤ 60 s, refreshed early when a round, consultation or question ends; never a spawn per render | The same, as `RoundCountsCache`: `current()` never reads; `refresh()` reads when the snapshot is older than 60 s, after `forget()` (a consultation or a question ended — `consultations.onChanged` / `questionConsults.onChanged` in `extension.ts`) or after the session files hold one more finished round (`noteFinishedRounds`, from the panel's own render), one read at a time; a load that throws is a stamped `unavailable` snapshot, so a failing read is not retried per render. The ledger (`readTailSince`) is read from its END in 64 KiB chunks and stops at the first chunk whose oldest line is older than the 7 d window; the counts and the tail load in parallel. | As planned; the "read from the end" rule moved here with the ledger (see 2.1). |
+| 2.2 | names the store (`this store: Windows` / WSL) and says the other side's rounds are not included | *Counted from this side's store only — `<side>`, `<directory>`.*, with `WSL: <distro>` from the window's remote name and *this machine* otherwise; every directory of `coai.alsoWatchDataDirectories` whose `coai.db` EXISTS is named as another installation's store whose rounds are not included — asked by `existsSync` on the file (`otherStores`), never opened. | The storage article's sentence shape; the existence check is the whole of what crosses the boundary. |
+| 2.3 | median output **per launch**; the bundled run in `src_vs_code/src/test/bundledPage.test.ts` | The column is **per recorded turn** (`MEDIAN_OUTPUT_LABEL`), as 2.5 decided — one line holds a repair or a follow-up until 3.3. The bundled run lives in **`roundsBlock.test.ts`** beside the renderer cases, through `bundledLogModule` widened to take more `export … from` lines for the same bundle; `bundledPage.test.ts` is untouched. The block is rendered by the HOST (`PanelProvider.roundsBlockHtml`) and handed to `usageTabHtml` as `extras.rounds`, drawn FIRST, above the window buttons — the block's windows are its own. | The label is the plan's own 2.3 text, recorded so the column is not read as a slip; one test file per surface, and the harness change is the reusable part. |
+| 2.4 | `7 days: 214 rounds · 31 consults · 5 h: 12` | `7 days: 214 rounds · 31 consult turns · 5 h: 12` (`cardRoundsLine`, from the cached snapshot through `PanelState.roundsSnapshot`); `Rounds: count unavailable` when the read failed; nothing at all before the first read. | The ledger counts recorded TURNS of kind `consult`, and one consultation is several turns (2.3's own rule) — "31 consults" would overcount. |
+| 2.2 (code round) | a missing ledger is no lines | A missing `usage.jsonl` is still no lines; any OTHER failure (a permission error, a directory in the file's place — which on Windows opens with size 0 and never fails a read, so `isFile()` decides) is no lines AND `failure`, carried to the snapshot as `ledgerFailure`; the block says *Tokens and money: unavailable — the usage ledger could not be read: <why>* once and *unavailable* in every cell drawn from the ledger, the card *consult turns unavailable*. A thrown load sets it too. | The epic-2 code round (codex, two reviewers): an unreadable ledger read as an empty one draws nothing spent — the same lie *count unavailable* exists to prevent. `missingRatherThanBroken` (`notificationsFile.ts`) is reused for the missing-or-broken decision. |
+| 2.1 (code round) | `modelsKnownSince` over the whole table | The same answer, by a walk: rounds oldest first through `rounds_by_time`, each one's reviewers through `reviewers_by_round`, `LIMIT 1` — the cost is the rounds written before step 20, fixed once it ran, not the history. Measured on this machine before the change: the `MIN` over the join took 4.2 ms over 1 463 rounds and 8 513 reviewer rows. | The epic-2 code round: a once-a-minute read whose cost grows with the lifetime history. |
 
 ## Definition of Done
 

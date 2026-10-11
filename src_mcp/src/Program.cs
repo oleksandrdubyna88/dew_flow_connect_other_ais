@@ -278,6 +278,17 @@ internal static class Program
         /// candidate unprocessed in the shipped product however well it classifies.
         /// </remarks>
         Collect,
+
+        /// <summary>
+        /// Rounds per vendor row over the trailing 5 h / 24 h / 7 d, by stage, from the rounds database —
+        /// the local counter the Spending tab reads (story 2.1 of <c>todo/PLAN_every_round_is_counted.md</c>).
+        /// </summary>
+        /// <remarks>
+        /// Its own <c>args[0]</c> for the reason <c>--findings-many</c> is: a flag on <c>--log</c> would
+        /// be accepted by an older binary and answered with a log, and the extension would draw a count
+        /// of nought where it should say the server is too old. See <see cref="Server.RoundCountsMode"/>.
+        /// </remarks>
+        RoundCounts,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -296,6 +307,7 @@ internal static class Program
                 "--ask-api" => Startup.AskApi,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
+                "--round-counts" => Startup.RoundCounts,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
@@ -384,6 +396,11 @@ internal static class Program
 
             case Startup.Log:
                 return LogJson(args);
+
+            case Startup.RoundCounts:
+                // The clock is the system's here and a `--now` in a test; the data directory is
+                // resolved exactly as `--log` resolves it, and the read is read-only.
+                return Server.RoundCountsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
 
             case Startup.Findings:
                 return FindingsJson(args);
@@ -1699,12 +1716,19 @@ internal static class Program
 
         // ISO 8601 only: TryParse also took "9/25/2026", which is a guess about a culture, not an
         // instant. (Our own code reviewer, the code round.)
-        return once && at + 1 < args.Length && DateTimeOffset.TryParseExact(
-            args[at + 1], IsoInstants, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal, out var instant)
+        return once && at + 1 < args.Length && TryParseInstant(args[at + 1], out var instant)
             ? instant.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
             : null;
     }
+
+    /// <summary>
+    /// An ISO-8601 instant, or nothing — the ONE parse <c>--since</c> and <c>--round-counts --now</c>
+    /// share, so a second mode cannot come to accept a date the first refuses.
+    /// </summary>
+    internal static bool TryParseInstant(string text, out DateTimeOffset instant) =>
+        DateTimeOffset.TryParseExact(
+            text, IsoInstants, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out instant);
 
     internal static async Task<int> AskLocalAsync(string[] args)
     {
@@ -2310,6 +2334,11 @@ internal static class Program
         `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
         JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
         older shape, which carries every listed round's findings inline.
+        `--round-counts [--now <utc instant>]` prints, per vendor row, how many DISTINCT rounds ran in
+        the trailing 5 h, 24 h and 7 d (plan, code, document and feature apart), the reviewer rows those
+        rounds launched, and the rounds per reviewer model where the round recorded one — from the rounds
+        database alone, read-only, as JSON; `--now` fixes the clock. A missing database is an empty
+        answer and exit 0; a bad argument is 65; a database that will not read is 74 — never 64.
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.

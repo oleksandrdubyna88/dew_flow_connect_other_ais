@@ -924,8 +924,8 @@ public sealed class RoundsDb : IDisposable
         {
             using var write = _db.CreateCommand();
             write.CommandText = """
-                INSERT INTO reviewers (round_id, provider, role, status, findings, seconds, note)
-                VALUES ($round, $provider, $role, $status, $findings, $seconds, $note)
+                INSERT INTO reviewers (round_id, provider, role, status, findings, seconds, note, model)
+                VALUES ($round, $provider, $role, $status, $findings, $seconds, $note, $model)
                 """;
             Bind(write, "$round", roundId);
             Bind(write, "$provider", reviewer.Provider);
@@ -934,6 +934,10 @@ public sealed class RoundsDb : IDisposable
             Bind(write, "$findings", reviewer.Findings);
             Bind(write, "$seconds", reviewer.Seconds);
             Bind(write, "$note", reviewer.Note);
+            // The model as the launch ran it (schema step 20). Empty when the reviewer named none —
+            // a stood-down local reviewer, a remote role whose server chose — and the round counter
+            // then counts the round under its stage and under no model.
+            Bind(write, "$model", reviewer.Model);
             write.ExecuteNonQuery();
         }
     }

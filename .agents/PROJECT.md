@@ -51,7 +51,7 @@ node .agents/conventions/tools/pin-check.mjs
   one stray stdout line while serving stdio is a protocol corruption that looks like a protocol bug.
   What is sanctioned is not a fixed list of two flags but a shape: a **one-shot CLI mode**, selected
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
-  all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
+  all. Those are `--help`, `--version`, `--log`, `--round-counts`, `--findings`, `--findings-many`, `--ask-local`,
   `--ask-remote`, `--ask-api`, `--probe-api`, `--providers`, `--bugs-json`, `--normalize`, `--outline`, `--collect-bugs`, `--pairs-json`,
   `--pairs-keep`, `--pairs-decide`, `--real-method`, `--file-at`, `--tree-at`, `--trees`, `--tree-remove`, `--upload-pairs`, `--requeue-refused`, `--close-consult`, `--cadence`, `--consultants`, `--check-consultant`, `--security-prompt-text`, `--features`, `--check-security`, `--check-model` and `--agy-hook`,
   and their stdout is their entire interface — `--log` has been read from stdout by

@@ -64,6 +64,7 @@ import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
 import { type WatchedDir } from './escalationDirs';
 import { roleOnServers } from './serverRoles';
+import type { RoundsSnapshot } from './roundCountsCache';
 import { CUSTOM_ROLES_SINCE } from './rolesBlocks';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -352,6 +353,11 @@ export interface PanelState {
    * have cost through an API. Anything typed wins over it.</p>
    */
   readonly cardPrices: Readonly<Record<string, ModelPrice>>;
+  /**
+   * The rounds each Models card's line counts (story 2.4 of todo/PLAN_every_round_is_counted.md) — the CACHED snapshot,
+   * never a read of its own (`roundCountsCache.ts`); absent before the first read, and the card then says nothing.
+   */
+  readonly roundsSnapshot?: RoundsSnapshot | undefined;
   /**
    * Each vendor's installed and published CLI version, by vendor id.
    *
@@ -2435,18 +2441,22 @@ ${features}
  * repaint: a repaint reloads the webview, and a reload closes whatever dropdown was open.
  */
 export /**
- * What one vendor cost: what it billed, or what its rates say, or nothing.
+ * What one vendor cost: what it billed, and what its rates say about the lines nobody billed — or nothing.
  *
- * <p>Never both. A reported cost is the fact and an estimate beside it is noise; an estimate with
- * no rate behind it is a guess dressed as a number, so that stays a dash. The tilde is load-bearing
- * — it is the difference between what somebody charged and what we worked out.</p>
+ * <p>Never the same line twice. A reported cost is the fact, and a billed line is never re-estimated;
+ * a line its vendor did not bill is priced at its own model's rate and shown apart, as `$0.42 +
+ * ~$3.00`, because a sum of the two is a number nobody can check. An estimate with no rate behind it
+ * is a guess dressed as a number, so that stays a dash. The tilde is load-bearing — it is the
+ * difference between what somebody charged and what we worked out — and `≥` says some line could not
+ * be priced at all (story 2.5 of todo/PLAN_every_round_is_counted.md).</p>
  */
-function spend(row: { costUsd: number | null; estimatedUsd: number | null }): string {
-  return row.costUsd !== null
-    ? money(row.costUsd)
-    : row.estimatedUsd !== null
-      ? estimated(row.estimatedUsd)
-      : '—';
+function spend(row: { costUsd: number | null; estimatedUsd: number | null; floor?: boolean }): string {
+  return atLeast(row.floor === true, total(row.costUsd, row.estimatedUsd));
+}
+
+/** `≥ ` before a figure that leaves something out — never before a dash, which already says nothing is known. */
+function atLeast(floor: boolean, shown: string): string {
+  return floor && shown !== '—' ? `≥ ${shown}` : shown;
 }
 
 
@@ -2471,6 +2481,8 @@ interface Half {
     readonly guess: number | null;
     /** Reviewers only: a chat card carries no duration, and the joint line shows none. */
     readonly seconds: number;
+    /** Reviewers only: some ledger line could not be priced, so the money is at least what is shown. */
+    readonly floor?: boolean;
   };
 }
 
@@ -2535,11 +2547,13 @@ ${team}`,
     }),
     { tokens: 0, cost: null as number | null, guess: null as number | null, seconds: 0, runs: 0 },
   );
+  // One row that could not price a line makes every vendor's total a floor too.
+  const floor = rows.some((r) => r.floor);
 
   return {
     html: `${cards}
-<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${summedTimeSpent(rows)}</div>`,
-    totals: all,
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${atLeast(floor, total(all.cost, all.guess))} · ${summedTimeSpent(rows)}</div>`,
+    totals: { ...all, floor },
   };
 }
 
@@ -2662,7 +2676,8 @@ function chatRegion(
   // the whole aggregation. (Four reviewers of the code round, independently.)
   const priceOf: ChatPriceOf = (model) => prices[model];
   const { rows, totals: sums } = chatSpend(chat.turns, chat.doors, window, new Date(), priceOf, chat.vendorOf);
-  const totals = { tokens: sums.tokens, cost: sums.costUsd, guess: sums.estimatedUsd, seconds: 0 };
+  // A turn nobody priced adds nothing to the money, so the money is a floor — the same rule as an unpriced reviewer line.
+  const totals = { tokens: sums.tokens, cost: sums.costUsd, guess: sums.estimatedUsd, seconds: 0, floor: sums.unpriced > 0 };
   if (rows.length === 0) {
     return {
       html: '<div class="empty">No conversations in this window. Ask a second model about a passage and'
@@ -2711,10 +2726,10 @@ export function usageRegion(
   const reviewers = reviewersRegion(usage, window, vendors, prices, teamServers);
   const chats = chatRegion(chat, window, prices, vendorPalette(vendors.map((v) => v.id)));
   const tokens = reviewers.totals.tokens + chats.totals.tokens;
-  const money = total(
+  const money = atLeast(reviewers.totals.floor === true || chats.totals.floor === true, total(
     bothHalves(reviewers.totals.cost, chats.totals.cost),
     bothHalves(reviewers.totals.guess, chats.totals.guess),
-  );
+  ));
 
   // TWO COLUMNS WHEN THERE IS ROOM, one when there is not - and the page decides, not the host: a
   // panel is dragged narrow and wide again without anybody redrawing it. The columns keep the width
