@@ -59,7 +59,7 @@ test('every language describes the sides seen and the path-fields switch, by the
 });
 
 test('every language says a CLI path is kept per side, and names the older-extension limit (paths per side E3)', () => {
-  // Design (c) of todo/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
+  // Design (c) of research/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
   // paths are the same in every language, so they are what all five are asked for; `PATH` is the lookup an emptied
   // field — and a side whose own value an older extension's save dropped — falls back to.
   const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
@@ -315,7 +315,7 @@ const SETTING_ALIAS: Record<string, string> = {
   // Issue #131: the article names both choices and says what neither of them is.
   'coai.gatePer': 'never once per story',
   'coai.perSideSettings': 'separate settings for each side',
-  // todo/PLAN_paths_per_side.md E2.3: the switch, by the label Setup › This side gives it.
+  // research/PLAN_paths_per_side.md E2.3: the switch, by the label Setup › This side gives it.
   'coai.pathFieldsPerSide': 'path fields per side',
   // The consultant's five. The caller map and each cap is a setting of its own, so each one is
   // covered by the words the article actually uses for it.

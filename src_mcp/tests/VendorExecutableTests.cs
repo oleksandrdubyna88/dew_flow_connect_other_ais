@@ -23,7 +23,7 @@ public sealed class VendorExecutableTests
     public void AVendorsExecutablePath_TravelsInTheVendorList()
     {
         // Read as the WSL side reads it: on a Windows host a POSIX path is the other side's and skipped
-        // (todo/PLAN_paths_per_side.md E1.2, ACliPathOfTheOtherSideIsSkippedTests).
+        // (research/PLAN_paths_per_side.md E1.2, ACliPathOfTheOtherSideIsSkippedTests).
         var vendors = PanelSettings.ParseVendors(
             """[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"/home/user/.npm-global/bin/codex"}]""", windows: false);
 

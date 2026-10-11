@@ -2,7 +2,7 @@ import { familyLabel, spelledForTheOtherOs, storedForThisSide, type ExecutableBy
 import { keepsItsOwnRefusal } from './pathSides';
 
 /**
- * What a SAVE of a CLI-path field writes on a catalog row — the one write rule of todo/PLAN_paths_per_side.md design (c),
+ * What a SAVE of a CLI-path field writes on a catalog row — the one write rule of research/PLAN_paths_per_side.md design (c),
  * the same in every mode (amended by the cadence consultation for epics 4-6, finding a).
  *
  * <p><b>Why one rule.</b> The first design wrote only the legacy `executablePath` while one field was shown, and the

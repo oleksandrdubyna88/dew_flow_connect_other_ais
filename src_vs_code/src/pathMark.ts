@@ -2,7 +2,7 @@ import { escapeHtml } from './escapeHtml';
 import { type PathFinding, markSentence } from './pathFindings';
 
 /**
- * The bright mark beside a path of this side that is not where the settings say it is (todo/PLAN_paths_per_side.md
+ * The bright mark beside a path of this side that is not where the settings say it is (research/PLAN_paths_per_side.md
  * E5.4) — ONE builder for every place that draws one: a question-consultant root, a Models card's CLI path, a watched
  * data folder and the data directory on Setup › MCP server.
  *

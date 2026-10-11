@@ -126,7 +126,7 @@ test('setup/mcp offers no delete of the old folder after a move that did not ver
 });
 
 test('setup/mcp says a watched folder of the other OS is the other side\'s, quietly — never the refusal tone', () => {
-  // todo/PLAN_paths_per_side.md E1.3: the list is shared with the WSL window, where `/home/...` is right.
+  // research/PLAN_paths_per_side.md E1.3: the list is shared with the WSL window, where `/home/...` is right.
   const alsoWatched = watchedDirs('C:\\Own', ['/home/user/.local/share/coai-mcp', 'C:\\Elsewhere'], 'win32');
   const { html } = opened('setup/mcp', everyButton({ storage: { ...WHERE, alsoWatched } }));
   const pane = pageTree(html).one((node) => node.dataset.pane === 'setup/mcp', 'the setup/mcp pane');

@@ -76,7 +76,7 @@ test('the env block coai-mcp reads is byte-identical after the migration', () =>
 });
 
 test('a row\'s per-side CLI paths survive the migration, and the env block still names only this side\'s one', () => {
-  // todo/PLAN_paths_per_side.md E3.1: the migration rewrites the rows it moves definitions into; every other field of
+  // research/PLAN_paths_per_side.md E3.1: the migration rewrites the rows it moves definitions into; every other field of
   // every row rides along, `executablePathBySide` included — and the wire carries the resolved `executablePath` alone.
   const bySide = { windows: 'C:\\tools\\codex.cmd', posix: '/opt/codex', mirrored: 'C:\\tools\\codex.cmd' };
   const layer: CatalogLayer = { ...OPERATOR, vendors: [{ ...REVIEWERS[0]!, executablePathBySide: bySide }, REVIEWERS[1]!] };

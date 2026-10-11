@@ -19,7 +19,7 @@ useFileProbe(fileAt(statSyncForProbe));
 
 /**
  * A CLI path spelled for the OTHER operating system is skipped — the runtime's CLI is looked up on PATH — never launched
- * and never sent to the server (todo/PLAN_paths_per_side.md E1.2). VS Code's settings are shared by a WSL window and a
+ * and never sent to the server (research/PLAN_paths_per_side.md E1.2). VS Code's settings are shared by a WSL window and a
  * Windows window, so a reviewer row's `C:\…\codex.cmd` reaches the WSL side, whose server probed it as a file, found
  * nothing, and the card said "cannot review" for a row that is right on the side that wrote it.
  */
@@ -84,7 +84,7 @@ test('a chat model saved with an other-side CLI path runs the runtime from PATH 
  * counted reads that only COPY or SHOW the stored value — a copy is resolved where it is launched or written. A new raw
  * read changes a count and goes red, so a launch site cannot be added that runs the other side's CLI.
  *
- * <p>Since E3 (todo/PLAN_paths_per_side.md E3.1) a catalog ROW holds a per-side value too, so a row is resolved WHOLE —
+ * <p>Since E3 (research/PLAN_paths_per_side.md E3.1) a catalog ROW holds a per-side value too, so a row is resolved WHOLE —
  * `executableOf(row, side)` / `pathForThisSide(row, side)`, or copied as `storedForThisSide(row, family)` — never through
  * its `.executablePath` alone, which would skip `executablePathBySide`. Those calls read no `.executablePath` and need no
  * count. `executableHere(value, side)` takes ONE value and is for a legacy DEFINITION (a consultant's, a question row's, a

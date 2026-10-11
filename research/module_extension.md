@@ -3339,7 +3339,7 @@ the seed is idempotent so switching off and on again keeps what a side had. `uiS
 
 VS Code shares its user settings between a WSL window and a plain Windows window on one machine, and each side runs its
 own `coai-mcp` — so every path setting is read on both sides, and a value written on one is spelled for the other's
-operating system. `todo/PLAN_paths_per_side.md` E1 generalised the question-consultant roots' rule (`pathFamily.ts`)
+operating system. `research/PLAN_paths_per_side.md` E1 generalised the question-consultant roots' rule (`pathFamily.ts`)
 to every one of them:
 
 - **The registry** — `pathSettings.ts` `PATH_SETTINGS`: seven fields in seven settings (`coai.qconsultRoots`,
@@ -3383,7 +3383,7 @@ to every one of them:
 
 ### A missing path of this OS: a notice at every start and a bright mark (2026-10-10, paths per side E5)
 
-E1 decided which stored path is the OTHER side's and skipped it; `todo/PLAN_paths_per_side.md` E5 is the other half of
+E1 decided which stored path is the OTHER side's and skipped it; `research/PLAN_paths_per_side.md` E5 is the other half of
 its design (e): a path of THIS side that the disk says is not there is a finding — said once per window run with
 **Open in Settings**, drawn bright beside its value, counted on its tab — and a NAMED data directory that is missing is
 red at every start and created by nothing (D3).
@@ -3519,7 +3519,7 @@ red at every start and created by nothing (D3).
 ### The sides this profile has been used on (2026-10-10, paths per side E2)
 
 Nothing in VS Code tells a window that the profile is also used from the other side of the machine, and the second
-path field of `todo/PLAN_paths_per_side.md` (E3/E4) needs exactly that. E2 is the record (design (a), option A):
+path field of `research/PLAN_paths_per_side.md` (E3/E4) needs exactly that. E2 is the record (design (a), option A):
 
 - **The registry** — `sidesSeen.ts` (pure): one `globalState` key per side, `coai.sideSeen@<sideKey>` =
   `{family, label, firstSeen, lastSeen}` (UTC milliseconds). One key per side, so two windows never read-modify-write one
@@ -3556,7 +3556,7 @@ path field of `todo/PLAN_paths_per_side.md` (E3/E4) needs exactly that. E2 is th
 
 ### Two values, stored and resolved (2026-10-11, paths per side E3)
 
-E3 is the storage half of `todo/PLAN_paths_per_side.md`'s second path field — the gate called it risky, because one
+E3 is the storage half of `research/PLAN_paths_per_side.md`'s second path field — the gate called it risky, because one
 persisted row is read and written by two extension versions at once (a WSL remote installs its own copy). Nothing new
 is DRAWN yet (E4 draws the two fields); what a side runs and what a save writes changed.
 
@@ -3665,7 +3665,7 @@ flowchart TD
 
 ### The page draws two fields (2026-10-11, paths per side E4)
 
-E4 is the page half of `todo/PLAN_paths_per_side.md`'s second path field: what E2 decides (`twoPathFields`) and E3
+E4 is the page half of `research/PLAN_paths_per_side.md`'s second path field: what E2 decides (`twoPathFields`) and E3
 stores and resolves is drawn. ONE decision for every place — `pathSides.ts`: `pathSidesOf(PanelState.sides, family)`
 is `undefined` (one field, every place byte for byte as before) unless the switch or the registry says two; then it
 names this side (`thisSideCaption`: *This side — Windows*, *This side — WSL / Linux (WSL: Ubuntu)*) and the other

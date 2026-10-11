@@ -8,7 +8,7 @@ import { ROOT_ANSWER_LIFETIME_MS, type FilePresence } from '../pathFamily';
 import { PROBE_DEADLINE_MS, PathProbes, statProbe } from '../pathProbes';
 
 /**
- * The bounded probes (todo/PLAN_paths_per_side.md E5.1, the cadence consultant's amendment): every probe has a deadline
+ * The bounded probes (research/PLAN_paths_per_side.md E5.1, the cadence consultant's amendment): every probe has a deadline
  * that answers `unknown`, at most one probe is outstanding per path however many renders and expiries pass, an unknown
  * answer is never kept as fresh, and a share that comes back clears the finding without any settings edit.
  */

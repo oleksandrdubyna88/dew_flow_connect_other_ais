@@ -94,7 +94,7 @@ public sealed class RoundsDb : IDisposable
     /// </summary>
     /// <remarks>
     /// <para>No <c>Directory.CreateDirectory</c> and no create mode: a mode the extension launches to READ must never make
-    /// the data directory it reads (todo/PLAN_paths_per_side.md E5.7, D3). <see cref="Open"/>'s first line makes it, so
+    /// the data directory it reads (research/PLAN_paths_per_side.md E5.7, D3). <see cref="Open"/>'s first line makes it, so
     /// <c>--bugs-json</c>, <c>--pairs-json</c> and the three pair reads created a NAMED data directory that was missing —
     /// into a bare mount point when a drive was not mounted — and hid the condition the extension reports. The caller asks
     /// <see cref="PresenceOf"/> first and answers empty only when the file is CONFIRMED absent; a file removed between that

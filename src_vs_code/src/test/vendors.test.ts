@@ -90,7 +90,7 @@ test('the path travels to the server, because PATH cannot always answer', () => 
   // WSL is why: `codex` resolves there to the Windows npm shim on the interop PATH, which runs
   // Linux node against a Windows install and dies. The native one is in ~/.npm-global/bin and
   // nothing could point at it, so a WSL round failed whatever anybody configured.
-  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (research/PLAN_paths_per_side.md E1.2).
   const own = hostFamily() === 'windows' ? 'C:\\tools\\codex.exe' : '/usr/local/bin/codex';
   const env = vendorsEnv([
     { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: own, pricePerMillionIn: 0, pricePerMillionOut: 0 },

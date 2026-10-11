@@ -7,7 +7,7 @@ import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 
 /**
- * The settings mirror does not write into a NAMED data root that is missing (todo/PLAN_paths_per_side.md E5.7, D3).
+ * The settings mirror does not write into a NAMED data root that is missing (research/PLAN_paths_per_side.md E5.7, D3).
  * Writing the server's settings file created the folder — into a bare `/mnt/z` mount point when the drive was not
  * mounted — and hid the one condition the page and the notice now report. The mirror asks the watch first and answers
  * `no-data-root`: a terminal outcome the schedule neither retries nor reports, because the missing-path notice already

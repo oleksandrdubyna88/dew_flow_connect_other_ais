@@ -12,7 +12,7 @@ import { panelState, runPanel } from './panelPageHarness';
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * Setup › MCP server once both sides are known (todo/PLAN_paths_per_side.md E4.3): the watched data folders in the groups
+ * Setup › MCP server once both sides are known (research/PLAN_paths_per_side.md E4.3): the watched data folders in the groups
  * of `pathGroups.ts`, and the OTHER side's data directory READ-ONLY (decided with the operator, D2) — text in a fieldset
  * with its legend and caption, no input, nothing to save, and *Change it from a window on that side.* One side known: the
  * place is drawn as before. The page is RUN (`runPanel`) and read back as the tree it drew.

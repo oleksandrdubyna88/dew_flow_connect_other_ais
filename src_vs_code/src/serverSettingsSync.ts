@@ -155,7 +155,7 @@ export class ServerSettingsSync {
      */
     private readonly features: () => readonly string[] = () => [],
     /**
-     * Whether the NAMED data root is missing, asked before every write (todo/PLAN_paths_per_side.md E5.7, D3): a
+     * Whether the NAMED data root is missing, asked before every write (research/PLAN_paths_per_side.md E5.7, D3): a
      * settings file written into a root that is not there would create it — in a bare `/mnt/z` mount point, hiding the
      * one condition the page and the notice report. `no-data-root` is a terminal outcome the schedule neither retries
      * nor reports: the missing-path notice already says it, and two toasts for one folder is what it must not be.

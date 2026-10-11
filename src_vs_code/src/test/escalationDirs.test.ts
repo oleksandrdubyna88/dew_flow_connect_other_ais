@@ -29,7 +29,7 @@ test('a named directory is watched beside the window’s own', () => {
 });
 
 test('a WSL path in a Windows window is the other side\'s — never refused, never watched, said with the shape that works here', () => {
-  // todo/PLAN_paths_per_side.md E1.3. The list is shared with the WSL window, where `/home/...` is right; a refusal here
+  // research/PLAN_paths_per_side.md E1.3. The list is shared with the WSL window, where `/home/...` is right; a refusal here
   // made one list unable to hold both sides' values. Still never handed to the watcher: `/home/...` resolved by a
   // Windows host is `C:\home\...`, which is not that folder.
   const dirs = watchedDirs('C:\\Own', ['/home/user/.local/share/coai-mcp'], 'win32');

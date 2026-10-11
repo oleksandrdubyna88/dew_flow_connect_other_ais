@@ -7,7 +7,7 @@ import { pathGroupsHtml } from './pathGroupsView';
 import { otherSideFieldset, type PathSides } from './pathSides';
 
 /**
- * Setup › MCP server once both sides are known (todo/PLAN_paths_per_side.md E4.3): the watched data folders in the
+ * Setup › MCP server once both sides are known (research/PLAN_paths_per_side.md E4.3): the watched data folders in the
  * groups of `pathGroups.ts`, and the OTHER side's data directory, read-only (decided with the operator, D2).
  *
  * <p><b>The watched folders</b> are grouped by their SPELLING alone (`NOTHING_ASKED`) — the rule `escalationDirs.ts`

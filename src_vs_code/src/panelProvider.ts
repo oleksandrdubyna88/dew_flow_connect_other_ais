@@ -363,7 +363,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /**
    * The per-side CLI-path keeper (`cliPathKeepHost.ts`), handed in by `extension.ts` the same way: what each Models card
    * offers back with **Restore**, and the restore a press runs — the keeper's own, which re-reads the row at the click
-   * (todo/PLAN_paths_per_side.md E4.1). Absent draws no Restore.
+   * (research/PLAN_paths_per_side.md E4.1). Absent draws no Restore.
    */
   public cliPathKeep: { dropped(): readonly DroppedValue[]; restore(offer: DroppedValue): Promise<void> } | undefined;
   /** Text typed into an other side's box and refused, by box — drawn beside the box on the next paint (E4.1, E4.2). */
@@ -2151,7 +2151,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // (Ux finding, plan 5's plan round.)
         const vendors = vendorsFrom(this.read(config)('vendors')).map((v) =>
           v.id === write.vendor
-            // A CLI-path box is saved per side: this side's mirrored (todo/PLAN_paths_per_side.md E3.2), the other side's
+            // A CLI-path box is saved per side: this side's mirrored (research/PLAN_paths_per_side.md E3.2), the other side's
             // box (`executablePath.<family>`, E4.1) into that side's member alone.
             ? { ...v, ...pinnedDocument(v, write.key), ...vendorFieldWrite(v, write.key, write.value, hostFamily()) }
             : v,
@@ -2262,7 +2262,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /**
    * A value typed into the OTHER side's CLI-path box that is spelled for this side's OS (`cliPathRefusal`): kept with its
-   * reason and drawn beside the box by the repaint, never a toast (todo/PLAN_paths_per_side.md E4.1). Every write of the
+   * reason and drawn beside the box by the repaint, never a toast (research/PLAN_paths_per_side.md E4.1). Every write of the
    * other side's box is refused while this side keeps its own settings: it would land in this side's own `vendors`, which
    * the other side never reads (E4's own review, item 1). Any write of a CLI-path box that is not refused forgets that
    * box's refusal. True when the write was refused.
@@ -2682,7 +2682,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       }
       case 'forgetSide':
-        // A side gone for good stops counting before its 90 days are up (todo/PLAN_paths_per_side.md E2.4); this
+        // A side gone for good stops counting before its 90 days are up (research/PLAN_paths_per_side.md E2.4); this
         // window's own record is refused inside. The render below redraws the list from the store.
         if (id !== undefined) {
           await forgetSide(this.context.globalState, id, this.sideHere().key);

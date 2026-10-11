@@ -4,7 +4,7 @@ import { type PathFamily } from './pathFamily';
 import { sidesIn, type SideHere, type SideReader } from './sidesSeen';
 
 /**
- * The OTHER side's data directory, read-only (todo/PLAN_paths_per_side.md E3.4; decided with the operator, D2).
+ * The OTHER side's data directory, read-only (research/PLAN_paths_per_side.md E3.4; decided with the operator, D2).
  *
  * <p><b>Where it is.</b> `coai.dataDirectory` is always per side (`ALWAYS_PER_SIDE`): each window writes its choice into
  * its own side's overlay in `globalState` — the client's store, which every window of the profile shares (measured,

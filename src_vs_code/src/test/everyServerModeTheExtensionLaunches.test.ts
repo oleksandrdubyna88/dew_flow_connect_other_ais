@@ -7,7 +7,7 @@ import { codeOf, shippedSources } from './dataDirWriters';
 
 /**
  * Every `coai-mcp` mode this extension launches, classified — and every one launched to READ is held by the server's own
- * test to leave a missing NAMED data directory absent (todo/PLAN_paths_per_side.md E5.7; the risk consultation of story
+ * test to leave a missing NAMED data directory absent (research/PLAN_paths_per_side.md E5.7; the risk consultation of story
  * 5.7, item C, measured: `--bugs-json`, `--pairs-json`, the three pair reads and `--providers` made the folder the
  * extension refuses to make).
  *

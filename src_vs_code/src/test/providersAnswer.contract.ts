@@ -12,7 +12,7 @@ import { vendorsFrom } from '../vendors';
 import { coaiMcpBinary } from './coaiMcpBinary';
 
 /**
- * The SHAPE of `--providers`' `settingProblems`, read off the REAL coai-mcp (todo/PLAN_paths_per_side.md E5.2).
+ * The SHAPE of `--providers`' `settingProblems`, read off the REAL coai-mcp (research/PLAN_paths_per_side.md E5.2).
  *
  * <p>Two implementations hold this field — the C# that prints it and the parser in `providers.ts` that reads it — and
  * two suites agreeing with themselves is not a check (`testing.md`, *a contract with TWO IMPLEMENTATIONS*). So the binary

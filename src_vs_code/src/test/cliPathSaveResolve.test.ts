@@ -6,7 +6,7 @@ import { pathForThisSide, storedForThisSide, type ExecutableBySide, type Executa
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 
 /**
- * Save → resolve (todo/PLAN_paths_per_side.md E3.2, design (c) as amended by the cadence consultation for epics 4-6).
+ * Save → resolve (research/PLAN_paths_per_side.md E3.2, design (c) as amended by the cadence consultation for epics 4-6).
  *
  * <p>ONE write rule in every mode: every save of a CLI-path field writes `executablePathBySide[<its family>]`; a save of
  * THIS side's field also mirrors the value into the legacy `executablePath` (what every older extension reads) and

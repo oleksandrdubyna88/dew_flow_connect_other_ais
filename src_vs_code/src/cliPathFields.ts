@@ -12,7 +12,7 @@ import { cliBoxKey, refusalAttributes, refusalNote, type TypedRefusal, type Type
 import type { Vendor } from './vendors';
 
 /**
- * A Models card's CLI path (todo/PLAN_paths_per_side.md E4.1): ONE box — THIS side's field, exactly as it was drawn
+ * A Models card's CLI path (research/PLAN_paths_per_side.md E4.1): ONE box — THIS side's field, exactly as it was drawn
  * before E4 — or, once both sides are known (`pathSides.ts`), two: this side's first, labelled *This side — Windows*,
  * then the OTHER side's in a `fieldset` with its legend and caption, editable as text only. No Browse on the other side's
  * box: this host cannot browse that disk, and its value is never `stat`ed from here.
@@ -76,7 +76,7 @@ function thisSideField(vendor: Vendor, cli: CliPathFacts): string {
 }
 
 /**
- * The quiet line under a CLI path spelled for the OTHER operating system (todo/PLAN_paths_per_side.md E1.5): VS Code
+ * The quiet line under a CLI path spelled for the OTHER operating system (research/PLAN_paths_per_side.md E1.5): VS Code
  * shares the row with the other side's window, where the path is right; here it is skipped and the CLI looked up on
  * PATH — the same decision the settings file this window writes (`pathForThisSide`) and coai-mcp's own read make.
  */
