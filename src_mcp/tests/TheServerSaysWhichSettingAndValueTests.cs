@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The server says WHICH setting and WHICH value a refusal is about (todo/PLAN_paths_per_side.md E5.2), so the Settings
+/// The server says WHICH setting and WHICH value a refusal is about (research/PLAN_paths_per_side.md E5.2), so the Settings
 /// page can mark the folder rather than relay a sentence: a missing question-consultant root of this OS travels in
 /// <c>--providers</c>' <c>settingProblems</c> as <c>(key, kind, value, sentence)</c>, beside the sentence
 /// <c>unrecognised</c> has always carried for an older extension.

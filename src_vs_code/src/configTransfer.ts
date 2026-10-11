@@ -32,11 +32,11 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   dataDirectory: 'a path on this machine',
   dataSide: 'which side of this machine this window is',
   alsoWatchDataDirectories: 'paths on this machine',
-  // The question consultant's disk roots are folders of the machine that wrote them (todo/PLAN_paths_per_side.md E1.6,
+  // The question consultant's disk roots are folders of the machine that wrote them (research/PLAN_paths_per_side.md E1.6,
   // decided with the operator, D4). An older export that carries them is refused by name; the importer keeps its own.
   qconsultRoots: 'paths on this machine',
   perSideSettings: 'how this machine splits its settings between its sides',
-  // How many fields a path setting shows is decided by the sides THIS profile has been used on (todo/PLAN_paths_per_side.md
+  // How many fields a path setting shows is decided by the sides THIS profile has been used on (research/PLAN_paths_per_side.md
   // E2.3): carried to another machine, it would decide over sides that machine never had.
   pathFieldsPerSide: 'how many fields a path setting shows, decided by the sides this machine has been used on',
   // The catalog's one-time move (PLAN_one_model_catalog.md E1.3): this machine's own copy of its settings from
@@ -48,7 +48,7 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
 
 /**
  * The fields inside a vendor or a consultant that are paths on this machine: the legacy CLI path, and the per-side pair a
- * row keeps for its Windows and WSL / Linux windows (todo/PLAN_paths_per_side.md E3.1) — as much this machine's as the
+ * row keeps for its Windows and WSL / Linux windows (research/PLAN_paths_per_side.md E3.1) — as much this machine's as the
  * first, and as wrong on another.
  */
 const MACHINE_PATH_FIELDS: readonly string[] = ['executablePath', 'executablePathBySide'];

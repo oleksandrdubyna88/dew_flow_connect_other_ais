@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { THROUGH_THE_MAKER, WRITERS, codeOf, shippedSources, sitesIn } from './dataDirWriters';
 
 /**
- * The inventory of every writer that MAKES a directory (todo/PLAN_paths_per_side.md E5.0 (b), E5.7; the gate's
+ * The inventory of every writer that MAKES a directory (research/PLAN_paths_per_side.md E5.0 (b), E5.7; the gate's
  * plan-round item B), derived by a scan rather than remembered: each one makes its folders through the one maker
  * (`dataDirMaker.ts`, which never makes a named root) — the async ones after the board's guard — or carries the reason it
  * can never touch the data directory: the extension's own storage, a temp folder of its own, or the folder a person

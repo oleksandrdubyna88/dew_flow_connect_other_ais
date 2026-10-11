@@ -4,7 +4,7 @@ import { otherSideFieldset, thisSideCaption, type PathSides } from './pathSides'
 
 /**
  * A list of folders a Windows window and a WSL window share, drawn in its three groups once both sides are known
- * (todo/PLAN_paths_per_side.md E4.2, E4.3; the groups are `pathGroups.ts`'s): THIS side's under *This side — Windows*,
+ * (research/PLAN_paths_per_side.md E4.2, E4.3; the groups are `pathGroups.ts`'s): THIS side's under *This side — Windows*,
  * the OTHER side's in a `fieldset` with its legend and caption, and *Both sides / unclear* — every entry in exactly one,
  * nothing hidden. The question consultant's folders and the watched data folders draw through this one builder, each
  * with its own line per entry and what it adds to a group (Add a folder…, the typed box).

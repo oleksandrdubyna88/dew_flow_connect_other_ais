@@ -1,12 +1,12 @@
 # PLAN — a path in the settings belongs to a side: a missing folder is marked, and two sides get two fields
 
-> Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
-> deviations are under E1); E5 implemented 2026-10-10 on `feat/paths-per-side-e5-on-main` (stories 5.0–5.7; its
-> deviations are under E5); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
-> [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E2 implemented 2026-10-10 (PR #751; stories
-> 2.1–2.4; its deviations are under E2); E3 implemented 2026-10-11 on `feat/paths-per-side-e3-two-values` (stories
-> 3.1–3.5; its deviations are under E3); E4 implemented 2026-10-11 on `feat/paths-per-side-e4-two-fields` (stories
-> 4.1–4.5; its deviations are under E4), not merged yet — the plan is promoted once E4 is merged.** Scope: the
+> Status: **IMPLEMENTED, 2026-10-11.** All six epics shipped: E0 measured 2026-10-10
+> ([RESULTS](RESULTS_side_registry_reaches_the_other_window.md)); E1 #740, E5 #752 and E2 #751 (2026-10-10; E2 and E5
+> released in extension 0.68.0 / coai-mcp 0.47.0), E3 #760 and E4 #764 (2026-10-11, the next extension release). Each
+> epic's deviations are recorded under it ("E1 as built" … "E4 as built"); the largest: the released extension DROPS
+> `executablePathBySide` on any vendor save (measured in E3 — a newer window says so once and offers **Restore**), and
+> with `coai.perSideSettings` on the other side's boxes are not drawn (E4's own review). Known limits left open are listed
+> at the end of "E4 as built". The feature review (`review_feature`) was skipped: no vendor is ticked for it. Scope: the
 > extension's path-bearing settings and the pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
@@ -22,9 +22,9 @@
 > **Its four open questions were decided with the operator on 2026-10-09** — see *Decided with the operator* (D1–D4);
 > D3 (a missing data directory is always red) went against the recommendation and reshaped E5.
 >
-> Related docs: [module_extension.md](../research/module_extension.md) (*Settings a side keeps to itself*, *A Team-server
-> sign-in belongs to a SIDE*), [module_server.md](../research/module_server.md),
-> [architecture.md](../research/architecture.md), [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md).
+> Related docs: [module_extension.md](module_extension.md) (*Settings a side keeps to itself*, *A Team-server
+> sign-in belongs to a SIDE*), [module_server.md](module_server.md),
+> [architecture.md](architecture.md), [PLAN_a_wsl_consultant_is_checked_from_windows.md](../todo/PLAN_a_wsl_consultant_is_checked_from_windows.md).
 
 ## The request (operator, 2026-10-09, after extension 0.65.0)
 
@@ -86,7 +86,7 @@ their words:
 
 Checked and **not** paths: `securityLane` and `roles` (prompt bodies live by id in the data directory,
 `package.json` descriptions), `teamServers` (URLs, `application` scope), `bugzServer` (a URL), `credsKey`, `dataSide`.
-A future `coai.credsPath` ([PLAN_coai_finds_creds_where_it_is.md](PLAN_coai_finds_creds_where_it_is.md)) would be an
+A future `coai.credsPath` ([PLAN_coai_finds_creds_where_it_is.md](../todo/PLAN_coai_finds_creds_where_it_is.md)) would be an
 eighth path field and must join the registry E1.1 builds.
 
 ### What already exists for "sides"
@@ -297,7 +297,7 @@ RUN the page through `src/test/panelPageHarness.ts` (`runPanel`) and `src/test/p
 
 ### E0 — measure before building (no product code) — ✅ measured 2026-10-10
 
-**Result** ([RESULTS_side_registry_reaches_the_other_window.md](../research/RESULTS_side_registry_reaches_the_other_window.md)):
+**Result** ([RESULTS_side_registry_reaches_the_other_window.md](RESULTS_side_registry_reaches_the_other_window.md)):
 a stamp written in a WSL window was visible to an already-open Windows window at its next read (≤ 23 s), and the
 reverse (≤ 20 s), without a reload; `Memento.keys()` is available in both hosts. "Both known" therefore flips live;
 the E0.2 fallback stays a person's override (`coai.pathFieldsPerSide = always`), not a detection signal.
@@ -1006,7 +1006,7 @@ The four questions this plan asked were answered the same day; the design above 
 - [x] E0 measured and recorded in `research/`; the plan says whether "both known" flips live (it does).
 - [x] Every path setting is in one registry; a census test fails on a new one that is not (E1.1; a nested field the
       manifest does not declare is registered by hand — see E1's deviations).
-- [ ] A path spelled for the other OS is skipped, never refused and never a toast, on both halves, from one vector file.
+- [x] A path spelled for the other OS is skipped, never refused and never a toast, on both halves, from one vector file.
       (E1: every path setting in the extension; on the server the `COAI_VENDORS` / catalog-`row` CLI paths and, from the
       fix branch, the roots.)
 - [x] A missing path of this OS raises one `setting-path-missing` notice per window start, with **Open in Settings**,
@@ -1022,5 +1022,5 @@ The four questions this plan asked were answered the same day; the design above 
       languages (E2).
 - [x] Two labelled fields per path when both sides are known, one otherwise; older extensions and servers unaffected
       (compat legs green) — E4; E4 stores nothing new, so E3's compat legs stand (`pathsPerSideCompat.test.ts` green).
-- [ ] `research/module_extension.md`, `research/module_server.md` and `research/architecture.md` updated; the help
+- [x] `research/module_extension.md`, `research/module_server.md` and `research/architecture.md` updated; the help
       articles in five languages; CHANGELOG entries; this plan promoted with its deviations.

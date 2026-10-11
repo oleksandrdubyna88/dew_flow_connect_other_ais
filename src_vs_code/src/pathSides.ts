@@ -4,7 +4,7 @@ import { twoPathFields, type SidesView } from './sidesSeen';
 import { seenDay } from './sidesSeenView';
 
 /**
- * The two sides a path setting is drawn for, when it is drawn twice (todo/PLAN_paths_per_side.md design (d), E4): THIS
+ * The two sides a path setting is drawn for, when it is drawn twice (research/PLAN_paths_per_side.md design (d), E4): THIS
  * side's field first, named by its family and — for a remote — by the side itself (*This side — WSL / Linux (WSL:
  * Ubuntu)*), then the OTHER side's in a bordered `fieldset` whose `legend` names its family and the day it was last seen
  * here (*The other side — Windows (last seen 2026-10-09)*), or *not seen yet* when the switch says *Always two* before
@@ -33,7 +33,7 @@ export const OTHER_SIDE_CAPTION = 'Used by the server on that side. This window 
 /**
  * What stands where the other side's box would be while this side keeps its own settings (`coai.perSideSettings`, for
  * that key — `settingsShape.keptPerSide`): a value typed here would be saved into THIS side's own settings, which the
- * other side never reads (todo/PLAN_paths_per_side.md, E4's own review, item 1). The data directory's group says the
+ * other side never reads (research/PLAN_paths_per_side.md, E4's own review, item 1). The data directory's group says the
  * same thing in its own words, since it is read-only at every setting of the switch.
  */
 export const KEEPS_ITS_OWN = 'This side keeps its own settings — set the other side\'s value from a window on that side.';

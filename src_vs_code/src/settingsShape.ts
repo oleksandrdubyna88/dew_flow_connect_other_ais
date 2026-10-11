@@ -356,7 +356,7 @@ export const ALWAYS_PER_SIDE: readonly string[] = ['dataDirectory', 'dataSide'];
  * Whether a key is saved into THIS side's own settings rather than the shared layer — the decision `sideConfig.saveSetting`
  * writes by (`writesTheOverlay`), here without `vscode` so the Settings page can ask it too: a value this side saves
  * there is one the other side never reads, so the page draws no box for the other side's value of such a key
- * (todo/PLAN_paths_per_side.md, E4's own review, item 1).
+ * (research/PLAN_paths_per_side.md, E4's own review, item 1).
  *
  * @param perSide `coai.perSideSettings`
  */

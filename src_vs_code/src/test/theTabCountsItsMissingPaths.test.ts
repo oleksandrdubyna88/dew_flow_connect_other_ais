@@ -10,7 +10,7 @@ import { panelState, runPanel } from './panelPageHarness';
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * The count on the tab (todo/PLAN_paths_per_side.md E5.5): a tab — and the sub-tab — whose place holds a missing path
+ * The count on the tab (research/PLAN_paths_per_side.md E5.5): a tab — and the sub-tab — whose place holds a missing path
  * shows `● N` after its label, in the error colour, with an `aria-label` a screen reader hears, so the mark is seen from
  * any tab without opening the one it is on. Zero findings draw no badge anywhere. The page is RUN and read back as the
  * tree it drew; the order is asserted on the tree, as a DOM gives it.

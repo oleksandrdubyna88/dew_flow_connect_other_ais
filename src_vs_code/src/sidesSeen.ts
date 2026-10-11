@@ -3,7 +3,7 @@ import { thisSideLabel } from './consultantSides';
 import { familyOf, type PathFamily } from './pathFamily';
 
 /**
- * The sides this profile has been used on (todo/PLAN_paths_per_side.md, design (a) option A, E2.1).
+ * The sides this profile has been used on (research/PLAN_paths_per_side.md, design (a) option A, E2.1).
  *
  * <p><b>Why a record at all.</b> A path setting can hold a Windows value and a WSL value only once something says both
  * sides are in use — and nothing in VS Code says it: user settings are shared by a WSL window and a plain Windows window

@@ -5,7 +5,7 @@ import { sideKey } from '../coaiInstall';
 import { forgetSide, sideHereOf, sideSeenKey, sidesIn, stampThisSide, type SideHere, type SideStore } from '../sidesSeen';
 
 /**
- * The side registry against a store (todo/PLAN_paths_per_side.md E2.2): what activation writes into `globalState`, at
+ * The side registry against a store (research/PLAN_paths_per_side.md E2.2): what activation writes into `globalState`, at
  * most once a day, what it prunes, and what **Forget** removes. The store is a map behind the three `Memento` members the
  * registry uses — the same members `context.globalState` answers in a real host, where `test:host` proves the stamp lands.
  */

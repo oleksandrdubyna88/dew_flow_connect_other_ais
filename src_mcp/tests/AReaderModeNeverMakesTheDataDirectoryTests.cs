@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A mode the extension launches only to READ never makes the data directory (todo/PLAN_paths_per_side.md E5.7, D3).
+/// A mode the extension launches only to READ never makes the data directory (research/PLAN_paths_per_side.md E5.7, D3).
 /// </summary>
 /// <remarks>
 /// <para><b>What the gate's risk consultation on story 5.7 found, and a run confirmed.</b> The extension refuses to create

@@ -26,7 +26,7 @@ import type { NotificationRecord } from '../notifications';
 import { SETTING_PATH_MISSING, type PathFinding, findingSubject } from '../pathFindings';
 
 /**
- * The storage-write policy's state (todo/PLAN_paths_per_side.md E5.0): what the host last published about this window's
+ * The storage-write policy's state (research/PLAN_paths_per_side.md E5.0): what the host last published about this window's
  * paths, the guard every writer of the data directory asks, and the notices held in memory while the named data root is
  * missing — one per setting key, cleared on a change or a recovery, so the list is bounded by the registry.
  */

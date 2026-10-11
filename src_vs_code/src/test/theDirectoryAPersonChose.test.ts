@@ -94,7 +94,7 @@ test('the shared setting answers when this side has chosen nothing', () => {
   assert.equal(chosen.source, 'shared setting');
 });
 
-// ---------- a shared directory of the other OS (todo/PLAN_paths_per_side.md E1.4) ----------
+// ---------- a shared directory of the other OS (research/PLAN_paths_per_side.md E1.4) ----------
 
 test('a SHARED directory spelled for the other OS is not resolved here — this side falls to the default', () => {
   // VS Code shares the setting between a WSL and a Windows window: `Z:\coai` written from Windows, read in WSL, was

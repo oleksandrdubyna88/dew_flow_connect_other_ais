@@ -5,7 +5,7 @@ import * as path from 'node:path';
 
 /**
  * That a CLI-path box's save is WIRED through the one vendor write, refusal first — the half the page tests and the
- * host scenario cannot reach (todo/PLAN_paths_per_side.md E4.1; E4's code round, finding 1).
+ * host scenario cannot reach (research/PLAN_paths_per_side.md E4.1; E4's code round, finding 1).
  *
  * <p>`twoCliPathFieldsOnTheCard.test.ts` RUNS the page: the box posts `executablePath.<family>`, and the write that
  * message parses into, given to `vendorFieldWrite`, saves only that side's member. `twoPathFieldsScenario.ts` proves the

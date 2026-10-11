@@ -63,7 +63,7 @@ function kit(): Kit {
 }
 
 test('while the NAMED data root is missing the survey is not run — the server would write consultants.json and create the folder', async () => {
-  // E5.0's policy (todo/PLAN_paths_per_side.md): nothing this window starts creates a missing named data root. The survey
+  // E5.0's policy (research/PLAN_paths_per_side.md): nothing this window starts creates a missing named data root. The survey
   // is a writer by proxy — coai-mcp --consultants writes `consultations/health/consultants.json` with a CreateDirectory.
   const one = kit();
   const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));

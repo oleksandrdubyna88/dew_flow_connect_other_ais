@@ -66,7 +66,7 @@ export async function recordNotification(
   record: NotificationRecord,
   onFailure?: (reason: unknown) => void,
 ): Promise<LedgerOutcome> {
-  // The storage-write policy (todo/PLAN_paths_per_side.md E5.0): while this window's NAMED data root is missing, this
+  // The storage-write policy (research/PLAN_paths_per_side.md E5.0): while this window's NAMED data root is missing, this
   // ledger writes nothing under it — the append's own mkdir would create the folder the notice reports missing, and
   // hide the condition. The notice about a missing path is HELD in memory; anything else is a lost record, counted into
   // the gap exactly as a disk that refused would be. Decided once the data root has been asked about, never before.

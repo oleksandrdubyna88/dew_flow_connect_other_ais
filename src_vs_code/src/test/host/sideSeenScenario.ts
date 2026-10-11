@@ -6,7 +6,7 @@ import { familyOf } from '../../pathFamily';
 import { STAMP_EVERY_MS, type SeenSide } from '../../sidesSeen';
 
 /**
- * Activation stamps this window's side, in a REAL editor (todo/PLAN_paths_per_side.md E2.4 — the release requirement of
+ * Activation stamps this window's side, in a REAL editor (research/PLAN_paths_per_side.md E2.4 — the release requirement of
  * E0.2: the "both sides known" signal is proven by a `test:host` scenario).
  *
  * <p><b>What it drives for real.</b> The shipped extension, activated by the editor, writing into ITS OWN `globalState` —

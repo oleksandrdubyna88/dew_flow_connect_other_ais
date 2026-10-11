@@ -50,7 +50,7 @@ export interface QconsultViewState {
   readonly findings?: readonly PathFinding[] | undefined;
   /** The catalog rows a question row picks from — those ticked "question consultant" among them (PLAN_one_model_catalog.md E4.2). */
   readonly pickFrom: readonly Vendor[];
-  /** Both sides, when the folders are drawn in groups (todo/PLAN_paths_per_side.md E4.2); undefined draws one list. */
+  /** Both sides, when the folders are drawn in groups (research/PLAN_paths_per_side.md E4.2); undefined draws one list. */
   readonly sides?: PathSides | undefined;
   /** What was typed into the other side's folder box and refused — drawn beside the box. */
   readonly refusals?: TypedRefusals | undefined;
@@ -294,7 +294,7 @@ function rootLine(root: string, state: QconsultViewState): string {
 }
 
 /**
- * The folders in the three groups of `pathGroups.ts` once both sides are known (todo/PLAN_paths_per_side.md E4.2): Add a
+ * The folders in the three groups of `pathGroups.ts` once both sides are known (research/PLAN_paths_per_side.md E4.2): Add a
  * folder… adds to this side's; the other side's takes TYPED text (`typedRoots.ts` decides, the host refuses beside the
  * box); Remove works in every group. Grouped by THIS window's verdict, the disk asked only at this machine's own spelling.
  */

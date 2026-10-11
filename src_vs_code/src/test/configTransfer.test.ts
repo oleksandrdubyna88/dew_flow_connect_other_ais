@@ -56,7 +56,7 @@ test('a secret and this machine\u2019s layout are never exported, whatever they 
 const shipped = (): Declared => declaredSettings(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')));
 
 test('the question consultant\'s roots are paths on this machine, and are never exported (D4)', () => {
-  // todo/PLAN_paths_per_side.md E1.6, decided with the operator: a root is a folder of the machine that wrote it.
+  // research/PLAN_paths_per_side.md E1.6, decided with the operator: a root is a folder of the machine that wrote it.
   const out = exportedSettings(shipped(), base({ qconsultRoots: ['D:\\rsd\\work', '/home/jinx/git'], maxConcurrency: 7 }));
 
   assert.equal(Object.hasOwn(out, 'maxConcurrency'), true, 'the premise: a changed setting is exported from this manifest');
@@ -64,7 +64,7 @@ test('the question consultant\'s roots are paths on this machine, and are never 
 });
 
 test('how many fields a path setting shows is never exported — it is about this machine\'s sides (E2.3)', () => {
-  // todo/PLAN_paths_per_side.md E2.3: the switch reads which sides THIS profile has been used on; on another machine it
+  // research/PLAN_paths_per_side.md E2.3: the switch reads which sides THIS profile has been used on; on another machine it
   // would decide over sides that machine never had.
   const out = exportedSettings(shipped(), base({ pathFieldsPerSide: 'always', maxConcurrency: 7 }));
 
@@ -110,7 +110,7 @@ test('a path on this machine inside a vendor or a consultant is removed, the res
 });
 
 test('the per-side CLI paths of a row leave with the legacy one, and an import puts both back from the entry this machine has', () => {
-  // todo/PLAN_paths_per_side.md E3.1: `executablePathBySide` holds a Windows and a WSL path of the machine that wrote the
+  // research/PLAN_paths_per_side.md E3.1: `executablePathBySide` holds a Windows and a WSL path of the machine that wrote the
   // file — as much a path on that machine as `executablePath`, and as wrong on another.
   const bySide = { windows: 'C:/tools/codex.cmd', posix: '/opt/codex', mirrored: 'C:/tools/codex.cmd' };
   const out = exportedSettings(declared, base({ vendors: [{ id: 'codex', model: 'm', executablePath: 'C:/tools/codex.cmd', executablePathBySide: bySide }] }));

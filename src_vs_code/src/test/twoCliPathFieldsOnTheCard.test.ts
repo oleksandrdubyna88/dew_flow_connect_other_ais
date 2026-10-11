@@ -15,7 +15,7 @@ import { click, lastWrite, panelState, runPanel, work, type Page } from './panel
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * The Models card draws TWO CLI-path fields once both sides are known (todo/PLAN_paths_per_side.md E4.1): this side's
+ * The Models card draws TWO CLI-path fields once both sides are known (research/PLAN_paths_per_side.md E4.1): this side's
  * first, labelled *This side — Windows*, then the other side's in a `fieldset` whose `legend` names it and the day it was
  * last seen, with the caption *Used by the server on that side. This window does not check it.* — editable as text, no
  * Browse. One field otherwise, exactly as before. The other side's box saves through the panel's ONE vendor write with

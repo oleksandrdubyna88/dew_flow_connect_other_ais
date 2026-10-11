@@ -462,7 +462,7 @@ test('COAI_CONSULTANTS carries the RESOLVED definition — all five fields — n
 });
 
 test('a stored definition crosses as itself — its own endpoint and CLI path, nothing borrowed from a row', () => {
-  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+  // A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (research/PLAN_paths_per_side.md E1.2).
   const own = hostFamily() === 'windows' ? 'C:\\opt\\claude\\claude.exe' : '/opt/claude/bin/claude';
   const map = wire({
     consultants: { codex: { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: own } },

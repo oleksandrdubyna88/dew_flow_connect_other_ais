@@ -19,7 +19,7 @@ import {
 import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from '../pathSettings';
 
 /**
- * The findings model (todo/PLAN_paths_per_side.md E5.1): what the disk said about a path of THIS side, as the one value
+ * The findings model (research/PLAN_paths_per_side.md E5.1): what the disk said about a path of THIS side, as the one value
  * the notice and the page mark are drawn from. Until it existed the page asked the disk about roots spelled for the
  * OTHER OS alone, and a root of this OS that was gone (`D:\old-project`) was a generic toast and nothing beside it.
  */

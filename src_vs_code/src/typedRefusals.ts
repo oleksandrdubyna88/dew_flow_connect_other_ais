@@ -2,7 +2,7 @@ import { escapeHtml } from './escapeHtml';
 import { stableId } from './pathMark';
 
 /**
- * Text typed into the OTHER side's box and refused — shown BESIDE the box, never as a toast (todo/PLAN_paths_per_side.md
+ * Text typed into the OTHER side's box and refused — shown BESIDE the box, never as a toast (research/PLAN_paths_per_side.md
  * E4.1 and E4.2): the box keeps what was typed, the reason is under it, and the box is `aria-invalid` and
  * `aria-describedby` the reason, so a person corrects the text where they typed it.
  *
