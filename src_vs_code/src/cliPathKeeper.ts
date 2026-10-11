@@ -30,8 +30,8 @@ export interface KeeperDeps<R extends KeptRow> {
 }
 
 export class CliPathKeeper<R extends KeptRow> {
-  /** The dropped members said in this run, by subject. */
-  private readonly said = new Set<string>();
+  /** The dropped members said in this run, by subject — replaced, never changed in place. */
+  private said: ReadonlySet<string> = new Set<string>();
   /** Every look waits for the one before it: two settings events must not write the same copies twice at once. */
   private queue: Promise<void> = Promise.resolve();
 
@@ -63,14 +63,11 @@ export class CliPathKeeper<R extends KeptRow> {
   /** Say what appeared; settle what ended. */
   private tell(dropped: readonly DroppedValue[]): void {
     const now = new Set(dropped.map((one) => one.key));
-    for (const ended of [...this.said].filter((key) => !now.has(key))) {
-      this.said.delete(ended);
-      this.deps.resolved(ended);
-    }
-    for (const one of dropped.filter((value) => !this.said.has(value.key))) {
-      this.said.add(one.key);
-      this.deps.say(one);
-    }
+    const ended = [...this.said].filter((key) => !now.has(key));
+    const fresh = dropped.filter((value) => !this.said.has(value.key));
+    this.said = new Set([...[...this.said].filter((key) => now.has(key)), ...fresh.map((one) => one.key)]);
+    ended.forEach((key) => { this.deps.resolved(key); });
+    fresh.forEach((one) => { this.deps.say(one); });
   }
 
   private async restoreNow(offer: DroppedValue): Promise<void> {
@@ -80,7 +77,7 @@ export class CliPathKeeper<R extends KeptRow> {
     if (typeof verdict === 'string') {
       this.deps.refused(offer, verdict);
       // Offered again on the next look when it is still dropped — with the row as it is now.
-      this.said.delete(offer.key);
+      this.said = new Set([...this.said].filter((key) => key !== offer.key));
       this.deps.resolved(offer.key);
       await this.look();
 

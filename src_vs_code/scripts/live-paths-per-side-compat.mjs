@@ -42,11 +42,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { flag, HERE, newServer, releasedExtension, releasedServer, run } from './releasedHalves.mjs';
 
-const broken = [];
+let broken = [];
 const say = (ok, what, detail = '') => {
   console.log(`${ok ? 'ok  ' : 'FAIL'}  ${what}${detail === '' ? '' : ` — ${detail}`}`);
   if (!ok) {
-    broken.push(what);
+    broken = [...broken, what];
   }
 };
 const note = (what) => console.log(`info  ${what}`);
