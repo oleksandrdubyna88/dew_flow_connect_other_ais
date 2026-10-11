@@ -1,3 +1,4 @@
+import type { NotificationRecord } from './notifications';
 import { Arrival, ReadPerLedger, group } from './notificationsRead';
 import { NOTIFICATIONS_FILE, PlacedRecord, SERVER_NOTICES_FILE } from './notificationsFile';
 import { PageState } from './notificationsPage';
@@ -50,6 +51,22 @@ export interface WhatWasRead {
   readonly notice: string;
   /** How long the reads were given, so the failure sentence can say it. */
   readonly waitedSeconds: number;
+  /**
+   * The notices this window is HOLDING in memory (todo/PLAN_paths_per_side.md E5.0): a missing-path notice raised while
+   * the named data folder itself is missing is written to no ledger — a write would create the very folder it reports —
+   * so the page shows it from here for this window run. Absent reads as none, which every earlier draw is.
+   */
+  readonly held?: readonly NotificationRecord[];
+}
+
+/**
+ * A held notice as an arrival of the page: on the extension's side, at an offset no acknowledgement can cover, so it is
+ * always new — it was never written down, and "read" is a fact about a file. Its detail says so.
+ */
+export function heldArrival(record: NotificationRecord): Arrival {
+  const held = 'Held in this window\'s memory, written to no ledger: the data folder it is about does not exist, and writing there would create it.';
+
+  return { record: { ...record, detail: record.detail === undefined ? held : `${record.detail}\n${held}` }, at: -1, ledger: 'extension' };
 }
 
 /**
@@ -76,6 +93,7 @@ export function snapshotOf(found: WhatWasRead): Snapshot {
   const arrivals: readonly Arrival[] = [
     ...mine.records.map((placed) => ({ ...placed, ledger: 'extension' as const })),
     ...theirs.records.map((placed) => ({ ...placed, ledger: 'server' as const })),
+    ...(found.held ?? []).map(heldArrival),
   ];
 
   return {

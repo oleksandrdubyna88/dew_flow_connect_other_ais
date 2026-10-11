@@ -356,7 +356,7 @@ internal static class Program
         }
     }
 
-    private static async Task<int> RunAsync(string[] args)
+    internal static async Task<int> RunAsync(string[] args)
     {
         switch (Classify(args))
         {
@@ -825,10 +825,23 @@ internal static class Program
     /// the pairs table. 74 when the file will not open, because an empty list and a success would
     /// read as "there is nothing to review".
     /// </remarks>
-    internal static int PairsJson(string[] args)
+    internal static int PairsJson(string[] args) => PairsJson(args, File.GetAttributes);
+
+    /// <summary>The mode over an injected attribute read — the database's presence, three-valued (<see cref="Store.RoundsDb.PresenceOf(string, Func{string, FileAttributes})"/>).</summary>
+    internal static int PairsJson(string[] args, Func<string, FileAttributes> attributesOf)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
-        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) == Server.RootPresence.Absent)
+        {
+            // No database yet, so nothing has been collected: an empty list — and the data directory is NOT made, because
+            // a reader must never create the folder it reads (todo/PLAN_paths_per_side.md E5.7, D3).
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                new Collecting.PairsAnswer([]), Server.ServerJsonContext.Default.PairsAnswer));
+
+            return 0;
+        }
+
+        using var db = Store.RoundsDb.OpenExisting(settings.DataDir, Serilog.Core.Logger.None);
         if (db is null)
         {
             Note("the rounds database could not be opened; no pair can be read from it");
@@ -968,7 +981,7 @@ internal static class Program
     /// byte-identical before and after.</para>
     /// </remarks>
     internal static Task<int> RealMethodAsync(string[] args) =>
-        AnswerOnePairAsync("--real-method", args, RealMethodOfAsync, Server.ServerJsonContext.Default.RealMethod);
+        AnswerOnePairAsync("--real-method", args, RealMethodOfAsync, Server.ServerJsonContext.Default.RealMethod, File.GetAttributes);
 
     /// <summary>One pair's file as it was at the commit the reviewers read, on stdout.</summary>
     /// <remarks>
@@ -984,8 +997,11 @@ internal static class Program
     /// the machine. <c>TheCoordinatesComeFromTheStore_AndNothingOnArgvCanRedirectThem</c> pins it.</para>
     /// <para>Nothing is written on this path — not a row, not a column.</para>
     /// </remarks>
-    internal static Task<int> FileAtAsync(string[] args) =>
-        AnswerOnePairAsync("--file-at", args, FileAtOfAsync, Server.ServerJsonContext.Default.FileAtRevision);
+    internal static Task<int> FileAtAsync(string[] args) => FileAtAsync(args, File.GetAttributes);
+
+    /// <summary>The mode over an injected attribute read, as <see cref="PairsJson(string[], Func{string, FileAttributes})"/>.</summary>
+    internal static Task<int> FileAtAsync(string[] args, Func<string, FileAttributes> attributesOf) =>
+        AnswerOnePairAsync("--file-at", args, FileAtOfAsync, Server.ServerJsonContext.Default.FileAtRevision, attributesOf);
 
     /// <summary>One pair's whole repository, checked out at the commit the reviewers read, on stdout.</summary>
     /// <remarks>
@@ -1001,7 +1017,7 @@ internal static class Program
     /// <para>Nothing is written to the rounds database on this path — not a row, not a column.</para>
     /// </remarks>
     internal static Task<int> TreeAtAsync(string[] args) =>
-        AnswerOnePairAsync("--tree-at", args, TreeAtOfAsync, Server.ServerJsonContext.Default.ReviewTree);
+        AnswerOnePairAsync("--tree-at", args, TreeAtOfAsync, Server.ServerJsonContext.Default.ReviewTree, File.GetAttributes);
 
     /// <summary>
     /// The shape every one-pair mode shares: <c>--id</c> to a row, the row to an answer, the answer to
@@ -1021,7 +1037,8 @@ internal static class Program
         string mode,
         string[] args,
         Func<long, Store.ReviewPair?, Task<T>> answer,
-        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape)
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape,
+        Func<string, FileAttributes> attributesOf)
     {
         if (!FindingId(Flags(args), out var findingId))
         {
@@ -1030,7 +1047,16 @@ internal static class Program
         }
 
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
-        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) == Server.RootPresence.Absent)
+        {
+            // No database, so no such pair — answered as the pair that is not there, and NOTHING is made: a reader must
+            // never create the data directory it reads (todo/PLAN_paths_per_side.md E5.7, D3).
+            await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(await answer(findingId, null), shape));
+
+            return 0;
+        }
+
+        using var db = Store.RoundsDb.OpenExisting(settings.DataDir, Serilog.Core.Logger.None);
         if (db is null)
         {
             Note("the rounds database could not be opened; no pair can be read from it");
@@ -1341,38 +1367,23 @@ internal static class Program
         return 0;
     }
 
-    internal static int BugsJson(string[] args)
+    internal static int BugsJson(string[] args) => BugsJson(args, File.GetAttributes);
+
+    /// <summary>The mode over an injected attribute read, as <see cref="PairsJson(string[], Func{string, FileAttributes})"/>.</summary>
+    internal static int BugsJson(string[] args, Func<string, FileAttributes> attributesOf)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
         try
         {
-            using (var migrated = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None))
+            // Only a database that is THERE is migrated and swept: opening one that is not would create the data
+            // directory this reader reads — a missing NAMED one included (todo/PLAN_paths_per_side.md E5.7, D3). With no
+            // file the read below answers an empty corpus, which is the truth about a machine that never ran a round.
+            // CONFIRMED absent alone skips the open: a database the disk would not describe (access denied, busy) goes on to
+            // the open, which fails and is reported 74 — never answered as an empty corpus (the E5 code round).
+            if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) != Server.RootPresence.Absent && !MigratedAndSwept(settings.DataDir))
             {
-                // Opened and closed: the migration is the whole point of the statement. A file that
-                // would not open is REPORTED rather than answered with an empty corpus — "no
-                // material" and "the database would not open" ask for different things from whoever
-                // reads it, and `Open` swallows the exception because a round must survive a
-                // projection it cannot write. Nothing here is a round.
-                if (migrated is null)
-                {
-                    Note("the rounds database could not be opened; no corpus can be read from it");
-                    return 74; // EX_IOERR
-                }
-
-                // And the sweep, here as well as in the collect mode. This is the mode the PANEL
-                // calls, and without it an abandoned run reads as `running` for ever: the Collect
-                // button stays disabled, and the only thing that would clear it is a collect the
-                // button will not start. A deadlock with no way out of it from the UI. Safe to run
-                // from a reader because the heartbeat is what decides staleness, so a run happening
-                // in another process right now is untouched. (Code round, codex and gemini.)
-                migrated.SweepStaleCollectRuns(StaleAfter);
-
-                // A SEND needs the same, and needs it here most of all. Its row is what disables the
-                // Send button, so an abandoned one is the same deadlock the collector had: the
-                // button stays disabled, and the only thing that would clear it is the send the
-                // button will not start. It was written and called from nowhere, which eight
-                // findings across three providers pointed at. (Code round, codex and gemini.)
-                migrated.SweepAbandonedUploads();
+                Note("the rounds database could not be opened; no corpus can be read from it");
+                return 74; // EX_IOERR
             }
 
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
@@ -1389,6 +1400,39 @@ internal static class Program
         }
 
         return 0;
+    }
+
+    /// <summary>The rounds database, opened only to migrate it and to end abandoned runs and sends — false when it would not open.</summary>
+    private static bool MigratedAndSwept(string dataDir)
+    {
+        using var migrated = Store.RoundsDb.OpenExisting(dataDir, Serilog.Core.Logger.None);
+
+        // Opened and closed: the migration is the whole point of the statement. A file that
+        // would not open is REPORTED rather than answered with an empty corpus — "no
+        // material" and "the database would not open" ask for different things from whoever
+        // reads it, and `Open` swallows the exception because a round must survive a
+        // projection it cannot write. Nothing here is a round.
+        if (migrated is null)
+        {
+            return false;
+        }
+
+        // And the sweep, here as well as in the collect mode. This is the mode the PANEL
+        // calls, and without it an abandoned run reads as `running` for ever: the Collect
+        // button stays disabled, and the only thing that would clear it is a collect the
+        // button will not start. A deadlock with no way out of it from the UI. Safe to run
+        // from a reader because the heartbeat is what decides staleness, so a run happening
+        // in another process right now is untouched. (Code round, codex and gemini.)
+        migrated.SweepStaleCollectRuns(StaleAfter);
+
+        // A SEND needs the same, and needs it here most of all. Its row is what disables the
+        // Send button, so an abandoned one is the same deadlock the collector had: the
+        // button stays disabled, and the only thing that would clear it is the send the
+        // button will not start. It was written and called from nowhere, which eight
+        // findings across three providers pointed at. (Code round, codex and gemini.)
+        migrated.SweepAbandonedUploads();
+
+        return true;
     }
 
     /// <summary>

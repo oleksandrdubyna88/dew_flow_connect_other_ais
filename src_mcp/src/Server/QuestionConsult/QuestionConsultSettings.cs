@@ -155,7 +155,7 @@ public static class QuestionConsultReader
         [
             .. rows.Complaints.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Rows, c)),
             .. prompts.Complaints.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Prompts, c)),
-            .. roots.Refused.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Roots, c)),
+            .. roots.Refusals.Select(c => new UnrecognisedSetting(QuestionConsultKeys.Roots, c.Sentence, c.Kind, c.Value)),
             .. modeComplaint,
         ]);
     }
@@ -221,11 +221,28 @@ public static class QuestionConsultReader
 /// </remarks>
 public static class QuestionRoots
 {
+    /// <param name="Refusals">
+    /// Every root refused, with WHY as a sentence and — when the extension can act on it — the KIND of problem and the
+    /// stored value it is about (todo/PLAN_paths_per_side.md E5.2). <see cref="Verdict.Refused"/> is the sentences alone,
+    /// the projection every earlier reader keeps.
+    /// </param>
     /// <param name="OtherSide">
     /// The roots spelled for the other operating system that are no directory here, trimmed and as written — skipped,
     /// never judged against this machine's places, and never refused (<see cref="OtherSideHere"/>).
     /// </param>
-    public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused, IReadOnlyList<string> OtherSide);
+    public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<RootRefusal> Refusals, IReadOnlyList<string> OtherSide)
+    {
+        /// <summary>The refusals as sentences — what <c>unrecognised</c> has always carried.</summary>
+        public IReadOnlyList<string> Refused => [.. Refusals.Select(one => one.Sentence)];
+    }
+
+    /// <summary>
+    /// One refused root: the sentence a person reads, and — for a folder that is missing or could not be checked — the
+    /// kind (<see cref="SettingProblemKinds"/>) and the STORED value, as the settings file spells it, so the Settings page
+    /// can mark exactly that entry. A root refused for WHERE it is (a drive root, the profile) has no kind: a mark saying
+    /// "missing" there would lie.
+    /// </summary>
+    public sealed record RootRefusal(string Sentence, string Kind = "", string Value = "");
 
     /// <summary>A two-valued disk, as the tests and a caller with only <c>Directory.Exists</c> have it: present or absent.</summary>
     public static Verdict Validate(
@@ -293,11 +310,12 @@ public static class QuestionRoots
         var otherSide = decided.Where(one => one.OtherSide).Select(one => one.Root.Trim()).Distinct(StringComparer.Ordinal).ToList();
         var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
         var accepted = new List<string>();
-        var refused = new List<string>();
-        foreach (var root in decided.Where(one => !one.OtherSide).Select(one => Here(one.Root)))
+        var refused = new List<RootRefusal>();
+        foreach (var stored in decided.Where(one => !one.OtherSide).Select(one => one.Root))
         {
-            var why = WhyNot(root, seen, presence);
-            if (why.Length > 0)
+            var root = Here(stored);
+            var why = WhyNot(stored, root, seen, presence);
+            if (why.Sentence.Length > 0)
             {
                 refused.Add(why);
             }
@@ -387,28 +405,38 @@ public static class QuestionRoots
     /// <remarks>Matched as path segments wherever they are (a <c>.ssh</c> copied to a backup is still keys), and as directories under the profile.</remarks>
     public static IReadOnlyList<string> CredentialDirectories { get; } = [".ssh", ".aws", ".gnupg", ".config/gcloud", ".claude", ".codex", ".azure"];
 
-    /// <summary>Why a root may not be read, or empty. The checks in the order a person would fix them — on the path as written AND on what it resolves to.</summary>
-    private static string WhyNot(string root, Seen seen, Func<string, RootPresence> presence)
+    /// <summary>
+    /// Why a root may not be read — an empty sentence when it may. The checks in the order a person would fix them — on
+    /// the path as written AND on what it resolves to. Only the last two carry a KIND: a folder refused for where it is
+    /// is a sentence alone; one that is missing or unanswerable names the stored value the page marks (E5.2).
+    /// </summary>
+    /// <param name="stored">The root as the settings file spells it — what a refusal with a kind reports as its value.</param>
+    /// <param name="root">The same root qualified (<see cref="Qualified"/>), judged and named in the sentence.</param>
+    private static RootRefusal WhyNot(string stored, string root, Seen seen, Func<string, RootPresence> presence)
     {
         if (!IsAbsolute(root))
         {
-            return $"{QuestionConsultKeys.Roots}: '{root}' is not an absolute path — a disk root is spelled from a drive or from /";
+            return new RootRefusal($"{QuestionConsultKeys.Roots}: '{root}' is not an absolute path — a disk root is spelled from a drive or from /");
         }
 
         var full = Full(root);
         var real = seen.Resolved(full);
 
-        return Place(full, seen) is { Length: > 0 } place ? place
-            : Place(real, seen) is { Length: > 0 } target ? $"{target} ('{full}' resolves to it)"
-            : Missing(root, presence(full));
+        return Place(full, seen) is { Length: > 0 } place ? new RootRefusal(place)
+            : Place(real, seen) is { Length: > 0 } target ? new RootRefusal($"{target} ('{full}' resolves to it)")
+            : Missing(stored, root, presence(full));
     }
 
-    /// <summary>Why a root that passed every place check still cannot be read: no folder, or a disk that would not say.</summary>
-    private static string Missing(string root, RootPresence said) => said switch
+    /// <summary>Why a root that passed every place check still cannot be read: no folder, or a disk that would not say — each its own kind.</summary>
+    private static RootRefusal Missing(string stored, string root, RootPresence said) => said switch
     {
-        RootPresence.Present => string.Empty,
-        RootPresence.Unknown => $"{QuestionConsultKeys.Roots}: '{root}' could not be checked on this machine (access denied, or the disk would not answer) — a disk row needs a folder it can read",
-        _ => $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists",
+        RootPresence.Present => new RootRefusal(string.Empty),
+        RootPresence.Unknown => new RootRefusal(
+            $"{QuestionConsultKeys.Roots}: '{root}' could not be checked on this machine (access denied, or the disk would not answer) — a disk row needs a folder it can read",
+            SettingProblemKinds.UnreadableFolder, stored.Trim()),
+        _ => new RootRefusal(
+            $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists",
+            SettingProblemKinds.MissingFolder, stored.Trim()),
     };
 
     /// <summary>The first place this path may not be — each check its own sentence, or empty.</summary>

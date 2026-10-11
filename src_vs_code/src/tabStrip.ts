@@ -75,6 +75,20 @@ export interface Tab {
 
   /** A tooltip — the whole path, when the label is only its last segment. */
   readonly title?: string;
+
+  /**
+   * A count worth seeing without opening the tab — `● 1` after the label, in the error colour, with a label a screen
+   * reader hears (todo/PLAN_paths_per_side.md E5.5: the missing paths under the place this tab holds). Absent on every
+   * strip that existed before it, which keeps those byte-identical.
+   */
+  readonly mark?: TabMark;
+}
+
+/** What a tab's count badge says: the number, and the words for it. */
+export interface TabMark {
+  readonly count: number;
+  /** The sentence a screen reader hears for the badge — `1 missing folder`, `3 missing folders`. */
+  readonly label: string;
 }
 
 /** The ids and the label this strip wires itself with. */
@@ -150,7 +164,17 @@ function button(tab: Tab, open: string, names: StripNames): string {
 
   return `<button type="button" role="tab" id="${id}" aria-controls="${controls}"`
     + ` aria-selected="${on ? 'true' : 'false'}" class="tab${on ? ' on' : ''}"`
-    + ` data-tab="${escapeHtml(tab.key)}"${attribute('title', tab.title)}${rovingIndex(names, on)}>${escapeHtml(tab.label)}</button>`;
+    + ` data-tab="${escapeHtml(tab.key)}"${attribute('title', tab.title)}${rovingIndex(names, on)}>${escapeHtml(tab.label)}${markOf(tab)}</button>`;
+}
+
+/**
+ * The count badge, AFTER the label so a reader meets the name first: the dot and the number for the eye, the sentence
+ * for a screen reader (`role="img"` makes the label its name). Nothing for a tab without one.
+ */
+function markOf(tab: Tab): string {
+  const mark = tab.mark;
+
+  return mark === undefined ? '' : `<span class="tab-mark" role="img" aria-label="${escapeHtml(mark.label)}">● ${mark.count}</span>`;
 }
 
 function rovingIndex(names: StripNames, on: boolean): string {

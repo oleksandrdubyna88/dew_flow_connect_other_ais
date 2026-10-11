@@ -102,6 +102,7 @@ const UNRESOLVED_READS: Readonly<Record<string, { readonly count: number; readon
   'consultSettings.ts': { count: 1, why: 'matches a stored definition\'s value to a row\'s — the stored value' },
   'setupTab.ts': { count: 2, why: 'draws a CLI group\'s path — already this side\'s stored value — in the vendor-keys table' },
   'pathFamily.ts': { count: 4, why: 'the side rule itself, and whether an older extension saved since' },
+  'pathFindings.ts': { count: 3, why: 'names the setting coai.vendors[].executablePath in the words of its notice and mark (E5) — strings, never a row' },
 };
 
 /** The calls of `executableHere`: ONE value, so a legacy definition's — a row through it would skip its per-side value. */

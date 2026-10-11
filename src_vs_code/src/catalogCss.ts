@@ -75,6 +75,9 @@ const SHELL = `
     border: 1px solid var(--border-strong); border-radius: 14px; padding: 3px 12px; color: var(--muted);
   }
   .catalog .pane .tabs .tab.on { color: var(--vscode-foreground); border-color: var(--focus); background: var(--secondary); }
+  /* The count of missing paths under a tab, seen without opening it (paths per side, E5.5): the dot and the number in
+     the error colour, after the label — the number carries it where a theme drops the colour. */
+  .catalog .tabs .tab .tab-mark { color: var(--err); margin-left: 6px; font-weight: 600; white-space: nowrap; }
   .settingsHead button { width: auto; margin: 0; }
   .catalog .hint { color: var(--muted); }
   .catalog button { width: auto; }
@@ -82,10 +85,17 @@ const SHELL = `
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: middle;
     border: 1px solid var(--link); color: var(--link); border-radius: 3px; padding: 0 4px;
   }
-  .skew {
-    border-left: 3px solid var(--err); background: color-mix(in srgb, var(--err) 8%, transparent);
+  /* One shape, three tones: the skew line, a MISSING path (error) and a path the disk could not answer for (warning) —
+     the mark beside a value whose folder or CLI is not where the settings say (paths per side, E5.4). The word carries it
+     where a high-contrast theme drops the tint; the border colour and the dot follow --mark. */
+  .skew, .path-missing, .path-unknown {
+    --mark: var(--err);
+    border-left: 3px solid var(--mark); background: color-mix(in srgb, var(--mark) 8%, transparent);
     padding: 4px 8px; margin: 6px 0; border-radius: 0 3px 3px 0;
   }
+  .path-unknown { --mark: var(--warn); }
+  .path-missing .path-note, .path-unknown .path-note { color: var(--mark); font-weight: 600; }
+  .path-mark { color: var(--mark); }
   dialog#confirm-dialog {
     background: var(--vscode-editorWidget-background); color: var(--vscode-foreground);
     border: 1px solid var(--border-strong); border-radius: 6px; padding: 14px 16px; width: min(560px, calc(100vw - 32px));
