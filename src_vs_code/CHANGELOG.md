@@ -22,8 +22,15 @@ receives one path per row, this side's. *Export settings* leaves the per-side va
 field for the other side's path comes with the two path fields in a following release. **One limit while two versions
 of the extension are in use** (a WSL remote installs its own copy, which can lag): an older copy reads only the one
 shared path — the one the side that saved last left there — and when it saves, it drops the per-side values, so the
-other side looks its CLI up on PATH until you set it again. Update the extension on both sides. Help in all five
-languages.
+other side looks its CLI up on PATH until you set it again. A window of this version notices that once per start:
+it says a previously saved value of that CLI path is missing, names it, and offers **Restore**, which puts it back only
+when you press it — never on its own, never into a model that was removed or replaced, and never over a path saved
+since. Update the extension on both sides. Help in all five languages.
+
+**Fixed: a CLI-path save no longer changes what the other side runs.** A legacy path such as `/tools/codex.exe` is
+`C:\tools\codex.exe` on a Windows side where that file exists; a save in a WSL window replaced it, and the Windows
+side lost its working CLI. Saving the unchanged path in a Windows window also ran it without its drive. Every save now
+keeps each other side resolving exactly what it did, on any disk.
 
 ## Server 0.46.0 — 2026-10-10
 

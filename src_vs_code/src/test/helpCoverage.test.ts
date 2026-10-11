@@ -69,6 +69,8 @@ test('every language says a CLI path is kept per side, and names the older-exten
     for (const marker of ['`C:\\tools\\codex.cmd`', '`/usr/local/bin/codex`', 'PATH']) {
       assert.ok(said.includes(marker), `the ${language} settings article never says ${marker} — the CLI path per side is undocumented there`);
     }
+    // E3 as built (2026-10-11): a value an older save dropped is said once, with **Restore** — the button the notice offers.
+    assert.ok(said.includes('**Restore**'), `the ${language} settings article never says **Restore** — the way back to a dropped CLI path is undocumented there`);
   }
 });
 

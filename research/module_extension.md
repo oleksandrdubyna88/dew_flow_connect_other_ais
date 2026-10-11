@@ -3572,23 +3572,31 @@ is DRAWN yet (E4 draws the two fields); what a side runs and what a save writes 
   `BySide[<the field's family>]`; a save of THIS side's field also mirrors the value into the legacy `executablePath` and
   records it as `mirrored`; a save of the other side's field (E4's second box) never touches the legacy value; clearing
   writes `""` (present → the PATH lookup), never deletes the member. Every other family keeps resolving what it did — its
-  value is pinned into its member when the save would move it. The panel's one vendor write goes through
+  stored value is pinned into its member when it has one, or when the save REPLACES the legacy value it reads; no
+  spelling and no disk is asked, because the reader judges a member by the same rule as the legacy value (the risk
+  consultant's finding c, 2026-10-11: the spelling-based pin let a WSL save take away the `C:\tools\codex.exe` a
+  Windows disk had found under a legacy `/tools/codex.exe`). The panel's one vendor write goes through
   `vendorFieldWrite` (`panelProvider.ts`, the `vendor` case).
 - **The resolution, `pathForThisSide` (design (c))**:
 
 ```mermaid
 flowchart TD
   A[row: executablePath + executablePathBySide] --> B{BySide family PRESENT?}
-  B -- no --> L[legacy rule]
+  B -- no --> L[the legacy value]
   B -- yes --> C{legacy differs from mirrored AND legacy is spelled for this family or neither?}
   C -- yes: an older extension saved since --> L
-  C -- no --> D[BySide family, empty = PATH lookup]
-  L --> E{legacy spelled for the other OS?}
-  E -- no --> F[legacy value, trimmed]
+  C -- no --> D[the BySide member, empty = PATH lookup]
+  L --> V[the value, trimmed]
+  D --> V
+  V --> E{spelled for the other OS?}
+  E -- no --> F[the value as it is]
   E -- yes --> G{file there at this machine's spelling?}
   G -- absent --> H[empty = PATH lookup, otherSide named]
   G -- here or unknown --> I[qualified path]
 ```
+
+  One rule for wherever the value is stored (since 2026-10-11): a member and the legacy value are judged alike, so
+  `/tools/codex.exe` saved unchanged on Windows still runs `C:\tools\codex.exe`.
 
 - **A shared folder list in three groups (E3.3)** — `pathGroups.ts`: `groupOf` / `groupedPaths` over `otherSideHere` and
   `existingHere` — **this side's**, **the other side's**, and **both sides / unclear** (`//server/share`, a relative or
@@ -3615,6 +3623,35 @@ flowchart TD
   side's own value is gone — that side falls back to the legacy rule (usually the PATH lookup) until it is set again.
   The cure is updating the extension on that side; the help says so in five languages. A legacy edit that keeps the
   member (a hand edit) is detected through `mirrored`, as designed.
+- **A dropped member is SAID and offered back — never restored on its own (2026-10-11, the plan gate's Major finding and
+  the risk consultant's findings a/b)** — `cliPathKeep.ts` (pure decisions), `cliPathKeeper.ts` (vscode-free, the
+  `PathWatch` shape), `cliPathKeepHost.ts` (the wiring: a look at activation and on every `coai` settings change).
+  Every user-layer row that carries its member has a copy in `globalState` — shared by the Windows and the WSL window
+  of one profile, never synced — under ONE key per layer and row, `coai.cliPathKept@user@[id,runtime,model]`: the id
+  alone is reused by `freeVendorId`, so a row whose runtime or model changed never inherits a copy, and a copy no row
+  carries is deleted. A row without its member whose copy exists is said once per run and per row
+  (`notifyOnceThen`, `cli-path-value-dropped`, class `offer`): *"a previously saved value"*, the kept values named,
+  never who removed it — an older save, a hand edit and another machine's settings look the same. **Restore** re-reads
+  the row at the click and writes the copy back EXACTLY, the legacy value untouched (so an older save of P′ still wins
+  for its family through `mirrored`); it is refused — `cli-path-restore-refused`, then offered again — when the row
+  is gone (never recreated), carries a member again, its legacy value changed since, or the copy changed. A side that
+  keeps its own settings (`coai.perSideSettings`) is not kept: only it writes those rows. E4.1 draws the same Restore
+  as a page button beside the field.
+
+```mermaid
+flowchart TD
+  S[activation, or a coai settings change] --> U{this side keeps its own settings?}
+  U -- yes --> N[nothing kept, nothing said]
+  U -- no --> R[each row of the user layer]
+  R --> M{member present?}
+  M -- yes --> K[copy kept per layer and identity]
+  M -- no --> Q{a copy for this id, runtime and model?}
+  Q -- no --> Z[nothing to offer]
+  Q -- yes --> T[said once per run, with Restore]
+  T -- Restore pressed --> W{row at the click: there, no member, same legacy value, same copy?}
+  W -- no --> X[refused and said why, offered again]
+  W -- yes --> Y[copy written back, legacy value untouched]
+```
 
 ### Team servers, and the four modules they are split into (2026-09-06)
 
@@ -4658,6 +4695,9 @@ flowchart LR
 | `sidesSeen.ts` | pure: the side registry — `coai.sideSeen@<sideKey>` records, the once-a-day stamp, the 90-day window and its pruning, `sideHereOf`, the `coai.pathFieldsPerSide` switch (`pathFieldsModeOf`, `twoPathFields`), and the thin store half (`stampThisSide`, `sidesIn`, `forgetSide`) over a structural `Memento` (paths per side E2) |
 | `sidesSeenView.ts` | pure: Setup › This side's list of the sides seen, **Forget** per side, the path-fields switch and the sentence that says what it decides (E2.4) |
 | `cliPathSave.ts` | pure: the one write rule for a catalog row's CLI path — `savedCliPath` (this side's field mirrored into the legacy value and `mirrored`, the other side's never; other families pinned) and `vendorFieldWrite`, the panel's vendor write (paths per side E3.2) |
+| `cliPathKeep.ts` | pure: the kept copy of each user-layer row's per-side CLI path — `keptKey` (layer + id + runtime + model), `keepPlan` (copy, prune, the dropped rows), `restoredRows` (the copy back, legacy untouched, a stale click refused) and the notice's words (paths per side, E3 as built) |
+| `cliPathKeeper.ts` | vscode-free: `CliPathKeeper` — one look per settings change, a dropped member said once per run, **Restore** only on a click (paths per side, E3 as built) |
+| `cliPathKeepHost.ts` | the vscode around the keeper: `globalState`, the user layer's `coai.vendors`, the `cli-path-value-dropped` / `cli-path-restore-refused` notices, the one settings write |
 | `pathGroups.ts` | pure: a shared folder list in three groups — this side's, the other side's, both sides / unclear — over `otherSideHere` and this host's disk (paths per side E3.3) |
 | `otherSideValues.ts` | pure: the OTHER side's data directory, read-only through a `SideReader`, from that side's overlay found via the side registry (paths per side E3.4) |
 | `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the MCP server tab states |

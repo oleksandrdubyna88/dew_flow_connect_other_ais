@@ -173,7 +173,10 @@ C# reads the same table:
 
 1. `executablePathBySide[family]`, when the key is **PRESENT** (a string) — an explicitly empty value is a PATH lookup and
    is final: it never falls through to the legacy value (amended by the cadence consultation for epics 4-6, below);
-   unless an older extension has saved since (the `mirrored` check below);
+   unless an older extension has saved since (the `mirrored` check below). *Amended 2026-10-11 (the risk consultant
+   after E3, finding c):* the value rule 1 picks is then judged by rules 2-3 exactly as the legacy value is — qualified
+   on the system drive, skipped only when the disk says absent — so a save that pins a family's value into its member
+   never moves what that family runs (see *E3 as built*);
 2. else the legacy `executablePath`, unless it is spelled for the other OS;
 3. else empty — a PATH lookup — **and** a finding `otherSide` naming the skipped value.
 
@@ -693,8 +696,9 @@ compiling break-it on its deciding line; the observed messages are in the commit
   every row (measured by `scripts/live-paths-per-side-compat.mjs` on both tags). "`BySide` untouched" happens only for a
   hand edit; that case behaves as written (the `mirrored` check, pinned). After an older save the newer reader on the
   saving side resolves P′, and the newer reader on the OTHER side has lost W: the legacy rule gives it the PATH lookup
-  (P′ is spelled for the other OS). Not worse than the single shared value it replaces, and not fixable from the newer
-  side — said in the help (five languages), the CHANGELOG and `module_extension.md`.
+  (P′ is spelled for the other OS). Not worse than the single shared value it replaces, and not PREVENTABLE from the
+  newer side — said in the help (five languages), the CHANGELOG and `module_extension.md`. What the newer side CAN do
+  is say it and offer the value back on a click: *The consultation after E3* below.
 - **The mixed-version fixture is the released extension itself, not a copy of `vendorsWire.ts:115`**: the compat script
   builds the tag (`releasedHalves.mjs`) and runs its `vendorsFrom` / `vendorsEnv`. Against extension-v0.67.0 (E1's rule
   included) the older reader sends `""` for the other side's path rather than W; against v0.65.0 it sends W. Both are
@@ -709,14 +713,65 @@ compiling break-it on its deciding line; the observed messages are in the commit
   the box draws, and the card keys its mark on the same (`theMissingPathIsMarked.test.ts`; break-it: the card keyed on
   `v.executablePath` → `the finding about this side's value did not mark its box`). `runtimeFields` takes the card's
   `CliFieldFacts` (`otherSideCli`, `missingCli`, `family`) instead of two more positional parameters.
+- **The consultation after E3 (2026-10-11): a plan-gate reviewer (one Major finding) and a risk consultant (findings a,
+  b, c; advice only — every claim verified here before acting).**
+  - **Finding c — a save changed the OTHER family's working CLI: REAL, fixed.** `pinnedFor` decided by the SPELLING
+    whether another family reads the legacy value, while `pathForThisSide` asks the DISK. Reproduced RED in
+    `cliPathSaveResolve.test.ts`: legacy `/tools/codex.exe`, `C:\tools\codex.exe` present on the Windows disk —
+    Windows resolved `C:\tools\codex.exe`; after a WSL save of `/opt/other/codex` it resolved `''` (*the save broke
+    the Windows side's working CLI*), and `C:\opt\other\codex` when the disk could not tell. The second claim was
+    real too: saving the UNCHANGED path on Windows wrote the member `/tools/codex.exe`, which the reader returned raw
+    (`'/tools/codex.exe'` instead of `C:\tools\codex.exe`). The every-state property test, run over three disks
+    (absent, here, unknown), found the same on the POSIX side (a Windows-spelled legacy value that is a file in WSL).
+    **Fix:** the reader judges a member by the same rule as the legacy value (`pathForThisSide` =
+    rules 2-3 over `storedForThisSide`), and `pinnedFor` pins a family's stored value whenever it has a member or the save
+    REPLACES the legacy value it reads — no spelling and no disk asked (the save cannot ask the other side's disk, and
+    need not: the pinned member resolves as the legacy value did). Break-its (both compile): the spelling condition back
+    in `pinnedFor` → three red; the raw member back in the reader → four red.
+  - **The Major finding and findings a/b — a member an older save dropped: no silent restore; SAID, with Restore.** The
+    consultant advised against restoring from a shadow copy on its own: it cannot tell an older save from a deliberate
+    removal, `freeVendorId` reuses ids, overlays can hold different rows with one id, and Settings Sync can replace the
+    settings under a copy. Built, inside the existing modules' shapes:
+    `cliPathKeep.ts` (pure decisions), `cliPathKeeper.ts` (the vscode-free keeper, the `PathWatch` shape: a said set,
+    `resolved` when a condition ends, one queue), `cliPathKeepHost.ts` (the wiring; a look at activation and on every
+    `coai` settings change). The copy lives in `globalState` (shared by the Windows and the WSL window of one profile,
+    never synced — no `setKeysForSync`), ONE key per layer and row, `coai.cliPathKept@<layer>@[id,runtime,model]` (the
+    `sidesSeen.ts` pattern: no read-modify-write of a shared value), holding the member as stored — `mirrored` and
+    explicit empty values included. **Identity is id + runtime + model**: the id alone is reused by `freeVendorId`; a
+    row whose runtime or model changed never inherits a copy, and a copy no row carries is deleted. Only the USER layer
+    is kept: a side that keeps its own settings (`coai.perSideSettings`) reads rows only it writes. A newer reader that
+    finds the member gone while a copy exists says once per run and per row (`notifyOnceThen`,
+    `cli-path-value-dropped`, an `offer`): *"… no longer holds a previously saved value — Windows: …; WSL / Linux: …"* —
+    never who removed it — with one button, **Restore**. Restore never runs on its own and re-reads the row AT THE CLICK:
+    refused (`cli-path-restore-refused`, and offered again with the row as it is now) when the row is gone (never
+    recreated), carries a member again, its legacy value changed since the offer, or the copy changed. It writes the copy
+    back EXACTLY and leaves the legacy value alone — so after an older WSL save of P′, restoring leaves legacy P′, the
+    `mirrored` check still lets P′ win for WSL, and Windows runs W again (calling `savedCliPath(…, W, 'windows',
+    'windows')` would have mirrored W into the legacy value — the test says so). Tests: `cliPathKeep.test.ts`, RED
+    first against stubs (*the drop is said once, not on every look* `0 !== 1`; the wording; *the copy is still there to
+    restore*; the restore's `0 !== 1`; *saved for it since* not matched) — the never-guarantees (reused id, own
+    settings, per layer) pass vacuously against a stub and were proved by break-its instead; seven compiling break-its
+    each turned a named test red. Two notice sites: `PLACES_THIS_SPEAKS` 164 → 166.
+  - **A page button for Restore is E4's** (the owner's rule: every extension action is a panel button). E3 changes no
+    page, and the Models card's CLI-path field is redrawn by E4.1, so the button joins it there (E4.1 below); for E3 the
+    notice's **Restore** is the action.
+  - **Said to people:** the help's settings paragraph (five languages) and the CHANGELOG's *Unreleased* paragraph now say
+    the notice and **Restore**; `helpCoverage.test.ts` asks every language for `**Restore**` (RED on `en`; break-it:
+    the Ukrainian label un-bolded → red). The CHANGELOG also records finding c as a fix.
+  - `scripts/live-paths-per-side-compat.mjs` still shows the release DROPPING the member (that is the release's
+    behaviour); that the drop is now SAID is pinned by `cliPathKeep.test.ts` over the same shape (a row without the
+    member after a copy was kept) — the script was not extended (it drives the released halves, not this build's host).
 - **Not in E3:** any page change — the two fields (E4.1), the three folder groups (E4.2) and the other side's data
-  directory (E4.3) are stored and decided here and drawn there.
+  directory (E4.3) are stored and decided here and drawn there; and the panel's **Restore** button (E4.1).
 
 ### E4 — the page draws two fields · `feat/paths-per-side-e4-two-fields`
 
 - **4.1** The Models card: two CLI-path fields when both are known, this side's first, the other in a
   `fieldset`/`legend` with its caption; one field otherwise. Page test, RUN: with two families known the card holds two
   inputs whose labels name *Windows* and *WSL / Linux*; the other side's input has no Browse; with one family, one input.
+  **And a Restore button** beside the field while a previously saved value is missing (`cliPathKeep.ts`'s
+  `DroppedValue`, handed to the page by the host) — the panel button E3's notice duplicates; it posts to
+  `CliPathKeeper.restore`, which re-reads the row at the click.
 - **4.2** Question consultant: the three groups of 3.3 (this side's, the other side's, both sides / unclear — never
   hidden); Add a folder adds to this side's; the other group accepts typed text (the refusal shown beside the box, not
   as a toast). **Admission into the other side's box** (cadence consultation 4-6, finding c): accepted only when THIS
@@ -779,7 +834,8 @@ Each epic is one branch and one pull request, gated per epic.
 2. **Two extension versions on two sides** (a WSL remote installs its own copy): an older one keeps writing the legacy
    `executablePath`, and a newer one notices that save through `mirrored` and resolves it for its family (E3.5 —
    measured: its save also DROPS `executablePathBySide` from every row, so the other side's own value is lost until set
-   again; see *E3 as built*); a
+   again — a newer window then SAYS so once per start, naming the previously saved value, and offers **Restore**, never
+   restoring on its own (`cliPathKeep.ts`; see *E3 as built*); a
    two-field save mirrors this side's value into the legacy field, so the older reader on THIS side is never left with
    a stale value (E3.2's RED covers it). **Not fixable without updating it:** an older reader on the OTHER side reads
    the one legacy value, i.e. the last value any side mirrored — exactly today's single shared value, and coai-mcp ≥
