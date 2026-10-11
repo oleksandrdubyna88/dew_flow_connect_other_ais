@@ -1360,3 +1360,18 @@ test('the bugs deploy wrapper verifies what it downloaded before unpacking it', 
     'and it is checked BEFORE the archive is handed to the release script',
   );
 });
+
+test('the deploy canary says it is the deploy\'s own, and still runs against a server that does not know the word', () => {
+  // Story 3.5 of todo/PLAN_every_round_is_counted.md: the canary was written as an ordinary review, so a spending
+  // report could not tell the deploy's check from a person's. A server older than the kind refuses it with a 400
+  // before any vendor starts — "'canary' is not a kind of job" — so the canary asks once more without it rather than
+  // rolling back a release that is fine. Read as the host reads it, like every deploy script here.
+  const script = deployScript('systemd-release.sh');
+
+  assert.match(script, /'"kind":"canary",'/u, 'the canary submit names its kind');
+  assert.match(script, /is not a kind of job/u, 'an older server\'s refusal of the kind is recognised by its own sentence');
+  assert.ok(
+    script.indexOf('is not a kind of job') < script.indexOf('# Polled to a TERMINAL state'),
+    'and the second submit happens before the canary starts polling — a refusal never reaches the vendor',
+  );
+});

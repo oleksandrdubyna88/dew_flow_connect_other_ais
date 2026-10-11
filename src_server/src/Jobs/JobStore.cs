@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Reviewers;
+
 namespace CoaiServer;
 
 /// <summary>Why a submission was refused, or <see cref="None"/> when it was not.</summary>
@@ -269,21 +271,40 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
         }
     }
 
-    /// <summary>Record a terminal state. Ignored when the job is already finished.</summary>
-    public void Finish(JobRecord job)
+    /// <summary>
+    /// Record a terminal state, and hand back the terminal record this store KEEPS — the one given, or, when a cancel
+    /// or an expiry ended the job first, that earlier record carrying what the late attempt reported it cost.
+    /// </summary>
+    /// <remarks>
+    /// <para>The job's ending is the store's to say (story 3.2 of todo/PLAN_every_round_is_counted.md): a cancel and
+    /// an expiry write their cause AT the transition, under this lock, before they fire the token the runner is
+    /// awaiting on — so by the time the runner arrives here with its own reading of the kill, the store's record is
+    /// the truth about WHY, and the ledger must be written from it rather than from the runner's recomputation.
+    /// Returning the kept record is what makes that a rule the runner cannot miss.</para>
+    /// <para>The usage is the one field the late arrival may add. The store's transition fired the token before the
+    /// vendor had said anything, so its record says <c>Usage.None</c>; what the attempt then reported — a billed first
+    /// launch under a cancelled follow-up, an answer that landed a second before the DELETE — is the truth about what
+    /// the job COST, and a status that answered 0 for it would be the free-withdrawal lie moved from the ledger to
+    /// the wire. A late arrival still releases the token source.</para>
+    /// </remarks>
+    public JobRecord Finish(JobRecord job)
     {
         lock (_gate)
         {
             if (_jobs.TryGetValue(job.Id, out var current) && current.IsTerminal)
             {
+                var kept = current with { Usage = job.Usage };
+                _jobs[job.Id] = kept;
                 Release(job.Id);
 
-                return;
+                return kept;
             }
 
             _jobs[job.Id] = job;
             Release(job.Id);
             Wake(job.Id);
+
+            return job;
         }
     }
 
@@ -300,7 +321,8 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
                 return null;
             }
 
-            var cancelled = JobTransitions.Fail(job, FailureKind.Cancelled, "cancelled by the caller", nowUtc);
+            // The cause as a word, set here where the token is fired (story 3.2): the ledger reads it off this record.
+            var cancelled = JobTransitions.Cancel(job, EndCauses.Withdrawn, "cancelled by the caller", nowUtc);
             _jobs[id] = cancelled;
             Stop(id);
             Wake(id);
@@ -465,8 +487,10 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
         // come between deciding to expire and stopping it. `Cancel` is idempotent, so the sweep and
         // a poll arriving together are safe. (local, code round.)
         Stop(job.Id);
-        var ended = JobTransitions.Fail(
-            job, FailureKind.Cancelled, JobTransitions.ExpiryReason(job, nowUtc), nowUtc);
+        // The clock that ran out, as the record's cause and its sentence from one decision (story 3.2 of
+        // todo/PLAN_every_round_is_counted.md): abandoned, the queue window, or the server's backstop.
+        var (cause, reason) = JobTransitions.Expiry(job, nowUtc);
+        var ended = JobTransitions.Cancel(job, cause, reason, nowUtc);
         _jobs[job.Id] = ended;
         Wake(job.Id);
 

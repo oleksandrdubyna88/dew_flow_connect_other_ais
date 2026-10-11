@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -57,7 +58,7 @@ public sealed class JobTransitionTests
     [Fact]
     public void AFinishedJobNeverExpires()
     {
-        var done = JobTransitions.Succeed(JobTransitions.Start(Queued(), "a", Now), "answer", 1, 2, Now);
+        var done = JobTransitions.Succeed(JobTransitions.Start(Queued(), "a", Now), "answer", new Usage(1, 2, null), Now);
 
         JobTransitions.IsExpired(done, Now.AddYears(1)).Should().BeFalse();
     }
@@ -222,7 +223,7 @@ public sealed class JobStoreTests
     {
         var store = new JobStore(keepFinished: TimeSpan.FromMinutes(30));
         var (job, _, _) = store.Submit(Job());
-        store.Finish(JobTransitions.Succeed(job!, "answer", 0, 0, Now));
+        store.Finish(JobTransitions.Succeed(job!, "answer", Usage.None, Now));
 
         store.Sweep(Now.AddMinutes(31));
 
@@ -236,7 +237,7 @@ public sealed class JobStoreTests
         var (job, _, _) = store.Submit(Job());
 
         var waiting = store.WaitForChangeAsync(job!.Id, TimeSpan.FromSeconds(20), CancellationToken.None);
-        store.Finish(JobTransitions.Succeed(job!, "answer", 0, 0, Now));
+        store.Finish(JobTransitions.Succeed(job!, "answer", Usage.None, Now));
 
         await waiting.WaitAsync(TimeSpan.FromSeconds(2));
     }
@@ -252,7 +253,7 @@ public sealed class JobStoreTests
         var (theirs, _, _) = store.Submit(Job(email: "other@example.com"));
 
         var waiting = store.WaitForChangeAsync(mine!.Id, TimeSpan.FromMilliseconds(400), CancellationToken.None);
-        store.Finish(JobTransitions.Succeed(theirs!, "not yours", 0, 0, Now));
+        store.Finish(JobTransitions.Succeed(theirs!, "not yours", Usage.None, Now));
 
         var finishedEarly = await Task.WhenAny(waiting, Task.Delay(120)) == waiting;
         finishedEarly.Should().BeFalse("the other job moving is not this job moving");

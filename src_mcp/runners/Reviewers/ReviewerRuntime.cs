@@ -243,6 +243,20 @@ public sealed record ReviewerInvocation(
     /// error; the round keeps that stderr as the reason, and the reason reaches the rounds database and the reply the
     /// calling AI reads.</remarks>
     public IReadOnlyList<string> Redact { get; init; } = [];
+
+    /// <summary>The effort and the tier this launch put on its CLI's command line — set by the adapter's <c>Build</c>.</summary>
+    /// <remarks>Story 3.4 of todo/PLAN_every_round_is_counted.md: the raw half of what a ledger line says the launch ran
+    /// with. <see cref="SentOptions"/> says why it sits beside <see cref="Effort"/> rather than replacing it.</remarks>
+    public SentOptions Sent { get; init; } = SentOptions.Nothing;
+
+    /// <summary>
+    /// What this launch RAN WITH, labelled for its ledger line — set by whoever knows the row it was built for (the
+    /// round's roster, the Team server's launcher); <see cref="LaunchOptions.None"/> on a path that labels nothing.
+    /// </summary>
+    /// <remarks>Labelled where the ROW is known, not in <c>Build</c>: whether a value nothing sent was asked for (and so
+    /// ignored), and which configuration the CLI reads, are facts about the row and the launch's environment that an
+    /// adapter is not given.</remarks>
+    public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
 }
 
 /// <summary>
@@ -469,6 +483,8 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var outputFile = Path.Combine(outputDir, $"{FileName.Safe(Provider)}-{FileName.Safe(role)}.json");
+        // Once, for the argv AND the record of what was sent: two calls that must agree are one value.
+        var tier = TierArgs(settings);
         var request = new ProcessRequest(
             Executable(settings, DefaultExecutable),
             [
@@ -486,7 +502,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
                 "--json",
                 .. ModelArgs(settings),
                 .. ProviderOverrides,
-                .. TierArgs(settings),
+                .. tier,
                 // Every MCP server this machine declares, switched off for this launch (issue #514).
                 .. NoMcpServers.CodexArgs(settings.McpServersToSwitchOff),
                 // `-` is codex's documented "read the instructions from stdin". The prompt does
@@ -501,7 +517,11 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
             StdIn = prompt,
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, outputFile, this, Model: settings.Model);
+        // No effort: codex is never told one (RosterBuilder.EffortFor) — the tier is all this argv carries of either.
+        return new ReviewerInvocation(Provider, role, request, outputFile, this, Model: settings.Model)
+        {
+            Sent = new(Tier: SentOptions.TierIn(tier)),
+        };
     }
 
     private protected static string Executable(ReviewerSettings settings, string fallback) =>

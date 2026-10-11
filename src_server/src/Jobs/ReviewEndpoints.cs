@@ -183,7 +183,9 @@ public static class ReviewEndpoints
                     caller.Email, request.Vendor, request.Model, role, taken.Prompt, kind,
                     request.TimeoutSeconds, taken.Effort),
             Effort: taken.Effort,
-            SystemPromptSha: taken.SystemPromptSha);
+            SystemPromptSha: taken.SystemPromptSha,
+            // What became of the request's effort, carried to the job's ledger line (story 3.4).
+            EffortFrom: taken.EffortFrom);
     }
 
     /// <summary>A contract-1 response has no notes at all, so an empty list is left out rather than sent.</summary>
@@ -344,7 +346,11 @@ public static class ReviewEndpoints
             job.TokensIn,
             job.TokensOut,
             job.Failure == FailureKind.None ? string.Empty : Wire(job.Failure),
-            job.Reason);
+            job.Reason,
+            // A NEW optional field rather than a new failure name (story 3.2 of todo/PLAN_every_round_is_counted.md): every
+            // shipped client branches on `status` and only renders `failure` inside a sentence, and a field an older client
+            // never reads is a field it cannot misread — `failure` stays `cancelled`, as it has been.
+            job.EndCause);
 
     /// <summary>The failure name a client already renders.</summary>
     private static string Wire(FailureKind kind) => kind switch

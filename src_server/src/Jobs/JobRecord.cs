@@ -1,3 +1,6 @@
+using CoaiMcp.Core.Findings;
+using CoaiMcp.Runners.Reviewers;
+
 namespace CoaiServer;
 
 /// <summary>Where a review is in its life.</summary>
@@ -83,8 +86,6 @@ public sealed record JobRecord(
     string Slot = "",
     FailureKind Failure = FailureKind.None,
     string Reason = "",
-    long TokensIn = 0,
-    long TokensOut = 0,
 
     /// <summary>The accounts that have already refused this job with a rate limit.</summary>
     /// <remarks>
@@ -102,8 +103,37 @@ public sealed record JobRecord(
     /// Contract 2: the SHA-256 of a client system prompt the server took — the text itself is only inside
     /// <see cref="Prompt"/>, in memory; empty when none was taken.
     /// </summary>
-    string SystemPromptSha = "")
+    string SystemPromptSha = "",
+
+    /// <summary>What became of the request's effort — <see cref="TakenOptions.EffortFrom"/> — for the job's ledger line.</summary>
+    string EffortFrom = "")
 {
+    /// <summary>
+    /// What the vendor reported for this job — the whole usage, cached and reasoning included (story 3.1 of
+    /// todo/PLAN_every_round_is_counted.md). It replaced two longs, which is where the server ledger lost the rest.
+    /// </summary>
+    public Usage Usage { get; init; } = Usage.None;
+
+    /// <summary>
+    /// WHY a <see cref="FailureKind.Cancelled"/> job was cancelled — one of <see cref="EndCauses"/> — and empty for
+    /// every other ending (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <remarks>
+    /// Set AT the transition, by whoever fired the token: <c>JobStore.Cancel</c> says <c>withdrawn</c>,
+    /// <c>JobStore.Expire</c> says <c>abandoned</c>, <c>backstop</c> or <c>queueExpired</c> from the clock that ran
+    /// out, and <c>JobRunner</c> says <c>hostStopped</c> only when the store kept no cause of its own. Until this field
+    /// the two store transitions both wrote <c>Cancelled</c>, told apart by a sentence nobody could count by. The
+    /// ledger reads it from the record the STORE kept, never from the runner's recomputation, which is why
+    /// <c>JobStore.Finish</c> hands that record back.
+    /// </remarks>
+    public string EndCause { get; init; } = string.Empty;
+
+    /// <summary>The input count the status endpoint reports.</summary>
+    public long TokensIn => Usage.TokensIn;
+
+    /// <summary>The output count the status endpoint reports.</summary>
+    public long TokensOut => Usage.TokensOut;
+
     public bool IsTerminal => Status is JobStatus.Done or JobStatus.Failed;
 
     /// <summary>The accounts that have refused it, never null.</summary>
@@ -188,39 +218,46 @@ public static class JobTransitions
             RunDeadlineUtc = nowUtc + job.RunBudget + RunSlack,
         };
 
-    public static JobRecord Succeed(JobRecord job, string answer, long tokensIn, long tokensOut, DateTimeOffset nowUtc) =>
+    public static JobRecord Succeed(JobRecord job, string answer, Usage usage, DateTimeOffset nowUtc) =>
         job with
         {
             Status = JobStatus.Done,
             Answer = answer,
-            TokensIn = tokensIn,
-            TokensOut = tokensOut,
+            Usage = usage,
             FinishedUtc = nowUtc,
         };
 
-    /// <param name="tokensIn">
-    /// What the attempt actually cost, when the failure carries it. A vendor that answered unusably
-    /// still BILLED for the call, and leaving these at zero writes a usage line saying the company
-    /// spent nothing — which is precisely the vendor somebody would want to find in that report.
-    /// Defaulted, because most failures genuinely have no usage to carry: nothing ran.
-    /// (CodeRabbit, PR 93.)
+    /// <summary>A failure that ran nothing, so it carries no usage.</summary>
+    public static JobRecord Fail(JobRecord job, FailureKind kind, string reason, DateTimeOffset nowUtc) =>
+        Fail(job, kind, reason, nowUtc, Usage.None);
+
+    /// <param name="usage">
+    /// What the attempt actually cost. A vendor that answered unusably, or exited non-zero, still BILLED for the call,
+    /// and leaving it out writes a usage line saying the company spent nothing — which is precisely the vendor somebody
+    /// would want to find in that report. (CodeRabbit, PR 93; widened to every failure and to the whole usage by story
+    /// 3.1 of todo/PLAN_every_round_is_counted.md.)
     /// </param>
-    public static JobRecord Fail(
-        JobRecord job,
-        FailureKind kind,
-        string reason,
-        DateTimeOffset nowUtc,
-        long tokensIn = 0,
-        long tokensOut = 0) =>
+    public static JobRecord Fail(JobRecord job, FailureKind kind, string reason, DateTimeOffset nowUtc, Usage usage) =>
         job with
         {
             Status = JobStatus.Failed,
             Failure = kind,
             Reason = reason,
-            TokensIn = tokensIn,
-            TokensOut = tokensOut,
+            Usage = usage,
             FinishedUtc = nowUtc,
         };
+
+    /// <summary>
+    /// A job somebody's token killed, saying WHY as a word and not only as a sentence — the one transition that writes
+    /// <see cref="FailureKind.Cancelled"/> (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <param name="cause">One of <see cref="EndCauses"/>: the store's word for the token it fired.</param>
+    /// <param name="usage">
+    /// What the attempt reported before it was stopped, when the runner is the one ending it; the store's own
+    /// transitions carry none, because they fire the token before the vendor has said anything.
+    /// </param>
+    public static JobRecord Cancel(JobRecord job, string cause, string reason, DateTimeOffset nowUtc, Usage? usage = null) =>
+        Fail(job, FailureKind.Cancelled, reason, nowUtc, usage ?? Usage.None) with { EndCause = cause };
 
     /// <summary>Has this job run out of the clock that currently applies to it?</summary>
     /// <remarks>
@@ -245,7 +282,13 @@ public static class JobTransitions
     /// because a job that is both abandoned and out of clock was abandoned earlier — the deadline
     /// merely arrived while nobody was watching.
     /// </remarks>
-    public static string ExpiryReason(JobRecord job, DateTimeOffset nowUtc)
+    public static string ExpiryReason(JobRecord job, DateTimeOffset nowUtc) => Expiry(job, nowUtc).Reason;
+
+    /// <summary>
+    /// The clock that ran out, as the cause the record keeps AND the sentence a person reads — decided once, so the
+    /// two cannot disagree (story 3.2 of todo/PLAN_every_round_is_counted.md). Abandonment first, as above.
+    /// </summary>
+    public static (string Cause, string Reason) Expiry(JobRecord job, DateTimeOffset nowUtc)
     {
         if (IsAbandoned(job, nowUtc))
         {
@@ -253,13 +296,14 @@ public static class JobTransitions
             // sentence beginning "nobody asked about this" is answered to somebody doing exactly
             // that, and reads as the server contradicting them. It says when it gave up instead.
             // (gemini, code round.)
-            return $"this review went {AbandonedAfter(job.Status).TotalMinutes:0} minutes with nobody "
-                + "asking about it, so it was dropped and its account freed — send it again if you still want it";
+            return (EndCauses.Abandoned, $"this review went {AbandonedAfter(job.Status).TotalMinutes:0} minutes with nobody "
+                + "asking about it, so it was dropped and its account freed — send it again if you still want it");
         }
 
         return job.Status == JobStatus.Queued
-            ? $"expired in the queue after {(job.QueueDeadlineUtc - job.SubmittedUtc).TotalMinutes:0} minutes "
-                + "without a free account — nothing was sent to the vendor"
-            : $"the vendor was still running {job.RunBudget.TotalSeconds:0}s after it started and was stopped";
+            ? (EndCauses.QueueExpired, $"expired in the queue after {(job.QueueDeadlineUtc - job.SubmittedUtc).TotalMinutes:0} minutes "
+                + "without a free account — nothing was sent to the vendor")
+            // The server's own deadline — the budget plus RunSlack — which the reviewer's own timeout should have beaten.
+            : (EndCauses.Backstop, $"the vendor was still running {job.RunBudget.TotalSeconds:0}s after it started and was stopped");
     }
 }

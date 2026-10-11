@@ -12,8 +12,10 @@ internal static class SecurityAnswerLimit
     {
         if (!work.IsSecurity || outcome is not ReviewerOutcome.Ok ok) return outcome;
         var reason = Refusal(ok.Review);
+        // The launches travel with the usage: a refused answer that took a repair was still two paid launches, and the
+        // ledger writes one line each (story 3.3 of todo/PLAN_every_round_is_counted.md).
         return reason.Length == 0 ? outcome : new ReviewerOutcome.Unparseable(reason, ok.LastTurnUsage)
-        { EarlierTurns = ok.EarlierTurns };
+        { EarlierTurns = ok.EarlierTurns, Launches = ok.Launches };
     }
 
     /// <summary>The first rule the answer breaks, in this order — size, then prose, status, severity and evidence — or empty.</summary>

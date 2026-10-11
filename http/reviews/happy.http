@@ -43,6 +43,8 @@ Authorization: Bearer {{token}}
     assert.strictEqual(typeof response.parsedBody.answer, 'string');
     assert.strictEqual(typeof response.parsedBody.failure, 'string');
     assert.strictEqual(typeof response.parsedBody.reason, 'string');
+    // Story 3.2 of todo/PLAN_every_round_is_counted.md: the cause is a string field, empty until a cancellation.
+    assert.strictEqual(response.parsedBody.endCause, '');
     assert.ok(Number.isInteger(response.parsedBody.tokensIn));
   });
 }}
@@ -95,6 +97,9 @@ Authorization: Bearer {{token}}
   test('it is failed, with cancelled as the reason', () => {
     assert.strictEqual(response.parsedBody.status, 'failed');
     assert.strictEqual(response.parsedBody.failure, 'cancelled');
+  });
+  test('and it says WHY as a word — withdrawn by this caller, never a sentence to match (story 3.2)', () => {
+    assert.strictEqual(response.parsedBody.endCause, 'withdrawn');
   });
 }}
 

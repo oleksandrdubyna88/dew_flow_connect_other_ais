@@ -79,7 +79,10 @@ public static class ConsultFailures
     private static ConsultFailure Ended(ReviewerOutcome terminal, ConsultFailure killedAs, string runtime, bool? linux) => terminal switch
     {
         ReviewerOutcome.NotStarted n => new ConsultFailure.CliNotFound(Safe(n.Reason), InstallCureFor(runtime, linux)),
-        ReviewerOutcome.TimedOut => killedAs,
+        // Both are a KILLED launch, and the caller decided from the tokens what killed it (the summary above): the
+        // executor's own word for the kill — the launch's budget, or the caller's token (story 3.2 of
+        // todo/PLAN_every_round_is_counted.md) — is not read here either way.
+        ReviewerOutcome.TimedOut or ReviewerOutcome.Cancelled => killedAs,
         ReviewerOutcome.RateLimited r => RateLimit.Hopeless(r.Reason) ? new ConsultFailure.Quota(Safe(r.Reason)) : new ConsultFailure.RateLimited(Safe(r.Reason)),
         ReviewerOutcome.NonZeroExit e => Exited(e, runtime, linux),
         // An ending that is no exit at all — an answer that would not parse, a launch stood down. None can

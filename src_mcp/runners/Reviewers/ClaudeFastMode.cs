@@ -28,6 +28,14 @@ public static class ClaudeFastMode
             ? []
             : ["--settings", FileFor(settings.DataDir, settings.Fast == FastMode.On)];
 
+    /// <summary>
+    /// The tier the arguments <see cref="Args"/> built tell the CLI, in codex's words so one ledger column compares across
+    /// vendors (story 3.4 of todo/PLAN_every_round_is_counted.md): <c>fast</c> for the On file, <c>default</c> — the standard
+    /// tier — for the Off one, empty when no file was sent.
+    /// </summary>
+    public static string TierOf(IReadOnlyList<string> args, FastMode fast) =>
+        args.Count == 0 ? string.Empty : fast == FastMode.On ? "fast" : "default";
+
     /// <summary>Whether <paramref name="model"/> has a fast tier — read from shared/feature-availability.json, the list the card reads too.</summary>
     public static bool HasTheTier(string model) => FeatureAvailability.Builtin.HasFastTier("claude", model);
 

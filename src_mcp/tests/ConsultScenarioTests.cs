@@ -326,6 +326,29 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
         Refusal(refused).Should().Contain("no longer holds").And.Contain("start a new consultation");
     }
 
+    /// <summary>
+    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: a failed turn's ledger row keeps the vendor's reason whole, and
+    /// redacted. It was the summary's 160-character cut of the CLI's stderr, unredacted.
+    /// </summary>
+    [Fact]
+    public async Task AFailedTurnsLedgerRow_KeepsTheReasonWhole_AndRedacted()
+    {
+        const string bearer = "abcdefghijklmnopqrstuvwxyz0123456789";
+        const string tail = "and the gateway explained at length, past any summary's width, why it would not take the call";
+        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", null);
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", null);
+        Environment.SetEnvironmentVariable("FAKECLI_STDERR", $"error: Authorization: Bearer {bearer} was refused, {tail}");
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
+
+        await Consult(Service(), "the count is wrong");
+
+        var row = (await File.ReadAllLinesAsync(Path.Combine(_data, "usage.jsonl"), TestContext.Current.CancellationToken))
+            .Should().ContainSingle().Subject;
+        row.Should().NotContain(bearer, "a vendor's stderr is written down whole only after it is redacted");
+        JsonDocument.Parse(row).RootElement.GetProperty("outcome").GetString().Should()
+            .Contain(tail, "the ledger's outcome is the vendor's whole reason, not the summary's cut");
+    }
+
     [Fact]
     public async Task EveryTurnIsOneLedgerRow_OfKindConsult()
     {

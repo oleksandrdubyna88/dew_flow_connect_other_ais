@@ -21,6 +21,14 @@ public static class ServerNoticeCodes
     public const string Refused = "refused";
 
     public const string ReviewerTimedOut = "reviewer-timed-out";
+
+    /// <summary>
+    /// A reviewer the CALLER's token killed — the round ended under it, or the person stopped the round — never one the
+    /// vendor was too slow for (<see cref="ReviewerTimedOut"/>). Its own code since story 3.2 of
+    /// todo/PLAN_every_round_is_counted.md: until then the executor read a cancellation as a timeout, and the notice sent a
+    /// person to look at a vendor that was never slow. Still written down, because the launch may well have been billed.
+    /// </summary>
+    public const string ReviewerCancelled = "reviewer-cancelled";
     public const string SecurityLaneIncomplete = "security-lane-incomplete";
 
     public const string ReviewerRateLimited = "reviewer-rate-limited";
@@ -61,6 +69,7 @@ public static class ServerNoticeCodes
     [
         Refused,
         ReviewerTimedOut,
+        ReviewerCancelled,
         SecurityLaneIncomplete,
         ReviewerRateLimited,
         ReviewerExit,

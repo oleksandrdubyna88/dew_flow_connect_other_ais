@@ -383,11 +383,14 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
         var ledger = new UsageLedger(_dir.At("ledger-repair"));
         ledger.Record(slow.Invocation, timedOut, "m", "FeatureReview", TimeSpan.FromSeconds(4));
+        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md: turn 1's, then turn 2's
+        // malformed launch and its repair that timed out — the folded line used to carry both of turn 2's.
         var lines = File.ReadAllLines(ledger.Path);
-        lines.Should().HaveCount(2, "turn 1's line and the failed turn's — the malformed attempt is on that turn's line, never a third");
-        lines[0].Should().Contain("\"tokensIn\":1000").And.Contain("\"outcome\":\"ok\"");
+        lines.Should().HaveCount(3, "turn 1's line, and turn 2's two launches each on its own");
+        lines[0].Should().Contain("\"tokensIn\":1000").And.Contain("\"outcome\":\"ok\"").And.Contain("\"attempt\":\"first\"");
         lines[1].Should().Contain("\"tokensIn\":700", "turn 2's first launch completed and reported its usage; only its answer was malformed")
-            .And.Contain("timeout");
+            .And.Contain("\"attempt\":\"first\"");
+        lines[2].Should().Contain("timeout").And.Contain("\"attempt\":\"repair\"").And.Contain(CostText.UsageNotCaptured);
     }
 
     /// <summary>
@@ -418,10 +421,15 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
         var ledger = new UsageLedger(_dir.At("ledger-continuing"));
         ledger.Record(work.Invocation, ok, "m", "FeatureReview", TimeSpan.FromSeconds(4));
-        var lines = File.ReadAllLines(ledger.Path);
-        lines.Should().HaveCount(2, "one ledger line per turn");
-        lines[0].Should().Contain("\"tokensIn\":1700", "turn 1's line carries every launch of turn 1");
-        lines[1].Should().Contain("\"tokensIn\":10");
+        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md — turn 1's malformed launch,
+        // its refused repair and the ladder's retry, then turn 2 — and turn 1's lines still add up to its 1700.
+        var lines = File.ReadAllLines(ledger.Path)
+            .Select(l => System.Text.Json.JsonSerializer.Deserialize(l, LedgerJsonContext.Default.UsageEntry)!).ToList();
+        lines.Select(l => l.Attempt).Should().Equal(LaunchAttempts.First, LaunchAttempts.Repair, LaunchAttempts.Retry, LaunchAttempts.First);
+        lines.Take(3).Sum(l => l.TokensIn).Should().Be(1700, "turn 1's lines carry every launch of turn 1, once");
+        lines.Take(3).Select(l => l.Turn).Distinct().Should().ContainSingle("turn 1's three launches share turn 1's id");
+        lines[3].TokensIn.Should().Be(10);
+        lines[3].Turn.Should().NotBe(lines[0].Turn, "turn 2 is another turn");
 
         var live = new LiveRound(new SessionStore(_dir.At("store-continuing")), new PersistedSession(new SessionState("s", "D:/r", "main", new PanelConfig()), []), 1, [work], "", Noticing.None);
         live.Finish("proceed", 0, "all 1 reviewers answered", [(work.Invocation, ok)]).TokensIn.Should().Be(1710, "the round total is the same sum");

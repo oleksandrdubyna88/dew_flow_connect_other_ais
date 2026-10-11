@@ -32,16 +32,24 @@ export async function readRoundCounts(executable: string, run: Run = serverRun(e
 /**
  * The cache's loader: one `--round-counts` spawn and one tail read of `usage.jsonl` back to the oldest window, the two
  * in parallel. `executable` empty is a side with no server — the counts are unavailable and the ledger is still read.
+ *
+ * @param besidePaths ledgers of the same `UsageEntry` shape read beside `usage.jsonl` — the extension's probe ledger
+ *   (`probeUsageFile.ts`). A failure to read one is said like the main ledger's.
  */
-export function roundsLoader(executable: () => string, usagePath: string, run?: Run): RoundsLoad {
+export function roundsLoader(executable: () => string, usagePath: string, run?: Run, besidePaths: readonly string[] = []): RoundsLoad {
   return async (nowMs) => {
     const binary = executable();
-    const [read, tail] = await Promise.all([
+    const since = nowMs - WINDOW_MS['7d'];
+    const [read, tails] = await Promise.all([
       readRoundCounts(binary, run ?? serverRun(binary)),
-      readTailSince(usagePath, nowMs - WINDOW_MS['7d'], parseUsageLine),
+      Promise.all([usagePath, ...besidePaths].map((path) => readTailSince(path, since, parseUsageLine))),
     ]);
 
-    return { read, ledger: tail.records, ledgerFailure: tail.failure };
+    return {
+      read,
+      ledger: tails.flatMap((tail) => tail.records),
+      ledgerFailure: tails.map((tail) => tail.failure).filter((failure) => failure.length > 0).join('; '),
+    };
   };
 }
 

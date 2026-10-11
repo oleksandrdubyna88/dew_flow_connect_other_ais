@@ -118,6 +118,9 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
         {
             // The prompt file goes when the turn does (BoundedScheduler) — the server already holds what it sent.
             TempFiles = systemFile.Length > 0 ? [promptFile, systemFile] : [promptFile],
+            // What this machine SENT the server (contract 2's `--effort`), which the server may still refuse: its own
+            // ledger line says what it applied, this one what was asked of it (story 3.4). No tier — the contract has none.
+            Sent = new(settings.ReasoningEffort),
         };
     }
 

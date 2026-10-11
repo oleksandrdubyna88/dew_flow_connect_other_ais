@@ -30,6 +30,16 @@ public enum JobKind
 
     /// <summary>One person asking one question about one passage. No role, no findings, no verdict.</summary>
     Chat,
+
+    /// <summary>
+    /// The deploy's own check: one real review per vendor, sent by <c>deploy/systemd-release.sh</c> after a swap.
+    /// </summary>
+    /// <remarks>
+    /// A review in every rule — it carries a role and is refused without one — and its own kind only so a spending
+    /// report can tell it from a person's review; it was written <c>review</c> before, and told apart only by its
+    /// token's email (story 3.5 of todo/PLAN_every_round_is_counted.md).
+    /// </remarks>
+    Canary,
 }
 
 /// <summary>Reading and checking the <c>kind</c> a caller sent.</summary>
@@ -97,6 +107,8 @@ public static class JobKinds
     ///   <item><term><c>chat</c> + no role</term><description>accepted.</description></item>
     ///   <item><term><c>chat</c> + a role</term><description>refused. A chat carries no role, and
     ///     quietly dropping one is how a field comes to mean something else.</description></item>
+    ///   <item><term><c>canary</c></term><description>judged exactly as <c>review</c>: the deploy's
+    ///     check is a review with its own name, not a different kind of work.</description></item>
     ///   <item><term>anything else</term><description>refused, naming both kinds — the same shape the
     ///     unknown-role refusal already has.</description></item>
     /// </list>
@@ -132,7 +144,7 @@ public static class JobKinds
             // here checked, and one with an unconfigured role came out of it accepted. `Refusal`
             // answers both questions — "you sent none" and "this server does not run that one" —
             // so the row is one row. (gemini, story 2's code round.)
-            (JobKind.Review, _) => roles.Refusal(saidRole),
+            (JobKind.Review or JobKind.Canary, _) => roles.Refusal(saidRole),
             _ => null,
         };
     }

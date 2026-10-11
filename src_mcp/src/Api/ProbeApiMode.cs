@@ -128,7 +128,10 @@ internal static class ProbeApiMode
         using var http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
         // No client-wide timeout: each call carries its own, below.
         http.Timeout = Timeout.InfiniteTimeSpan;
-        var report = await ProbeAsync(probe, key, http, note);
+        // Every completion sent with the real key is written down as it is spent (story 3.3 of
+        // todo/PLAN_every_round_is_counted.md) — into this machine's one ledger, under the row it probed.
+        var ledger = new UsageLedger(SettingsFile.DataDirFrom(env).Path);
+        var report = await ProbeAsync(probe, key, http, note, spent => Written(ledger, row?.Provider ?? vendor, probe.Model, spent));
         await output.WriteLineAsync(Render(probe, report));
 
         return Ok;
@@ -145,7 +148,8 @@ internal static class ProbeApiMode
     private static string DialectOf(ProviderSettings? row) =>
         row is { Dialect.Length: > 0 } ? row.Dialect : ApiDialects.OpenAiName;
 
-    private static async Task<Report> ProbeAsync(Probe probe, string key, HttpClient http, Action<string> note)
+    /// <param name="paid">Told of every completion sent with the REAL key, the moment it answers — the wrong-key request bills nobody.</param>
+    private static async Task<Report> ProbeAsync(Probe probe, string key, HttpClient http, Action<string> note, Action<RequestResult> paid)
     {
         var models = await ModelsAsync(probe, key, http);
         note($"GET {probe.Endpoint}/models answered {models.Status} with {models.Ids.Count} model id(s)");
@@ -160,6 +164,7 @@ internal static class ProbeApiMode
         foreach (var variant in Variants(probe))
         {
             requests.Add(await CompletionAsync(probe, variant, key, http));
+            Spent(variant, requests[^1], paid);
             note($"{probe.Model} · {variant.Name}: HTTP {requests[^1].Status}");
         }
 
@@ -228,6 +233,7 @@ internal static class ProbeApiMode
     private static async Task<RequestResult> CompletionAsync(Probe probe, Variant variant, string key, HttpClient http)
     {
         var body = ChatRequest.Body(variant.Dialect, probe.Model, Prompt, FindingSchema.Json, LocalAsk.SeedFor(Prompt), variant.Effort, 2048);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var (status, text) = await SendAsync(
             http, HttpMethod.Post, $"{probe.Endpoint}/chat/completions", variant.WrongKey ? WrongKey : key, body, probe.PerCall);
         var ok = status is >= 200 and <= 299;
@@ -238,8 +244,51 @@ internal static class ProbeApiMode
             status,
             ok ? string.Empty : RefusedField(quoted),
             quoted,
-            ok ? Usage(text) : new Tokens(0, 0, 0));
+            ok ? Usage(text) : new Tokens(0, 0, 0),
+            clock.Elapsed);
     }
+
+    /// <summary>A completion sent with the real key is a paid launch, and is handed on to be written down.</summary>
+    private static void Spent(Variant variant, RequestResult result, Action<RequestResult> paid)
+    {
+        if (!variant.WrongKey)
+        {
+            paid(result);
+        }
+    }
+
+    /// <summary>
+    /// One completion as a ledger line — kind <c>probe</c>, stage <c>Probe</c>, the variant as its role, the model it
+    /// asked, and what the endpoint reported (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    /// <remarks>
+    /// <para>Before this the matrix spent ten completions per run against a metered key and wrote nothing — row 7 of the
+    /// paid-path census (research/RESULTS_vendor_quota_gauges.md §5.1): a probe's money sat in the vendor's bill and in
+    /// no record here. A probe is not a round, so it is its own kind and has no turn and no attempt.</para>
+    /// <para>The outcome is the ALLOWLIST's words only — <c>ok</c>, <c>HTTP 400 (refused frequency_penalty)</c>,
+    /// <c>no answer</c> — never the vendor's text, which this mode prints only after redaction and a cap: the ledger
+    /// is a file other tools read, and the probe's refusal sentences are already in its report.</para>
+    /// <para>A request that got no answer may well have been read and billed, so its usage is <i>not captured</i>,
+    /// never a zero; a refusal reported nothing, and is the zero it reported.</para>
+    /// </remarks>
+    private static void Written(UsageLedger ledger, string provider, string model, RequestResult result) =>
+        ledger.RecordJob(
+            string.Empty, provider, model, result.Case, LedgerOutcome(result), result.Took, LedgerUsage(result), UsageKinds.Probe, "Probe");
+
+    private static string LedgerOutcome(RequestResult result) => result.Status switch
+    {
+        >= 200 and <= 299 => "ok",
+        0 => "no answer",
+        _ when result.RefusedField.Length > 0 => $"HTTP {result.Status} (refused {result.RefusedField})",
+        _ => $"HTTP {result.Status}",
+    };
+
+    private static Usage LedgerUsage(RequestResult result) => result.Status switch
+    {
+        >= 200 and <= 299 => new Usage(result.Tokens.Prompt, result.Tokens.Completion, null, TokensCached: result.Tokens.Cached),
+        0 => Core.Findings.Usage.Unknown,
+        _ => Core.Findings.Usage.None,
+    };
 
     /// <summary>One call under its own deadline. A timeout or a refused connection is a status of 0 and a sentence.</summary>
     private static async Task<(int Status, string Text)> SendAsync(
@@ -374,7 +423,8 @@ internal static class ProbeApiMode
 
     private sealed record Tokens(long Prompt, long Completion, long Cached);
 
-    private sealed record RequestResult(string Case, int Status, string RefusedField, string Error, Tokens Tokens);
+    /// <param name="Took">How long the completion took — the ledger line's seconds; never printed in the report.</param>
+    private sealed record RequestResult(string Case, int Status, string RefusedField, string Error, Tokens Tokens, TimeSpan Took);
 
     private sealed record Report(ModelsResult Models, IReadOnlyList<RequestResult> Requests, IReadOnlyList<string> Notes);
 }

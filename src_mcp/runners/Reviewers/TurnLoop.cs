@@ -97,7 +97,8 @@ internal sealed class TurnLoop(
     private async Task<TurnDecision> AfterAsync(
         ReviewerWork work, int turn, ReviewerOutcome.Ok answered, TimeSpan elapsed, CancellationToken ct)
     {
-        _earlier = _earlier.Add(new TurnUsage(turn, answered.LastTurnUsage, elapsed));
+        // Its launches with it — the ledger writes each as its own line (story 3.3 of todo/PLAN_every_round_is_counted.md).
+        _earlier = _earlier.Add(new TurnUsage(turn, answered.LastTurnUsage, elapsed) { Launches = answered.Launches });
         var decision = await work.Continue.AfterAsync(turn, answered, ct);
         if (decision is TurnDecision.Stop)
         {

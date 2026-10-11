@@ -83,6 +83,9 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
         string outputDir,
         ReviewerSettings settings)
     {
+        // Once each, for the argv AND the record of what was sent: two calls that must agree are one value.
+        var effort = EffortArguments(settings);
+        var fast = ClaudeFastMode.Args(settings);
         var request = new ProcessRequest(
             settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
             [
@@ -94,9 +97,9 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 NoMcpServers.ClaudeFlag,
                 "--add-dir", worktreePath,
                 .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
-                .. EffortArguments(settings),
+                .. effort,
                 // The row's fast mode, as a one-key settings file (research/PLAN_fast_mode.md).
-                .. ClaudeFastMode.Args(settings),
+                .. fast,
             ],
             worktreePath)
         {
@@ -108,7 +111,10 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 : new Dictionary<string, string?>(),
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model, Effort: settings.ReasoningEffort);
+        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model, Effort: settings.ReasoningEffort)
+        {
+            Sent = new(effort.Length > 0 ? settings.ReasoningEffort : string.Empty, ClaudeFastMode.TierOf(fast, settings.Fast)),
+        };
     }
 
     /// <summary>The review is the envelope's <c>result</c> string; the rest is metadata.</summary>
