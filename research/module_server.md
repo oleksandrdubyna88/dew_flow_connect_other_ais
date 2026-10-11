@@ -3093,6 +3093,97 @@ apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period con
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.
 
+### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `todo/PLAN_every_round_is_counted.md` story 2.1)
+
+The operator's question of 2026-10-09 — *"my plan used to allow ~250 rounds comfortably; now it hits the limit at
+~150"* — had no surface that counted ROUNDS: the Spending tab counted reviewer launches per row, and a round is one
+launch per vendor in a plan round and up to four in a code round, so "runs" moved with the settings rather than with
+the work. [RESULTS_what_spends_the_subscription_2026-10-09.md](RESULTS_what_spends_the_subscription_2026-10-09.md) §1
+counted them by hand out of `coai.db`; this mode is that hand count as the binary's own answer, for the extension's
+Spending tab (story 2.2 reads it, 2.3 draws it).
+
+**The contract.** `coai-mcp --round-counts [--now <ISO-8601 UTC instant>]` prints one JSON document on stdout and
+exits 0 (`Store/RoundCounts.cs`, `Server/RoundCountsMode.cs`):
+
+```json
+{ "nowUtc": "2026-10-10T12:00:00.0000000Z",
+  "windows": [ { "name": "5h", "fromUtc": "2026-10-10T07:00:00.0000000Z", "toUtc": "2026-10-10T12:00:00.0000000Z",
+                 "rows": [ { "provider": "codex",
+                             "rounds": { "plan": 1, "code": 3, "document": 0, "feature": 0 },
+                             "reviewers": 6,
+                             "models": [ { "model": "gpt-6-luna", "rounds": 4 } ] } ] },
+               { "name": "24h", "...": "..." }, { "name": "7d", "...": "..." } ],
+  "modelsKnownSince": "2026-10-02T11:58:03.1234567Z" }
+```
+
+- **A round** is one `rounds` row, counted for a provider when at least one `reviewers` row of that round names it —
+  whatever the reviewer's status, because a launch that failed or stood down still belongs to a round that ran.
+  `rounds` is DISTINCT rounds by stage (`rounds.stage` → `plan` / `code` / `document` / `feature`, the enum's own
+  names); `reviewers` is the reviewer rows of that provider in those rounds — the honest numerator of "reviewers per
+  round" until story 4.1 puts a round id on ledger lines. Three codex reviewers of one code round are one round and
+  three reviewers, which is the distinction "N runs" could not make.
+- **Windows are trailing and half-open**, `(fromUtc, toUtc]`, ending at `--now` or the real clock (`TimeProvider`,
+  UTC): a round exactly five hours old is in the last day and not in the last five hours; one that started exactly
+  at `now` is in every window; one in the future is in none. The comparison is textual over the column's own `"O"`
+  UTC stamps, the way `--since` compares, and written ONCE (`RoundCounts.Inside`) so the SQL's outer bound and the
+  in-memory cut cannot disagree about an edge.
+- **Team-server rows** (`<server>-<vendor>`) come back under their stored provider string, never folded into the
+  vendor's row; the extension labels them *ran on <server>*.
+- **Per-model rounds** come from schema step 20's `reviewers.model` (below): a round whose reviewer recorded no model
+  is counted under its stage and on no model line, so a model change inside a window is two lines for the row.
+  `modelsKnownSince` is the start of the first round, over the whole table, whose reviewer recorded a model — the
+  instant from which per-model counts exist — and is `null` **written, not omitted** when none has.
+- **Rows are per window**, providers in ordinal order, models by rounds descending then name: a provider with
+  rounds in the last week and none in the last five hours has a row in `7d` and none in `5h`; a window nothing ran
+  in answers `rows: []`.
+
+**Exit codes.** **0** with the answer — an EMPTY answer (three windows, no rows, `modelsKnownSince: null`) when
+`coai.db` does not exist yet, and the file is NOT created: a machine that has never run a round has nought rounds.
+The extension tells a count from "unavailable" by the exit code and the parse — any exit 0 that parses is a count,
+rows or none; **64**, a timeout, or text that will not parse is *count unavailable*, never 0. **65** for a bad
+argument — an unparseable `--now`, a second `--now`, a `--now` with no value, an unknown flag — with the sentence on
+stderr naming the mode and what it takes and quoting the refused value. **74** for a database that will not read
+(`Program.Unreadable`, the same sentence `--log --paged` gives). **Never 64**: that means "this binary has never heard
+of the mode" and sends the extension down its fallback (`.agents/PROJECT.md`, where the mode is listed);
+`RoundCountsCliScenarioTests.ABadArgument_IsAUsageErrorNot64` holds it, with `--round-countz` → 64 as the control.
+
+**Read-only, one scan, from `coai.db` alone.** `RoundCounts.Read` opens the file exactly as `RoundsQuery.Read`
+does — `Mode=ReadOnly`, unpooled, a busy timeout — and never migrates: the extension refreshes this every minute, and
+a one-shot that wrote would be a writer racing the server. One query bounded by the longest window (`rounds_by_time`,
+then `reviewers_by_round`) returns every reviewer row of every round that started in the last seven days, and the
+shorter windows are cut from those rows in memory — a few hundred rounds, never the year of history the plan's code
+round refused to re-scan. The model column is asked of the schema (`RoundsQuery.HasColumn`): a database last written
+by a build without step 20 counts its rounds and knows no models, instead of failing the whole count on
+`no such column`. **`usage.jsonl` is not opened here.** Tokens and money are the EXTENSION's, computed from the ledger
+it already parses (the design decision of 2026-10-10, recorded in the plan's deviations): one reader of the ledger,
+not two that drift, and the mode answers the one thing only the database can — what a round IS.
+
+```mermaid
+flowchart LR
+    ext["extension · story 2.2<br/>spawns coai-mcp --round-counts [--now]"] --> cls["Program.Classify on args[0]"]
+    cls -->|a mode this build lacks| e64["exit 64 — the extension's fallback"]
+    cls --> mode["RoundCountsMode.Run"]
+    mode -->|bad argument| e65["sentence on stderr · exit 65"]
+    mode --> read["RoundCounts.Read(dataDir, nowUtc)"]
+    read -->|no coai.db| empty["empty answer · exit 0 · nothing created"]
+    read --> db[("coai.db · Mode=ReadOnly")]
+    db -->|one scan: rounds ⨝ reviewers<br/>started in the last 7 d| cut["cut into 5h / 24h / 7d<br/>distinct rounds · reviewer rows · models"]
+    cut --> json["JSON on stdout · exit 0"]
+    db -->|will not read| e74["sentence on stderr · exit 74"]
+```
+
+**Schema step 20 — `reviewers.model` and `reviewers(round_id)`** (`Schema.TheReviewersModel`, appended after step
+19's failure columns). `reviewers` recorded the provider and the role and never the model, so no count could say that
+the Gemini row's step to `flash-medium` on 2026-10-02 is where its weekly quota started running out.
+`RoundsDb.RecordReviewers` writes `ReviewerState.Model`, which the roster has filled since the log named the model;
+**empty means "not recorded"** — every row from before the step, and a reviewer that named none (a stood-down local
+reviewer) — and the counter leaves such rows off its model lines. The index is in the SAME step because every count
+joins rounds to reviewers by round and `Tables` indexed findings by round and reviewers not at all; one step, so a
+database at nineteen gains both or neither. Both preview-fork shapes (the consultant's and the security lane's,
+stamped 17) are repaired first and then migrate through to step 20 (`TheReviewersModelIsStepTwentyTests`). A reader
+opened read-only cannot run the step and does not try — `--round-counts` on a step-19 file leaves it at step 19,
+byte for byte.
+
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
 The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer

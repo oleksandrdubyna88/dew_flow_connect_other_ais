@@ -1,6 +1,11 @@
 import { ModelPrice } from './modelPrices';
 import { ModelUsage, VendorUsage } from './teamServerApi';
-import { money } from './usage';
+import { Estimate, totalCost, UNKNOWN } from './usage';
+
+// The figure, its sum and its text moved to `usage.ts` with story 2.5 of todo/PLAN_every_round_is_counted.md, where the
+// spending tab prices each ledger line by the same three states; re-exported so this tab's callers are unchanged.
+export { costText, totalCost, UNKNOWN } from './usage';
+export type { Estimate } from './usage';
 
 /**
  * What the team's spending would cost at public list prices (todo/PLAN_team_usage_by_person.md, story 3.2, D4).
@@ -23,17 +28,6 @@ import { money } from './usage';
 
 /** A model's list price, or nothing when no list names it. */
 export type ListPrice = (model: string) => ModelPrice | undefined;
-
-/** One figure, and what it is: known at all, a floor, and whether any of it is an estimate rather than a bill. */
-export interface Estimate {
-  readonly usd: number;
-  readonly known: boolean;
-  readonly floor: boolean;
-  readonly estimated: boolean;
-}
-
-/** Nothing priced it: a dash, and — when added to something that is priced — a floor. */
-export const UNKNOWN: Estimate = { usd: 0, known: false, floor: true, estimated: false };
 
 const PER_MILLION = 1_000_000;
 
@@ -63,29 +57,6 @@ export function vendorCost(row: VendorUsage, price: ListPrice): Estimate {
  */
 function reported(row: VendorUsage): Estimate {
   return typeof row.costUsd === 'number' ? { usd: row.costUsd, known: true, floor: row.costIsFloor === true, estimated: false } : UNKNOWN;
-}
-
-/** Several figures added up: known when any part is, a floor when any part is unknown or a floor itself. */
-export function totalCost(parts: readonly Estimate[]): Estimate {
-  if (parts.length === 0) {
-    return UNKNOWN;
-  }
-
-  return {
-    usd: parts.reduce((sum, part) => sum + part.usd, 0),
-    known: parts.some((part) => part.known),
-    floor: parts.some((part) => part.floor),
-    estimated: parts.some((part) => part.estimated),
-  };
-}
-
-/** `~$3.00` for an estimate, `$0.4200` for a bill, `≥ ` before a floor, and a dash for nothing known. */
-export function costText(estimate: Estimate): string {
-  if (!estimate.known) {
-    return '—';
-  }
-
-  return `${estimate.floor ? '≥ ' : ''}${estimate.estimated ? '~' : ''}${money(estimate.usd)}`;
 }
 
 /** The one question the tab asks of a price book: what does this model cost by the public lists. */

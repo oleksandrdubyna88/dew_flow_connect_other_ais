@@ -77,6 +77,10 @@ import { promptsDir } from './rolesPrompts';
 import { watchGlob } from './fileWatch';
 import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
+import { finishedRounds, RoundCountsCache } from './roundCountsCache';
+import { otherStores, roundsLoader } from './roundCountsRead';
+import { ranOnOf, roundsBlock } from './roundsBlock';
+import { chatLedgerLines } from './roundMoney';
 import { seedIfEmpty } from './sideSettings';
 import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
@@ -214,11 +218,12 @@ import {
 import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { existsSync } from 'node:fs';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, serverEnv, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
-import { watchedDirs, type WatchedDir } from './escalationDirs';
+import { usableDirs, watchedDirs, type WatchedDir } from './escalationDirs';
 import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
 import { closeTarget } from './consultKind';
@@ -357,6 +362,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.qconsult.forgetRootAnswers();
   }
   private readonly roundsLog_: RoundsLogCache;
+
+  /**
+   * `--round-counts` and the ledger's last seven days, read at most once a minute and sooner when something ended (story
+   * 2.2 of todo/PLAN_every_round_is_counted.md) — what the Models cards' line and the Rounds block draw from.
+   */
+  private readonly roundCounts: RoundCountsCache;
 
 
   private codexModels: ModelChoice[] = [];
@@ -520,6 +531,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.consultPrompt = new ConsultPromptFile(dataDir);
     this.qconsult = new QconsultHost(dataDir);
     this.roundsLog_ = new RoundsLogCache(context);
+    this.roundCounts = this.roundCountsOf(dataDir);
     this.claudeProbes = new ClaudeProbeCache({
       dataDir,
       render: () => this.render(),
@@ -536,6 +548,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     });
     this.consultantHealth = this.healthPanel(dataDir);
     this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
+  }
+
+  /** The round counts' cache: this side's `coai-mcp --round-counts`, and `usage.jsonl` read from its end (story 2.2). */
+  private roundCountsOf(dataDir: vscode.Uri): RoundCountsCache {
+    return new RoundCountsCache(roundsLoader(
+      () => serverPath(this.context.globalStorageUri)?.fsPath ?? '', join(dataDir.fsPath, 'usage.jsonl')));
   }
 
   /** The consultant and model checks' host: the caller kinds' checks, and each catalog row's (PLAN_one_model_catalog.md E3.3). */
@@ -620,6 +638,42 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   // name; what left is the caching, the process spawning and the reasons for both.
   forgetRoundsLog(): void {
     this.roundsLog_.forgetRoundsLog();
+  }
+
+  /** A consultation or a question ended: the round counts and their ledger are read again on the next refresh. */
+  forgetRoundCounts(): void {
+    this.roundCounts.forget();
+  }
+
+  /** Read the round counts if due — never per render, see `roundCountsCache.ts` — and repaint when a read landed. */
+  private async refreshRoundCounts(): Promise<void> {
+    if (await this.roundCounts.refresh()) {
+      void this.render();
+    }
+  }
+
+  /**
+   * The Rounds block for the Spending tab (story 2.3): the cached counts, the ledger's seven days, the chat ledger, every
+   * model they name priced by `priceOfLine`, and the store — this side's, plus any other installation's store this window
+   * was told about, named by the existence of its file and never opened.
+   */
+  private async roundsBlockHtml(vendors: readonly Vendor[]): Promise<string> {
+    const snapshot = this.roundCounts.current();
+    const chat = chatLedgerLines(await this.chatLines(), vendorOfPreset(chatModelsAndPresets()));
+    const prices = await this.modelPrices(vendors, [...(snapshot?.ledger ?? []), ...chat].map((line) => line.model));
+    const others = usableDirs(watchedDirs(this.dataDir.fsPath, alsoWatchDataDirectories(), process.platform)).slice(1);
+
+    return roundsBlock({
+      snapshot,
+      chat,
+      rateOf: (provider, model) => priceOfLine(provider, model, vendors, (id) => prices[id]),
+      ranOn: ranOnOf(vendors),
+      store: {
+        side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
+        directory: this.dataDir.fsPath,
+        others: otherStores(others, existsSync),
+      },
+    });
   }
 
   /** A consultation changed, so every plan's cadence line is asked again — each stays up until its answer lands. */
@@ -788,7 +842,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   async consultationsTab(log: DbLog): Promise<string> {
     const vendors = this.vendorsHere();
-    const prices = await this.modelPrices(vendors);
+    // Each consultation is priced at the model that answered it (`priceOfLine`), so those models are looked up too.
+    const prices = await this.modelPrices(vendors, log.consultations.map((one) => one.model));
 
     return consultationsHtml(log, vendors, (model: string) => prices[model]);
   }
@@ -799,12 +854,19 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   async usageTab(): Promise<string> {
     const vendors = this.vendorsHere();
+    const usage = this.remembered(await this.readUsage());
+    // The page's own tick: a read when due (at most once a minute, sooner after an ending), never per tick.
+    await this.roundCounts.refresh();
+    const rounds = await this.roundsBlockHtml(vendors);
 
     return usageTabHtml(
-      this.remembered(await this.readUsage()),
+      usage,
       this.usageWindow,
       vendors,
-      await this.modelPrices(vendors),
+      // Every model the LEDGER names, not only the ones the rows are set to now: a line is priced at the model that
+      // answered it (story 2.5 of todo/PLAN_every_round_is_counted.md), and a row that changed model has history at
+      // the old one, which a map of today's models would leave unpriced.
+      await this.modelPrices(vendors, usage.map((line) => line.model)),
       {
       // What each Team server says was spent ON IT. This machine's ledger has no line for a
       // review that ran there, so the two are shown beside each other rather than summed into
@@ -817,6 +879,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // row it belongs in, so both halves of the page name the same three vendors the same way.
       // Resolved on the way OUT rather than on the way in, which names every line already on disk.
       chat: await this.chatLedgers(),
+      // The tab's FIRST block (story 2.3): rounds per vendor row over 5 h / 24 h / 7 d, with tokens and money beside.
+      rounds,
       },
     );
   }
@@ -1270,6 +1334,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
     const sessions = await this.readSessions();
+    // A round that stopped running since the last paint brings the round count forward; the read itself is not awaited
+    // here — the cards draw the cached count, and a read that lands repaints (story 2.4, never a spawn per render).
+    // Only while the Settings page is open: its Models cards are the one surface here that draws the count, and the
+    // Review rounds page refreshes on its own tick — a sidebar-only render need not spawn anything (CodeRabbit, #750).
+    this.roundCounts.noteFinishedRounds(finishedRounds(sessions));
+    if (this.settingsTab.view !== undefined) {
+      void this.refreshRoundCounts();
+    }
     // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer. Every
     // write reads the rows afresh, so a hidden row is never dropped by one. The Models cards are priced per ROW from every
     // row (`cardPrices`), so this list no longer decides prices (research/PLAN_models_card_prices_every_row.md).
@@ -1312,6 +1384,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       storage: await whereThisWindowKeepsItsData(),
       cliStatus: await this.vendorCliStatus(vendors),
       cardPrices: await this.cardPrices(vendors),
+      roundsSnapshot: this.roundCounts.current(),
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
@@ -1531,16 +1604,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return cardPrices(rows, (model, baseUrl) => PRICE_BOOK.priceOf(model, baseUrl));
   }
 
-  private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
+  private async modelPrices(vendors: readonly Vendor[], ledger: readonly string[] = []): Promise<Record<string, ModelPrice>> {
     await this.refreshPriceTables();
 
     // THE MODELS OF BOTH HALVES OF THE PAGE. A reviewer row selects one; a chat is switched between
     // model PRESETS, which select their own - and this map used to hold only the first kind, so a
     // chat card read "no rate set for this model" for a model the published table prices perfectly
     // well. The two lists are asked the same question and answered from the same table.
-    // (CodeRabbit, PR #209.)
+    // (CodeRabbit, PR #209.) And the models a ledger names, each once, for a tab that prices each line by its own.
     const presets = chatModelsAndPresets();
-    const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
+    const wanted = [...new Set([...vendors.map((one) => one.model), ...presets.map((one) => one.model), ...ledger])];
     // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
     // guess and answers nothing for it.
     const priced = (model: string, baseUrl = ''): (readonly [string, ModelPrice])[] => {

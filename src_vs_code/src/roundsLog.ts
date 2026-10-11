@@ -927,6 +927,8 @@ export interface UsageTabExtras {
   readonly teamServers?: readonly TeamServerState[];
   /** The chat's own two ledgers. */
   readonly chat?: ChatLedgers;
+  /** The Rounds block, rendered by the host (`roundsBlock.ts`, story 2.3 of todo/PLAN_every_round_is_counted.md). */
+  readonly rounds?: string;
 }
 
 /**
@@ -941,13 +943,22 @@ export function usageTabHtml(
   window: Window,
   vendors: readonly Vendor[],
   prices: Readonly<Record<string, ModelPrice>>,
-  { teamServers = [], chat = { turns: [], doors: [] } }: UsageTabExtras = {},
+  extras: UsageTabExtras = {},
 ): string {
+  const { teamServers = [], chat = { turns: [], doors: [] } } = extras;
+  const rounds = roundsOf(extras);
   const buttons = WINDOWS
     .map((w) => `<button type="button" class="tab${w.id === window ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`)
     .join('');
 
-  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, chat)}</div>`;
+  // The Rounds block FIRST, above the window buttons: its windows are its own (5 h / 24 h / 7 d, trailing), and the
+  // buttons below choose only the spending chart's.
+  return `${rounds}<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, chat)}</div>`;
+}
+
+/** The Rounds block the host rendered, or nothing — a caller that predates it passes none. */
+function roundsOf(extras: UsageTabExtras): string {
+  return extras.rounds ?? '';
 }
 
 /**
@@ -1458,6 +1469,18 @@ ${TEXT_CONTROLS_CSS}
   .tabs .tab, .windows .tab { background: transparent; color: var(--vscode-foreground); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; opacity: .75; }
   .tabs .tab.on, .windows .tab.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
   .windows { display: flex; gap: 6px; margin: 0 0 10px; }
+  /* THE ROUNDS BLOCK (story 2.3 of todo/PLAN_every_round_is_counted.md), FIRST on the tab: its windows are its own
+     (5 h / 24 h / 7 d, trailing), so it sits above the buttons that choose the chart's. One table, the vendor row in
+     bold, its model and kind lines indented under it; wide, so it scrolls sideways rather than squeezing ten columns. */
+  .rounds-block { margin: 0 0 16px; }
+  .rounds-block > h3.ledger { margin-top: 4px; }
+  .rounds-block .table-scroll { overflow-x: auto; margin: 6px 0; }
+  .rounds-block table.rounds { width: auto; min-width: 640px; }
+  .rounds-block table.rounds th { cursor: default; white-space: nowrap; }
+  .rounds-block table.rounds td { vertical-align: top; }
+  .rounds-block tr.model td, .rounds-block tr.kind td { opacity: .85; font-size: .95em; }
+  .rounds-block .indent { padding-left: 14px; }
+  .rounds-block p.hint, .rounds-block p.warn { margin: 4px 0; }
   .spend { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 8px 12px; margin: 0 0 8px; max-width: 640px; }
   .spend .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .spend .name { font-weight: 600; }
