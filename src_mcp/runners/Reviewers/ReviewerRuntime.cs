@@ -257,6 +257,32 @@ public sealed record ReviewerInvocation(
     /// ignored), and which configuration the CLI reads, are facts about the row and the launch's environment that an
     /// adapter is not given.</remarks>
     public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
+
+    /// <summary>
+    /// The identity of the round this launch belongs to — 32 hex characters the round engine minted when the round
+    /// started (story 4.1 of todo/PLAN_every_round_is_counted.md) — or empty on a launch outside a round: a consultation,
+    /// a question row, a probe, a harness that builds work by hand.
+    /// </summary>
+    /// <remarks>
+    /// <para>Stamped on every piece of a round's work by the ENGINE, never by an adapter's <c>Build</c> — so a retry
+    /// (the same invocation launched again), a repair (stamped beside its first launch), a follow-up (derived from the
+    /// first launch with <c>with</c>) and a conversation's later turn (<see cref="TurnLoop"/> hands it its first turn's)
+    /// all carry the one key. Random rather than a hash: <c>sessionId</c> is eight hex characters and a round's number
+    /// restarts with the budget counter, so a hash of the two would collide across sessions and hide nothing.</para>
+    /// <para>A Team server is told it on every launch (<see cref="RemoteRuntime.ForLaunch"/>); nothing else reads it yet.</para>
+    /// </remarks>
+    public string Round { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What this launch IS inside its turn — one of <see cref="LaunchAttempts"/>: <c>first</c> unless the rate-limit
+    /// ladder (<c>retry</c>) or the executor's second launch (<c>repair</c>, <c>followUp</c>) says otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The same word the ledger writes for the launch's line (<see cref="LaunchPart.Attempt"/>), stamped where the
+    /// decision is taken, so a child that repeats it on the wire (<see cref="RemoteRuntime.ForLaunch"/>) says what the
+    /// ledger will say.
+    /// </remarks>
+    public string Attempt { get; init; } = LaunchAttempts.First;
 }
 
 /// <summary>
@@ -341,6 +367,21 @@ public interface IReviewerRuntime
     /// A default, so no other adapter changes. Pure: it reads the first launch's transcript.
     /// </remarks>
     ReviewerInvocation? FollowUp(ReviewerInvocation first, string transcript) => null;
+
+    /// <summary>
+    /// The launch as it will actually be STARTED, given what was decided after <see cref="Build"/>: its effective
+    /// timeout (<see cref="RetryLadder"/> shortens <c>Request.Timeout</c> for a retry and a repair, the turn loop for a
+    /// later turn), its <see cref="ReviewerInvocation.Attempt"/> and its <see cref="ReviewerInvocation.Round"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>The default is the invocation unchanged, so no CLI adapter changes: a vendor process is handed its deadline
+    /// by the launcher's kill and repeats nothing. An adapter whose command line REPEATS any of those — the Team server
+    /// shim, whose own waiting deadline is an argument fixed when the invocation was built — rebuilds it here, so the
+    /// child is told what the parent will enforce (the risk consultation for epic 4 of
+    /// todo/PLAN_every_round_is_counted.md: a repair with forty seconds left advertised the six hundred it was built
+    /// with). Pure; the executor calls it once per launch, immediately before the process starts.</para>
+    /// </remarks>
+    ReviewerInvocation ForLaunch(ReviewerInvocation invocation) => invocation;
 
     /// <summary>
     /// The answer text out of a finished run. Default: the file the invocation named (codex's

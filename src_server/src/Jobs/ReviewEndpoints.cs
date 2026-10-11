@@ -78,10 +78,20 @@ public static class ReviewEndpoints
 
             // `Refusal` found the vendor; what it runs on decides which effort it can take (E2.5).
             var taken = ClientOptions.Take(request, current.Find(request.Vendor!)!.Runtime, options ?? new ClientOptionsPolicy());
+            // The counting fields (story 4.2): read by hand, a malformed one dropped with a note — never a refusal. Not
+            // in the idempotency fingerprint, deliberately: a retry of a lost submit carries the same round and less
+            // time left, and it is the same request.
+            var round = RoundFields.Take(request);
             var now = DateTimeOffset.UtcNow;
             var key = request.IdempotencyKey?.Trim() ?? string.Empty;
             var (job, refused, position) = jobs.Submit(
-                Accepted(caller, request, taken, key, now, queueWait, roles), now);
+                Accepted(caller, request, taken, key, now, queueWait, roles) with
+                {
+                    Round = round.Round,
+                    ClientAttempt = round.Attempt,
+                    StatedBudget = round.Budget,
+                },
+                now);
 
             if (Rejected(ctx, jobs, refused, key) is { } rejection)
             {
@@ -91,7 +101,7 @@ public static class ReviewEndpoints
             await Task.CompletedTask;
 
             return Results.Json(
-                new ReviewAcceptedDto(job!.Id, position, NotesOrNone(taken.Dropped), NotesOrNone(taken.Clamped)),
+                new ReviewAcceptedDto(job!.Id, position, NotesOrNone([.. taken.Dropped, .. round.Dropped]), NotesOrNone(taken.Clamped)),
                 ServerJsonContext.Default.ReviewAcceptedDto,
                 statusCode: StatusCodes.Status202Accepted);
         }).RequireCaller(gate);
@@ -362,6 +372,9 @@ public static class ReviewEndpoints
         FailureKind.NotStarted => "not_started",
         FailureKind.Cancelled => "cancelled",
         FailureKind.Lost => "lost",
+        // Its own name (story 4.3 of todo/PLAN_every_round_is_counted.md): the client's shim reads it by name — exit
+        // `RemoteAsk.NoBudget` — and an older shim renders it inside its failure sentence, as it does every name here.
+        FailureKind.NoBudget => "no_budget",
         _ => string.Empty,
     };
 }

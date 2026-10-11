@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel,
+        TheReviewersModel, TheRoundsKey,
     ];
 
     internal const string SecurityEvidence = """
@@ -597,5 +597,21 @@ internal static class Schema
     internal const string TheReviewersModel = """
         ALTER TABLE reviewers ADD COLUMN model TEXT NOT NULL DEFAULT '';
         CREATE INDEX IF NOT EXISTS reviewers_by_round ON reviewers (round_id);
+        """;
+
+    /// <summary>
+    /// Step 21: the round's identity across the wire (<c>todo/PLAN_every_round_is_counted.md</c>, story 4.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>Thirty-two hex characters the engine mints when a round starts (<c>RoundKeys</c>), carried by every launch of
+    /// the round to a Team server and kept on the round's record; the projection keeps it so the local record and the
+    /// server's ledger name one round by one key. <b>Empty means "not recorded"</b> — every row written before this step,
+    /// and a skipped round, which launched nothing. No index: nothing on this machine looks a round up by its key yet,
+    /// and sixteen bytes a round is the whole of what it costs (the plan's growth table).</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only
+    /// (<c>--round-counts</c>, <c>--log</c>) runs no step and never asks for the column.</para>
+    /// </remarks>
+    internal const string TheRoundsKey = """
+        ALTER TABLE rounds ADD COLUMN round_key TEXT NOT NULL DEFAULT '';
         """;
 }

@@ -1558,6 +1558,12 @@ flowchart LR
   the launch's own usage and seconds (the last line takes what is left of the turn's, so the seconds add up too);
   its outcome — `ok`, `unparseable: …`, `rate limited (after 1 attempt): …`, and on the last line the turn's own
   ending.
+- **The round, on a Team-server line (story 4.2, 2026-10-11).** `UsageEntry` gains two trailing, defaulted fields after
+  `EndCause`: `Round` (the client's 32-hex round id) and `ClientAttempt` (the client's word for the request — `first`,
+  `retry`, `repair`, `followUp`), written by the Team server through `RecordJob`'s two new trailing parameters, the
+  client's word BESIDE the server's own `attempt` (`first` / `rotated` / `followUp` inside the job), never over it. A
+  local line leaves both empty here — its own `attempt` already is the client's word; whether a local line carries the
+  round is story 4.1's ([module_team_server.md](module_team_server.md), *The round on the wire*).
 - **The guard.** `LaunchLines.Of` writes the parts only when their usage adds up to the turn's exactly; otherwise the
   turn is the one line it always was. A ledger whose lines summed to something the round total did not would be a
   second answer to "what did this cost".
@@ -2494,3 +2500,117 @@ sequenceDiagram
     Site->>Args: ReviewerSettings.CodexTier
     Args-->>Site: Off+RefusesStandard: no tier, else as before
 ```
+
+## A round has an identity on the wire, and every launch says what it is and how long it can wait (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+
+The client half of epic 4. One `POST /api/reviews` was one role for one vendor and carried nothing that tied launches
+together (symptom 3 of the plan), and the shim's own waiting deadline was fixed when the invocation was BUILT, so a
+repair with forty seconds left still told the Team server it could wait six hundred (the risk consultation for epic 4).
+
+- **The key.** `RoundEngine.RunStageAsync` mints `RoundKeys.Mint()` — 128 random bits as 32 lower-case hex characters
+  (`RandomNumberGenerator.GetHexString`) — beside the round's number, once per round that RUNS; `again`, the escalation
+  ladder and a person's Continue/Fix come through the engine again and so get a new one. Random, not a hash: `sessionId`
+  is eight hex characters and the number restarts with the budget counter. It is kept on `RoundRecord.Key` (the session
+  file, from the running record's first save — `LiveRound`) and projected to `rounds.round_key` (schema step 21,
+  `Schema.TheRoundsKey` — [module_server.md](module_server.md)). Not the `(session, stage, number)` triple the log calls a
+  round key (`RoundKeyDto`): that names a place in a journal.
+- **Every launch carries it.** The engine stamps `ReviewerInvocation.Round` on every piece of the work the stage built —
+  each reviewer's first launch and its repair, the security lane's included (`RoundWork.InRound`) — so a retry (the same
+  invocation launched again) and a follow-up (`IReviewerRuntime.FollowUp` derives it from the first with `with`) carry it
+  by construction, and a conversation's later turn, which the feature stage builds fresh, is handed its first turn's by
+  `TurnLoop` (`InRound`). A launch outside a round — a consultation, a question row, a probe — has none.
+- **What a launch IS.** `ReviewerInvocation.Attempt` (default `first`) is stamped where the decision is taken: `retry` by
+  `BoundedScheduler.LadderAsync` on the launch after a wait, `repair` / `followUp` by `ReviewerExecutor.RunAsync` on its
+  second launch — the same word the ledger's `LaunchPart.Attempt` writes for that line. The wire never carries `rotated`:
+  that is the Team server's own word for a job that took two accounts, and the server drops any other word with a note.
+- **`IReviewerRuntime.ForLaunch(invocation)`** — a new seam with an identity default, called once per launch by
+  `ReviewerExecutor.LaunchAsync` immediately before the process starts: the launch AS IT WILL START, given what was
+  decided after `Build`. Only `RemoteRuntime` overrides it: `--timeout-seconds` (`LocalAsk.ShimDeadlineSeconds`) and
+  `--vendor-timeout-seconds` (`VendorBudgetSeconds`) are re-derived from the launch's EFFECTIVE `Request.Timeout` —
+  what `RetryLadder.WithinRemaining` / `Lesser` and the turn loop's `Bounded` shortened — and `--attempt` and `--round`
+  are set from the invocation (`WithFlag`: in place where the flag is there, else appended, so a launch rebuilt twice is
+  the same launch). The invocation as BUILT still says what the reviewer was given; the launch says what it has left.
+- **The body.** `RemoteAsk.RequestBody` adds `round`, `attempt` and `remainingSeconds`, each left out when empty — and
+  `remainingSeconds` never 0 — exactly as contract 2 added `effort`. **`ContractVersion` stays 2**: the fields are
+  additive and optional; the deployed server's `ServerJsonContext` sets no `UnmappedMemberHandling`
+  (`src_server/src/ServerJsonContext.cs:252`), so it skips them at binding — measured live by the probe below — and a
+  version the old server does not serve would refuse every review.
+- **`remainingSeconds` is the shim's own clock.** `--ask-remote` computes it at submit from what is left of its own
+  deadline (`RemoteAsk.RemainingSeconds(deadline − elapsed)`, whole seconds, rounded down): RELATIVE, never an instant,
+  so neither side's clock can enter (the plan round of 2026-10-09). The submit's own HTTP budget is that remainder too.
+  **An exhausted budget is never sent**: `remaining == 0` is refused BEFORE the wire — exit 78 with
+  `RemoteAsk.BudgetSpentMessage` — because a 0 the server dropped would switch its budget refusal (story 4.3) off for
+  exactly the launch it exists for, a request without the field being an old client's. Only a shim run by hand with
+  `--timeout-seconds 0` reaches it today: the adapter floors a derived deadline at five seconds.
+- **The zero-spend live probe** (`src_vs_code/src/test/reviewBody.contract.ts`, `npm run test:contract`): the new body
+  with one deliberately unknown member and `"kind":"probe-no-such-kind"` is answered 400 *"'probe-no-such-kind' is not
+  a kind of job"* by the real server — binding came first and skipped the members, and no job was ever created; the
+  control sends `timeoutSeconds: "x"` and gets the binding error instead. It never posts a valid job. "POST then DELETE"
+  was refused at the plan round: the runner can claim and launch between the two.
+
+Not done here: the LOCAL ledger line does not carry the round (story 4.2 adds the server line's `Round`; the local
+writer can take it from `ReviewerInvocation.Round` once the field is there); the server's reading of the three fields
+(4.2) and its refusal of a job whose caller can no longer wait (4.3) are the server stories' — the shim's half of the
+refusal is the next section.
+
+```mermaid
+sequenceDiagram
+  participant E as RoundEngine
+  participant S as BoundedScheduler / ReviewerExecutor
+  participant A as RemoteRuntime.ForLaunch
+  participant H as --ask-remote shim
+  participant T as Team server
+  E->>E: key = RoundKeys.Mint(), RoundWork.InRound(key), RoundRecord.Key
+  E->>S: work (Round = key on every launch and repair)
+  S->>S: Attempt = retry (the ladder) or repair / followUp (the executor)
+  S->>A: ForLaunch(invocation with its effective Request.Timeout)
+  A-->>S: argv with --timeout-seconds and --vendor-timeout-seconds re-derived, --attempt, --round
+  S->>H: launch
+  H->>H: remaining = deadline - elapsed (0 means exit 78, nothing sent)
+  H->>T: POST /api/reviews (round, attempt, remainingSeconds) under contract 2
+  T-->>H: 202
+```
+
+Tests: `ARoundHasAnIdOnTheWireTests`, `ARoundIsMintedAKeyTests`, `TheRoundKeyIsStepTwentyOneTests`,
+`RemoteShimScenarioTests.TheRoundTheAttemptAndTheSecondsLeft_GoOut_WithTheRealBinary`, `reviewBody.contract.ts` —
+listed in [module_tests.md](module_tests.md).
+
+## The shim reads a refusal by name — exit 79 (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+
+The Team server now ends a job whose caller can no longer wait for a launch's start-up — at claim, nothing launched,
+counted in its ledger ([module_team_server.md](module_team_server.md), *No start without budget*) — and says so with a
+failure NAME of its own on `GET /api/reviews/{id}`: `failure: "no_budget"`. The shim's half:
+
+- **Read by name, never by sentence.** `AskRemote.Ended` compares `failure` with `RemoteAsk.NoBudgetFailure` by ordinal
+  equality and answers **`RemoteAsk.NoBudget` (79)** with `RemoteAsk.NoBudgetMessage` — *the Team server at … did not
+  start this codex review: by the time an account was free, this reviewer could no longer wait for a launch (…). Nothing
+  was spent. Raise COAI_REVIEWER_TIMEOUT_MINUTES, or ask the operator for more accounts on that vendor.* The server's
+  sentence under any other name is the vendor's failure (70) as before, and the name under any sentence is 79. Its own
+  code rather than `VendorFailed`, because the vendor was never asked: the cure is `TooSlow`'s, not a look at the vendor;
+  one past the end of sysexits, where no system meaning can be mistaken for it. The job is already terminal, so no DELETE.
+- **An older shim** — one built before the name — takes the road every unknown name takes: `RemotePoll.Failure` holds
+  it, `Decide` finishes, `FailedMessage` renders *(no_budget)* inside its sentence, exit 70. Nothing throws; the person
+  reads the server's reason. The extension's `remoteAsk.ts` (remote CHAT) renders any `failure` string inside a sentence
+  the same way, and was not changed.
+- **Above the shim** the executor sees a `NonZeroExit(79, …)`; no `ReviewerOutcome` case was added — every switch over
+  outcomes would widen for one server ending. What matters above is that the ladder does NOT retry it: neither the new
+  shim's sentence nor the old one's, nor the server's reason inside either, matches a phrase `RateLimit.Hit` reads
+  (`TheNoBudgetReason_MatchesNoRateLimitPhrase` on the server side, `NeitherShimsSentence_IsReadAsARateLimit` here), so a
+  refusal that cannot clear is never waited out into the same refusal.
+
+```mermaid
+sequenceDiagram
+  participant H as --ask-remote shim
+  participant T as Team server
+  H->>T: POST /api/reviews (remainingSeconds)
+  T-->>H: 202
+  loop poll
+    H->>T: GET /api/reviews/{id}?wait=25
+    T-->>H: queued …
+  end
+  Note over T: an account comes free; the caller cannot wait MinStart more — ended at claim, nothing launched
+  T-->>H: failed, failure "no_budget", reason
+  H->>H: Ended: the NAME equals no_budget → exit 79 (an older shim: 70, the name in its sentence)
+```
+
+Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
