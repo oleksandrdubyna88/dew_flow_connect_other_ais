@@ -7717,6 +7717,21 @@ unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
 the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
 says the product ships no price table.
 
+**Story 5.3b (2026-10-11): a stated reset is shown.** `coai-mcp` writes `resetsUtc` — the instant the vendor STATED, read
+by the one `CooldownParser` both halves use — on the last ledger line of a turn that ended rate-limited, and `usage.ts`
+keeps it (`resetOf`, present only when the line says it). `statedReset.ts` (pure) turns it into words:
+`resetLine(lines, provider, nowMs, timeZone?)` answers *quota out — resets in 89 h (Wed 04:49)* only while the row's
+NEWEST line by its own `utc` is that refusal and the instant is ahead — a later answer means the account works again —
+rounding hours and minutes UP so a wait never reads shorter than stated, the day and time in the viewer's zone
+(`Intl.DateTimeFormat('en-GB')`, `timeZone` for tests). It is drawn beside the vendor row's name in the Rounds block
+(`<span class="warn reset">`) and as the Models card's `reset-line` above its round count (`cardResetLine`, the same
+cached snapshot and its clock; `.catalog .reset-line` in the warning tone, the sheet's pin re-taken). `untilWords` is
+the one wording — in `resetWords.ts`, a LEAF that imports nothing, because kept in `statedReset.ts` it made the Team
+servers view import the ledger's graph and closed three new cycles (`importCycles.test.mjs`, red on the full run) —
+also used by `teamServerView.slotSentence`, which now ends a vendor whose accounts are all rate-limited
+with *— the first in 89 h (Wed 04:49)* from the catalog's new `slots.resetsUtc` (`SlotSummary.resetsUtc?`, absent from
+an older server, which then reads as before). Display only: nothing is parked or waited out locally (story 5.3c).
+
 **Story 3.3 (2026-10-10): a probe is its own kind, and a ledger line is a launch.** `coai-mcp --probe-api --model` now
 writes a line per paid completion, of kind `probe`; `roundsBlock`'s `BESIDE` names it (`probe N recorded turns`, a
 `probe · N recorded turns` kind line), `roundMoney`'s kind order and units know it (per recorded line), and it never

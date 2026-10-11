@@ -41,6 +41,10 @@ Authorization: Bearer {{token}}
     assert.strictEqual(codex.slots.ready, 0);
     assert.strictEqual(codex.slots.needsSignIn, 1);
   });
+  test('no account is parked, so no reset is claimed — a string, empty (story 5.3b)', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.strictEqual(codex.slots.resetsUtc, '');
+  });
   test('health speaks only about the BINARY, and says so as a boolean', () => {
     const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
     assert.strictEqual(typeof codex.health.cliFound, 'boolean');

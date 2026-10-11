@@ -8,7 +8,8 @@ import { SERVER_CONTRACT_REQUIRED } from './teamServerApi';
 // security rule names by example — "three byte-identical private copies | hardening one left the
 // other two behind" — and byte-identical is exactly what this one was. Caught on the code round.
 import { escapeHtml as escape } from './escapeHtml';
-import { untilWords } from './statedReset';
+// A leaf, so the Team servers view does not pull the ledger's import graph in (importCycles.test.mjs).
+import { untilWords } from './resetWords';
 
 /**
  * The *Team servers* section, as markup.

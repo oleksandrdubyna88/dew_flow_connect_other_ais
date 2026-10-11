@@ -577,7 +577,8 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       why:
         'A panel that did not review is not a panel that approved. Every partial round is reported as partial, and the reviewer sentence you see in the panel names who failed and why.',
       setup:
-        'Nothing to set up. A rate-limited reviewer is retried once after a backoff — unless the vendor said the limit is DAILY, which no retry can clear.',
+        'Nothing to set up. A rate-limited reviewer is retried once after a backoff — unless the vendor said the limit is DAILY, which no retry can clear.'
+        + '\n\n**A vendor that says WHEN its quota comes back is believed.** Antigravity answers *Resets in 88h49m9s*: when that lies beyond what is left of the reviewer\'s own time limit, the reviewer is not retried at all — one launch, and the refusal in the vendor\'s words. A short stated wait inside the limit is still waited out. The reset is written into the spending ledger, and the vendor\'s row on the **Rounds** block and its model card say *quota out — resets in 89 h (Wed 04:49)* until that time passes or a later run of the row answers. On a Team server the account is parked until then: the Team servers view says *all 2 rate-limited, they come back by themselves — the first in 89 h (…)*, and a review queued behind it says, after its place in the queue, when the first account comes back.',
       usage:
         'A failure carries the CLI\'s own words, chosen by content rather than position: the first line that announces an error, skipping stack frames and version banners. For five known failures — a retired CLI, an untrusted directory, a missing platform binary — it reports what to DO instead of what was printed.',
       whatCanGoWrong:
