@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { savedCliPath, vendorFieldWrite } from '../cliPathSave';
-import { pathForThisSide, storedForThisSide, type ExecutableBySide, type ExecutableSide, type PathFamily } from '../pathFamily';
+import { pathForThisSide, storedForThisSide, type ExecutableBySide, type ExecutableSide, type FilePresence, type PathFamily } from '../pathFamily';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 
 /**
@@ -35,9 +35,9 @@ function saved(before: Vendor, value: string, field: PathFamily, here: PathFamil
   return vendorsFrom(JSON.parse(JSON.stringify([{ ...before, ...savedCliPath(before, value, field, here) }])) as unknown)[0]!;
 }
 
-/** What a side of this family runs for the row — the disk saying "absent" to every other-OS spelling. */
-function resolved(stored: Vendor, family: PathFamily): string {
-  const side: ExecutableSide = { family, systemDrive: 'C:', fileAt: () => 'absent' };
+/** What a side of this family runs for the row — the disk answering `disk` (by default "absent" to every other-OS spelling). */
+function resolved(stored: Vendor, family: PathFamily, disk: (path: string) => FilePresence = () => 'absent'): string {
+  const side: ExecutableSide = { family, systemDrive: 'C:', fileAt: disk };
 
   return pathForThisSide(stored, side).path;
 }
@@ -134,18 +134,57 @@ const STATES: readonly Vendor[] = [
   row(SHARE, { posix: '' }),
 ];
 
-test('every save leaves every OTHER family resolving exactly what it did — the only thing a save changes is its own field', () => {
-  for (const before of STATES) {
-    for (const [field, here, value] of [['windows', 'windows', W2], ['posix', 'windows', P2], ['posix', 'posix', P2], ['windows', 'posix', W2], ['windows', 'windows', '']] as const) {
-      const after = saved(before, value, field, here);
-      const other: PathFamily = field === 'windows' ? 'posix' : 'windows';
-      const label = `${JSON.stringify(before)} saved ${field}=${value} from ${here}`;
+/** The three answers a disk can give about every other-OS spelling it is asked about (`FilePresence`). */
+const DISKS: readonly FilePresence[] = ['absent', 'here', 'unknown'];
 
-      assert.equal(resolved(after, field), value, `${label}: the field saved`);
-      assert.equal(resolved(after, other), resolved(before, other), `${label}: the other family moved`);
-      assert.equal(after.executablePathBySide?.mirrored, after.executablePath, `${label}: mirrored records the legacy value`);
+test('every save leaves every OTHER family resolving exactly what it did — the only thing a save changes is its own field', () => {
+  for (const presence of DISKS) {
+    const disk = (): FilePresence => presence;
+    for (const before of STATES) {
+      for (const [field, here, value] of [['windows', 'windows', W2], ['posix', 'windows', P2], ['posix', 'posix', P2], ['windows', 'posix', W2], ['windows', 'windows', '']] as const) {
+        const after = saved(before, value, field, here);
+        const other: PathFamily = field === 'windows' ? 'posix' : 'windows';
+        const label = `${JSON.stringify(before)} saved ${field}=${value} from ${here}, the disk saying ${presence}`;
+
+        assert.equal(resolved(after, field, disk), value, `${label}: the field saved`);
+        assert.equal(resolved(after, other, disk), resolved(before, other, disk), `${label}: the other family moved`);
+        assert.equal(after.executablePathBySide?.mirrored, after.executablePath, `${label}: mirrored records the legacy value`);
+      }
     }
   }
+});
+
+/**
+ * The risk consultant's case (2026-10-11, finding c): the save decided by SPELLING whether another family reads the
+ * legacy value, while the reader asks the DISK. On Windows `/tools/codex.exe` is the root-relative `C:\tools\codex.exe`
+ * — a legal path, run when the file is there (or when the disk cannot tell) — so a WSL save that replaced the legacy
+ * value left Windows' working CLI behind.
+ */
+const ROOT_RELATIVE = '/tools/codex.exe';
+const ON_THE_SYSTEM_DRIVE = 'C:\\tools\\codex.exe';
+
+/** A Windows disk on which only `C:\tools\codex.exe` is a file. */
+const onlyThatFile = (path: string): FilePresence => (path === ON_THE_SYSTEM_DRIVE ? 'here' : 'absent');
+
+test('a WSL save never takes away the CLI the Windows side found on its own disk under the legacy value', () => {
+  const before = row(ROOT_RELATIVE);
+  const after = saved(before, '/opt/other/codex', 'posix', 'posix');
+
+  assert.equal(resolved(before, 'windows', onlyThatFile), ON_THE_SYSTEM_DRIVE, 'the premise: Windows runs the file on its system drive');
+  assert.equal(resolved(after, 'windows', onlyThatFile), ON_THE_SYSTEM_DRIVE, 'the save broke the Windows side\'s working CLI');
+});
+
+test('a WSL save keeps a legacy value the Windows disk could not answer for — kept before, kept after', () => {
+  const before = row(ROOT_RELATIVE);
+  const after = saved(before, '/opt/other/codex', 'posix', 'posix');
+
+  assert.equal(resolved(after, 'windows', () => 'unknown'), resolved(before, 'windows', () => 'unknown'));
+});
+
+test('saving the UNCHANGED path on Windows changes nothing it runs — the per-side value is qualified as the legacy one was', () => {
+  const after = saved(row(ROOT_RELATIVE), ROOT_RELATIVE, 'windows', 'windows');
+
+  assert.equal(resolved(after, 'windows', onlyThatFile), ON_THE_SYSTEM_DRIVE, 'the save moved Windows from C:\\tools\\codex.exe to an unqualified path');
 });
 
 test('the vendor write turns the card\'s CLI-path box into this side\'s save, and leaves every other key as posted', () => {

@@ -1,4 +1,4 @@
-import { spelledForTheOtherOs, storedForThisSide, type ExecutableBySide, type PathFamily, type StoredExecutable } from './pathFamily';
+import { storedForThisSide, type ExecutableBySide, type PathFamily, type StoredExecutable } from './pathFamily';
 
 /**
  * What a SAVE of a CLI-path field writes on a catalog row — the one write rule of todo/PLAN_paths_per_side.md design (c),
@@ -16,9 +16,14 @@ import { spelledForTheOtherOs, storedForThisSide, type ExecutableBySide, type Pa
  *       reader.</li>
  *   <li>`mirrored` records the legacy value as this save left it, so a later save by an extension that does not know the
  *       per-side field is DETECTED (legacy ≠ `mirrored`, `olderSaveFor`).</li>
- *   <li>Every OTHER family keeps resolving exactly what it did: its value is pinned into its member when the save would
- *       otherwise move it — when it was reading the legacy value this save replaces (a share or a bare name spelled for
- *       neither OS), or when an older extension's save was winning for it and `mirrored` is about to catch up.</li>
+ *   <li>Every OTHER family keeps resolving exactly what it did: its stored value is pinned into its member when the save
+ *       would otherwise move it — when it has a member already (an older extension's save may be winning for it, and
+ *       `mirrored` is about to catch up), or when it reads the legacy value and this save REPLACES that value. Pinned
+ *       whatever its spelling: the reader judges a member by the same disk-aware rule as the legacy value
+ *       (`pathForThisSide`), so the pinned value resolves exactly as the legacy one did — `/tools/codex.exe` stays
+ *       `C:\tools\codex.exe` on a Windows side where that file is, and stays skipped where it is not. Deciding by the
+ *       spelling instead broke a working CLI (the risk consultant, 2026-10-11, finding c): the save cannot ask the other
+ *       side's disk, and does not have to.</li>
  *   <li>Clearing writes `""` — present, the PATH lookup — never deletes the member: a deleted member would resurrect the
  *       legacy value, and a `//server/share/codex` is spelled for neither OS, so it would run on both sides.</li>
  * </ul>
@@ -45,7 +50,8 @@ const FAMILIES: readonly PathFamily[] = ['windows', 'posix'];
 export function savedCliPath(stored: StoredExecutable, value: string, field: PathFamily, here: PathFamily): SavedCliPath {
   const text = value.trim();
   const executablePath = field === here ? text : stored.executablePath.trim();
-  const pinned = FAMILIES.filter((family) => family !== field).map((family) => pinnedFor(stored, family));
+  const replacesLegacy = executablePath !== stored.executablePath.trim();
+  const pinned = FAMILIES.filter((family) => family !== field).map((family) => pinnedFor(stored, family, replacesLegacy));
 
   return { executablePath, executablePathBySide: Object.assign({}, stored.executablePathBySide, ...pinned, { [field]: text, mirrored: executablePath }) };
 }
@@ -53,13 +59,14 @@ export function savedCliPath(stored: StoredExecutable, value: string, field: Pat
 /**
  * The member a family keeps through a save of another family's field: its current stored value, written out when it has
  * a member already (an older extension's save may be winning for it — folded in before `mirrored` catches up) or when
- * the legacy value is the one it reads (the legacy value is about to change). A family whose legacy value is spelled for
- * the other OS reads nothing from it and needs no member.
+ * the save replaces the legacy value it reads. No spelling and no disk is asked: the member is resolved by the very rule
+ * the legacy value was, so pinning the stored value preserves the resolution on any disk. A family with no member keeps
+ * reading an unchanged legacy value and needs none.
  */
-function pinnedFor(stored: StoredExecutable, family: PathFamily): ExecutableBySide {
-  const reads = stored.executablePathBySide?.[family] !== undefined || !spelledForTheOtherOs(stored.executablePath, family === 'windows');
+function pinnedFor(stored: StoredExecutable, family: PathFamily, replacesLegacy: boolean): ExecutableBySide {
+  const keeps = stored.executablePathBySide?.[family] !== undefined || replacesLegacy;
 
-  return reads ? { [family]: storedForThisSide(stored, family) } : {};
+  return keeps ? { [family]: storedForThisSide(stored, family) } : {};
 }
 
 /**

@@ -272,23 +272,26 @@ export interface ExecutableSide {
 }
 
 /**
- * The CLI path THIS side runs (todo/PLAN_paths_per_side.md, design (c), rules 2-3) — the question-consultant roots' rule
- * (`otherSideHere`) applied to a FILE: the stored `executablePath` trimmed, unless it is spelled for the other operating
+ * The CLI path THIS side runs (todo/PLAN_paths_per_side.md, design (c), rules 1-3) — the value this side's field holds
+ * (rule 1, {@link storedForThisSide}: the per-side member when it is present, else the legacy value), judged by ONE rule
+ * wherever it is stored. A member is judged exactly as the legacy value is, so a save that pins a family's value into its
+ * member never moves what that family runs (the risk consultant, 2026-10-11, finding c: `/tools/codex.exe` saved
+ * unchanged on Windows ran unqualified, and a WSL save took away the `C:\tools\codex.exe` the Windows disk had found).
+ *
+ * <p>The rule — the question-consultant roots' (`otherSideHere`) applied to a FILE: the value trimmed, unless it is spelled for the other operating
  * system AND the disk confirms there is no such file here — then nothing, so the runtime's own name is looked up on
  * PATH, and the skipped value is named so a page can say whose it is. On Windows `/Program Files/nodejs/node.exe` is a
  * legal root-relative path; one that exists — qualified with the SYSTEM drive (`qualified`), the base both halves use
  * — is this side's and runs qualified, and one the disk could not answer for is kept too: never skipped on a guess (the
  * cadence consultant, E1's code round). Never refused. Answered by the `executable` vectors, which coai-mcp's
- * `ExecutablePaths.Here` answers too.
+ * `ExecutablePaths.Here` answers too.</p>
  */
 export function pathForThisSide(stored: StoredExecutable, side: ExecutableSide): ThisSidePath {
-  const own = ownSidePath(stored, side.family);
-
-  return own === undefined ? legacyForThisSide(stored.executablePath, side) : { path: own, otherSide: '' };
+  return valueForThisSide(storedForThisSide(stored, side.family), side);
 }
 
-/** Rules 2-3 of design (c) over the legacy value — what every side ran before E3, and what a row without a per-side value still runs. */
-function legacyForThisSide(stored: string, side: ExecutableSide): ThisSidePath {
+/** Rules 2-3 of design (c) over one stored value — what every side ran before E3, and what it runs of a member now. */
+function valueForThisSide(stored: string, side: ExecutableSide): ThisSidePath {
   const value = stored.trim();
   if (!spelledForTheOtherOs(value, side.family === 'windows')) {
     return { path: value, otherSide: '' };
