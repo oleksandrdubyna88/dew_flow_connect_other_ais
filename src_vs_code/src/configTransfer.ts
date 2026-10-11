@@ -333,7 +333,7 @@ function localPaths(local: unknown): Record<string, unknown> {
 
 /** A value with every `executablePath` and `executablePathBySide` removed, at any depth. */
 export function withoutMachinePaths(value: unknown): unknown {
-  return MACHINE_PATH_FIELDS.reduce(withoutField, value);
+  return MACHINE_PATH_FIELDS.reduce((rest, field) => withoutField(rest, field), value);
 }
 
 /** A value with every `field` removed, at any depth. */

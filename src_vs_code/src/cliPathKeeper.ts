@@ -55,9 +55,8 @@ export class CliPathKeeper<R extends KeptRow> {
     const layer = this.deps.layer();
     const plan = layer === undefined ? { writes: [], dropped: [] } : keepPlan(this.deps.store, layer, this.deps.rows());
     this.tell(plan.dropped);
-    for (const [key, value] of plan.writes) {
-      await this.deps.store.update(key, value);
-    }
+    // One write per key, each to a different key, so they need no order among themselves.
+    await Promise.all(plan.writes.map(([key, value]) => this.deps.store.update(key, value)));
   }
 
   /** Say what appeared; settle what ended. */
