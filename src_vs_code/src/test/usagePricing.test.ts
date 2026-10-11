@@ -63,8 +63,8 @@ test('TheParser_KeepsWhatTheLaunchRanWith — a line keeps its CLI, version, eff
   // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
   const [server, local, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
-    + '"cli":"codex","cliVersion":"codex-cli 0.160.0","effort":"","effortFrom":"dropped","tier":"default","tierFrom":"server",'
-    + '"job":"1760090400-def","slot":"a"}',
+    + '"cli":"codex","cliVersion":"codex-cli 0.160.0","effort":"low","effortFrom":"cli-config","tier":"default","tierFrom":"server",'
+    + '"job":"1760090400-def","slot":"a","effortNotSent":"dropped"}',
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
     + '"cli":"codex","cliVersion":"","effort":"xhigh","effortFrom":"cli-config","tier":"","tierFrom":"","job":"","slot":""}',
     '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
@@ -72,10 +72,11 @@ test('TheParser_KeepsWhatTheLaunchRanWith — a line keeps its CLI, version, eff
 
   assert.deepEqual(
     [server?.cli, server?.cliVersion, server?.effortFrom, server?.tier, server?.tierFrom, server?.job, server?.slot],
-    ['codex', 'codex-cli 0.160.0', 'dropped', 'default', 'server', '1760090400-def', 'a'],
+    ['codex', 'codex-cli 0.160.0', 'cli-config', 'default', 'server', '1760090400-def', 'a'],
     'what the launch ran with was dropped on the way in',
   );
-  assert.equal(server?.effort, undefined, 'a dropped effort is empty, and an empty value is absent — never an effort');
+  // What ran and whether the request's own effort reached it are two facts (the consultation of 2026-10-11).
+  assert.deepEqual([server?.effort, server?.effortNotSent], ['low', 'dropped'], 'the not-sent fact was dropped on the way in');
   assert.deepEqual([local?.effort, local?.effortFrom], ['xhigh', 'cli-config']);
   assert.deepEqual([local?.cliVersion, local?.job, local?.slot, local?.tierFrom], [undefined, undefined, undefined, undefined],
     'an empty field is "not recorded", so it is absent like an old line\'s');

@@ -112,17 +112,36 @@ public sealed class EachLineSaysWhatItRanWithTests : IAsyncLifetime
     [Fact]
     public void ACodexRowsEffort_IsRecordedAsIgnored()
     {
-        // Whatever this machine's own config.toml says: an ignored effort is not relabelled as the configuration's.
+        // The row asked for 'high'; the launch path never sends a codex effort; the CLI's own config.toml names 'xhigh'.
+        // Two facts, two fields (the consultation of 2026-10-11): what RAN — the config's value, labelled as its — and
+        // that the row's own setting did not reach the launch. An empty effort hid the inherited value that drives cost.
         CodexHome("codex-home-ignored", CodexConfig);
         var invocation = Work(Codex() with { CliEffort = "high" }).Single().Invocation;
 
         string.Join(' ', invocation.Request.Arguments).Should().NotContain("reasoning_effort", "codex is never told a row's effort");
 
         var line = LineFor(invocation);
-        Text(line, "effortFrom").Should().Be(OptionSources.Ignored,
+        Text(line, "effortNotSent").Should().Be(OptionSources.Ignored,
             "the row asked for 'high' and the launch path never sends a codex effort — the line must say so, not stay silent");
-        Text(line, "effort").Should().BeEmpty("what the row asked for did not run, and nothing is claimed about what did");
+        (Text(line, "effort"), Text(line, "effortFrom")).Should().Be(("xhigh", OptionSources.CliConfig),
+            "what ran is the CLI's configured effort, and the line says whose it is");
         Text(line, "cli").Should().Be("codex");
+    }
+
+    [Fact]
+    public void TheSameConfig_ReadsAsTheSameEffort_WhetherOrNotTheRowAskedForOne()
+    {
+        // The consultation's paired fixture: identical configuration and argv, the row's effort empty against 'low'. The
+        // effort that ran must not change with an inert row setting; only the not-sent fact may.
+        CodexHome("codex-home-paired", CodexConfig);
+        var silent = LineFor(Work(Codex()).Single().Invocation);
+        var asked = LineFor(Work(Codex() with { CliEffort = "low" }).Single().Invocation);
+
+        (Text(silent, "effort"), Text(silent, "effortFrom")).Should().Be(("xhigh", OptionSources.CliConfig));
+        (Text(asked, "effort"), Text(asked, "effortFrom")).Should().Be(("xhigh", OptionSources.CliConfig),
+            "a row setting that never reached the launch must not change what the line says ran");
+        Text(silent, "effortNotSent").Should().BeOneOf([string.Empty, "<absent>"], "nothing was asked, so nothing was refused");
+        Text(asked, "effortNotSent").Should().Be(OptionSources.Ignored);
     }
 
     // ---------- the CLI's own configuration labels, and changes nothing ----------
@@ -197,7 +216,11 @@ public sealed class EachLineSaysWhatItRanWithTests : IAsyncLifetime
                         "an Off row is told the standard tier, and the line names what the argv carried");
                     Setting(argv, "service_tier").Should().Be("default");
                     Setting(argv, "model_reasoning_effort").Should().BeEmpty();
-                    (Text(line, "effort"), Text(line, "effortFrom")).Should().Be((string.Empty, OptionSources.Ignored));
+                    var offConfig = CodexConfigFile.TextIn(name => sent.Environment.GetValueOrDefault(name) ?? Environment.GetEnvironmentVariable(name));
+                    (Text(line, "effort"), Text(line, "effortFrom")).Should().Be(
+                        (CodexConfigFile.RootValue(offConfig, "model_reasoning_effort"), OptionSources.CliConfig),
+                        "the row's 'high' never ran; what ran is the config.toml the launch's environment points at");
+                    Text(line, "effortNotSent").Should().Be(OptionSources.Ignored);
                     Text(line, "cliVersion").Should().Be(LaunchOptions.FirstLine(VersionAnswer()),
                         "the version is the tier probe's answer, which this launch's codex was asked before it started");
                     launcher.VersionsAsked.Should().Contain(FakeCliExe, "the version comes from a --version that ran anyway");

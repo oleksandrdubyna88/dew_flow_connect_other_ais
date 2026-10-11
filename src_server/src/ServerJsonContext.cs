@@ -175,7 +175,10 @@ public sealed record UsageEntryDto(
     string? Tier = null,
     string? TierFrom = null,
     string? Job = null,
-    string? Slot = null);
+    string? Slot = null,
+    // Whether the asked-for effort / tier reached the CLI — apart from what ran (the consultation of 2026-10-11).
+    string? EffortNotSent = null,
+    string? TierNotSent = null);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>
