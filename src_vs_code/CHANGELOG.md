@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## Server 0.48.0 — 2026-10-11
+
+**The usage ledger tells the truth: one line per paid launch, how each ended, and what it ran with.** `usage.jsonl`
+now gets a line for every launch a review paid for — a repair, a follow-up, a rate-limit retry, a requeued Team-server
+attempt — joined by a shared `turn` id and named by `attempt`. The lines are split only where they add up to the turn
+exactly, so no total moves, except one: a repair that exited non-zero after billing was counted twice and is now
+counted once. A launch cancelled under it is said as cancelled, before a timeout, and a Team-server job carries the
+cause it ended by (`withdrawn`, `abandoned`, `backstop`, `queueExpired`, `hostStopped`). Each line names the CLI and its
+version, the effort and tier and where each came from, the job, the slot by its name (never an email), and an effort
+or tier the vendor ignored or dropped. Probes are lines of kind `probe`, and a vendor's reason is kept up to 4 000
+characters, redacted. Every new field is trailing and has a default, so older lines still read.
+
+## Extension 0.69.0 — 2026-10-11
 
 **Changed: a reviewer's CLI path belongs to the side that saved it.** A CLI path saved in a Windows window (say
 `C:\tools\codex.cmd`) no longer replaces the path a WSL window runs (`/usr/local/bin/codex`): each catalog row now keeps
@@ -32,6 +44,9 @@ never reads — and *This side keeps its own settings — set the other side's v
 their place. A shared CLI path spelled for this side's system is not shown as the other side's: that box stays empty,
 with a note that the other side looks its CLI up on PATH. Nothing of the other side is ever checked on the disk from
 this window.
+
+**The Claude model probe is in the ledger too.** The extension's Claude model probe writes its usage to
+`probe-usage.jsonl`, read beside `usage.jsonl`, so its launches are no longer missing from what was spent.
 
 ## Server 0.47.0 — 2026-10-11
 
