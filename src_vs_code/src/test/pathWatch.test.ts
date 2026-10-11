@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { NOTHING_CHOSEN, useStorageSettings } from '../dataDir';
 import { currentFindings, forgetFindingsBoard } from '../findingsBoard';
-import { type ExecutableSide, type FilePresence } from '../pathFamily';
+import { type ExecutableSide, type FilePresence, type StoredExecutable } from '../pathFamily';
 import { type PathFinding, findingSubject } from '../pathFindings';
 import { PathProbes } from '../pathProbes';
 import { PathWatch } from '../pathWatch';
@@ -17,7 +17,7 @@ import type { SettingProblem } from '../providers';
 
 interface World {
   readonly roots?: readonly string[];
-  readonly vendors?: readonly { readonly id: string; readonly executablePath: string }[];
+  readonly vendors?: readonly (StoredExecutable & { readonly id: string })[];
   readonly watched?: readonly string[];
   readonly dataRoot?: string;
   /** What the disk says per path; a path with no entry is absent. */
@@ -119,6 +119,23 @@ test('this side\'s missing CLI is said with its owner; the other side\'s CLI and
   await it.settle();
 
   assert.deepEqual(it.said.map((one) => [one.owner, one.value, one.place]), [['my-codex', 'D:\\tools\\codex.exe', 'models']]);
+});
+
+test('a row with a CLI path per side is watched by THIS side\'s value — the finding names what the box draws, never the legacy value the other side mirrored', async () => {
+  // Paths per side E3 × E5: the WSL side saved last, so the legacy value is its `/usr/local/bin/codex`; this Windows
+  // side's own value is in its member, and that is what runs here, what the box shows, and what is missing.
+  const it = run({
+    vendors: [{
+      id: 'my-codex',
+      executablePath: '/usr/local/bin/codex',
+      executablePathBySide: { windows: 'D:\\mine\\codex.exe', posix: '/usr/local/bin/codex', mirrored: '/usr/local/bin/codex' },
+    }],
+    disk: {},
+  });
+  it.watch.start();
+  await it.settle();
+
+  assert.deepEqual(it.said.map((one) => [one.owner, one.value]), [['my-codex', 'D:\\mine\\codex.exe']]);
 });
 
 test('a watched folder of this side that is missing is a finding under Setup › MCP server; the other side\'s is not', async () => {

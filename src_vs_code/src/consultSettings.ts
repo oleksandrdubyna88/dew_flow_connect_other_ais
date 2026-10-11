@@ -13,6 +13,8 @@
 import { compareVersions } from './coaiInstall';
 import { CONSULTING } from './featureAvailability.generated';
 import { Runtime, RUNTIMES } from './models';
+import { hostFamily } from './hostSide';
+import { storedForThisSide } from './pathFamily';
 import { Vendor, vendorsFrom } from './vendors';
 
 /**
@@ -360,7 +362,8 @@ function fromRow(choice: ConsultantChoice, row: Vendor): ResolvedConsultant {
     runtime: row.runtime,
     model: choice.model.length > 0 ? choice.model : row.model,
     baseUrl: row.baseUrl,
-    executablePath: row.executablePath,
+    // THIS side's stored value (paths per side E3.1): the definition is resolved later exactly as the row would be.
+    executablePath: storedForThisSide(row, hostFamily()),
   };
 }
 
@@ -546,7 +549,7 @@ function reproducedByARow(one: ConsultantDefinition, vendors: readonly Vendor[])
     && row.enabled
     && row.runtime === one.runtime
     && row.baseUrl === one.baseUrl
-    && row.executablePath === one.executablePath;
+    && storedForThisSide(row, hostFamily()) === one.executablePath;
 }
 
 function olderThanMarker(version: string): boolean {

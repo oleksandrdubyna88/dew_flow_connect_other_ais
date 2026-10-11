@@ -351,7 +351,15 @@ export function sideKey(side: Side): string {
  * every extension host, and there is no API that writes a remote host's machine settings.</p>
  */
 export function overlayKey(side: Side): string {
-  return `coai.settingsOverlay@${sideKey(side)}`;
+  return overlayKeyOf(sideKey(side));
+}
+
+/**
+ * {@link overlayKey} for a side known only by its `sideKey` — the side registry's records (`sidesSeen.ts`) carry the key,
+ * not the `Side`, so another side's overlay is found through it (todo/PLAN_paths_per_side.md E3.4).
+ */
+export function overlayKeyOf(key: string): string {
+  return `coai.settingsOverlay@${key}`;
 }
 
 
