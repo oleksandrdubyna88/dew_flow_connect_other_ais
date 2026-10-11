@@ -8,6 +8,7 @@ import { ConsultSettings } from './consultSettings';
 import { Vendor } from './vendors';
 import { unquoted } from './cliVersions';
 import { writeFileAtomically } from './atomicFile';
+import { probeUsagePath, recordingRun } from './probeUsageFile';
 
 /**
  * What this machine knows about the Claude CLI's models, and how it finds out again.
@@ -180,7 +181,12 @@ export class ClaudeProbeCache {
       await this.render();
       const found = await probeClaudeModels(
         {
-          run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => !this.watched()),
+          // Every request is written to the probe ledger, a failed one included: each is billed (story 3.3).
+          run: recordingRun(
+            (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => !this.watched()),
+            probeUsagePath(this.dataDir.fsPath),
+            Date.now,
+          ),
           cliVersion: async () => cliVersion,
           executable,
           now: () => Date.now(),

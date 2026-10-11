@@ -35,8 +35,41 @@ export interface UsageEntry {
   readonly tokensCached?: number;
   /** How many of `tokensOut` the vendor reported as reasoning — for the record; the bill is `tokensOut`. */
   readonly tokensReasoning?: number;
-  /** What the line WAS — `review`, `consult`, `question`, `chat`; a line older than the field is a review. */
+  /** What the line WAS — `review`, `consult`, `question`, `chat`, `probe`; a line older than the field is a review. */
   readonly kind?: string;
+  /**
+   * The id every launch of one reviewer turn shares (story 3.3 of todo/PLAN_every_round_is_counted.md) — a repair, a
+   * follow-up, a retry and a rotated Team-server attempt each write a line of their own, and this ties them back to
+   * their turn. Absent on a line older than the field, and on a kind with no turns.
+   */
+  readonly turn?: string;
+  /** What the launch was inside its turn — `first`, `repair`, `followUp`, `retry`, `rotated`; absent like `turn`. */
+  readonly attempt?: string;
+  /**
+   * What the launch RAN WITH (story 3.4 of todo/PLAN_every_round_is_counted.md): the runtime that ran it, the first line
+   * of that CLI's `--version` where one was already asked, the effort and the tier each with its source (`row`, `server`,
+   * `ignored`, `dropped`, `cli-config` — `OptionSources` in `src_mcp/runners/Reviewers/LaunchOptions.cs`), and on a Team
+   * server the job and the account slot by its name. Each is absent on a line older than the field, and where the line
+   * says nothing — an empty value is "not recorded", never a value.
+   */
+  readonly cli?: string;
+  readonly cliVersion?: string;
+  readonly effort?: string;
+  readonly effortFrom?: string;
+  readonly tier?: string;
+  readonly tierFrom?: string;
+  readonly job?: string;
+  readonly slot?: string;
+  /** `ignored` / `dropped` when the asked-for effort did not reach the CLI — apart from `effort`, which says what ran. */
+  readonly effortNotSent?: string;
+  readonly tierNotSent?: string;
+  /**
+   * WHY a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — `withdrawn`,
+   * `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in `src_mcp/runners/Reviewers/EndCauses.cs`).
+   * Absent on a line older than the field, on every other ending, and on a local line, which does not know which
+   * token fired. The outcome stays `Cancelled`; this is the column that tells a withdrawal from the server's backstop.
+   */
+  readonly endCause?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -98,6 +131,9 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...(typeof parsed.costNote === 'string' && parsed.costNote.length > 0 ? { costNote: parsed.costNote } : {}),
       ...(typeof parsed.usageNote === 'string' && parsed.usageNote.length > 0 ? { usageNote: parsed.usageNote } : {}),
       ...ledgerExtras(parsed),
+      ...launchFields(parsed),
+      ...ranWithFields(parsed),
+      ...endCauseOf(parsed.endCause),
     };
   } catch {
     return undefined;
@@ -117,6 +153,62 @@ function ledgerExtras(parsed: Partial<UsageEntry>): Required<Pick<UsageEntry, 't
     tokensReasoning: number(parsed.tokensReasoning),
     kind: typeof parsed.kind === 'string' && parsed.kind.length > 0 ? parsed.kind : 'review',
   };
+}
+
+/**
+ * The two fields story 3.3 of todo/PLAN_every_round_is_counted.md added — the turn a launch shares and what the launch
+ * was — present only when the line says them. An older line has neither, and an empty one is absent rather than an id:
+ * every old line with an empty turn would otherwise read as one turn.
+ */
+function launchFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, 'turn' | 'attempt'> {
+  return { ...turnOf(parsed.turn), ...attemptOf(parsed.attempt) };
+}
+
+/** A text field the line actually says — a non-empty string; anything else is silence. */
+function saidText(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function turnOf(value: unknown): Pick<UsageEntry, 'turn'> {
+  return saidText(value) ? { turn: value } : {};
+}
+
+function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
+  return saidText(value) ? { attempt: value } : {};
+}
+
+/**
+ * Why a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — present only
+ * when the line says it, by `launchFields`' rule: an older line, every other ending and a local line say nothing, and an
+ * empty value is absent rather than a cause.
+ */
+function endCauseOf(value: unknown): Pick<UsageEntry, 'endCause'> {
+  return saidText(value) ? { endCause: value } : {};
+}
+
+/**
+ * The text fields story 3.4 of todo/PLAN_every_round_is_counted.md added — what the launch ran with — and the two
+ * not-sent facts the consultation of 2026-10-11 split off them.
+ */
+const RAN_WITH_FIELDS = [
+  'cli', 'cliVersion', 'effort', 'effortFrom', 'tier', 'tierFrom', 'job', 'slot', 'effortNotSent', 'tierNotSent',
+] as const;
+
+type RanWithField = (typeof RAN_WITH_FIELDS)[number];
+
+/**
+ * What the launch ran with, each field present only when the line says it — the rule `launchFields` keeps: an older line
+ * has none, and an empty value ("not recorded") is absent rather than a value nothing chose.
+ */
+function ranWithFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, RanWithField> {
+  const said: Partial<Record<RanWithField, string>> = {};
+  for (const name of RAN_WITH_FIELDS) {
+    const value: unknown = parsed[name];
+    if (saidText(value)) {
+      said[name] = value;
+    }
+  }
+  return said;
 }
 
 function number(value: unknown): number {

@@ -84,6 +84,26 @@ public sealed class SecurityAnswerLimitCharacterizationTests
         refused.EarlierTurns.Should().BeSameAs(earlier);
     }
 
+    /// <summary>
+    /// A refused answer that took a repair was two paid launches, and the ledger writes each as its own line (story 3.3
+    /// of todo/PLAN_every_round_is_counted.md) — so the refusal keeps the launches the answer carried, or the turn falls
+    /// back to one folded line.
+    /// </summary>
+    [Fact]
+    public void A_refusal_keeps_the_answers_launches()
+    {
+        LaunchPart[] launches =
+        [
+            new(LaunchAttempts.First, new Usage(6, 8, null), TimeSpan.FromSeconds(1), "unparseable: prose"),
+            new(LaunchAttempts.Repair, new Usage(4, 12, 0.5), TimeSpan.FromSeconds(2), "ok"),
+        ];
+        var answer = new ReviewerOutcome.Ok(Review("SECURE", Defect()), true, new Usage(10, 20, 0.5)) { Launches = launches };
+
+        var refused = SecurityAnswerLimit.Apply(Lane, answer).Should().BeOfType<ReviewerOutcome.Unparseable>().Subject;
+
+        refused.Launches.Should().BeSameAs(launches, "the refused answer's two launches were lost, so its turn would be written folded");
+    }
+
     [Fact]
     public void One_hundred_findings_pass_the_count_and_one_more_does_not()
     {

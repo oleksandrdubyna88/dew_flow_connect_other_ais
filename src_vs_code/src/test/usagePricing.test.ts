@@ -45,6 +45,61 @@ test('TheParser_KeepsCachedReasoningAndKind — a new line keeps its cached, rea
   assert.equal(old?.kind, 'review', 'everything written before `kind` existed was a review');
 });
 
+test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it shares and what it was; an old line has neither', () => {
+  // Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, tied to its turn — read, not dropped.
+  const [repair, old] = parseUsage([
+    '{"utc":"2026-10-10T10:00:00Z","provider":"gemini","model":"gemini-3.7-flash-low","tokensIn":200,"tokensOut":7,'
+    + '"kind":"review","outcome":"ok","turn":"3f9a0c1b2d4e","attempt":"repair"}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.equal(repair?.turn, '3f9a0c1b2d4e', 'the turn a repair shares with its first launch was dropped on the way in');
+  assert.equal(repair?.attempt, 'repair', 'what the launch was was dropped on the way in');
+  assert.equal(old?.turn, undefined, 'an old line says nothing about its turn — absent, never an empty id that matches every other old line');
+  assert.equal(old?.attempt, undefined);
+});
+
+test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it was cancelled; an old line and any other ending have none', () => {
+  // Story 3.2 of todo/PLAN_every_round_is_counted.md: the store that fired the token writes the cause, the outcome stays
+  // `Cancelled`, and this side reads the column rather than dropping it — so a withdrawal can be told from the backstop.
+  const [withdrawn, deadline, old] = parseUsage([
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":0,"tokensOut":0,"outcome":"Cancelled",'
+    + '"usageNote":"usage not captured","turn":"1760090400-def","attempt":"first","endCause":"withdrawn"}',
+    '{"utc":"2026-10-11T10:00:01Z","provider":"codex","model":"gpt-6-luna","tokensIn":0,"tokensOut":0,"outcome":"TimedOut","endCause":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.equal(withdrawn?.endCause, 'withdrawn', 'why the store killed it was dropped on the way in');
+  assert.equal(withdrawn?.outcome, 'Cancelled', 'the outcome is still the failure\'s name');
+  assert.equal(deadline?.endCause, undefined, 'an empty cause is absent — a real deadline has none');
+  assert.equal(old?.endCause, undefined, 'an old line says nothing of why');
+});
+
+test('TheParser_KeepsWhatTheLaunchRanWith — a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
+  // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
+  const [server, local, old] = parseUsage([
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
+    + '"cli":"codex","cliVersion":"codex-cli 0.160.0","effort":"low","effortFrom":"cli-config","tier":"default","tierFrom":"server",'
+    + '"job":"1760090400-def","slot":"a","effortNotSent":"dropped"}',
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
+    + '"cli":"codex","cliVersion":"","effort":"xhigh","effortFrom":"cli-config","tier":"","tierFrom":"","job":"","slot":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.deepEqual(
+    [server?.cli, server?.cliVersion, server?.effortFrom, server?.tier, server?.tierFrom, server?.job, server?.slot],
+    ['codex', 'codex-cli 0.160.0', 'cli-config', 'default', 'server', '1760090400-def', 'a'],
+    'what the launch ran with was dropped on the way in',
+  );
+  // What ran and whether the request's own effort reached it are two facts (the consultation of 2026-10-11).
+  assert.deepEqual([server?.effort, server?.effortNotSent], ['low', 'dropped'], 'the not-sent fact was dropped on the way in');
+  assert.deepEqual([local?.effort, local?.effortFrom], ['xhigh', 'cli-config']);
+  assert.deepEqual([local?.cliVersion, local?.job, local?.slot, local?.tierFrom], [undefined, undefined, undefined, undefined],
+    'an empty field is "not recorded", so it is absent like an old line\'s');
+  assert.deepEqual([old?.cli, old?.effortFrom, old?.tierFrom, old?.job, old?.slot], [undefined, undefined, undefined, undefined, undefined],
+    'an old line says nothing of what it ran with');
+});
+
 test('APastLine_IsPricedAtItsOwnModel — a row that changed model prices its earlier lines at the model that answered them', () => {
   // The Gemini row moved to flash-medium on 2026-10-02: every earlier flash-low line was priced as flash-medium.
   const prices = listed({

@@ -181,6 +181,8 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
         {
             // The prompt file goes when the turn does (BoundedScheduler); it holds the change under review.
             TempFiles = [promptFile],
+            // What the argv above carries, exactly — the flag's own guard, so the two cannot disagree (story 3.4).
+            Sent = new(settings.ReasoningEffort.Length > 0 ? settings.ReasoningEffort : string.Empty),
         };
     }
 

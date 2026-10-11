@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
 
@@ -25,10 +26,39 @@ public sealed record UsageLine(
     long TokensOut,
     double? CostUsd,
     /// <summary>A review or a conversation. A line written before the field existed was a review.</summary>
-    JobKind Kind = JobKinds.WhenNotSaid)
+    JobKind Kind = JobKinds.WhenNotSaid,
+    /// <summary>How much of the input the vendor reported as cached — a subset of it, never added to it.</summary>
+    long TokensCached = 0,
+    /// <summary>How much of the output the vendor reported as reasoning — a subset of it, for the record.</summary>
+    long TokensReasoning = 0,
+    /// <summary><c>usage not captured</c> when the launch ended before the vendor reported anything; else empty.</summary>
+    string UsageNote = "",
+    /// <summary>The id every launch of one turn shares — on this server, the job's id; empty on a line older than the field.</summary>
+    string Turn = "",
+    /// <summary>What the launch was inside its turn (<c>LaunchAttempts</c>); empty on a line older than the field.</summary>
+    string Attempt = "")
 {
     /// <summary>True when this run produced no answer. It cost the same.</summary>
     public bool Failed => !Outcome.Equals("ok", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What the launch ran with — its CLI and that CLI's version, its effort and tier with their sources (story 3.4 of
+    /// todo/PLAN_every_round_is_counted.md); <see cref="LaunchOptions.None"/> on a line older than the fields.
+    /// </summary>
+    /// <remarks>The ledger writer's own record, read back whole, so this reader and the writer cannot spell it two ways.</remarks>
+    public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
+
+    /// <summary>The job the line belongs to — empty on a line older than the field, and on a line a local run wrote.</summary>
+    public string Job { get; init; } = string.Empty;
+
+    /// <summary>The account slot the launch ran on, by its name — empty like <see cref="Job"/>.</summary>
+    public string Slot { get; init; } = string.Empty;
+
+    /// <summary>
+    /// WHY a <c>Cancelled</c> line was cancelled — one of <c>EndCauses</c> — empty on every other ending and on a line
+    /// older than the field (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    public string EndCause { get; init; } = string.Empty;
 }
 
 /// <summary>What a read of the ledger produced, including what it could not read.</summary>
@@ -162,7 +192,32 @@ public sealed class UsageReader(string dataDir)
                 entry.TokensIn,
                 entry.TokensOut,
                 entry.CostUsd,
-                kind);
+                kind,
+                // Read whole (story 3.1 of todo/PLAN_every_round_is_counted.md): a line from before these fields
+                // reads 0 / 0 / empty, which is what it always meant.
+                entry.TokensCached,
+                entry.TokensReasoning,
+                entry.UsageNote ?? string.Empty,
+                // Read, not dropped (story 3.3): one line per launch, tied to its turn. An older line has neither.
+                entry.Turn ?? string.Empty,
+                entry.Attempt ?? string.Empty)
+            {
+                // Read, not dropped (story 3.4): what the launch ran with, the job and the slot. An older line has none.
+                RanWith = new LaunchOptions(
+                    entry.Cli ?? string.Empty,
+                    entry.CliVersion ?? string.Empty,
+                    entry.Effort ?? string.Empty,
+                    entry.EffortFrom ?? string.Empty,
+                    entry.Tier ?? string.Empty,
+                    entry.TierFrom ?? string.Empty,
+                    entry.EffortNotSent ?? string.Empty,
+                    entry.TierNotSent ?? string.Empty),
+                Job = entry.Job ?? string.Empty,
+                Slot = entry.Slot ?? string.Empty,
+                // Read, not dropped (story 3.2): why the store killed a cancelled job. An older line, and every
+                // other ending, says nothing.
+                EndCause = entry.EndCause ?? string.Empty,
+            };
         }
         catch (JsonException)
         {

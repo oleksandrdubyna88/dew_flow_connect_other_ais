@@ -99,6 +99,18 @@ test('consultations, questions and chat sit beside the rounds as recorded turns,
   assert.match(consult[10]!, /~\$1\.0\d*<\/span> <span class="hint">per recorded turn/u, '$2 over 2 consult turns');
 });
 
+test('AProbe_IsItsOwnKind_NeverARound — a --probe-api completion sits beside the rounds as a probe, on no model line', () => {
+  // Story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` now writes a line per paid
+  // completion, of kind `probe`. Its money is the row's, but it is not a review — it must show as its own kind.
+  const lines = [usageLine(), usageLine({ model: 'gpt-6-astra', kind: 'probe', role: 'json_schema' })];
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), lines) }));
+
+  assert.equal(rowCells(html, '<b>codex</b>')[5], 'probe 1 recorded turns', 'the probe spent the row and was not said beside its rounds');
+  const probe = rowCells(html, '>probe · 1 recorded turns<');
+  assert.match(probe[8]!, /in 1\.0M/u, 'the probe\'s tokens are on its own line');
+  assert.doesNotMatch(html, />gpt-6-astra</u, 'a probe of a model is not a round of it — no model line for it');
+});
+
 test('AConsultationOnlyWindow_ShowsNoPerRoundFigure — consultations and no rounds: a dash saying why', () => {
   const none = JSON.stringify({ nowUtc: hoursAgo(0), windows: ['5h', '24h', '7d'].map((name) => ({ name, fromUtc: hoursAgo(name === '5h' ? 5 : name === '24h' ? 24 : 168), toUtc: hoursAgo(0), rows: [] })), modelsKnownSince: null });
   const html = roundsBlock(input({ snapshot: snapshot(counted(none), [usageLine({ model: 'gpt-6-astra', kind: 'consult' })]) }));

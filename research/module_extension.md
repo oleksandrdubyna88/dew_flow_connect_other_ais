@@ -2729,6 +2729,7 @@ family that answered:
 | `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
 | `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
 | `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
+| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
 
 **A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
 installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
@@ -7715,6 +7716,33 @@ consultation is several ledger lines; *consult turns unavailable* when the ledge
 unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
 the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
 says the product ships no price table.
+
+**Story 3.3 (2026-10-10): a probe is its own kind, and a ledger line is a launch.** `coai-mcp --probe-api --model` now
+writes a line per paid completion, of kind `probe`; `roundsBlock`'s `BESIDE` names it (`probe N recorded turns`, a
+`probe · N recorded turns` kind line), `roundMoney`'s kind order and units know it (per recorded line), and it never
+reaches a model line or a round — a row's money still holds every kind. `usage.ts`'s parser reads the two new ledger
+fields, `turn` and `attempt` (`launchFields`: present only when the line says them, so old lines with no turn never read
+as one turn). A repair, a follow-up, a retry and a rotated Team-server attempt are each a line since this story, so the
+spending tab's `runs` count them; the median is still labelled per recorded turn, because a seven-day window holds lines
+from both sides of the change. The help's spending article says both, in five languages
+(`helpCoverage.test.ts` asks every language for `**probe**`, `--probe-api --model` and `` `turn` ``).
+The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
+plan's deviations.
+
+**Story 3.4 (2026-10-11): the parser keeps what a launch ran with.** `usage.ts`'s `UsageEntry` gains the eight ledger
+fields `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, `job` and `slot`, and `ranWithFields` reads them —
+each present only when the line says it, so an empty value ("not recorded") and an old line both read as absent. Nothing
+renders them yet, so no help article changed; they are kept so a later surface reads them rather than drops them
+(`TheParser_KeepsWhatTheLaunchRanWith`).
+
+**Story 3.2 (2026-10-11): the parser keeps why a cancelled Team-server launch was cancelled.** `UsageEntry` gains
+`endCause` — `withdrawn`, `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in
+`src_mcp/runners/Reviewers/EndCauses.cs`) — and `endCauseOf` reads it by `launchFields`' rule: present only when the
+line says it, so an old line, every other ending and a local line (which does not know which token fired) read as
+absent. The line's `outcome` stays `Cancelled`, so every reader that groups by outcome is unchanged; a reader asking
+"how many withdrawals against how many backstops" has a column. Nothing renders it yet, so no help article changed
+(`TheParser_KeepsTheEndCause`). The Team server's status answer carries the same word as a new optional `endCause`
+field beside the unchanged `failure: cancelled`; `remoteAsk.ts` branches on `status` alone and is untouched.
 
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the

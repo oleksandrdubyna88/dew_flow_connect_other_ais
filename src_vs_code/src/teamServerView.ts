@@ -157,6 +157,7 @@ export function kindLine(
  * state of a fleet — and showing what it said is better than showing nothing.</p>
  */
 const KIND_NAMES: Readonly<Record<string, string>> = {
+  canary: 'deploy canaries',
   chat: 'conversations',
   review: 'reviews',
 };

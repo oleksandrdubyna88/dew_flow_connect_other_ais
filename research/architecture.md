@@ -896,7 +896,7 @@ What the server writes, and where it is observed:
 | What | Observed at | Code |
 |---|---|---|
 | Every refusal returned to a calling AI | `Refusal.Answer` — the one place an `ErrorAnswer` is built (story 2.1's boundary) | `refused` |
-| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
+| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `todo/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
 | A setting this build cannot read, and a legacy settings file adopted | `Program` at startup, AND `PanelServiceHost.Build` on every settings RELOAD — which is what a person editing the panel causes | `unrecognised-setting`, `settings-adopted` |
 | What it found on the DISK | `Program` at startup only: the survey stats the data directory, and re-running it on a settings change would stat a configured NAS (issue #115) | `storage-note` |
 | A run that never finished (epic 3, 2026-09-23) | the NEXT start, sweeping `runs/` — nobody else is left to say it | `unclean-exit`, carrying the DEAD run's `run` and `pid` |

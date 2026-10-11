@@ -27,6 +27,7 @@
     }
   ],
   "reviewerEndings": [
+    "Cancelled",
     "NonZeroExit",
     "NotStarted",
     "Ok",
