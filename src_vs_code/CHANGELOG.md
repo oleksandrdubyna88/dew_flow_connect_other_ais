@@ -7,13 +7,26 @@
 one value per side (`executablePathBySide`, beside the `executablePath` older versions read), every launch on a side
 runs that side's value, and an emptied field means "look the CLI up on PATH" on that side. Every coai-mcp version still
 receives one path per row, this side's. *Export settings* leaves the per-side values out, like the CLI path itself. The
-field for the other side's path comes with the two path fields in a following release. **One limit while two versions
+other side's path has a field of its own (below). **One limit while two versions
 of the extension are in use** (a WSL remote installs its own copy, which can lag): an older copy reads only the one
 shared path — the one the side that saved last left there — and when it saves, it drops the per-side values, so the
 other side looks its CLI up on PATH until you set it again. A window of this version notices that once per start:
 it says a previously saved value of that CLI path is missing, names it, and offers **Restore**, which puts it back only
 when you press it — never on its own, never into a model that was removed or replaced, and never over a path saved
 since. Update the extension on both sides. Help in all five languages.
+
+**New: two path fields once both sides are known.** When a Windows side and a WSL / Linux side have both been seen (or
+**Path fields per side** is *Always two*), a Models card shows two CLI-path fields: this side's first, labelled *This
+side — Windows* (or *This side — WSL / Linux (WSL: Ubuntu)*), then the other side's in a box of its own whose title names
+that side and the day it was last seen — *Used by the server on that side. This window does not check it.* It is typed
+as text (there is no browsing: this window cannot see that disk) and saved only as that side's value; a path spelled for
+this side's own system is refused beside the box, never in a pop-up. The question consultant's folders are listed in
+three groups — this side's (with *Add a folder…*), the other side's (type one in, then press Enter; only a path this
+window would call the other side's is taken) and *Both sides / unclear* (a `//server/share`, a relative name) — and
+the watched data folders on *Setup › MCP server* in the same groups; that place also shows the other side's data
+directory, read-only: change it from a window on that side. While a previously saved CLI path is missing, **Restore**
+sits beside the field as well as in the notice. *Always one* keeps one field everywhere. Nothing of the other side is
+ever checked on the disk from this window.
 
 ## Server 0.47.0 — 2026-10-11
 
