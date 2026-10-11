@@ -85,12 +85,18 @@ WORKDIR /home/coai
 #
 # Each install is followed by `--version` IN THE BUILD, so an image cannot be published
 # carrying a CLI that does not start. That is the check the pin would otherwise have been.
+#
+# And no installer is PIPED into a shell: `install-cli.sh` fetches it to a file (each attempt
+# bounded), runs it only behind a shebang, and tries three times. On 2026-10-10 the amd64 image of
+# server-v0.11.0 failed because bash was handed a page instead of a script, once — the arm64 image
+# built from the same URL in the same run (TheImageChecksEachInstallerTests).
 # --------------------------------------------------------------------------
-RUN curl -fsSL https://chatgpt.com/codex/install.sh | sh \
+COPY src_server/install-cli.sh /tmp/install-cli.sh
+RUN sh /tmp/install-cli.sh https://chatgpt.com/codex/install.sh sh \
     && "$HOME/.local/bin/codex" --version
-RUN curl -fsSL https://claude.ai/install.sh | bash \
+RUN sh /tmp/install-cli.sh https://claude.ai/install.sh bash \
     && "$HOME/.local/bin/claude" --version
-RUN curl -fsSL https://antigravity.google/cli/install.sh | bash \
+RUN sh /tmp/install-cli.sh https://antigravity.google/cli/install.sh bash \
     && "$HOME/.local/bin/agy" --version
 
 ENV PATH="/home/coai/.local/bin:${PATH}"
