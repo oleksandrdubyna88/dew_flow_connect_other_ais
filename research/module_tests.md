@@ -3208,3 +3208,18 @@ a host written as a bare word passes, and the model-field exemption would pass a
 catalogue id. The reader test proves the deployed server's bytes parse through today's `UsageReader`, not that E3's
 widened reader will — that is `AnOldLedgerLine_StillReads`, owed by E3, and these fixtures are its input. Nothing here
 reaches the live ledger beyond the three lines that were copied.
+
+## The server reads a stated duration (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`)
+
+The scenario reaches as deep as the Team server's harness goes without a product seam: the real `JobRunner`,
+`ReviewLauncher`, antigravity adapter and `SlotRegistry` on disk, with a fake `IProcessLauncher` standing in for the
+paid agy process. Run: `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.exe --filter-class "*CooldownParserTests"
+--filter-class "*AStatedResetParksTheSlotTests"`.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `CooldownParserTests` (+5) | `CooldownParser_ReadsResetsIn88h49m9s` and `…33m52s` on the two verbatim agy lines (RESULTS §3.1, the fixture); a duration of one part (`5h.`, `45s`, `12m`); `ADurationNoVendorWindowCouldMean_IsTheFallback_NeverAThrow` — `999999999999999999h` and `9999h` are the 30-minute fallback, `336h` is exactly the 14-day ceiling; `ADurationIsNotMistakenForAClockTime` — `Resets in 9h30m` is nine and a half hours, `resets 9:30pm (UTC)` still a clock time | RED: every duration read as the 30-minute guess (`… but <2026-09-06 12:30:00 +0h> does not`). Break-it: the duration branch disabled in `NamedInstant` → the same five red |
+| `AStatedResetParksTheSlotTests` (2) | the verbatim refusal through the real runner parks the slot for 88h49m9s, READ BACK FROM DISK, and a second queued job launches nothing; with `Resets in 2s` the next job waits, then launches once the two seconds pass — the positive control the cadence consultation asked for, so a slot parked for good cannot pass | RED: `parked!.Value to be within 30s from <… +88h49m9s> … but <… +30 min> was off by 3d, 16h…`; `Expected launched to be True because after the stated two seconds the account is used again — not parked on a 30-minute guess, but found False`. Break-it: the same plant → both red |
+
+**NOT covered:** the HTTP host (`Program.cs` builds the launcher inline — a vendor double there needs a product seam);
+a real agy refusal on the deployed box — checked live at the next deploy.
