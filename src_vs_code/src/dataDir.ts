@@ -488,6 +488,9 @@ export const DATA_TO_MOVE: readonly string[] = [
   'prompts/', 'usage.jsonl',
   'documents/', 'escalations/', 'consultations/', 'question-consults/', 'cadence/', 'qphase/', 'callers/',
   'chat-conversations/', 'chat-usage.jsonl', 'chat-doors.jsonl', 'pictures/',
+  // What the extension's Claude model probe spent (story 3.3 of todo/PLAN_every_round_is_counted.md) — its own
+  // ledger, beside `usage.jsonl`, because the chat ledger's readers would read a probe as a conversation.
+  'probe-usage.jsonl',
   // The setup saved before each import that replaced the models (PLAN_one_model_catalog.md E1.5) — the only way
   // back from such an import, so it travels with the rest.
   'config-backups/',

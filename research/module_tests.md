@@ -3236,3 +3236,13 @@ line of the fix planted back.
 **NOT covered:** a consultation's, a question row's, a probe's and a chat turn's lines are not labelled (their fields are
 empty — "not recorded"); claude's own settings are not read for a label; the client's line for a Team-server row records
 the effort it SENT (`row`) — what the server applied is the server's line's.
+
+## The extension's Claude model probe writes what it spent (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `probeUsageFile.test.ts` (4) | an answered probe is one `probe` line with Claude's own usage (cache reads and writes in the input) and its billed cost; a request that did not finish (`capture`'s -1) is *usage not captured* with no cost, never 0/0; `recordingRun` writes one line per candidate it asked — a failed one included — and hands the answer back unchanged; the Rounds block's loader reads `probe-usage.jsonl` beside a missing `usage.jsonl` without calling that a failure | RED (a stub recording nothing): every assertion, `Expected values to be strictly equal`. Break-it: the wrapper appending only answered requests → `the recording run writes one line per candidate …` red |
+| `theInventoryIsComplete.test.ts` | `probe-usage.jsonl` in `DATA_TO_MOVE` and in `shared/data-inventory.json` (moves, clashes) | — the existing guard, now with one more row |
+
+**NOT covered:** `ClaudeProbeCache` and `PanelProvider.readUsage` passing the probe ledger (thin `vscode` wiring over the
+tested wrapper and loader).

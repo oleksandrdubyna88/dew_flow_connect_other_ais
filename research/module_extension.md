@@ -2729,6 +2729,7 @@ family that answered:
 | `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
 | `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
 | `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
+| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
 
 **A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
 installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
