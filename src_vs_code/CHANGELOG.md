@@ -14,6 +14,17 @@ and why. It is yours rather than a side's, so every window reads the same value,
 it. The second field itself comes in a following release; until then the list and the switch are recorded and shown.
 Help in all five languages.
 
+**Changed: a reviewer's CLI path belongs to the side that saved it.** A CLI path saved in a Windows window (say
+`C:\tools\codex.cmd`) no longer replaces the path a WSL window runs (`/usr/local/bin/codex`): each catalog row now keeps
+one value per side (`executablePathBySide`, beside the `executablePath` older versions read), every launch on a side
+runs that side's value, and an emptied field means "look the CLI up on PATH" on that side. Every coai-mcp version still
+receives one path per row, this side's. *Export settings* leaves the per-side values out, like the CLI path itself. The
+field for the other side's path comes with the two path fields in a following release. **One limit while two versions
+of the extension are in use** (a WSL remote installs its own copy, which can lag): an older copy reads only the one
+shared path — the one the side that saved last left there — and when it saves, it drops the per-side values, so the
+other side looks its CLI up on PATH until you set it again. Update the extension on both sides. Help in all five
+languages.
+
 ## Server 0.46.0 — 2026-10-10
 
 **A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares

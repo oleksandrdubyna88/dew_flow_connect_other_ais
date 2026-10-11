@@ -3,7 +3,9 @@
 > Status: **in progress — E1 implemented 2026-10-10 on `feat/paths-per-side-e1-one-rule` (stories 1.1–1.6; its
 > deviations are under E1); E0 measured 2026-10-10 (a stamp reaches the other side's open window live —
 > [RESULTS](../research/RESULTS_side_registry_reaches_the_other_window.md)); E2 implemented 2026-10-10 on
-> `feat/paths-per-side-e2-sides-seen` (stories 2.1–2.4; its deviations are under E2); E5, E3 and E4 not started.** Scope: the extension's path-bearing settings and the
+> `feat/paths-per-side-e2-sides-seen` (stories 2.1–2.4; its deviations are under E2); E3 implemented 2026-10-11 on
+> `feat/paths-per-side-e3-two-values` (stories 3.1–3.5; its deviations are under E3); E5 on its own branch (PR #752);
+> E4 not started.** Scope: the extension's path-bearing settings and the
 > pages that draw them (`src_vs_code`: `pathFamily.ts`, `sideSettings.ts`/`sideConfig.ts`, `settingsShape.ts`,
 > `vendors.ts`/`vendorsWire.ts`, `escalationDirs.ts`, `dataDir.ts`, the Settings page's Models, Question consultant,
 > MCP server and This side places, `panelProvider.ts`'s notices), and coai-mcp's settings reader and `--providers`
@@ -532,10 +534,10 @@ checked against the plan and the code before the plan was amended; all three hel
 
 ### E3 — two values, stored and resolved · `feat/paths-per-side-e3-two-values`
 
-- **3.1** `executablePathBySide` read and written (`vendors.ts:386`, `catalogEdit.ts`), carried by the catalog
+- ✅ **3.1** `executablePathBySide` read and written (`vendors.ts:386`, `catalogEdit.ts`), carried by the catalog
   migration and by *Export settings* **without** its values (`configTransfer.ts:44`'s `MACHINE_PATH_FIELD` widened to
   both names). RED: a row with `executablePathBySide.posix` set still sends the legacy value to a WSL server today.
-- **3.2** `pathForThisSide` rule 1 (a PRESENT key wins, empty included), with the write rules of (c), the same in every
+- ✅ **3.2** `pathForThisSide` rule 1 (a PRESENT key wins, empty included), with the write rules of (c), the same in every
   mode: every save writes `BySide[<its family>]`, this side's field also mirrors into the legacy value and `mirrored`.
   REDs: a two-field save of THIS side's field leaves the legacy value stale for an older reader; a save of the OTHER
   side's field must not touch the legacy value. **Save → resolve, across modes** (cadence consultation 4-6, finding a):
@@ -544,7 +546,7 @@ checked against the plan and the code before the plan was amended; all three hel
   and P is still stored; **clearing** this side's field → resolves `""` (a PATH lookup) even with a legacy
   `//server/share/codex` stored, and the other side's value untouched; the RED for each is today's design resolving the
   older value or the legacy one.
-- **3.3** Lists grouped through `otherSideHere` (O1) into **three** groups, never two (cadence consultation 4-6,
+- ✅ **3.3** Lists grouped through `otherSideHere` (O1) into **three** groups, never two (cadence consultation 4-6,
   finding c, verified: `spelledForTheOtherOs` is false on both platforms for `//server/share/x` and for a relative
   path, so a two-way split put them in THIS window's group on each side): **this side's**, **the other side's**, and
   **both sides / unclear** — an entry spelled for neither OS (`//server/share`), a relative entry (still refused
@@ -558,8 +560,8 @@ checked against the plan and the code before the plan was amended; all three hel
   literal name in WSL) — the disk this side's server reads. It never reaches across to the other side's disk
   (`\\wsl.localhost\…`, `/mnt/<drive>`), which is what E4's rule forbids (it wakes a stopped distro, or an unmounted drive
   answers nothing).
-- **3.4** `dataDirectory`: the other side's value read from its overlay via the registry, never written from here.
-- **3.5** Compatibility pinned: a settings file written by an older extension (legacy only) resolves identically; a
+- ✅ **3.4** `dataDirectory`: the other side's value read from its overlay via the registry, never written from here.
+- ✅ **3.5** Compatibility pinned: a settings file written by an older extension (legacy only) resolves identically; a
   server settings file written by the new extension parses in the oldest supported coai-mcp (the existing
   `live-*-compat` pattern, `package.json` scripts). **Mixed versions** (cadence consultation 4-6, finding b): a row a
   newer Windows extension saved in two-field mode (`BySide.windows` W, `BySide.posix` P, legacy W) consumed by the
@@ -567,6 +569,41 @@ checked against the plan and the code before the plan was amended; all three hel
   named in the test — and coai-mcp ≥ 0.46.0 skips W on a POSIX side; then that older extension's next save (legacy P′,
   `BySide` untouched) is resolved as P′ by a newer WSL reader through the `mirrored` check, and still as W by the newer
   Windows reader.
+
+**E3 as built (2026-10-11) — deviations and what is left.** Every story above is done on
+`feat/paths-per-side-e3-two-values` (4e171192, aa692fb0, f5076c0b, 7b5de9b1, 8525d7f5; help 76cdd9b1), each with a
+compiling break-it on its deciding line; the observed messages are in the commits and in `research/module_tests.md`.
+
+- **3.1 reaches every launch, not only the wire**: `executableOf(row, side)` is what the terminal, the Claude probe, the
+  chat launches and the agy model list run, and a copy of a row into a definition takes `storedForThisSide`; a scan test
+  counts one-value resolutions (`executableHere`) apart, so a row routed through it goes red. Export refuses the per-side
+  member by name on import (`MACHINE_PATH_FIELDS`).
+- **3.2's write rule lives in `cliPathSave.ts`** (`savedCliPath`, `vendorFieldWrite` — the panel's one vendor write), and
+  it PINS every other family's value into its member when a save would otherwise move it (a family reading the legacy
+  value the save replaces, or an older save winning for it) — a property the plan implied and a test now states for every
+  stored state.
+- **3.3 is `pathGroups.ts`**, and a drive-relative name (`C:work`) joins *both / unclear* with the relative ones.
+- **3.4 is `otherSideValues.ts`**: one row per side of the other family (a second distro is a second row, D1 being about
+  fields, not folders); the store is typed `SideReader` (no `update`), so "never written from here" holds by type.
+  `overlayKeyOf(sideKey)` was split out of `overlayKey`.
+- **3.5 — the older extension DROPS the member (measured, a correction to the mixed-version text above).** The released
+  extension's vendor write is `vendorsFrom(read('vendors')).map(…)`, and its `vendorsFrom` builds every row from the
+  fields it knows — so any save of any vendor field by extension-v0.67.0 or v0.65.0 removes `executablePathBySide` from
+  every row (measured by `scripts/live-paths-per-side-compat.mjs` on both tags). "`BySide` untouched" happens only for a
+  hand edit; that case behaves as written (the `mirrored` check, pinned). After an older save the newer reader on the
+  saving side resolves P′, and the newer reader on the OTHER side has lost W: the legacy rule gives it the PATH lookup
+  (P′ is spelled for the other OS). Not worse than the single shared value it replaces, and not fixable from the newer
+  side — said in the help (five languages), the CHANGELOG and `module_extension.md`.
+- **The mixed-version fixture is the released extension itself, not a copy of `vendorsWire.ts:115`**: the compat script
+  builds the tag (`releasedHalves.mjs`) and runs its `vendorsFrom` / `vendorsEnv`. Against extension-v0.67.0 (E1's rule
+  included) the older reader sends `""` for the other side's path rather than W; against v0.65.0 it sends W. Both are
+  accepted as the pinned limitation; mcp-v0.46.0 and this checkout's server skip W, mcp-v0.45.1 / v0.40.5 probe it and say
+  the CLI is not found (reported, not asserted).
+- **"The oldest supported coai-mcp"** has no constant in the code; the script defaults to the newest published release
+  and was run against mcp-v0.46.0, v0.45.1 and v0.40.5 — the file this build writes parses in all three and runs this
+  side's value.
+- **Not in E3:** any page change — the two fields (E4.1), the three folder groups (E4.2) and the other side's data
+  directory (E4.3) are stored and decided here and drawn there.
 
 ### E4 — the page draws two fields · `feat/paths-per-side-e4-two-fields`
 
@@ -633,7 +670,9 @@ Each epic is one branch and one pull request, gated per epic.
    appears one restart late; if it never does, the fallback of E0.2 turns two fields on from the first other-OS path
    seen. Said on the This side page either way.
 2. **Two extension versions on two sides** (a WSL remote installs its own copy): an older one keeps writing the legacy
-   `executablePath`, and a newer one notices that save through `mirrored` and resolves it for its family (E3.5); a
+   `executablePath`, and a newer one notices that save through `mirrored` and resolves it for its family (E3.5 —
+   measured: its save also DROPS `executablePathBySide` from every row, so the other side's own value is lost until set
+   again; see *E3 as built*); a
    two-field save mirrors this side's value into the legacy field, so the older reader on THIS side is never left with
    a stale value (E3.2's RED covers it). **Not fixable without updating it:** an older reader on the OTHER side reads
    the one legacy value, i.e. the last value any side mirrored — exactly today's single shared value, and coai-mcp ≥
