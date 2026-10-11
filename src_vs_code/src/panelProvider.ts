@@ -2402,6 +2402,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       vendors: vendorsFrom(this.read(config)('vendors')),
       save,
       snapBack: afterTheWrite(() => this.snapBack(from)),
+      // A folder typed into the other side's box and refused is drawn beside the box by the next paint (E4.2).
+      besideTheBox: (box, refusal) => {
+        this.typedRefusals = refusal === undefined ? withoutRefusal(this.typedRefusals, box) : withRefusal(this.typedRefusals, box, refusal);
+      },
     };
   }
 

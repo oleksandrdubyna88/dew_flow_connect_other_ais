@@ -73,8 +73,9 @@ export function otherSideLegend(sides: PathSides): string {
  *
  * @param captionId the caption's id, unescaped — the controls inside name it in their `aria-describedby`
  * @param body the group's content, already escaped
+ * @param attributes more attributes of the fieldset, already escaped (a list's `data-list` / `data-group`), or ''
  */
-export function otherSideFieldset(sides: PathSides, captionId: string, body: string): string {
-  return `<fieldset class="other-side"><legend>${escapeHtml(otherSideLegend(sides))}</legend>`
+export function otherSideFieldset(sides: PathSides, captionId: string, body: string, attributes = ''): string {
+  return `<fieldset class="other-side"${attributes}><legend>${escapeHtml(otherSideLegend(sides))}</legend>`
     + `<p class="hint other-side-caption" id="${escapeHtml(captionId)}">${escapeHtml(OTHER_SIDE_CAPTION)}</p>${body}</fieldset>`;
 }

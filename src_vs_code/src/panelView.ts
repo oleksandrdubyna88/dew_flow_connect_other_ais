@@ -581,6 +581,9 @@ export function questionConsultantSection(state: PanelState, pickFrom: readonly 
     promptOverrides: state.qconsultPromptOverrides,
     places: state.qconsultPlaces,
     findings: state.pathFindings,
+    // The folders in three groups once both sides are known, the typed box's refusal beside it (paths per side E4.2).
+    sides: pathSidesOf(state.sides, state.hostFamily ?? hostFamily()),
+    refusals: state.typedRefusals,
   });
 }
 

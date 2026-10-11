@@ -3,7 +3,12 @@ import { offeredLine, optionHtml, rowPicks } from './catalogPicks';
 import { escapeHtml } from './escapeHtml';
 import type { HelpKey } from './help';
 import { help, segmentedRadio } from './panelControls';
-import { otherSideHere, otherSideNote } from './pathFamily';
+import { familyLabel, otherSideHere, otherSideNote, type Existence, type PathFamily } from './pathFamily';
+import { NOTHING_ASKED, groupedPaths } from './pathGroups';
+import { groupCaptionId, pathGroupsHtml } from './pathGroupsView';
+import type { PathSides } from './pathSides';
+import { TYPED_ROOT_KEY } from './typedRoots';
+import { refusalAttributes, refusalNote as typedRefusalNote, rootBoxKey, type TypedRefusal, type TypedRefusals } from './typedRefusals';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
 import { QCONSULT_ROOTS } from './pathSettings';
@@ -45,6 +50,10 @@ export interface QconsultViewState {
   readonly findings?: readonly PathFinding[] | undefined;
   /** The catalog rows a question row picks from — those ticked "question consultant" among them (PLAN_one_model_catalog.md E4.2). */
   readonly pickFrom: readonly Vendor[];
+  /** Both sides, when the folders are drawn in groups (todo/PLAN_paths_per_side.md E4.2); undefined draws one list. */
+  readonly sides?: PathSides | undefined;
+  /** What was typed into the other side's folder box and refused — drawn beside the box. */
+  readonly refusals?: TypedRefusals | undefined;
 }
 
 /** One option of a row's prompt picker: the prompt, and — when this row's runtime cannot run it — why. */
@@ -258,15 +267,62 @@ function promptAction(prompt: QuestionPromptView, overridden: boolean): string {
 }
 
 function rootsBlock(settings: QconsultSettings, state: QconsultViewState): string {
-  const listed = settings.roots.length === 0
-    ? '<div class="hint">No folder yet — a disk row reads nothing until one is here.</div>'
-    : settings.roots.map((root) => rootHtml(root, state.places, findingFor(state.findings ?? [], QCONSULT_ROOTS.id, root))).join('\n');
-
   return `<h3>${help('qconsultRoots')}Folders a disk row may read</h3>
-${listed}${noneOnThisSide(settings.roots, state.places)}
-<button type="button" class="link" data-command="qconsultAddRoot" data-id="">Add a folder…</button>
+${state.sides === undefined ? oneRootList(settings, state) : rootGroups(settings, state, state.sides)}
 <div class="hint">Read-only, and never a drive root, your profile folder itself, a system folder or the data folder — the server refuses those too.</div>`;
 }
+
+/** The folders as one list — every place before E4, and one side known (or *Always one*). */
+function oneRootList(settings: QconsultSettings, state: QconsultViewState): string {
+  const listed = settings.roots.length === 0
+    ? '<div class="hint">No folder yet — a disk row reads nothing until one is here.</div>'
+    : settings.roots.map((root) => rootLine(root, state)).join('\n');
+
+  return `${listed}${noneOnThisSide(settings.roots, state.places)}
+${ADD_A_FOLDER}`;
+}
+
+const ADD_A_FOLDER = '<button type="button" class="link" data-command="qconsultAddRoot" data-id="">Add a folder…</button>';
+
+function rootLine(root: string, state: QconsultViewState): string {
+  return rootHtml(root, state.places, findingFor(state.findings ?? [], QCONSULT_ROOTS.id, root));
+}
+
+/**
+ * The folders in the three groups of `pathGroups.ts` once both sides are known (todo/PLAN_paths_per_side.md E4.2): Add a
+ * folder… adds to this side's; the other side's takes TYPED text (`typedRoots.ts` decides, the host refuses beside the
+ * box); Remove works in every group. Grouped by THIS window's verdict, the disk asked only at this machine's own spelling.
+ */
+function rootGroups(settings: QconsultSettings, state: QconsultViewState, sides: PathSides): string {
+  const grouped = groupedPaths(settings.roots, sides.here === 'windows', existenceOf(state.places));
+
+  return pathGroupsHtml(QCONSULT_ROOTS_LIST, grouped, sides, (root) => rootLine(root, state), {
+    thisSide: `${noneOnThisSide(settings.roots, state.places)}\n${ADD_A_FOLDER}`,
+    otherSide: typedRootBox(sides, state.refusals?.[rootBoxKey(QCONSULT_ROOTS_LIST, 'otherSide')]),
+  });
+}
+
+/** The list the typed box appends to — the one shared setting (design (b) O1: the spelling IS the side). */
+const QCONSULT_ROOTS_LIST = 'qconsultRoots';
+
+/** What this host's disk said about the stored roots spelled for the other OS, as the grouping reads it. */
+function existenceOf(places: RootPlaces | undefined): Existence {
+  return places === undefined ? NOTHING_ASKED : { existing: places.existingHere, unknown: places.unknownHere };
+}
+
+/** The box that types a folder of the other side — text only, described by its group's caption and by a refusal. */
+function typedRootBox(sides: PathSides, refusal: TypedRefusal | undefined): string {
+  const box = rootBoxKey(QCONSULT_ROOTS_LIST, 'otherSide');
+  const attributes = refusalAttributes(refusal, box);
+
+  return `<div class="field"><label for="qconsult-typed-root">Add a folder on ${familyLabel(sides.other)} — type its path, then press Enter</label>`
+    + `<input type="text" id="qconsult-typed-root" data-setting="${TYPED_ROOT_KEY}" data-caller="otherSide" value="${escapeHtml(refusal?.typed ?? '')}"`
+    + ` placeholder="${escapeHtml(TYPED_EXAMPLE[sides.other])}" aria-describedby="${escapeHtml(groupCaptionId(QCONSULT_ROOTS_LIST))}${attributes.describedBy}"${attributes.invalid}>`
+    + `${typedRefusalNote(refusal, box)}</div>`;
+}
+
+/** What the typed box suggests, by the family it types for. */
+const TYPED_EXAMPLE: Readonly<Record<PathFamily, string>> = { windows: 'D:\\work\\project or \\\\server\\share\\project', posix: '/home/you/project' };
 
 /**
  * A stored root's line: the folder, its Remove, and what this side makes of it — the other side's folder SAID (the
