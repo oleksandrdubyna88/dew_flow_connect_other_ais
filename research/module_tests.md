@@ -105,6 +105,19 @@ dotnet build src_bench/CoaiBench/CoaiBench.csproj -c Release
 ./src_bench/CoaiBench/bin/Release/net10.0/coai-bench.exe judge --runs artifacts/bench/<name>/runs.json …
 ```
 
+Locally, the same commands run **capped and lowered** (`common.local-cpu-budget`, 2026-10-11):
+
+- `npm test` and `test:contract` start `node --test` through `nodeTestArgs()` in `scripts/run-tests.mjs`, which caps
+  it at `min(8, CPUs - 1)` workers (a cap, never a raise: a 4-vCPU CI runner keeps node's default of 3), and lower themselves first through `scripts/lower-priority.mjs`, the family template copied
+  with its MOUNT line set. That means BelowNormal on Windows and nice 19 elsewhere; under `CI` nothing is lowered.
+- The four xUnit projects read `maxParallelThreads: 8` from an `xunit.runner.json` copied to their output. Measured on
+  xunit.v3 4.0.1: an uncopied file is never read, and the runner then takes 24 threads. The copy is conditioned on
+  `'$(CI)' != 'true'`, so CI keeps its own default: an exact 8 would raise a 4-vCPU runner.
+- Executables and builds run through `node .agents/conventions/tools/low-priority.mjs …`.
+- `src_vs_code/src/test/localCpuBudget.test.mjs` pins the cap, the preload against its template, the preload's effect
+  on a real child process, every test project's config and Content item, and the documented commands. Break-it:
+  dropping the cap and dropping one Content item each redden exactly their own case.
+
 ## When it runs
 
 - **The two test suites: in CI, on every push and pull request**, plus the family checks (pin,
