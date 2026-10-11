@@ -438,6 +438,35 @@ Answers the operator's question for this machine's work from the whole history, 
     availability unverified"* — recovery is never inferred from the clock or the percentage; `ordinaryUsageAllowed`
     kept; the observed gauge and reset shown even when rounds-per-1 % is hidden by the missing-consumer rule (kept).
     Daily token buckets never stand for quota recovery. agy has no gauge: its reset stays the stated one from E5.
+- **What E6's plan round and its risk consultation for epic 6 decided (2026-10-11)** — binding on the build:
+  - **Containment against a crashed parent (consultation `166a40f3`, all four code claims verified):** a startup sweep
+    alone is NOT enough — `SlotRegistry.AcquireAsync` hands back a lease the moment the lock opens, `VendorLogin` uses the
+    same path, `ProcessLauncher` starts a child before `ProcessTracking.Record`, and `ProcessTracking.Sweep` kills without
+    awaiting exit and forgets the record either way. So the reader's safety lives IN THE SLOT: (1) take the lock;
+    (2) reconcile the previous holder's reader marker — kill identified survivors (the whole tree, pid AND start time
+    matched) and CONFIRM exit before the lease is usable; (3) persist a fail-closed "a reader may exist" marker BEFORE
+    the reader is spawned (no marker written, no spawn); (4) record the child's identity with its start time after
+    spawn; (5) on completion confirm every descendant exited, clear the marker, then release the lock. Missing or
+    partial identity after a crash leaves the slot UNAVAILABLE until recovery proves it safe (availability is the
+    price of an ambiguous crash). Login and every other acquisition obey the same barrier; the startup sweep runs
+    through the same slot-locked path. systemd's control-group kill is extra protection, checked on the host at deploy
+    (`systemctl show coai-server -p KillMode …`), never asserted from repo text. **Shipping proof:** an external crash
+    harness with a fake reader that survives stdin EOF and disposable fake credentials — an already-running contender
+    and a newly started server launch nothing until the reader tree is gone; login obeys the barrier; a crash between
+    spawn and registration, a partial record and a failed termination keep the slot unavailable across another
+    restart; a surviving grandchild is covered; a mismatched pid/start time is untouched. Recorded limit: this proves
+    process exclusion, not that a vendor-side rotation survives an interruption before local persistence.
+  - **The rounds-per-1 % formula (plan round):** per window (limit identity + duration), between two consecutive
+    readings of the SAME window instance (same `resetsAt`): `rounds counted between them ÷ (usedPercent₂ −
+    usedPercent₁)`. An interval is unusable — the ratio *unavailable*, never 0 or ∞ — when the percentage did not rise,
+    when the window reset between the readings (`resetsAt` changed), or when either reading is stale or missing. The
+    figure is the rounds-weighted mean over the last N usable intervals; with none, it is *unavailable* with the reason.
+  - **An older client against the new server (plan round):** a seam/contract check runs the previously RELEASED
+    extension's parser (extension-v0.69.0) against the new server's answers carrying the gauge fields, and records that
+    it still loads usage and the catalog unchanged.
+  - **A real-product scenario (plan round):** a scenario through the REAL `JobRunner` and slot with a fake
+    `codex app-server` (the FakeCli pattern) — capture inside the lease, stored, served by the endpoint and rendered —
+    catalogued in `research/module_tests.md`'s scenario-harness table with its run command and its limits.
 
 ## Build order
 
