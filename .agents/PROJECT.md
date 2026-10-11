@@ -31,11 +31,10 @@ build order, each with its deviations recorded). **Session start:** read `resear
 
 ```bash
 # Build everything
-dotnet build dew_flow_connect_other_ais.slnx -c Debug
+dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
 
 # Tests — ALWAYS the MTP executable, NEVER `dotnet test` (no VSTest host here; it aborts)
-./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
-./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-method "*SomeTest*"
+node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
 
 # Extension (once src_vs_code exists)
 cd src_vs_code && npm ci && npm test

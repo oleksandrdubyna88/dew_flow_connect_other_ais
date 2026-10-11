@@ -168,11 +168,22 @@ an orphan from a killed session is pruned by the next `open`.
 ## Build and test
 
 ```bash
-dotnet build dew_flow_connect_other_ais.slnx -c Debug
-./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe     # never `dotnet test` — MTP, no VSTest host
+node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
+node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe     # never `dotnet test` — MTP, no VSTest host
 (cd src_vs_code && npm ci && npm test)   # subshell: the next line runs from the repo root
 node .agents/conventions/tools/plan-lifecycle.mjs
 ```
+
+Local runs are capped and lowered (the family rule `common.local-cpu-budget`):
+
+- `npm test` and `test:contract` give `node --test` at most 8 workers (`min(8, CPUs - 1)`, so a small machine keeps
+  node's own default) and lower themselves through
+  `scripts/lower-priority.mjs`, a copy of the mount's template;
+- each xUnit project reads `maxParallelThreads: 8` from its copied `xunit.runner.json`. The copy is skipped when
+  `CI=true`, because an exact 8 would RAISE a 4-vCPU runner;
+- the executables run through the mount's `low-priority.mjs`.
+
+CI is exempt and unchanged. `localCpuBudget.test.mjs` pins all of it.
 
 The process-level suite drives a scriptable **fake CLI**, so CI touches no vendor and needs no
 network. The wire contract is checked against the built binary and, in the release workflow,
