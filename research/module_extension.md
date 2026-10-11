@@ -7442,8 +7442,10 @@ says only that some of it was not. The round counts come from `coai-mcp --round-
   retried per render. The age bound is what lets a trailing window FALL while nothing runs, and the early refresh is what
   makes a consultation-only session move the numbers. The clock and the loader are handed in (fake-clock tests).
 
-`PanelProvider` owns one `RoundCountsCache` (`roundCountsOf`), notes finished rounds and refreshes on every render
-without awaiting (a read that lands repaints), and refreshes on the spending tab's own tick (`usageTab`). The tab's
+`PanelProvider` owns one `RoundCountsCache` (`roundCountsOf`), notes finished rounds on every render, refreshes on a
+render only while the Settings page is open — its Models cards are the panel's one surface that draws the count, so a
+sidebar-only render spawns nothing — without awaiting (a read that lands repaints), and refreshes on the spending
+tab's own tick (`usageTab`). The tab's
 FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
 by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
 by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's

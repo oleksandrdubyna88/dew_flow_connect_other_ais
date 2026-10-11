@@ -1335,8 +1335,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const sessions = await this.readSessions();
     // A round that stopped running since the last paint brings the round count forward; the read itself is not awaited
     // here — the cards draw the cached count, and a read that lands repaints (story 2.4, never a spawn per render).
+    // Only while the Settings page is open: its Models cards are the one surface here that draws the count, and the
+    // Review rounds page refreshes on its own tick — a sidebar-only render need not spawn anything (CodeRabbit, #750).
     this.roundCounts.noteFinishedRounds(finishedRounds(sessions));
-    void this.refreshRoundCounts();
+    if (this.settingsTab.view !== undefined) {
+      void this.refreshRoundCounts();
+    }
     // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer. Every
     // write reads the rows afresh, so a hidden row is never dropped by one. The Models cards are priced per ROW from every
     // row (`cardPrices`), so this list no longer decides prices (research/PLAN_models_card_prices_every_row.md).
