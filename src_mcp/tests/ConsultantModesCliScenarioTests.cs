@@ -21,6 +21,9 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ConsultantModesCliScenarioTests : IDisposable
 {
+    /// <summary>A check runs a consultant turn through the fake CLI, so a run gets three minutes, not the default one.</summary>
+    private static readonly TimeSpan Deadline = TimeSpan.FromMinutes(3);
+
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
     private readonly string _data = Directory.CreateTempSubdirectory("coai-modes-data-").FullName;
@@ -62,19 +65,15 @@ public sealed class ConsultantModesCliScenarioTests : IDisposable
     private static Dictionary<string, string> Definition(string runtime) =>
         new() { ["vendor"] = runtime, ["runtime"] = runtime, ["executablePath"] = FakeCliExe };
 
+    /// <summary>The shared runner's start info, with this suite's environment shaped on top of it.</summary>
+    /// <remarks>
+    /// The inherited <c>COAI_*</c> sweep also removes the <c>COAI_DATA_DIR</c> the shared builder set; it is
+    /// set again straight after, so the order stays what it always was: sweep, then this suite's values,
+    /// then the test's steering — which may override any of them, the data directory included.
+    /// </remarks>
     private ProcessStartInfo Info(IReadOnlyDictionary<string, string> steering, params string[] args)
     {
-        var info = new ProcessStartInfo(ServerBinary.Path)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var arg in args)
-        {
-            info.ArgumentList.Add(arg);
-        }
-
+        var info = OneShotProcess.StartInfo(_data, args);
         foreach (var name in info.Environment.Keys.Where(Inherited).ToList())
         {
             info.Environment.Remove(name);
@@ -106,22 +105,8 @@ public sealed class ConsultantModesCliScenarioTests : IDisposable
         name.StartsWith("FAKECLI_", StringComparison.OrdinalIgnoreCase)
         || name.StartsWith("COAI_", StringComparison.OrdinalIgnoreCase);
 
-    private (int Code, string Out, string Err) Run(IReadOnlyDictionary<string, string> steering, params string[] args)
-    {
-        using var process = Process.Start(Info(steering, args))!;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(180_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit(5_000);
-            throw new TimeoutException($"{args[0]} did not answer and exit within three minutes");
-        }
-
-        Task.WaitAll([stdout, stderr], 10_000).Should().BeTrue("the pipes close when the child does");
-
-        return (process.ExitCode, stdout.Result, stderr.Result);
-    }
+    private (int Code, string Out, string Err) Run(IReadOnlyDictionary<string, string> steering, params string[] args) =>
+        OneShotProcess.Run(Info(steering, args), Deadline);
 
     private (int Code, string Out, string Err) Run(params string[] args) => Run(new Dictionary<string, string>(), args);
 
