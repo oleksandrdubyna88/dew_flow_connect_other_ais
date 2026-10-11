@@ -42,6 +42,22 @@ test('every language’s chat article names the header button, not just the arti
   }
 });
 
+test('every language describes the sides seen and the path-fields switch, by the controls\' own English labels (paths per side E2.3)', () => {
+  // The operator's ruling: the help is in FIVE languages. bodyFor marks a MISSING translation, not a stale one, so each
+  // language is asked for the labels a person meets on Setup › This side — English in every language, as every control
+  // name in this catalogue is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} settings article is missing`);
+    for (const label of ['**Path fields per side**', '**Forget**', '*Automatic*', '*Always two*', '*Always one*', '90']) {
+      assert.ok(said.includes(label), `the ${language} settings article never says ${label} — the side registry is undocumented there`);
+    }
+  }
+});
+
 test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
   // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
   // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).
@@ -257,6 +273,8 @@ const SETTING_ALIAS: Record<string, string> = {
   // Issue #131: the article names both choices and says what neither of them is.
   'coai.gatePer': 'never once per story',
   'coai.perSideSettings': 'separate settings for each side',
+  // todo/PLAN_paths_per_side.md E2.3: the switch, by the label Setup › This side gives it.
+  'coai.pathFieldsPerSide': 'path fields per side',
   // The consultant's five. The caller map and each cap is a setting of its own, so each one is
   // covered by the words the article actually uses for it.
   'coai.consultants': 'who a stuck ai asks',

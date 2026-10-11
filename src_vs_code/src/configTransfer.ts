@@ -36,6 +36,9 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   // decided with the operator, D4). An older export that carries them is refused by name; the importer keeps its own.
   qconsultRoots: 'paths on this machine',
   perSideSettings: 'how this machine splits its settings between its sides',
+  // How many fields a path setting shows is decided by the sides THIS profile has been used on (todo/PLAN_paths_per_side.md
+  // E2.3): carried to another machine, it would decide over sides that machine never had.
+  pathFieldsPerSide: 'how many fields a path setting shows, decided by the sides this machine has been used on',
   // The catalog's one-time move (PLAN_one_model_catalog.md E1.3): this machine's own copy of its settings from
   // before it, and whether it ran. Carried across, the copy would overwrite the importer's own backup, and a
   // `restored` marker would stop a migration the importer never declined.

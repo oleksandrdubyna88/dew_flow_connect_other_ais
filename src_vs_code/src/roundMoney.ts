@@ -114,7 +114,8 @@ export function moneyGroups(lines: readonly LedgerLine[], window: TimeWindow, ra
   return [...groups.values()].map((members) => group(members, rateOf)).sort(byRowModelKind);
 }
 
-function inside(line: LedgerLine, window: TimeWindow): boolean {
+/** Whether a line falls inside the window — the one test the groups and the Models card line both use. */
+export function inside(line: Pick<LedgerLine, 'utc'>, window: TimeWindow): boolean {
   const at = Date.parse(line.utc);
 
   return Number.isFinite(at) && at >= window.fromMs && at <= window.toMs;

@@ -5,7 +5,7 @@ import {
 } from './roundCounts';
 import { RoundsSnapshot } from './roundCountsCache';
 import {
-  LedgerLine, MEDIAN_OUTPUT_LABEL, MoneyGroup, moneyGroups, PER_RECORDED_TURN, perUnit, RateOf, rollUp, Rollup,
+  inside, LedgerLine, MEDIAN_OUTPUT_LABEL, MoneyGroup, moneyGroups, PER_RECORDED_TURN, perUnit, RateOf, rollUp, Rollup,
   TimeWindow, tokenText, unitDivisor,
 } from './roundMoney';
 import { costText, shortNumber } from './usage';
@@ -131,8 +131,9 @@ function body(input: RoundsBlockInput, snapshot: RoundsSnapshot): string {
     return '<p class="hint">No rounds, consultations, questions or chat in the last 7 days.</p>';
   }
 
-  return `<div class="table-scroll"><table class="rounds"><thead><tr>${HEADERS.map((one) => `<th scope="col">${one}</th>`).join('')}</tr></thead>`
-    + `<tbody>${facts.providers.map((provider) => rowBlock(facts, provider)).join('')}</tbody></table></div>`;
+  const rows = facts.providers.map((provider) => rowBlock(facts, provider)).join('');
+
+  return `<div class="table-scroll"><table class="rounds"><thead><tr>${HEADER_CELLS}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const HEADERS: readonly string[] = [
@@ -140,10 +141,20 @@ const HEADERS: readonly string[] = [
   'Reviewers per round', escapeHtml(MEDIAN_OUTPUT_LABEL), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
 ];
 
-function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
-  const end = windowEndMs(snapshot.read, snapshot.atMs);
+const HEADER_CELLS = HEADERS.map(headerCell).join('');
+
+function headerCell(label: string): string {
+  return `<th scope="col">${label}</th>`;
+}
+
+/** The 7 d window the block and the card line both cut the ledger to — the counts' own edges when they counted. */
+function sevenDays(snapshot: RoundsSnapshot): TimeWindow {
   // `(from, to]`, as the counts are: a millisecond past the start, so a line on the edge is in the same window as a round.
-  const window = { fromMs: windowStartMs(snapshot.read, '7d', snapshot.atMs) + 1, toMs: end };
+  return { fromMs: windowStartMs(snapshot.read, '7d', snapshot.atMs) + 1, toMs: windowEndMs(snapshot.read, snapshot.atMs) };
+}
+
+function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
+  const window = sevenDays(snapshot);
   const groups = moneyGroups([...snapshot.ledger, ...input.chat], window, input.rateOf);
 
   return { read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure };
@@ -165,7 +176,7 @@ function rowBlock(facts: Facts, provider: string): string {
 
 function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): string {
   const ranOn = facts.input.ranOn(provider);
-  const name = `<b>${escapeHtml(provider)}</b>${ranOn.length > 0 ? ` <span class="hint">ran on ${escapeHtml(ranOn)}</span>` : ''}`;
+  const name = `<b>${escapeHtml(provider)}</b>${ranOnHint(ranOn)}`;
   const all = rollUp(mine);
 
   return tr('row', [
@@ -175,8 +186,17 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
   ]);
 }
 
+/** *ran on &lt;server&gt;* beside a Team-server row's name; nothing for a row that runs here. */
+function ranOnHint(ranOn: string): string {
+  return ranOn.length > 0 ? ` <span class="hint">ran on ${escapeHtml(ranOn)}</span>` : '';
+}
+
 function tr(kind: string, cells: readonly string[]): string {
-  return `<tr class="${kind}">${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr>`;
+  return `<tr class="${kind}">${cells.map(dataCell).join('')}</tr>`;
+}
+
+function dataCell(cell: string): string {
+  return `<td>${cell}</td>`;
 }
 
 /** A row's rounds in one window: a count (nought included, when counted) or *count unavailable*. */
@@ -201,7 +221,9 @@ function stagesCell(read: RoundCountsRead, provider: string): string {
 function besideCell(mine: readonly MoneyGroup[]): string {
   const said = BESIDE.map(([kind, word]) => [word, turnsOf(mine, kind)] as const).filter(([, turns]) => turns > 0);
 
-  return said.length === 0 ? '—' : `${said.map(([word, turns]) => `${word} ${turns}`).join(' · ')} recorded turns`;
+  const list = said.map(([word, turns]) => `${word} ${turns}`).join(' · ');
+
+  return said.length === 0 ? '—' : `${list} recorded turns`;
 }
 
 function turnsOf(groups: readonly MoneyGroup[], kind: string): number {
@@ -331,5 +353,9 @@ function consultTurns(snapshot: RoundsSnapshot, provider: string): string {
     return `consult turns ${LEDGER_UNAVAILABLE}`;
   }
 
-  return `${snapshot.ledger.filter((one) => one.provider === provider && one.kind === 'consult').length} consult turns`;
+  // Cut to the block's own 7 days: the tail read can start mid-chunk and the snapshot is held a minute, so the ledger
+  // can carry an older line, and the card and the block must not disagree about one "7 days" (CodeRabbit on #750).
+  const window = sevenDays(snapshot);
+
+  return `${snapshot.ledger.filter((one) => one.provider === provider && one.kind === 'consult' && inside(one, window)).length} consult turns`;
 }

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { before, test } from 'node:test';
 
 import { modelsTabHtml } from '../modelsTab';
@@ -149,6 +151,31 @@ test('the Models card carries its row\'s line from the cached snapshot (story 2.
   assert.match(withRounds, /<div class="rounds-line">7 days: 14 rounds · 1 consult turns · 5 h: 2<\/div>/u);
   assert.doesNotMatch(without, /rounds-line/u);
   assert.match(unavailable, /<div class="rounds-line">Rounds: count unavailable<\/div>/u);
+});
+
+test('the card counts only the consult turns inside the same 7 days as the block (CodeRabbit on #750)', () => {
+  // The tail read can start mid-chunk and the snapshot is held for a minute, so the ledger can carry a line older than
+  // the window; the block cut it, the card did not, and the two "7 days" figures disagreed.
+  const codex = { ...DEFAULT_VENDORS[0]!, id: 'codex' };
+  const lines = [usageLine({ kind: 'consult' }), usageLine({ kind: 'consult', utc: hoursAgo(24 * 8) })];
+  const html = modelsTabHtml({ ...panelState('reviewers'), vendors: [codex], roundsSnapshot: snapshot(counted(), lines) });
+
+  assert.match(html, /<div class="rounds-line">7 days: 14 rounds · 1 consult turns · 5 h: 2<\/div>/u,
+    'a consult turn eight days old was counted in the card\'s 7 days');
+});
+
+test('a render asks for the round counts only while the Settings page that draws them is open (CodeRabbit on #750)', () => {
+  // The Models cards on the Settings page are the panel's only surface that draws `roundsSnapshot`; the Review rounds
+  // page refreshes on its own tick. A render for the sidebar alone used to start a `--round-counts` spawn and a ledger
+  // tail read every minute for nothing. Read, not run: `panelProvider.ts` imports `vscode` — comments stripped first,
+  // and the WHOLE guard pinned, so the assertion cannot match the prose about it (bugzReviewWiring.test.ts).
+  const text = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+
+  assert.match(text, /if \(this\.settingsTab\.view !== undefined\) \{\s*void this\.refreshRoundCounts\(\);\s*\}/u,
+    'a render reads the round counts whether or not any open surface draws them');
+  assert.strictEqual(text.match(/void this\.refreshRoundCounts\(\)/gu)?.length, 1, 'an unguarded call is still there beside the guarded one');
 });
 
 test('the card line says consult turns are unavailable when the ledger would not read — never 0 consult turns', () => {
