@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.47.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.46.0...mcp-v0.47.0) (2026-10-11)
+
+
+### Features
+
+* a missing path of this OS is said at every start and marked bright on the Settings page (paths per side E5) ([#752](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/752)) ([a33edd7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a33edd7ef895e8d6b1ec96fc8dcbcea1ffa678bd))
+* every round is counted — the local counter, the Rounds block and the card line (epic 2) ([#750](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/750)) ([132acd1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/132acd18457fbd55661bd8b5a6bb5becbe2ff2dc))
+
 ## [0.46.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.45.1...mcp-v0.46.0) (2026-10-10)
 
 
