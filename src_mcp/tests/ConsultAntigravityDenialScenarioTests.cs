@@ -251,6 +251,33 @@ public sealed class ConsultAntigravityDenialScenarioTests : ConsultScenarioBase
         Field(RecordFile(), "failureKind").Should().Be("quota");
     }
 
+    /// <summary>
+    /// Epic 5's code round (gating finding) of todo/PLAN_every_round_is_counted.md: a CONSULTATION refused with a stated
+    /// reset wrote its ledger row without <c>resetsUtc</c> — only the reviewer path read the reset — so the extension
+    /// could not say when the vendor comes back after a consultation met the quota.
+    /// </summary>
+    [Fact]
+    public async Task AConsultationRefusedWithAStatedReset_WritesTheResetOnItsLedgerRow()
+    {
+        // agy 1.3.3's verbatim refusal (research/RESULTS_vendor_quota_gauges.md §3.1).
+        const string AgyQuotaLine =
+            "error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s.";
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        using var steering = Steer(Fixture("consult-advice.ndjson"), firstStdout: string.Empty, firstStderr: AgyQuotaLine);
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "3");
+        var service = Agy(callsPerSession: 1);
+        var before = DateTimeOffset.UtcNow;
+
+        Refusal(await Consult(service, "where is the sweep invoked?")).Should().Contain("quota");
+
+        var row = (await LedgerRows()).Should().ContainSingle().Subject;
+        row.GetProperty("kind").GetString().Should().Be("consult");
+        var resets = row.GetProperty("resetsUtc").GetString()!;
+        resets.Should().NotBeEmpty("the vendor stated when its quota comes back, and the ledger is where the local half keeps it");
+        DateTimeOffset.Parse(resets, System.Globalization.CultureInfo.InvariantCulture)
+            .Should().BeCloseTo(before + new TimeSpan(88, 49, 9), TimeSpan.FromMinutes(1));
+    }
+
     /// <summary>The service over the fake CLI as agy, with git refused after the consultant ran while <paramref name="launcher"/> says so.</summary>
     private PanelService Agy(TurnLauncher launcher) =>
         Service(providers: [], consultants: OnAntigravity, launcher: launcher);

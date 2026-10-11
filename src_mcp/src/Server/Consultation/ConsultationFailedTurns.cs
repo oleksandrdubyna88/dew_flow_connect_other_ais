@@ -129,8 +129,8 @@ internal sealed class ConsultationFailedTurns(
             ConsultationFailing.FaultIs(killedAs, fault));
 
     /// <summary>The turn's ledger row (<see cref="ConsultantTurnBooks.Billed"/>), role <c>consult</c>.</summary>
-    public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage) =>
-        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage);
+    public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
+        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, resetsUtc);
 
     /// <summary>A best-effort write on a path that is already failing — it must not mask what failed.</summary>
     public void Quietly(Action write)
@@ -154,8 +154,12 @@ internal sealed class ConsultationFailedTurns(
 
         // The ledger's outcome: the vendor's reason whole and redacted, never the summary's unredacted 160-character
         // cut (story 3.3 of todo/PLAN_every_round_is_counted.md).
+        // And the reset the refusal stated, for the same row (epic 5's code round of todo/PLAN_every_round_is_counted.md).
         return final.Terminal is { } terminal
-            ? ConsultationFailing.Terminal(facts, failure, ReviewerSummaryFactory.DescribeWhole(terminal))
+            ? ConsultationFailing.Terminal(facts, failure, ReviewerSummaryFactory.DescribeWhole(terminal)) with
+            {
+                ResetsUtc = ConsultantTurnBooks.StatedResetOf(final),
+            }
             : ConsultationFailing.Silent(facts, failure);
     }
 
@@ -163,7 +167,7 @@ internal sealed class ConsultationFailedTurns(
     private string Applied(TurnConsultant consultant, TimeSpan elapsed, ConsultationFailed failed, string unrecorded)
     {
         var gaveBack = GaveBack(consultant, failed.Failure);
-        Billed(consultant, failed.LedgerOutcome, elapsed, failed.Share);
+        Billed(consultant, failed.LedgerOutcome, elapsed, failed.Share, failed.ResetsUtc);
         health.Failed(ConsultHealth.FailureOf(failed));
 
         return refuse(ConsultationFailing.Answer(failed, gaveBack, unrecorded), $"consult:{failed.Failure.Kind}");

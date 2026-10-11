@@ -43,7 +43,14 @@ internal static class ConsultantTurnBooks
     /// <remarks>
     /// The WHOLE usage reaches the line — a usage the vendor never reported as <c>usage not captured</c>, not a free 0/0
     /// (the whole-branch review, C) — for a consultation (<c>consult</c>) and a check (<c>consult-check</c>) alike.
+    /// <para><paramref name="resetsUtc"/> is the reset a refused turn STATED (<see cref="UsageLedger.StatedResetOf"/>), or
+    /// empty — epic 5's code round of todo/PLAN_every_round_is_counted.md: a consultation refused with
+    /// <i>Resets in 88h49m9s</i> wrote no reset, so the extension could not say when the vendor comes back.</para>
     /// </remarks>
-    public static void Billed(UsageLedger ledger, ProviderSettings row, string model, string role, string outcome, TimeSpan elapsed, Usage usage) =>
-        ledger.RecordJob(string.Empty, row.Provider, model, role, outcome, elapsed, usage, UsageKinds.Consult, stage: "Consultation");
+    public static void Billed(
+        UsageLedger ledger, ProviderSettings row, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
+        ledger.RecordJob(string.Empty, row.Provider, model, role, outcome, elapsed, usage, UsageKinds.Consult, stage: "Consultation", resetsUtc);
+
+    /// <summary>The reset the turn's final launch STATED, now — empty for an answer, and for a refusal that named no time.</summary>
+    public static string StatedResetOf(ReviewerLaunch final) => UsageLedger.StatedResetOf(final.Terminal, DateTimeOffset.UtcNow);
 }

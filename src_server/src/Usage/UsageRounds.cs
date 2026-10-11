@@ -39,26 +39,34 @@ internal static class UsageRounds
     public static RoundCounts Of(IReadOnlyCollection<UsageLine> lines)
     {
         var reviews = lines.Where(line => line.Kind == JobKind.Review).ToList();
+        var asked = RequestsByWord(lines);
 
         return new RoundCounts(
             reviews.Select(line => line.Round).Where(round => round.Length > 0).Distinct(StringComparer.Ordinal).Count(),
             reviews.Count(line => line.Round.Length == 0),
-            Requests(lines, LaunchAttempts.Retry),
-            Requests(lines, LaunchAttempts.Repair),
-            Requests(lines, LaunchAttempts.FollowUp),
+            asked.GetValueOrDefault(LaunchAttempts.Retry),
+            asked.GetValueOrDefault(LaunchAttempts.Repair),
+            asked.GetValueOrDefault(LaunchAttempts.FollowUp),
             lines.Count(line => Ended(line, CancelledOutcome)),
             lines.Count(line => Ended(line, NoBudgetOutcome)),
             LaunchesByKind(lines));
     }
 
-    /// <summary>How many REQUESTS the client called <paramref name="word"/> — distinct jobs, not lines.</summary>
-    private static int Requests(IEnumerable<UsageLine> lines, string word) =>
+    /// <summary>The client's words a request is counted under — retries, repairs and follow-ups.</summary>
+    private static readonly string[] Counted = [LaunchAttempts.Retry, LaunchAttempts.Repair, LaunchAttempts.FollowUp];
+
+    /// <summary>
+    /// How many REQUESTS the client called each of <see cref="Counted"/> — distinct jobs, not lines — in ONE pass over
+    /// the lines (epic 5's code round: it was one pass per word, three over the same lines per vendor row).
+    /// </summary>
+    private static Dictionary<string, int> RequestsByWord(IEnumerable<UsageLine> lines) =>
         lines
             .Select((line, index) => (line, index))
-            .Where(one => one.line.ClientAttempt.Equals(word, StringComparison.Ordinal))
-            .Select(one => RequestOf(one.line, one.index))
-            .Distinct(StringComparer.Ordinal)
-            .Count();
+            .Where(one => Counted.Contains(one.line.ClientAttempt, StringComparer.Ordinal))
+            .Select(one => (Word: one.line.ClientAttempt, Request: RequestOf(one.line, one.index)))
+            .Distinct()
+            .GroupBy(one => one.Word, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
     /// <summary>The request a line belongs to: its job, else its turn, else the line itself.</summary>
     /// <remarks>The prefixes keep a job id, a turn id and a line's position from ever naming the same request.</remarks>

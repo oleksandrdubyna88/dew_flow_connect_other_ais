@@ -1235,9 +1235,14 @@ flowchart LR
 - **Shown.** `UsageLedger.Record` writes the reset on the LAST line of a turn that ended `RateLimited` — the trailing,
   defaulted `UsageEntry.ResetsUtc` (`O`, UTC), empty on every other line and on a refusal that stated no time — and
   the extension turns it into *quota out — resets in 89 h (Wed 04:49)* (`statedReset.ts`, module_extension.md).
-  A consultation's or question row's refusal does not carry it yet (those lines are written through `RecordJob` with
-  an outcome string). The Team server writes no `resetsUtc` on its own lines: it keeps the reset on the slot and says
-  it in `/api/catalog` (module_team_server.md), so `UsageEntryDto` / `UsageLine` are not widened.
+  **Every local refusal carries it** (epic 5's code round): a consultation, a consultant check and a question row write
+  through `RecordJob`'s LOCAL overload, which takes `resetsUtc` — `UsageLedger.StatedResetOf(final.Terminal, now)`,
+  the one helper the reviewer path uses, reached through `ConsultantTurnBooks.StatedResetOf(final)`
+  (`ConsultationFailed.ResetsUtc` carries it from the failed consultation turn to its row). An answer, an interrupted
+  turn and a refusal that named no time write none. The Team server writes no `resetsUtc` on its own lines: its
+  overload of `RecordJob` has no such parameter (both build their line through one `JobEntry`), because the server
+  keeps the reset on the slot and says it in `/api/catalog` (module_team_server.md), so `UsageEntryDto` / `UsageLine`
+  are not widened.
 - **Seen from the shim.** `RemoteStatus` / `RemotePoll` read the server's new optional `waiting` field, and
   `RemoteAsk.QueuedMessage(server, position, waiting)` appends it to the queued progress line — *queued on the Team
   server at …, 0 ahead of it — every account is rate-limited; the first comes back at …* — whose stem `IsProgress`

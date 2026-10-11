@@ -367,7 +367,12 @@ public sealed class UsageLedger(string dataDir)
     /// The reset a rate-limited ending STATED, as a UTC instant — or empty for any other ending, and for a refusal that
     /// named no time (story 5.3b of todo/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
     /// </summary>
-    private static string StatedResetOf(ReviewerOutcome outcome, DateTimeOffset nowUtc) =>
+    /// <remarks>
+    /// Public since epic 5's code round: every LOCAL path that records a refusal — a reviewer's turn here, a consultation,
+    /// a consultant check and a question row through <see cref="RecordJob(string, string, string, string, string, TimeSpan, Usage, string, string, string)"/>
+    /// — reads its reset through this ONE helper. A launch that never ended on a terminal outcome passes null: no reset.
+    /// </remarks>
+    public static string StatedResetOf(ReviewerOutcome? outcome, DateTimeOffset nowUtc) =>
         outcome is ReviewerOutcome.RateLimited limited && CooldownParser.StatedReset(limited.Reason, nowUtc) is { } resets
             ? resets.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
             : string.Empty;
@@ -447,10 +452,17 @@ public sealed class UsageLedger(string dataDir)
     /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
     /// is an EMPTY value, never a null (the epic-3 code round).</para>
     /// </remarks>
+    /// <param name="resetsUtc">
+    /// The reset the turn's refusal STATED — <see cref="StatedResetOf"/> of its terminal outcome — or empty. Epic 5's code
+    /// round of todo/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
+    /// refusals like a reviewer's, and only the reviewer path wrote one, so the extension could not say when the vendor
+    /// comes back after a consultation met its quota. Never set on a Team-server line: the overload below has no such
+    /// parameter, because the server keeps the reset on the slot and says it in its catalog.
+    /// </param>
     public void RecordJob(
-        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage) =>
-        RecordJob(email, provider, model, role, outcome, elapsed, usage, kind, stage,
-            turn: string.Empty, attempt: string.Empty, ranWith: LaunchOptions.None, job: string.Empty, slot: string.Empty);
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
+        string resetsUtc = "") =>
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(LaunchOptions.None)) with { ResetsUtc = resetsUtc });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>
@@ -462,7 +474,19 @@ public sealed class UsageLedger(string dataDir)
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
         string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "",
         string round = "", string clientAttempt = "") =>
-        Append(new UsageEntry(
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage,
+            new JobPlace(ranWith, turn, attempt, job, slot, endCause, round, clientAttempt)));
+
+    /// <summary>Where a job's line sits: the Team server's turn, attempt, launch options, job, slot, end cause and round — all empty locally.</summary>
+    private sealed record JobPlace(
+        LaunchOptions RanWith, string Turn = "", string Attempt = "", string Job = "", string Slot = "", string EndCause = "",
+        string Round = "", string ClientAttempt = "");
+
+    /// <summary>The ONE construction of a job's line, local or Team server — the two overloads differ only in what they fill.</summary>
+    private static UsageEntry JobEntry(
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
+        JobPlace place) =>
+        new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
             model,
@@ -479,13 +503,13 @@ public sealed class UsageLedger(string dataDir)
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             UsageNote: UsageNoteOf(usage),
-            Turn: turn,
-            Attempt: attempt,
-            Job: job,
-            Slot: slot,
-            EndCause: endCause,
-            Round: round,
-            ClientAttempt: clientAttempt).RanWith(ranWith));
+            Turn: place.Turn,
+            Attempt: place.Attempt,
+            Job: place.Job,
+            Slot: place.Slot,
+            EndCause: place.EndCause,
+            Round: place.Round,
+            ClientAttempt: place.ClientAttempt).RanWith(place.RanWith);
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;

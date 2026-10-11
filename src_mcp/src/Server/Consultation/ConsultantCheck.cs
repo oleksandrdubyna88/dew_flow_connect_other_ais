@@ -255,7 +255,8 @@ internal sealed class ConsultantCheckTurn(
 
         return ConsultantTurnBooks.Answered(turned.Final)
             ? Answered(turn, turned)
-            : Failed(turn.Checking, turn.Row, Kept(turn.Row, turned.Final, ConsultFailures.Classify(turn.Runtime, turned.Final, RuntimeResolution.NameOf(turn.Row.Identity()), killedAs)), turned.TurnUsage, turn.Clock.Elapsed);
+            : Failed(turn.Checking, turn.Row, Kept(turn.Row, turned.Final, ConsultFailures.Classify(turn.Runtime, turned.Final, RuntimeResolution.NameOf(turn.Row.Identity()), killedAs)), turned.TurnUsage, turn.Clock.Elapsed,
+                ConsultantTurnBooks.StatedResetOf(turned.Final));
     }
 
     private ConsultCheckRecord Answered(Turn turn, ConsultantTurnResult turned)
@@ -276,9 +277,10 @@ internal sealed class ConsultantCheckTurn(
         };
     }
 
-    private ConsultCheckRecord Failed(ConsultCheckRecord sent, ProviderSettings row, ConsultFailure failure, Usage usage, TimeSpan elapsed)
+    /// <param name="resetsUtc">The reset a refused check STATED, for its ledger row — or empty (epic 5's code round).</param>
+    private ConsultCheckRecord Failed(ConsultCheckRecord sent, ProviderSettings row, ConsultFailure failure, Usage usage, TimeSpan elapsed, string resetsUtc = "")
     {
-        Billed(row, failure.Kind, elapsed, usage);
+        Billed(row, failure.Kind, elapsed, usage, resetsUtc);
 
         return Spent(sent, usage, elapsed) with
         {
@@ -302,8 +304,8 @@ internal sealed class ConsultantCheckTurn(
         row.Api.Stream && string.Equals(RuntimeResolution.NameOf(row.Identity()), "api", StringComparison.Ordinal);
 
     /// <summary>One ledger row per check, under its own role — a check is a paid turn nobody asked a consultation for.</summary>
-    private void Billed(ProviderSettings row, string outcome, TimeSpan elapsed, Usage usage) =>
-        ConsultantTurnBooks.Billed(ledger, row, row.Model, ConsultantRoles.Check, outcome, elapsed, usage);
+    private void Billed(ProviderSettings row, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
+        ConsultantTurnBooks.Billed(ledger, row, row.Model, ConsultantRoles.Check, outcome, elapsed, usage, resetsUtc);
 
     /// <summary>The failure, with where its launch's transcript was kept — the consultation's own keeper and retention.</summary>
     private ConsultFailure Kept(ProviderSettings row, ReviewerLaunch final, ConsultFailure failure) =>

@@ -53,28 +53,28 @@ public sealed class TheWindowAnswerKeepsItsBytesTests
             UsageTotals.ByKind(Lines));
     }
 
-    /// <summary>The answer's text with every key story 5.1 added taken out again.</summary>
-    private static string WithoutTheCounts(string json)
-    {
-        var node = JsonNode.Parse(json)!;
-        foreach (var vendor in VendorObjects(node))
-        {
-            foreach (var key in Added)
-            {
-                vendor.Remove(key);
-            }
-        }
-
+    /// <summary>The answer's text with every key story 5.1 added taken out again — from a filtered COPY, never the parsed tree.</summary>
+    /// <remarks>
+    /// Epic 5's code round: the first version removed the keys from the parsed objects in place; the repository's rule is
+    /// that nothing is mutated, so the vendor totals (<c>vendors[]</c> and <c>people[].vendors[]</c>) are rebuilt without them.
+    /// </remarks>
+    private static string WithoutTheCounts(string json) =>
         // Relaxed escaping on the way back out, so `+` in an offset reads as `+` on both sides of the comparison: the
         // server escapes it (`+`), and a golden text that held the escape was unescaped by the tooling that wrote it.
-        return node.ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
-    }
+        Copy(JsonNode.Parse(json))!.ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 
-    private static IEnumerable<JsonObject> VendorObjects(JsonNode answer) =>
-    [
-        .. answer["vendors"]!.AsArray().Select(v => v!.AsObject()),
-        .. answer["people"]!.AsArray().SelectMany(p => p!["vendors"]!.AsArray()).Select(v => v!.AsObject()),
-    ];
+    /// <summary>A copy of <paramref name="node"/>; a vendor total (an element of a <c>vendors</c> array) loses the <see cref="Added"/> keys.</summary>
+    private static JsonNode? Copy(JsonNode? node, bool vendorTotal = false) => node switch
+    {
+        JsonObject members => new JsonObject(members
+            .Where(member => !(vendorTotal && Added.Contains(member.Key)))
+            .Select(member => KeyValuePair.Create(member.Key, member.Key == "vendors" ? VendorTotals(member.Value) : Copy(member.Value)))),
+        JsonArray items => new JsonArray([.. items.Select(item => Copy(item))]),
+        _ => node?.DeepClone(),
+    };
+
+    private static JsonNode? VendorTotals(JsonNode? vendors) =>
+        vendors is JsonArray items ? new JsonArray([.. items.Select(item => Copy(item, vendorTotal: true))]) : Copy(vendors);
 
     [Fact]
     public void AWindowAnswer_IsTodaysBytes_WithTheCountsOnlyAdded()

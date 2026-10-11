@@ -3536,6 +3536,17 @@ process starts. Run: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filt
 | `teamServerTab.test.ts` (re-pinned on purpose) | the Settings sheet's hash, re-taken for the one `.catalog .reset-line` rule; without that comment and rule the sheet still hashes to the previous pin | the old pin went red on the change: `actual: '456ad98a…', expected: 'becbdd07…'` |
 | `http/` contract suite | `catalog.http`: `slots.resetsUtc` is `''` with nothing parked; `reviews/happy.http`: a queued job's `waiting` says *signed out* (the suite's account is never signed in) and `reason` stays `''` | 67/67 green against the server built from this tree |
 
-**NOT covered:** a consultation's or question row's refusal does not write `resetsUtc` (those lines go through
-`RecordJob` with an outcome string); a reset older than the 7-day ledger tail is not shown; the shim's queued line is
+**NOT covered:** a reset older than the 7-day ledger tail is not shown; the shim's queued line is
 tested through `PollTracker`, not through a running `--ask-remote` against a real server holding a parked slot.
+
+## Epic 5's code round (2026-10-11, `todo/PLAN_every_round_is_counted.md`)
+
+Three findings accepted. One changed behaviour and was seen RED first; two are quality changes guarded by the tests that
+already existed.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `ConsultAntigravityDenialScenarioTests` (+1) | `AConsultationRefusedWithAStatedReset_WritesTheResetOnItsLedgerRow` — the REAL consultation path over the fake CLI as agy (exit 3, agy's verbatim `Resets in 88h49m9s` line on stderr): the one `consult` ledger row's `resetsUtc` is within a minute of now + 88h49m9s | RED (the gating finding): `Did not expect resets to be empty because the vendor stated when its quota comes back, and the ledger is where the local half keeps it.` Break-it: `ConsultantTurnBooks.StatedResetOf` answering empty for a refusal → the same message |
+| `QuestionConsultServiceTests` (+2) | `AQuestionRowRefusedWithAStatedReset_WritesTheResetOnItsLedgerLine` — the real `QuestionConsultService` and row launch over `ScriptedLauncher`, one claude row refused with agy's verbatim line (exit 3; the classification reads the words): the `question` line's outcome starts `rate limited` and its `resetsUtc` is now + 88h49m9s; `AQuestionRowThatAnswered_WritesNoReset` — answered rows write none | RED: `Did not expect line.ResetsUtc to be empty because the vendor stated when its quota comes back …`. Break-it (the same plant, which also wrote `x` for a launch with no terminal): both red, the answered one included |
+| `TheWindowAnswerKeepsItsBytesTests` (test-only change) | `WithoutTheCounts` builds a filtered COPY of the parsed answer instead of removing keys from it in place (the repository's no-mutation rule) | no RED: a test helper's shape, not behaviour — its two tests stay green against the same golden text |
+| `RoundCountsTests`, `SeveralWindowsTests`, `RoundCountsEndpointTests` (unchanged — the guard) | `UsageRounds` counts retries, repairs and follow-ups in ONE pass (`RequestsByWord`) instead of one pass per word | no RED: a refactor that must not change a number — the 24 tests and the seam leg are the guard, green before and after |
