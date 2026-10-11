@@ -19,7 +19,17 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-09 · mcp **0.45.0** (released) · server **0.10.0** released, NOT deployed — the box serves
+Last verified: 2026-10-11 · mcp **0.47.0** and extension **0.68.0** (released) · server 0.11.0 released, NOT deployed —
+the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 7, 8,
+11 and 12 were not run. Run locally:
+`MCP_VERSION=0.47.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.68.0`. The
+`mcp-v0.47.0` run (38137338999) published 12 assets; the `extension-v0.68.0` run (38141881007) attached and published
+the vsix, and the Marketplace served 0.68.0 at the first check. In these: paths per side E5 (#752 — a missing path of
+this OS said at every start and marked on the Settings page; reader modes never create a missing data folder), E2
+(#751 — the sides this profile was used on), and the round counter (#750 — `--round-counts`, the Spending tab's Rounds
+block).
+
+Previously verified: 2026-10-09 · mcp **0.45.0** (released) · server **0.10.0** released, NOT deployed — the box serves
 0.9.0 · extension 0.65.0 unchanged · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items
 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
 `MCP_VERSION=0.45.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.65.0` —

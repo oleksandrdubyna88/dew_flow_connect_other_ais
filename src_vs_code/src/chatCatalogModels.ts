@@ -1,6 +1,8 @@
 import { legacyPick, type ChatProviderList, type LegacyPick } from './chatModels';
 import { chatModelPresetsFrom, type ModelPreset } from './chatPresets';
 import { entryOf, movedRecordFrom, wasMoved, type MovedPreset } from './chatPresetMove';
+import { hostFamily } from './hostSide';
+import { storedForThisSide } from './pathFamily';
 import { vendorsFrom, type Vendor } from './vendors';
 
 /**
@@ -37,7 +39,8 @@ function asChatModel(row: Vendor): ModelPreset {
     model: row.model,
     // The catalog has no "main": the model the chat opens on is `coai.chatModel`, which the move points at the main row.
     main: false,
-    executablePath: row.executablePath,
+    // THIS side's stored value (paths per side E3.1), which chatRunSpec resolves as the row would be.
+    executablePath: storedForThisSide(row, hostFamily()),
     baseUrl: row.baseUrl,
     ...optionalOf(row),
   };

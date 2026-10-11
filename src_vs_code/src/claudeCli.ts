@@ -1,6 +1,6 @@
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import { hostExecutableSide } from './hostSide';
-import { executableHere, type ExecutableSide } from './pathFamily';
+import { executableHere, executableOf, type ExecutableSide } from './pathFamily';
 import { executableForRuntime } from './vendorTerminal';
 import { Vendor } from './vendors';
 
@@ -34,9 +34,10 @@ export function claudeExecutableFor(vendors: readonly Vendor[], consult: Consult
   // Only THIS side's paths count (todo/PLAN_paths_per_side.md E1.2): a CLI path spelled for the other OS is skipped,
   // so the next candidate — or the PATH name — is asked, never a file that is the other side's.
   const here = (path: string): string => executableHere(path, side);
-  const row = vendors.find((v) => v.runtime === 'claude' && here(v.executablePath).length > 0);
+  // A ROW resolves through its per-side value first (E3.1); a consultant definition holds one value.
+  const row = vendors.find((v) => v.runtime === 'claude' && executableOf(v, side).length > 0);
   if (row !== undefined) {
-    return here(row.executablePath);
+    return executableOf(row, side);
   }
   const caller = CALLER_KINDS
     .map(({ id }) => consult.byCaller[id])

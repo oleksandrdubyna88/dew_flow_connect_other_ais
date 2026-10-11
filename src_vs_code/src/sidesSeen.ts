@@ -217,8 +217,11 @@ export interface SideStore {
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
+/** The reading half of a {@link SideStore} — what a reader that must never write is handed (E3.4). */
+export type SideReader = Pick<SideStore, 'keys' | 'get'>;
+
 /** The sides seen within the window, read from the store now — every render reads this afresh (E0: a stamp lands live). */
-export function sidesIn(store: SideStore, now: number): readonly SeenSide[] {
+export function sidesIn(store: SideReader, now: number): readonly SeenSide[] {
   return seenSides(entriesOf(store), now);
 }
 
@@ -265,6 +268,6 @@ export async function forgetSide(store: SideStore, side: string, here: string): 
 }
 
 /** The store's registry keys with their values — the registry's slice of `Memento.keys()`. */
-function entriesOf(store: SideStore): readonly (readonly [string, unknown])[] {
+function entriesOf(store: SideReader): readonly (readonly [string, unknown])[] {
   return store.keys().filter((key) => key.startsWith(SIDE_SEEN_PREFIX)).map((key) => [key, store.get(key)] as const);
 }

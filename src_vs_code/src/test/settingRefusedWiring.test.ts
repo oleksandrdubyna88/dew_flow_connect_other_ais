@@ -75,7 +75,10 @@ test('every host that saves a setting reports the refusal, because saveSetting n
     'roleDeletionsHost.ts', 'commandsHost.ts',
     // The chat presets' model edits go to the catalog's rows and this side's chat model since E4.6a; their writes moved,
     // with their `reportRefusal`, into `chatPresetsHost.ts`, which both pages that edit them call (E4.6b).
-    'chatPresetsHost.ts'];
+    'chatPresetsHost.ts',
+    // The per-side CLI-path keeper's **Restore** (paths per side, E3 as built) takes the panel's shape: the write a person
+    // asked for from a notification button is caught and reported, never thrown out of the button's callback.
+    'cliPathKeepHost.ts'];
   for (const file of callers) {
     assert.match(
       source(file),
