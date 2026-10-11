@@ -247,7 +247,20 @@ public sealed record UsageEntry(
     /// still the server's <c>first</c> — one field cannot say both. Empty on a local line, whose own
     /// <paramref name="Attempt"/> already IS the client's word, and on every line older than the field.
     /// </remarks>
-    string ClientAttempt = "")
+    string ClientAttempt = "",
+
+    /// <summary>
+    /// The instant the vendor STATED its quota comes back, in UTC (<c>O</c> format) — or empty.
+    /// </summary>
+    /// <remarks>
+    /// Story 5.3b of todo/PLAN_every_round_is_counted.md: the last line of a turn that ended rate-limited carries the
+    /// reset its refusal stated — agy's <i>"Resets in 88h49m9s"</i> — read by <see cref="CooldownParser.StatedReset"/>,
+    /// the parser the Team server parks a slot on, so the extension shows it without parsing vendor sentences itself.
+    /// Empty on every other line, on a refusal that stated no time (never the server's guess), on a line older than the
+    /// field, and on a Team-server line — the server keeps its reset on the slot and says it in its catalog. Trailing and
+    /// defaulted like the rest.
+    /// </remarks>
+    string ResetsUtc = "")
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -327,22 +340,37 @@ public sealed class UsageLedger(string dataDir)
         var last = elapsed - TimeSpan.FromTicks(outcome.EarlierTurns.Sum(turn => turn.Elapsed.Ticks));
 
         AppendTurn(
-            line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome));
+            line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome),
+            StatedResetOf(outcome, DateTimeOffset.UtcNow));
     }
 
     /// <summary>What every line of one reviewer shares: who ran, on which model, at which stage.</summary>
     private sealed record LineOf(ReviewerInvocation Invocation, string Model, string Stage);
 
-    /// <summary>One turn, as its lines: one per launch when they add up to the turn, else the turn as one line.</summary>
-    private void AppendTurn(LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome)
+    /// <summary>
+    /// One turn, as its lines: one per launch when they add up to the turn, else the turn as one line — its LAST line
+    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated.
+    /// </summary>
+    private void AppendTurn(
+        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "")
     {
         var turn = LaunchLines.NewTurn();
-        foreach (var launch in LaunchLines.Of(launches, usage, elapsed, outcome))
+        var lines = LaunchLines.Of(launches, usage, elapsed, outcome);
+        foreach (var (launch, at) in lines.Select((launch, at) => (launch, at)))
         {
             var entry = Entry(line.Invocation, line.Model, line.Stage, launch.Elapsed, launch.Usage, launch.Outcome);
-            Append(entry with { Turn = turn, Attempt = launch.Attempt });
+            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = at == lines.Count - 1 ? resetsUtc : string.Empty });
         }
     }
+
+    /// <summary>
+    /// The reset a rate-limited ending STATED, as a UTC instant — or empty for any other ending, and for a refusal that
+    /// named no time (story 5.3b of todo/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
+    /// </summary>
+    private static string StatedResetOf(ReviewerOutcome outcome, DateTimeOffset nowUtc) =>
+        outcome is ReviewerOutcome.RateLimited limited && CooldownParser.StatedReset(limited.Reason, nowUtc) is { } resets
+            ? resets.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
 
     private static UsageEntry Entry(
         ReviewerInvocation invocation, string model, string stage, TimeSpan elapsed, Usage usage, string outcome) =>

@@ -62,6 +62,18 @@ test('accounts that are merely rate-limited say they return by themselves', () =
   assert.ok(said.includes('by themselves'));
 });
 
+test('AParkedVendor_SaysWhenItsFirstAccountComesBack — the catalog\'s resetsUtc, rounded up (story 5.3b)', () => {
+  const now = Date.parse('2026-10-10T12:00:00Z');
+  const resetsUtc = new Date(now + ((88 * 3600) + (49 * 60) + 9) * 1000).toISOString();
+
+  assert.strictEqual(slotSentence(vendor({ total: 2, coolingDown: 2, resetsUtc }), now, 'UTC'),
+    'codex: all 2 rate-limited, they come back by themselves — the first in 89 h (Wed 04:49)');
+  assert.strictEqual(slotSentence(vendor({ total: 2, coolingDown: 2 }), now, 'UTC'),
+    'codex: all 2 rate-limited, they come back by themselves', 'a server older than the field says what it always said');
+  assert.strictEqual(slotSentence(vendor({ total: 2, coolingDown: 2, resetsUtc: '2026-10-10T11:00:00Z' }), now, 'UTC'),
+    'codex: all 2 rate-limited, they come back by themselves', 'a reset already past claims nothing');
+});
+
 test('a vendor with no accounts at all points at the operator', () => {
   assert.ok(slotSentence(vendor({})).includes('no accounts'));
 });

@@ -67,7 +67,17 @@ public static class CatalogEndpoints
             slots.Count,
             slots.Count(s => s.IsReady(nowUtc)),
             slots.Count(s => s.IsCoolingDown(nowUtc)),
-            slots.Count(s => s.NeedsSignIn));
+            slots.Count(s => s.NeedsSignIn),
+            FirstBack(slots, nowUtc));
+
+    /// <summary>
+    /// When the first parked account comes back, in UTC — or empty when none is parked (story 5.3b of
+    /// todo/PLAN_every_round_is_counted.md). The instant only: which account it is stays on the box.
+    /// </summary>
+    private static string FirstBack(IReadOnlyList<AccountSlot> slots, DateTimeOffset nowUtc) =>
+        slots.Where(s => s.IsCoolingDown(nowUtc)).Min(s => s.CooldownUntilUtc) is { } first
+            ? first.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
 
     /// <summary>The sentence the operator needs, or empty when nothing is wrong.</summary>
     private static string ErrorFor(VendorCatalog current, VendorCatalogHost host) =>

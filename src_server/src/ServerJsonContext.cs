@@ -51,7 +51,14 @@ public sealed record VendorHealthDto(bool CliFound, string Version, string Note)
 /// <param name="Ready">Signed in, not cooling down — one of these can take a review.</param>
 /// <param name="CoolingDown">Rate-limited until a time the vendor named; they come back by themselves.</param>
 /// <param name="NeedsSignIn">Signed out. These never come back on their own — a human runs `login`.</param>
-public sealed record SlotSummaryDto(int Total, int Ready, int CoolingDown, int NeedsSignIn);
+/// <param name="ResetsUtc">
+/// When the FIRST parked account of this vendor comes back — the earliest <c>CooldownUntilUtc</c> among the accounts
+/// cooling down, in UTC (<c>O</c> format) — or empty when none is. Story 5.3b of todo/PLAN_every_round_is_counted.md: the
+/// slot is parked until the instant its vendor stated (5.3a), and this is that instant said where a client can read it.
+/// An instant and nothing else: never an account's name, never an email. Trailing and defaulted, so a client older than
+/// the field reads the answer unchanged.
+/// </param>
+public sealed record SlotSummaryDto(int Total, int Ready, int CoolingDown, int NeedsSignIn, string ResetsUtc = "");
 
 public sealed record CatalogVendorDto(
     string Id,
@@ -153,6 +160,14 @@ public sealed record ReviewAcceptedDto(string Id, int Position, IReadOnlyList<Fi
 /// defaulted, so a client older than the field deserialises the answer unchanged: it reads <c>status</c> and renders
 /// <c>failure</c> in a sentence, and never reads this (story 3.2 of todo/PLAN_every_round_is_counted.md).
 /// </param>
+/// <param name="Waiting">
+/// Why a QUEUED job cannot start now, when no account of its vendor can take it — <c>SlotSelector.Explain</c>'s sentence:
+/// <i>every account is rate-limited; the first comes back at …</i>, or that every account is signed out and the cure.
+/// Empty for a job that is not queued, and for a queued job an account could take (it waits only for its turn, which
+/// <c>position</c> already says). Story 5.3b of todo/PLAN_every_round_is_counted.md. Its own field rather than
+/// <c>reason</c>, which is the FAILURE's own words: a shipped client renders <c>reason</c> inside a failure sentence, and a
+/// queued job has failed at nothing. Trailing and defaulted, so an older client reads the answer unchanged.
+/// </param>
 public sealed record ReviewStatusDto(
     string Id,
     string Status,
@@ -163,7 +178,8 @@ public sealed record ReviewStatusDto(
     long TokensOut,
     string Failure,
     string Reason,
-    string EndCause = "");
+    string EndCause = "",
+    string Waiting = "");
 
 /// <summary>A ledger line as it sits on disk. Mirrors <c>UsageEntry</c> in Runners.</summary>
 /// <remarks>

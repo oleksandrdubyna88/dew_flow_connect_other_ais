@@ -150,6 +150,8 @@ const MODELS = `
   .catalog .card-foot { align-self: start; }
   /* The card's round count (story 2.4 of todo/PLAN_every_round_is_counted.md): one quiet line above Connection. */
   .catalog .rounds-line { font-size: 0.9em; color: var(--muted); margin: 0 0 6px; }
+  /* The reset the row's last refusal stated (story 5.3b of the same plan): the line above it, in the warning tone. */
+  .catalog .reset-line { font-size: 0.9em; color: var(--warn); margin: 0 0 6px; }
   .catalog details.more { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
   .catalog details.more summary { cursor: pointer; color: var(--muted); }
   .catalog .used-by { margin-top: 8px; font-size: 0.9em; color: var(--muted); }

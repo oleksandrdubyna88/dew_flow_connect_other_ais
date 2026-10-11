@@ -43,6 +43,11 @@ export interface ModelCardFacts {
    * of todo/PLAN_every_round_is_counted.md, `cardRoundsLine`); empty before the first read, and then nothing is drawn.
    */
   readonly roundsLine?: string;
+  /**
+   * `quota out — resets in 89 h (Wed 04:49)` — the reset the row's last refusal stated, from the same cached snapshot
+   * (story 5.3b of todo/PLAN_every_round_is_counted.md, `cardResetLine`); empty when none is ahead, and then nothing is drawn.
+   */
+  readonly resetLine?: string;
 }
 
 interface Access {
@@ -258,11 +263,13 @@ function usedLine(references: readonly string[]): string {
 function foot(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const prices = priceFields(vendor, id, vendor.runtime === 'local', vendor.runtime === 'remote', facts.context.price, '', '', false);
 
-  return `<div class="card-foot">${roundsLineOf(facts.roundsLine)}${details('Connection', connectionOf(vendor, id, facts.context))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
+  return `<div class="card-foot">${footLine('reset-line', facts.resetLine)}${footLine('rounds-line', facts.roundsLine)}`
+    + `${details('Connection', connectionOf(vendor, id, facts.context))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
 }
 
-function roundsLineOf(line: string | undefined): string {
-  return line === undefined || line.length === 0 ? '' : `<div class="rounds-line">${escapeHtml(line)}</div>`;
+/** One quiet line at the top of the card's foot — the stated reset, the round count — or nothing when it is empty. */
+function footLine(kind: string, line: string | undefined): string {
+  return line === undefined || line.length === 0 ? '' : `<div class="${kind}">${escapeHtml(line)}</div>`;
 }
 
 function details(title: string, body: string): string {

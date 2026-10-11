@@ -93,6 +93,11 @@ export interface SlotSummary {
   readonly ready: number;
   readonly coolingDown: number;
   readonly needsSignIn: number;
+  /**
+   * When the first parked account comes back, in UTC — empty when none is parked (story 5.3b of
+   * todo/PLAN_every_round_is_counted.md). Absent from a server older than the field; an instant, never an account name.
+   */
+  readonly resetsUtc?: string;
 }
 
 export interface CatalogVendor {
