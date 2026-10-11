@@ -58,6 +58,22 @@ test('every language describes the sides seen and the path-fields switch, by the
   }
 });
 
+test('every language says a CLI path is kept per side, and names the older-extension limit (paths per side E3)', () => {
+  // Design (c) of todo/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
+  // paths are the same in every language, so they are what all five are asked for; `PATH` is the lookup an emptied
+  // field — and a side whose own value an older extension's save dropped — falls back to.
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const marker of ['`C:\\tools\\codex.cmd`', '`/usr/local/bin/codex`', 'PATH']) {
+      assert.ok(said.includes(marker), `the ${language} settings article never says ${marker} — the CLI path per side is undocumented there`);
+    }
+    // E3 as built (2026-10-11): a value an older save dropped is said once, with **Restore** — the button the notice offers.
+    assert.ok(said.includes('**Restore**'), `the ${language} settings article never says **Restore** — the way back to a dropped CLI path is undocumented there`);
+  }
+});
+
 test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
   // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
   // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).

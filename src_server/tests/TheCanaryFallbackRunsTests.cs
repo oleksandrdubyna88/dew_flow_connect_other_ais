@@ -102,6 +102,7 @@ public sealed class TheCanaryFallbackRunsTests : IDisposable
         var python = ShellScripts.Python();
         Assert.SkipWhen(bash.Length == 0 || python.Length == 0,
             "no bash or no Python 3 on this machine — the canary's run is CI's Linux and macOS legs'");
+        Path.IsPathRooted(python).Should().BeTrue("the python3 shim below is FIRST on PATH, so a bare name would exec itself for ever");
         var bin = Directory.CreateDirectory(Path.Combine(_dir, "bin")).FullName;
         Script(Path.Combine(bin, "curl"), StubCurl);
         Script(Path.Combine(bin, "python3"), $"#!/usr/bin/env bash\nexec '{ShellScripts.Posix(python)}' \"$@\"\n");
@@ -124,9 +125,15 @@ public sealed class TheCanaryFallbackRunsTests : IDisposable
         start.Environment["CANARY_STUB_LOG"] = ShellScripts.Posix(log);
         start.Environment["CANARY_STUB_OLD_ANSWER"] = OldServerRefusal;
         using var process = Process.Start(start)!;
+        // Both streams read without blocking, and the wait BOUNDED: a child that never exits must fail this test in a
+        // minute, never hold a CI leg to its job limit (PR #761: a self-execing python3 shim did exactly that).
         var stderr = process.StandardError.ReadToEndAsync();
-        _ = process.StandardOutput.ReadToEnd();
-        process.WaitForExit(TimeSpan.FromSeconds(60)).Should().BeTrue("the canary must not hang on a stub that answers at once");
+        _ = process.StandardOutput.ReadToEndAsync();
+        if (!process.WaitForExit(TimeSpan.FromSeconds(60)))
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail("the canary did not finish within 60 s against a stub that answers at once");
+        }
 
         return (process.ExitCode, stderr.Result, File.Exists(log) ? File.ReadAllLines(log) : []);
     }

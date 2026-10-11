@@ -80,35 +80,57 @@ test('a chat model saved with an other-side CLI path runs the runtime from PATH 
 });
 
 /**
- * Every READ of a stored `executablePath` in the shipped source either goes through the side rule (`executableHere`,
- * `pathForThisSide`, or a local `here(…)` over it) or is one of the counted reads that only COPY or SHOW the stored value
- * — a copy is resolved where it is launched or written. A new raw read changes a count and goes red, so a launch site
- * cannot be added that runs the other side's CLI.
+ * Every READ of a stored `executablePath` in the shipped source either goes through the side rule or is one of the
+ * counted reads that only COPY or SHOW the stored value — a copy is resolved where it is launched or written. A new raw
+ * read changes a count and goes red, so a launch site cannot be added that runs the other side's CLI.
+ *
+ * <p>Since E3 (todo/PLAN_paths_per_side.md E3.1) a catalog ROW holds a per-side value too, so a row is resolved WHOLE —
+ * `executableOf(row, side)` / `pathForThisSide(row, side)`, or copied as `storedForThisSide(row, family)` — never through
+ * its `.executablePath` alone, which would skip `executablePathBySide`. Those calls read no `.executablePath` and need no
+ * count. `executableHere(value, side)` takes ONE value and is for a legacy DEFINITION (a consultant's, a question row's, a
+ * chat preset's), which has no per-side value: its calls are counted on their own ({@link ONE_VALUE_RESOLUTIONS}), so a
+ * row routed through it changes a count and goes red.</p>
  */
 const UNRESOLVED_READS: Readonly<Record<string, { readonly count: number; readonly why: string }>> = {
   'catalogEdit.ts': { count: 2, why: 'copies the stored launch fields between a row and a definition' },
   'catalogLaunch.ts': { count: 3, why: 'compares a row\'s launch identity, and copies it — the stored value, never run' },
   'catalogMigration.ts': { count: 2, why: 'moves a stored definition into a catalog row' },
-  'chatCatalogModels.ts': { count: 1, why: 'copies a catalog row into a chat model, which chatRunSpec resolves' },
   'chatModelEdits.ts': { count: 1, why: 'an edit of the stored value' },
   'chatPresetMove.ts': { count: 1, why: 'moves a stored preset into the catalog' },
   'chatPresets.ts': { count: 1, why: 'turns a reviewer row into a stored preset' },
-  'consultSettings.ts': { count: 3, why: 'resolves a stored definition and matches it to a row — the stored value' },
-  'qconsultSettings.ts': { count: 1, why: 'copies a catalog row into a question row, which rowsOnTheWire resolves' },
-  'panelView.ts': { count: 2, why: 'draws the stored value in the card\'s CLI-path box, and finds its missing-path finding by it (E5.4)' },
-  'setupTab.ts': { count: 4, why: 'draws the stored value in the vendor-keys table' },
-  'pathFamily.ts': { count: 1, why: 'the side rule itself' },
+  'cliPathSave.ts': { count: 2, why: 'the write rule: keeps the legacy value on the other side\'s save, and sees whether a save replaces it — stored, never run' },
+  'cliPathKeep.ts': { count: 3, why: 'the keeper records the legacy value an offer was made against, refuses a restore after it changed, and reads whether it is spelled for neither OS to catch `mirrored` up — stored, never run' },
+  'consultSettings.ts': { count: 1, why: 'matches a stored definition\'s value to a row\'s — the stored value' },
+  'setupTab.ts': { count: 2, why: 'draws a CLI group\'s path — already this side\'s stored value — in the vendor-keys table' },
+  'pathFamily.ts': { count: 3, why: 'the side rule itself, and whether an older extension saved since' },
   'pathFindings.ts': { count: 3, why: 'names the setting coai.vendors[].executablePath in the words of its notice and mark (E5) — strings, never a row' },
-  'pathWatch.ts': { count: 1, why: 'the stored value is the finding\'s subject; the path asked of the disk is pathForThisSide\'s (E5.3)' },
+};
+
+/** The calls of `executableHere`: ONE value, so a legacy definition's — a row through it would skip its per-side value. */
+const ONE_VALUE_RESOLUTIONS: Readonly<Record<string, { readonly count: number; readonly why: string }>> = {
+  'chatPresets.ts': { count: 1, why: 'a chat preset holds one CLI path' },
+  'claudeCli.ts': { count: 1, why: 'a consultant definition\'s path — the rows go through executableOf' },
+  'qconsultSettings.ts': { count: 1, why: 'a question row\'s own definition' },
+  'settingsShape.ts': { count: 1, why: 'a consultant definition on COAI_CONSULTANTS' },
+  'pathFamily.ts': { count: 1, why: 'its declaration' },
 };
 
 const READ = /\.executablePath\b/g;
 const RESOLVED = /(?:executableHere|pathForThisSide|here)\([^()]*\.executablePath\b/g;
+const ONE_VALUE = /\bexecutableHere\(/g;
+
+function codeOf(file: string): string {
+  return fs.readFileSync(file, 'utf8').split('\n').filter((line) => !/^\s*(?:\*|\/\/|\/\*\*)/.test(line)).join('\n');
+}
 
 function rawReads(file: string): number {
-  const text = fs.readFileSync(file, 'utf8').split('\n').filter((line) => !/^\s*(?:\*|\/\/|\/\*\*)/.test(line)).join('\n');
+  const text = codeOf(file);
 
   return (text.match(READ) ?? []).length - (text.match(RESOLVED) ?? []).length;
+}
+
+function oneValueResolutions(file: string): number {
+  return (codeOf(file).match(ONE_VALUE) ?? []).length;
 }
 
 function shippedSources(): readonly string[] {
@@ -122,11 +144,20 @@ test('every read of a stored CLI path goes through the side rule, or is a counte
   const found = Object.fromEntries(shippedSources().map((name) => [name, rawReads(path.join(dir, name))] as const).filter(([, count]) => count > 0));
   const expected = Object.fromEntries(Object.entries(UNRESOLVED_READS).map(([name, one]) => [name, one.count]));
 
-  assert.deepEqual(found, expected, 'a read of executablePath that is not resolved for this side: route it through executableHere, or count it here with why');
+  assert.deepEqual(found, expected, 'a read of executablePath that is not resolved for this side: resolve the row whole (executableOf), or count it here with why');
+});
+
+test('every one-value resolution is a legacy definition\'s — a catalog row resolves whole, its per-side value first', () => {
+  const dir = path.join(__dirname, '..', '..', 'src');
+  const found = Object.fromEntries(shippedSources().map((name) => [name, oneValueResolutions(path.join(dir, name))] as const).filter(([, count]) => count > 0));
+  const expected = Object.fromEntries(Object.entries(ONE_VALUE_RESOLUTIONS).map(([name, one]) => [name, one.count]));
+
+  assert.deepEqual(found, expected, 'executableHere takes ONE value: a ROW must go through executableOf / pathForThisSide (E3.1), or count a definition here with why');
 });
 
 test('the scan still sees a resolved read and an unresolved one — a pattern that matched nothing would pass forever', () => {
-  const wire = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'vendorsWire.ts'), 'utf8');
-  assert.ok((wire.match(RESOLVED) ?? []).length > 0, 'vendorsWire.ts resolves its read, and the scan sees it');
-  assert.ok(rawReads(path.join(__dirname, '..', '..', 'src', 'panelView.ts')) > 0, 'the card\'s box is a raw read the scan sees');
+  const shape = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'settingsShape.ts'), 'utf8');
+  assert.ok((shape.match(RESOLVED) ?? []).length > 0, 'settingsShape.ts resolves a definition\'s read, and the scan sees it');
+  assert.ok(rawReads(path.join(__dirname, '..', '..', 'src', 'setupTab.ts')) > 0, 'the vendor-keys table\'s path is a raw read the scan sees');
+  assert.ok(oneValueResolutions(path.join(__dirname, '..', '..', 'src', 'claudeCli.ts')) > 0, 'a definition\'s one-value resolution is seen too');
 });

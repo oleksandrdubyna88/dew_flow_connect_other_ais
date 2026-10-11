@@ -1,6 +1,6 @@
 import { CliStatus, updateAvailable } from './cliVersions';
 import { Platform, hostExecutableSide } from './hostSide';
-import { executableHere, type ExecutableSide } from './pathFamily';
+import { executableOf, type ExecutableSide } from './pathFamily';
 import { Vendor } from './vendors';
 
 /**
@@ -158,15 +158,15 @@ function updatesItself(runtime: string, installed: string): boolean {
  * A row that sets one wins; otherwise the runtime's own name, exactly as a row with no path gets.</p>
  */
 export function executableForRuntime(runtime: string, vendors: readonly Vendor[], side: ExecutableSide = hostExecutableSide()): string {
-  // A path spelled for the other OS is that side's CLI and is skipped here (todo/PLAN_paths_per_side.md E1.2).
-  const said = vendors.find((v) => v.runtime === runtime && executableHere(v.executablePath, side).length > 0);
+  // This side's value of the row (todo/PLAN_paths_per_side.md E1.2, E3.1): a path spelled for the other OS is skipped here.
+  const said = vendors.find((v) => v.runtime === runtime && executableOf(v, side).length > 0);
 
-  return said === undefined ? (EXECUTABLE[runtime] ?? 'codex') : executableHere(said.executablePath, side);
+  return said === undefined ? (EXECUTABLE[runtime] ?? 'codex') : executableOf(said, side);
 }
 
 /** The binary a ROW runs: this side's own CLI path, else its runtime's name — a path of the other OS is skipped. */
 export function executableFor(vendor: Vendor, side: ExecutableSide = hostExecutableSide()): string {
-  const path = executableHere(vendor.executablePath, side);
+  const path = executableOf(vendor, side);
 
   return path.length > 0 ? path : (EXECUTABLE[vendor.runtime] ?? 'codex');
 }

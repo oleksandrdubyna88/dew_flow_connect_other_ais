@@ -95,9 +95,10 @@ import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
-import { hostExecutableSide, hostPlatform, Platform } from './hostSide';
+import { hostExecutableSide, hostFamily, hostPlatform, Platform } from './hostSide';
+import { vendorFieldWrite } from './cliPathSave';
 import { currentFindings } from './findingsBoard';
-import { executableHere, otherSideClis } from './pathFamily';
+import { executableOf, otherSideClis } from './pathFamily';
 import { thisSide } from './installer';
 import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
@@ -2129,7 +2130,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // (Ux finding, plan 5's plan round.)
         const vendors = vendorsFrom(this.read(config)('vendors')).map((v) =>
           v.id === write.vendor
-            ? { ...v, ...pinnedDocument(v, write.key), [write.key]: write.value }
+            // The CLI-path box is THIS side's field: saved per side and mirrored (todo/PLAN_paths_per_side.md E3.2).
+            ? { ...v, ...pinnedDocument(v, write.key), ...vendorFieldWrite(v, write.key, write.value, hostFamily()) }
             : v,
         );
         await this.saveWrite(config, 'vendors', vendors, write, from);
@@ -4544,9 +4546,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return this.agyModels;
     }
     this.agyCheckedAt = Date.now();
-    // This side's agy only: a path spelled for the other OS is skipped (todo/PLAN_paths_per_side.md E1.2).
+    // This side's agy only: the row's per-side value first, a path spelled for the other OS skipped (paths per side E1.2, E3.1).
     const agyRow = vendors.find((v) => v.runtime === 'antigravity');
-    const agy = executableHere(agyRow?.executablePath ?? '', hostExecutableSide()) || 'agy';
+    const agy = (agyRow === undefined ? '' : executableOf(agyRow, hostExecutableSide())) || 'agy';
     const { code, output } = await capture(unquoted(agy), ['models'], false, 20_000);
 
     return code === 0 ? parseAgyModels(output) : [];
