@@ -230,3 +230,39 @@ test('the host refuses the other side\'s box while this side keeps its own setti
   assert.equal(keptPerSide(true, 'vendors'), true, 'with coai.perSideSettings on, vendors is not called this side\'s own');
   assert.equal(keptPerSide(false, 'vendors'), false, 'with coai.perSideSettings off, vendors is called this side\'s own');
 });
+
+/** The other side's box of a row, by its key. */
+function otherBox(tree: PageNode, id: string, family: PathFamily): PageNode {
+  return tree.one((node) => node.tagName === 'INPUT' && node.dataset['vendor'] === id && node.dataset['setting'] === `executablePath.${family}`, `the ${family} box of ${id}`);
+}
+
+test('a legacy-only value spelled for THIS window\'s OS is not shown in the other side\'s box: empty, with a quiet hint whose it is', () => {
+  const windows = opened(stateOf([row({ executablePath: 'C:\\tools\\codex.exe' })], 'windows', BOTH_FROM_WINDOWS)).tree;
+  const wslBox = otherBox(windows, 'codex-a', 'posix');
+  assert.equal(wslBox.value, '', `the WSL / Linux box shows '${wslBox.value}' — the Windows side's path, which the WSL side skips (a PATH lookup) and which the box itself would refuse if edited`);
+  assert.ok(described(windows, wslBox).some((said) => said === 'The shared value C:\\tools\\codex.exe is this side\'s CLI; that side skips it and looks the CLI up on PATH.'),
+    `the WSL / Linux box is not described by whose the shared value is: ${JSON.stringify(described(windows, wslBox))}`);
+});
+
+test('the mirror: a legacy-only POSIX value is not shown in the Windows box of a WSL window', () => {
+  const wsl = opened(stateOf([row({ executablePath: '/usr/bin/codex' })], 'posix', BOTH_FROM_WSL)).tree;
+  const windowsBox = otherBox(wsl, 'codex-a', 'windows');
+  assert.equal(windowsBox.value, '', `the Windows box of a WSL window shows '${windowsBox.value}' — the WSL side's path`);
+  assert.ok(described(wsl, windowsBox).some((said) => said.startsWith('The shared value /usr/bin/codex is this side\'s CLI')), 'the Windows box is not described by whose the shared value is');
+});
+
+test('the other side\'s box shows what is stored when it is that side\'s: a member of its own, a legacy value of that side\'s spelling, or one of neither', () => {
+  const cases: readonly (readonly [Vendor, string])[] = [
+    [row({ executablePath: 'C:\\tools\\codex.exe', executablePathBySide: { posix: '/opt/codex', mirrored: 'C:\\tools\\codex.exe' } }), '/opt/codex'],
+    [row({ executablePath: '/usr/bin/codex' }), '/usr/bin/codex'],
+    [row({ executablePath: 'codex' }), 'codex'],
+    [row({ executablePath: '//nas/share/codex' }), '//nas/share/codex'],
+  ];
+  for (const [vendor, shown] of cases) {
+    const tree = opened(stateOf([vendor], 'windows', BOTH_FROM_WINDOWS)).tree;
+    const box = otherBox(tree, 'codex-a', 'posix');
+
+    assert.equal(box.value, shown, `the WSL / Linux box of ${JSON.stringify(vendor.executablePath)} shows '${box.value}'`);
+    assert.ok(!described(tree, box).some((said) => said.startsWith('The shared value')), `the box of ${shown} says the value is this side's`);
+  }
+});

@@ -3,7 +3,7 @@ import { otherSideCliKey } from './cliPathSave';
 import { escapeHtml } from './escapeHtml';
 import { HELP } from './help';
 import { help } from './panelControls';
-import { familyLabel, otherSideNote, storedForThisSide, type PathFamily } from './pathFamily';
+import { familyLabel, otherSideNote, sharedValueNote, sharedValueOfTheOtherOs, storedForThisSide, type PathFamily } from './pathFamily';
 import type { PathFinding } from './pathFindings';
 import { markAttributes, markClass, markNote, stableId } from './pathMark';
 import { VENDOR_EXECUTABLE } from './pathSettings';
@@ -25,6 +25,10 @@ import type { Vendor } from './vendors';
  * <p>While this side keeps its own settings (`coai.perSideSettings`, so `vendors` is saved into this side's own copy) the
  * other side's box is NOT drawn: what it saved would be read by no one on that side. A read-only sentence stands in its
  * place, and the host refuses a write a page drawn before the switch moved still posts (E4's own review, item 1).</p>
+ *
+ * <p>A row whose other side has no value of its own and whose SHARED legacy value is spelled for this window's OS draws
+ * the other side's box EMPTY, with a quiet hint naming the shared value as this side's: that side skips it and looks the
+ * CLI up on PATH, and the box's own rule would refuse that text (E4's own review, item 2). Decided by spelling only.</p>
  */
 
 /** What the CLI-path field(s) are drawn from, beside the row. */
@@ -108,12 +112,33 @@ function captionOf(id: string): string {
 function otherSideBox(vendor: Vendor, other: PathFamily, refusal: TypedRefusal | undefined, id: string): string {
   const box = cliBoxKey(vendor.id, other);
   const attributes = refusalAttributes(refusal, box);
-  const value = refusal === undefined ? storedForThisSide(vendor, other) : refusal.typed;
+  const shared = sharedHint(vendor, other, id);
 
   return `<div class="field"><label for="${escapeHtml(id)}">CLI path on ${familyLabel(other)}</label>`
     + `<input type="text" id="${escapeHtml(id)}" data-setting="${otherSideCliKey(other)}" data-vendor="${escapeHtml(vendor.id)}"`
-    + ` placeholder="CLI path on that side — empty means that side looks it up on PATH" value="${escapeHtml(value)}"`
-    + ` aria-describedby="${escapeHtml(captionOf(id))}${attributes.describedBy}"${attributes.invalid}>${refusalNote(refusal, box)}</div>`;
+    + ` placeholder="CLI path on that side — empty means that side looks it up on PATH" value="${escapeHtml(refusal?.typed ?? otherSideValue(vendor, other))}"`
+    + ` aria-describedby="${escapeHtml(captionOf(id))}${shared.describedBy}${attributes.describedBy}"${attributes.invalid}>${shared.html}${refusalNote(refusal, box)}</div>`;
+}
+
+/**
+ * What the other side's box shows: the value that side's field holds — or nothing, when that is only the SHARED legacy
+ * value and it is spelled for THIS window's OS, which that side does not run (E4's own review, item 2).
+ */
+function otherSideValue(vendor: Vendor, other: PathFamily): string {
+  return sharedValueOfTheOtherOs(vendor, other) ? '' : storedForThisSide(vendor, other);
+}
+
+/** The quiet hint beside a box drawn empty by {@link otherSideValue}, and the id the box points at — nothing otherwise. */
+function sharedHint(vendor: Vendor, other: PathFamily, id: string): { readonly html: string; readonly describedBy: string } {
+  if (!sharedValueOfTheOtherOs(vendor, other)) {
+    return { html: '', describedBy: '' };
+  }
+  const note = `${id}-shared`;
+
+  return {
+    html: `<div class="hint path-other-side" id="${escapeHtml(note)}">${escapeHtml(sharedValueNote(vendor.executablePath, VENDOR_EXECUTABLE))}</div>`,
+    describedBy: ` ${escapeHtml(note)}`,
+  };
 }
 
 /** **Restore** and what it puts back — while a previously saved value of the row is missing. */
