@@ -81,6 +81,8 @@ public sealed class TheImageChecksEachInstallerTests : IDisposable
 
         code.Should().Be(0, stderr);
         File.Exists(mark).Should().BeTrue("the installer that arrived whole and looked like a script was run");
+        stderr.Should().Contain("fetching", "a build log shows the fetch BEFORE it can stall for minutes (the code round)")
+            .And.Contain("attempt 1 of 3");
     }
 
     [Fact]

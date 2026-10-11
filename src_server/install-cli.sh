@@ -24,6 +24,8 @@ trap 'rm -f "$file"' EXIT
 
 attempt=1
 while [ "$attempt" -le 3 ]; do
+    # Said BEFORE the fetch: a stalled one is silent for up to five minutes, and the log must show it is alive.
+    printf 'install-cli: fetching %s (attempt %s of 3)\n' "$url" "$attempt" >&2
     : >"$file"
     if curl -fsSL --connect-timeout 20 --max-time 300 "$url" -o "$file" && [ "$(head -c 2 "$file")" = '#!' ]; then
         "$shell" "$file"
