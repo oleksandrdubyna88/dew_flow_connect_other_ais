@@ -83,9 +83,9 @@ sequenceDiagram
 | `POST /api/session` | IdP token only | `201 {token, expiresUtc, email}`; a session may not mint another |
 | `DELETE /api/session` | any | `204`; `400` for an IdP token, `500` when the file would not go |
 | `GET /api/whoami` | any | `{email, name, isAdmin}` |
-| `GET /api/catalog` | any | the allowlist, each CLI's presence, and the account counts |
+| `GET /api/catalog` | any | the allowlist, each CLI's presence, and the account counts — with `slots.resetsUtc`, when the first parked account comes back (story 5.3b) |
 | `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models/**kinds** · `409` an idempotency key reused for a different request · `429 + Retry-After` over the queued cap |
-| `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost. **A read that writes**: the poll is the only evidence anybody is still listening, so it stamps `LastPolledUtc` |
+| `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer — and, for a queued job no account can take, `waiting` (story 5.3b) · `403` somebody else's · `404` unknown or lost. **A read that writes**: the poll is the only evidence anybody is still listening, so it stamps `LastPolledUtc` |
 | `DELETE /api/reviews/{id}` | owner | `204` |
 | `GET /api/usage?window=&scope=&windows=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind**; every vendor row carries `models[]` (since 2026-10-09) and the **round counts** (`rounds`, `runsWithoutRound`, `retries`, `repairs`, `followUps`, `cancelled`, `noBudget`, `launchesByKind` — story 5.1, 2026-10-11), and the company answer alone carries `daily` — thirty dense UTC calendar days of launches per vendor, its own range whatever the window. `windows=5h,24h,week` adds a `windows[]` block — each named window's range, vendors and (company) people — from the same scan; absent when not asked · `400` unknown window, in `window` or in `windows` · `403` company as a non-admin |
 | `GET /api/people` | **admins** | who has an unexpired session this server still serves (the allow-list applied): `[{email, displayName, lastUsedUtc}]`, one row per case-insensitive email, sorted by email — and nothing else about a session · `403` as a non-admin, naming `Coai:Admins` (2026-10-09) |
@@ -157,7 +157,8 @@ wrong choice *for CI* and the right one everywhere else.
 | `VendorConfig`, `VendorCatalog`, `VendorCatalogHost` | `src/Vendors/` | `vendors.json`: the model allowlist, its validation, and its content-hash reload |
 | `AccountSlot`, `SlotSelector` | `src/Slots/AccountSlot.cs` | one account's state, and which account the next job goes to |
 | `SlotEnvironment` | `src/Slots/SlotEnvironment.cs` | the variables that make one launch use one account and see no other |
-| `CooldownParser` | `src/Slots/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant: a stated duration (`Resets in 88h49m9s`), a date, a clock time, *weekly*, else a doubling guess |
+| `CooldownParser` | `src_mcp/runners/Reviewers/CooldownParser.cs` (moved from `src/Slots` by story 5.3b — one parser, both halves) | the vendor's own rate-limit sentence → an instant: a stated duration (`Resets in 88h49m9s`), a date, a clock time, *weekly*, else a doubling guess |
+| `QueueWaiting` | `src/Slots/QueueWaiting.cs` | why a queued job cannot start now — `SlotSelector.Explain` when no account can take it — the status's `waiting` field (story 5.3b) |
 | `SlotRegistry`, `SlotLease` | `src/Slots/SlotRegistry.cs` | the cross-process lock and the persisted per-account state |
 | `VendorLogin` | `src/Slots/VendorLogin.cs` | `coai-server login <vendor> <slot>` — the only interactive path |
 | `CatalogEndpoints`, `VendorHealthCache` | `src/Vendors/CatalogEndpoints.cs` | `GET /api/catalog`, and the 60 s cache that stops a poll launching a CLI per request |
@@ -532,6 +533,28 @@ sequenceDiagram
   and never a throw that fails the job. **"Weekly" is checked first**, because its guess is the longer one (a day): a
   line saying both errs to the day.
   `SlotRegistry.MarkCoolingDown` already persisted what the parser answers, so the parser was the whole fix.
+  A punctuation separator before more digits (`2h, 30m`, `2h; 30m`) refuses the match too, while a comma that ends the
+  duration (`2h, then try again`) still reads it (CodeRabbit on #754 again).
+- **The parser lives in the shared runners library now (2026-10-11, story 5.3b).** `CooldownParser` moved to
+  `src_mcp/runners/Reviewers/CooldownParser.cs`: the dependency runs server → mcp, so the local half could not reach it
+  here, and a second copy would be two readings of one vendor sentence. The server still parks a slot on `Until`; the
+  local half reads `StatedReset`, the same reading without the guess (module_runners.md, *A stated reset is never
+  waited out locally*). Its tests moved with it, to `src_mcp/tests/CooldownParserTests.cs`; `AStatedResetParksTheSlotTests`
+  (the server's park) stays here.
+- **A parked account is heard (2026-10-11, story 5.3b).** Two additive, defaulted fields, so an older client reads both
+  answers unchanged:
+  - `/api/catalog` — `vendors[].slots.resetsUtc`: when the FIRST parked account of that vendor comes back, the earliest
+    `CooldownUntilUtc` among the slots cooling down, in UTC (`O`), empty when none is. An instant only — never a slot's
+    name, never an email (`TheCatalog_SaysWhenTheFirstParkedAccountComesBack_NamingNoAccount` asserts the body carries
+    neither). The extension's Team servers view says it: *codex: all 2 rate-limited, they come back by themselves — the
+    first in 89 h (Wed 04:49)*.
+  - `GET /api/reviews/{id}` — `waiting`: for a QUEUED job that no account can take now, `SlotSelector.Explain`'s sentence
+    (*every account is rate-limited; the first comes back at …*, or *every account is signed out — run `coai-server
+    login …`*), computed at the poll by `QueueWaiting` (`src/Slots/QueueWaiting.cs`) from the same registry the runner
+    claims from; empty for a job that is not queued and for one an account could take (its `position` says the rest).
+    **Its own field, not `reason`:** `reason` is the FAILURE's own words, and the shipped shim renders it inside its
+    failure sentence — a queued job has failed at nothing. `Explain` was written for this and no status path called it
+    until now (5.3a's code round). The shim appends it to its queued progress line.
 - **`login` is attached to the terminal, and is the ONE thing here that does not use
   `ProcessLauncher`.** That launcher redirects stdout, stderr and stdin, which is right for
   everything that wants output as a string — and fatal for a sign-in, which prints a URL and a code

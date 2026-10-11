@@ -71,6 +71,25 @@ public static class RetryLadder
         return elapsed + wait < budget ? wait : null;
     }
 
+    /// <summary>
+    /// Whether the vendor STATED a reset that lies beyond what is left of the reviewer's budget — a refusal no step of
+    /// this ladder can outwait, and so not worth a second launch.
+    /// </summary>
+    /// <param name="reason">The vendor's own words (<see cref="ReviewerOutcome.RateLimited.Reason"/>).</param>
+    /// <param name="left">What is left of the reviewer's own deadline — <see cref="Remaining"/>.</param>
+    /// <remarks>
+    /// <para>Story 5.3c of todo/PLAN_every_round_is_counted.md, as E5's plan round narrowed it: <b>a stated reset is never
+    /// waited out locally.</b> agy's verbatim <i>"Individual quota reached … Resets in 88h49m9s."</i> says none of
+    /// <c>RateLimit.Spent</c>'s words, so a local agy row climbed the whole ladder — four launches, each refused — into a
+    /// reset days away. The reset is read by <see cref="CooldownParser.StatedReset"/>, the parser the Team server parks a
+    /// slot on, so the two halves never disagree about what the vendor said.</para>
+    /// <para>A refusal that states NO reset answers false and is the ladder's as before; a stated reset inside the budget
+    /// is still waited out by the ladder's own steps. Nothing is persisted across rounds: a local CLI's account can change
+    /// under it (a re-login), and a parked row would then refuse a working account — the plan round's reason.</para>
+    /// </remarks>
+    public static bool ResetOutlasts(string reason, TimeSpan left, DateTimeOffset nowUtc) =>
+        CooldownParser.StatedReset(reason, nowUtc) is { } resets && resets - nowUtc > left;
+
     /// <summary>One step, spread by up to a fifth either way.</summary>
     private static TimeSpan Jittered(TimeSpan step, double roll) =>
         step * (1 + ((Math.Clamp(roll, 0, 1) * 2) - 1) * JitterFraction);

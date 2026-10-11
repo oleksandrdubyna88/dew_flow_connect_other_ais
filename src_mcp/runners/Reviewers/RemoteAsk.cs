@@ -26,6 +26,11 @@ public enum RemoteState
 /// <summary>One poll's answer, parsed.</summary>
 /// <param name="Position">Where it sits in its vendor's queue; 0 once it is running.</param>
 /// <param name="Answer">The vendor's RAW text. This shim does not parse it — the round does.</param>
+/// <param name="Waiting">
+/// Why a QUEUED review cannot start now, in the server's words — <i>every account is rate-limited; the first comes back
+/// at …</i> — or empty: a review that is not queued, one an account could take, and every answer from a server older
+/// than the field (story 5.3b of todo/PLAN_every_round_is_counted.md).
+/// </param>
 public sealed record RemotePoll(
     RemoteState State,
     string RawStatus,
@@ -34,7 +39,8 @@ public sealed record RemotePoll(
     string Failure,
     string Reason,
     long TokensIn,
-    long TokensOut);
+    long TokensOut,
+    string Waiting = "");
 
 /// <summary>
 /// The pure half of <c>--ask-remote</c>: what to send, how to read what comes back, and every
@@ -213,7 +219,8 @@ public static class RemoteAsk
                     status.Failure ?? string.Empty,
                     status.Reason ?? string.Empty,
                     status.TokensIn,
-                    status.TokensOut);
+                    status.TokensOut,
+                    status.Waiting ?? string.Empty);
         }
         catch (JsonException)
         {
@@ -305,6 +312,14 @@ public static class RemoteAsk
     /// <summary>Still waiting for a free account, and how many are ahead.</summary>
     public static string QueuedMessage(string serverUrl, int position) =>
         $"queued on the Team server at {serverUrl}, {position} ahead of it";
+
+    /// <summary>
+    /// The same, and — when the server said so — why no account can take it now: <i>every account is rate-limited; the
+    /// first comes back at …</i> (story 5.3b of todo/PLAN_every_round_is_counted.md). The stem is
+    /// <see cref="QueuedMessage(string, int)"/>'s, so <see cref="IsProgress"/> still knows the line for progress.
+    /// </summary>
+    public static string QueuedMessage(string serverUrl, int position, string waiting) =>
+        waiting.Length > 0 ? $"{QueuedMessage(serverUrl, position)} — {Trim(waiting, 200)}" : QueuedMessage(serverUrl, position);
 
     /// <summary>On an account now, running.</summary>
     public static string RunningMessage(string serverUrl) =>
@@ -400,7 +415,8 @@ internal sealed record RemoteStatus(
     long TokensIn,
     long TokensOut,
     string? Failure,
-    string? Reason);
+    string? Reason,
+    string? Waiting = null);
 
 internal sealed record RemoteUsage(
     long TokensIn,

@@ -63,7 +63,7 @@ public static class ReviewEndpoints
 
     public static void MapReviewEndpoints(
         this WebApplication app, JobStore jobs, VendorCatalogHost catalog, CallerFilter gate,
-        AcceptedRoles roles, TimeSpan? queueWait = null, ClientOptionsPolicy? options = null)
+        AcceptedRoles roles, QueueWaiting waiting, TimeSpan? queueWait = null, ClientOptionsPolicy? options = null)
     {
         app.MapPost("/api/reviews", async (HttpContext ctx, ReviewRequestDto request) =>
         {
@@ -141,7 +141,7 @@ public static class ReviewEndpoints
 
             return job is null
                 ? Missing(id, caller.Email, jobs)
-                : Results.Json(Describe(job, jobs), ServerJsonContext.Default.ReviewStatusDto);
+                : Results.Json(Describe(job, jobs, waiting.For(job, DateTimeOffset.UtcNow)), ServerJsonContext.Default.ReviewStatusDto);
         }).RequireCaller(gate);
 
         app.MapDelete("/api/reviews/{id}", (HttpContext ctx, string id) =>
@@ -346,7 +346,8 @@ public static class ReviewEndpoints
             statusCode: StatusCodes.Status404NotFound);
     }
 
-    private static ReviewStatusDto Describe(JobRecord job, JobStore jobs) =>
+    /// <param name="waiting">Why a queued job cannot start now (<see cref="QueueWaiting"/>, story 5.3b) — or empty.</param>
+    private static ReviewStatusDto Describe(JobRecord job, JobStore jobs, string waiting) =>
         new(
             job.Id,
             job.Status.ToString().ToLowerInvariant(),
@@ -360,7 +361,9 @@ public static class ReviewEndpoints
             // A NEW optional field rather than a new failure name (story 3.2 of todo/PLAN_every_round_is_counted.md): every
             // shipped client branches on `status` and only renders `failure` inside a sentence, and a field an older client
             // never reads is a field it cannot misread — `failure` stays `cancelled`, as it has been.
-            job.EndCause);
+            job.EndCause,
+            // Its own field too, and for the same reason: `reason` is a FAILURE's words, rendered inside a failure sentence.
+            waiting);
 
     /// <summary>The failure name a client already renders.</summary>
     private static string Wire(FailureKind kind) => kind switch
