@@ -136,8 +136,8 @@ public sealed class EveryServerLaunchIsWrittenTests : IDisposable
         (scan.Lines[1].Turn, scan.Lines[1].Attempt).Should().Be(("1760090400-abc", "rotated"), "the reader dropped the fields the line holds");
     }
 
-    /// <summary>Slot a refuses with a rate limit; any other slot answers.</summary>
-    private sealed class BySlot : IReviewLauncher
+    /// <summary>Slot a refuses with a rate limit; any other slot answers. Shared with <c>TheServerRecordsTheRoundTests</c>.</summary>
+    internal sealed class BySlot : IReviewLauncher
     {
         public Task<ReviewAttempt> RunAsync(
             VendorConfig vendor, AccountSlot slot, JobRecord job, IReadOnlyDictionary<string, string?> environment, CancellationToken ct) =>

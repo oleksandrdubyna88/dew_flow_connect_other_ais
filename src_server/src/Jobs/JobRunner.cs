@@ -92,15 +92,38 @@ public sealed class JobRunner(
         // Claimed under the store's own lock, so a DELETE that answered 204 cannot be overtaken by
         // this dispatch. The token comes back with it: it is the one a cancel or the deadline sweep
         // fires, and it is what actually stops the vendor process.
-        if (jobs.TryClaim(vendorId, candidate.Name, DateTimeOffset.UtcNow, ct) is not { } claimed)
+        var claim = jobs.TryClaim(vendorId, candidate.Name, DateTimeOffset.UtcNow, ct);
+        RefusedForBudget(vendor, claim.Refused);
+        if (claim.Job is not { } job)
         {
             return false;
         }
 
         started?.TrySetResult(true);
-        await RunAsync(vendor, candidate, claimed.Job, claimed.Token);
+        await RunAsync(vendor, candidate, job, claim.Token);
 
         return true;
+    }
+
+    /// <summary>Nothing launched and nothing ran: the attempt a refused job's one ledger line is written from.</summary>
+    private static readonly ReviewAttempt NothingLaunched =
+        new ReviewAttempt.Failed(new ReviewerOutcome.NotStarted("ended at claim: its caller could no longer wait for a launch"));
+
+    /// <summary>
+    /// The refusal is counted (story 4.3 of todo/PLAN_every_round_is_counted.md): one line per job the claim pass ended
+    /// for want of budget — outcome <c>NoBudget</c>, an honest zero with no usage note, no seconds, no account, the job's
+    /// kind and round kept — so the effect of the rule can be seen in the same ledger as what it saves.
+    /// </summary>
+    /// <remarks>
+    /// Written from the record the STORE ended, as every line is; the attempt is <see cref="NothingLaunched"/>, so the
+    /// line carries no launch options — nothing ran with anything — and no slot: no account carried it.
+    /// </remarks>
+    private void RefusedForBudget(VendorConfig vendor, IReadOnlyList<JobRecord> ended)
+    {
+        foreach (var job in ended)
+        {
+            Ledger(new(vendor, string.Empty, job, NothingLaunched), job, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
+        }
     }
 
     private async Task RunAsync(VendorConfig vendor, AccountSlot slot, JobRecord job, CancellationToken jobToken)
@@ -161,7 +184,7 @@ public sealed class JobRunner(
             // line per refused attempt would count one review several times; a REVIEW is counted by its turn (the job's
             // id, on every line), and what one line counts now is one launch (story 3.3 of
             // todo/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
-            Ledger(new(vendor, slot, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated);
+            Ledger(new(vendor, slot.Name, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated);
 
             return;
         }
@@ -171,11 +194,14 @@ public sealed class JobRunner(
         // carrying what the attempt REPORTED, because a vendor that answered a second before the withdrawal was billed
         // for the answer nobody collected (story 3.2 of todo/PLAN_every_round_is_counted.md).
         var kept = jobs.Finish(finished);
-        Ledger(new(vendor, slot, job, attempt), kept, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
+        Ledger(new(vendor, slot.Name, job, attempt), kept, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
     }
 
-    /// <summary>What every line of one attempt shares: the vendor, the account it ran on, the job, and the attempt itself.</summary>
-    private sealed record AttemptOn(VendorConfig Vendor, AccountSlot Slot, JobRecord Job, ReviewAttempt Attempt);
+    /// <summary>
+    /// What every line of one attempt shares: the vendor, the NAME of the account it ran on — empty for an attempt that ran
+    /// on none (a refusal at claim) — the job, and the attempt itself.
+    /// </summary>
+    private sealed record AttemptOn(VendorConfig Vendor, string Slot, JobRecord Job, ReviewAttempt Attempt);
 
     /// <summary>
     /// The refused attempt as a terminal record of its own, for its ledger line only — never stored: the job itself went
@@ -301,10 +327,14 @@ public sealed class JobRunner(
                 ledger.RecordJob(
                     finished.Email, on.Vendor.Id, on.Job.Model, on.Job.Role, line.Outcome, line.Elapsed, line.Usage,
                     kind: JobKinds.Wire(on.Job.Kind), stage: "TeamServer", turn: on.Job.Id, attempt: line.Attempt,
-                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot.Name,
+                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot,
                     // WHY the store killed it, on the line that says Cancelled — a follow-up pair's first launch ended on
                     // its own and says so (story 3.2 of todo/PLAN_every_round_is_counted.md).
-                    endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty);
+                    endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty,
+                    // What the REQUEST carried, on every line of the job — a requeued launch's included — so a round is
+                    // counted once however many launches it took; the client's word beside the server's own attempt,
+                    // never over it (story 4.2 of todo/PLAN_every_round_is_counted.md).
+                    round: on.Job.Round, clientAttempt: on.Job.ClientAttempt);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

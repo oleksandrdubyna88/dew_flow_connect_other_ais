@@ -113,6 +113,95 @@ Authorization: Bearer {{token}}
 
 ###
 
+# Story 4.2 of todo/PLAN_every_round_is_counted.md: a request may carry the client's round id, its word for the
+# request and the seconds left on its own deadline. They are bound as raw JSON and read by hand — through THIS
+# server's source-generated binding, which no in-process test reaches — so a well-formed set is taken silently and a
+# malformed one is dropped with a note, never refused.
+
+# @name a_review_carrying_its_round_is_accepted_with_nothing_dropped
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "vendor": "codex",
+  "model": "gpt-5.6-luna",
+  "prompt": "review this",
+  "role": "Architecture",
+  "timeoutSeconds": 60,
+  "round": "0123456789abcdef0123456789abcdef",
+  "attempt": "repair",
+  "remainingSeconds": 50
+}
+
+?? status == 202
+
+{{
+  const assert = require('node:assert');
+  test('nothing was dropped: the three fields were read, not refused and not ignored', () => {
+    // A response with no notes sends `dropped: null` (ReviewAcceptedDto) — the list exists only when something was dropped.
+    assert.strictEqual(response.parsedBody.dropped, null);
+  });
+  exports.roundReviewId = response.parsedBody.id;
+}}
+
+###
+
+# @name the_review_carrying_its_round_is_withdrawn
+DELETE {{baseUrl}}/api/reviews/{{roundReviewId}}
+Authorization: Bearer {{token}}
+
+?? status == 204
+
+###
+
+# @name malformed_counting_fields_are_dropped_with_a_note_never_refused
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "vendor": "codex",
+  "model": "gpt-5.6-luna",
+  "prompt": "review this",
+  "role": "Architecture",
+  "timeoutSeconds": 60,
+  "round": "oops",
+  "attempt": {},
+  "remainingSeconds": 1.5
+}
+
+?? status == 202
+
+{{
+  const assert = require('node:assert');
+  test('accepted, and each malformed field is named in a note with its reason', () => {
+    assert.deepStrictEqual(response.parsedBody.dropped.map((note) => note.field), ['round', 'attempt', 'remainingSeconds']);
+    for (const note of response.parsedBody.dropped) {
+      assert.strictEqual(typeof note.reason, 'string');
+      assert.ok(note.reason.length > 0);
+    }
+  });
+  exports.malformedRoundReviewId = response.parsedBody.id;
+}}
+
+###
+
+# @name the_review_with_malformed_counting_fields_is_withdrawn
+DELETE {{baseUrl}}/api/reviews/{{malformedRoundReviewId}}
+Authorization: Bearer {{token}}
+
+?? status == 204
+
+###
+
+# @uncovered `failure: "no_budget"` on GET /api/reviews/{id} (story 4.3 of todo/PLAN_every_round_is_counted.md) — the
+#            server ends a job whose caller can no longer wait AT CLAIM, and a claim needs a signed-in account, which
+#            this suite's stack deliberately has none of (nothing may reach a vendor). The in-process host proves the
+#            name on the wire: `TheCallerCanStillWaitTests.TheConfiguredAllowance_IsWhatTheClaimReads`.
+
+###
+
 # @name a_model_the_allowlist_does_not_have_is_refused_naming_what_it_does
 POST {{baseUrl}}/api/reviews
 Authorization: Bearer {{token}}

@@ -116,6 +116,19 @@ public sealed record RoundRecord(
     public string Note { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
+    /// The round's identity across the wire — 32 hex characters minted when it started
+    /// (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md), which every launch of the round
+    /// carries to a Team server. Empty for a round recorded before the field existed, and for a skipped round, which
+    /// launched nothing.
+    /// </summary>
+    /// <remarks>
+    /// Not the <c>(session, stage, number)</c> triple the log and the extension call a round KEY (<c>RoundKeyDto</c>):
+    /// that names a round's place in a journal, and restarts with the journal; this names the round itself, anywhere.
+    /// Trailing and defaulted, so every session file on disk stays valid.
+    /// </remarks>
+    public string Key { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
     /// The D23 ground this round was admitted on — a <see cref="Core.Rounds.SecondRoundGround"/> by name for
     /// a feature review's second round; empty for every first round and for every other stage.
     /// </summary>

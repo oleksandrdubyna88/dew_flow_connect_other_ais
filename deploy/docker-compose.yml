@@ -78,6 +78,13 @@ services:
       Coai__QueueWaitMinutes: ${QUEUE_WAIT_MINUTES:-30}
       Coai__PerCallerQueued: ${PER_CALLER_QUEUED:-10}
       Coai__PerCallerRunning: ${PER_CALLER_RUNNING:-2}
+      # No start without budget (story 4.3 of todo/PLAN_every_round_is_counted.md): a review whose client said how
+      # long it can still wait is not started once that is gone. The margin comes off the stated seconds at receipt
+      # and is also the transit allowance; the start-up allowance is what a launch needs to be worth starting — a
+      # small number, NOT a least useful run (a 60 s reviewer advertises at most 50 s). Both refused at boot when
+      # they could never be right (a negative margin, an allowance of 0).
+      Coai__DeadlineSafetyMarginSeconds: ${DEADLINE_SAFETY_MARGIN_SECONDS:-5}
+      Coai__MinStartSeconds: ${MIN_START_SECONDS:-10}
       Coai__RateLimit__PermitLimit: ${RATE_LIMIT_PERMITS:-120}
       Coai__RateLimit__WindowSeconds: ${RATE_LIMIT_WINDOW_SECONDS:-10}
       # nginx always sets X-Forwarded-Proto, and this port is unreachable except through

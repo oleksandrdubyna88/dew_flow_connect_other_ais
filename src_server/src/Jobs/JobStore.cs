@@ -20,6 +20,22 @@ public enum SubmitRefusal
 }
 
 /// <summary>
+/// What one claim pass decided: the job it started, if any, and the jobs it ENDED on the way because their callers could
+/// no longer wait for a launch (story 4.3 of todo/PLAN_every_round_is_counted.md).
+/// </summary>
+/// <param name="Job">The job moved to Running, or null when nothing on this vendor could be started.</param>
+/// <param name="Token">The claimed job's own token — the one a cancel or the deadline sweep fires; <see cref="CancellationToken.None"/> when nothing was claimed.</param>
+/// <param name="Refused">
+/// Every job this pass ended with <see cref="FailureKind.NoBudget"/>, as the store keeps them — terminal, nothing launched
+/// — so the runner can write each one's ledger line. Empty when every candidate could still wait, or there was none.
+/// </param>
+public sealed record ClaimOutcome(JobRecord? Job, CancellationToken Token, IReadOnlyList<JobRecord> Refused)
+{
+    /// <summary>Nothing claimed — and what was refused on the way.</summary>
+    public static ClaimOutcome Nothing(IReadOnlyList<JobRecord> refused) => new(null, CancellationToken.None, refused);
+}
+
+/// <summary>
 /// Every job this run of the server knows about, and the only place their state changes.
 /// </summary>
 /// <remarks>
@@ -40,7 +56,8 @@ public enum SubmitRefusal
 /// would add a state machine and a heap allocation per call to avoid a contention that cannot occur.
 /// </para>
 /// </remarks>
-public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3, TimeSpan? keepFinished = null)
+public sealed class JobStore(
+    int perCallerQueued = 20, int perCallerRunning = 3, TimeSpan? keepFinished = null, ClientBudgetPolicy? budget = null)
 {
     private readonly TimeSpan _keep = keepFinished ?? TimeSpan.FromHours(1);
     private readonly Lock _gate = new();
@@ -77,6 +94,9 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// finishes. So a caller may hold 20 queued and 3 running, and jobs 4..20 are accepted and wait.
     /// </remarks>
     public int PerCallerRunning { get; } = perCallerRunning;
+
+    /// <summary>The budget rule's two numbers (story 4.3 of todo/PLAN_every_round_is_counted.md), from configuration.</summary>
+    public ClientBudgetPolicy Budget { get; } = budget ?? ClientBudgetPolicy.Default;
 
     /// <summary>
     /// Accept a job, or say why not — or hand back the one this key already made.
@@ -129,17 +149,22 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
                 return (null, SubmitRefusal.TooManyQueued, 0);
             }
 
-            _jobs[job.Id] = job;
-            if (job.IdempotencyKey.Length > 0)
+            // When the caller's stated budget ends, on this clock — the record's receipt stamp plus the stated seconds,
+            // capped at the job's own lifetime, less the margin (story 4.3 of todo/PLAN_every_round_is_counted.md).
+            // Stamped HERE, where the rule that reads it lives, and from the server's receipt alone: nothing a client
+            // sends about its own clock is ever read. A request that stated none keeps none.
+            var stamped = job with { ClientDeadlineUtc = ClientBudget.DeadlineOf(job, Budget.SafetyMargin) };
+            _jobs[stamped.Id] = stamped;
+            if (stamped.IdempotencyKey.Length > 0)
             {
                 // Overwrites, which matters on the one path that reaches here with a key already
                 // filed: the previous job under it had expired and was just ended, so the key must
                 // now name the live one.
-                _keys[KeyOf(job.Email, job.IdempotencyKey)] = job.Id;
+                _keys[KeyOf(stamped.Email, stamped.IdempotencyKey)] = stamped.Id;
             }
-            Wake(job.Id);
+            Wake(stamped.Id);
 
-            return (job, SubmitRefusal.None, Position(job));
+            return (stamped, SubmitRefusal.None, Position(stamped));
         }
     }
 
@@ -229,46 +254,85 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     }
 
     /// <summary>
-    /// Take the next job that may run on <paramref name="vendor"/>, moving it to Running atomically.
+    /// Take the next job that may run on <paramref name="vendor"/>, moving it to Running atomically — ending, on the way,
+    /// every older job whose caller can no longer wait for a launch.
     /// </summary>
     /// <param name="ct">The host's token. The job's own token is linked to it and returned.</param>
-    /// <returns>The claimed job and the token its vendor process must observe, or null.</returns>
-    public (JobRecord Job, CancellationToken Token)? TryClaim(
+    /// <returns>The claimed job and the token its vendor process must observe, if one was claimed; and what was refused.</returns>
+    /// <remarks>
+    /// <para><b>No start without budget</b> (story 4.3 of todo/PLAN_every_round_is_counted.md). A candidate whose
+    /// caller's deadline, after the margin, cannot hold even a launch's start-up (<see cref="ClientBudgetPolicy.MinStart"/>)
+    /// is ENDED here — <see cref="FailureKind.NoBudget"/>, nothing launched, its poller woken — and the pass moves on to
+    /// the next queued job, so a free account is not left idle for a tick on a review nobody will collect. Decided under
+    /// this lock, where the claim is: a job judged on one tick and claimed on the next would be the race the lock
+    /// exists to close. A job that stated no budget is never refused.</para>
+    /// <para>The candidates are materialised before any is ended: a refusal writes <c>_jobs</c>, and a dictionary is not
+    /// enumerated while it is written.</para>
+    /// </remarks>
+    public ClaimOutcome TryClaim(
         string vendor, string slot, DateTimeOffset nowUtc, CancellationToken ct = default)
     {
         lock (_gate)
         {
-            // Counted ONCE, before filtering, rather than re-scanned for every candidate — the nested
-            // count made a dispatch tick quadratic in the number of jobs, under this lock. (Two
-            // reviewers, code round.)
-            var running = _jobs.Values
-                .Where(j => j.Status == JobStatus.Running)
-                .GroupBy(j => j.Email, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            var refused = new List<JobRecord>();
+            foreach (var candidate in Candidates(vendor, nowUtc))
+            {
+                if (ClientBudget.CanStart(candidate, nowUtc, Budget.MinStart))
+                {
+                    return Start(candidate, slot, nowUtc, ct, refused);
+                }
 
-            var candidate = _jobs.Values
+                refused.Add(Refuse(candidate, nowUtc));
+            }
+
+            return ClaimOutcome.Nothing(refused);
+        }
+    }
+
+    /// <summary>Every job that may run on <paramref name="vendor"/> now, oldest first. Called with the lock held.</summary>
+    private List<JobRecord> Candidates(string vendor, DateTimeOffset nowUtc)
+    {
+        // Counted ONCE, before filtering, rather than re-scanned for every candidate — the nested
+        // count made a dispatch tick quadratic in the number of jobs, under this lock. (Two
+        // reviewers, code round.)
+        var running = _jobs.Values
+            .Where(j => j.Status == JobStatus.Running)
+            .GroupBy(j => j.Email, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        return
+        [
+            .. _jobs.Values
                 .Where(j => j.Status == JobStatus.Queued && j.Vendor == vendor)
                 .Where(j => !JobTransitions.IsExpired(j, nowUtc))
                 .Where(j => running.GetValueOrDefault(j.Email) < PerCallerRunning)
                 .OrderBy(j => j.SubmittedUtc)
                 // Two submissions can share a timestamp; without a tie-break the order between them
                 // is whatever the dictionary happens to yield, which is not an order at all.
-                .ThenBy(j => j.Id, StringComparer.Ordinal)
-                .FirstOrDefault();
+                .ThenBy(j => j.Id, StringComparer.Ordinal),
+        ];
+    }
 
-            if (candidate is null)
-            {
-                return null;
-            }
+    /// <summary>The job moves to Running on <paramref name="slot"/>, with its own token. Called with the lock held.</summary>
+    private ClaimOutcome Start(JobRecord candidate, string slot, DateTimeOffset nowUtc, CancellationToken ct, List<JobRecord> refused)
+    {
+        var started = JobTransitions.Start(candidate, slot, nowUtc);
+        _jobs[started.Id] = started;
+        var source = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _running[started.Id] = source;
+        Wake(started.Id);
 
-            var started = JobTransitions.Start(candidate, slot, nowUtc);
-            _jobs[started.Id] = started;
-            var source = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            _running[started.Id] = source;
-            Wake(started.Id);
+        return new ClaimOutcome(started, source.Token, refused);
+    }
 
-            return (started, source.Token);
-        }
+    /// <summary>The job is ended for want of budget, and whoever is polling it hears so at once. Called with the lock held.</summary>
+    private JobRecord Refuse(JobRecord candidate, DateTimeOffset nowUtc)
+    {
+        var ended = JobTransitions.WithoutBudget(candidate, Budget.MinStart, nowUtc);
+        _jobs[ended.Id] = ended;
+        Wake(ended.Id);
+
+        return ended;
     }
 
     /// <summary>
