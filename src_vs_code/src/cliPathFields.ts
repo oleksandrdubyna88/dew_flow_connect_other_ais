@@ -1,0 +1,105 @@
+import { droppedNoticeText, type DroppedValue } from './cliPathKeep';
+import { otherSideCliKey } from './cliPathSave';
+import { escapeHtml } from './escapeHtml';
+import { HELP } from './help';
+import { help } from './panelControls';
+import { familyLabel, otherSideNote, storedForThisSide, type PathFamily } from './pathFamily';
+import type { PathFinding } from './pathFindings';
+import { markAttributes, markClass, markNote, stableId } from './pathMark';
+import { VENDOR_EXECUTABLE } from './pathSettings';
+import { otherSideFieldset, thisSideCaption, type PathSides } from './pathSides';
+import { cliBoxKey, refusalAttributes, refusalNote, type TypedRefusals } from './typedRefusals';
+import type { Vendor } from './vendors';
+
+/**
+ * A Models card's CLI path (todo/PLAN_paths_per_side.md E4.1): ONE box — THIS side's field, exactly as it was drawn
+ * before E4 — or, once both sides are known (`pathSides.ts`), two: this side's first, labelled *This side — Windows*,
+ * then the OTHER side's in a `fieldset` with its legend and caption, editable as text only. No Browse on the other side's
+ * box: this host cannot browse that disk, and its value is never `stat`ed from here.
+ *
+ * <p>The other side's box posts `executablePath.<family>` through the panel's one vendor write (`vendorFieldWrite`), which
+ * saves only that side's member (`savedCliPath`). A path of this side's OS typed into it is refused by the host
+ * (`cliPathRefusal`) and drawn BESIDE the box with what was typed (`typedRefusals.ts`). While a previously saved per-side
+ * value is missing (`CliPathKeeper.dropped`), **Restore** sits under the field — the panel button E3's notice duplicates.</p>
+ */
+
+/** What the CLI-path field(s) are drawn from, beside the row. */
+export interface CliPathFacts {
+  /** The family of THIS side when the row's stored value is the other side's (the host decided it) — else undefined, no note. */
+  readonly otherSideCli: PathFamily | undefined;
+  /** The finding about this side's value — missing, or unanswerable — when the watch has one; else undefined, no mark. */
+  readonly missingCli: PathFinding | undefined;
+  /** The family the page is drawn for: this side's box shows the row's value for it (`storedForThisSide`). */
+  readonly family: PathFamily;
+  /** Both sides, when the path setting shows two fields; undefined draws one. */
+  readonly sides?: PathSides | undefined;
+  /** The row's previously saved value that is missing, offered back by **Restore**. */
+  readonly dropped?: DroppedValue | undefined;
+  /** What was typed into an other side's box and refused, by box. */
+  readonly refusals?: TypedRefusals | undefined;
+}
+
+/** The CLI-path field(s) of a row whose runtime runs a CLI here. */
+export function cliPathFieldsHtml(vendor: Vendor, cli: CliPathFacts): string {
+  return thisSideField(vendor, cli) + otherSidesNote(cli.otherSideCli) + otherSideField(vendor, cli) + restoreLine(cli.dropped);
+}
+
+/** A box's element id, unescaped — `cli-<row>-<family>`. */
+function boxId(vendor: string, family: PathFamily): string {
+  return `cli-${vendor}-${family}`;
+}
+
+/** This side's box — labelled only when there are two, so one field is drawn byte for byte as before E4. */
+function thisSideField(vendor: Vendor, cli: CliPathFacts): string {
+  const id = escapeHtml(boxId(vendor.id, cli.family));
+  const label = cli.sides === undefined ? '' : `\n    <label for="${id}">${help('vendorExecutablePath')}${escapeHtml(thisSideCaption(cli.sides))}</label>`;
+  const named = cli.sides === undefined ? '' : ` id="${id}"`;
+
+  return `
+  <div class="field${markClass(cli.missingCli)}">${label}
+    <input type="text"${named} data-setting="executablePath" data-vendor="${escapeHtml(vendor.id)}" title="${escapeHtml(HELP.vendorExecutablePath)}"
+           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(storedForThisSide(vendor, cli.family))}"${markAttributes(cli.missingCli)}>${markNote(cli.missingCli)}
+  </div>`;
+}
+
+/**
+ * The quiet line under a CLI path spelled for the OTHER operating system (todo/PLAN_paths_per_side.md E1.5): VS Code
+ * shares the row with the other side's window, where the path is right; here it is skipped and the CLI looked up on
+ * PATH — the same decision the settings file this window writes (`pathForThisSide`) and coai-mcp's own read make.
+ */
+function otherSidesNote(family: PathFamily | undefined): string {
+  return family === undefined
+    ? ''
+    : `<div class="hint path-other-side">${escapeHtml(otherSideNote(family === 'windows', VENDOR_EXECUTABLE))}</div>`;
+}
+
+/** The other side's box, in its group: the value that side's field holds, or the text a refusal kept. */
+function otherSideField(vendor: Vendor, cli: CliPathFacts): string {
+  if (cli.sides === undefined) {
+    return '';
+  }
+  const other = cli.sides.other;
+  const box = cliBoxKey(vendor.id, other);
+  const refusal = cli.refusals?.[box];
+  const id = boxId(vendor.id, other);
+  const caption = `${id}-caption`;
+  const attributes = refusalAttributes(refusal, box);
+  const value = refusal === undefined ? storedForThisSide(vendor, other) : refusal.typed;
+  const field = `<div class="field"><label for="${escapeHtml(id)}">CLI path on ${familyLabel(other)}</label>`
+    + `<input type="text" id="${escapeHtml(id)}" data-setting="${otherSideCliKey(other)}" data-vendor="${escapeHtml(vendor.id)}"`
+    + ` placeholder="CLI path on that side — empty means that side looks it up on PATH" value="${escapeHtml(value)}"`
+    + ` aria-describedby="${escapeHtml(caption)}${attributes.describedBy}"${attributes.invalid}>${refusalNote(refusal, box)}</div>`;
+
+  return `\n  ${otherSideFieldset(cli.sides, caption, field)}`;
+}
+
+/** **Restore** and what it puts back — while a previously saved value of the row is missing. */
+function restoreLine(dropped: DroppedValue | undefined): string {
+  if (dropped === undefined) {
+    return '';
+  }
+  const note = stableId('cli-kept', dropped.key);
+
+  return `\n  <div class="hint path-kept" id="${note}">${escapeHtml(droppedNoticeText(dropped).title)}</div>`
+    + `<button type="button" class="link" data-command="restoreCliPath" data-id="${escapeHtml(dropped.key)}" aria-describedby="${note}">Restore</button>`;
+}

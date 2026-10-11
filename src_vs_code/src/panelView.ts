@@ -84,12 +84,16 @@ import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
-import { otherSideNote, storedForThisSide, type PathFamily } from './pathFamily';
+import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
 import { DATA_DIRECTORY, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
 import { type SidesView } from './sidesSeen';
 import { sidesSeenHtml } from './sidesSeenView';
+import { droppedFor, type DroppedValue } from './cliPathKeep';
+import type { TypedRefusals } from './typedRefusals';
+import { cliPathFieldsHtml, type CliPathFacts } from './cliPathFields';
+import { pathSidesOf, type PathSides } from './pathSides';
 import { thisSideLabel } from './consultantSides';
 import { SECURITY_COMMANDS } from './securityLaneState';
 import { cardColumns } from './cardColumns';
@@ -195,6 +199,16 @@ export interface PanelState {
    * Question consultant, Models and MCP server places and the counts on their tabs are drawn from. Absent draws none.
    */
   readonly pathFindings?: readonly PathFinding[] | undefined;
+  /**
+   * The rows whose per-side CLI path an older save dropped while a copy is kept (`CliPathKeeper.dropped`,
+   * todo/PLAN_paths_per_side.md E4.1): each card draws **Restore** beside its CLI-path field. Absent draws none.
+   */
+  readonly droppedCliPaths?: readonly DroppedValue[] | undefined;
+  /**
+   * Text typed into the OTHER side's box and refused, by box (`typedRefusals.ts`, E4.1 / E4.2) — drawn beside the box,
+   * never as a toast. Absent draws none.
+   */
+  readonly typedRefusals?: TypedRefusals | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
   /**
@@ -1113,6 +1127,8 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   // The host's disk and drive, in the family the page is drawn for (a test names it; absent is this host's).
   const family = state.hostFamily ?? hostFamily();
   const otherSides = state.otherSideClis ?? [];
+  // Once for the page: every card draws one field or two by the same decision (E4.1, E2's `twoPathFields`).
+  const sides = pathSidesOf(state.sides, family);
 
   return (v) => ({
     colour: colour(v.id),
@@ -1139,6 +1155,9 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     // The mark by THIS side's STORED value — what the box draws and the watch keys its finding on (paths per side,
     // E5.4; E3.1: the per-side value for this family when one was saved, else the legacy value).
     missingCli: findingFor(state.pathFindings ?? [], VENDOR_EXECUTABLE.id, storedForThisSide(v, family)),
+    sides,
+    dropped: droppedFor(state.droppedCliPaths ?? [], v),
+    refusals: state.typedRefusals,
   });
 }
 
@@ -1240,6 +1259,12 @@ export interface CardContext {
   readonly family: PathFamily;
   /** The finding about this row's CLI path — missing, or unanswerable — when the watch has one (E5.4); else undefined, no mark. */
   readonly missingCli: PathFinding | undefined;
+  /** Both sides, when a path setting shows two fields (todo/PLAN_paths_per_side.md E4.1) — undefined draws one. */
+  readonly sides?: PathSides | undefined;
+  /** This row's previously saved per-side CLI path that is missing — **Restore** is drawn beside the field (E4.1). */
+  readonly dropped?: DroppedValue | undefined;
+  /** Text typed into an other side's box and refused, by box — drawn beside the box (E4.1). */
+  readonly refusals?: TypedRefusals | undefined;
 }
 
 /**
@@ -1305,28 +1330,16 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-/** What the card's one CLI-path box is drawn from, beside the row: the other side's note, the missing mark, and the family. */
-export type CliFieldFacts = Pick<CardContext, 'otherSideCli' | 'missingCli' | 'family'>;
-
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean, cli: CliFieldFacts): string {
-  // The mark (E5.4): the field takes the class, the box is invalid and described by the sentence under it. The box is
-  // THIS side's field (paths per side E3.1): the row's per-side value for this family when one was saved, else the legacy.
-  return remote ? '' : `
-  <div class="field${markClass(cli.missingCli)}">
-    <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
-           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(storedForThisSide(vendor, cli.family))}"${markAttributes(cli.missingCli)}>${markNote(cli.missingCli)}
-  </div>${otherSidesCli(cli.otherSideCli)}`;
-}
+/** What the card's CLI-path field(s) are drawn from, beside the row (`cliPathFields.ts`). */
+export type CliFieldFacts = CliPathFacts;
 
 /**
- * The quiet line under a CLI path spelled for the OTHER operating system (todo/PLAN_paths_per_side.md E1.5): VS Code
- * shares the row with the other side's window, where the path is right; here it is skipped and the CLI looked up on
- * PATH — the same decision the settings file this window writes (`pathForThisSide`) and coai-mcp's own read make.
+ * The CLI path of a row that runs a CLI here: THIS side's box — the row's per-side value for this family when one was
+ * saved, else the legacy (paths per side E3.1), marked when missing (E5.4) — and, once both sides are known, the other
+ * side's box beside it (E4.1). `cliPathFields.ts` draws them.
  */
-function otherSidesCli(family: PathFamily | undefined): string {
-  return family === undefined
-    ? ''
-    : `<div class="hint path-other-side">${escapeHtml(otherSideNote(family === 'windows', VENDOR_EXECUTABLE))}</div>`;
+export function runtimeFields(vendor: Vendor, remote: boolean, cli: CliFieldFacts): string {
+  return remote ? '' : cliPathFieldsHtml(vendor, cli);
 }
 
 /**
@@ -3371,6 +3384,9 @@ export const PANEL_COMMANDS = [
   // Setup › This side: one side's record dropped from the side registry (todo/PLAN_paths_per_side.md E2.4). Its id is the
   // side's key; the host refuses this window's own.
   'forgetSide',
+  // A Models card's Restore of a per-side CLI path a save dropped (todo/PLAN_paths_per_side.md E4.1) — the panel button
+  // E3's notice duplicates. Its id is the kept copy's key; the keeper re-reads the row at the click.
+  'restoreCliPath',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;
   // Review opens what it collected; and the server address is asked for in a dialog rather than
   // typed into the section, because a free-text control here would be rebuilt under the caret on

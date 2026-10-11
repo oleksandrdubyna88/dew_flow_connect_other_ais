@@ -96,7 +96,9 @@ import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostExecutableSide, hostFamily, hostPlatform, Platform } from './hostSide';
-import { vendorFieldWrite } from './cliPathSave';
+import { cliBoxFamily, cliPathRefusal, vendorFieldWrite } from './cliPathSave';
+import type { DroppedValue } from './cliPathKeep';
+import { NO_REFUSALS, cliBoxKey, withRefusal, withoutRefusal, type TypedRefusals } from './typedRefusals';
 import { currentFindings } from './findingsBoard';
 import { executableOf, otherSideClis } from './pathFamily';
 import { thisSide } from './installer';
@@ -357,6 +359,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * beside the escalation watcher rather than as one more constructor argument. Absent reads as none.
    */
   public questionConsults: { readonly questions: readonly QuestionConsult[] } | undefined;
+  /**
+   * The per-side CLI-path keeper (`cliPathKeepHost.ts`), handed in by `extension.ts` the same way: what each Models card
+   * offers back with **Restore**, and the restore a press runs — the keeper's own, which re-reads the row at the click
+   * (todo/PLAN_paths_per_side.md E4.1). Absent draws no Restore.
+   */
+  public cliPathKeep: { dropped(): readonly DroppedValue[]; restore(offer: DroppedValue): Promise<void> } | undefined;
+  /** Text typed into an other side's box and refused, by box — drawn beside the box on the next paint (E4.1, E4.2). */
+  private typedRefusals: TypedRefusals = NO_REFUSALS;
   private readonly qconsult: QconsultHost;
 
   /** `coai.qconsultRoots` changed: the next paint asks the disk again about the roots spelled for the other OS. */
@@ -1422,6 +1432,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // The paths of this side that are missing or unanswerable, as the watch last published them (E5.4): the marks
       // beside the values and the counts on the tabs. Read, never asked here — the watch asks the disk.
       pathFindings: currentFindings(),
+      // What each Models card offers back with Restore, and what was refused beside an other side's box (E4.1).
+      droppedCliPaths: this.cliPathKeep?.dropped() ?? [],
+      typedRefusals: this.typedRefusals,
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
@@ -2109,6 +2122,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     switch (write.kind) {
       case 'vendor': {
+        // Text typed into the OTHER side's CLI-path box and spelled for this side's OS: refused beside the box (E4.1).
+        if (await this.refusedBesideTheBox(write, from)) {
+          return;
+        }
         // Refused BEFORE it is saved: a prompt past 8 KiB, an effort the runtime refuses, the last
         // model of a review stage switched off (catalogWriteRules.ts; PLAN_one_model_catalog.md E3.2). The control
         // snaps back and the person is told why.
@@ -2130,7 +2147,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // (Ux finding, plan 5's plan round.)
         const vendors = vendorsFrom(this.read(config)('vendors')).map((v) =>
           v.id === write.vendor
-            // The CLI-path box is THIS side's field: saved per side and mirrored (todo/PLAN_paths_per_side.md E3.2).
+            // A CLI-path box is saved per side: this side's mirrored (todo/PLAN_paths_per_side.md E3.2), the other side's
+            // box (`executablePath.<family>`, E4.1) into that side's member alone.
             ? { ...v, ...pinnedDocument(v, write.key), ...vendorFieldWrite(v, write.key, write.value, hostFamily()) }
             : v,
         );
@@ -2239,6 +2257,26 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /** This window's side as the side registry records it — the one activation stamps (`sideHereOf`). */
+  /**
+   * A value typed into the OTHER side's CLI-path box that is spelled for this side's OS (`cliPathRefusal`): kept with its
+   * reason and drawn beside the box by the repaint, never a toast (todo/PLAN_paths_per_side.md E4.1). Any write of a
+   * CLI-path box that is not refused forgets that box's refusal. True when the write was refused.
+   */
+  private async refusedBesideTheBox(write: Extract<SettingWrite, { kind: 'vendor' }>, from: SurfaceSlot): Promise<boolean> {
+    const family = cliBoxFamily(write.key, hostFamily());
+    if (family === undefined) {
+      return false;
+    }
+    const box = cliBoxKey(write.vendor, family);
+    const reason = cliPathRefusal(write.key, write.value, hostFamily());
+    this.typedRefusals = reason.length === 0 ? withoutRefusal(this.typedRefusals, box) : withRefusal(this.typedRefusals, box, { typed: String(write.value), reason });
+    if (reason.length > 0) {
+      await afterTheWrite(() => this.snapBack(from))();
+    }
+
+    return reason.length > 0;
+  }
+
   private sideHere(): SideHere {
     return sideHereOf(thisSide(this.context.globalStorageUri), process.platform);
   }
@@ -2622,6 +2660,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.deleteOldDataFolder);
         await this.render();
         break;
+      case 'restoreCliPath': {
+        // The Models card's Restore (E4.1): the keeper's own restore, which re-reads the row AT THE CLICK and refuses a
+        // stale offer — the same one the notice's button runs. An offer no longer listed restores nothing; the paint redraws.
+        const offer = this.cliPathKeep?.dropped().find((one) => one.key === id);
+        if (offer !== undefined) {
+          await this.cliPathKeep?.restore(offer);
+        }
+        break;
+      }
       case 'forgetSide':
         // A side gone for good stops counting before its 90 days are up (todo/PLAN_paths_per_side.md E2.4); this
         // window's own record is refused inside. The render below redraws the list from the store.

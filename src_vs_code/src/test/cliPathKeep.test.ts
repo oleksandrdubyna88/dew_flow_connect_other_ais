@@ -224,3 +224,28 @@ test('a copy is per layer: a row of one layer is never offered another layer\'s 
   assert.equal(w.said.length, 0);
   assert.ok(w.kept.keys().every((key) => key.startsWith(`${CLI_PATH_KEPT_PREFIX}user@`)), 'and another layer\'s copy is not pruned from here');
 });
+
+test('the card reads what is dropped NOW: the keeper lists it after the look that found it, and tells the panel when the list changes (paths per side E4.1)', async () => {
+  // The panel button E3's notice duplicates: a Models card draws Restore while its row's member is dropped, so the list the
+  // cards read must follow the look — and a change must repaint, or the button lags a settings change behind.
+  const w = world([BOTH()]);
+  let told = 0;
+  const stop = w.keeper.onChanged(() => { told += 1; });
+  await w.keeper.check();
+  assert.deepEqual([w.keeper.dropped(), told], [[], 0], 'nothing is dropped, and nothing was said to the panel');
+
+  w.set([OLDER_WSL_SAVE()]);
+  await w.keeper.check();
+  assert.deepEqual(w.keeper.dropped().map((one) => one.kept), [{ windows: W, posix: P, mirrored: W }], 'the dropped member is not listed for the card');
+  assert.equal(told, 1, 'the panel was not told the list changed');
+  await w.keeper.check();
+  assert.equal(told, 1, 'a look that changed nothing repainted the panel');
+
+  w.set([BOTH()]);
+  await w.keeper.check();
+  assert.deepEqual([w.keeper.dropped(), told], [[], 2], 'the member came back and the card still offers Restore');
+  stop();
+  w.set([OLDER_WSL_SAVE()]);
+  await w.keeper.check();
+  assert.equal(told, 2, 'a listener that stopped is still told');
+});

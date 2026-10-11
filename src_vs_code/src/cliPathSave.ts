@@ -1,4 +1,4 @@
-import { storedForThisSide, type ExecutableBySide, type PathFamily, type StoredExecutable } from './pathFamily';
+import { familyLabel, spelledForTheOtherOs, storedForThisSide, type ExecutableBySide, type PathFamily, type StoredExecutable } from './pathFamily';
 
 /**
  * What a SAVE of a CLI-path field writes on a catalog row — the one write rule of todo/PLAN_paths_per_side.md design (c),
@@ -70,9 +70,43 @@ function pinnedFor(stored: StoredExecutable, family: PathFamily, replacesLegacy:
 }
 
 /**
- * The fields the panel's one vendor write (`data-setting` + `data-vendor`) puts on a row: the card's CLI-path box is THIS
- * side's field, saved by {@link savedCliPath}; every other key as it was posted.
+ * The fields the panel's one vendor write (`data-setting` + `data-vendor`) puts on a row: a card's CLI-path box is saved
+ * by {@link savedCliPath} with the family of the box — `executablePath` is THIS side's, `executablePath.<family>` the
+ * OTHER side's box E4 draws beside it (E4's plan round, finding 0: never a second write path) — and every other key as it
+ * was posted.
  */
 export function vendorFieldWrite(stored: StoredExecutable, key: string, value: unknown, here: PathFamily): Readonly<Record<string, unknown>> {
-  return key === 'executablePath' && typeof value === 'string' ? { ...savedCliPath(stored, value, here, here) } : { [key]: value };
+  const field = cliBoxFamily(key, here);
+
+  return field !== undefined && typeof value === 'string' ? { ...savedCliPath(stored, value, field, here) } : { [key]: value };
+}
+
+/** The key the OTHER side's CLI-path box posts — its family named, so the one vendor write saves that side's member. */
+export function otherSideCliKey(family: PathFamily): string {
+  return `executablePath.${family}`;
+}
+
+/** The family whose CLI-path box a posted key names — `executablePath` is this side's — or undefined for any other key. */
+export function cliBoxFamily(key: string, here: PathFamily): PathFamily | undefined {
+  return key === 'executablePath' ? here : FAMILIES.find((family) => key === otherSideCliKey(family));
+}
+
+/**
+ * Why a value typed into the OTHER side's CLI-path box is not saved — '' when it may be (design (d): editable as text,
+ * refused when spelled for the wrong OS). A path spelled for THIS side's OS belongs in this side's box — a drive letter or
+ * a `\` path typed into the WSL / Linux box on Windows, a `/…` path typed into the Windows box in WSL. A bare name, a
+ * relative path, a `//server/share` and an empty box (the PATH lookup) are kept: none of them is this side's spelling.
+ * Never `stat`ed: the other side's disk is not this window's to ask.
+ */
+export function cliPathRefusal(key: string, value: unknown, here: PathFamily): string {
+  const field = cliBoxFamily(key, here);
+
+  return field === undefined || field === here || typeof value !== 'string' ? '' : spelledHere(value, field, here);
+}
+
+/** The refusal of a value typed into `field`'s box when it is spelled for `here`'s OS — '' when it is not. */
+function spelledHere(value: string, field: PathFamily, here: PathFamily): string {
+  return spelledForTheOtherOs(value, field === 'windows')
+    ? `'${value.trim()}' is a ${familyLabel(here)} path — this side's; type it in the box above, or a ${familyLabel(field)} path here`
+    : '';
 }
