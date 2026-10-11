@@ -3543,7 +3543,9 @@ empty `models`. Every server string goes through `escapeHtml`.
   tier on a sum — a vendor-reported `costUsd` winning (on an older server too, which reports it per vendor without models), a model no list
   prices a dash that makes its total a floor (`≥`). Person, vendor and summary totals add those; the note says the
   server's lines carry no cached count, so cache-heavy input is overstated. ~$ and *last seen* become sorts when the
-  answer can serve them (`sorts` in the push; the page disables and labels the others).
+  answer can serve them (`sorts` in the push; the page disables and labels the others). The figure itself — `Estimate`,
+  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `todo/PLAN_every_round_is_counted.md`, where
+  the spending tab prices each ledger line by the same three states; `teamCost.ts` re-exports them unchanged.
 - *The chart (3.3, D7).* `teamChart.ts`: an inline SVG of the dense 30 UTC days, stacked by vendor, drawn to one scale,
   its axis labelled *launches*, coloured through the vendor palette (theme colours, no hex), the days the server's
   `yyyy-MM-dd` strings printed as they came (never through `new Date()`), a legend naming each vendor, a summary as the
@@ -7371,6 +7373,98 @@ back to the sidebar's provider, which still owns the window choice, the price ca
 marks. `within('day')` is since local midnight now, by the operator's ruling; week, month and year
 stay rolling. A Team server's own block on this tab is this account's spending on it (`scope=me`); the company view is
 the **Team server** tab (2026-10-09), and a window press re-asks the servers for the new window at once.
+
+**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `todo/PLAN_every_round_is_counted.md`).**
+`totalsByVendor` priced a row's whole history at the row's CURRENT model, all input at the full rate and never at a
+long-context tier — after the Gemini row moved to `flash-medium` on 2026-10-02, every earlier `flash-low` line was
+priced as `flash-medium`. Now:
+
+- `parseUsageLine` keeps `tokensCached`, `tokensReasoning` and `kind` (an old line: 0, 0, `review` — `UsageKinds` in
+  `src_mcp` reads an absent kind the same way) beside the `usageNote` it already kept.
+- `priceOfLine(provider, model, …)` is the row's TYPED rate when it has one (per field over the list, as before; a typed
+  row takes no list tier and no list cached rate), else the list price of the LINE's model — it used to fall back to the
+  row's current model whenever the row still existed, so the consultations tab priced a consultation at the row's model
+  too. It returns a `LineRate` (`in`, `out`, and `cached` / `tier` only when stated); `PriceLookup` answers a
+  `ListedRate`, which a `ModelPrice` is.
+- `lineCost(line, rate)` is one line's `Estimate`: a reported `costUsd` is the fact and never re-estimated; otherwise
+  `(in − cached)·in + cached·cached + out·out` per million, at the tier's rates once THIS line's input reaches it —
+  `TokenPrice.CostOf` in `src_mcp`, one arithmetic on both halves (cached is a subset of input; a list with no cached
+  rate prices it at the input rate). A line whose usage was not captured adds nothing and is a floor; a line no rate
+  prices is a floor unless it consumed nothing.
+- `VendorTotals` keeps the halves apart — `costUsd` what was billed, `estimatedUsd` the unbilled lines' estimate (a row
+  with both reads `$0.18 + ~$0.31` through `spend`, where it used to drop the estimate) — and gains `floor`, rendered
+  `≥` on the card, on *All vendors* and on *Reviewers and chat together* (`atLeast`, never before a dash).
+- The provider looks up every model the ledger names (`modelPrices(vendors, ledger)`), not only the rows' current
+  models, for the spending tab and for the consultations tab — otherwise a past model would be an unpriced floor.
+
+**`roundMoney.ts` — tokens and money per vendor row × model × kind (2026-10-10, story 2.5).** Pure and `vscode`-free,
+over the lines the panel already reads (`parseUsage`; the chat ledger through `chatLedgerLines`, kind `chat`, on the
+vendor `chatRowProvider` names, answered/stopped not failures) and a `RateOf` lookup handed in (`priceOfLine` over the
+rows and lists). `moneyGroups(lines, window, rateOf)` answers, inside a trailing window, per vendor row × model × kind
+(review / consult / question / chat; a Team-server row is its own row): tokens in / cached / out / reasoning — an
+uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `unknown`, never 0 (`tokenText`) — recorded
+turns, failed, the median input and output **per recorded turn** (`MEDIAN_OUTPUT_LABEL`: a repair or a follow-up is two
+launches on one line until story 3.3, so no per-launch figure is claimed), and the money (`Estimate`). `rollUp` makes
+a vendor row or the window from groups (no medians). `perUnit(money, unitDivisor(kind, count, turns))` divides: a
+MODEL line by the rounds that used it when the caller knows them, else per recorded turn; a vendor row or the total by
+every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
+the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
+this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
+says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1), read as below.
+
+**The counts are read once a minute, and the Spending tab's first block is Rounds (2026-10-10, stories 2.2–2.4 of
+`todo/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
+
+- `roundCounts.ts` — the mode's contract as data (`RoundCountsAnswer`: `nowUtc`, three windows `5h` / `24h` / `7d`
+  half-open `(from, to]`, each a row per vendor with rounds by stage, the reviewer rows and the rounds per model;
+  `modelsKnownSince`), checked field by field by `parseRoundCounts`, and `roundCountsFrom(exit, output)` → a
+  `RoundCountsRead` that is `counted` or `unavailable` WITH ITS REASON: exit 64 is *older than --round-counts — update it
+  in Setup › MCP server*, 65 refused, 74 the database would not read, -1 a timeout or a spawn that failed, an exit-0
+  answer outside the contract *something this build cannot read*. Rows `[]` on exit 0 is a count of nought. Never a zero
+  standing in for "nobody knows" — `COUNT_UNAVAILABLE` is what every surface prints instead.
+- `roundCountsRead.ts` — `readRoundCounts(executable, run)` through `serverRun` from `roundsDbRead.ts`, the one door
+  that hands the child this window's data directory (a child inheriting the window's environment would count the
+  DEFAULT directory's rounds); `roundsLoader` spawns it and reads the ledger's tail in parallel; `otherStores` asks only
+  whether another installation's `coai.db` EXISTS. Its own file because `roundsDbRead.ts` is at 796 of its 800 lines,
+  and because the page module imports the types — a spawn beside them would drag `node:child_process` into the bundle.
+- `ledgerTail.ts` — `readTailSince(path, sinceMs, parse)` reads `usage.jsonl` from its END in 64 KiB chunks and stops at
+  the first chunk whose oldest whole line is older than the instant asked for (the code round's rule: a year of history
+  is one chunk, not a parse per refresh); a line torn across a chunk is carried back and joined; a missing file is no
+  lines. It answers `bytesRead`, which is what the bound is tested by, and `failure`: empty when the ledger read or does
+  not exist yet (`missingRatherThanBroken` from `notificationsFile.ts`), else why it did not read — a permission error,
+  a directory in the file's place (on Windows that OPENS cleanly with size 0, so it is caught by `isFile()`, not by a read).
+  The loader hands it to the snapshot as `ledgerFailure`; a thrown load sets it too.
+- `roundCountsCache.ts` — **bounded freshness, never a spawn per render.** `current()` never reads; `refresh()` reads
+  when the snapshot is older than `ROUNDS_MAX_AGE_MS` (60 s), after `forget()` — a consultation or a question ended
+  (`consultations.onChanged`, `questionConsults.onChanged` in `extension.ts`) — or after the session files hold one more
+  finished round (`noteFinishedRounds(finishedRounds(sessions))`, from the panel's own render; the first sighting only
+  remembers), one read at a time; a load that throws is a stamped `unavailable` snapshot, so a failing read is not
+  retried per render. The age bound is what lets a trailing window FALL while nothing runs, and the early refresh is what
+  makes a consultation-only session move the numbers. The clock and the loader are handed in (fake-clock tests).
+
+`PanelProvider` owns one `RoundCountsCache` (`roundCountsOf`), notes finished rounds on every render, refreshes on a
+render only while the Settings page is open — its Models cards are the panel's one surface that draws the count, so a
+sidebar-only render spawns nothing — without awaiting (a read that lands repaints), and refreshes on the spending
+tab's own tick (`usageTab`). The tab's
+FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
+by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
+by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
+history, the median output per recorded turn, tokens in / cached / out / reasoning and money over 7 d through
+`roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
+this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
+only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*
+(`ranOnOf`). The block names the store it counted (`storeSentence`: *Counted from this side's store only — WSL: Ubuntu,
+<dir>.*) and every other installation's existing store as *not included* — the other side's WAL `coai.db` is never
+opened across the `\\wsl.localhost` / drvfs boundary. Before the first read the block says *Counting…*; an unavailable
+read says *count unavailable* in every count cell, once with the reason, and the ledger's tokens still show. A ledger
+that did not read is the mirror case: *Tokens and money: unavailable — the usage ledger could not be read: <why>*, once,
+and *unavailable* in every cell drawn from it (beside, median, tokens, money, per round) while the counts still show —
+never a zero that reads as nothing spent. The Models
+card's foot carries `cardRoundsLine` — `7 days: 14 rounds · 1 consult turns · 5 h: 2` (consult TURNS, since one
+consultation is several ledger lines; *consult turns unavailable* when the ledger did not read), `Rounds: count
+unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
+the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
+says the product ships no price table.
 
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the

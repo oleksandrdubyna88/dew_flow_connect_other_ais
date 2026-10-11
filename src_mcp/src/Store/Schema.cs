@@ -34,6 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
+        TheReviewersModel,
     ];
 
     internal const string SecurityEvidence = """
@@ -570,5 +571,31 @@ internal static class Schema
         ALTER TABLE consultations ADD COLUMN failure_kind TEXT NOT NULL DEFAULT '';
         ALTER TABLE consultations ADD COLUMN failure_cure TEXT NOT NULL DEFAULT '';
         ALTER TABLE consultations ADD COLUMN evidence     TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 20: which MODEL each reviewer launch ran, and the index the round counter joins on
+    /// (<c>todo/PLAN_every_round_is_counted.md</c>, story 2.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>The reviewers table recorded the provider and the role and never the model, so no count
+    /// could say that the Gemini row's step to <c>flash-medium</c> on 2026-10-02 is where its weekly
+    /// quota started running out (<c>research/RESULTS_what_spends_the_subscription_2026-10-09.md</c>).
+    /// <c>ReviewerState.Model</c> has carried it in the session file since the log named the model; this
+    /// is the projection catching up. <b>Empty means "not recorded"</b> — every row written before this
+    /// step, and a reviewer that ran with no model named — and <c>--round-counts</c> leaves such rows out
+    /// of its per-model lines, telling the client from when per-model counts exist.</para>
+    /// <para>The index belongs to the same question: every count joins <c>rounds</c> to <c>reviewers</c>
+    /// by round, and <see cref="Tables"/> indexed findings by round and reviewers not at all. One step
+    /// for both, because a database that has run nineteen steps gains the column and the index or
+    /// neither — the migrator applies a step and its version in one transaction.</para>
+    /// <para>Appended, never inserted: a database that has run nineteen records nineteen, and widening an
+    /// earlier step would leave it without this column while believing it had run every one. A reader
+    /// opened read-only (<c>--round-counts</c>, <c>--log</c>) cannot run this and asks the schema
+    /// whether the column is there instead.</para>
+    /// </remarks>
+    internal const string TheReviewersModel = """
+        ALTER TABLE reviewers ADD COLUMN model TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS reviewers_by_round ON reviewers (round_id);
         """;
 }
