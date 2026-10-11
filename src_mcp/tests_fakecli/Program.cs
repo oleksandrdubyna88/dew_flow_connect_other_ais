@@ -317,6 +317,16 @@ switch (args0)
         Console.Out.Write(thenStdout);
         return 0;
 
+    // A SERVER rather than a command (Serving.cs): answers the request whose line carries `"id":2` and goes on
+    // serving — writing its own pid and, with `grandchild`, a sleeping child's to the file — and lives on for
+    // <afterEofMs> after stdin closes (forever when negative). The shape a launcher's EndsWhen exists for.
+    case ["serve", var pidFile, var afterEofMs, var tree, var answer]:
+        return Serving.Run(pidFile, int.Parse(afterEofMs), tree == "grandchild", answer);
+
+    // What the Team server's gauge reader starts, confined: steered by a file in the temp directory, never by argv.
+    case ["app-server"]:
+        return Serving.AppServer();
+
     default:
         Console.Error.WriteLine($"fake-cli: unknown verb [{string.Join(' ', args0)}]");
         return 64;

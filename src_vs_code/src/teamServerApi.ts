@@ -98,6 +98,36 @@ export interface SlotSummary {
    * todo/PLAN_every_round_is_counted.md). Absent from a server older than the field; an instant, never an account name.
    */
   readonly resetsUtc?: string;
+  /**
+   * The latest reading of the vendor's own gauge among this vendor's accounts (story 6.1a of
+   * todo/PLAN_every_round_is_counted.md) — absent from a server older than the field AND from one that never captured
+   * a reading: the same absence, which story 6.2 renders as unavailable, never 0 %. Numbers, the vendor's own words and
+   * instants only; never an account name.
+   */
+  readonly gauge?: GaugeReading;
+}
+
+/** One reported window of one limit, identified by the limit's id and the window's duration (6.1a). */
+export interface GaugeWindow {
+  readonly limitId: string;
+  readonly kind: string;
+  readonly usedPercent: number;
+  /** Null when the vendor did not say — never 0. */
+  readonly windowDurationMins: number | null;
+  /** UTC instant, or empty when the vendor did not say. */
+  readonly resetsAtUtc: string;
+}
+
+/** One reading of the vendor's own gauge, as the Team server keeps it on the slot (6.1a). */
+export interface GaugeReading {
+  readonly observedUtc: string;
+  readonly planType: string;
+  readonly rateLimitReachedType: string;
+  readonly ordinaryUsageAllowed: boolean | null;
+  readonly resetCreditsAvailable: number | null;
+  readonly windows: readonly GaugeWindow[];
+  /** True once a later capture failed: the numbers are the last the vendor said. */
+  readonly stale: boolean;
 }
 
 export interface CatalogVendor {

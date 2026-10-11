@@ -89,6 +89,22 @@ export interface UsageEntry {
    * line older than the field; `statedReset.ts` turns it into the words a person reads.
    */
   readonly resetsUtc?: string;
+  /**
+   * The vendor's own gauge as read on the Team server's account right after this launch (story 6.1a of
+   * todo/PLAN_every_round_is_counted.md): when, the plan word, the limit, and the preferred limit's primary and secondary
+   * windows — each by its length in minutes, its use in percent and its reset instant (UTC). Each field is present only
+   * when the line says it: absent on a line older than the fields, on a local line, and on a job after which nothing was
+   * read; a window the plan does not report has no fields at all — never a 0 %.
+   */
+  readonly gaugeObservedUtc?: string;
+  readonly gaugePlan?: string;
+  readonly gaugeLimit?: string;
+  readonly gaugePrimaryMins?: number;
+  readonly gaugePrimaryUsedPercent?: number;
+  readonly gaugePrimaryResetsUtc?: string;
+  readonly gaugeSecondaryMins?: number;
+  readonly gaugeSecondaryUsedPercent?: number;
+  readonly gaugeSecondaryResetsUtc?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -155,10 +171,46 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...endCauseOf(parsed.endCause),
       ...roundFields(parsed),
       ...resetOf(parsed.resetsUtc),
+      ...gaugeFields(parsed),
     };
   } catch {
     return undefined;
   }
+}
+
+/** The gauge's text fields, each present only when the line says it. */
+const GAUGE_TEXT_FIELDS = [
+  'gaugeObservedUtc', 'gaugePlan', 'gaugeLimit', 'gaugePrimaryResetsUtc', 'gaugeSecondaryResetsUtc',
+] as const;
+
+/** The gauge's numbers, each present only when the line carries a finite number — an absent window is absent, never 0. */
+const GAUGE_NUMBER_FIELDS = [
+  'gaugePrimaryMins', 'gaugePrimaryUsedPercent', 'gaugeSecondaryMins', 'gaugeSecondaryUsedPercent',
+] as const;
+
+type GaugeTextField = (typeof GAUGE_TEXT_FIELDS)[number];
+type GaugeNumberField = (typeof GAUGE_NUMBER_FIELDS)[number];
+
+/**
+ * The vendor's gauge as read after a Team-server launch (story 6.1a of todo/PLAN_every_round_is_counted.md), by
+ * `launchFields`' rule: a text field is present only when non-empty, and a number only when the line carries one. Unlike
+ * `number()`, a missing number is NOT coerced to 0 — a window the plan did not report must not read as an empty one.
+ */
+function gaugeFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, GaugeTextField | GaugeNumberField> {
+  const said: Partial<Record<GaugeTextField, string>> & Partial<Record<GaugeNumberField, number>> = {};
+  for (const name of GAUGE_TEXT_FIELDS) {
+    const value: unknown = parsed[name];
+    if (saidText(value)) {
+      said[name] = value;
+    }
+  }
+  for (const name of GAUGE_NUMBER_FIELDS) {
+    const value: unknown = parsed[name];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      said[name] = value;
+    }
+  }
+  return said;
 }
 
 /**

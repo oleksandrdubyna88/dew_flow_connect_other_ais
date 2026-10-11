@@ -58,7 +58,20 @@ public sealed record VendorHealthDto(bool CliFound, string Version, string Note)
 /// An instant and nothing else: never an account's name, never an email. Trailing and defaulted, so a client older than
 /// the field reads the answer unchanged.
 /// </param>
-public sealed record SlotSummaryDto(int Total, int Ready, int CoolingDown, int NeedsSignIn, string ResetsUtc = "");
+/// <param name="Gauge">
+/// The LATEST reading of the vendor's own gauge among this vendor's accounts — by observation time, whichever account
+/// read it — or omitted when none was ever captured (story 6.1a of todo/PLAN_every_round_is_counted.md). Numbers, the
+/// vendor's own words and instants only: never an account's name, never an email. Nullable AND omitted when null, as
+/// <c>UsageDto.Daily</c> is: a client older than the field never sees the key, and a server older than it never sends
+/// one — the same absence either way, which story 6.2 renders as <i>unavailable</i>, never 0 %.
+/// </param>
+public sealed record SlotSummaryDto(
+    int Total,
+    int Ready,
+    int CoolingDown,
+    int NeedsSignIn,
+    string ResetsUtc = "",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] GaugeReadingDto? Gauge = null);
 
 public sealed record CatalogVendorDto(
     string Id,
@@ -221,7 +234,18 @@ public sealed record UsageEntryDto(
     string? EndCause = null,
     // The client's round id and its own word for the request (story 4.2) — absent on every older line.
     string? Round = null,
-    string? ClientAttempt = null);
+    string? ClientAttempt = null,
+    // The vendor's own gauge read on the account right after the launch (story 6.1a) — absent on every older line, on
+    // a local line, and after a capture that produced nothing; a number is null, never 0, when it was not reported.
+    string? GaugeObservedUtc = null,
+    string? GaugePlan = null,
+    string? GaugeLimit = null,
+    long? GaugePrimaryMins = null,
+    double? GaugePrimaryUsedPercent = null,
+    string? GaugePrimaryResetsUtc = null,
+    long? GaugeSecondaryMins = null,
+    double? GaugeSecondaryUsedPercent = null,
+    string? GaugeSecondaryResetsUtc = null);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>
@@ -284,12 +308,30 @@ public sealed record UsageWindowDto(
 /// <summary>One account's persisted state, in its own directory.</summary>
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>
 /// <param name="NeedsSignIn">Set when a CLI said so; cleared only by a successful `login`.</param>
+/// <param name="Reader">
+/// The fail-closed "a gauge reader may exist" marker (story 6.1a of todo/PLAN_every_round_is_counted.md) — present from
+/// before the reader is spawned until its tree is confirmed gone, and after a crash until the next holder reconciles it.
+/// Null on every older file and whenever no reader is in flight.
+/// </param>
+/// <param name="Blocked">A <see cref="BlockedReasons"/> code while the account is unavailable until recovery proves it safe; null or empty otherwise.</param>
+/// <param name="Gauge">The latest gauge reading — one overwritten snapshot — or null when none was captured.</param>
+/// <param name="GaugeSuspended">A <see cref="GaugeCodes"/> code while capture is suspended on this account; null or empty otherwise.</param>
+/// <param name="GaugeSuspendedUtc">When the suspension began, or null.</param>
+/// <remarks>
+/// The five trailing fields are absent on every state file written before them and bind to null (doctrine §4a); the
+/// registry reads each null as "none", so an older file is a valid one.
+/// </remarks>
 public sealed record SlotStateDto(
     DateTimeOffset? CooldownUntilUtc,
     bool NeedsSignIn,
     string Note,
     DateTimeOffset LastUsedUtc,
-    int ConsecutiveCooldowns);
+    int ConsecutiveCooldowns,
+    ReaderMarkerDto? Reader = null,
+    string? Blocked = null,
+    GaugeReadingDto? Gauge = null,
+    string? GaugeSuspended = null,
+    DateTimeOffset? GaugeSuspendedUtc = null);
 
 /// <summary>
 /// Every shape this server serialises, source-generated because reflection is switched off.
@@ -314,6 +356,10 @@ public sealed record SlotStateDto(
 [JsonSerializable(typeof(CatalogVendorDto))]
 [JsonSerializable(typeof(CatalogDto))]
 [JsonSerializable(typeof(SlotStateDto))]
+[JsonSerializable(typeof(ReaderMarkerDto))]
+[JsonSerializable(typeof(CoaiMcp.Runners.Processes.ProcessIdentity))]
+[JsonSerializable(typeof(GaugeReadingDto))]
+[JsonSerializable(typeof(GaugeWindowDto))]
 [JsonSerializable(typeof(ReviewRequestDto))]
 [JsonSerializable(typeof(ReviewAcceptedDto))]
 [JsonSerializable(typeof(FieldNoteDto))]

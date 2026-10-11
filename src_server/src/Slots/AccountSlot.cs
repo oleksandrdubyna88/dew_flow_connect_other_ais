@@ -17,6 +17,17 @@ namespace CoaiServer;
 /// How many times in a row this account has been rate-limited without a success in between. It is
 /// what makes the fallback back off instead of hammering an exhausted account every thirty minutes.
 /// </param>
+/// <param name="Blocked">
+/// A <see cref="BlockedReasons"/> code while the account is UNAVAILABLE until recovery proves it safe — a gauge reader
+/// of a crashed server that could not be named, or one that would not die (story 6.1a of
+/// todo/PLAN_every_round_is_counted.md). Empty otherwise. Neither a cooldown (no clock clears it) nor needs-sign-in
+/// (the credentials are fine); every later acquisition reconciles it again, and a human may clear the marker.
+/// </param>
+/// <param name="GaugeSuspended">
+/// A <see cref="GaugeCodes"/> code while gauge capture on this account is suspended — the read met an authentication
+/// error or a refresh request — or empty. Its OWN state: the account still takes jobs, and a job that succeeds lifts it.
+/// </param>
+/// <param name="Gauge">The latest reading of the vendor's own gauge on this account, or null when none was ever captured.</param>
 public sealed record AccountSlot(
     string Vendor,
     string Name,
@@ -25,11 +36,14 @@ public sealed record AccountSlot(
     DateTimeOffset? CooldownUntilUtc,
     bool NeedsSignIn,
     string Note,
-    int ConsecutiveCooldowns)
+    int ConsecutiveCooldowns,
+    string Blocked = "",
+    string GaugeSuspended = "",
+    GaugeReadingDto? Gauge = null)
 {
     /// <summary>True when this account could take work at <paramref name="nowUtc"/>.</summary>
     public bool IsReady(DateTimeOffset nowUtc) =>
-        !NeedsSignIn && (CooldownUntilUtc is null || CooldownUntilUtc <= nowUtc);
+        Blocked.Length == 0 && !NeedsSignIn && (CooldownUntilUtc is null || CooldownUntilUtc <= nowUtc);
 
     /// <summary>True when it is only WAITING — rate-limited, and it will come back on its own.</summary>
     public bool IsCoolingDown(DateTimeOffset nowUtc) =>
@@ -74,9 +88,15 @@ public static class SlotSelector
         }
 
         var soonest = slots.Where(s => s.IsCoolingDown(nowUtc)).Min(s => s.CooldownUntilUtc);
+        if (soonest is { } until)
+        {
+            return $"every account is rate-limited; the first comes back at {until:u}";
+        }
 
-        return soonest is { } until
-            ? $"every account is rate-limited; the first comes back at {until:u}"
+        // Blocked before signed-out: a blocked account's credentials are fine, and `login` would be the wrong cure —
+        // it meets the same barrier. The cure is on the box: the server log names the code.
+        return slots.Any(s => s.Blocked.Length > 0 && !s.NeedsSignIn)
+            ? "every account is unavailable — a gauge reader of a crashed server could not be proved gone; see the server log"
             : $"every account is signed out — run `coai-server login {slots.First().Vendor} <slot>` on the server";
     }
 }

@@ -109,6 +109,28 @@ public sealed record ProcessRequest(
     /// second copy of one decision. Ignored while <see cref="InheritsEnvironment"/> is true.
     /// </remarks>
     public IReadOnlySet<string> Passthrough { get; init; } = ProcessEnvironment.Passthrough;
+
+    /// <summary>The predicate that never ends a child early — the default, and what every launch written before it gets.</summary>
+    public static readonly Func<string, bool> Never = _ => false;
+
+    /// <summary>
+    /// When the child's stdout so far satisfies this, the child is ENDED — its whole tree killed and confirmed gone —
+    /// and the launch returns with <see cref="ProcessResult.Ended"/> set. Default: never.
+    /// </summary>
+    /// <remarks>
+    /// <para>For a child that is a SERVER rather than a command: <c>codex app-server</c> answers one request and then
+    /// serves until it is told to stop, and the way this product stops it is the way it stops every child it has had
+    /// enough of — the tree kill. Asked per chunk of stdout, with the whole text so far, so a predicate looks for a
+    /// complete line and nothing else.</para>
+    /// <para>A request that sets this takes the tree discipline on EVERY early end — the answer and the deadline alike:
+    /// the descendants are listed before the kill and handed to the tracker, and the result says which of them, if any,
+    /// survived (<see cref="ProcessResult.Survivors"/>). A request that leaves it alone is killed on its deadline
+    /// exactly as before, and nothing is listed; the reviewers lose nothing and gain no new work.</para>
+    /// </remarks>
+    public Func<string, bool> EndsWhen { get; init; } = Never;
+
+    /// <summary>Whether this request ends its child itself, and so owns the tree it ends.</summary>
+    public bool EndsEarly => !ReferenceEquals(EndsWhen, Never);
 }
 
 /// <summary>What a run produced. <see cref="TimedOut"/> true means the tree was killed.</summary>
@@ -129,6 +151,15 @@ public sealed record ProcessRequest(
 /// rather than the whole. A caller validating machine-readable output can tell that from a vendor
 /// that answered badly, without parsing the sentence in the text.
 /// </param>
+/// <param name="Ended">
+/// The tree was killed because the request's <see cref="ProcessRequest.EndsWhen"/> said the child had answered —
+/// neither a timeout nor a cancellation. <see cref="TimedOut"/> stays false: the launch got what it asked for.
+/// </param>
+/// <param name="Survivors">
+/// The members of the child's tree that were still alive when the tree discipline gave up confirming — empty for a
+/// tree confirmed gone, and for every request that does not end its child itself. A caller holding a lease over
+/// what those processes can reach decides what a survivor costs; the launcher only reports it.
+/// </param>
 /// </remarks>
 public sealed record ProcessResult(
     int ExitCode,
@@ -136,7 +167,13 @@ public sealed record ProcessResult(
     string StdErr,
     bool TimedOut,
     bool Cancelled = false,
-    bool Truncated = false);
+    bool Truncated = false,
+    bool Ended = false,
+    IReadOnlyList<ProcessIdentity> Survivors = null!)
+{
+    /// <summary>Never null, whatever a constructor was handed: an absent list is an empty one.</summary>
+    public IReadOnlyList<ProcessIdentity> Survivors { get; init; } = Survivors ?? [];
+}
 
 /// <summary>The seam every process in this repository goes through — one launcher, injectable
 /// everywhere, so a test hands in a fake and the suite touches no vendor.</summary>
@@ -215,12 +252,12 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         var tracked = request.TrackAs.Length > 0;
         if (tracked)
         {
-            _tracker.Record(process.Id, process.StartTime.ToUniversalTime(), request.TrackAs);
+            await RecordedAsync(process, request);
         }
 
         try
         {
-            return await RunToCompletionAsync(process, request, stdout, stderr, ct);
+            return await RunToCompletionAsync(process, request, stdout, stderr, tracked, ct);
         }
         finally
         {
@@ -229,6 +266,42 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
                 _tracker.Forget(process.Id);
             }
         }
+    }
+
+    /// <summary>
+    /// Records the child's identity — and a child that CANNOT be recorded is ended before the failure travels.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ProcessTracking.Record"/> never throws; a tracker that writes a slot's reader marker can (a disk, a
+    /// permission). A child alive with its identity on nobody's disk is the one state the containment of story 6.1a
+    /// of todo/PLAN_every_round_is_counted.md has no answer to — a marker still saying "spawning" would then be read as
+    /// "nothing was spawned" — so the launcher closes that door itself: a record that fails is a child that is killed,
+    /// its tree with it, and waited for, before the exception reaches the caller.
+    /// </remarks>
+    private async Task RecordedAsync(Process process, ProcessRequest request)
+    {
+        try
+        {
+            _tracker.Record(process.Id, process.StartTime.ToUniversalTime(), request.TrackAs);
+        }
+        catch (Exception)
+        {
+            await EndItAsync(process, request with { EndsWhen = ProcessRequest.Never }, tracked: false);
+            throw;
+        }
+    }
+
+    /// <summary>How the wait for the child ended.</summary>
+    private enum WaitEnd
+    {
+        /// <summary>The child exited by itself.</summary>
+        Exited,
+
+        /// <summary>The request's deadline, or the caller's token, fired first.</summary>
+        Deadline,
+
+        /// <summary>The request's <see cref="ProcessRequest.EndsWhen"/> said the child had answered.</summary>
+        Answered,
     }
 
     /// <summary>
@@ -290,11 +363,12 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// write that ignored its token (an anonymous pipe on Windows does) still fails at once, with
     /// the <c>IOException</c> this class has always treated as the child's decision.</para>
     /// </remarks>
-    private static async Task<ProcessResult> RunToCompletionAsync(
+    private async Task<ProcessResult> RunToCompletionAsync(
         Process process,
         ProcessRequest request,
         BoundedText stdout,
         BoundedText stderr,
+        bool tracked,
         CancellationToken ct)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -305,23 +379,24 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         // the same token would throw that away at the one moment it matters.
         using var draining = new CancellationTokenSource();
 
+        // Set the moment the stdout so far satisfies the request's own predicate — for a child that is
+        // a server and answers before it ends. Checked on the stdout drain alone: an answer arrives there.
+        var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action onStdOut = request.EndsEarly
+            ? () => AnsweredIf(request, stdout, answered)
+            : static () => { };
+
         // Started before the write, because a child may answer before it has finished reading — and
         // one that fills ITS pipe while nobody drains ours is a deadlock made of two blocked writes.
         var reading = Task.WhenAll(
-            DrainAsync(process.StandardOutput, stdout, draining.Token),
-            DrainAsync(process.StandardError, stderr, draining.Token));
+            DrainAsync(process.StandardOutput, stdout, draining.Token, onStdOut),
+            DrainAsync(process.StandardError, stderr, draining.Token, static () => { }));
         var writing = WriteStdInAsync(process, request.StdIn, deadline.Token);
 
-        var timedOut = false;
-        try
-        {
-            await process.WaitForExitAsync(deadline.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            timedOut = true;
-            await EndItAsync(process);
-        }
+        var end = await UntilExitOrAnswerAsync(process, answered.Task, deadline.Token);
+        var survivors = end == WaitEnd.Exited
+            ? []
+            : await EndItAsync(process, request, tracked);
 
         // The child is gone, so the streams should end now. The grace is what bounds the case where
         // they do not — and it CANCELS the read rather than walking away from it, so no suspended
@@ -329,6 +404,8 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         // reading. (codex and gemini, code round, from three directions.)
         draining.CancelAfter(request.DrainGrace);
         await Task.WhenAll(SettledAsync(writing), SettledAsync(reading));
+
+        var timedOut = end == WaitEnd.Deadline;
 
         return new ProcessResult(
             process.ExitCode,
@@ -340,11 +417,66 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             // too slow for it; a caller that cancelled is a job somebody withdrew, and retrying that
             // is spending money on an answer nobody is waiting for.
             Cancelled: timedOut && ct.IsCancellationRequested,
-            Truncated: stdout.Truncated || stderr.Truncated);
+            Truncated: stdout.Truncated || stderr.Truncated,
+            Ended: end == WaitEnd.Answered,
+            Survivors: survivors);
+    }
+
+    /// <summary>Asks the request's predicate of the stdout so far, and marks the launch answered once it says yes.</summary>
+    /// <remarks>
+    /// The predicate is given the text at every chunk, which is quadratic in the child's output — and that is fine for
+    /// the one caller this exists for, whose child says a few kilobytes and is then ended. Guarded against a predicate
+    /// that throws: a reader's parse error is "not answered yet", never a launch that faults mid-drain.
+    /// </remarks>
+    private static void AnsweredIf(ProcessRequest request, BoundedText stdout, TaskCompletionSource answered)
+    {
+        try
+        {
+            if (request.EndsWhen(stdout.ToString()))
+            {
+                answered.TrySetResult();
+            }
+        }
+        catch (Exception)
+        {
+            // Not answered yet, as far as this launcher can tell; the deadline still bounds the wait.
+        }
+    }
+
+    /// <summary>Waits for the first of: the child exiting, the request's answer, the deadline — and says which.</summary>
+    /// <remarks>
+    /// The exit wait is given a token of its own, cancelled when the answer wins, and then settled, so no wait is left
+    /// suspended against a process about to be killed and disposed. The deadline's own cancellation arrives as the
+    /// exit wait throwing, which is read as the deadline and nothing else.
+    /// </remarks>
+    private static async Task<WaitEnd> UntilExitOrAnswerAsync(Process process, Task answered, CancellationToken deadline)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline);
+        var exit = process.WaitForExitAsync(stop.Token);
+        var first = await Task.WhenAny(exit, answered);
+        if (first == answered)
+        {
+            await stop.CancelAsync();
+            await SettledAsync(exit);
+
+            return WaitEnd.Answered;
+        }
+
+        try
+        {
+            await exit;
+
+            return WaitEnd.Exited;
+        }
+        catch (OperationCanceledException)
+        {
+            return WaitEnd.Deadline;
+        }
     }
 
     /// <summary>
-    /// Ends a child that outlived its deadline, and waits for it to actually be gone.
+    /// Ends a child that outlived its deadline — or answered, for a request that ends its child itself — and waits for
+    /// it to actually be gone.
     /// </summary>
     /// <remarks>
     /// <para>Its own method because the doctrine's complexity bound is four and the loop it was
@@ -358,9 +490,25 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// blocked for ever — with the launcher awaiting it, and on the Team server an account locked
     /// behind it. Closing our own end fails the write at once, whoever else is holding theirs.
     /// (codex, code round.)</para>
+    /// <para><b>A request that ends its child itself owns the tree it ends</b> (story 6.1a of
+    /// todo/PLAN_every_round_is_counted.md): the descendants are listed BEFORE the kill — a killed parent's children
+    /// are reparented and cannot be found afterwards — and written to the tracker before the signal is sent, so a
+    /// crash in the middle of this still leaves every member named on disk; after the kill each member is checked by
+    /// pid and start time, and the ones still there at the bound come back as survivors. A request without a
+    /// predicate takes the old path exactly: kill the tree, wait for the root, list nothing.</para>
     /// </remarks>
-    private static async Task EndItAsync(Process process)
+    /// <returns>The tree members still alive after the confirmation; empty for a request that lists none.</returns>
+    private async Task<IReadOnlyList<ProcessIdentity>> EndItAsync(Process process, ProcessRequest request, bool tracked)
     {
+        var members = request.EndsEarly ? ProcessTree.Descendants(process.Id) : [];
+        if (tracked)
+        {
+            foreach (var member in members)
+            {
+                _tracker.Record(member.Pid, member.StartedUtc, request.TrackAs);
+            }
+        }
+
         Close(process.StandardInput);
         try
         {
@@ -374,6 +522,28 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         // No token: this is the wait for a process we have already killed, and a cancelled one would
         // return before the handle is free.
         await process.WaitForExitAsync(CancellationToken.None);
+
+        return await ConfirmedGoneAsync(members, tracked);
+    }
+
+    /// <summary>The members still alive after the bound — each one confirmed gone is forgotten by the tracker.</summary>
+    private async Task<IReadOnlyList<ProcessIdentity>> ConfirmedGoneAsync(IReadOnlyList<ProcessIdentity> members, bool tracked)
+    {
+        if (members.Count == 0)
+        {
+            return [];
+        }
+
+        var survivors = await ProcessTree.ConfirmGoneAsync(members);
+        if (tracked)
+        {
+            foreach (var gone in members.Where(member => !survivors.Contains(member)))
+            {
+                _tracker.Forget(gone.Pid);
+            }
+        }
+
+        return survivors;
     }
 
     /// <summary>
@@ -415,7 +585,8 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// are different clocks. Its cancellation is CAUGHT here, so the launch still returns everything
     /// that did arrive and the text says the rest was dropped.
     /// </param>
-    private static async Task DrainAsync(StreamReader stream, BoundedText into, CancellationToken ct)
+    /// <param name="onChunk">Told after every chunk lands — how a request that ends its child on an answer gets to look.</param>
+    private static async Task DrainAsync(StreamReader stream, BoundedText into, CancellationToken ct, Action onChunk)
     {
         var buffer = new char[DrainBufferChars];
         try
@@ -423,6 +594,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             while (await stream.ReadAsync(buffer, ct) is var read && read > 0)
             {
                 into.Append(buffer, read);
+                onChunk();
             }
         }
         catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException or IOException)

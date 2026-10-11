@@ -191,8 +191,15 @@ var jobRunner = new JobRunner(
     // The CLI version a job's ledger line names is the catalog's last probe — never a --version per job (story 3.4).
     new ReviewLauncher(new ProcessLauncher(), (message, error) => reportSessionFailure?.Invoke(message, error), vendorHealth.LastSeenVersion),
     new UsageLedger(dataDir),
-    (message, error) => reportSessionFailure?.Invoke(message, error));
+    (message, error) => reportSessionFailure?.Invoke(message, error),
+    // The vendor's own gauge, read after each codex job inside the slot's lease (story 6.1a of
+    // todo/PLAN_every_round_is_counted.md). The reader's launcher is built around the tracker that writes the child's
+    // identity into the slot's marker; the log gets codes and numbers, never a line of what the reader said.
+    new GaugeCapture(slotRegistry, tracker => new ProcessLauncher(tracker), Startup.Version, message => reportCatalog?.Invoke(message)));
 builder.Services.AddSingleton(jobs);
+// The gauge readers a dead server left behind, reconciled at boot through the same slot-locked path every acquisition
+// takes — registered BEFORE the pump, so the sweep runs before the first claim.
+builder.Services.AddHostedService(sp => new GaugeReaderSweep(catalog, slotRegistry, sp.GetRequiredService<ILogger<GaugeReaderSweep>>()));
 builder.Services.AddHostedService(sp => new JobPump(
     jobs, catalog, jobRunner, sp.GetRequiredService<ILogger<JobPump>>()));
 // Expired session files go at boot and every hour after. The boot sweep used to be a line here and

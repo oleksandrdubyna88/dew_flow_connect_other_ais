@@ -22,6 +22,11 @@
          against the POST the real ask-remote shim code builds for a launch, never against a hand-built request: the
          shim's own ten seconds are the number a hand-built one misses. -->
     <ProjectReference Include="..\..\src_mcp\src\CoaiMcp.csproj" />
+    <!-- The fake CLI, beside the tests, for the gauge reader's containment (story 6.1a of
+         todo/PLAN_every_round_is_counted.md): the crash harness runs the REAL server binary as a child with a fake
+         `codex` on its PATH — a server-shaped stand-in that survives the parent that started it — and the barrier
+         tests kill real processes it starts. Run as an executable, never loaded as a library. -->
+    <ProjectReference Include="..\..\src_mcp\tests_fakecli\FakeCli.csproj" />
   </ItemGroup>
 
   <ItemGroup>
