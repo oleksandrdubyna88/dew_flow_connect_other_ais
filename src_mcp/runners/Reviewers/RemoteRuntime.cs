@@ -145,6 +145,57 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     private static string[] ContractTwo(string systemFile, string effort) =>
         [.. effort.Length > 0 ? ["--effort", effort] : (string[])[], .. systemFile.Length > 0 ? ["--system-prompt-file", systemFile] : (string[])[]];
 
+    /// <summary>
+    /// The shim's command line for THIS launch (story 4.1 of todo/PLAN_every_round_is_counted.md): its own waiting deadline
+    /// and the vendor's budget re-derived from the launch's EFFECTIVE timeout, the attempt it is, and the round it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="Build"/> fixed <c>--timeout-seconds</c> from the reviewer timeout, and <see cref="RetryLadder"/>
+    /// later shortened only <c>Request.Timeout</c> — so a repair launched with forty seconds left still waited, and
+    /// advertised, the six hundred it was built with; a stale large value over-admits at the server and never refuses
+    /// (the risk consultation for epic 4). Re-deriving both numbers here, from the one timeout the executor will enforce,
+    /// is what keeps the shim's deadline, the vendor's budget and the advertised <c>remainingSeconds</c> one fact.</para>
+    /// <para>Pure, and idempotent: a flag already on the argv is replaced in place, so a launch rebuilt twice is the same
+    /// launch. The round goes on only when the launch has one; the attempt always — the executor stamps every launch.</para>
+    /// </remarks>
+    public ReviewerInvocation ForLaunch(ReviewerInvocation invocation)
+    {
+        var timeout = invocation.Request.Timeout;
+        var argv = WithFlag(invocation.Request.Arguments, "--timeout-seconds", LocalAsk.ShimDeadlineSeconds(timeout).ToString());
+        argv = WithFlag(argv, "--vendor-timeout-seconds", VendorBudgetSeconds(timeout).ToString());
+        argv = WithFlag(argv, "--attempt", invocation.Attempt);
+        argv = invocation.Round.Length > 0 ? WithFlag(argv, "--round", invocation.Round) : argv;
+
+        return invocation with { Request = invocation.Request with { Arguments = argv } };
+    }
+
+    /// <summary>
+    /// The argv with <paramref name="flag"/> set to <paramref name="value"/>: the value replaced in place where the flag
+    /// already carries one, else the pair appended. A trailing flag with no value is left as it was and the pair appended
+    /// after it — <c>Program.Flags</c> reads the last pair, so the new value wins either way.
+    /// </summary>
+    internal static IReadOnlyList<string> WithFlag(IReadOnlyList<string> argv, string flag, string value)
+    {
+        var at = IndexOf(argv, flag);
+
+        return at < 0 || at == argv.Count - 1
+            ? [.. argv, flag, value]
+            : [.. argv.Take(at + 1), value, .. argv.Skip(at + 2)];
+    }
+
+    private static int IndexOf(IReadOnlyList<string> argv, string flag)
+    {
+        for (var i = 0; i < argv.Count; i++)
+        {
+            if (argv[i] == flag)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>What the Team server said it did not apply — the shim's usage line carries it (contract 2, E2.5).</summary>
     public string NotApplied(ReviewerInvocation invocation, ProcessResult result) => RemoteAsk.NotAppliedOf(result.StdOut);
 

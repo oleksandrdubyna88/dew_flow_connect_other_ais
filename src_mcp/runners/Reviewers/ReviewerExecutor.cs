@@ -569,9 +569,12 @@ public sealed class ReviewerExecutor(
         // The LESSER of the two, not whichever was computed last. The scheduler may already have
         // shortened this repair on a retry, and overwriting that with the executor's own remainder
         // would hand it back time the ladder had taken away. Raised on the code round.
+        // Stamped with what it IS (story 4.1 of todo/PLAN_every_round_is_counted.md): an adapter that repeats the
+        // attempt on the wire reads it at launch, and it is the word the ledger's line below carries.
         var started = spent.Elapsed;
-        var second = await RunOnceAsync(RetryLadder.Lesser(left, next.Launch!), ct);
-        var after = AfterTheRepair(next.Launch!, (usage, answer, evidence), second);
+        var launch = next.Launch! with { Attempt = next.Attempt };
+        var second = await RunOnceAsync(RetryLadder.Lesser(left, launch), ct);
+        var after = AfterTheRepair(launch, (usage, answer, evidence), second);
 
         // Two paid launches, each its own ledger line (story 3.3 of todo/PLAN_every_round_is_counted.md): the outcome's
         // sums stay what every other reader adds, and the parts say what each launch was, cost and took.
@@ -813,7 +816,15 @@ public sealed class ReviewerExecutor(
         }
     }
 
-    public async Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct)
+    /// <summary>
+    /// Every launch passes through here, so this is where the adapter is asked for the launch AS IT WILL START
+    /// (<see cref="IReviewerRuntime.ForLaunch"/>): the Team server shim's own deadline, attempt and round are argv, and the
+    /// executor and the ladder decide two of the three after <c>Build</c> (story 4.1 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    public Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct) =>
+        LaunchBuiltAsync(invocation.Adapter?.ForLaunch(invocation) ?? invocation, ct);
+
+    private async Task<ReviewerLaunch> LaunchBuiltAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;
         try

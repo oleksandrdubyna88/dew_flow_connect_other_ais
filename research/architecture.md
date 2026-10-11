@@ -842,6 +842,17 @@ runtime's listed levels, a cap) and the accepted answer names what it dropped or
 or a server that still says 1 — into the reviewer's note, so "sent" is never read as "applied". The minimum stays
 1: nothing an older half reads has changed shape.
 
+**Still contract 2 (2026-10-11, story 4.1 of todo/PLAN_every_round_is_counted.md):** a review also carries the round's
+identity (`round`, 32 hex characters the engine mints when the round starts — every launch of the round, retries,
+repairs and follow-ups included, sends the same one), what the launch is inside its turn (`attempt`: `first`, `retry`,
+`repair`, `followUp`) and the seconds left on the shim's own deadline at submit (`remainingSeconds`, relative — never
+an instant, so no clock crosses the seam; never 0 — an exhausted budget is refused on the client before the wire).
+Additive and optional, each left out when empty, so the number did not move: the deployed server's `ServerJsonContext`
+sets no `UnmappedMemberHandling` and skips what it does not know, measured live by the contract suite's zero-spend
+probe (a body with those members and `"kind":"probe-no-such-kind"` is refused by its KIND, which the server judges only
+after binding — nothing queued, nothing spent). Reading them, and ending a job whose caller can no longer wait, are the
+server's stories (4.2, 4.3).
+
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
 `COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step

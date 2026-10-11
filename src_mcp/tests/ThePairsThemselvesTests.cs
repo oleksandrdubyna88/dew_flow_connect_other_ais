@@ -519,9 +519,12 @@ public sealed class ThePairsThemselvesTests : IDisposable
         // column it already has: step 14 (issue #131) added two to `rounds`, step 15 (the consultation
         // cadence) three more and three to `consultations`, step 16 (the feature stage's skip reason)
         // one more to `rounds`, step 18 (the security lane's evidence projection) one to `findings`, step 19
-        // (why a consultation failed) three more to `consultations`, and step 20 (the round counter's model)
-        // one to `reviewers`. Step 17 (the question consultant) only creates tables IF NOT EXISTS, and step
-        // 20's index is CREATE INDEX IF NOT EXISTS, so re-running those needs nothing dropped.
+        // (why a consultation failed) three more to `consultations`, step 20 (the round counter's model)
+        // one to `reviewers`, and step 21 (the round's identity across the wire, story 4.1) one more to
+        // `rounds`. Step 17 (the question consultant) only creates tables IF NOT EXISTS, and step 20's index
+        // is CREATE INDEX IF NOT EXISTS, so re-running those needs nothing dropped. A column left here makes
+        // the reopen's migration throw, RoundsDb.Open answer null by design, and this test fail with a
+        // NullReferenceException on `db.Pairs` — which is how step 21 was first seen by it.
         Execute("""
             ALTER TABLE collect_pairs DROP COLUMN comment;
             ALTER TABLE collect_pairs DROP COLUMN comment_lost;
@@ -539,6 +542,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE consultations DROP COLUMN failure_cure;
             ALTER TABLE consultations DROP COLUMN evidence;
             ALTER TABLE reviewers DROP COLUMN model;
+            ALTER TABLE rounds DROP COLUMN round_key;
             PRAGMA user_version = 12;
             """);
         SqliteConnection.ClearAllPools();

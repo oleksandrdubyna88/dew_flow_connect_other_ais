@@ -35,6 +35,10 @@ internal static class AskRemote
         // Contract 2 (E2.5): the row's effort, and its system prompt in a file — never argv.
         var effort = flags.GetValueOrDefault("--effort", string.Empty);
         var systemPromptFile = flags.GetValueOrDefault("--system-prompt-file", string.Empty);
+        // Story 4.1 of todo/PLAN_every_round_is_counted.md: which round this launch belongs to and what it is inside its
+        // turn — both from the adapter (RemoteRuntime.ForLaunch); a shim run by hand sends neither.
+        var round = flags.GetValueOrDefault("--round", string.Empty);
+        var attempt = flags.GetValueOrDefault("--attempt", string.Empty);
 
         var token = TeamServerAuth.ReadToken(tokenFile);
         if (Refusal(server, vendor, promptFile, outFile, token) is { } refused)
@@ -67,7 +71,11 @@ internal static class AskRemote
         http.DefaultRequestHeaders.Add(RemoteAsk.ContractHeader, RemoteAsk.ContractVersion.ToString());
 
         return await ReviewAsync(
-            new Job(server, vendor, model, role, promptFile, outFile, jobFile, tokenFile, deadline, vendorBudget, effort, systemPromptFile),
+            new Job(server, vendor, model, role, promptFile, outFile, jobFile, tokenFile, deadline, vendorBudget, effort, systemPromptFile)
+            {
+                Round = round,
+                Attempt = attempt,
+            },
             http, note, output);
     }
 
@@ -93,7 +101,14 @@ internal static class AskRemote
         string Server, string Vendor, string Model, string Role,
         string PromptFile, string OutFile, string JobFile, string TokenFile,
         TimeSpan Deadline, int VendorBudgetSeconds,
-        string Effort = "", string SystemPromptFile = "", string NotApplied = "");
+        string Effort = "", string SystemPromptFile = "", string NotApplied = "")
+    {
+        /// <summary>The round's identity, sent on every launch of it — empty when the shim was not told (story 4.1).</summary>
+        public string Round { get; init; } = string.Empty;
+
+        /// <summary>What this launch is inside its turn, one of <see cref="LaunchAttempts"/> — empty when the shim was not told.</summary>
+        public string Attempt { get; init; } = string.Empty;
+    }
 
     private static async Task<int> ReviewAsync(Job job, HttpClient http, Action<string> note, TextWriter output)
     {
@@ -107,7 +122,7 @@ internal static class AskRemote
         // time the server spent thinking.
         var waited = Stopwatch.StartNew();
 
-        var submitted = await SubmitAsync(job, prompt, instruction, http, note);
+        var submitted = await SubmitAsync(job, prompt, instruction, job.Deadline - waited.Elapsed, http, note);
         if (submitted.Exit is { } refused)
         {
             return refused;
@@ -145,16 +160,40 @@ internal static class AskRemote
         }
     }
 
+    /// <summary>
+    /// The submit — or the refusal to make one: a launch whose own deadline is already spent sends NOTHING.
+    /// </summary>
+    /// <param name="left">What is left of this shim's deadline — the <c>remainingSeconds</c> the body advertises, relative.</param>
+    /// <remarks>
+    /// Serialising a 0 and letting the server drop it would quietly switch the server's budget refusal (story 4.3) off for
+    /// exactly the launch it exists for — a request without the field is an OLD client's, and is never refused for budget.
+    /// So an exhausted budget is refused HERE, before the wire, with its own sentence (the risk consultation for epic 4).
+    /// </remarks>
     private static async Task<(string Id, int? Exit, string NotApplied)> SubmitAsync(
-        Job job, string prompt, string instruction, HttpClient http, Action<string> note)
+        Job job, string prompt, string instruction, TimeSpan left, HttpClient http, Action<string> note)
     {
-        var body = RemoteAsk.RequestBody(job.Vendor, job.Model, job.Role, prompt, job.VendorBudgetSeconds, job.Effort, instruction);
+        var remaining = RemoteAsk.RemainingSeconds(left);
+        if (remaining == 0)
+        {
+            note(RemoteAsk.BudgetSpentMessage(job.Server, job.Deadline));
 
+            return (string.Empty, RemoteAsk.TooSlow, string.Empty);
+        }
+
+        var body = RemoteAsk.RequestBody(
+            job.Vendor, job.Model, job.Role, prompt, job.VendorBudgetSeconds, job.Effort, instruction, job.Round, job.Attempt, remaining);
+
+        return await PostAsync(job, body, instruction, left, http, note);
+    }
+
+    private static async Task<(string Id, int? Exit, string NotApplied)> PostAsync(
+        Job job, string body, string instruction, TimeSpan left, HttpClient http, Action<string> note)
+    {
         try
         {
-            // The submit gets the review's own deadline, so a stalled server cannot spend more of it
-            // than the person allowed for the whole review.
-            using var budget = new CancellationTokenSource(job.Deadline);
+            // The submit gets what is LEFT of the review's own deadline, so a stalled server cannot spend
+            // more of it than the person allowed for the whole review.
+            using var budget = new CancellationTokenSource(left);
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
             using var response = await http.PostAsync(
                 TeamServerAuth.Endpoint(job.Server, "api/reviews"), content, budget.Token);

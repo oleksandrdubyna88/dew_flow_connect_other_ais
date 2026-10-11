@@ -3229,6 +3229,15 @@ stamped 17) are repaired first and then migrate through to step 20 (`TheReviewer
 opened read-only cannot run the step and does not try — `--round-counts` on a step-19 file leaves it at step 19,
 byte for byte.
 
+**Schema step 21 — `rounds.round_key`** (`Schema.TheRoundsKey`, appended after step 20; story 4.1 of
+`todo/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
+mints when the round starts (`RoundKeys.Mint`) — as `RoundRecord.Key` in the session file and here, written by
+`RoundsDb.RecordRoundRow` from the record (the upsert on `(session, stage, number)` rewrites it with the rest). **Empty
+means "not recorded"**: every row from before the step, and a skipped round (`RoundSkips.Record`), which launched
+nothing. No index: nothing on this machine looks a round up by its key yet, and sixteen bytes a round is the whole cost.
+Reached through both preview-fork shapes as step 20 is (`TheRoundKeyIsStepTwentyOneTests`); `--round-counts` on a
+step-20 file reads and leaves it at twenty — no reader asks for the column.
+
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
 The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer
@@ -6805,3 +6814,14 @@ not read would say nothing to the person. An On row, a row outside the range, an
 no such sentence. The review stages ask before they build (`RosterBuilder.CodexTiersAsync` → `BuildWork(codexTiers:)`,
 from `ReviewPlanAsync`, `ReviewCodeAsync`, `ReviewDocumentAsync` and `FeatureStage`); a codex question row asks in
 `QuestionRowLaunch.TierProbedAsync`, which now takes the fan-out's launcher.
+
+## A round is minted its identity when it starts (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+
+`RoundEngine.RunStageAsync` mints `RoundKeys.Mint()` beside `RoundNumber.Next` — once per round that runs, so `again`,
+the escalation ladder and a person's Continue/Fix (each a fresh pass through the engine) start a new round with a new
+key — stamps it on every launch of the work the stage built (`RoundWork.InRound`: each reviewer's launch and repair, the
+security lane's too) and hands it to `LiveRound`, whose first save already carries `RoundRecord.Key`; the projection
+writes `rounds.round_key` (schema step 21, under *`--round-counts`* above). `status` answers it as `rounds[].key`, and
+an older session file reads an empty one. A skipped round is minted none. What a launch does with the key on the wire —
+`ReviewerInvocation.Round`, `IReviewerRuntime.ForLaunch`, the shim's `remainingSeconds` — is the runners' half:
+[module_runners.md](module_runners.md), *A round has an identity on the wire*.

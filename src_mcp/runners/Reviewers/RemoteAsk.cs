@@ -95,10 +95,30 @@ public static class RemoteAsk
 
     /// <summary>The body of <c>POST /api/reviews</c>.</summary>
     /// <remarks>Contract 2's fields are left out when empty, so a row with neither sends what a contract-1 client sent.</remarks>
-    public static string RequestBody(string vendor, string model, string role, string prompt, int timeoutSeconds, string effort = "", string systemPrompt = "") =>
+    /// <param name="round">The round's identity, 32 hex characters — left out when empty (story 4.1 of todo/PLAN_every_round_is_counted.md).</param>
+    /// <param name="attempt">What this launch is inside its turn, one of <see cref="LaunchAttempts"/> — left out when empty.</param>
+    /// <param name="remainingSeconds">The whole seconds left on the shim's own deadline at submit — left out when not positive (never 0).</param>
+    public static string RequestBody(
+        string vendor, string model, string role, string prompt, int timeoutSeconds, string effort = "", string systemPrompt = "",
+        string round = "", string attempt = "", int remainingSeconds = 0) =>
         JsonSerializer.Serialize(
-            new RemoteRequest(vendor, model, prompt, role, timeoutSeconds, OrNone(effort), OrNone(systemPrompt)),
+            new RemoteRequest(
+                vendor, model, prompt, role, timeoutSeconds, OrNone(effort), OrNone(systemPrompt),
+                OrNone(round), OrNone(attempt), remainingSeconds > 0 ? remainingSeconds : null),
             RemoteJsonContext.Default.RemoteRequest);
+
+    /// <summary>
+    /// The whole seconds left of a deadline, as the body advertises them: never negative, and 0 means "none left" — which
+    /// the shim does not submit (an exhausted budget serialised as 0 and dropped by the server would switch its refusal
+    /// off for exactly the launch it exists for).
+    /// </summary>
+    public static int RemainingSeconds(TimeSpan left) => left <= TimeSpan.Zero ? 0 : (int)Math.Floor(left.TotalSeconds);
+
+    /// <summary>The shim's own deadline was spent before the review was submitted; nothing was sent.</summary>
+    public static string BudgetSpentMessage(string serverUrl, TimeSpan deadline) =>
+        $"this reviewer's own deadline of {deadline.TotalSeconds:0}s was spent before its review could be submitted to "
+        + $"the Team server at {serverUrl}, so nothing was sent. Raise COAI_REVIEWER_TIMEOUT_MINUTES, or ask the operator "
+        + "for more accounts on that vendor.";
 
     private static string? OrNone(string text) => text.Length == 0 ? null : text;
 
@@ -317,6 +337,15 @@ public static class RemoteAsk
     }
 }
 
+/// <param name="Round">The round's identity (story 4.1 of todo/PLAN_every_round_is_counted.md) — absent when the launch is outside a round.</param>
+/// <param name="Attempt">What the launch is inside its turn — absent when the shim was not told.</param>
+/// <param name="RemainingSeconds">The seconds left on the shim's own deadline at submit, relative — never an instant, so a clock on either side cannot enter; absent rather than 0.</param>
+/// <remarks>
+/// Still contract 2: the three are additive and optional, and the deployed server's <c>ServerJsonContext</c> sets no
+/// <c>UnmappedMemberHandling</c>, so a server older than them skips them at binding — measured live by the contract
+/// suite's zero-spend probe (<c>src_vs_code/src/test/reviewBody.contract.ts</c>). A version the old server does not serve
+/// would refuse every review.
+/// </remarks>
 internal sealed record RemoteRequest(
     string Vendor,
     string Model,
@@ -324,7 +353,10 @@ internal sealed record RemoteRequest(
     string Role,
     int TimeoutSeconds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Effort = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SystemPrompt = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SystemPrompt = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Round = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Attempt = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RemainingSeconds = null);
 
 /// <summary>A field a contract-2 server did not take as sent, and why.</summary>
 internal sealed record RemoteFieldNote(string? Field, string? Reason);
