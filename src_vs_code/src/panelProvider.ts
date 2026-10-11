@@ -2260,7 +2260,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       : '';
   }
 
-  /** This window's side as the side registry records it — the one activation stamps (`sideHereOf`). */
   /**
    * A value typed into the OTHER side's CLI-path box that is spelled for this side's OS (`cliPathRefusal`): kept with its
    * reason and drawn beside the box by the repaint, never a toast (todo/PLAN_paths_per_side.md E4.1). Every write of the
@@ -2283,6 +2282,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return reason.length > 0;
   }
 
+  /** This window's side as the side registry records it — the one activation stamps (`sideHereOf`). */
   private sideHere(): SideHere {
     return sideHereOf(thisSide(this.context.globalStorageUri), process.platform);
   }
