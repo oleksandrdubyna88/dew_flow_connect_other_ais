@@ -291,6 +291,23 @@ internal static class Program
         RoundCounts,
     }
 
+    /// <summary>
+    /// The modes a PERSON starts that write under the data directory (research/PLAN_names_and_a_missing_root.md, story
+    /// 3.1): the paid checks through their lock, and the rest through <c>RoundsDb.Open</c>. Each stops before it starts
+    /// while the NAMED data root is confirmed absent — <c>AWriterModeRefusesAMissingNamedRootTests</c> runs every one.
+    /// </summary>
+    internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
+    {
+        Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
+        Startup.UploadPairs, Startup.RequeueRefused,
+    };
+
+    /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
+    internal static string MissingRootRefusal(Startup startup, Func<string, string?> env, Func<string, FileAttributes> attributesOf) =>
+        WriterModes.Contains(startup) && Server.PanelSettings.NamedRootMissing(env, attributesOf) is { Length: > 0 } missing
+            ? missing + Server.PanelSettings.WriterCure
+            : string.Empty;
+
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
     internal static Startup Classify(string[] args) =>
         args.Length == 0
@@ -358,7 +375,14 @@ internal static class Program
 
     internal static async Task<int> RunAsync(string[] args)
     {
-        switch (Classify(args))
+        var startup = Classify(args);
+        if (MissingRootRefusal(startup, Environment.GetEnvironmentVariable, File.GetAttributes) is { Length: > 0 } refused)
+        {
+            Note(refused);
+            return 74; // EX_IOERR — the extension words 74 as "could not use its data directory"
+        }
+
+        switch (startup)
         {
             case Startup.Help:
                 // `--help` on stdout: a person running this by hand is not speaking the protocol.
