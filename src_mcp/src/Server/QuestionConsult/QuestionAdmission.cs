@@ -179,9 +179,26 @@ public static class QuestionRowResolver
 
         return QuestionResolution.Answering.FirstOrDefault(runtime => ConsultantResolver.SameId(runtime, row.Vendor)) is { } named
             ? new ResolvedQuestionRow.Vendor(ConsultantResolver.FromRuntime(choice, named) with { VaultKey = row.Key })
-            : new ResolvedQuestionRow.Unavailable(
-                $"the row '{row.Id}' names the vendor '{row.Vendor}', which is neither a reviewer row nor a runtime this build can "
-                + $"launch a question on ({string.Join(", ", QuestionResolution.Answering)}) — give the row a runtime of its own, "
-                + $"or name a reviewer, in {QuestionAdmission.Section}");
+            : new ResolvedQuestionRow.Unavailable(NoModel(row));
+    }
+
+    /// <summary>
+    /// Why a row with no runtime of its own names nothing that answers — in the extension's words
+    /// (<c>qconsultWrite.ts</c>, <c>noModel</c>; research/PLAN_names_and_a_missing_root.md story 2). An id that is no
+    /// runtime's name is a catalog pick the extension sent stranded — its row is gone or no longer ticked; a runtime's own
+    /// name that does not answer questions keeps the list of those that do, which is its cure. Never <c>''</c>.
+    /// </summary>
+    private static string NoModel(QuestionRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Vendor))
+        {
+            return $"this row picks no model — pick one, in {QuestionAdmission.Section}";
+        }
+
+        return ReviewerRuntimeSelector.RuntimeNames.Contains(row.Vendor)
+            ? $"the row '{row.Id}' names the vendor '{row.Vendor}', which is neither a reviewer row nor a runtime this build can "
+              + $"launch a question on ({string.Join(", ", QuestionResolution.Answering)}) — give the row a runtime of its own, "
+              + $"or name a reviewer, in {QuestionAdmission.Section}"
+            : $"{row.Vendor} is no longer ticked question consultant (or was removed) — pick another model, in {QuestionAdmission.Section}";
     }
 }
