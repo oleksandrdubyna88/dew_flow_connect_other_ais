@@ -57,6 +57,7 @@ const { securitySeam } = await import('./seam-security.mjs');
 // The security prompt text leg: the tab's reading of real prompt files against the server's (epic 2).
 const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
+const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
 const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
 const { featuresSeam } = await import('./seam-features.mjs');
 // The question consultant's roots of the other OS: the page's decision against the server's, one root at a time.
@@ -498,6 +499,10 @@ console.log(`  ok  ${tier.compared} rows asked of the extension and the server a
 // byte for byte, before and after, and the binary lists the same reviewers from a multi-instance catalog.
 const catalog = await catalogSeam({ providersIn, fail });
 console.log(`  ok  a migrated catalog writes the same settings file, and the server's reviewers are still ${catalog.ids.join(', ')}`);
+
+// The usage-counts leg (E5's plan round): the REAL Team server over a seeded ledger, read by the extension's own parser.
+const counts = await usageCountsSeam({ fail });
+console.log(`  ok  the Team server's round counts for ${counts.windows.join(', ')} (${counts.vendorsRead} vendor rows) read by value through the extension's own parser`);
 
 // The consultant-row leg (C2 of the epics 1–3 consultation): a consultant's catalog row, written by the extension with
 // its effort, system prompt and timeout, is read by the server's own parser — and never handed to a binary without it.

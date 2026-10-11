@@ -2,6 +2,7 @@ import { escapeHtml } from './escapeHtml';
 import { PersonListing, Usage, VendorUsage } from './teamServerApi';
 import { costText, ListPrice, totalCost, vendorCost } from './teamCost';
 import { launchesChart } from './teamChart';
+import { teamRoundsBlock } from './teamRounds';
 import { idleList, joinPeople, peopleCards, PeopleView, totalsOf } from './teamPeople';
 import { TeamServerState } from './teamServerView';
 import { selectedServer, TeamSelection, TeamWindow, windowOf } from './teamTabSelection';
@@ -13,9 +14,10 @@ import { VendorPalette } from './vendorColour';
  * The Team server tab's figures, as markup (todo/PLAN_team_usage_by_person.md, story 1.3) — pure, so every sentence an
  * admin reads is a test rather than something only a real server can show.
  *
- * <p><b>Launches, not rounds.</b> The server's ledger has a line per vendor RUN and no round id, so grouping it by
- * person or day yields launches; the tab counts those and says so. Rounds, retries, cached share and the vendor quota
- * gauges in the approved mockup belong to PLAN_every_round_is_counted.md and appear here when its fields arrive.</p>
+ * <p><b>Launches, and the server's rounds beside them.</b> The server's ledger has a line per vendor RUN, so grouping it
+ * by person or day yields launches; the tab counts those and says so. Rounds are what the SERVER counted by the round id
+ * each client sent (story 5.1 of PLAN_every_round_is_counted.md) and are drawn under the vendor rows by `teamRounds.ts`;
+ * the cached share and the vendor quota gauges of the approved mockup are that plan's later stories.</p>
  *
  * <p><b>Absent is never zero (D8).</b> What today's server cannot say — a model per row, a price, who is signed in, a
  * per-day series — says which server it needs in its place. A server is recognised as older by the ABSENCE of
@@ -368,7 +370,12 @@ function models(row: VendorUsage, usage: Usage): string {
     : `<span class="model">${row.models.map((one) => `${escapeHtml(one.model.length > 0 ? one.model : 'unknown')} ${shortNumber(one.runs)}`).join(', ')}</span>`;
 }
 
+/** The vendor rows over the chosen window, and under them the server's own round counts (story 5.2). */
 function vendors(view: View): string {
+  return vendorRows(view) + teamRoundsBlock(view.usage, view.palette);
+}
+
+function vendorRows(view: View): string {
   const usage = view.usage;
   if (usage.vendors.length === 0) {
     return '<div class="quiet">No vendor ran in this window.</div>';
@@ -391,7 +398,10 @@ function chart(view: View): string {
 }
 
 const NOTES = '<div><b>Launches</b> are runs of a vendor\'s CLI, not review rounds: one round launches several reviewers, and '
-  + 'a retry is another launch. Rounds are counted here once the server records which round a run belonged to.</div>'
+  + 'a retry is another launch. <b>Rounds</b> are counted by the server, once per vendor, by the round id each launch\'s '
+  + 'client sent — over the last 5 h, 24 h and 7 d whatever window is chosen. A launch whose client sent no round (an older '
+  + 'extension) is counted apart as a run without a round, never guessed into one; a server older than round counting says '
+  + '<i>count unavailable</i>.</div>'
   + '<div><b>~$</b> is an estimate at each model\'s public list price (OpenRouter, then LiteLLM), never a bill — the company '
   + 'pays flat subscriptions. A vendor\'s own reported cost is used where it gave one. A model no list prices is a dash, and a '
   + 'total that includes one is marked ≥. The server\'s lines carry no cached-token count yet, so every input token is priced '
