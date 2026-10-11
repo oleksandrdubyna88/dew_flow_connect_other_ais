@@ -307,6 +307,20 @@ Answers the operator's question for this machine's work from the whole history, 
   - **POST then DELETE is not zero-spend.** The runner can claim and launch between the two. The live measurement of
     the new body must prevent dispatch (a probe the catalog cannot run, or a vendor whose only slot is parked), with
     a counting fake launcher proving the interleaving in the suite; which probe is decided at E4's plan round.
+- **What E4's plan round decided (2026-10-11, codex, `proceed`)** — binding on the build:
+  - **The zero-spend live probe** (amendment 5): the contract suite POSTs the NEW body — `round`, `attempt`,
+    `remainingSeconds` and one deliberately unknown member — with `"kind":"probe-no-such-kind"`. The server binds the
+    JSON before it checks the kind, so a 400 naming *"'probe-no-such-kind' is not a kind of job"* proves the new
+    members were skipped by binding, and no job is ever created. The control in the same run: the same body with a
+    malformed KNOWN member (`timeoutSeconds: "x"`) answers the binding error instead. It never posts a valid job.
+  - **Transit time is the margin's to absorb, and that is a stated limit.** The server anchors `remainingSeconds` at
+    RECEIPT and cannot see how long the request travelled (a client timestamp would bring clock skew back).
+    `Coai:DeadlineSafetyMarginSeconds` is therefore the transit allowance as well as the safety margin, documented as
+    such: a request delayed in transit by MORE than the margin can still be claimed after its caller gave up — and
+    is then withdrawn by the caller's own DELETE, the existing withdrawal path. Test: a request whose remaining time,
+    less the margin, cannot hold the start-up is refused at claim; one just above that edge launches.
+  - **The refusal is counted, asserted.** `AJobWithoutBudget_IsEndedWithoutStartingTheVendor` also asserts exactly
+    ONE ledger line for the job: outcome `NoBudget`, zero tokens, no usage note, kind and round kept.
 
 ### E5 — the server counts rounds, and the fleet gets it · `feat/round-counter-e5-server-counts`
 
