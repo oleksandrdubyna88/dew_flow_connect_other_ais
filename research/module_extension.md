@@ -3672,7 +3672,8 @@ what can be TESTED rather than by topic:
 | File | What it holds | Testable without |
 |---|---|---|
 | `teamServers.ts` | the canonical URL, the token filename, the server id, the scope rules | anything |
-| `teamServerApi.ts` | every request, each with a deadline | a server (stubbed `fetch`) |
+| `teamServerApi.ts` | every request, each with a deadline; the round-count parser `serverRounds` (story 5.2) | a server (stubbed `fetch`) |
+| `teamRounds.ts` | the Team server tab's Rounds block (story 5.2) | a webview |
 | `teamServerAuth.ts` | sign in / out / renew, the token file | an extension host (`AuthHost`, `StateStore`) |
 | `teamServerView.ts` | the section's markup, the slot line, the usage block | a webview |
 
@@ -3797,6 +3798,29 @@ empty `models`. Every server string goes through `escapeHtml`.
   image's label and the numbers as a table under *The numbers*, a fold with its own key (`<server>|chart-data`) refilled
   the way the cards are, so a push keeps it open; the axis label sits at the plot's left edge, start-anchored, where the
   svg cannot clip it; it says its 30 calendar days are not the Month window.
+
+**The server's own rounds (story 5.2 of `todo/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
+(`fetchUsage` → `usageRoute`) also asks `&windows=5h,24h,week` (`ROUND_WINDOWS`), so the rounds come from the same
+request, scan and cached answer as the figures they sit beside, whatever window chip is pressed; a personal request asks
+none. `serverRounds` in `teamServerApi.ts` reads the answer by its SHAPE, never its status: the counts are believed only
+when every round window came back by name and every vendor row in it — people's included — carries every count
+(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE`. That is exactly what a server
+older than story 5.1 produces: it binds only `window` and answers 200 with its own range, no `windows`, no counts. A
+window that came back with no vendor in it is a counted 0. Nothing is cast — every field is read by hand.
+`teamRounds.ts` (pure) draws the **Rounds** block at the end of the Vendors part (no new page part): one line per vendor
+of the week window — `5 h N · 24 h N · 7 d N` — and under it, over 7 d, the runs without a round, retries, repairs,
+follow-ups, cancelled and budget refusals; or `Rounds: count unavailable — <reason>`, never a column of zeroes. The notes
+say how rounds are counted. Help (`the-rounds-log`, five languages) names the block.
+
+```mermaid
+flowchart LR
+  C["TeamUsageCache: company / window"] --> F["fetchUsage → api/usage?window=w&scope=company&windows=5h,24h,week"]
+  F --> U["Usage (the cell)"]
+  U --> P["serverRounds(usage)<br/>shape check"]
+  P -->|counted| B["teamRoundsBlock: 5 h · 24 h · 7 d per vendor + the week's apart"]
+  P -->|"unavailable (older server: 200, no windows)"| X["Rounds: count unavailable — reason"]
+  B & X --> V["TeamParts.vendors, under the vendor rows"]
+```
 
 **Styled with the Settings design.** Its tokens, chips and badges moved from `catalogCss.ts` into the LEAF
 `catalogSheet.ts` (which imports nothing — `catalogCss.ts` imports `settingsPage`, which would drag `SETTINGS_CSS` onto

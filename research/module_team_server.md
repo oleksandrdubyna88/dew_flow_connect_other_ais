@@ -87,7 +87,7 @@ sequenceDiagram
 | `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models/**kinds** · `409` an idempotency key reused for a different request · `429 + Retry-After` over the queued cap |
 | `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost. **A read that writes**: the poll is the only evidence anybody is still listening, so it stamps `LastPolledUtc` |
 | `DELETE /api/reviews/{id}` | owner | `204` |
-| `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind**; every vendor row carries `models[]` (since 2026-10-09), and the company answer alone carries `daily` — thirty dense UTC calendar days of launches per vendor, its own range whatever the window · `400` unknown window · `403` company as a non-admin |
+| `GET /api/usage?window=&scope=&windows=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind**; every vendor row carries `models[]` (since 2026-10-09) and the **round counts** (`rounds`, `runsWithoutRound`, `retries`, `repairs`, `followUps`, `cancelled`, `noBudget`, `launchesByKind` — story 5.1, 2026-10-11), and the company answer alone carries `daily` — thirty dense UTC calendar days of launches per vendor, its own range whatever the window. `windows=5h,24h,week` adds a `windows[]` block — each named window's range, vendors and (company) people — from the same scan; absent when not asked · `400` unknown window, in `window` or in `windows` · `403` company as a non-admin |
 | `GET /api/people` | **admins** | who has an unexpired session this server still serves (the allow-list applied): `[{email, displayName, lastUsedUtc}]`, one row per case-insensitive email, sorted by email — and nothing else about a session · `403` as a non-admin, naming `Coai:Admins` (2026-10-09) |
 
 **Every route that has a caller reads its credential from `Authorization: Bearer …` and from
@@ -1506,3 +1506,49 @@ flowchart TD
   N --> W["GET /api/reviews/{id}: failure no_budget"]
   W --> H["shim: exit 79 by NAME<br/>(an old shim: 70, the name in its sentence)"]
 ```
+
+## The server counts rounds (2026-10-11, story 5.1 of `todo/PLAN_every_round_is_counted.md`)
+
+`/api/usage` answers how many ROUNDS each vendor ran, not only how many launches, from the `round` and `clientAttempt`
+story 4.2 put on every ledger line. Additive only: nothing an older client reads moved.
+
+**Two trailing windows**, `5h` and `24h` (`UsageWindow.Names` is now `today, 5h, 24h, week, month, year`), trailing like
+`week` — the range ends a second after now and reaches back five or twenty-four hours, so a run exactly at `now − span`
+belongs to the window before (half-open, as every window here).
+
+**Several windows, one scan.** `?windows=5h,24h,week` — comma-separated, trimmed, case-insensitive, an empty item
+ignored, a repeat answered once (`UsageWindow.Several`, a closed `WindowsAsked` of `Read`/`Refused`) — adds a trailing
+`windows[]` to the answer: per name, `{window, fromUtc, toUtc, vendors, people}` (people empty on a personal answer). The
+answer's top is still the `window` asked (default `today`), and `UsageEndpoints.Answer` hands the reader the UNION of
+every range it needs — the top's, the chart's (company) and each window's — so one parse of the ledger answers all of
+them, each part applying its own range. One unknown name refuses the whole request with the same 400 an unknown
+`window` gets, naming the legal ones; `?windows=` alone is no windows. **An answer to `?window=` alone is today's shape:**
+`windows` is omitted (not `null`, as `daily` is on a personal answer), and every key the answer had keeps its order and
+value — the counts are keys added to each vendor row (`TheWindowAnswerKeepsItsBytesTests` compares against text captured
+from the server before the change). An older server ignores `windows` and answers 200 with its own range — the extension
+judges it by the missing key (story 5.2, [module_extension.md](module_extension.md)).
+
+**What a vendor row counts** (`UsageRounds.Of`, folded into every `VendorTotal` — `vendors[]` and `people[].vendors[]`
+alike, top and windows):
+
+| Field | Counts |
+|---|---|
+| `rounds` | DISTINCT non-empty `round` on the vendor's `review` lines. A chat carries none; the deploy **canary is not a round** (story 3.5). A line ended for want of budget still belongs to its round. |
+| `runsWithoutRound` | `review` lines with no round — a client older than story 4.1 (or a line older than 4.2). Counted apart, never folded into a guess; the canary is not one. |
+| `retries`, `repairs`, `followUps` | REQUESTS the client called `retry` / `repair` / `followUp` (`clientAttempt`), counted per **distinct job** (else turn, else the line itself): a retry whose job met a refusing account first writes two lines and is ONE retry. **The server's own `followUp` and `rotated` launches (its `attempt` word) are in none of the three** — they are launches inside one request, visible in `runs` and `launchesByKind`. |
+| `cancelled`, `noBudget` | lines whose outcome is `Cancelled` / `NoBudget`, any kind. |
+| `launchesByKind` | lines per kind (`review`, `chat`, `canary`, ordinal order) **except `NoBudget`**, which launched nothing; `runs` is still every line. |
+
+```mermaid
+flowchart LR
+  Q["GET /api/usage?window=w&scope=s&windows=5h,24h,week"] --> R["Request: window, scope, Several(windows)<br/>400 on an unknown name"]
+  R --> U["one UsageReader.Read over the union<br/>top ∪ chart (company) ∪ every window"]
+  U --> T["top: w's lines → vendors (+ counts), people, kinds"]
+  U --> D["daily (company)"]
+  U --> W["windows[]: each name's lines → vendors (+ counts), people (company)"]
+  T & D & W --> A["UsageDto — windows omitted when none asked"]
+```
+
+Tests: `RoundCountsTests`, `SeveralWindowsTests`, `RoundCountsEndpointTests`, `TheWindowAnswerKeepsItsBytesTests`, the
+`http/usage/usage.http` requests over the round lines `http/run-contracts.mjs` seeds, and the seam suite's usage-counts
+leg that reads the real server through the extension's parser — listed in [module_tests.md](module_tests.md).

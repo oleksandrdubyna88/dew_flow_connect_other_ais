@@ -89,6 +89,11 @@ Two crossings changed between the extension and the Team server, both read-only 
 - `GET /api/people` is new: email, display name and last-used time of everyone with an unexpired
   session in an allowed domain — three fields, never a token or an expiry. The admin decision is the
   same one `/api/usage` makes for company scope.
+- **The server counts rounds (2026-10-11, stories 5.1–5.2 of
+  [../todo/PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md)).** Every vendor total gains the
+  round counts (additive), and a company request from the tab also sends `windows=5h,24h,week`, answered as a trailing
+  `windows[]` from the same scan. An older server ignores the parameter and answers 200 without the key — the tab reads
+  that SHAPE as *count unavailable*, never 0. The seam suite reads the real server through the extension's own parser.
 
 **Who asks, and when, is the extension's decision and it is deliberately narrow.** One host-side cache
 (`teamUsageCache.ts`, keyed by server, scope and window) is the only requester; a page model
