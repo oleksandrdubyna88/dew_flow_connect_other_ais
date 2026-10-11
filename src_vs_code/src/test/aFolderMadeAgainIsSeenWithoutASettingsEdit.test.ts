@@ -23,6 +23,23 @@ import { stat } from 'node:fs/promises';
 const tick = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve); });
 const settle = async (): Promise<void> => { for (let at = 0; at < 6; at += 1) { await tick(); } };
 
+/**
+ * Waits until `done()` holds, or fails naming `what` after `ms`. The rig asks the REAL disk, and a `stat` goes through
+ * libuv's thread pool: a fixed number of ticks raced it on a slower runner (CI on Linux, PR #752).
+ */
+async function until(done: () => boolean, what: string, ms = 5000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!done()) {
+    if (Date.now() > deadline) {
+      assert.fail(`timed out after ${ms} ms waiting for ${what}`);
+    }
+    await new Promise((resolve) => { setTimeout(resolve, 10); });
+  }
+}
+
+/** A quiet time for a check that something does NOT change: the disk's answers land well inside it. */
+const quiet = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 300); });
+
 let parent = '';
 
 afterEach(() => {
@@ -66,14 +83,14 @@ test('the folder is made again and nothing else happens: the next recheck confir
   let back = 0;
   onDataRootBack(() => { back += 1; });
   it.watch.start();
-  await settle();
+  await until(() => it.said.length === 1, 'the missing root to be said');
   assert.equal(it.said.length, 1, 'the rig never said the missing root');
   holdNotice({ utc: '2026-10-10T12:00:00.000Z', class: 'failure', source: 'pathWatch', code: SETTING_PATH_MISSING, subject: findingSubject(it.said[0]!), title: 'missing' });
   assert.deepEqual(it.timers.map((one) => one.ms), [RECHECK_MS], 'the watch arms no recheck, so only a settings edit would ever look again');
 
   mkdirSync(it.root);
   it.timers[0]!.work();
-  await settle();
+  await until(() => absentDataRoot() === undefined && back === 1, 'the recheck to confirm the root');
 
   assert.equal(absentDataRoot(), undefined, 'the folder exists and the guard still refuses it — no settings edit, no recovery');
   assert.deepEqual(it.resolved.map(findingSubject), [findingSubject(it.said[0]!)], 'the notice was not cleared');
@@ -88,12 +105,12 @@ test('a recheck while the folder is still gone changes nothing: still refused, s
   let back = 0;
   onDataRootBack(() => { back += 1; });
   it.watch.start();
-  await settle();
+  await until(() => it.said.length === 1, 'the missing root to be said');
 
   it.timers[0]!.work();
-  await settle();
+  await quiet();
   it.timers[0]!.work();
-  await settle();
+  await quiet();
 
   assert.ok(absentDataRoot() !== undefined);
   assert.deepEqual([it.said.length, it.resolved.length, back], [1, 0, 0]);
