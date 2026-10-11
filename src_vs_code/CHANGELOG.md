@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## Server 0.47.0 — 2026-10-11
+
+**A folder of this side that is not found is named by setting, value and kind.** `--providers` answers a new
+`settingProblems` list (key, kind, value, sentence) for each question-consultant folder it refuses as missing or
+unreadable, so the extension says it once, by name, instead of a generic *server did not understand a setting*.
+
+**A read never creates a missing data folder.** The modes the extension runs only to read — `--bugs-json`,
+`--pairs-json`, `--real-method`, `--file-at`, `--tree-at`, `--providers` and the new `--round-counts` — leave a
+data folder that is not there absent, and answer as for an empty one; a database the disk will not describe is an
+I/O failure (exit 74), never an empty answer.
+
+**New: `--round-counts [--now <UTC instant>]`.** How many distinct review rounds each vendor row ran over the
+trailing 5 hours, 24 hours and 7 days, by stage, with reviewers per round — read from `coai.db`, for the
+extension's Spending tab and Models cards. Schema step 20 records each reviewer's model, so rounds can be counted per model.
+
+## Extension 0.68.0 — 2026-10-11
 
 **New: Settings › Setup › This side lists the sides this profile has been used on.** VS Code shares your settings between
 a Windows window and a WSL window on the same machine, and until now nothing recorded that both were in use. Every
@@ -13,22 +28,6 @@ Windows field and a WSL / Linux field — Automatic once both sides have been se
 and why. It is yours rather than a side's, so every window reads the same value, and *Export settings* never carries
 it. The second field itself comes in a following release; until then the list and the switch are recorded and shown.
 Help in all five languages.
-
-## Server 0.46.0 — 2026-10-10
-
-**A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares
-your settings between a WSL window and a Windows one, so a reviewer row's CLI path written on one side (a Windows
-`C:\…\codex.cmd`, or a WSL `/usr/local/bin/codex`) reached the other side's coai-mcp, which probed it as a file there,
-found nothing and reported the CLI as not found — that reviewer dropped out of every round on that side. Now:
-- A path spelled for the other OS that does not exist here is skipped: coai-mcp looks the CLI up on `PATH` by its
-  runtime's name instead, and says once in its log (Information) that it did — never a notice, never a refusal.
-- A path that DOES exist here is still used. On Windows a root-relative `/Program Files/nodejs/node.exe` is a real
-  path: it runs from the system drive (`C:\Program Files\nodejs\node.exe`). When the disk cannot tell, the path is kept.
-- Rows that share one CLI path ask the disk once.
-- The extension already sends this side's value (extension 0.67.0); this is the same rule for a settings file an older
-  extension wrote.
-
-## Unreleased
 
 **A folder or a CLI path of this side that is not found now is said once, marked bright, and counted.** A
 question-consultant folder, a reviewer's CLI path or a watched data folder of this operating system that is gone — the
@@ -45,6 +44,28 @@ not the consultants survey, which is not run until the folder is there — not e
 check and a write: what this window would have written is held in its memory and listed on Notifications, and the
 writes resume within seconds of the folder being made or the drive mounted, with no setting to change. The default
 folder is never red and is still created when first needed.
+
+**New: every round is counted — on the Spending tab and on each Models card.** The Spending tab now opens with a
+**Rounds** block: per vendor row and per model, how many review rounds ran in the last 5 hours, 24 hours and 7 days
+and at which stage, with the consultations, questions and chats beside them as recorded turns. Each Models card gets
+one line — `7 days: 214 rounds · 31 consult turns · 5 h: 12`. Every ledger line is now priced at the model that
+answered it (cached input at the cached rate), and a total that holds a line with no known price says it is a lower
+bound. A count or a ledger that cannot be read says *unavailable* with the reason — never a 0. The counts are read at
+most once a minute, sooner when a round, a consultation or a question ends. Help in all five languages.
+
+## Server 0.46.0 — 2026-10-10
+
+**A reviewer's CLI path written for the other operating system no longer takes that reviewer out.** VS Code shares
+your settings between a WSL window and a Windows one, so a reviewer row's CLI path written on one side (a Windows
+`C:\…\codex.cmd`, or a WSL `/usr/local/bin/codex`) reached the other side's coai-mcp, which probed it as a file there,
+found nothing and reported the CLI as not found — that reviewer dropped out of every round on that side. Now:
+- A path spelled for the other OS that does not exist here is skipped: coai-mcp looks the CLI up on `PATH` by its
+  runtime's name instead, and says once in its log (Information) that it did — never a notice, never a refusal.
+- A path that DOES exist here is still used. On Windows a root-relative `/Program Files/nodejs/node.exe` is a real
+  path: it runs from the system drive (`C:\Program Files\nodejs\node.exe`). When the disk cannot tell, the path is kept.
+- Rows that share one CLI path ask the disk once.
+- The extension already sends this side's value (extension 0.67.0); this is the same rule for a settings file an older
+  extension wrote.
 
 ## Extension 0.67.0 — 2026-10-10
 
