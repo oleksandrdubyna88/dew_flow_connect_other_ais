@@ -36,6 +36,7 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--file-at': 'reader',
   '--tree-at': 'reader',
   '--trees': 'reader',
+  '--round-counts': 'reader',
   '--providers': 'reader',
   '--features': 'reader',
   '--version': 'reader',

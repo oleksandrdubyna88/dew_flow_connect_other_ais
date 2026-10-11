@@ -43,6 +43,7 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--file-at", "--id", "1" },
         new[] { "--tree-at", "--id", "1" },
         new[] { "--trees" },
+        new[] { "--round-counts" },
         new[] { "--features" },
         new[] { "--version" },
     };
