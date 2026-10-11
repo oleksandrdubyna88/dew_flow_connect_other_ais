@@ -11,7 +11,26 @@ namespace CoaiMcp.Server;
 /// </remarks>
 /// <param name="Key">The environment variable, exactly as it is spelled — never parsed from prose.</param>
 /// <param name="Sentence">What to do about it, in the words a person reads.</param>
-public sealed record UnrecognisedSetting(string Key, string Sentence);
+/// <param name="Kind">
+/// What KIND of problem it is, when the extension can act on the kind rather than the prose
+/// (todo/PLAN_paths_per_side.md E5.2): one of <see cref="SettingProblemKinds"/>, or empty for a value
+/// only a sentence describes — a malformed row, an unknown mode, a folder refused by name.
+/// </param>
+/// <param name="Value">The stored value the problem is about, as the settings file spells it, or empty.</param>
+public sealed record UnrecognisedSetting(string Key, string Sentence, string Kind = "", string Value = "");
+
+/// <summary>
+/// The kinds of setting problem the extension marks on its page from the structured answer alone — the two the
+/// question consultant's roots can have. Everything else a server refuses stays prose in <c>unrecognised</c>.
+/// </summary>
+public static class SettingProblemKinds
+{
+    /// <summary>The disk SAID there is no folder at the stored path — ENOENT, a file where a folder should be.</summary>
+    public const string MissingFolder = "missing-folder";
+
+    /// <summary>The disk could not tell — access denied, busy, an I/O failure; never read as missing.</summary>
+    public const string UnreadableFolder = "unreadable-folder";
+}
 
 /// <summary>
 /// Something about the DISK that a person would want told: a database left behind, a new directory.

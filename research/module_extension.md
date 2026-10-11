@@ -3381,6 +3381,141 @@ to every one of them:
 - **Export settings** — `qconsultRoots` joined `NEVER_TRANSFERRED` (D4): never exported, and an older export that
   carries it is refused by name while the importer keeps its own roots.
 
+### A missing path of this OS: a notice at every start and a bright mark (2026-10-10, paths per side E5)
+
+E1 decided which stored path is the OTHER side's and skipped it; `todo/PLAN_paths_per_side.md` E5 is the other half of
+its design (e): a path of THIS side that the disk says is not there is a finding — said once per window run with
+**Open in Settings**, drawn bright beside its value, counted on its tab — and a NAMED data directory that is missing is
+red at every start and created by nothing (D3).
+
+- **The finding** — `pathFindings.ts`: `PathFinding { key, place, value, family, state, owner }`, `state` being `missing`
+  (the disk SAID absent) or `unknown` (EACCES, EBUSY, a probe past its deadline — never counted, never toasted).
+  `probeable(value, family)` asks only this side's absolute spelling: a path of the other OS, a bare CLI name and a
+  relative root are E1's decisions (`otherSideHere`, `otherSideClis`, `WatchedDir.otherSide`, `skippedShared`), not
+  re-decided here. `pathFindings(values, family, presenceOf)` maps every `PathValue`; `findingFor`, `missingAt(findings,
+  place)` (a top place counts its sub-places; `unknown` counts for nothing), `findingSubject` (`<key>|<value>`) and the
+  words every surface shares — `missingTitle`, `missingCure`, `markSentence`: *"not found on this machine (Windows) just
+  now"*, never *"deleted"*, because an unmounted drive or a sleeping share reads the same. The registry
+  (`pathSettings.ts`) gained each setting's `wireKey` (the server's name for it), and its `place` became the Settings
+  page's place id, worded by `catalogPlaces.placeLabel`.
+- **The probes** — `pathProbes.ts` `PathProbes(stat)`: one `stat` at a time per path, a deadline (`PROBE_DEADLINE_MS`,
+  5 s) that answers `unknown`, at most ONE outstanding probe per path however many renders and expiries pass, an unknown
+  answer never kept as fresh, a definitive one kept `ROOT_ANSWER_LIFETIME_MS`. `presence()` is synchronous (`pending`
+  before the first answer) so a repaint never waits for a share; `settled()` waits the deadline at most. `statProbe`
+  maps a failure through `pathFamily.presenceOnFailure` (exported for it, not copied).
+- **The watch** — `pathWatch.ts` (vscode-free) and `pathWatchHost.ts` (the vscode around it): started at activation
+  BEFORE the settings mirror writes the data directory, never from the panel, which a window may never open. It reads
+  this side's values — the question consultant's roots (`qualified`), this side's CLI paths (`pathForThisSide`, the
+  owner named), the watched data folders of this side (`watchedDirs`), the named data root (`dataDir.namedRoot`,
+  `dataDirFinding`) — asks the probes, publishes to the board, SAYS a path when it APPEARS missing (never on every
+  refresh, which would be a ledger row per repaint) and resolves it (`notifyResolved`) when it is back, so going
+  missing again is news. It re-asks on a `coai` configuration change (`forget()`) and takes the server's word
+  (`serverSaid`) — see *page and server agree*. **Only a SETTLED answer resolves a said path** (`settled`,
+  `PathWatch.stillSaid`): the disk saying it is there, the server taking it, or the value leaving the settings — a
+  `pending` or `unknown` answer keeps it said. The first run in a real editor showed why: a settings change drops every
+  answer and asks again, and resolving on that gap said one CLI path sixteen times, once per keystroke in the settings.
+  `pathFindings.asked` / `findingsOf` give the findings and the resolve rule ONE answer per value (`valueSubject`).
+- **The notice** — `setting-path-missing` (a warning, source `pathWatch`, subject `<key>|<value>` so fixing one path
+  clears one notice) through the funnel's new door `notify.notifyOnceThen`: `notifyOnce`'s once per run with
+  `notifyThen`'s button — **Open in Settings** runs `coai.openSettings` with the finding's place. The census
+  (`scripts/count-notifications.mjs`) knows the door; `PLACES_THIS_SPEAKS` is 164. Never two toasts for one folder:
+  `providers.withoutCovered` drops from the generic "did not understand a setting" toast every sentence a structured
+  `settingProblems` entry covers (`panelProvider.sayWhatTheServerSaid`); from an older server nothing is covered.
+- **The board and the storage-write policy (D3, story 5.0)** — `findingsBoard.ts` is the one answer to "is this
+  window's data root missing": `publishFindings` / `currentFindings` / `onFindings` (the panel repaints on it),
+  `expectDataRoot` / `dataRootSettled` (bounded by `SETTLE_CEILING_MS`, 10 s), `missingDataRoot`,
+  `refusedDataRoot(path)` (at or under the missing root, case-folded on Windows) and `refuseUnderMissingRoot(path)`,
+  which throws `missingRootRefusal` — and `refuseUnderMissingRootOnceSettled(path)`, which WAITS for the first
+  data-root answer (bounded) before it asks. Every async writer asks the waiting one: a write at activation runs beside
+  the probe, and a guard that read the board before the disk had answered let the chat store's heartbeat create the
+  missing root on E5's first run in a real editor; `dataRootKnown()` lets a writer that must decide in the same turn (a
+  render's spawn) skip the wait once the answer is in, and only the sync atomic write keeps the sync guard. The
+  writers: the ledgers (`jsonlLedger`),
+  the atomic write (`atomicFile`, both forms), the settings file and its lock (`extension.createDataDirectory`, one
+  road for both), the probe cache (`claudeProbeCache`), the token file (`teamServerAuth`), the prompt overrides
+  (`consultPromptFile`, `securityPromptEditor`), the import backup (`configTransferCommands`) and the chat store's
+  lock (`chatStoreLock`). `everyWriterOfTheDataDirectory.test.ts` derives the inventory of every `mkdir` / `mkdirSync`
+  / `createDirectory` site from the source and holds each to the guard or a stated reason (inside an existing store,
+  the folder a person chose, extension storage, a temp folder), and holds every async one to the waiting guard. The
+  consultants survey (`consultantsProbe`, `coai-mcp --consultants`) is a writer by proxy — the server writes
+  `consultations/health/consultants.json` with a `CreateDirectory` — and is not started while the named root is
+  missing; the tab reads the refusal as an unanswered probe. `notificationsFile.recordNotification` answers
+  `landed | held | lost`: a record refused under a missing root is LOST and counted into the ledger's write gap —
+  except the missing-path notice itself, which is HELD in memory (`holdNotice` / `heldNotices`: one per setting key,
+  the newest replacing the older, released the moment the path changes or the folder is found again — bounded by the
+  registry) and shown on this window's Notifications page as `heldArrival` (ledger `extension`, at an offset no
+  acknowledgement covers, its detail saying it was written to no ledger).
+- **The data directory (D3, story 5.7)** — `dataDir.namedRoot()` is the root somebody NAMED (nothing for the default
+  location, which is created lazily and never red); `dataDirFinding(named, presence, family)` is its finding.
+  `whereData` keeps its quiet *"is not there yet"* note for a side folder inside an EXISTING root only — a missing
+  named root is the bright mark, not the same folder said twice in two tones — and `panelProvider.probePaths` probes
+  the root itself so the page can tell the two apart. The settings mirror asks the watch
+  (`PathWatch.dataRootMissing`, the board's settled answer) BEFORE its critical section, whose lock file would create
+  the folder, and answers `no-data-root` — a terminal `SyncOutcome` that `MirrorSchedule` neither retries nor reports,
+  because the notice already says it; nothing is remembered as written, so the content lands on the next change once
+  the folder exists. `REASONS['no-data-root']` words it on the page.
+- **What the gate's risk consultation on 5.7 changed (2026-10-10)** — each item verified before it was fixed, RED first:
+  - **The guard keeps its own state** (item D). `findingsBoard.noteDataRoot(root, presence)` — asked by the watch on
+    every refresh, before `publishFindings` — keeps a root the disk SAID is absent (`absentDataRoot()`) until a probe
+    CONFIRMS it is there or the setting names another root; `pending` (the re-ask after a settings change) and `unknown`
+    (a probe past its deadline) never lift it. Before, the guard read only the published finding: after `forget()` the
+    root read `pending`, the first-answer wait had settled at activation, and a ledger append or the heartbeat created
+    the folder; a timed-out probe let the mirror write. `refusedDataRoot` and `PathWatch.dataRootMissing` read it.
+  - **One maker, never a named root** (items E and F). `dataDirMaker.ts` `makeDataDirectory(dir)` /
+    `makeDataDirectorySync(dir)` is the one way a folder that may lie under the data directory is made: below a NAMED
+    root one non-recursive `mkdir` per level from the root down, the root itself only `stat`-ed and never made — so a
+    root removed between the guard and the write (a drive unmounted) is refused at the moment of the write, in the
+    finding's words; the default location and any path outside a named root recursively, as before. Which LAYER named
+    the folder decides, never its spelling: an explicit value equal to the default path is named. Every writer under the
+    data directory makes folders only through it — the atomic write, the ledgers, the chat store's claim and quarantine,
+    the import backup, the token file, the security prompt override (`securityPromptOverride.ensureOverride`, moved out
+    of the vscode-bound editor so it can run in a test), the settings file. VS Code's `workspace.fs.writeFile` /
+    `rename` / `copy` make missing parent folders, so the settings file (`fsp.writeFile` + `atomicFile.renameWithRetry`),
+    the consultant prompt override (now the shared atomic write) and an answered escalation are written with Node.
+  - **Recovery without a settings edit** (item F). `PathWatch` rechecks every path it found ABSENT every `RECHECK_MS`
+    (5 s; `PathProbes.recheck` — one outstanding probe each, a quiet window asks nothing) through the host's
+    `setInterval` (`PathWatchDeps.every`, unref'd, disposed with the extension). A probe that confirms the root lifts the
+    kept absence, resolves the notice, releases the held notice and tells `onDataRootBack`, where `activate` runs the
+    settings mirror again — so a person recovers by making the folder (or mounting the drive), as the notice's cure says
+    (*"Connect the drive, create the folder, or choose another"*).
+  - **The writers, checked two ways** (item B). `test/dataDirWriters.ts` holds the inventory the scan derives — every
+    `mkdir` / `mkdirSync` / `createDirectory` / `makeDataDirectory(Sync)` and VS Code parent-making write in the shipped
+    source, each classified (`the one maker`, `board`, `through the maker`, `the folder a person chose`, `extension
+    storage`, `a temp folder`) — and `everyWriterLeavesAMissingRootAbsent.test.ts` RUNS every writer classified as
+    writing under the data directory with the root absent and the board knowing nothing, asserting the root absent on
+    disk; the two that need an editor (`extension.ts`, `configTransferCommands.ts`) must import `vscode`, and the
+    settings file is run by the host's second launch.
+  - **The choice makes no folder** (item A, the gate's premise refuted). `askWhereDataLives` reads the folder the system
+    dialog returned (which exists) and saves the setting; it makes nothing, and `<root>/<side>` is made lazily through
+    the maker. The one flow that makes a folder is the MOVE (`moveDataDirectory` + `copyInventory`: `<destination>/<side>`
+    inside the folder a person just picked) — the recorded exception, the pick being the consent.
+    `theChoiceMakesNoFolder.test.ts` pins where the calls are.
+  - **The server's readers** (item C). Every `coai-mcp` mode the extension launches is classified
+    (`everyServerModeTheExtensionLaunches.test.ts`, from `Program.Classify`): 13 readers, 10 launched on a person's act,
+    the consultants survey (held by the extension), and `--help` (not a coai-mcp launch); every reader is run against a
+    missing data directory by the server's own test — see `research/module_server.md`, *A reader never makes the data
+    directory*.
+- **Page and server agree (story 5.6)** — coai-mcp names each refused root as a `settingProblems` entry
+  (`{ key, kind, value, sentence }`, kinds `missing-folder` / `unreadable-folder`; `--features` lists
+  `settingProblems`); `providers.parseProviderNotes` reads the list (a row kept only whole), `FEATURES.settingProblems`
+  names the capability, and `pathFindings.agreed(own, server, family)` lets the server's problems REPLACE this
+  window's own findings for the settings the server judges (`saidBy: 'server'`, matched by `wireKey`) once the panel's
+  probe has answered from a server that lists the capability (`PanelProvider.onServerProblems` →
+  `PathWatch.serverSaid`), and leaves them otherwise. The seam leg `scripts/seam-path-missing.mjs` holds the two halves
+  level against the real binary.
+- **The mark (story 5.4)** — `pathMark.ts` is the one builder every place draws: `markClass` (` path-missing` /
+  ` path-unknown`), `markAttributes` (`aria-invalid="true"` and `aria-describedby` the sentence, for a missing path
+  only), `markNote` (a leading `●`, the word *missing* or *could not be checked*, the sentence). One CSS block in
+  `catalogCss.ts` for `.skew`, `.path-missing` and `.path-unknown` — the `.skew` shape (a 3px left border and an 8%
+  tint) in the editor's error colour, the unknown tone in its warning colour. Drawn on the Question consultant's root
+  line (`qconsultView.rootHtml`), the Models card's CLI-path field (`panelView.runtimeFields` ← `modelCard.connectionOf`,
+  the finding found by the STORED value, `CardContext.missingCli`) and Setup › MCP server's watched-folder lines and
+  data-directory line (`watchedLine`, `dataDirectoryLine`, `storageBlock`) — all from `PanelState.pathFindings`, which
+  the panel reads off the board, never asking the disk itself.
+- **The tab count (story 5.5)** — `tabStrip.Tab.mark?: TabMark { count, label }`, drawn AFTER the label as
+  `<span class="tab-mark" role="img" aria-label="N missing folders or paths">● N</span>` in the error colour, nothing
+  for a tab without one; `catalogPage.markFor(place, findings)` computes it through `missingAt` — a top tab counts every
+  sub-place under it, a sub-tab its own, zero findings draw no badge.
 ### The sides this profile has been used on (2026-10-10, paths per side E2)
 
 Nothing in VS Code tells a window that the profile is also used from the other side of the machine, and the second

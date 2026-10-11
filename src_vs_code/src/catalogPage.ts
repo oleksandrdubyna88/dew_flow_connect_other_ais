@@ -6,8 +6,9 @@ import { placeBody } from './catalogSections';
 import { CONFIRM_DIALOG } from './catalogShell';
 import { modelsTabHtml } from './modelsTab';
 import { pageDocument, type PanelState } from './panelView';
+import { type PathFinding, missingAt } from './pathFindings';
 import { settingsTextCss } from './settingsPage';
-import { tabStrip } from './tabStrip';
+import { type TabMark, tabStrip } from './tabStrip';
 import { textControlsHtml, textOf } from './textControls';
 
 /**
@@ -25,10 +26,20 @@ import { textControlsHtml, textOf } from './textControls';
 const TOP_STRIP = { tab: 'ctab-', panel: 'cpane-', label: 'Settings', strip: 'catalog', roving: true } as const;
 
 /** One tab's sub-strip: a sub-tab's key is its whole place, so the page's one click handler tells the two apart. */
-function subStrip(tab: CatalogTab): string {
+function subStrip(tab: CatalogTab, findings: readonly PathFinding[]): string {
   const names = { tab: `ctab-${tab.id}-`, panel: `cpane-${tab.id}-`, label: tab.label, strip: `catalog-${tab.id}`, roving: true };
 
-  return tabStrip(tab.subs.map((sub) => ({ key: `${tab.id}/${sub.id}`, slug: sub.id, label: sub.label })), '', names);
+  return tabStrip(tab.subs.map((sub) => ({ key: `${tab.id}/${sub.id}`, slug: sub.id, label: sub.label, ...markFor(`${tab.id}/${sub.id}`, findings) })), '', names);
+}
+
+/**
+ * The count badge a tab carries for the MISSING paths under its place (todo/PLAN_paths_per_side.md E5.5) — nothing for
+ * none, so a page with no finding is the page it always was. The top tab counts every sub-place under it.
+ */
+function markFor(place: string, findings: readonly PathFinding[]): { readonly mark?: TabMark } {
+  const count = missingAt(findings, place);
+
+  return count === 0 ? {} : { mark: { count, label: `${count} missing ${count === 1 ? 'folder or path' : 'folders or paths'}` } };
 }
 
 /** A place's content, in a readable column (E4.1). */
@@ -47,7 +58,7 @@ function paneBody(tab: CatalogTab, state: PanelState): string {
     return modelsTabHtml(state);
   }
 
-  return tab.subs.length === 0 ? placeContent(tab.id, state) : `${subStrip(tab)}\n${subPanes(tab, state)}`;
+  return tab.subs.length === 0 ? placeContent(tab.id, state) : `${subStrip(tab, state.pathFindings ?? [])}\n${subPanes(tab, state)}`;
 }
 
 function pane(tab: CatalogTab, state: PanelState): string {
@@ -57,7 +68,7 @@ function pane(tab: CatalogTab, state: PanelState): string {
 
 /** The page's body — and its paint key: no held place, no header, nothing that moves by the host's push. */
 export function catalogBody(state: PanelState): string {
-  const tabs = CATALOG_TABS.map((tab) => ({ key: tab.id, label: tab.label }));
+  const tabs = CATALOG_TABS.map((tab) => ({ key: tab.id, label: tab.label, ...markFor(tab.id, state.pathFindings ?? []) }));
 
   return ['<main class="settings catalog">', tabStrip(tabs, '', TOP_STRIP), ...CATALOG_TABS.map((tab) => pane(tab, state)), '</main>'].join('\n');
 }

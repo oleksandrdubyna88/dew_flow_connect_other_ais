@@ -257,6 +257,8 @@ public sealed class PanelService
             // it maps to never leave this process (S3.6).
             VaultKeyNames = [.. _keys.Keys.Keys.Order(StringComparer.Ordinal)],
             VaultRead = _keys.Available,
+            // Which setting and which value, for the problems that have a kind (paths per side, E5.2).
+            SettingProblems = _settings.SettingProblems,
         },
             ServerJsonContext.Default.ProvidersAnswer);
     }

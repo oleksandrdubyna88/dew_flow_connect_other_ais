@@ -86,7 +86,27 @@ public sealed record ProvidersAnswer(
     /// a readable vault holding no keys, or one that could not be read (and <see cref="VaultNote"/> says why).
     /// </summary>
     public bool VaultRead { get; init; }
+
+    /// <summary>
+    /// The settings this build refused whose problem has a KIND the extension can mark on its page — today the
+    /// question consultant's roots that are missing or could not be checked (todo/PLAN_paths_per_side.md E5.2).
+    /// </summary>
+    /// <remarks>
+    /// Additive, like <see cref="VaultKeyNames"/>: an older extension reads <see cref="Unrecognised"/> as before
+    /// and shows its generic toast; a newer one drops from that toast every sentence this list covers, so one
+    /// missing folder is one notice. Each entry carries its sentence for exactly that match. Listed as the
+    /// capability <c>settingProblems</c> in <c>--features</c>, so the page prefers this answer to its own probe
+    /// only from a server that has it.
+    /// </remarks>
+    public IReadOnlyList<SettingProblem> SettingProblems { get; init; } = [];
 }
+
+/// <summary>One refused setting the extension can act on by kind: which key, what kind, which stored value, and the sentence.</summary>
+/// <param name="Key">The settings-file key — <c>COAI_QCONSULT_ROOTS</c>.</param>
+/// <param name="Kind">One of <see cref="SettingProblemKinds"/>.</param>
+/// <param name="Value">The stored value as the file spells it — what the page holds and matches on.</param>
+/// <param name="Sentence">The same sentence <see cref="ProvidersAnswer.Unrecognised"/> carries, so the extension can drop it there.</param>
+public sealed record SettingProblem(string Key, string Kind, string Value, string Sentence);
 
 /// <summary>
 /// A consultation this repository has open, as `status` reports it.

@@ -2,7 +2,8 @@
    The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
+import { readFile, readdir, rename, rm, stat } from 'node:fs/promises';
+import { makeDataDirectory } from './dataDirMaker';
 import { join } from 'node:path';
 import { abreast } from './abreast';
 import { writeFileAtomically } from './atomicFile';
@@ -763,11 +764,7 @@ export class ChatStoreFile {
     // losing what somebody said. (CodeRabbit, on the pull request.)
     const to = join(this.dir, QUARANTINE_DIR, `${id}-forgotten-${randomUUID().slice(0, 8)}-${now}.json`);
     try {
-      await mkdir(join(this.dir, QUARANTINE_DIR), { recursive: true });
-      await rename(this.recordPath(id), to);
-      console.info(`ConnectOtherAIs: a conversation was forgotten; its transcript was set aside, unchanged, at ${to}`);
-
-      return { kind: 'ok' };
+      return await this.moveAside(id, to);
     } catch (reason) {
       if (codeOf(reason) === 'ENOENT') {
         // NOT the same event as an archive, and it does not pass in silence. The row has gone, which
@@ -789,6 +786,24 @@ export class ChatStoreFile {
         reason: withCode('the conversation was removed from the list but its transcript could not be set aside', codeOf(reason)),
       };
     }
+  }
+
+  /**
+   * The transcript renamed into the quarantine, its folder made through the one maker. A named data root that went away
+   * under the store is the maker's ANSWER: nothing is set aside and nothing is made — the same failed outcome a disk
+   * that refused the move gives, worded by the refusal. A rename that fails throws to the caller, as before.
+   */
+  private async moveAside(id: string, to: string): Promise<ForgetOutcome> {
+    const made = await makeDataDirectory(join(this.dir, QUARANTINE_DIR));
+    if (!made.made) {
+      console.error(`ConnectOtherAIs: a forgotten conversation transcript could not be set aside: ${made.sentence}`);
+
+      return { kind: 'failed', reason: 'the conversation was removed from the list but its transcript could not be set aside' };
+    }
+    await rename(this.recordPath(id), to);
+    console.info(`ConnectOtherAIs: a conversation was forgotten; its transcript was set aside, unchanged, at ${to}`);
+
+    return { kind: 'ok' };
   }
 
   /** The two deletes, in their order, with the claim held — the retirement's path, and nothing else's. */

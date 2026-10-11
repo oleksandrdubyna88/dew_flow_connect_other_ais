@@ -39,6 +39,14 @@ function server(): string {
 
 const built = fs.existsSync(server());
 
+/**
+ * The mode that makes the database a seed fills: a WRITER. `--bugs-json` did it until E5.7, when every mode the
+ * extension launches to READ stopped creating the database and its folder (todo/PLAN_paths_per_side.md, risk item C;
+ * `AReaderModeNeverMakesTheDataDirectoryTests.cs`). `--requeue-refused` opens for writing — creating and migrating — and
+ * on an empty database changes nothing.
+ */
+const MAKES_THE_DATABASE = ['--requeue-refused'];
+
 test('the real --bugs-json output parses, and says what the panel needs', { skip: built ? false : 'the server is not built' }, () => {
   // A data directory of its own: this asks the binary a question, and it must not be answered from
   // whatever database the person running the suite happens to have.
@@ -278,7 +286,7 @@ test('both halves of the wire name the same sixteen fields', () => {
  * brought `node:sqlite` into the runtime, so a test can write the rows itself. The product is
  * untouched and the gap is closed.</p>
  *
- * <p><b>The server makes the schema; this only fills it.</b> A `--bugs-json` call first, so every
+ * <p><b>The server makes the schema; this only fills it.</b> A {@link MAKES_THE_DATABASE} call first, so every
  * table and every migration is the binary's own work — a test that wrote its own `CREATE TABLE`
  * would be asserting against a schema it invented, which is the failure this whole file exists to
  * avoid. Then four rows, through the three tables `Pairs()` actually joins: `repo_path` comes from
@@ -394,7 +402,7 @@ function realRunIn(data: string): (args: readonly string[]) => Promise<{ code: n
  * cannot change.</p>
  */
 async function seedOnePair(data: string, { sent = true }: { readonly sent?: boolean } = {}): Promise<void> {
-      const made = spawnSync(server(), ['--bugs-json'], {
+      const made = spawnSync(server(), MAKES_THE_DATABASE, {
         encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
       });
       assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
@@ -469,7 +477,7 @@ test('a seeded pair reads its real method back out of a real repository',
       git('commit', '-q', '-a', '-m', 'the fix, with the method moved down');
       const fixSha = git('rev-parse', 'HEAD');
 
-      const made = spawnSync(server(), ['--bugs-json'], {
+      const made = spawnSync(server(), MAKES_THE_DATABASE, {
         encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
       });
       assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
@@ -621,7 +629,7 @@ test('a seeded pair reads its file at its revision out of a real repository, and
       // The working tree moves on, so a read of the checkout instead of the object would differ.
       fs.writeFileSync(path.join(repo, 'Totals.cs'), '// changed since\n', 'utf8');
 
-      const made = spawnSync(server(), ['--bugs-json'], {
+      const made = spawnSync(server(), MAKES_THE_DATABASE, {
         encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
       });
       assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);

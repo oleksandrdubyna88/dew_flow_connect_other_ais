@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -14,6 +14,8 @@ import { notify, notifyAndAsk } from './notify';
 import { oneAtATime } from './oneAtATime';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { askPerson } from './personWait';
+import { makeDataDirectory } from './dataDirMaker';
+import { refuseUnderMissingRootOnceSettled } from './findingsBoard';
 
 /**
  * Export config / Import config, the `…` menu's pair — issue #467. Only VS Code here: what travels is
@@ -153,7 +155,14 @@ function backupsDir(): string {
 /** The current setup written to `path`, and all but the newest ten such files removed. A failure stops the import. */
 async function backedUp(context: vscode.ExtensionContext, path: string): Promise<boolean> {
   try {
-    await mkdir(backupsDir(), { recursive: true });
+    // Never the missing NAMED data root (E5.0 of paths per side): a backup that cannot be kept stops the import.
+    await refuseUnderMissingRootOnceSettled(backupsDir());
+    const made = await makeDataDirectory(backupsDir());
+    if (!made.made) {
+      refuse(`The current setup could not be saved to ${path} first, so nothing was imported: ${made.sentence}`);
+
+      return false;
+    }
     await writeExport(context, path, backupSettings);
     await Promise.all(staleBackups(await readdir(backupsDir())).map((name) => rm(join(backupsDir(), name), { force: true })));
 

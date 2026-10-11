@@ -126,11 +126,13 @@ async function flushTheGap(at: Date): Promise<void> {
  */
 async function write(record: NotificationRecord): Promise<boolean> {
   const at = new Date();
-  let landed = true;
-  await recordNotification(coaiDataDir(), record, () => {
-    landed = false;
+  // Three outcomes since E5.0 of paths per side: landed, HELD (the notice about a missing path, kept in memory while the
+  // named data root it reports is missing — shown, never written) or lost. A held record is not on disk either, so a
+  // caller about to refer to it is told exactly what a lost one tells it: nothing to refer to.
+  const outcome = await recordNotification(coaiDataDir(), record, () => {
     noteLoss(at);
   });
+  const landed = outcome === 'landed';
   if (landed) {
     // The disk is answering again, so the hole that opened while it was not gets written down now,
     // after the record that proved the disk is back — which puts it in the ledger in the order it
@@ -273,6 +275,35 @@ export async function notifyOnce(notice: Notice): Promise<void> {
     if (firstEver) {
       detached(show(notice));
     }
+  });
+}
+
+/**
+ * Record every occurrence; show — with its button — only the first of each `(code, subject)` in this run, and react to
+ * the button without making the caller wait.
+ *
+ * <p>`notifyOnce`'s once-per-run and `notifyThen`'s button, in one door (todo/PLAN_paths_per_side.md E5.3): the notice
+ * about a missing path is raised at every start and again whenever the paths or the disk's answers change, and it
+ * offers **Open in Settings**. A once-guard at the call site would be the fourth copy of the guard this funnel exists to
+ * hold once; a `notifyThen` would toast on every refresh. The answer is recorded against the first record as
+ * `notifyThen` records it — and not at all when that record was held or lost, because there is then no asking on disk
+ * for it to answer.</p>
+ */
+export async function notifyOnceThen(
+  notice: Notice,
+  chosen: (answer: string | undefined) => void,
+): Promise<void> {
+  await kept(async () => {
+    const { firstEver, kept: asked } = await record(notice, new Date());
+    if (!firstEver) {
+      return;
+    }
+    detached(show(notice).then(async (answer) => {
+      if (asked !== undefined) {
+        await write(answered(asked, answer));
+      }
+      chosen(answer);
+    }));
   });
 }
 

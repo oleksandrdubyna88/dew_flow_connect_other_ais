@@ -41,6 +41,9 @@ internal static class FeaturesMode
         "consultantRow",
         // A row's `fast`: its fast mode, Off by default, for codex and claude launches (research/PLAN_fast_mode.md).
         "fastMode",
+        // `--providers` carries `settingProblems` — which setting and which stored value a refusal is about, by kind
+        // (todo/PLAN_paths_per_side.md E5.2); the Settings page prefers it to its own probe from a server that lists it.
+        "settingProblems",
     ];
 
     internal static async Task<int> RunAsync()

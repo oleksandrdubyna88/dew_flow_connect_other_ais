@@ -278,8 +278,8 @@ export function fileAt(statSync: (path: string) => { isFile(): boolean }): (path
   };
 }
 
-/** A failed `stat`: absent when the disk SAID there is nothing there, unknown for anything else. */
-function presenceOnFailure(failure: unknown): FilePresence {
+/** A failed `stat`: absent when the disk SAID there is nothing there, unknown for anything else. The probes (`pathProbes.ts`) map theirs through it too. */
+export function presenceOnFailure(failure: unknown): FilePresence {
   return ABSENT.has(String((failure as { code?: unknown }).code ?? '')) ? 'absent' : 'unknown';
 }
 

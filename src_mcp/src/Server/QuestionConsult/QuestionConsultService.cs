@@ -90,7 +90,8 @@ public sealed class QuestionConsultService(
 
     private readonly ConsultCallCounter _counter = new(settings.DataDir);
 
-    private readonly ConsultSchemaFile.Provisioned _answerSchema = Provision(settings, log);
+    /// <summary>The question's answer schema, provisioned the first time a fan-out needs it — never by building this service, which `--providers` does only to read (E5.7, the consultation service's reason).</summary>
+    private ConsultSchemaFile.Provisioned AnswerSchema => field ??= Provision(settings, log);
 
     /// <summary>The projection, as a static so the field initialiser above can reach it (the consultation service's reason).</summary>
     private static void Project(PanelSettings settings, Serilog.ILogger log, QuestionConsultRecord record) =>
@@ -322,7 +323,7 @@ public sealed class QuestionConsultService(
     private async Task<Consulted> FannedOutAsync(QuestionConsultRecord record, int left, string counterNote, CancellationToken ct)
     {
         var nonce = Guid.NewGuid().ToString("N")[..8];
-        var fanOut = new QuestionFanOut(launcher, executor, _store, prompts, ledger, keys, settings, new Normalizer.TreeSitterOutliner(), _answerSchema.Path, env, log);
+        var fanOut = new QuestionFanOut(launcher, executor, _store, prompts, ledger, keys, settings, new Normalizer.TreeSitterOutliner(), AnswerSchema.Path, env, log);
         log.Information("question {Id}: {Rows} row(s) configured, asked in {Repo}", record.Id, settings.QuestionConsult.Rows.Count, record.RepoPath);
         var settled = await fanOut.RunAsync(record, new FanOutInput(
             settings.QuestionConsult, settings.Providers, settings.ApiOverrides, record.Question, record.Context,

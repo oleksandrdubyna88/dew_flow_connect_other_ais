@@ -95,9 +95,11 @@ const UNRESOLVED_READS: Readonly<Record<string, { readonly count: number; readon
   'chatPresets.ts': { count: 1, why: 'turns a reviewer row into a stored preset' },
   'consultSettings.ts': { count: 3, why: 'resolves a stored definition and matches it to a row — the stored value' },
   'qconsultSettings.ts': { count: 1, why: 'copies a catalog row into a question row, which rowsOnTheWire resolves' },
-  'panelView.ts': { count: 1, why: 'draws the stored value in the card\'s CLI-path box' },
+  'panelView.ts': { count: 2, why: 'draws the stored value in the card\'s CLI-path box, and finds its missing-path finding by it (E5.4)' },
   'setupTab.ts': { count: 4, why: 'draws the stored value in the vendor-keys table' },
   'pathFamily.ts': { count: 1, why: 'the side rule itself' },
+  'pathFindings.ts': { count: 3, why: 'names the setting coai.vendors[].executablePath in the words of its notice and mark (E5) — strings, never a row' },
+  'pathWatch.ts': { count: 1, why: 'the stored value is the finding\'s subject; the path asked of the disk is pathForThisSide\'s (E5.3)' },
 };
 
 const READ = /\.executablePath\b/g;

@@ -1146,6 +1146,53 @@ the `executable` set — a reviewer's CLI path of the other OS is skipped (PATH 
 (`pathForThisSide`) and by the server's vendor read (`ExecutablePaths.Here`) alike, checked against each other by the
 seam leg `seam-cli-path-other-side.mjs` (`todo/PLAN_paths_per_side.md` E1).
 
+**A root of THIS OS that is missing is named by both halves too (2026-10-10, the same plan's E5).** coai-mcp's
+`--providers` carries `settingProblems: [{key, kind, value, sentence}]` (kinds `missing-folder` / `unreadable-folder`;
+the capability listed in `--features`), the extension's own bounded probes (`pathFindings.ts`, `pathProbes.ts`,
+`pathWatch.ts`) find the same set and take the server's word for the settings it judges (`agreed`), the generic "did not
+understand a setting" toast drops every sentence a problem covers, and the seam leg `seam-path-missing.mjs` holds the
+two level. A NAMED data directory that is missing is created by neither half: the extension's directory-making
+writers refuse under it (`findingsBoard.refuseUnderMissingRoot`), the notice about it is held in memory rather than
+written, and the settings mirror stands aside (`no-data-root`) until the folder exists — so the server keeps reading
+its previous settings file, or none ([module_extension.md](module_extension.md), [module_server.md](module_server.md)).
+Since the gate's risk consultation on that story, the guard keeps its own state (an absence the disk SAID holds until a
+probe confirms the root — a settings change's re-ask or a timeout never lifts it), every folder under the data
+directory is made by one maker that never makes a named root (`dataDirMaker.ts`, its refusal a value), the watch
+rechecks what it found absent so making the folder is enough to recover, and the modes the extension launches only to
+read never make the data directory either (`RoundsDb.PresenceOf` / `OpenExisting`):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Disk as Disk (stat)
+    participant Watch as PathWatch + PathProbes
+    participant Board as findingsBoard
+    participant Writers as Writers (ledgers, store, settings file)
+    participant Mirror as Settings mirror
+    participant Mcp as coai-mcp --providers
+    participant UI as Notice + Settings page mark
+
+    Watch->>Disk: probe the named data root and this side's paths (5 s deadline, one outstanding per path)
+    Disk-->>Watch: absent
+    Watch->>Board: noteDataRoot(root, absent) + publishFindings(missing)
+    Board-->>UI: setting-path-missing once per run with Open in Settings, the value marked missing, the tab counted
+    Mcp-->>Watch: settingProblems (key, kind, value) for the roots it judges
+    Watch->>Board: agreed findings (the server's word replaces this window's for those settings)
+    Writers->>Board: refuseUnderMissingRootOnceSettled(path)
+    Board-->>Writers: refused while the absence is kept (pending or unknown never lift it)
+    Writers->>Writers: makeDataDirectory: below a named root, one non-recursive mkdir per level, never the root
+    Note over Writers: a root gone at the moment of the write is answered as a value, nothing is made
+    Mirror->>Board: dataRootMissing()
+    Board-->>Mirror: yes, so no-data-root, terminal, not retried and not reported
+    loop every 5 s while a path is absent
+        Watch->>Disk: recheck(path)
+    end
+    Disk-->>Watch: here (the folder was made, or the drive mounted)
+    Watch->>Board: noteDataRoot(root, here) lifts the kept absence
+    Board-->>UI: the notice resolved, the held notice released, the mark gone
+    Board-->>Mirror: onDataRootBack, so the mirror writes settings.json
+```
+
 ### The question card gained a status and the consultants' answers (2026-10-02, S3 of the question consultant)
 
 `escalations/<id>.json` has been the one file neither container owns since escalation shipped: `coai-mcp`
@@ -1237,8 +1284,8 @@ sequenceDiagram
     Mcp-->>Ext: [..., consultantRow]
     Ext->>File: {vendor, model, runtime, baseUrl, executablePath, row: rowOnTheWire(catalog row)}
     Mcp->>File: read on start and on change
-    Mcp->>Mcp: OptionsOf(row) via ParseVendors; WithOptions over the entry's identity
-    Mcp->>Mcp: launch: row timeout, CLI effort, api module; system prompt frozen in the record, redacted from output
+    Mcp->>Mcp: OptionsOf(row) via ParseVendors, then WithOptions over the entry's identity
+    Mcp->>Mcp: launch: row timeout, CLI effort, api module, system prompt frozen in the record, redacted from output
 ```
 
 ## How the Team server is deployed (2026-09-06)

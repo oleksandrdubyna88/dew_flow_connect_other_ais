@@ -1,4 +1,6 @@
+import { writeFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
+import { renameWithRetry } from './atomicFile';
 import { sortedJoin } from './codeUnitOrder';
 import { answerChoices, answerJson } from './escalationAnswer';
 import {
@@ -266,8 +268,11 @@ export class EscalationWatcher {
 
         return;
       }
-      await vscode.workspace.fs.writeFile(temp, bytes);
-      await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+      // Node's write and rename, never VS Code's: those make missing parent folders, so an answer typed after the
+      // question's folder went away (a share unmounted) made the folder again — a data directory recreated by a reply
+      // (todo/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which is the failure handled below.
+      await writeFile(temp.fsPath, bytes);
+      await renameWithRetry(temp.fsPath, target.fsPath);
     } catch (reason) {
       // KEPT, not swallowed. A mount can go read-only or disappear between the question being found
       // and the answer being typed, and an answer that silently failed to land looks exactly like one

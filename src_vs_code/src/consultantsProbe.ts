@@ -1,5 +1,7 @@
 import { type ConsultantsReport, parseConsultantsAnswer } from './consultantHealth';
 import type { ProbeShown } from './consultantHealthState';
+import { coaiDataDir } from './dataDir';
+import { dataRootKnown, missingRootRefusal, refusedDataRoot, refusedDataRootOnceSettled } from './findingsBoard';
 
 /**
  * `coai-mcp --consultants`, asked by a render and NEVER awaited by one — E5.4 of
@@ -93,8 +95,21 @@ export class ConsultantsProbe {
     }
   }
 
-  /** The spawn's answer as something to draw — a rejected spawn is an unanswered probe, with the last answer kept. */
+  /**
+   * The spawn's answer as something to draw — a rejected spawn is an unanswered probe, with the last answer kept.
+   *
+   * <p>Never while the NAMED data root is missing (E5.0 of todo/PLAN_paths_per_side.md): the survey is a writer by proxy —
+   * `--consultants` writes `consultations/health/consultants.json` with a CreateDirectory, which is the folder the policy
+   * says nothing creates. Asked of the board synchronously once it has its first answer — a render's spawn starts in the
+   * same turn, which this probe's own tests pin — and waited for (bounded) only while the disk has not answered yet.</p>
+   */
   private async asked(executable: string): Promise<ProbeShown> {
+    const missing = dataRootKnown() ? refusedDataRoot(coaiDataDir()) : await refusedDataRootOnceSettled(coaiDataDir());
+
+    return missing === undefined ? this.spawned(executable) : this.unanswered(missingRootRefusal(missing).message);
+  }
+
+  private async spawned(executable: string): Promise<ProbeShown> {
     try {
       const { code, output } = await this.host.run(executable, ['--consultants']);
       const answer = parseConsultantsAnswer(code, output);

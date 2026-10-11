@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { forgetFindingsBoard, heldNotices, noteDataRoot, publishFindings } from '../findingsBoard';
 import { appendLine, flushLedgers } from '../jsonlLedger';
 import { NotificationRecord, notificationLine } from '../notifications';
+import { familyOf } from '../pathFamily';
+import { SETTING_PATH_MISSING, type PathFinding } from '../pathFindings';
 import {
   NOTIFICATIONS_FILE,
   SERVER_NOTICES_FILE,
@@ -460,6 +463,63 @@ test('a ledger that is not there acknowledges an empty range rather than everyth
     assert.equal(read.start, 0);
     assert.equal(read.end, 0, 'nothing was read, so nothing may be marked read');
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------- the storage-write policy (todo/PLAN_paths_per_side.md E5.0) ----------
+
+/** The finding the host publishes when this window's NAMED data root is not there. */
+function missingRoot(root: string): PathFinding {
+  return { key: 'coai.dataDirectory', place: 'setup/mcp', value: root, family: familyOf(process.platform), state: 'missing', owner: '' };
+}
+
+test('a notice about the missing data folder is HELD, not written — its own write must not create the folder it reports', async () => {
+  const dir = home();
+  const gone = join(dir, 'gone');
+  forgetFindingsBoard();
+  publishFindings([missingRoot(gone)]);
+  try {
+    const outcome = await recordNotification(gone, record({ code: SETTING_PATH_MISSING, subject: `coai.dataDirectory|${gone}`, title: `${gone} is missing` }));
+
+    assert.equal(existsSync(gone), false, 'the notice\'s own write created the folder it reports missing — and hid the condition');
+    assert.equal(outcome, 'held');
+    assert.deepEqual(heldNotices().map((one) => one.subject), [`coai.dataDirectory|${gone}`], 'the held notice is what the page shows for this window run');
+
+    // Any OTHER record while the root is missing is LOST — counted into the write gap, never written anywhere.
+    let told: unknown;
+    const lost = await recordNotification(gone, record(), (reason) => { told = reason; });
+    assert.equal(lost, 'lost');
+    assert.match(String(told), /was not found on this machine/u, 'the loss carries the finding\'s own sentence');
+    assert.equal(existsSync(gone), false, 'a lost record created the folder');
+
+    // The folder is found again — a probe CONFIRMS it, which is all that lifts the kept absence (risk item D) — the board
+    // clears, and writes land as they always did.
+    mkdirSync(gone, { recursive: true });
+    noteDataRoot(gone, 'here');
+    publishFindings([]);
+    assert.equal(await recordNotification(gone, record()), 'landed');
+    assert.equal((await readNotifications(gone)).length, 1, 'once the folder exists the ledger resumes');
+    assert.deepEqual(heldNotices(), [], 'the recovery released the held notice');
+  } finally {
+    forgetFindingsBoard();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('every ledger appended under the missing named root is refused and counted, and the root stays absent', async () => {
+  const dir = home();
+  const gone = join(dir, 'gone');
+  forgetFindingsBoard();
+  publishFindings([missingRoot(gone)]);
+  try {
+    let told: unknown;
+    await appendLine(join(gone, 'chat-usage.jsonl'), 'line\n', 'a chat turn', { onFailure: (reason) => { told = reason; } });
+
+    assert.equal(existsSync(gone), false, 'the chat ledger created the missing root');
+    assert.match(String(told), /was not found on this machine/u);
+  } finally {
+    forgetFindingsBoard();
     rmSync(dir, { recursive: true, force: true });
   }
 });
