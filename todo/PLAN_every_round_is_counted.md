@@ -411,6 +411,33 @@ Answers the operator's question for this machine's work from the whole history, 
   summed with a list-price estimate; without a gauge it is not shown at all.
 - **6.3 The record** (Opus) — the status line says what was not possible; README rows; the plan promoted with its
   deviations and its open tail; a second server deploy only if 6.1 exists.
+- **What the owner and the risk consultation for 6.1 decided (2026-10-11)** — binding on E6's plan round:
+  - **The owner wants E6:** read each vendor's gauge and know when the quota comes back. The consultation
+    (`71ab5408`, gpt-6-astra, two turns, verified in code) decides HOW.
+  - **6.1a server capture — under the lease, never alone.** The read runs INSIDE `JobRunner`'s slot lease (taken before
+    the claim, held across `RunAsync` — verified), after the job, and its process is killed before the lease is
+    released (a test proves no reader outlives the lease, a parent crash included). Before spawning: skip unless the
+    access token's JWT `exp` minus now exceeds the reader's enforced lifetime plus a margin; an unknown expiry skips.
+    That guard NARROWS the risk and is not the safety boundary: an unexpired token can still meet a 401, or codex can
+    refresh proactively. **The safety is exclusive ownership of the slot's token set** — a refresh, if one happens,
+    happens while nothing else uses that set, and a test proves the NEXT launch on the slot uses the resulting
+    credentials. First step of 6.1a: inspect the deployed codex version's managed-auth path for
+    `account/rateLimits/read` (start-up, proactive refresh, 401 recovery) and record what it does.
+  - **On any auth error or refresh request:** stop the capture, never log in or retry, keep the previous reading marked
+    stale, and persist **"gauge capture suspended"** on the slot — its OWN state, never `NeedsSignIn` (which would make
+    the recovery launch unschedulable) — until a later launch on that slot succeeds. A capture failure never changes the
+    finished job's result. The reader logs allow-listed numbers and fixed codes, never a raw message or stderr.
+  - **The expired-token measurement by a COPY is dropped as unsafe:** copying a store duplicates its refresh token at
+    the vendor, so refreshing the copy can leave the original holding dead credentials. With no disposable account,
+    the expired-token behaviour stays recorded as **unmeasured** — the design does not claim it is unreachable.
+  - **6.1b local capture is deferred:** a lock excludes only cooperating coai processes, and "no other codex process
+    visible" races with direct use. The local view shows the SERVER's observation only for an explicitly matched
+    account, with its source and time; otherwise *unavailable*.
+  - **6.2 reset first:** a reset per reported window, identified by **limit identity plus duration** (not primary /
+    secondary); the observation time and its staleness; after a passed reset with no newer reading, *"reset time passed;
+    availability unverified"* — recovery is never inferred from the clock or the percentage; `ordinaryUsageAllowed`
+    kept; the observed gauge and reset shown even when rounds-per-1 % is hidden by the missing-consumer rule (kept).
+    Daily token buckets never stand for quota recovery. agy has no gauge: its reset stays the stated one from E5.
 
 ## Build order
 
