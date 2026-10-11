@@ -21,6 +21,13 @@ type Launch =
   | 'reader'
   /** Launched on a person's own act — a button, a check, a send: the person's consent, as the move flow is. */
   | 'a person acts'
+  /**
+   * A person's paid check, which writes its state under the data directory: not started while the named root is missing
+   * (`consultantCheckRun.runConsultantCheck`), and refused by the server too (research/PLAN_names_and_a_missing_root.md 3.3).
+   */
+  | 'a person acts, held by the extension'
+  /** Launched on a person's act, but reads stdin and answers stdout only: never touches the data directory (`CheckSecurityMode`). */
+  | 'touches no data directory'
   /** The consultants survey: writes its health file, and is not started while the named root is missing (`consultantsProbe`). */
   | 'survey, held by the extension'
   /** The literal names a mode but launches no `coai-mcp` (another program's flag). */
@@ -47,9 +54,9 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--tree-remove': 'a person acts',
   '--upload-pairs': 'a person acts',
   '--close-consult': 'a person acts',
-  '--check-consultant': 'a person acts',
-  '--check-model': 'a person acts',
-  '--check-security': 'a person acts',
+  '--check-consultant': 'a person acts, held by the extension',
+  '--check-model': 'a person acts, held by the extension',
+  '--check-security': 'touches no data directory',
   '--probe-api': 'a person acts',
   '--consultants': 'survey, held by the extension',
   '--help': 'not a coai-mcp launch',
@@ -91,7 +98,19 @@ test('every READER is run by the server\'s test against a missing data directory
   const held = fs.readFileSync(path.join(REPO, 'src_mcp', 'tests', 'AReaderModeNeverMakesTheDataDirectoryTests.cs'), 'utf8');
   const covered = new Set([...held.matchAll(/"(--[a-z-]+)"/gu)].map((match) => match[1]!));
 
-  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => launch === 'reader')) {
+  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => launch === 'reader' || launch === 'touches no data directory')) {
     assert.ok(covered.has(mode), `${mode} is launched to read, and AReaderModeNeverMakesTheDataDirectoryTests.cs never runs it against a missing data directory`);
+  }
+});
+
+test('every check the extension holds under a missing root is refused by the server too — the two halves agree', () => {
+  // reads-another-program: research/PLAN_names_and_a_missing_root.md 3.3 — the extension does not start these while the
+  // named root is missing, and the server's own test runs each against one (exit 74, nothing made), so a check started
+  // another way — a terminal, an older extension — still makes nothing.
+  const held = fs.readFileSync(path.join(REPO, 'src_mcp', 'tests', 'AWriterModeRefusesAMissingNamedRootTests.cs'), 'utf8');
+  const covered = new Set([...held.matchAll(/"(--[a-z-]+)"/gu)].map((match) => match[1]!));
+
+  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => launch === 'a person acts, held by the extension')) {
+    assert.ok(covered.has(mode), `${mode} is held by the extension, and AWriterModeRefusesAMissingNamedRootTests.cs never runs it against a missing data directory`);
   }
 });

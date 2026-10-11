@@ -46,6 +46,8 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--round-counts" },
         new[] { "--features" },
         new[] { "--version" },
+        // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
+        new[] { "--check-security" },
     };
     // END READER MODES
 
@@ -59,7 +61,18 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
     [MemberData(nameof(ReaderModes))]
     public async Task AReaderModeLeavesAMissingNamedDataDirectoryAbsent(string[] args)
     {
-        var (_, code) = await Stdout.OfAsync(() => Program.RunAsync(args));
+        // A mode that reads stdin (`--check-security`) reads an empty one here, never this test runner's own.
+        var inWas = Console.In;
+        Console.SetIn(new StringReader(string.Empty));
+        int code;
+        try
+        {
+            (_, code) = await Stdout.OfAsync(() => Program.RunAsync(args));
+        }
+        finally
+        {
+            Console.SetIn(inWas);
+        }
 
         Directory.Exists(Missing).Should().BeFalse(
             $"`coai-mcp {string.Join(' ', args)}` exited {code} and left the missing data directory behind, holding: {Inside()}");

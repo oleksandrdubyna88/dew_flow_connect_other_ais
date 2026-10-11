@@ -70,6 +70,9 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
     [Fact]
     public async Task CheckModel_StopsAt74_AndLeavesTheMissingNamedRootAbsent()
     {
+        Program.Classify(["--check-model"]).Should().Be(Program.Startup.CheckModel, "the entry below is what this mode runs");
+        Program.WriterModes.Should().Contain(Program.Startup.CheckModel, "and the dispatch refuses it before it starts");
+
         var (code, _, err) = await ConsultantCheckMode.AnswerModelAsync(
             Settings(), RowJson, new FailsEveryCall(), _parent, _ => { }, Noticing.None, TestContext.Current.CancellationToken, VaultKeys.None("t"));
 
@@ -82,6 +85,9 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
     public async Task CheckConsultant_StopsAt74_AndLeavesTheMissingNamedRootAbsent()
     {
         // A consultant that PASSES preflight: an unavailable one writes nothing anyway, and this test would prove nothing.
+        Program.Classify(["--check-consultant"]).Should().Be(Program.Startup.CheckConsultant, "the entry below is what this mode runs");
+        Program.WriterModes.Should().Contain(Program.Startup.CheckConsultant, "and the dispatch refuses it before it starts");
+
         var (code, _, err) = await ConsultantCheckMode.AnswerAsync(
             Settings(), ["--check-consultant", "--caller", "claude"], new FailsEveryCall(), _parent, _ => { }, Noticing.None, TestContext.Current.CancellationToken);
 

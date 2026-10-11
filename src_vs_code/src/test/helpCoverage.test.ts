@@ -116,6 +116,20 @@ test('every language says how a Security lane pair names its reviewer, by the pa
   }
 });
 
+test('every language says the MCP server does not create a missing named data folder either (names and a missing root, story 3)', () => {
+  // research/PLAN_names_and_a_missing_root.md: the paid **Check** is not started, the server's own modes stop, and a client
+  // that starts the server gets one that refuses every tool naming the folder. `COAI_DATA_DIR` and **Check** are English
+  // in every language — a variable and a control — so they are what all five are asked for.
+  const article = HELP_ARTICLES.find((one) => one.id === 'where-your-data-lives');
+  assert.ok(article !== undefined, 'the data article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const words of ['**Check**', '`COAI_DATA_DIR`']) {
+      assert.ok(said.includes(words), `the ${language} data article never says ${words} — that the MCP server makes no missing named folder is undocumented there`);
+    }
+  }
+});
+
 test('every language names the Team server tab where the help lists the tabs of the log and the spending tab points at it', () => {
   // The same blind spot as the chat test above: bodyFor marks a MISSING translation, not a stale one, and the old
   // help promised a "Show the whole company" button that no longer exists (todo/PLAN_team_usage_by_person.md, D6).
