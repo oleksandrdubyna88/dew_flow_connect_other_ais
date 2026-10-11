@@ -93,7 +93,7 @@ export interface Vendor {
    */
   readonly executablePath: string;
   /**
-   * The CLI path per SIDE (todo/PLAN_paths_per_side.md E3.1): VS Code shares this row between a Windows window and a WSL
+   * The CLI path per SIDE (research/PLAN_paths_per_side.md E3.1): VS Code shares this row between a Windows window and a WSL
    * window, and one `executablePath` cannot hold both `C:\…\codex.cmd` and `/usr/local/bin/codex`. Only when SAID, like
    * `dialect`; a present member wins over `executablePath` on its side (`pathForThisSide`), an empty one being the PATH
    * lookup. Never crosses in `COAI_VENDORS`: this side's value is resolved before the file is written.

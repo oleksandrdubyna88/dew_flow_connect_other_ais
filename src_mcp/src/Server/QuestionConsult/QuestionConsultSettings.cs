@@ -223,7 +223,7 @@ public static class QuestionRoots
 {
     /// <param name="Refusals">
     /// Every root refused, with WHY as a sentence and — when the extension can act on it — the KIND of problem and the
-    /// stored value it is about (todo/PLAN_paths_per_side.md E5.2). <see cref="Verdict.Refused"/> is the sentences alone,
+    /// stored value it is about (research/PLAN_paths_per_side.md E5.2). <see cref="Verdict.Refused"/> is the sentences alone,
     /// the projection every earlier reader keeps.
     /// </param>
     /// <param name="OtherSide">

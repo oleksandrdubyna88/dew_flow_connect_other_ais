@@ -13,7 +13,7 @@ import { panelState, runPanel } from './panelPageHarness';
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * The bright mark (todo/PLAN_paths_per_side.md E5.4): a path of this side the disk cannot find is marked `.path-missing`
+ * The bright mark (research/PLAN_paths_per_side.md E5.4): a path of this side the disk cannot find is marked `.path-missing`
  * beside its value — the `.skew` shape in the error colour, a `●`, the word *missing*, `aria-invalid="true"` and an
  * `aria-describedby` sentence — on the Question consultant, on the Models card's CLI path and on Setup › MCP server's
  * watched folders and data directory. An unknown path takes the warning tone and "could not be checked". The page is RUN

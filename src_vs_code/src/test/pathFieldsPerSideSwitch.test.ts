@@ -13,7 +13,7 @@ import { panelState, runPanel } from './panelPageHarness';
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * `coai.pathFieldsPerSide` decides every place at once (todo/PLAN_paths_per_side.md E4.4): *Always one* (`never`)
+ * `coai.pathFieldsPerSide` decides every place at once (research/PLAN_paths_per_side.md E4.4): *Always one* (`never`)
  * restores ONE field everywhere even with both sides seen; *Always two* (`always`) draws two with a single side seen, the
  * other labelled *(not seen yet)*. The Models card, the Question consultant's folders and Setup › MCP server are each RUN
  * (`runPanel`) and read back as the tree they drew.

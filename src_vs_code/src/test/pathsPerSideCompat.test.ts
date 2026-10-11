@@ -9,7 +9,7 @@ import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 import { rowOnTheWire } from '../vendorsWire';
 
 /**
- * Compatibility of the per-side CLI path with extensions that do not know it (todo/PLAN_paths_per_side.md E3.5).
+ * Compatibility of the per-side CLI path with extensions that do not know it (research/PLAN_paths_per_side.md E3.5).
  *
  * <p>VS Code shares `coai.vendors` between a Windows window and a WSL window, and a WSL remote installs its OWN copy of
  * the extension, which can lag a version. So one row is read and written by two extension versions at once. These tests

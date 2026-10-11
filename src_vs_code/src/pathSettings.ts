@@ -1,5 +1,5 @@
 /**
- * Every setting that holds a PATH on this machine — the registry `todo/PLAN_paths_per_side.md` E1.1 asks for.
+ * Every setting that holds a PATH on this machine — the registry `research/PLAN_paths_per_side.md` E1.1 asks for.
  *
  * <p><b>Why a registry.</b> VS Code's user settings are shared by a WSL window and a plain Windows window on one machine,
  * and each side runs its own `coai-mcp` (operator, 2026-10-09). A path written on one side is read on the other, so each

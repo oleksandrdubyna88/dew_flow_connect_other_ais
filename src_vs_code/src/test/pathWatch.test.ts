@@ -10,7 +10,7 @@ import { PathWatch } from '../pathWatch';
 import type { SettingProblem } from '../providers';
 
 /**
- * The watch over this side's paths (todo/PLAN_paths_per_side.md E5.3), run without an editor: what the settings name is
+ * The watch over this side's paths (research/PLAN_paths_per_side.md E5.3), run without an editor: what the settings name is
  * asked of a disk the test answers for, published for the page, and SAID — once per missing path, when it appears, with
  * its place; resolved when it comes back, so going missing again is news. The operator's case first.
  */

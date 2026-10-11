@@ -1,5 +1,5 @@
 /**
- * A reviewer's CLI path of the OTHER operating system, across the seam (todo/PLAN_paths_per_side.md E1.2).
+ * A reviewer's CLI path of the OTHER operating system, across the seam (research/PLAN_paths_per_side.md E1.2).
  *
  * <p>VS Code shares its settings between a WSL window and a Windows window, so a reviewer row's `executablePath` written on
  * one side is read on the other. Which value this side runs is decided TWICE: the extension writes THIS side's value into

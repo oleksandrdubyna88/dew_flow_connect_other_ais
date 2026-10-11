@@ -2,7 +2,7 @@ import { isPosixAbsolute, isWindowsAbsolute, qualified } from './pathFamily';
 import { rootRefusal, type RootPlaces } from './qconsultWrite';
 
 /**
- * Text typed into the OTHER side's folder box on the Question consultant (todo/PLAN_paths_per_side.md E4.2, the
+ * Text typed into the OTHER side's folder box on the Question consultant (research/PLAN_paths_per_side.md E4.2, the
  * admission rule of the cadence consultation for epics 4-6, finding c): admitted only when THIS window would group the
  * typed text as the other side's (`pathGroups.groupOf`), so an entry never jumps groups on the next render — an
  * unambiguous absolute path of that OS: a drive letter or `\\server\share` for the Windows box, a single-slash `/…` for

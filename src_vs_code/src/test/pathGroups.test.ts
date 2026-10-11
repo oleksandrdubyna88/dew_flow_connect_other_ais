@@ -5,7 +5,7 @@ import { existingHere } from '../pathFamily';
 import { groupedPaths, groupOf, NOTHING_ASKED } from '../pathGroups';
 
 /**
- * A shared list of folders in three groups (todo/PLAN_paths_per_side.md E3.3; the cadence consultation for epics 4-6,
+ * A shared list of folders in three groups (research/PLAN_paths_per_side.md E3.3; the cadence consultation for epics 4-6,
  * finding c): this side's, the other side's, and both sides / unclear — never two, and nothing hidden. The disk is asked
  * through the real `existingHere`, so what the groups are built from is what the host asks.
  */

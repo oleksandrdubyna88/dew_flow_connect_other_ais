@@ -9,7 +9,7 @@ import { DEFAULT_VENDORS } from '../../vendors';
 import { activated, until } from './missingDataRootScenario';
 
 /**
- * Two CLI-path fields in a real editor (todo/PLAN_paths_per_side.md E4.5): with two fields switched on, Settings › Models
+ * Two CLI-path fields in a real editor (research/PLAN_paths_per_side.md E4.5): with two fields switched on, Settings › Models
  * opens, the OTHER side's CLI path is saved, and the settings file this side writes for ITS server still carries THIS
  * side's value — the other side's value never reaches this side's server.
  *

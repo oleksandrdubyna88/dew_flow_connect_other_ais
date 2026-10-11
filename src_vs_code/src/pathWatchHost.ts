@@ -12,7 +12,7 @@ import { settingsFrom } from './settingsShape';
 import { vendorsFrom } from './vendors';
 
 /**
- * The host half of the path watch (todo/PLAN_paths_per_side.md E5.3): the settings as THIS side reads them, the real
+ * The host half of the path watch (research/PLAN_paths_per_side.md E5.3): the settings as THIS side reads them, the real
  * disk through the bounded probes, and the notice through the funnel — once per window run and per missing path, with
  * **Open in Settings** landing on the place that draws the value. Every decision is `pathWatch.ts`'s; this is the
  * `vscode` around it.
@@ -59,7 +59,7 @@ function ownDataDir(): string {
 }
 
 /**
- * The notice at every start (todo/PLAN_paths_per_side.md, design (e)): a warning, keyed per `(key, value)` so fixing one
+ * The notice at every start (research/PLAN_paths_per_side.md, design (e)): a warning, keyed per `(key, value)` so fixing one
  * clears one, worded "not found now" and never "deleted" — an unmounted drive or a sleeping share reports absence too.
  */
 function sayMissing(finding: PathFinding): void {

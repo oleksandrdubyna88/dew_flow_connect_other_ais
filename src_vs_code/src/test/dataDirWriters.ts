@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * The inventory of every shipped site that can MAKE a directory (todo/PLAN_paths_per_side.md E5.0 (b), E5.7; the gate's
+ * The inventory of every shipped site that can MAKE a directory (research/PLAN_paths_per_side.md E5.0 (b), E5.7; the gate's
  * plan-round item B), derived by a scan rather than remembered, and shared by the two tests that hold it:
  * `everyWriterOfTheDataDirectory.test.ts` (the scan finds exactly these, each guarded as classified) and
  * `everyWriterLeavesAMissingRootAbsent.test.ts` (each writer RUN under a missing named root leaves it absent — text in a

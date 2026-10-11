@@ -5,7 +5,7 @@ import type { SettingProblem } from './providers';
 
 /**
  * A path of THIS side that is not where the settings say it is — the one model behind the notice at every start and the
- * bright mark on the Settings page (todo/PLAN_paths_per_side.md, design (e); E5.1).
+ * bright mark on the Settings page (research/PLAN_paths_per_side.md, design (e); E5.1).
  *
  * <p><b>Why one model.</b> The operator's case (2026-10-09): a Windows question-consultant root `D:\old-project` that was
  * deleted was a generic "the server could not understand a setting" toast on every start, and nothing on the page beside
@@ -139,7 +139,7 @@ export function pathFindings(values: readonly PathValue[], family: PathFamily, p
 }
 
 /**
- * The findings the page and the notice run on when the SERVER has answered (todo/PLAN_paths_per_side.md E5.6): for the
+ * The findings the page and the notice run on when the SERVER has answered (research/PLAN_paths_per_side.md E5.6): for the
  * settings coai-mcp judges (`saidBy: 'server'` — the question consultant's roots) its `settingProblems` replace this
  * window's own probe, so the page and the server cannot disagree about a root; every other setting keeps this
  * window's findings. `undefined` is a server that has not answered, or is older than the capability — then this

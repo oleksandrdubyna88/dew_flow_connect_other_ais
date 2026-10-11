@@ -14,7 +14,7 @@ import { type PageNode, pageTree } from './pageTree';
 
 /**
  * The Question consultant's folders drawn in the three groups of `pathGroups.ts` once both sides are known
- * (todo/PLAN_paths_per_side.md E4.2): this side's (with Add a folder…), the other side's in a `fieldset` with its legend
+ * (research/PLAN_paths_per_side.md E4.2): this side's (with Add a folder…), the other side's in a `fieldset` with its legend
  * and caption, and *both sides / unclear* — nothing hidden. The other side's group takes TYPED text, admitted only when
  * this window would group it as the other side's (so an entry never jumps groups on the next render), and refused
  * BESIDE the box with the reason. The page is RUN (`runPanel`), saved through the host's own decisions

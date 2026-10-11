@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 /// <c>shared/path-family-vectors.json</c>, read CHECKED: every row a JSON object and every field of its declared type,
 /// or the test fails naming the section, the row and the field — never an InvalidOperationException from a null row
 /// (the third code round). <c>pathFamily.test.ts</c> reads the file the same way. Its own file since the CLI-path vectors
-/// (todo/PLAN_paths_per_side.md E1.2) are read by a second class.
+/// (research/PLAN_paths_per_side.md E1.2) are read by a second class.
 /// </summary>
 internal static class SharedVectors
 {

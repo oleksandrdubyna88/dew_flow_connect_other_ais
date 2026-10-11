@@ -98,7 +98,7 @@ export class ConsultantsProbe {
   /**
    * The spawn's answer as something to draw — a rejected spawn is an unanswered probe, with the last answer kept.
    *
-   * <p>Never while the NAMED data root is missing (E5.0 of todo/PLAN_paths_per_side.md): the survey is a writer by proxy —
+   * <p>Never while the NAMED data root is missing (E5.0 of research/PLAN_paths_per_side.md): the survey is a writer by proxy —
    * `--consultants` writes `consultations/health/consultants.json` with a CreateDirectory, which is the folder the policy
    * says nothing creates. Asked of the board synchronously once it has its first answer — a render's spawn starts in the
    * same turn, which this probe's own tests pin — and waited for (bounded) only while the disk has not answered yet.</p>

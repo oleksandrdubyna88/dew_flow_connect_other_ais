@@ -66,7 +66,7 @@ public sealed class ConsultationService(
     /// <remarks>
     /// <para>Its own directory, never <c>consultations/</c>: that one holds a file per consultation keyed
     /// by id, and story 2's live check found this schema being read back as a record with no id.</para>
-    /// <para><b>Provisioned when first asked, not when this service is built</b> (todo/PLAN_paths_per_side.md E5.7, D3):
+    /// <para><b>Provisioned when first asked, not when this service is built</b> (research/PLAN_paths_per_side.md E5.7, D3):
     /// <c>--providers</c> builds this service only to READ the providers' health, and a field initialiser that wrote
     /// <c>schemas/</c> made a NAMED data directory that was missing — the one condition the extension reports.</para>
     /// </remarks>

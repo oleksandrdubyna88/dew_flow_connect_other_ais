@@ -817,7 +817,7 @@ const qroots = await qconsultRootsSeam({
 });
 console.log('  ok  a question-consultant root of the other OS is skipped without a complaint, and the page agrees with the server on every root');
 
-// A reviewer's CLI path of the OTHER OS (todo/PLAN_paths_per_side.md E1.2): the extension sends nothing for it, and the
+// A reviewer's CLI path of the OTHER OS (research/PLAN_paths_per_side.md E1.2): the extension sends nothing for it, and the
 // server skips it in a file an older extension wrote — the CLI is looked up instead, never probed as the other side's file.
 const clipath = await cliPathOtherSideSeam({
   providersIn, fakeCli: cli,
@@ -825,7 +825,7 @@ const clipath = await cliPathOtherSideSeam({
 });
 console.log('  ok  a reviewer\'s CLI path of the other OS is skipped by both halves: the server looks the CLI up instead of probing the path');
 
-// A missing root of THIS OS (todo/PLAN_paths_per_side.md E5.6): the server names it in `settingProblems` by key, value
+// A missing root of THIS OS (research/PLAN_paths_per_side.md E5.6): the server names it in `settingProblems` by key, value
 // and kind, the page's own probe finds the same set, and the generic toast drops the sentence the problem covers.
 const missing = await pathMissingSeam({
   providersIn,

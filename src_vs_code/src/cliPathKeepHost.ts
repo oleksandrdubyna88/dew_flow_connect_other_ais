@@ -6,7 +6,7 @@ import { reportRefusal, saveSetting, userLayer, writesTheOverlay } from './sideC
 import { vendorsFrom, type Vendor } from './vendors';
 
 /**
- * The host half of the per-side CLI-path keeper (todo/PLAN_paths_per_side.md, E3 as built): the catalog rows of the user
+ * The host half of the per-side CLI-path keeper (research/PLAN_paths_per_side.md, E3 as built): the catalog rows of the user
  * layer, the copies in `globalState`, the notice through the funnel, and the one settings write. Every decision is
  * `cliPathKeep.ts`'s and `cliPathKeeper.ts`'s; this is the `vscode` around them.
  *

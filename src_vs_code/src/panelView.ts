@@ -186,7 +186,7 @@ export interface PanelState {
   readonly qconsultPlaces?: RootPlaces | undefined;
   /**
    * The family this window's host spells paths in — what decides which stored paths the page calls the other side's
-   * (todo/PLAN_paths_per_side.md E1.5). Absent is this extension host's own, which is what the panel always draws; a
+   * (research/PLAN_paths_per_side.md E1.5). Absent is this extension host's own, which is what the panel always draws; a
    * test names it, so a page is the same on any machine.
    */
   readonly hostFamily?: PathFamily | undefined;
@@ -197,13 +197,13 @@ export interface PanelState {
   readonly otherSideClis?: readonly string[] | undefined;
   /**
    * The paths of this side that are not where the settings say they are — missing, or unanswerable — as the path watch
-   * last published them (`findingsBoard.currentFindings`, todo/PLAN_paths_per_side.md E5.4): what the marks on the
+   * last published them (`findingsBoard.currentFindings`, research/PLAN_paths_per_side.md E5.4): what the marks on the
    * Question consultant, Models and MCP server places and the counts on their tabs are drawn from. Absent draws none.
    */
   readonly pathFindings?: readonly PathFinding[] | undefined;
   /**
    * The rows whose per-side CLI path an older save dropped while a copy is kept (`CliPathKeeper.dropped`,
-   * todo/PLAN_paths_per_side.md E4.1): each card draws **Restore** beside its CLI-path field. Absent draws none.
+   * research/PLAN_paths_per_side.md E4.1): each card draws **Restore** beside its CLI-path field. Absent draws none.
    */
   readonly droppedCliPaths?: readonly DroppedValue[] | undefined;
   /**
@@ -252,7 +252,7 @@ export interface PanelState {
    */
   readonly perSide: boolean;
   /**
-   * The sides this profile has been used on, this window's own and the switch (todo/PLAN_paths_per_side.md E2.4) — read
+   * The sides this profile has been used on, this window's own and the switch (research/PLAN_paths_per_side.md E2.4) — read
    * from `globalState` on every render, so a side another window stamps appears at the next repaint. Absent (a test, the
    * sidebar) draws Setup › This side without the list.
    */
@@ -1267,13 +1267,13 @@ export interface CardContext {
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
   /**
-   * The family the page is drawn for. The one CLI-path field is THIS side's (todo/PLAN_paths_per_side.md E3.1), so it
+   * The family the page is drawn for. The one CLI-path field is THIS side's (research/PLAN_paths_per_side.md E3.1), so it
    * draws the row's per-side value for this family when one was saved, else the legacy value.
    */
   readonly family: PathFamily;
   /** The finding about this row's CLI path — missing, or unanswerable — when the watch has one (E5.4); else undefined, no mark. */
   readonly missingCli: PathFinding | undefined;
-  /** Both sides, when a path setting shows two fields (todo/PLAN_paths_per_side.md E4.1) — undefined draws one. */
+  /** Both sides, when a path setting shows two fields (research/PLAN_paths_per_side.md E4.1) — undefined draws one. */
   readonly sides?: PathSides | undefined;
   /** This row's previously saved per-side CLI path that is missing — **Restore** is drawn beside the field (E4.1). */
   readonly dropped?: DroppedValue | undefined;
@@ -1577,7 +1577,7 @@ export function sideBody(state: PanelState): string {
 }
 
 /**
- * This window's side by name — never "this machine" (todo/PLAN_paths_per_side.md E2.4): the name the side registry
+ * This window's side by name — never "this machine" (research/PLAN_paths_per_side.md E2.4): the name the side registry
  * records it under (`thisSideLabel`), or, on a page drawn without the registry, the remote's label or this host's
  * operating system.
  */
@@ -1956,7 +1956,7 @@ ${rows}`;
 }
 
 /**
- * One named directory's line: the other side's said in the quiet hint tone (todo/PLAN_paths_per_side.md E1.3), a
+ * One named directory's line: the other side's said in the quiet hint tone (research/PLAN_paths_per_side.md E1.3), a
  * refusal in the worth-noticing one, a directory this window reads plainly.
  */
 function watchedLine(dir: WatchedDir, missing: PathFinding | undefined): string {
@@ -3411,10 +3411,10 @@ export const PANEL_COMMANDS = [
   'moveDataDirectory',
   // And deleting what a VERIFIED move left behind, offered on the Settings page's MCP server tab after a reload (E4.5).
   'deleteOldDataFolder',
-  // Setup › This side: one side's record dropped from the side registry (todo/PLAN_paths_per_side.md E2.4). Its id is the
+  // Setup › This side: one side's record dropped from the side registry (research/PLAN_paths_per_side.md E2.4). Its id is the
   // side's key; the host refuses this window's own.
   'forgetSide',
-  // A Models card's Restore of a per-side CLI path a save dropped (todo/PLAN_paths_per_side.md E4.1) — the panel button
+  // A Models card's Restore of a per-side CLI path a save dropped (research/PLAN_paths_per_side.md E4.1) — the panel button
   // E3's notice duplicates. Its id is the kept copy's key; the keeper re-reads the row at the click.
   'restoreCliPath',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;

@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /**
- * That the host REFUSES a write to the other side's box while this side keeps its own settings (todo/PLAN_paths_per_side.md,
+ * That the host REFUSES a write to the other side's box while this side keeps its own settings (research/PLAN_paths_per_side.md,
  * E4's own review, item 1): with `coai.perSideSettings` on, `vendors` and `qconsultRoots` are saved into THIS side's
  * own settings, which the other side never reads — so the other side's CLI box and typed folder box are not drawn, and a
  * page drawn before the switch moved cannot save one either.

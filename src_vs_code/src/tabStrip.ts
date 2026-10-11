@@ -78,7 +78,7 @@ export interface Tab {
 
   /**
    * A count worth seeing without opening the tab — `● 1` after the label, in the error colour, with a label a screen
-   * reader hears (todo/PLAN_paths_per_side.md E5.5: the missing paths under the place this tab holds). Absent on every
+   * reader hears (research/PLAN_paths_per_side.md E5.5: the missing paths under the place this tab holds). Absent on every
    * strip that existed before it, which keeps those byte-identical.
    */
   readonly mark?: TabMark;

@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A reviewer row's CLI path spelled for the OTHER operating system is skipped — the runtime's CLI is looked up on PATH —
-/// and said once at Information, never probed as a file and never refused (todo/PLAN_paths_per_side.md E1.2).
+/// and said once at Information, never probed as a file and never refused (research/PLAN_paths_per_side.md E1.2).
 /// </summary>
 /// <remarks>
 /// VS Code shares its user settings between a WSL window and a Windows window, and each side runs its own coai-mcp. A

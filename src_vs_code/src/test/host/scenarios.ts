@@ -243,7 +243,7 @@ function workspaceRoot(): string {
 
 const SCENARIOS: readonly Scenario[] = [
   {
-    // todo/PLAN_paths_per_side.md E5.7, the first-start guarantee: an existing named data directory raises no
+    // research/PLAN_paths_per_side.md E5.7, the first-start guarantee: an existing named data directory raises no
     // missing-path notice. FIRST, before any scenario below names a path that is not there — the revision scenario's
     // `D:\old\claude.exe` is rightly said as missing, and a ledger read after it would blame the first start for that.
     // What it does and does not drive is in `missingDataRootScenario.ts`.
@@ -904,13 +904,13 @@ const SCENARIOS: readonly Scenario[] = [
     run: theMigrationKeysAreKnownInARealEditor,
   },
   {
-    // todo/PLAN_paths_per_side.md E2.4 (E0.2's release requirement): activation stamps this window's side into the shared
+    // research/PLAN_paths_per_side.md E2.4 (E0.2's release requirement): activation stamps this window's side into the shared
     // globalState, read back through what activation returns. What it does and does not drive is in `sideSeenScenario.ts`.
     name: 'activation leaves a coai.sideSeen record for this window\'s side, fresh, with its family and its name',
     run: activationStampsThisSideInARealEditor,
   },
   {
-    // todo/PLAN_paths_per_side.md E4.5: two CLI-path fields switched on, Settings › Models open, the other side's value saved
+    // research/PLAN_paths_per_side.md E4.5: two CLI-path fields switched on, Settings › Models open, the other side's value saved
     // through the one vendor write — and this side's server still handed this side's. What it does and does not drive is in
     // `twoPathFieldsScenario.ts`.
     name: 'with two CLI-path fields, saving the other side\'s value leaves this side\'s server with this side\'s own',
@@ -924,7 +924,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: aRevisionInARealEditor,
   },
   {
-    // todo/PLAN_paths_per_side.md E5.3 in a real editor: the storm the first host run of E5 showed — sixteen ledger rows
+    // research/PLAN_paths_per_side.md E5.3 in a real editor: the storm the first host run of E5 showed — sixteen ledger rows
     // for one CLI path, one per settings change. What it drives is in `missingPathSaidOnceScenario.ts`.
     name: 'a path still missing is said once per window run, however many settings changes follow',
     run: aStillMissingPathIsSaidOnceAcrossSettingsChanges,
@@ -932,7 +932,7 @@ const SCENARIOS: readonly Scenario[] = [
 ];
 
 /**
- * The SECOND launch's one scenario (todo/PLAN_paths_per_side.md E5.7): its `COAI_DATA_DIR` names a folder that is not
+ * The SECOND launch's one scenario (research/PLAN_paths_per_side.md E5.7): its `COAI_DATA_DIR` names a folder that is not
  * there, so none of the ordinary scenarios — which read and write that directory — can run in it, and this one cannot
  * run in theirs. The launcher sets `MISSING_ROOT_LAUNCH` for it.
  */

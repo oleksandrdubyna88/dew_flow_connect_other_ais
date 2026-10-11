@@ -8,7 +8,7 @@ import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
 
 /**
  * A per-side CLI path an older extension's save dropped is SAID, and offered back — never restored on its own
- * (todo/PLAN_paths_per_side.md, E3 as built: the plan gate's Major finding, the risk consultant's findings a and b).
+ * (research/PLAN_paths_per_side.md, E3 as built: the plan gate's Major finding, the risk consultant's findings a and b).
  *
  * <p>Measured: extension v0.67.0 and v0.65.0 rebuild every row from the fields they know when they save `coai.vendors`,
  * so any vendor save they make removes `executablePathBySide` from every row. Every row here goes through the real reader

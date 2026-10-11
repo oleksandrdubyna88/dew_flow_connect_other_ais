@@ -147,7 +147,7 @@ export class QconsultHost {
   }
 
   /**
-   * A folder typed into the OTHER side's box (todo/PLAN_paths_per_side.md E4.2): admitted only when this window would
+   * A folder typed into the OTHER side's box (research/PLAN_paths_per_side.md E4.2): admitted only when this window would
    * group it as the other side's (`typedRootRefusal`, the disk asked only at this machine's own spelling of it) and then
    * appended to the one shared list; refused BESIDE the box — the text kept, the reason under it — never as a toast.
    *

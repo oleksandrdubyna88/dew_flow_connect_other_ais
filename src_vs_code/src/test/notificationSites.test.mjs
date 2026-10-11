@@ -253,12 +253,12 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 162 → 163 on 2026-10-09, research/PLAN_catalog_migration_waits_for_its_settings.md: a window that will not load the
 // updated extension's settings says once that the move waits for a reload (`catalog-migration-waits-for-reload`, a
 // warning with Reload Window) — instead of the ERROR an update in place used to show.
-// 163 → 164 on 2026-10-10, todo/PLAN_paths_per_side.md E5.3: a path of THIS side that is not where the settings say it
+// 163 → 164 on 2026-10-10, research/PLAN_paths_per_side.md E5.3: a path of THIS side that is not where the settings say it
 // is — a question-consultant folder, a model's CLI, another installation's data folder, the named data folder itself —
 // is said at every window start and whenever it goes missing, once per path (`setting-path-missing`, a warning with
 // **Open in Settings**), through the new `notifyOnceThen` door. It replaces, for exactly those folders, the generic
 // "the server could not understand a setting" toast, which keeps every other sentence — never two toasts for one folder.
-// 164 → 166 on 2026-10-11, todo/PLAN_paths_per_side.md, E3 as built: a model's per-side CLI path that is gone while a copy
+// 164 → 166 on 2026-10-11, research/PLAN_paths_per_side.md, E3 as built: a model's per-side CLI path that is gone while a copy
 // of it is kept — an older extension's save drops it from every row — is said once per run and per row, as "a previously
 // saved value", with **Restore** (`cli-path-value-dropped`, an offer); and a Restore that finds the row changed since the
 // offer writes nothing and says why (`cli-path-restore-refused`). Two places, because they are two kinds: an offer and a

@@ -5,7 +5,7 @@ import { type NamedRoot, dataDirFinding, namedRoot } from './dataDir';
 import { isUnder, missingRootRefusal } from './findingsBoard';
 
 /**
- * The ONE way this extension makes a directory that may lie under its data directory (todo/PLAN_paths_per_side.md E5.7,
+ * The ONE way this extension makes a directory that may lie under its data directory (research/PLAN_paths_per_side.md E5.7,
  * D3; the risk consultation of story 5.7, item F).
  *
  * <p><b>Why the guard alone was not enough.</b> Every writer asked the storage guard (`findingsBoard`) and then made the

@@ -1,5 +1,5 @@
 /**
- * The released-half check for E3.5 of todo/PLAN_paths_per_side.md: a catalog row's CLI path PER SIDE
+ * The released-half check for E3.5 of research/PLAN_paths_per_side.md: a catalog row's CLI path PER SIDE
  * (`coai.vendors[].executablePathBySide`) measured against the RELEASED extension and the RELEASED coai-mcp a person may
  * still be running on the other side.
  *
