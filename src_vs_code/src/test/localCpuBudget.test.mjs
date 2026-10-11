@@ -31,6 +31,8 @@ test('every node --test this repository starts carries a worker cap of 8 or fewe
   assert.ok(cap, `no --test-concurrency in ${JSON.stringify(args)}`);
   const n = Number(cap.split('=')[1]);
   assert.ok(Number.isInteger(n) && n >= 1 && n <= 8, `the cap is ${n}`);
+  // A cap, never a raise: below nine threads the value is node's own default (CPUs - 1).
+  assert.equal(n, Math.max(1, Math.min(8, os.availableParallelism() - 1)));
   assert.deepEqual(args.slice(-3), ['--test-timeout=60000', 'a.test.js', 'b.test.js']);
 });
 
@@ -76,16 +78,15 @@ test('the preload really lowers the runner and every process it starts', () => {
 /** Every xUnit test project here, found by walking rather than by a list somebody must keep. */
 function testProjects() {
   const found = [];
-  const walk = (dir, depth) => {
-    if (depth > 4) return;
+  const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (['node_modules', 'bin', 'obj', '.git', 'artifacts', '.agents'].includes(entry.name)) continue;
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full, depth + 1);
+      if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.Tests.csproj')) found.push(full);
     }
   };
-  walk(root, 0);
+  walk(root);
   return found;
 }
 
@@ -95,7 +96,8 @@ test('every xUnit test project caps its threads at 8 or fewer, and the cap reach
   for (const project of projects) {
     // Measured 2026-10-11, xunit.v3 4.0.1: an xunit.runner.json that is not copied to the output is
     // never read (24 threads); with the Content item it is (8). The item is half of the cap.
-    assert.match(read(project), /<Content Include="xunit\.runner\.json" CopyToOutputDirectory="PreserveNewest" \/>/,
+    // Copied for local runs only: CI is exempt, and an exact 8 would RAISE a 4-vCPU runner's threads.
+    assert.match(read(project), /<Content Include="xunit\.runner\.json" CopyToOutputDirectory="PreserveNewest" Condition="'\$\(CI\)' != 'true'" \/>/,
       `${path.relative(root, project)} does not copy xunit.runner.json to its output`);
     const config = JSON.parse(read(path.join(path.dirname(project), 'xunit.runner.json')));
     assert.ok(Number.isInteger(config.maxParallelThreads) && config.maxParallelThreads >= 1 && config.maxParallelThreads <= 8,

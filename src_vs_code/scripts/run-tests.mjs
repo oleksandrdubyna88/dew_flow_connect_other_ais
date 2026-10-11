@@ -24,7 +24,7 @@
  */
 import { readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readRule, sweep } from './sweepTemp.mjs';
 
@@ -74,8 +74,12 @@ export function batches(root) {
  * The most test files `node --test` may run at once — the family rule `common.local-cpu-budget`.
  * Node's own default is one per CPU minus one, which on a 24-thread workstation was 23 processes
  * holding the CPU at 100 % while every other session lagged (measured 2026-10-10).
+ *
+ * <p>A CAP, never a raise: `--test-concurrency` is an exact number, so a bare 8 would take a 4-vCPU
+ * CI runner from node's 3 workers to 8. The minimum keeps every machine with fewer than nine
+ * threads, CI included, exactly where node's default put it.</p>
  */
-export const TEST_CONCURRENCY = 8;
+export const TEST_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism() - 1));
 
 /**
  * The arguments of every `node --test` this package starts, so the cap is written in one place:

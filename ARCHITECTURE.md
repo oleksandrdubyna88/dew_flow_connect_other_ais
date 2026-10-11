@@ -176,9 +176,11 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 
 Local runs are capped and lowered (the family rule `common.local-cpu-budget`):
 
-- `npm test` and `test:contract` give `node --test` at most 8 workers and lower themselves through
+- `npm test` and `test:contract` give `node --test` at most 8 workers (`min(8, CPUs - 1)`, so a small machine keeps
+  node's own default) and lower themselves through
   `scripts/lower-priority.mjs`, a copy of the mount's template;
-- each xUnit project reads `maxParallelThreads: 8` from its copied `xunit.runner.json`;
+- each xUnit project reads `maxParallelThreads: 8` from its copied `xunit.runner.json`. The copy is skipped when
+  `CI=true`, because an exact 8 would RAISE a 4-vCPU runner;
 - the executables run through the mount's `low-priority.mjs`.
 
 CI is exempt and unchanged. `localCpuBudget.test.mjs` pins all of it.
