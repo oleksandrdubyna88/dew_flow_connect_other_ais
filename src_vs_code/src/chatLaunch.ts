@@ -21,7 +21,7 @@ import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFo
 import { chatProcessFor } from './chatProcess';
 import { resolvedExecutable } from './versionProbe';
 import { hostExecutableSide } from './hostSide';
-import { executableHere } from './pathFamily';
+import { executableOf } from './pathFamily';
 import { Vendor } from './vendors';
 import { notify } from './notify';
 import { accessDropped, accessOn } from './chatAccessRules';
@@ -128,8 +128,8 @@ export async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusa
     // question, one refusal, before anything is created.
     return { resolved: '', refusal: '' };
   }
-  // A CLI path of the other OS is that side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
-  const own = executableHere(vendor.executablePath, hostExecutableSide());
+  // This side's CLI path: the row's per-side value first; one of the other OS is that side's and skipped (paths per side E1.2, E3.1).
+  const own = executableOf(vendor, hostExecutableSide());
   const asked = own.length > 0 ? own : defaultExecutableFor(vendor.runtime);
   const resolved = await resolvedExecutable(asked);
 

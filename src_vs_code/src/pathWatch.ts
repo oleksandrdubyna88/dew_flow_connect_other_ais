@@ -1,7 +1,7 @@
 import { type NamedRoot, dataDirFinding } from './dataDir';
 import { watchedDirs } from './escalationDirs';
 import { absentDataRoot, expectDataRoot, noteDataRoot, publishFindings } from './findingsBoard';
-import { type ExecutableSide, pathForThisSide, qualified } from './pathFamily';
+import { type ExecutableSide, pathForThisSide, qualified, storedForThisSide, type StoredExecutable } from './pathFamily';
 import { type PathFinding, type PathValue, type Presence, type ProbeKind, agreed, asked, findingSubject, findingsOf, probeKindOf, valueSubject } from './pathFindings';
 import type { PathProbes } from './pathProbes';
 import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
@@ -30,7 +30,8 @@ import type { SettingProblem } from './providers';
 /** What the watch reads, each time it refreshes — the settings as THIS side reads them. */
 export interface PathReads {
   roots(): readonly string[];
-  vendors(): readonly { readonly id: string; readonly executablePath: string }[];
+  /** The catalog rows WHOLE — the per-side value included (E3.1), so this side's is the one watched. */
+  vendors(): readonly (StoredExecutable & { readonly id: string })[];
   watched(): readonly string[];
   /** This window's own data directory — the first watched folder, never probed. */
   ownDataDir(): string;
@@ -179,12 +180,17 @@ export class PathWatch {
     return this.deps.reads.roots().map((root) => ({ setting: QCONSULT_ROOTS, value: root.trim(), path: qualified(root, windows, this.deps.side.systemDrive) }));
   }
 
-  /** This side's CLI paths: the other side's are skipped by E1's rule and asked about nowhere. */
+  /**
+   * This side's CLI paths: the other side's are skipped by E1's rule and asked about nowhere. The finding's subject is
+   * THIS side's stored value (paths per side E3.1: the row's per-side value for this family when one was saved, else the
+   * legacy value) — what the card's box draws and keys its mark on, never a legacy value the other side mirrored.
+   */
   private cliValues(): readonly PathValue[] {
     return this.deps.reads.vendors().flatMap((row) => {
       const here = pathForThisSide(row, this.deps.side);
+      const value = storedForThisSide(row, this.deps.side.family);
 
-      return here.path.length === 0 ? [] : [{ setting: VENDOR_EXECUTABLE, value: row.executablePath.trim(), path: here.path, owner: row.id }];
+      return here.path.length === 0 ? [] : [{ setting: VENDOR_EXECUTABLE, value, path: here.path, owner: row.id }];
     });
   }
 

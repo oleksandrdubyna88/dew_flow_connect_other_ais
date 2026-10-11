@@ -2,6 +2,8 @@ import { type CliStatus, UNKNOWN_CLI, updateAvailable } from './cliVersions';
 import { mayDeleteTheOldCopy, type MoveRecord } from './dataMove';
 import { escapeHtml } from './escapeHtml';
 import type { Runtime } from './models';
+import { hostFamily } from './hostSide';
+import { storedForThisSide, type PathFamily } from './pathFamily';
 import type { Vendor } from './vendors';
 
 /**
@@ -23,15 +25,16 @@ export interface CliGroup {
 }
 
 /** The models grouped by the CLI they run on: a row with its own CLI path is a CLI of its own. */
-export function cliGroups(rows: readonly Vendor[]): readonly CliGroup[] {
-  const keyOf = (row: Vendor): string => `${row.runtime}\u0000${row.executablePath}`;
+export function cliGroups(rows: readonly Vendor[], family: PathFamily = hostFamily()): readonly CliGroup[] {
+  // THIS side's stored CLI path (paths per side E3.1): the per-side value when one was saved, else the legacy one.
+  const keyOf = (row: Vendor): string => `${row.runtime}\u0000${storedForThisSide(row, family)}`;
   const onCli = rows.filter((row) => CLI_RUNTIMES.includes(row.runtime));
   const keys = [...new Set(onCli.map(keyOf))];
 
   return keys.map((key) => {
     const members = onCli.filter((row) => keyOf(row) === key);
 
-    return { runtime: members[0]!.runtime, executablePath: members[0]!.executablePath, rows: members };
+    return { runtime: members[0]!.runtime, executablePath: storedForThisSide(members[0]!, family), rows: members };
   });
 }
 

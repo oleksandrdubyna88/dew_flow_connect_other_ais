@@ -119,7 +119,7 @@ export function bugzServerThisSide(context: vscode.ExtensionContext): string {
  * ignores the switch on purpose — see its own remark. A data directory written to the shared layer would be handed to
  * the other side of this machine, where the same string names a path that does not exist.
  */
-function writesTheOverlay(config: vscode.WorkspaceConfiguration, key: string): boolean {
+export function writesTheOverlay(config: vscode.WorkspaceConfiguration, key: string): boolean {
   return (config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key)) || ALWAYS_PER_SIDE.includes(key);
 }
 
@@ -163,9 +163,11 @@ function writesTheOverlay(config: vscode.WorkspaceConfiguration, key: string): b
  *       using.</li>
  *   <li><b>`noticeIgnoredWorkspaceModels`</b> — the panel's shape: the copy a person asked for from a
  *       notification button is caught and reported, never thrown out of the button's callback.</li>
+ *   <li><b>`startCliPathKeep`</b> — the same: the **Restore** a person pressed on a notification is caught
+ *       and reported (paths per side, E3 as built).</li>
  * </ul>
  *
- * <p>A seventh caller must pick one of those two shapes — catch and report, or let a chain with its own `.catch`
+ * <p>An eighth caller must pick one of those two shapes — catch and report, or let a chain with its own `.catch`
  * report it. There is no third, and a caller that neither catches nor sits in such a chain is an unhandled rejection.</p>
  */
 export async function saveSetting(
