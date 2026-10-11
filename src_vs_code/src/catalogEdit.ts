@@ -4,6 +4,8 @@ import { CALLER_KINDS, ConsultantChoice, consultantChoiceFrom } from './consultS
 import { questionRowFrom, QuestionRowSetting } from './qconsultSettings';
 import { normaliseId, Vendor, vendorsFrom } from './vendors';
 import { asRecord, isRecord, Launch, listOf, RawRow, rawId, sameLaunch, withLaunch } from './catalogLaunch';
+import { hostFamily } from './hostSide';
+import type { PathFamily } from './pathFamily';
 
 /**
  * The panel writes through the catalog (PLAN_one_model_catalog.md E1.4, "one write road").
@@ -49,9 +51,13 @@ export function foldedWrite(key: string, value: unknown, read: (key: string) => 
     : { value };
 }
 
-export function editThroughCatalog(key: 'consultants' | 'qconsultRows', after: unknown, state: CatalogState): CatalogFold {
+/**
+ * @param family the side that wrote `after` — its definitions carry THAT side's CLI path (`storedForThisSide`), so a row
+ *     is compared and rewritten on that side's value, never on the legacy one (paths per side E3). Default: this host's.
+ */
+export function editThroughCatalog(key: 'consultants' | 'qconsultRows', after: unknown, state: CatalogState, family: PathFamily = hostFamily()): CatalogFold {
   const rows = rawRows(state.vendors);
-  const fold = key === 'consultants' ? consultantsFold(after, state, rows) : questionsFold(after, state, rows);
+  const fold = key === 'consultants' ? consultantsFold(after, state, rows, family) : questionsFold(after, state, rows, family);
 
   return fold.rows === rows ? { value: fold.value } : { value: fold.value, vendors: fold.rows };
 }
@@ -63,7 +69,7 @@ interface Working {
 
 // ---------------------------------------------------------------- the consultants
 
-function consultantsFold(after: unknown, state: CatalogState, rows: readonly RawRow[]): Working {
+function consultantsFold(after: unknown, state: CatalogState, rows: readonly RawRow[], family: PathFamily): Working {
   const before = asRecord(state.consultants);
   const next = asRecord(after);
   const owned = exclusiveRows(state, rows, 'consultant');
@@ -74,13 +80,13 @@ function consultantsFold(after: unknown, state: CatalogState, rows: readonly Raw
       return acc;
     }
 
-    return consultantOnRow(acc, id, row, consultantChoiceFrom(asRecord(acc.value)[id]));
+    return consultantOnRow(acc, id, row, consultantChoiceFrom(asRecord(acc.value)[id]), family);
   }, { value: next, rows });
 }
 
 /** One caller whose entry referred to `row`, which only it uses: rewrite the row, keep the reference — or drop the row. */
-function consultantOnRow(acc: Working, caller: string, row: Vendor, entry: ConsultantChoice): Working {
-  const launch = consultantLaunch(entry);
+function consultantOnRow(acc: Working, caller: string, row: Vendor, entry: ConsultantChoice, family: PathFamily): Working {
+  const launch = consultantLaunch(entry, family);
   if (entry.runtime === '' && entry.vendor.toLowerCase() === row.id) {
     return acc;
   }
@@ -90,10 +96,10 @@ function consultantOnRow(acc: Working, caller: string, row: Vendor, entry: Consu
     : { value: { ...asRecord(acc.value), [caller]: { vendor: row.id } }, rows: rewritten(acc.rows, row.id, launch) };
 }
 
-function consultantLaunch(entry: ConsultantChoice): Launch | undefined {
+function consultantLaunch(entry: ConsultantChoice, family: PathFamily): Launch | undefined {
   return entry.runtime === '' || normaliseId(entry.vendor) !== entry.vendor
     ? undefined
-    : { runtime: entry.runtime, model: entry.model, baseUrl: entry.baseUrl, executablePath: entry.executablePath, vault: entry.vendor };
+    : { runtime: entry.runtime, model: entry.model, baseUrl: entry.baseUrl, executablePath: entry.executablePath, vault: entry.vendor, family };
 }
 
 /** A legacy-shaped reference's row id, or `''` for a definition. */
@@ -103,18 +109,25 @@ function referenceOf(choice: ConsultantChoice): string {
 
 // ---------------------------------------------------------------- the question rows
 
-function questionsFold(after: unknown, state: CatalogState, rows: readonly RawRow[]): Working {
+function questionsFold(after: unknown, state: CatalogState, rows: readonly RawRow[], family: PathFamily): Working {
   const owned = exclusiveRows(state, rows, 'qconsult');
   const before = new Map(listOf(state.qconsultRows).flatMap(questionRowFrom).map((row) => [row.id, row] as const));
   const next = listOf(after);
   const kept = new Set(next.flatMap(questionRowFrom).map((row) => row.id));
-  const edited = next.reduce<Working>((acc, value, index) => questionOnRow(acc, index, value, before, owned), { value: next, rows });
+  const edited = next.reduce<Working>((acc, value, index) => questionOnRow(acc, { index, value, family }, before, owned), { value: next, rows });
   const removed = [...before.values()].filter((row) => !kept.has(row.id)).map((row) => owned.get(row.vendor.toLowerCase()));
 
   return { value: edited.value, rows: edited.rows.filter((raw) => !removed.some((row) => row?.id === rawId(raw))) };
 }
 
-function questionOnRow(acc: Working, index: number, value: unknown, before: ReadonlyMap<string, QuestionRowSetting>, owned: ReadonlyMap<string, Vendor>): Working {
+/** One entry of the question tab's write: where it sits, what it holds, and the side that wrote it. */
+interface QuestionEntry {
+  readonly index: number;
+  readonly value: unknown;
+  readonly family: PathFamily;
+}
+
+function questionOnRow(acc: Working, { index, value, family }: QuestionEntry, before: ReadonlyMap<string, QuestionRowSetting>, owned: ReadonlyMap<string, Vendor>): Working {
   const edit = questionRowFrom(value)
     .filter((now) => now.runtime !== '')
     .flatMap((now) => ownedRowOf(now, before, owned).map((row) => ({ now, row })))[0];
@@ -122,7 +135,7 @@ function questionOnRow(acc: Working, index: number, value: unknown, before: Read
     return acc;
   }
   const { now, row } = edit;
-  const launch: Launch = { runtime: now.runtime, model: now.model, baseUrl: now.baseUrl, executablePath: now.executablePath, vault: now.vendor };
+  const launch: Launch = { runtime: now.runtime, model: now.model, baseUrl: now.baseUrl, executablePath: now.executablePath, vault: now.vendor, family };
 
   return {
     value: listOf(acc.value).map((one, at) => (at === index ? asReference(one, row.id) : one)),

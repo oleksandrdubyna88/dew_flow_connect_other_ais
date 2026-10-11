@@ -84,7 +84,7 @@ import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 import { hostFamily } from './hostSide';
-import { otherSideNote, type PathFamily } from './pathFamily';
+import { otherSideNote, storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
 import { DATA_DIRECTORY, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
@@ -1135,8 +1135,10 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
     otherSideCli: otherSides.includes(v.id) ? family : undefined,
-    // The mark by the STORED value, which is what the watch keys its finding on (paths per side, E5.4).
-    missingCli: findingFor(state.pathFindings ?? [], VENDOR_EXECUTABLE.id, v.executablePath),
+    family,
+    // The mark by THIS side's STORED value — what the box draws and the watch keys its finding on (paths per side,
+    // E5.4; E3.1: the per-side value for this family when one was saved, else the legacy value).
+    missingCli: findingFor(state.pathFindings ?? [], VENDOR_EXECUTABLE.id, storedForThisSide(v, family)),
   });
 }
 
@@ -1231,6 +1233,11 @@ export interface CardContext {
   readonly serverVersion: string;
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
+  /**
+   * The family the page is drawn for. The one CLI-path field is THIS side's (todo/PLAN_paths_per_side.md E3.1), so it
+   * draws the row's per-side value for this family when one was saved, else the legacy value.
+   */
+  readonly family: PathFamily;
   /** The finding about this row's CLI path — missing, or unanswerable — when the watch has one (E5.4); else undefined, no mark. */
   readonly missingCli: PathFinding | undefined;
 }
@@ -1298,13 +1305,17 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-export function runtimeFields(vendor: Vendor, id: string, remote: boolean, otherSide: PathFamily | undefined, missing: PathFinding | undefined): string {
-  // The mark (E5.4): the field takes the class, the box is invalid and described by the sentence under it.
+/** What the card's one CLI-path box is drawn from, beside the row: the other side's note, the missing mark, and the family. */
+export type CliFieldFacts = Pick<CardContext, 'otherSideCli' | 'missingCli' | 'family'>;
+
+export function runtimeFields(vendor: Vendor, id: string, remote: boolean, cli: CliFieldFacts): string {
+  // The mark (E5.4): the field takes the class, the box is invalid and described by the sentence under it. The box is
+  // THIS side's field (paths per side E3.1): the row's per-side value for this family when one was saved, else the legacy.
   return remote ? '' : `
-  <div class="field${markClass(missing)}">
+  <div class="field${markClass(cli.missingCli)}">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
-           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}"${markAttributes(missing)}>${markNote(missing)}
-  </div>${otherSidesCli(otherSide)}`;
+           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(storedForThisSide(vendor, cli.family))}"${markAttributes(cli.missingCli)}>${markNote(cli.missingCli)}
+  </div>${otherSidesCli(cli.otherSideCli)}`;
 }
 
 /**
