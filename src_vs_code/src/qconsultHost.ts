@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
 import { notify } from './notify';
 import { RootExistence, directoryAt, systemDriveOf } from './pathFamily';
+import { keepsItsOwnRefusal } from './pathSides';
 import { askPerson } from './personWait';
 import { type QconsultSettings, qconsultSettingsFrom } from './qconsultSettings';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
@@ -25,10 +26,31 @@ import {
   shippedPromptWrite,
 } from './qconsultWrite';
 import type { Vendor } from './vendors';
+import { TYPED_ROOT_KEY, typedRootRefusal } from './typedRoots';
+import { rootBoxKey, type TypedRefusal } from './typedRefusals';
 
-/** Whether a routed `caller`-kind write belongs to this section: a row's control, or a prompt's box. */
+/** Whether a routed `caller`-kind write belongs to this section: a row's control, a prompt's box, or the typed folder box. */
 export function isQconsultCallerKey(key: string): boolean {
-  return isRowKey(key) || key === 'qconsultPromptText';
+  return isRowKey(key) || BOX_KEYS.has(key);
+}
+
+/** The boxes whose text is handled whole rather than as a row's field: a prompt's words, and a folder of the other side. */
+const BOX_KEYS: ReadonlySet<string> = new Set(['qconsultPromptText', TYPED_ROOT_KEY]);
+
+/** The other side's typed folder box (E4.2) — the key its refusal is kept under. */
+const TYPED_BOX = rootBoxKey('qconsultRoots', 'otherSide');
+
+/** What a press of Enter in the typed box decided: the roots to store, or the refusal to draw beside the box — or neither (empty). */
+interface TypedVerdict {
+  readonly roots?: readonly string[];
+  readonly refusal?: TypedRefusal;
+}
+
+const NOTHING_TYPED: TypedVerdict = {};
+
+/** A typed root while this side keeps its own folders: refused, whatever it says — an empty box saves nothing either. */
+function keptHere(root: string): TypedVerdict {
+  return root.length === 0 ? NOTHING_TYPED : { refusal: { typed: root, reason: keepsItsOwnRefusal(root) } };
 }
 
 /** What a write is handed by the panel: the side-aware reader, the vendor rows, and how to store or refuse. */
@@ -39,6 +61,10 @@ export interface QconsultWriteHooks {
   readonly save: (key: string, value: unknown) => Promise<void>;
   /** Repaints from what is stored — an edit refused here leaves the control where it was. */
   readonly snapBack: () => Promise<void>;
+  /** Keeps (or forgets, with undefined) what was typed into a box and refused, so the next paint draws it beside the box. */
+  readonly besideTheBox: (box: string, refusal: TypedRefusal | undefined) => void;
+  /** Whether a key is saved into THIS side's own settings (`sideConfig.writesTheOverlay`) — which the other side never reads. */
+  readonly keptHere: (key: string) => boolean;
 }
 
 /**
@@ -106,14 +132,51 @@ export class QconsultHost {
   /** One control of a row, or one prompt's box, changed. A refused edit snaps back rather than storing what the server would refuse. */
   async write(key: string, id: string, value: unknown, hooks: QconsultWriteHooks): Promise<void> {
     const settings = qconsultSettingsFrom(hooks.read);
-    if (key === 'qconsultPromptText') {
-      await this.promptText(id, value, settings, hooks);
+    if (BOX_KEYS.has(key)) {
+      await this.boxWrite(key, id, value, settings, hooks);
       return;
     }
     const rows = isRowKey(key)
       ? rowEdited(settings.rows, id, key, value, { prompts: questionPrompts(settings.prompts), vendors: hooks.vendors })
       : undefined;
     await (rows === undefined ? hooks.snapBack() : hooks.save('qconsultRows', rows));
+  }
+
+  private boxWrite(key: string, id: string, value: unknown, settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {
+    return key === TYPED_ROOT_KEY ? this.typedRoot(value, settings, hooks) : this.promptText(id, value, settings, hooks);
+  }
+
+  /**
+   * A folder typed into the OTHER side's box (todo/PLAN_paths_per_side.md E4.2): admitted only when this window would
+   * group it as the other side's (`typedRootRefusal`, the disk asked only at this machine's own spelling of it) and then
+   * appended to the one shared list; refused BESIDE the box — the text kept, the reason under it — never as a toast.
+   *
+   * <p>While this side keeps its own folders (`coai.perSideSettings`) every typed root is refused before the disk is asked:
+   * it would be saved into THIS side's own settings, which the other side never reads (E4's own review, item 1). The page
+   * draws no typed box then; only a page drawn before the switch moved can post one.</p>
+   */
+  private async typedRoot(value: unknown, settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {
+    const root = typeof value === 'string' ? value.trim() : '';
+    const verdict = hooks.keptHere('qconsultRoots') ? keptHere(root) : await this.typedVerdict(root, settings);
+    hooks.besideTheBox(TYPED_BOX, verdict.refusal);
+    await (verdict.roots === undefined ? hooks.snapBack() : this.addTyped(verdict.roots, hooks));
+  }
+
+  private async typedVerdict(root: string, settings: QconsultSettings): Promise<TypedVerdict> {
+    return root.length === 0 ? NOTHING_TYPED : this.admitted(root, settings);
+  }
+
+  private async admitted(root: string, settings: QconsultSettings): Promise<TypedVerdict> {
+    const places = await this.places([...settings.roots, root]);
+    const reason = typedRootRefusal(root, places);
+
+    return reason.length > 0 ? { refusal: { typed: root, reason } } : { roots: rootAdded(settings.roots, root, places).roots };
+  }
+
+  private addTyped(roots: readonly string[], hooks: QconsultWriteHooks): Promise<void> {
+    this.forgetRootAnswers();
+
+    return hooks.save('qconsultRoots', roots);
   }
 
   private async promptText(id: string, value: unknown, settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {

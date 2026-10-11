@@ -34,6 +34,10 @@ export class CliPathKeeper<R extends KeptRow> {
   private said: ReadonlySet<string> = new Set<string>();
   /** Every look waits for the one before it: two settings events must not write the same copies twice at once. */
   private queue: Promise<void> = Promise.resolve();
+  /** What the last look found dropped — replaced by each look, never changed in place. */
+  private current: readonly DroppedValue[] = [];
+  /** Who is told when {@link current} changes — replaced, never changed in place. */
+  private listeners: readonly (() => void)[] = [];
 
   constructor(private readonly deps: KeeperDeps<R>) {}
 
@@ -42,6 +46,18 @@ export class CliPathKeeper<R extends KeptRow> {
     this.queue = this.queue.then(() => this.look()).catch((error: unknown) => { this.deps.failed(error); });
 
     return this.queue;
+  }
+
+  /** The rows whose member is dropped as of the last look — what each Models card offers back with **Restore** (E4.1). */
+  dropped(): readonly DroppedValue[] {
+    return this.current;
+  }
+
+  /** Be told when {@link dropped} changed — the panel repaints its cards. Returns the way to stop being told. */
+  onChanged(listener: () => void): () => void {
+    this.listeners = [...this.listeners, listener];
+
+    return () => { this.listeners = this.listeners.filter((one) => one !== listener); };
   }
 
   /** **Restore** was clicked: the row as it is NOW decides, and nothing is written when it changed since the offer. Never rejects. */
@@ -55,6 +71,7 @@ export class CliPathKeeper<R extends KeptRow> {
     const layer = this.deps.layer();
     const plan = layer === undefined ? { writes: [], dropped: [] } : keepPlan(this.deps.store, layer, this.deps.rows());
     this.tell(plan.dropped);
+    this.publish(plan.dropped);
     // One write per key, each to a different key, so they need no order among themselves.
     await Promise.all(plan.writes.map(([key, value]) => this.deps.store.update(key, value)));
   }
@@ -67,6 +84,15 @@ export class CliPathKeeper<R extends KeptRow> {
     this.said = new Set([...[...this.said].filter((key) => now.has(key)), ...fresh.map((one) => one.key)]);
     ended.forEach((key) => { this.deps.resolved(key); });
     fresh.forEach((one) => { this.deps.say(one); });
+  }
+
+  /** The list the cards read, replaced — and the panel told — only when a look found it different. */
+  private publish(dropped: readonly DroppedValue[]): void {
+    if (JSON.stringify(dropped) === JSON.stringify(this.current)) {
+      return;
+    }
+    this.current = dropped;
+    this.listeners.forEach((listener) => { listener(); });
   }
 
   private async restoreNow(offer: DroppedValue): Promise<void> {

@@ -165,7 +165,15 @@ function spelledForNeither(path: string): boolean {
   return !spelledForTheOtherOs(path, true) && !spelledForTheOtherOs(path, false);
 }
 
-function sameIdentity(row: KeptRow, offer: DroppedValue): boolean {
+/**
+ * The dropped value a row's card offers back — matched by the same identity a restore re-reads it by (id, runtime and
+ * model), so a card never offers a copy the click would refuse as another row's (todo/PLAN_paths_per_side.md E4.1).
+ */
+export function droppedFor(dropped: readonly DroppedValue[], row: Pick<KeptRow, 'id' | 'runtime' | 'model'>): DroppedValue | undefined {
+  return dropped.find((one) => sameIdentity(row, one));
+}
+
+function sameIdentity(row: Pick<KeptRow, 'id' | 'runtime' | 'model'>, offer: DroppedValue): boolean {
   return row.id === offer.id && row.runtime === offer.runtime && row.model === offer.model;
 }
 

@@ -16,6 +16,7 @@ import { theMigrationKeysAreKnownInARealEditor } from './migrationKeysScenario';
 import { MISSING_ROOT_LAUNCH, aFirstStartRaisesNoMissingPathNotice, aMissingNamedDataRootStaysAbsent } from './missingDataRootScenario';
 import { aStillMissingPathIsSaidOnceAcrossSettingsChanges } from './missingPathSaidOnceScenario';
 import { activationStampsThisSideInARealEditor } from './sideSeenScenario';
+import { twoCliPathFieldsKeepThisSidesValueInARealEditor } from './twoPathFieldsScenario';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -907,6 +908,13 @@ const SCENARIOS: readonly Scenario[] = [
     // globalState, read back through what activation returns. What it does and does not drive is in `sideSeenScenario.ts`.
     name: 'activation leaves a coai.sideSeen record for this window\'s side, fresh, with its family and its name',
     run: activationStampsThisSideInARealEditor,
+  },
+  {
+    // todo/PLAN_paths_per_side.md E4.5: two CLI-path fields switched on, Settings › Models open, the other side's value saved
+    // through the one vendor write — and this side's server still handed this side's. What it does and does not drive is in
+    // `twoPathFieldsScenario.ts`.
+    name: 'with two CLI-path fields, saving the other side\'s value leaves this side\'s server with this side\'s own',
+    run: twoCliPathFieldsKeepThisSidesValueInARealEditor,
   },
   {
     // R7 of research/PLAN_one_model_catalog.md (epic 5 prerequisite (a)), its code round's finding 0: the shipped migration

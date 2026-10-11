@@ -362,6 +362,11 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   };
   questionConsults.start();
 
+  // A Models card offers a dropped per-side CLI path back with Restore, and repaints when the keeper's list changes (E4.1).
+  panel.cliPathKeep = cliPathKeep;
+  const stopKeepTelling = cliPathKeep.onChanged(() => { void panel.render(); });
+  context.subscriptions.push({ dispose: stopKeepTelling });
+
   // The settings the server reads, mirrored from activation — never from the panel.
   //
   // This was the defect a colleague hit on macOS: the write lived in `PanelProvider.render()`

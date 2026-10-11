@@ -3607,7 +3607,7 @@ flowchart TD
 - **A shared folder list in three groups (E3.3)** — `pathGroups.ts`: `groupOf` / `groupedPaths` over `otherSideHere` and
   `existingHere` — **this side's**, **the other side's**, and **both sides / unclear** (`//server/share`, a relative or
   drive-relative name, and an entry the disk could not answer for), never two and never hidden. The disk asked is this
-  host's, at this machine's own spelling (`qualified`), never the other side's. Nothing draws it yet (E4.2).
+  host's, at this machine's own spelling (`qualified`), never the other side's. Drawn by E4.2 and E4.3 (below).
 - **The other side's data directory, read-only (E3.4)** — `otherSideValues.ts`: `otherSideDataDirectories(store, here,
   now)` lists every side of the OTHER family seen within the registry's 90 days (newest first; a second distro is a
   second row) with the `dataDirectory` / `dataSide` its own overlay names, found through the side registry
@@ -3615,8 +3615,8 @@ flowchart TD
   module cannot write another side's overlay (D2); the value is never `stat`ed from here. Drawn by E4.3.
 - **With E5's missing-path watch** — `pathWatch.cliValues` names a CLI finding by `storedForThisSide(row, family)` (the
   value the box draws) while asking the disk about `pathForThisSide`'s path, and the card keys its mark (`missingCli`)
-  on the same value; `runtimeFields(vendor, id, remote, cli: CliFieldFacts)` draws the box from the card's
-  `otherSideCli` / `missingCli` / `family`.
+  on the same value; `runtimeFields(vendor, remote, cli: CliFieldFacts)` draws the box from the card's
+  `otherSideCli` / `missingCli` / `family` (since E4 through `cliPathFields.ts`, below).
 - **Compatibility (E3.5)** — pinned in CI by `pathsPerSideCompat.test.ts` and against the RELEASED halves by
   `scripts/live-paths-per-side-compat.mjs` (`npm run test:paths-per-side-compat`, by hand). Measured 2026-10-11 on
   Windows against extension-v0.67.0 / v0.65.0 and mcp-v0.46.0 / v0.45.1 / v0.40.5: a legacy-only row reads and crosses
@@ -3661,6 +3661,86 @@ flowchart TD
   W -- yes --> V{legacy value spelled for neither OS?}
   V -- no --> Y[copy written back exactly, legacy value untouched]
   V -- yes --> YY[copy written back with mirrored = the legacy value, legacy value untouched]
+```
+
+### The page draws two fields (2026-10-11, paths per side E4)
+
+E4 is the page half of `todo/PLAN_paths_per_side.md`'s second path field: what E2 decides (`twoPathFields`) and E3
+stores and resolves is drawn. ONE decision for every place — `pathSides.ts`: `pathSidesOf(PanelState.sides, family)`
+is `undefined` (one field, every place byte for byte as before) unless the switch or the registry says two; then it
+names this side (`thisSideCaption`: *This side — Windows*, *This side — WSL / Linux (WSL: Ubuntu)*) and the other
+(`otherSideLegend`: *The other side — WSL / Linux (last seen 2026-10-09)*, or *(not seen yet)* under *Always two* before
+that side was ever opened, E4.4). The other side is always drawn by `otherSideFieldset`: a `fieldset.other-side` with its
+`legend` and the caption *Used by the server on that side. This window does not check it.*, which every control inside
+names in its `aria-describedby`. Nothing of the other side is ever `stat`ed from this window.
+
+- **The Models card (E4.1)** — `cliPathFields.ts` (moved out of `panelView.ts`; `runtimeFields` delegates): this
+  side's box first (`data-setting="executablePath"`, labelled, with the help mark), then the other side's
+  (`data-setting="executablePath.<family>"`, text only — no Browse — showing `storedForThisSide(row, other)`). The box
+  posts through the panel's ONE vendor write: `vendorFieldWrite` reads the box's family from the key (`cliBoxFamily`)
+  and saves through `savedCliPath`, so the other side's box writes only `executablePathBySide[<other>]` — it never
+  changes the legacy value; `mirrored` is set to that unchanged legacy value (E4's plan round, finding 0). A path
+  spelled for THIS side's OS typed into the other box is refused by the host before the write (`cliPathRefusal`, `panelProvider.refusedBesideTheBox`) and drawn BESIDE the box —
+  the text kept, `aria-invalid`, the reason in its `aria-describedby` — never a toast (`typedRefusals.ts`, a
+  per-window, in-memory record, replaced and never changed in place, forgotten when the box is saved). **Restore** is a
+  panel button beside the field while the row's per-side value is dropped (`droppedFor` over `CliPathKeeper.dropped()`,
+  matched by id + runtime + model); `restoreCliPath` runs the keeper's own `restore`, which re-reads the row at the
+  click. The keeper now keeps the list its last look found and tells its listeners when it changes (`onChanged` —
+  `extension.ts` repaints the panel); the provider gets the keeper as `panel.cliPathKeep`, the `questionConsults`
+  precedent.
+- **The question consultant's folders (E4.2)** — `qconsultView.rootGroups` draws the three groups of `pathGroups.ts`
+  through `pathGroupsView.pathGroupsHtml` (each group `data-list` + `data-group`): this side's (with *Add a folder…*),
+  the other side's (in its fieldset, with a TYPED box), *Both sides / unclear* — every stored root in one, Remove in
+  each. The typed box posts `qconsultTypedRoot` in the caller slot; `QconsultHost.typedRoot` asks this host's disk about
+  the typed text at this machine's spelling (`places([...roots, typed])`) and `typedRoots.typedRootRefusal` decides:
+  admitted only when this window would group it as the other side's (so an entry never jumps groups), `//server/share`
+  into *both / unclear*; refused — beside the box, through the new `QconsultWriteHooks.besideTheBox` — for this OS's
+  spelling, a relative path (`rootRefusal`'s words), on Windows a `/…` whose `C:\…` exists here (or could not be told), in
+  WSL a root-relative `\…`, and every root's own rules. An admitted root is appended to the one shared list by
+  `rootAdded`.
+- **While this side keeps its own settings (E4's own review, item 1)** — with `coai.perSideSettings` on, `vendors` and
+  `qconsultRoots` are saved into THIS side's own settings, which the other side never reads, so the other side's CLI box
+  and its typed folder box are NOT drawn: `pathSides.keepsItsOwnLine` stands in their place (*This side keeps its own
+  settings — set the other side's value from a window on that side.*), with a refusal still drawn beside it. The page
+  asks `settingsShape.keptPerSide(perSide, key)` — the `vscode`-free half `sideConfig.writesTheOverlay` now calls —
+  through `CliPathFacts.ownSettings` and `QconsultViewState.ownSettings`. The host refuses such a write from a page drawn
+  before the switch moved: `refusedBesideTheBox(write, from, config)` hands `cliPathRefusal` a fourth argument,
+  `writesTheOverlay(config, 'vendors')`, and `QconsultHost.typedRoot` refuses before the disk is asked while
+  `QconsultWriteHooks.keptHere('qconsultRoots')` — both with `pathSides.keepsItsOwnRefusal(typed)`, which names what
+  was typed, since the box it was typed into is gone. One-field mode and the read-only data directory are unchanged.
+- **A shared value of this side's spelling (E4's own review, item 2)** — the other side's CLI box no longer shows
+  `storedForThisSide(row, other)` when that falls back to a legacy value spelled for THIS window's OS (which that side
+  skips): `pathFamily.sharedValueOfTheOtherOs` — no member of that family, and `spelledForTheOtherOs(legacy, other)` —
+  draws the box EMPTY with `sharedValueNote` beside it (*The shared value C:\tools\codex.exe is this side's CLI; that
+  side skips it and looks the CLI up on PATH.*), in the box's `aria-describedby`. By spelling only, never a disk.
+- **Setup › MCP server (E4.3)** — `serverPathsView.ts`: the watched folders (`alsoWatchDataDirectories`) in the same
+  groups, by spelling alone (`NOTHING_ASKED`, the rule `escalationDirs.ts` reads them by) — display only, the list has no
+  editor on this page; and the other side's data directory READ-ONLY (D2): `PanelState.otherSideData` is
+  `otherSideDataDirectories(globalState, sideHere, now)` (E3.4), drawn as text in the fieldset — no input, nothing to
+  save — with *Change it from a window on that side.*
+- **CSS** — `fieldset.other-side` and its legend in `catalogCss.ts` (`min-width: 0`, so a long path wraps); the
+  `CATALOG_CSS` hash pin re-pinned with the reason.
+- **The help** (five languages) and the CHANGELOG say the two fields; `helpCoverage.test.ts` asks every language for the
+  page's own labels.
+
+```mermaid
+flowchart TD
+  V[PanelState.sides: the registry and the switch] --> D{pathSidesOf: two fields?}
+  D -- no --> O[one field, every place as before E4]
+  D -- yes --> T[this side first: This side - family and name]
+  D -- yes --> F[the other side: fieldset, legend, caption]
+  F --> C[Models card: the other side's CLI box, text only]
+  F --> Q[Question consultant: the typed folder box]
+  F --> M[MCP server: the other side's data directory, read-only]
+  C -- change --> W[vendorFieldWrite with that box's family]
+  W --> R1{cliPathRefusal: spelled for this side?}
+  R1 -- yes --> B[refused beside the box, text kept]
+  R1 -- no --> S1[savedCliPath: only BySide of that family]
+  Q -- Enter --> R2{typedRootRefusal: grouped as the other side's?}
+  R2 -- no --> B
+  R2 -- yes --> S2[rootAdded to the one shared list]
+  K[CliPathKeeper.dropped] --> X[Restore beside the CLI field]
+  X -- press --> KR[the keeper's restore, the row re-read at the click]
 ```
 
 ### Team servers, and the four modules they are split into (2026-09-06)
@@ -4704,7 +4784,7 @@ flowchart LR
 | `consultantWrite.ts` | what an edit in the *Consultant* section STORES — the vendor picker, the three per-caller fields, and a custom endpoint's name and URL with the one-name-one-vault-key check. The write half of `consultSettings.ts`, lifted out of `settingsShape.ts` on 2026-09-15 when that file passed the 800-line rule |
 | `sidesSeen.ts` | pure: the side registry — `coai.sideSeen@<sideKey>` records, the once-a-day stamp, the 90-day window and its pruning, `sideHereOf`, the `coai.pathFieldsPerSide` switch (`pathFieldsModeOf`, `twoPathFields`), and the thin store half (`stampThisSide`, `sidesIn`, `forgetSide`) over a structural `Memento` (paths per side E2) |
 | `sidesSeenView.ts` | pure: Setup › This side's list of the sides seen, **Forget** per side, the path-fields switch and the sentence that says what it decides (E2.4) |
-| `cliPathSave.ts` | pure: the one write rule for a catalog row's CLI path — `savedCliPath` (this side's field mirrored into the legacy value and `mirrored`, the other side's never; other families pinned) and `vendorFieldWrite`, the panel's vendor write (paths per side E3.2) |
+| `cliPathSave.ts` | pure: the one write rule for a catalog row's CLI path — `savedCliPath` (this side's field mirrored into the legacy value and `mirrored`; the other side's never changes the legacy value, and `mirrored` is set to that unchanged value; other families pinned) and `vendorFieldWrite`, the panel's vendor write (paths per side E3.2) |
 | `cliPathKeep.ts` | pure: the kept copy of each user-layer row's per-side CLI path — `keptKey` (layer + id + runtime + model), `keepPlan` (copy, prune, the dropped rows), `restoredRows` (the copy back, legacy untouched, `mirrored` caught up only for a legacy value spelled for neither OS, a stale click refused) and the notice's words (paths per side, E3 as built) |
 | `cliPathKeeper.ts` | vscode-free: `CliPathKeeper` — one look per settings change, a dropped member said once per run, **Restore** only on a click (paths per side, E3 as built) |
 | `cliPathKeepHost.ts` | the vscode around the keeper: `globalState`, the user layer's `coai.vendors`, the `cli-path-value-dropped` / `cli-path-restore-refused` notices, the one settings write |
