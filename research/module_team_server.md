@@ -522,11 +522,14 @@ sequenceDiagram
 - **A stated DURATION is believed (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`).** agy says how
   long, not when — `… Individual quota reached. … Resets in 88h49m9s.` — and no form read it, so an exhausted Gemini
   slot sat on the doubling 30-minute guess and was asked again into the refusal for the whole ~110 h. The duration
-  form (`Resets in <h>h<m>m<s>s`, any part may be absent) is read FIRST, so "resets in" is never offered to the
-  clock-time form that also starts at "resets"; it is believed like a named instant (`MaxGuess` caps only the guess)
-  up to `MaxStatedWait`, fourteen days — longer than any window these vendors state. Past it, or a number too large
-  to be an instant at all, it is no duration and the fallback applies: a malformed refusal never throws and never
-  fails the job. `SlotRegistry.MarkCoolingDown` already persisted what the parser answers, so this was the whole fix.
+  form (`Resets in <h>h<m>m<s>s`, any part may be absent, one space allowed inside — `2h 30m`) is read FIRST, so
+  "resets in" is never offered to the clock-time form that also starts at "resets"; it is believed like a named
+  instant (`MaxGuess` caps only the guess) up to `MaxStatedWait`, fourteen days — longer than any window these vendors
+  state. **It is read whole or not at all:** text glued to a unit (`2seconds`) or a spaced number after it
+  (`2h 30 minutes`) refuses the match, because its first part alone is a SHORTER wait than the one stated (CodeRabbit
+  on #754). A wait that was stated and could not be read — such a form, a number past the ceiling, one too large to be
+  an instant — errs LONG, to `MaxGuess` (5 h), never the 30-minute retry and never a throw that fails the job.
+  `SlotRegistry.MarkCoolingDown` already persisted what the parser answers, so the parser was the whole fix.
 - **`login` is attached to the terminal, and is the ONE thing here that does not use
   `ProcessLauncher`.** That launcher redirects stdout, stderr and stdin, which is right for
   everything that wants output as a string — and fatal for a sign-in, which prints a URL and a code

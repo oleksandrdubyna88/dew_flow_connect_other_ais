@@ -70,6 +70,14 @@ public static partial class CooldownParser
             return WeeklyWithoutDate;
         }
 
+        // The vendor stated a wait this could not read whole — a malformed number, one past MaxStatedWait, a form never
+        // seen. A wait WAS stated, so the 30-minute retry would be the one direction certain to be wrong: the guess's
+        // ceiling instead (CodeRabbit on #754; MaxStatedWait would park a paid account for a fortnight over one sentence).
+        if (StatedButUnread().IsMatch(reason ?? string.Empty))
+        {
+            return MaxGuess;
+        }
+
         // Doubling, because the same 30 minutes repeated is not a back-off — an account that has
         // been refused three times running is not thirty minutes from being ready.
         var doubled = Unparseable * Math.Pow(2, Math.Clamp(consecutive, 0, 8));
@@ -186,9 +194,15 @@ public static partial class CooldownParser
     // Captured 2026-10-10 from agy 1.3.x on a Gemini quota refusal (research/RESULTS_vendor_quota_gauges.md §3.1):
     //   "… Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s."
     // and the fixture src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt: "… Resets in 33m52s".
-    // The trailing boundary is the code round's: "2seconds" or "1hgarbage" must not read as a short wait.
-    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)h)?(?:(?<m>\d+)m)?(?:(?<s>\d+)s)?(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
+    // The trailing boundary is the code round's: "2seconds" or "1hgarbage" must not read as a short wait. One space is
+    // allowed inside ("2h 30m" is read whole), and a spaced number after the match refuses it (CodeRabbit on #754):
+    // "2h 30 minutes" read as its first part would be a SHORTER wait than the one stated.
+    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)\s?h)?\s?(?:(?<m>\d+)\s?m)?\s?(?:(?<s>\d+)\s?s)?(?![A-Za-z0-9])(?!\s*\d)", RegexOptions.IgnoreCase)]
     private static partial Regex Duration();
+
+    // A wait the vendor STATED that the duration form could not read whole — what makes the guess err long.
+    [GeneratedRegex(@"resets\s+in\s+\d", RegexOptions.IgnoreCase)]
+    private static partial Regex StatedButUnread();
 
     // "weekly limit reached" with no date attached — a day is the smallest wait that can help.
     [GeneratedRegex(@"weekly", RegexOptions.IgnoreCase)]

@@ -209,10 +209,10 @@ public sealed class CooldownParserTests
     [Fact]
     public void ADurationNoVendorWindowCouldMean_IsTheFallback_NeverAThrow()
     {
-        // The plan round's finding: a malformed refusal must not fail the job; it is a sentence with nothing usable
-        // in it, and the existing fallback applies. Fourteen days is longer than any window these vendors state.
-        CooldownParser.Until("Resets in 999999999999999999h", Now).Should().Be(Now + CooldownParser.Unparseable);
-        CooldownParser.Until("Resets in 9999h", Now).Should().Be(Now + CooldownParser.Unparseable,
+        // The plan round's finding: a malformed refusal must not fail the job. The vendor DID state a wait, so it is not
+        // "nothing usable": the guess errs long, to MaxGuess (CodeRabbit on #754) — never the 30-minute retry into it.
+        CooldownParser.Until("Resets in 999999999999999999h", Now).Should().Be(Now + CooldownParser.MaxGuess);
+        CooldownParser.Until("Resets in 9999h", Now).Should().Be(Now + CooldownParser.MaxGuess,
             "four hundred days is not a window, it is a parse of something else");
         CooldownParser.Until("Resets in 336h", Now).Should().Be(Now + CooldownParser.MaxStatedWait, "exactly the ceiling is believed");
     }
@@ -221,10 +221,21 @@ public sealed class CooldownParserTests
     public void ADurationWithTextGluedToItsUnit_IsNoDuration()
     {
         // The code round's finding: a reworded or truncated line must not read as a SHORT wait — "2seconds" read as
-        // two seconds would put the slot straight back into the refusal. Unusable text is the fallback.
-        CooldownParser.Until("Resets in 2seconds", Now).Should().Be(Now + CooldownParser.Unparseable);
-        CooldownParser.Until("Resets in 1hgarbage", Now).Should().Be(Now + CooldownParser.Unparseable);
+        // two seconds would put the slot straight back into the refusal. A stated wait that cannot be read errs long.
+        CooldownParser.Until("Resets in 2seconds", Now).Should().Be(Now + CooldownParser.MaxGuess);
+        CooldownParser.Until("Resets in 1hgarbage", Now).Should().Be(Now + CooldownParser.MaxGuess);
         CooldownParser.Until("Resets in 88h49m9s.", Now).Should().Be(Now + new TimeSpan(88, 49, 9), "a sentence's full stop is a boundary");
+    }
+
+    [Fact]
+    public void ASpacedDuration_IsReadWhole_NeverAsItsFirstPart()
+    {
+        // CodeRabbit on #754: "Resets in 2h 30m" read as two hours retries thirty minutes into the refusal. The spaced
+        // form is read whole; a form that cannot be read whole is not read in part — it errs long, to MaxGuess.
+        CooldownParser.Until("Resets in 2h 30m", Now).Should().Be(Now + new TimeSpan(2, 30, 0));
+        CooldownParser.Until("Resets in 1h 2m 3s.", Now).Should().Be(Now + new TimeSpan(1, 2, 3));
+        CooldownParser.Until("Resets in 2h 30 minutes", Now).Should().Be(Now + CooldownParser.MaxGuess,
+            "the first part alone is a SHORTER wait than the one stated");
     }
 
     [Fact]
