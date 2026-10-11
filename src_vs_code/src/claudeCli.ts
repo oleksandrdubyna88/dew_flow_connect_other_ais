@@ -31,7 +31,7 @@ type Placed = Extract<ResolvedConsultant, { kind: 'definition' }>;
  * rather than read — reading a field off it would be reading one that is not there.</p>
  */
 export function claudeExecutableFor(vendors: readonly Vendor[], consult: ConsultSettings, side: ExecutableSide = hostExecutableSide()): string {
-  // Only THIS side's paths count (todo/PLAN_paths_per_side.md E1.2): a CLI path spelled for the other OS is skipped,
+  // Only THIS side's paths count (research/PLAN_paths_per_side.md E1.2): a CLI path spelled for the other OS is skipped,
   // so the next candidate — or the PATH name — is asked, never a file that is the other side's.
   const here = (path: string): string => executableHere(path, side);
   // A ROW resolves through its per-side value first (E3.1); a consultant definition holds one value.

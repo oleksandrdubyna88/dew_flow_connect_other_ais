@@ -2,7 +2,7 @@ import { isPosixAbsolute, isWindowsAbsolute, otherSideHere, type Existence } fro
 
 /**
  * A list of folders a Windows window and a WSL window share — `coai.qconsultRoots`, `coai.alsoWatchDataDirectories` —
- * split into the groups the page draws (todo/PLAN_paths_per_side.md E3.3, design (b) O1: the spelling IS the side).
+ * split into the groups the page draws (research/PLAN_paths_per_side.md E3.3, design (b) O1: the spelling IS the side).
  *
  * <p><b>Three groups, never two</b> (the cadence consultation for epics 4-6, finding c, verified): `spelledForTheOtherOs`
  * is false on BOTH platforms for `//server/share/x` and for a relative path, so a two-way split put them in THIS window's

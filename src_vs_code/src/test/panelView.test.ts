@@ -732,7 +732,7 @@ test('the panel names the side it is about to keep settings for', () => {
 test('with the switch off the panel says the settings are shared, and does not tick the box', () => {
   const page = everyPageHtml(state({ side: '', perSide: false }), 'nonce');
 
-  // Reversed by todo/PLAN_paths_per_side.md E2.4: a local window is one side among those the profile is used on, so it
+  // Reversed by research/PLAN_paths_per_side.md E2.4: a local window is one side among those the profile is used on, so it
   // names itself by its operating system (thisSideLabel) — "this machine" says nothing once a WSL side is listed beside it.
   assert.ok(page.includes(`This side is <b>${thisSideLabel(undefined, '', process.platform)}</b>`), 'a local window does not name its side');
   assert.doesNotMatch(page, /This side is <b>this machine<\/b>/, 'a local window still calls itself "this machine"');

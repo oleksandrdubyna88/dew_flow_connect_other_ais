@@ -578,7 +578,7 @@ public sealed record PanelSettings
 
     /// <summary>
     /// The unrecognised settings whose problem has a KIND — the projection <c>--providers</c> prints as
-    /// <c>settingProblems</c> (todo/PLAN_paths_per_side.md E5.2), beside <see cref="Unrecognised"/>, which keeps every
+    /// <c>settingProblems</c> (research/PLAN_paths_per_side.md E5.2), beside <see cref="Unrecognised"/>, which keeps every
     /// sentence for an older extension.
     /// </summary>
     public IReadOnlyList<SettingProblem> SettingProblems =>

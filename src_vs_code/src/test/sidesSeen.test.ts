@@ -7,7 +7,7 @@ import {
 } from '../sidesSeen';
 
 /**
- * The sides this profile has been used on (todo/PLAN_paths_per_side.md E2.1): one `globalState` record per side, stamped at
+ * The sides this profile has been used on (research/PLAN_paths_per_side.md E2.1): one `globalState` record per side, stamped at
  * activation at most once a day, a side known while it was seen within 90 days and pruned after.
  *
  * <p>Every time here is derived from one fixed `NOW` — the module is handed its clock, so nothing below expires with the

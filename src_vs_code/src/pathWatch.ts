@@ -8,7 +8,7 @@ import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES 
 import type { SettingProblem } from './providers';
 
 /**
- * The watch over this side's paths (todo/PLAN_paths_per_side.md E5.3): what the settings name, asked of the disk through
+ * The watch over this side's paths (research/PLAN_paths_per_side.md E5.3): what the settings name, asked of the disk through
  * the bounded probes, published as findings for the page, and SAID — once per window run and once per missing path, at
  * every start and again whenever a path goes missing after being found.
  *

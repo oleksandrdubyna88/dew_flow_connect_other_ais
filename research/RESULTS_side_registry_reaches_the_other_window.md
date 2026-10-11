@@ -1,7 +1,7 @@
 # RESULTS — a `globalState` stamp from one side reaches an already-open window of the other side, live
 
 > 2026-10-10, measured by the operator on their machine for E0 of
-> [PLAN_paths_per_side.md](../todo/PLAN_paths_per_side.md) (decides how soon "both sides known" — and so the two path
+> [PLAN_paths_per_side.md](PLAN_paths_per_side.md) (decides how soon "both sides known" — and so the two path
 > fields — appears). VS Code 1.141 on Windows 11 with a WSL (Ubuntu) remote window; one profile.
 
 ## The question

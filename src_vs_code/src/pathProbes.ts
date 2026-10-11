@@ -2,7 +2,7 @@ import { ROOT_ANSWER_LIFETIME_MS, presenceOnFailure, type FilePresence } from '.
 import type { Presence, ProbeKind } from './pathFindings';
 
 /**
- * The disk, asked about one path at a time and never waited for by a render (todo/PLAN_paths_per_side.md E5.1, as amended
+ * The disk, asked about one path at a time and never waited for by a render (research/PLAN_paths_per_side.md E5.1, as amended
  * by the gate's cadence consultant).
  *
  * <p><b>What the amendment found.</b> `existingHere` awaited each root's `stat` in turn with no deadline, so one stalled
@@ -83,7 +83,7 @@ export class PathProbes {
 
   /**
    * Asks the disk about `path` again NOW, however fresh the last answer — the watch's recheck of a path it found absent,
-   * so a folder made again is seen without a settings change (todo/PLAN_paths_per_side.md E5.7, risk item F). Still one
+   * so a folder made again is seen without a settings change (research/PLAN_paths_per_side.md E5.7, risk item F). Still one
    * outstanding probe per path; a changed answer tells the listeners, as every answer does.
    */
   recheck(path: string, kind: ProbeKind): void {

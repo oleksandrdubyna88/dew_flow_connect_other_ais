@@ -6,7 +6,7 @@ import { finishedInTime } from './withinTheClock';
 
 /**
  * What this window knows about its paths right now — the findings the host last published — and the ONE storage-write
- * policy built on them (todo/PLAN_paths_per_side.md E5.0, decided after the gate's cadence consultant verified the
+ * policy built on them (research/PLAN_paths_per_side.md E5.0, decided after the gate's cadence consultant verified the
  * trap on E1: `notify` → `recordNotification` → `appendLine` → `mkdir(dirname(path), { recursive: true })`, so the notice
  * about a missing NAMED data directory would itself create it, and hide the very condition it reports).
  *
@@ -100,7 +100,7 @@ function nothingToLift(root: string | undefined, presence: Presence): boolean {
 /**
  * Told when a kept absence is lifted by a probe that CONFIRMS the root — the folder was made again, the drive mounted.
  * The settings mirror, which stood aside (`no-data-root`, terminal), writes again from it, so a person recovers by making
- * the folder, with no settings edit (todo/PLAN_paths_per_side.md E5.7, risk item F).
+ * the folder, with no settings edit (research/PLAN_paths_per_side.md E5.7, risk item F).
  */
 export function onDataRootBack(listener: () => void): void {
   backListeners = [...backListeners, listener];

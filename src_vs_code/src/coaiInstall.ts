@@ -356,7 +356,7 @@ export function overlayKey(side: Side): string {
 
 /**
  * {@link overlayKey} for a side known only by its `sideKey` — the side registry's records (`sidesSeen.ts`) carry the key,
- * not the `Side`, so another side's overlay is found through it (todo/PLAN_paths_per_side.md E3.4).
+ * not the `Side`, so another side's overlay is found through it (research/PLAN_paths_per_side.md E3.4).
  */
 export function overlayKeyOf(key: string): string {
   return `coai.settingsOverlay@${key}`;

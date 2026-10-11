@@ -59,7 +59,7 @@ test('every language describes the sides seen and the path-fields switch, by the
 });
 
 test('every language says a CLI path is kept per side, and names the older-extension limit (paths per side E3)', () => {
-  // Design (c) of todo/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
+  // Design (c) of research/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
   // paths are the same in every language, so they are what all five are asked for; `PATH` is the lookup an emptied
   // field — and a side whose own value an older extension's save dropped — falls back to.
   const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
@@ -71,6 +71,32 @@ test('every language says a CLI path is kept per side, and names the older-exten
     }
     // E3 as built (2026-10-11): a value an older save dropped is said once, with **Restore** — the button the notice offers.
     assert.ok(said.includes('**Restore**'), `the ${language} settings article never says **Restore** — the way back to a dropped CLI path is undocumented there`);
+  }
+});
+
+test('every language describes the two fields the pages draw, by the labels the pages carry (paths per side E4)', () => {
+  // The labels and the caption are English on the page in every language, as every control name here is — so they are what
+  // all five are asked for: this side's field, the other side's caption, the third group of folders, and the read-only
+  // data directory's "from a window on that side".
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const label of ['**This side — Windows**', '*Used by the server on that side. This window does not check it.*', '*Both sides / unclear*', 'Setup › MCP server']) {
+      assert.ok(said.includes(label), `the ${language} settings article never says ${label} — the two fields are undocumented there`);
+    }
+    assert.equal(said.includes('comes in a following release'), false, `the ${language} settings article still promises the other side's field for a later release`);
+  }
+});
+
+test('every language says why the other side\'s boxes are gone while each side keeps its own settings (paths per side E4, own review)', () => {
+  // The sentence the page draws in their place is English in every language, as every control text here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'settings-and-the-server');
+  assert.ok(article !== undefined, 'the settings article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    assert.ok(said.includes('*This side keeps its own settings — set the other side\'s value from a window on that side.*'),
+      `the ${language} settings article never says why the other side's CLI path and folder box are not shown while each side keeps its own settings`);
   }
 });
 
@@ -289,7 +315,7 @@ const SETTING_ALIAS: Record<string, string> = {
   // Issue #131: the article names both choices and says what neither of them is.
   'coai.gatePer': 'never once per story',
   'coai.perSideSettings': 'separate settings for each side',
-  // todo/PLAN_paths_per_side.md E2.3: the switch, by the label Setup › This side gives it.
+  // research/PLAN_paths_per_side.md E2.3: the switch, by the label Setup › This side gives it.
   'coai.pathFieldsPerSide': 'path fields per side',
   // The consultant's five. The caller map and each cap is a setting of its own, so each one is
   // covered by the words the article actually uses for it.

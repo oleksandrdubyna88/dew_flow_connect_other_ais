@@ -1,5 +1,5 @@
 /**
- * A missing question-consultant root of THIS OS, across the seam (todo/PLAN_paths_per_side.md E5.6).
+ * A missing question-consultant root of THIS OS, across the seam (research/PLAN_paths_per_side.md E5.6).
  *
  * <p>Which roots are missing is decided TWICE: the Settings page asks the disk (`pathFindings` over the bounded probes)
  * and coai-mcp refuses the root and names it in `--providers`' `settingProblems` (E5.2) — and the page then prefers the

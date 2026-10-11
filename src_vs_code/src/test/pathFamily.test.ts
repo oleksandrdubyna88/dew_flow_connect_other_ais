@@ -222,7 +222,7 @@ test('a definitive answer lives ROOT_ANSWER_LIFETIME_MS: within it one stat, aft
 });
 
 test('a CLI path of the other OS is skipped — the PATH lookup — and named; answers the shared executable vectors as the server does', () => {
-  // todo/PLAN_paths_per_side.md E1.2: a Windows `codex.cmd` read in a WSL window was probed as a file there, and the card
+  // research/PLAN_paths_per_side.md E1.2: a Windows `codex.cmd` read in a WSL window was probed as a file there, and the card
   // said "cannot review". It is the Windows side's CLI: this side runs the runtime's own name from PATH instead.
   const all = rowsOf('executable');
   assert.ok(all.length > 5, 'the file is read, not an empty array');

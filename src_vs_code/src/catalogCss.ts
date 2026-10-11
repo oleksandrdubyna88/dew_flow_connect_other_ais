@@ -96,6 +96,11 @@ const SHELL = `
   .path-unknown { --mark: var(--warn); }
   .path-missing .path-note, .path-unknown .path-note { color: var(--mark); font-weight: 600; }
   .path-mark { color: var(--mark); }
+  /* The other side's group (paths per side, E4): a bordered fieldset whose legend names that side — nothing in it is
+     checked on this machine. min-width 0: a fieldset is min-content wide by default, and a long path must wrap, never
+     push the page sideways. */
+  fieldset.other-side { border: 1px solid var(--border-strong); border-radius: 4px; padding: 4px 10px 8px; margin: 8px 0; min-width: 0; }
+  fieldset.other-side legend { padding: 0 4px; font-weight: 600; }
   dialog#confirm-dialog {
     background: var(--vscode-editorWidget-background); color: var(--vscode-foreground);
     border: 1px solid var(--border-strong); border-radius: 6px; padding: 14px 16px; width: min(560px, calc(100vw - 32px));

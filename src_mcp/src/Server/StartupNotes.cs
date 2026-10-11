@@ -13,7 +13,7 @@ namespace CoaiMcp.Server;
 /// <param name="Sentence">What to do about it, in the words a person reads.</param>
 /// <param name="Kind">
 /// What KIND of problem it is, when the extension can act on the kind rather than the prose
-/// (todo/PLAN_paths_per_side.md E5.2): one of <see cref="SettingProblemKinds"/>, or empty for a value
+/// (research/PLAN_paths_per_side.md E5.2): one of <see cref="SettingProblemKinds"/>, or empty for a value
 /// only a sentence describes — a malformed row, an unknown mode, a folder refused by name.
 /// </param>
 /// <param name="Value">The stored value the problem is about, as the settings file spells it, or empty.</param>

@@ -98,7 +98,7 @@ const pause = (ms: number): Promise<void> => new Promise((resolve) => { setTimeo
  *
  * <p>Shared with the two writers that cannot take the whole atomic write — the settings file, which checks its lock
  * between the write and the rename, and an answered escalation, which must make no folder at all — so they replace
- * VS Code's rename, which makes missing parent folders (todo/PLAN_paths_per_side.md E5.7).</p>
+ * VS Code's rename, which makes missing parent folders (research/PLAN_paths_per_side.md E5.7).</p>
  */
 export async function renameWithRetry(beside: string, path: string): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {

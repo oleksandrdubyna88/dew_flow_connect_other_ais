@@ -32,7 +32,7 @@
     "`QuestionRoots.Qualified` and the extension's `qualified`.",
     "",
     "`executable` is a CLI path — a reviewer's, a consultant's, a question row's or a chat model's `executablePath`",
-    "(todo/PLAN_paths_per_side.md E1.2). The roots' rule, for a FILE: one spelled for the other operating system is",
+    "(research/PLAN_paths_per_side.md E1.2). The roots' rule, for a FILE: one spelled for the other operating system is",
     "skipped — the CLI is looked up on PATH by its runtime's name, never launched, never refused — ONLY when the disk",
     "confirms no such file here (`existsHere` false and no `unknownHere`). On Windows `/Program Files/nodejs/node.exe` is a",
     "legal root-relative path: it is looked for qualified with `systemDrive` and, when there or when the disk cannot",

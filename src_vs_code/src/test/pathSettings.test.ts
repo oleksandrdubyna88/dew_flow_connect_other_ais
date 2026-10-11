@@ -7,7 +7,7 @@ import { PATH_FIELD_NAME, PATH_SETTINGS } from '../pathSettings';
 import { sectionsOf } from '../settingRefused';
 
 /**
- * The census over the manifest (todo/PLAN_paths_per_side.md E1.1): every setting, and every field nested in one, whose
+ * The census over the manifest (research/PLAN_paths_per_side.md E1.1): every setting, and every field nested in one, whose
  * name says it holds a path must be in `PATH_SETTINGS` — so the rule "a path of the other side is skipped, not refused"
  * cannot miss the next path setting the way it missed six of the seven before the registry existed.
  */

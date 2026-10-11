@@ -10,7 +10,7 @@ import { panelState, runPanel } from './panelPageHarness';
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * The Models card of a row whose CLI path is the OTHER side's (todo/PLAN_paths_per_side.md E1.5): VS Code shares the row
+ * The Models card of a row whose CLI path is the OTHER side's (research/PLAN_paths_per_side.md E1.5): VS Code shares the row
  * between a WSL window and a Windows window, so a WSL window's `/usr/local/bin/codex` is on the Windows page too. The card
  * says it quietly — "the other side's CLI … this Windows side skips it and looks the CLI up on PATH" — and nothing on it
  * calls the row broken because of that path. The page is RUN (`runPanel`) and read back as the tree it drew.
@@ -82,7 +82,7 @@ test('on a Windows page a root-relative CLI path that EXISTS on the system drive
 });
 
 test('the one CLI-path box shows THIS side\'s per-side value — and no note, since nothing of the other side runs here', () => {
-  // todo/PLAN_paths_per_side.md E3.1: the legacy value is the Windows one; the WSL window saved a per-side value of its own.
+  // research/PLAN_paths_per_side.md E3.1: the legacy value is the Windows one; the WSL window saved a per-side value of its own.
   const split = vendorsFrom([{ ...DEFAULT_VENDORS[0]!, id: 'split', runtime: 'codex', enabled: true, executablePath: 'C:\\tools\\codex.exe', executablePathBySide: { posix: '/opt/codex' } }]);
   const isBox = (node: PageNode): boolean => node.tagName === 'INPUT' && node.dataset['setting'] === 'executablePath';
   const posix = cardOf(modelsPage(split, 'posix'), 'split');

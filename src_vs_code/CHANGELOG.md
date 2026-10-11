@@ -1,19 +1,52 @@
 # Changelog
 
-## Unreleased
+## Server 0.48.0 — 2026-10-11
+
+**The usage ledger tells the truth: one line per paid launch, how each ended, and what it ran with.** `usage.jsonl`
+now gets a line for every launch a review paid for — a repair, a follow-up, a rate-limit retry, a requeued Team-server
+attempt — joined by a shared `turn` id and named by `attempt`. The lines are split only where they add up to the turn
+exactly, so no total moves, except one: a repair that exited non-zero after billing was counted twice and is now
+counted once. A launch cancelled under it is said as cancelled, before a timeout, and a Team-server job carries the
+cause it ended by (`withdrawn`, `abandoned`, `backstop`, `queueExpired`, `hostStopped`). Each line names the CLI and its
+version, the effort and tier and where each came from, the job, the slot by its name (never an email), and an effort
+or tier the vendor ignored or dropped. Probes are lines of kind `probe`, and a vendor's reason is kept up to 4 000
+characters, redacted. Every new field is trailing and has a default, so older lines still read.
+
+## Extension 0.69.0 — 2026-10-11
 
 **Changed: a reviewer's CLI path belongs to the side that saved it.** A CLI path saved in a Windows window (say
 `C:\tools\codex.cmd`) no longer replaces the path a WSL window runs (`/usr/local/bin/codex`): each catalog row now keeps
 one value per side (`executablePathBySide`, beside the `executablePath` older versions read), every launch on a side
 runs that side's value, and an emptied field means "look the CLI up on PATH" on that side. Every coai-mcp version still
 receives one path per row, this side's. *Export settings* leaves the per-side values out, like the CLI path itself. The
-field for the other side's path comes with the two path fields in a following release. **One limit while two versions
+other side's path has a field of its own (below). **One limit while two versions
 of the extension are in use** (a WSL remote installs its own copy, which can lag): an older copy reads only the one
 shared path — the one the side that saved last left there — and when it saves, it drops the per-side values, so the
 other side looks its CLI up on PATH until you set it again. A window of this version notices that once per start:
 it says a previously saved value of that CLI path is missing, names it, and offers **Restore**, which puts it back only
 when you press it — never on its own, never into a model that was removed or replaced, and never over a path saved
 since. Update the extension on both sides. Help in all five languages.
+
+**New: two path fields once both sides are known.** When a Windows side and a WSL / Linux side have both been seen (or
+**Path fields per side** is *Always two*), a Models card shows two CLI-path fields: this side's first, labelled *This
+side — Windows* (or *This side — WSL / Linux (WSL: Ubuntu)*), then the other side's in a box of its own whose title names
+that side and the day it was last seen — *Used by the server on that side. This window does not check it.* It is typed
+as text (there is no browsing: this window cannot see that disk) and saved only as that side's value; a path spelled for
+this side's own system is refused beside the box, never in a pop-up. The question consultant's folders are listed in
+three groups — this side's (with *Add a folder…*), the other side's (type one in, then press Enter; only a path this
+window would call the other side's is taken, and a typed `//server/share/…` goes to *Both sides / unclear*) and *Both
+sides / unclear* (a `//server/share`, a relative name) — and
+the watched data folders on *Setup › MCP server* in the same groups; that place also shows the other side's data
+directory, read-only: change it from a window on that side. While a previously saved CLI path is missing, **Restore**
+sits beside the field as well as in the notice. *Always one* keeps one field everywhere. With **Separate settings for each
+side** on, the other side's CLI path and folder box are not shown — this side's settings are its own, which that side
+never reads — and *This side keeps its own settings — set the other side's value from a window on that side.* stands in
+their place. A shared CLI path spelled for this side's system is not shown as the other side's: that box stays empty,
+with a note that the other side looks its CLI up on PATH. Nothing of the other side is ever checked on the disk from
+this window.
+
+**The Claude model probe is in the ledger too.** The extension's Claude model probe writes its usage to
+`probe-usage.jsonl`, read beside `usage.jsonl`, so its launches are no longer missing from what was spent.
 
 ## Server 0.47.0 — 2026-10-11
 

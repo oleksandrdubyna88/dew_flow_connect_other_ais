@@ -19,7 +19,7 @@ useFileProbe(fileAt(statSyncForProbe));
 
 /**
  * A CLI path spelled for the OTHER operating system is skipped — the runtime's CLI is looked up on PATH — never launched
- * and never sent to the server (todo/PLAN_paths_per_side.md E1.2). VS Code's settings are shared by a WSL window and a
+ * and never sent to the server (research/PLAN_paths_per_side.md E1.2). VS Code's settings are shared by a WSL window and a
  * Windows window, so a reviewer row's `C:\…\codex.cmd` reaches the WSL side, whose server probed it as a file, found
  * nothing, and the card said "cannot review" for a row that is right on the side that wrote it.
  */
@@ -84,7 +84,7 @@ test('a chat model saved with an other-side CLI path runs the runtime from PATH 
  * counted reads that only COPY or SHOW the stored value — a copy is resolved where it is launched or written. A new raw
  * read changes a count and goes red, so a launch site cannot be added that runs the other side's CLI.
  *
- * <p>Since E3 (todo/PLAN_paths_per_side.md E3.1) a catalog ROW holds a per-side value too, so a row is resolved WHOLE —
+ * <p>Since E3 (research/PLAN_paths_per_side.md E3.1) a catalog ROW holds a per-side value too, so a row is resolved WHOLE —
  * `executableOf(row, side)` / `pathForThisSide(row, side)`, or copied as `storedForThisSide(row, family)` — never through
  * its `.executablePath` alone, which would skip `executablePathBySide`. Those calls read no `.executablePath` and need no
  * count. `executableHere(value, side)` takes ONE value and is for a legacy DEFINITION (a consultant's, a question row's, a
@@ -98,11 +98,12 @@ const UNRESOLVED_READS: Readonly<Record<string, { readonly count: number; readon
   'chatModelEdits.ts': { count: 1, why: 'an edit of the stored value' },
   'chatPresetMove.ts': { count: 1, why: 'moves a stored preset into the catalog' },
   'chatPresets.ts': { count: 1, why: 'turns a reviewer row into a stored preset' },
+  'cliPathFields.ts': { count: 1, why: 'names the shared legacy value in the hint beside an other side\'s box drawn empty (E4\'s own review, item 2) — a display, never run' },
   'cliPathSave.ts': { count: 2, why: 'the write rule: keeps the legacy value on the other side\'s save, and sees whether a save replaces it — stored, never run' },
   'cliPathKeep.ts': { count: 3, why: 'the keeper records the legacy value an offer was made against, refuses a restore after it changed, and reads whether it is spelled for neither OS to catch `mirrored` up — stored, never run' },
   'consultSettings.ts': { count: 1, why: 'matches a stored definition\'s value to a row\'s — the stored value' },
   'setupTab.ts': { count: 2, why: 'draws a CLI group\'s path — already this side\'s stored value — in the vendor-keys table' },
-  'pathFamily.ts': { count: 3, why: 'the side rule itself, and whether an older extension saved since' },
+  'pathFamily.ts': { count: 4, why: 'the side rule itself, whether an older extension saved since, and whether the shared value is spelled for the other OS (E4\'s own review, item 2)' },
   'pathFindings.ts': { count: 3, why: 'names the setting coai.vendors[].executablePath in the words of its notice and mark (E5) — strings, never a row' },
 };
 

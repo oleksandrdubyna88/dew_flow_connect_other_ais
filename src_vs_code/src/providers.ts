@@ -95,7 +95,7 @@ export interface ProviderNotes {
   readonly vault: VaultState;
   /**
    * The refused settings the server could name by KIND — which key, which stored value, and the same sentence
-   * `unrecognised` carries (todo/PLAN_paths_per_side.md E5.2). Empty from a server that predates the field, which is
+   * `unrecognised` carries (research/PLAN_paths_per_side.md E5.2). Empty from a server that predates the field, which is
    * how the generic toast knows it is still the only surface for those sentences.
    */
   readonly settingProblems: readonly SettingProblem[];
@@ -140,7 +140,7 @@ export function parseProviderNotes(output: string): ProviderNotes {
 
 /**
  * The sentences the generic "the server could not understand a setting" toast still has to carry: every one of
- * `unrecognised` that no structured problem covers (todo/PLAN_paths_per_side.md E5.3). A sentence a problem names is
+ * `unrecognised` that no structured problem covers (research/PLAN_paths_per_side.md E5.3). A sentence a problem names is
  * the missing-path notice's to say, with its place and its button — never two toasts for one folder. From a server
  * before the field the list is empty, so every sentence stays the toast's, as before.
  */
