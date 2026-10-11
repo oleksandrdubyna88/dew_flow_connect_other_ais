@@ -46,7 +46,7 @@ export type CriticalSection = (work: () => Promise<void>) => Promise<boolean>;
  * others are terminal — the content is on disk, or it was already, or a newer build owns it, or the
  * disk refused and the next change will try again.</p>
  */
-export type SyncOutcome = 'written' | 'unchanged' | 'stood-down' | 'busy' | 'failed';
+export type SyncOutcome = 'written' | 'unchanged' | 'stood-down' | 'busy' | 'failed' | 'no-data-root';
 
 /**
  * Mirrors the workspace's `coai.*` settings into the file the server reads.
@@ -154,6 +154,13 @@ export class ServerSettingsSync {
      * (PLAN_one_model_catalog.md E2): a catalog field crosses into the file only when listed.
      */
     private readonly features: () => readonly string[] = () => [],
+    /**
+     * Whether the NAMED data root is missing, asked before every write (todo/PLAN_paths_per_side.md E5.7, D3): a
+     * settings file written into a root that is not there would create it — in a bare `/mnt/z` mount point, hiding the
+     * one condition the page and the notice report. `no-data-root` is a terminal outcome the schedule neither retries
+     * nor reports: the missing-path notice already says it, and two toasts for one folder is what it must not be.
+     */
+    private readonly dataRootMissing: () => Promise<boolean> = async () => false,
   ) {}
 
   /** What the file would hold now: this side's settings and rows, as the installed binary can take them. */
@@ -191,6 +198,11 @@ export class ServerSettingsSync {
     if (json === this.lastWritten && !this.stoodDown) {
       return 'unchanged';
     }
+    // BEFORE the critical section, which makes the data directory for its lock file: a NAMED root that is missing is
+    // nobody's to create (E5.7, D3). Nothing is remembered as written, so the content lands the moment the folder is there.
+    if (await this.dataRootMissing()) {
+      return 'no-data-root';
+    }
 
     // The comparison and the write are ONE step, or they are a race. Two guard-aware hosts can
     // otherwise both read a stamp they are allowed to overwrite, and the second to finish wins with
@@ -203,25 +215,7 @@ export class ServerSettingsSync {
     let entered: boolean;
     try {
       entered = await this.critical(async () => {
-        if (await this.wouldOverwriteANewerBuild()) {
-          this.stoodDown = true;
-          outcome = 'stood-down';
-          return;
-        }
-
-        try {
-          await this.write(json);
-          this.lastWritten = json;
-          this.stoodDown = false;
-          // The situation is over. A stand-down after this is news, not a repeat.
-          this.reportedFor = '';
-          outcome = 'written';
-        } catch {
-          // Not writable. The pasted env block remains a way in, and this runs from a configuration
-          // listener — throwing here would put an extension error in front of somebody for every
-          // keystroke in their settings file, over a disk problem a settings panel cannot fix.
-          outcome = 'failed';
-        }
+        outcome = await this.writeUnlessNewer(json);
       });
     } catch {
       // The section itself failed — a lock that could not be created, a filesystem that threw. Same
@@ -233,6 +227,28 @@ export class ServerSettingsSync {
     // Saying so is what lets the caller schedule the ONE retry that keeps a configuration from
     // being dropped because another window happened to be writing when it changed.
     return entered ? outcome : 'busy';
+  }
+
+  /** Inside the section: stands down before a newer build's file, otherwise writes — and a failed write is not remembered. */
+  private async writeUnlessNewer(json: string): Promise<SyncOutcome> {
+    if (await this.wouldOverwriteANewerBuild()) {
+      this.stoodDown = true;
+      return 'stood-down';
+    }
+
+    try {
+      await this.write(json);
+      this.lastWritten = json;
+      this.stoodDown = false;
+      // The situation is over. A stand-down after this is news, not a repeat.
+      this.reportedFor = '';
+      return 'written';
+    } catch {
+      // Not writable. The pasted env block remains a way in, and this runs from a configuration
+      // listener — throwing here would put an extension error in front of somebody for every
+      // keystroke in their settings file, over a disk problem a settings panel cannot fix.
+      return 'failed';
+    }
   }
 
   /**

@@ -61,13 +61,16 @@ public sealed class ConsultationService(
     private ConsultationFailedTurns FailedTurns => field ??= new(_store, _counter, _health, ledger, settings.DataDir, log, Error);
 
     /// <summary>
-    /// The answer schema, on disk once when this service is built rather than on every launch.
+    /// The answer schema, on disk once — the first time a consultation needs it — rather than on every launch.
     /// </summary>
     /// <remarks>
-    /// Its own directory, never <c>consultations/</c>: that one holds a file per consultation keyed
-    /// by id, and story 2's live check found this schema being read back as a record with no id.
+    /// <para>Its own directory, never <c>consultations/</c>: that one holds a file per consultation keyed
+    /// by id, and story 2's live check found this schema being read back as a record with no id.</para>
+    /// <para><b>Provisioned when first asked, not when this service is built</b> (todo/PLAN_paths_per_side.md E5.7, D3):
+    /// <c>--providers</c> builds this service only to READ the providers' health, and a field initialiser that wrote
+    /// <c>schemas/</c> made a NAMED data directory that was missing — the one condition the extension reports.</para>
     /// </remarks>
-    private readonly ConsultSchemaFile.Provisioned _answerSchema = Provision(settings, log);
+    private ConsultSchemaFile.Provisioned AnswerSchema => field ??= Provision(settings, log);
 
     /// <summary>
     /// The projection, as a static so the field initialiser above can reach it.
@@ -373,7 +376,7 @@ public sealed class ConsultationService(
         // The one route that needs the schema is refused BY NAME when it is not there, rather than
         // launched to meet a shim's complaint about a file it was handed. Every other route is
         // unaffected by the same failure, which is why this is checked here and not at startup.
-        return runtime.NeedsAnswerSchema && !_answerSchema.Ready ? _answerSchema.Problem : string.Empty;
+        return runtime.NeedsAnswerSchema && !AnswerSchema.Ready ? AnswerSchema.Problem : string.Empty;
     }
 
     public Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default) =>
@@ -648,7 +651,7 @@ public sealed class ConsultationService(
             record.Handle,
             AnswersDir,
             Settings(consultant),
-            _answerSchema.Path), launcher, ct);
+            AnswerSchema.Path), launcher, ct);
         if (prepared is ConsultantPreparation.Refused refused)
         {
             return FailedTurns.RefusedBeforeTheLaunch(record, consultant, refused.Failure);

@@ -69,6 +69,21 @@ export const OLD_TAB_PLACES: Readonly<Record<string, string>> = {
   server: 'setup/mcp',
 };
 
+/**
+ * How a place is named in a sentence — `Consultants › Question consultant`, `Models` — from the one list that names the
+ * tabs, so a notice and the strip cannot call one place two things. An unknown place is named as it was given.
+ */
+export function placeLabel(place: string): string {
+  const [tabId, subId] = place.split('/');
+  const tab = CATALOG_TABS.find((one) => one.id === tabId);
+  const sub = tab?.subs.find((one) => one.id === subId);
+  if (tab === undefined) {
+    return place;
+  }
+
+  return sub === undefined ? tab.label : `${tab.label} › ${sub.label}`;
+}
+
 /** A place as the page opens it: a tab with sub-tabs always names one (its first, when only the tab was named). */
 function canonical(requested: string): string {
   const [tabId, subId] = requested.split('/');

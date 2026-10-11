@@ -201,9 +201,10 @@ function readOneFile(file) {
     // that must never fall, falling because the work was going well. The test held, and the lesson
     // is that a door missing from this list reads as a message that stopped existing.
     // `notifyResolved` is deliberately NOT matched: it clears a counter and says nothing to anybody.
+    // `notifyOnceThen` arrived with the missing-path notice (paths per side, E5.3) and is named here the day it did.
     routed: isFunnel || file.endsWith('notice.ts')
       ? 0
-      : (text.match(/\bnotify(?:AndAsk|Then|Once)?\(/gu)?.length ?? 0),
+      : (text.match(/\bnotify(?:AndAsk|Then|OnceThen|Once)?\(/gu)?.length ?? 0),
   };
 }
 

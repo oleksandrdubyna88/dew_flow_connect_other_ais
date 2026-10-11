@@ -27,29 +27,12 @@ const TIMEOUT_MS = 30_000;
 
 const repo = resolve(import.meta.dirname, '..', '..');
 
-/**
- * The binary this repository just built, in whichever configuration built it.
- *
- * <p>RELEASE first, because that is what CI builds — `dotnet build … -c Release` — and a script that
- * only looked under `Debug` would have refused on its very first run there. Debug second, because
- * that is what a person has locally. `COAI_MCP_DLL` overrides both, for a published binary.</p>
- */
-function findBinary() {
-  const named = process.env['COAI_MCP_DLL'];
-  if (named !== undefined && named.length > 0) {
-    return named;
-  }
-  for (const configuration of ['Release', 'Debug']) {
-    const candidate = join(repo, 'src_mcp', 'src', 'bin', configuration, 'net10.0', 'coai-mcp.dll');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
+// The binary this repository just built — Release first (what CI builds), Debug second, `COAI_MCP_DLL` over both. ONE
+// finder, shared with the providers-answer contract (`src/test/coaiMcpBinary.ts`): this script carried its own copy
+// until that contract needed the same answer, and a second copy is the duplication `reuse-first.md` names.
+const { coaiMcpBinary } = await import('../out/test/coaiMcpBinary.js');
 
-  return '';
-}
-
-const binary = findBinary();
+const binary = coaiMcpBinary();
 if (binary === '') {
   console.error('seam: no coai-mcp build found. Run: dotnet build src_mcp/src/CoaiMcp.csproj');
   process.exit(1);
@@ -79,6 +62,8 @@ const { featuresSeam } = await import('./seam-features.mjs');
 // The question consultant's roots of the other OS: the page's decision against the server's, one root at a time.
 const { qconsultRootsSeam } = await import('./seam-qconsult-roots.mjs');
 const { cliPathOtherSideSeam } = await import('./seam-cli-path-other-side.mjs');
+// A missing root of this OS: the server's `settingProblems` against the page's own findings (E5.6).
+const { pathMissingSeam } = await import('./seam-path-missing.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -840,6 +825,14 @@ const clipath = await cliPathOtherSideSeam({
 });
 console.log('  ok  a reviewer\'s CLI path of the other OS is skipped by both halves: the server looks the CLI up instead of probing the path');
 
+// A missing root of THIS OS (todo/PLAN_paths_per_side.md E5.6): the server names it in `settingProblems` by key, value
+// and kind, the page's own probe finds the same set, and the generic toast drops the sentence the problem covers.
+const missing = await pathMissingSeam({
+  providersIn,
+  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
+});
+console.log('  ok  a missing question-consultant root is named by the server as a settingProblem, and the page agrees on the same (key, value, kind) set');
+
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
@@ -851,4 +844,5 @@ console.log(`seam: and a consultant DEFINED with no reviewer row answered throug
 console.log(`seam: and a REAL refusal carrying a secret was written with it taken out, read back by the extension's own reader, and survived its parser byte for byte — "${refusal.title.slice(0, 90)}…" (${refusal.logs} log file(s) checked too)`);
 console.log(`seam: and the question consultant's roots — kept ${qroots.kept}, skipped ${qroots.skipped}, the page agreeing on both`);
 console.log(`seam: and a reviewer's CLI path of the other side — ${clipath.skipped} skipped by the page and by the server; an existing one spelled without its drive: ${clipath.kept}`);
+console.log(`seam: and a missing root of this OS — ${missing.missing} named by both halves as ${missing.agreed.join(', ')}`);
 console.log(`seam: asked ${binary}`);
