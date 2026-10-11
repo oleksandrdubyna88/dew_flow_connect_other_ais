@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -67,7 +68,7 @@ public sealed class AbandonedJobTests
     [Fact]
     public void AFinishedJobIsNeverAbandoned()
     {
-        var done = JobTransitions.Succeed(JobTransitions.Start(Queued(Now), "a", Now), "answer", 1, 2, Now);
+        var done = JobTransitions.Succeed(JobTransitions.Start(Queued(Now), "a", Now), "answer", new Usage(1, 2, null), Now);
 
         JobTransitions.IsAbandoned(done, Now.AddYears(1)).Should().BeFalse();
         JobTransitions.IsExpired(done, Now.AddYears(1)).Should().BeFalse();

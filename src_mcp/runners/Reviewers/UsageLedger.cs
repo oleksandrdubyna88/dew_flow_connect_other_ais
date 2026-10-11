@@ -40,15 +40,29 @@ public static class UsageKinds
     /// </summary>
     public const string Question = "question";
 
-    /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question];
+    /// <summary>
+    /// The deploy's own check — one real review per vendor the release script sends after a swap (story 3.5 of
+    /// todo/PLAN_every_round_is_counted.md). A Team-server kind: written by the server, never by this machine.
+    /// </summary>
+    public const string Canary = "canary";
 
     /// <summary>
-    /// Kinds the Team server never produces: a consultation and a question row run on this machine
+    /// A MEASUREMENT a person ran from a terminal — <c>coai-mcp --probe-api --model</c>, whose request matrix makes
+    /// ten real completions against a metered key (story 3.3 of todo/PLAN_every_round_is_counted.md). It wrote nothing
+    /// before, which is how a probe's spend sat in the vendor's bill and in no record here; it is its own kind rather
+    /// than a review, because a probe is not a round and must never be counted as one.
+    /// </summary>
+    public const string Probe = "probe";
+
+    /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
+    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question, Canary, Probe];
+
+    /// <summary>
+    /// Kinds the Team server never produces: a consultation, a question row and a probe run on this machine
     /// only. The server's wire vocabulary is therefore <see cref="Known"/> minus these, and the test
     /// that holds the two vocabularies level says so rather than asserting a false equality.
     /// </summary>
-    public static IReadOnlyList<string> LocalOnly { get; } = [Consult, Question];
+    public static IReadOnlyList<string> LocalOnly { get; } = [Consult, Question, Probe];
 
     /// <summary>Whether a non-empty kind is one this build knows. Empty is "not said", which is fine.</summary>
     public static bool IsKnown(string kind) =>
@@ -126,7 +140,104 @@ public sealed record UsageEntry(
     /// reads this file, and a bare zero says the run was free. Trailing and defaulted like the rest, so an
     /// old line simply has none.
     /// </remarks>
-    string UsageNote = "");
+    string UsageNote = "",
+
+    /// <summary>
+    /// The id every launch of ONE reviewer turn shares — its first launch, a repair, a follow-up, a retry, an attempt
+    /// the Team server rotated onto another account — or empty.
+    /// </summary>
+    /// <remarks>
+    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, and this is what ties them
+    /// back together, so retries, repairs and follow-ups are COUNTED from lines rather than inferred from a folded
+    /// sum. Twelve hex characters of a fresh GUID on this machine (a turn lives inside one process, so it only has to
+    /// be unique among the lines it sits beside); the job id on a Team server, where a job IS one turn. Empty on a
+    /// line written before the field, and on a kind with no turns — a probe. Trailing and defaulted like the rest.
+    /// </remarks>
+    string Turn = "",
+
+    /// <summary>What this launch WAS inside its turn — one of <see cref="LaunchAttempts"/>, or empty.</summary>
+    /// <remarks>
+    /// Empty on an old line, where a repair or a follow-up is folded into the one line its turn wrote, and on a kind
+    /// that has no attempts (a consultation, a question row, a probe). Trailing and defaulted like the rest.
+    /// </remarks>
+    string Attempt = "",
+
+    /// <summary>The runtime that ran the launch — <see cref="LaunchOptions.Cli"/> — or empty.</summary>
+    /// <remarks>
+    /// <para><b>The eight fields below are story 3.4 of todo/PLAN_every_round_is_counted.md</b>: each line says what its
+    /// launch RAN WITH. A cross-vendor measurement must say which CLI ran each model and at which effort and tier, and
+    /// the ledger could not — the plan's hand-built answer had to reconstruct that a codex row inherited
+    /// <c>~/.codex/config.toml</c>'s <c>high</c> effort and, for a while, its <c>priority</c> tier.</para>
+    /// <para>Empty on a line written before them, and on a path that labels nothing yet — a consultation, a question row,
+    /// a probe, a chat turn: an empty field says "not recorded", never "none". Trailing and defaulted like the rest.</para>
+    /// </remarks>
+    string Cli = "",
+
+    /// <summary>The first line of the CLI's own <c>--version</c>, where one was already asked — see <see cref="LaunchOptions.CliVersion"/>.</summary>
+    string CliVersion = "",
+
+    /// <summary>The effort the launch ran with: what was sent, else what the CLI's own config names — or empty.</summary>
+    string Effort = "",
+
+    /// <summary>Where <paramref name="Effort"/> came from — one of <see cref="OptionSources"/>, or empty for unknown.</summary>
+    /// <remarks>
+    /// <c>row</c> (sent from the row's settings), <c>server</c> (sent, the Team server's choice: a cap or its own default),
+    /// <c>cli-config</c> (nothing was sent, and the CLI's own configuration names the value shown — read to label the line,
+    /// never to change the launch), or empty (unknown: the vendor's own default). Whether the row asked for a value that
+    /// did not reach the launch is <paramref name="EffortNotSent"/>'s, apart — the consultation of 2026-10-11.
+    /// </remarks>
+    string EffortFrom = "",
+
+    /// <summary>The service tier the launch ran with, in codex's words (<c>default</c> is the standard tier, <c>fast</c>) — or empty.</summary>
+    string Tier = "",
+
+    /// <summary>Where <paramref name="Tier"/> came from — the same vocabulary as <paramref name="EffortFrom"/>.</summary>
+    string TierFrom = "",
+
+    /// <summary>The Team server's job id — empty on a local line. The same id the line's <paramref name="Turn"/> carries there.</summary>
+    string Job = "",
+
+    /// <summary>
+    /// The Team server account slot the launch ran on, by its NAME from <c>vendors.json</c> — never the account's email,
+    /// which nothing on this line may carry but <paramref name="Email"/>, the caller's. Empty on a local line.
+    /// </summary>
+    string Slot = "",
+
+    /// <summary>
+    /// <c>ignored</c> or <c>dropped</c> when the row (or the request) asked for an effort that did not reach the CLI — or
+    /// empty. Apart from <paramref name="Effort"/>, which says what RAN, so an inert row setting never changes it.
+    /// </summary>
+    string EffortNotSent = "",
+
+    /// <summary>The same as <paramref name="EffortNotSent"/>, for the tier.</summary>
+    string TierNotSent = "",
+
+    /// <summary>
+    /// WHY a launch the caller's token killed was killed — one of <see cref="EndCauses"/> — or empty.
+    /// </summary>
+    /// <remarks>
+    /// Story 3.2 of todo/PLAN_every_round_is_counted.md. Written by the Team server from the STORE's terminal record
+    /// (the store fires the token at the transition and is the only thing that knows why), never from the runner's own
+    /// recomputation; the line's <paramref name="Outcome"/> stays the failure's name (<c>Cancelled</c>), so a reader
+    /// that groups by outcome is unchanged and one that asks "how many withdrawals against how many backstops" has a
+    /// column to ask. Empty on a line older than the field, on every ending but a cancellation, and on a local line,
+    /// where nothing above the executor records which token fired. Trailing and defaulted like the rest.
+    /// </remarks>
+    string EndCause = "")
+{
+    /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
+    public UsageEntry RanWith(LaunchOptions ranWith) => this with
+    {
+        Cli = ranWith.Cli,
+        CliVersion = ranWith.CliVersion,
+        Effort = ranWith.Effort,
+        EffortFrom = ranWith.EffortFrom,
+        Tier = ranWith.Tier,
+        TierFrom = ranWith.TierFrom,
+        EffortNotSent = ranWith.EffortNotSent,
+        TierNotSent = ranWith.TierNotSent,
+    };
+}
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -158,20 +269,27 @@ public sealed class UsageLedger(string dataDir)
     public string Path => System.IO.Path.Combine(dataDir, "usage.jsonl");
 
     /// <summary>
-    /// Records one reviewer — one line per TURN of its conversation, the last turn's from the outcome
-    /// itself. Never throws: a spending record that can fail a review is worse than one with a gap in it.
+    /// Records one reviewer — one line per paid LAUNCH of every turn of its conversation, the last turn's from the
+    /// outcome itself. Never throws: a spending record that can fail a review is worse than one with a gap in it.
     /// </summary>
     /// <remarks>
-    /// The earlier turns come off the outcome's base (<see cref="ReviewerOutcome.EarlierTurns"/>),
+    /// <para>The earlier turns come off the outcome's base (<see cref="ReviewerOutcome.EarlierTurns"/>),
     /// whatever the outcome is: a reviewer whose turn 2 timed out, was cancelled or came back unreadable
     /// still cost what turn 1 cost, and a ledger that read only the terminal usage would file that turn
-    /// as free — the very under-report this method was first fixed for, one turn over.
+    /// as free — the very under-report this method was first fixed for, one turn over.</para>
+    /// <para><b>One line per launch, since story 3.3 of todo/PLAN_every_round_is_counted.md.</b> A turn that took a
+    /// repair, a follow-up or a step of the rate-limit ladder was ONE line, its launches summed into it, so a week's
+    /// retries, repairs and follow-ups could not be counted. Each launch is its own line now, naming its attempt and
+    /// sharing its turn's id; the lines add up to exactly what the folded line said, and a split that would not is
+    /// written as that one line instead (<see cref="LaunchLines.Of"/>). A failure's words are its WHOLE reason
+    /// (<see cref="ReviewerSummaryFactory.DescribeWhole"/>), never the summary's 160-character cut.</para>
     /// </remarks>
     public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
     {
+        var line = new LineOf(invocation, model, stage);
         foreach (var turn in outcome.EarlierTurns)
         {
-            Append(Entry(invocation, model, stage, turn.Elapsed, turn.Usage, "ok"));
+            AppendTurn(line, turn.Launches, turn.Usage, turn.Elapsed, LaunchLines.Answered);
         }
 
         // The last turn's own usage, EVERY launch of it — an unparseable answer's, and the malformed
@@ -181,18 +299,30 @@ public sealed class UsageLedger(string dataDir)
         // it now, on the outcome, for this line and for the round total alike — a billed non-zero exit included
         // (2026-09-26: a shim billed for a reasoning-only completion, refusing it at exit 70; `NonZeroExit`
         // carries its usage and answers `OwnUsage` with it).
-        var usage = outcome.LastTurnUsage;
         // The last turn's own seconds: the whole reviewer's less what the earlier turns took.
         var last = elapsed - TimeSpan.FromTicks(outcome.EarlierTurns.Sum(turn => turn.Elapsed.Ticks));
 
-        Append(Entry(
-            invocation, model, stage, last < TimeSpan.Zero ? TimeSpan.Zero : last, usage,
-            outcome is ReviewerOutcome.Ok ? "ok" : ReviewerSummaryFactory.Describe(outcome)));
+        AppendTurn(
+            line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome));
+    }
+
+    /// <summary>What every line of one reviewer shares: who ran, on which model, at which stage.</summary>
+    private sealed record LineOf(ReviewerInvocation Invocation, string Model, string Stage);
+
+    /// <summary>One turn, as its lines: one per launch when they add up to the turn, else the turn as one line.</summary>
+    private void AppendTurn(LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome)
+    {
+        var turn = LaunchLines.NewTurn();
+        foreach (var launch in LaunchLines.Of(launches, usage, elapsed, outcome))
+        {
+            var entry = Entry(line.Invocation, line.Model, line.Stage, launch.Elapsed, launch.Usage, launch.Outcome);
+            Append(entry with { Turn = turn, Attempt = launch.Attempt });
+        }
     }
 
     private static UsageEntry Entry(
         ReviewerInvocation invocation, string model, string stage, TimeSpan elapsed, Usage usage, string outcome) =>
-        new(
+        new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             invocation.Provider,
             model,
@@ -207,7 +337,7 @@ public sealed class UsageLedger(string dataDir)
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             // Unknown, in words, when the launch ended before its vendor reported anything — never a bare zero.
-            UsageNote: UsageNoteOf(usage));
+            UsageNote: UsageNoteOf(usage)).RanWith(invocation.RanWith);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>
@@ -254,8 +384,26 @@ public sealed class UsageLedger(string dataDir)
     /// The whole-branch review of PLAN_the_consultant_works_on_every_vendor.md (2026-10-03), finding C: a consultation
     /// and a consultant check wrote their rows through the bare-counts overload above, so a turn killed before its vendor
     /// reported anything was filed as a free 0/0, and the cache and reasoning counts never reached the ledger.
+    /// <para><paramref name="turn"/> and <paramref name="attempt"/> are the Team server's, one line per launch of a job
+    /// (story 3.3); every other caller of this overload records a kind that has no attempts and leaves them empty.</para>
+    /// <para><paramref name="ranWith"/>, <paramref name="job"/> and <paramref name="slot"/> are the Team server's too
+    /// (story 3.4): what the job's launch ran with, the job, and the account slot by its name. A consultation and a question
+    /// row label nothing yet and leave them empty, which the line then says.</para>
+    /// <para><paramref name="endCause"/> is the Team server's as well (story 3.2): why the store killed a cancelled job —
+    /// one of <see cref="EndCauses"/> — read off the store's own terminal record; empty for every other ending.</para>
+    /// <para>An overload rather than defaulted parameters for the Team server's fields, because C# cannot default a
+    /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
+    /// is an EMPTY value, never a null (the epic-3 code round).</para>
     /// </remarks>
-    public void RecordJob(string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage) =>
+    public void RecordJob(
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage) =>
+        RecordJob(email, provider, model, role, outcome, elapsed, usage, kind, stage,
+            turn: string.Empty, attempt: string.Empty, ranWith: LaunchOptions.None, job: string.Empty, slot: string.Empty);
+
+    /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
+    public void RecordJob(
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
+        string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
@@ -272,7 +420,12 @@ public sealed class UsageLedger(string dataDir)
             TokensCached: usage.TokensCached,
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
-            UsageNote: UsageNoteOf(usage)));
+            UsageNote: UsageNoteOf(usage),
+            Turn: turn,
+            Attempt: attempt,
+            Job: job,
+            Slot: slot,
+            EndCause: endCause).RanWith(ranWith));
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;

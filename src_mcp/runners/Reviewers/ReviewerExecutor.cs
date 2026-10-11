@@ -52,6 +52,17 @@ public abstract record ReviewerOutcome
     /// </remarks>
     public Usage EarlierLaunches { get; init; } = Usage.None;
 
+    /// <summary>
+    /// Every launch of the outcome's own — last — turn, one part each, when it took more than one: a repair, a
+    /// follow-up, a step of the rate-limit ladder. Empty for a turn of one launch.
+    /// </summary>
+    /// <remarks>
+    /// The LEDGER's, not the round's (story 3.3 of todo/PLAN_every_round_is_counted.md): the ledger writes one line per
+    /// part, while <see cref="LastTurnUsage"/> and <see cref="TotalUsage"/> keep the sums every other reader adds — so
+    /// the parts' usage adds up to <see cref="LastTurnUsage"/> exactly, or <see cref="LaunchLines.Of"/> ignores them.
+    /// </remarks>
+    public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
+
     /// <summary>What the launch this outcome describes reported: an answer's, an unparseable one's; nothing for a run that never finished.</summary>
     protected virtual Usage OwnUsage => Usage.None;
 
@@ -138,6 +149,30 @@ public abstract record ReviewerOutcome
         /// conversation's cap was already spent (<c>TurnLoop</c>) — which is the one TimedOut that
         /// consumed nothing, as a fact.
         /// </remarks>
+        public Usage Usage { get; init; } = Usage.Unknown;
+
+        protected override Usage OwnUsage => Usage;
+    }
+
+    /// <summary>
+    /// The launch was killed because the CALLER's token fired — a job somebody withdrew, a round that ended, a Team
+    /// server that stopped it — and never because the reviewer ran out of its own deadline, which is
+    /// <see cref="TimedOut"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own ending since story 3.2 of todo/PLAN_every_round_is_counted.md. <c>ProcessLauncher</c> has told the
+    /// two apart since <c>ProcessResult.Cancelled</c> — a budget that ran out and a caller that withdrew arrive as the
+    /// same kill and mean opposite things — and the executor read only <see cref="TimedOut"/>, so a withdrawal the
+    /// Team server's client gave up on after 8.4 s was written down as the vendor's timeout, and a person reading the
+    /// ledger was sent to look at a vendor that was never slow. The deployed server's own line says so:
+    /// <c>src_server/tests/fixtures/usage/timed-out-withdrawal.jsonl</c>.</para>
+    /// <para>What it consumed is <see cref="Usage.Unknown"/>, for <see cref="TimedOut"/>'s reason: a process killed
+    /// before it answered never reported, and the vendor may well have read and billed the request. WHY the caller
+    /// fired — withdrawn, abandoned, the server's backstop, the host stopping — is not this type's to know: the token
+    /// does not say, and only the store that fired it does (<c>JobStore</c> on the Team server, <c>JobRecord.EndCause</c>).</para>
+    /// </remarks>
+    public sealed record Cancelled : ReviewerOutcome
+    {
         public Usage Usage { get; init; } = Usage.Unknown;
 
         protected override Usage OwnUsage => Usage;
@@ -347,8 +382,10 @@ public sealed class ReviewerExecutor(
     /// with no newline inside the budget has no first line to drop, so dropping it leaves a real
     /// failure reported as blank. Trimming here — where the whole stderr is in hand and the boundary
     /// is knowable — costs the picker no new parameter and leaves it no case to get wrong.</para>
-    /// <para>The one thing this cannot do is fit a line longer than the whole budget. Its OPENING is
-    /// kept, which is the half <c>Because</c> shows anyway.</para>
+    /// <para>A line longer than the whole budget is ONE reason, and it is kept whole up to
+    /// <see cref="VendorReason.SafetyCap"/> — never cut at the budget. It used to keep only its opening
+    /// <see cref="StdErrTail"/> characters, which were then the most the ledger and the log could ever say about it
+    /// (story 3.3 of todo/PLAN_every_round_is_counted.md); a summary still shortens what it shows.</para>
     /// </remarks>
     public static string TailOf(string stdErr)
     {
@@ -380,13 +417,13 @@ public sealed class ReviewerExecutor(
         return firstBreak < 0 ? string.Empty : cut[(firstBreak + 1)..].Trim();
     }
 
-    /// <summary>One diagnostic longer than the whole budget: its beginning, where the reason is.</summary>
+    /// <summary>One diagnostic longer than the whole budget: the whole of it, to the safety cap.</summary>
     private static string OpeningOfLastLine(string written)
     {
         var lastBreak = written.LastIndexOf('\n');
-        var line = (lastBreak < 0 ? written : written[(lastBreak + 1)..]).TrimStart();
+        var line = (lastBreak < 0 ? written : written[(lastBreak + 1)..]).Trim();
 
-        return (line.Length <= StdErrTail ? line : line[..StdErrTail]).Trim();
+        return VendorReason.Capped(line);
     }
 
     /// <summary>
@@ -483,10 +520,11 @@ public sealed class ReviewerExecutor(
     /// <remarks>
     /// Issue #504: a reviewer whose shell command was auto-denied ended its turn with nothing, and a fresh
     /// repair asked the same question into the same denial. The adapter that can CONTINUE the conversation
-    /// knows it; this only asks. Still ONE second launch, inside the same remaining deadline.
+    /// knows it; this only asks. Still ONE second launch, inside the same remaining deadline — and it says
+    /// which it is, because the ledger writes each launch as its own line (story 3.3).
     /// </remarks>
-    private static ReviewerInvocation? SecondLaunch(ReviewerInvocation first, ReviewerInvocation? repair, string transcript) =>
-        first.Adapter?.FollowUp(first, transcript) ?? repair;
+    private static (ReviewerInvocation? Launch, string Attempt) SecondLaunch(ReviewerInvocation first, ReviewerInvocation? repair, string transcript) =>
+        first.Adapter?.FollowUp(first, transcript) is { } followUp ? (followUp, LaunchAttempts.FollowUp) : (repair, LaunchAttempts.Repair);
 
     private static string? NoRepairToRun(ReviewerInvocation? repair, TimeSpan left) => repair switch
     {
@@ -521,8 +559,8 @@ public sealed class ReviewerExecutor(
         // needed a repair could take twice what it was given — and the operator who reported "the
         // limit did not work again" was reading a real number.
         var left = RetryLadder.Remaining(spent.Elapsed, budget);
-        repair = SecondLaunch(invocation, repair, evidence);
-        if (NoRepairToRun(repair, left) is { } why)
+        var next = SecondLaunch(invocation, repair, evidence);
+        if (NoRepairToRun(next.Launch, left) is { } why)
         {
             return new ReviewerOutcome.Unparseable(
                 Because(Said(answer, Complaint(evidence)), why, Keep(invocation, evidence)), usage);
@@ -531,10 +569,28 @@ public sealed class ReviewerExecutor(
         // The LESSER of the two, not whichever was computed last. The scheduler may already have
         // shortened this repair on a retry, and overwriting that with the executor's own remainder
         // would hand it back time the ladder had taken away. Raised on the code round.
-        var second = await RunOnceAsync(RetryLadder.Lesser(left, repair!), ct);
+        var started = spent.Elapsed;
+        var second = await RunOnceAsync(RetryLadder.Lesser(left, next.Launch!), ct);
+        var after = AfterTheRepair(next.Launch!, (usage, answer, evidence), second);
 
-        return AfterTheRepair(repair!, (usage, answer, evidence), second);
+        // Two paid launches, each its own ledger line (story 3.3 of todo/PLAN_every_round_is_counted.md): the outcome's
+        // sums stay what every other reader adds, and the parts say what each launch was, cost and took.
+        return after with
+        {
+            Launches =
+            [
+                new LaunchPart(LaunchAttempts.First, usage, started, LaunchLines.OutcomeOf(new ReviewerOutcome.Unparseable(Said(answer, Complaint(evidence))))),
+                SecondPart(next.Attempt, second.Outcome, second.Usage, spent.Elapsed - started, after),
+            ],
+        };
     }
+
+    /// <summary>
+    /// The second launch as a part: what IT reported — a failed launch's own usage (a kill's is unknown, not zero), an
+    /// answer's as its launch read it — so the two parts add up to the outcome's <see cref="ReviewerOutcome.LastTurnUsage"/>.
+    /// </summary>
+    private static LaunchPart SecondPart(string attempt, ReviewerOutcome? terminal, Usage launched, TimeSpan took, ReviewerOutcome after) =>
+        new(attempt, terminal?.LastTurnUsage ?? launched, took, LaunchLines.OutcomeOf(after));
 
     /// <summary>
     /// The reviewer's outcome once its repair has run: the repair's answer, the repair's own failure, or
@@ -546,8 +602,13 @@ public sealed class ReviewerExecutor(
     /// unparseable answer since the same day — but a repair whose own launch failed (timed out, exited
     /// non-zero, was rate limited, never started) was returned exactly as the launch produced it, and the
     /// first attempt's usage went nowhere: not on the outcome, not in the ledger, not in the round total.
-    /// Found by the epic 3 risk consultation (159f0397). It rides on <see cref="ReviewerOutcome.EarlierLaunches"/>,
-    /// together with whatever the repair's own launch reported before it failed.
+    /// Found by the epic 3 risk consultation (159f0397). It rides on <see cref="ReviewerOutcome.EarlierLaunches"/>;
+    /// whatever the repair's own launch reported before it failed is the failure's OWN usage already.
+    /// <para><b>Once, not twice</b> (story 3.3 of todo/PLAN_every_round_is_counted.md). The repair's launch usage was
+    /// added to <see cref="ReviewerOutcome.EarlierLaunches"/> as well, and a <see cref="ReviewerOutcome.NonZeroExit"/>
+    /// carries that same usage as its own — so a repair billed and then refused (the api shim's exit 70) counted twice in
+    /// the turn, the ledger line and the round total. Every other failure's launch reported nothing, which is why it
+    /// went unseen; splitting the turn into one line per launch is what made the two sums disagree.</para>
     /// </remarks>
     private ReviewerOutcome AfterTheRepair(
         ReviewerInvocation repair,
@@ -556,7 +617,7 @@ public sealed class ReviewerExecutor(
     {
         if (second.Outcome is { } failed)
         {
-            return failed with { EarlierLaunches = first.Usage.Add(second.Usage) };
+            return failed with { EarlierLaunches = first.Usage };
         }
 
         return second.Review is { } fixedReview
@@ -786,6 +847,18 @@ public sealed class ReviewerExecutor(
                 null,
                 Usage.None,
                 string.Empty);
+        }
+
+        // `Cancelled` BEFORE `TimedOut` (story 3.2 of todo/PLAN_every_round_is_counted.md): a kill by the caller's
+        // token sets both flags, a kill on the launch's own budget sets only the second, and reading the second alone
+        // filed every withdrawal as the vendor's timeout. The courtesy DELETE is kept on this branch — it is what stops
+        // a withdrawn Team-server job, and an early return without it leaves the job running on the company's
+        // subscription for an answer nobody will collect. What the launch consumed is unknown, never a free 0/0.
+        if (result.Cancelled)
+        {
+            await AbandonAsync(invocation);
+
+            return new ReviewerLaunch(new ReviewerOutcome.Cancelled(), null, Usage.Unknown, string.Empty, result);
         }
 
         if (result.TimedOut)

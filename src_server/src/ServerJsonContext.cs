@@ -132,6 +132,12 @@ public sealed record ReviewAcceptedDto(string Id, int Position, IReadOnlyList<Fi
 /// does not exist in two places and drift.
 /// </param>
 /// <param name="Failure">The wire name of the failure, or empty. <param name="Reason">its own words.</param></param>
+/// <param name="EndCause">
+/// WHY a <c>cancelled</c> job was cancelled — one of <c>EndCauses</c> (<c>withdrawn</c>, <c>abandoned</c>,
+/// <c>backstop</c>, <c>queueExpired</c>, <c>hostStopped</c>) — and empty for every other ending. Trailing and
+/// defaulted, so a client older than the field deserialises the answer unchanged: it reads <c>status</c> and renders
+/// <c>failure</c> in a sentence, and never reads this (story 3.2 of todo/PLAN_every_round_is_counted.md).
+/// </param>
 public sealed record ReviewStatusDto(
     string Id,
     string Status,
@@ -141,7 +147,8 @@ public sealed record ReviewStatusDto(
     long TokensIn,
     long TokensOut,
     string Failure,
-    string Reason);
+    string Reason,
+    string EndCause = "");
 
 /// <summary>A ledger line as it sits on disk. Mirrors <c>UsageEntry</c> in Runners.</summary>
 /// <remarks>
@@ -161,7 +168,26 @@ public sealed record UsageEntryDto(
     double? CostUsd = null,
     string? Outcome = null,
     string? Email = null,
-    string? Kind = null);
+    string? Kind = null,
+    long TokensCached = 0,
+    long TokensReasoning = 0,
+    string? UsageNote = null,
+    string? Turn = null,
+    string? Attempt = null,
+    // What the launch ran with (story 3.4 of todo/PLAN_every_round_is_counted.md) — absent on every older line.
+    string? Cli = null,
+    string? CliVersion = null,
+    string? Effort = null,
+    string? EffortFrom = null,
+    string? Tier = null,
+    string? TierFrom = null,
+    string? Job = null,
+    string? Slot = null,
+    // Whether the asked-for effort / tier reached the CLI — apart from what ran (the consultation of 2026-10-11).
+    string? EffortNotSent = null,
+    string? TierNotSent = null,
+    // Why the store killed a cancelled job (story 3.2) — absent on every older line and on every other ending.
+    string? EndCause = null);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>

@@ -366,9 +366,12 @@ internal sealed class RosterBuilder(
             // the repair of turn N is composed from turn N's own prompt (plan §4.9).
             // What the launch was given and must not echo back into a record: the row's system prompt (see Redact).
             IReadOnlyList<string> redact = instruction.Length == 0 ? [] : [instruction];
+            // Each launch labelled with what it ran with, for its ledger line (story 3.4) — the repair as much as the first.
+            ReviewerInvocation Built(string text, string directory) =>
+                RowLaunchOptions.Labelled(runtime.Build(role, text, directory, schemaFile, outputDir, launch), provider, runtime, launch) with { Redact = redact };
             ReviewerWork Turn(string tail) => new(
-                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch) with { Redact = redact },
-                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, launch) with { Redact = redact },
+                Built(prompt + tail, launchDir),
+                Built(repairBase + tail + RepairInstruction.Text, repairDir),
                 choice.Id,
                 System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
             work.Add(Turn(string.Empty) with

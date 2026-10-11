@@ -256,6 +256,41 @@ public sealed class ProbeApiModeTests : IDisposable
             "the-client-env-key\n", "a variable in the client's config is more specific than a file any window may rewrite");
     }
 
+    /// <summary>
+    /// The matrix makes paid completions against a metered key — and wrote nothing (story 3.3 of
+    /// todo/PLAN_every_round_is_counted.md; RESULTS_vendor_quota_gauges.md §5.1, row 7): one ledger line per completion
+    /// sent with the real key, of kind <c>probe</c>, never a review.
+    /// </summary>
+    [Fact]
+    public async Task AProbe_WritesALine()
+    {
+        var code = await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint, "--model", "grok-4"]);
+
+        code.Should().Be(0, Stderr);
+        var ledger = Path.Combine(_dir, "usage.jsonl");
+        File.Exists(ledger).Should().BeTrue("ten completions against a metered key were spent and nothing was written down");
+        var lines = File.ReadAllLines(ledger).Select(l => JsonSerializer.Deserialize(l, Runners.Reviewers.LedgerJsonContext.Default.UsageEntry)!).ToList();
+        var sent = Report().GetProperty("requests").EnumerateArray().Count(r => r.GetProperty("case").GetString() != "wrong_key");
+        lines.Should().HaveCount(sent, "one line per completion sent with the real key — the wrong-key request bills nobody");
+        lines.Should().OnlyContain(l => l.Kind == "probe" && l.Stage == "Probe" && l.Provider == "grok" && l.Model == "grok-4",
+            "a probe is its own kind, filed under the row it probed and the model it asked");
+        lines.Should().OnlyContain(l => l.Attempt.Length == 0 && l.Turn.Length == 0, "a probe has no reviewer turn");
+        var answered = lines.Single(l => l.Role == "second_turn");
+        (answered.TokensIn, answered.TokensOut, answered.TokensCached, answered.Outcome).Should().Be((900L, 40L, 640L, "ok"));
+        var refused = lines.Single(l => l.Role == "frequency_penalty");
+        refused.Outcome.Should().StartWith("HTTP 400");
+        (refused.TokensIn, refused.TokensOut).Should().Be((0L, 0L), "the endpoint refused it and reported nothing");
+        File.ReadAllText(ledger).Should().NotContain(Key, "the key never reaches the ledger").And.NotContain("sk-echoed");
+    }
+
+    [Fact]
+    public async Task AProbeWithoutAModel_SpendsNothing_AndWritesNothing()
+    {
+        await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint]);
+
+        File.Exists(Path.Combine(_dir, "usage.jsonl")).Should().BeFalse("GET /models is not a completion — the panel's ≡ runs exactly this");
+    }
+
     private void WriteSettings(string json) => File.WriteAllText(Path.Combine(_dir, "settings.json"), json);
 
     /// <summary>

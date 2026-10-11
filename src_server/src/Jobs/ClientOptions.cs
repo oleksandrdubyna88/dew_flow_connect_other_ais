@@ -16,12 +16,19 @@ public sealed record ClientOptionsPolicy(bool AcceptSystemPrompt = false, string
 /// <param name="Prompt">The prompt the job runs — the request's, with the system prompt placed in it when it was taken.</param>
 /// <param name="Effort">The effort the launch applies; empty for none.</param>
 /// <param name="SystemPromptSha">The SHA-256 of the system prompt taken, lower-case hex; empty when none was.</param>
+/// <param name="EffortFrom">
+/// What became of the request's effort, in the ledger's words (<see cref="CoaiMcp.Runners.Reviewers.OptionSources"/>):
+/// <c>row</c> taken as asked, <c>server</c> lowered to the cap, <c>dropped</c> refused — empty when the request asked none.
+/// The job carries it to its ledger line (story 3.4 of todo/PLAN_every_round_is_counted.md), because by the time the line
+/// is written the notes the client was answered with are long gone.
+/// </param>
 public sealed record TakenOptions(
     string Prompt,
     string Effort,
     string SystemPromptSha,
     IReadOnlyList<FieldNoteDto> Dropped,
-    IReadOnlyList<FieldNoteDto> Clamped);
+    IReadOnlyList<FieldNoteDto> Clamped,
+    string EffortFrom = "");
 
 /// <summary>
 /// The decision over a request's effort and system prompt: taken, clamped, or dropped — and every one not taken as asked is
@@ -45,8 +52,23 @@ public static class ClientOptions
         var (effort, effortDropped, effortClamped) = EffortOf(request.Effort ?? string.Empty, runtime, policy.MaxEffort);
         var (prompt, sha, promptDropped) = PromptOf(request.Prompt ?? string.Empty, request.SystemPrompt ?? string.Empty, policy.AcceptSystemPrompt);
 
-        return new TakenOptions(prompt, effort, sha, [.. effortDropped, .. promptDropped], effortClamped);
+        return new TakenOptions(prompt, effort, sha, [.. effortDropped, .. promptDropped], effortClamped)
+        {
+            EffortFrom = EffortFromOf(request.Effort ?? string.Empty, effortDropped, effortClamped),
+        };
     }
+
+    /// <summary>
+    /// What became of the request's effort, in the ledger's words — read off the same notes the client is answered with,
+    /// so the line and the answer cannot tell two stories (story 3.4 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    private static string EffortFromOf(string asked, FieldNoteDto[] dropped, FieldNoteDto[] clamped) => asked.Length switch
+    {
+        0 => string.Empty,
+        _ when dropped.Length > 0 => CoaiMcp.Runners.Reviewers.OptionSources.Dropped,
+        _ when clamped.Length > 0 => CoaiMcp.Runners.Reviewers.OptionSources.Server,
+        _ => CoaiMcp.Runners.Reviewers.OptionSources.Row,
+    };
 
     private static (string Effort, FieldNoteDto[] Dropped, FieldNoteDto[] Clamped) EffortOf(string asked, string runtime, string cap)
     {

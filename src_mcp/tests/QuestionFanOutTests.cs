@@ -437,6 +437,29 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: a failed row's LEDGER line keeps the vendor's reason whole —
+    /// and redacted, like the record. It wrote the summary's 160-character cut, unredacted: the bearer above reached
+    /// <c>usage.jsonl</c> though the record had lost it, and the end of a longer sentence never reached it at all.
+    /// </summary>
+    [Fact]
+    public async Task AFailedRowsLedgerLine_KeepsTheReasonWhole_AndRedacted()
+    {
+        const string bearer = "abcdefghijklmnopqrstuvwxyz0123456789";
+        const string tail = "and the gateway explained at length, past any summary's width, why it would not take the call";
+        var settings = Settings([Row("broken", "claude", "claude", "opus", "question-opinion")]);
+        var launcher = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable != "claude" ? null
+            : new ScriptedAnswer(ExitCode: 1, StdErr: $"error: Authorization: Bearer {bearer} was refused, {tail}")));
+
+        await FanOut(launcher, settings).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        var line = File.ReadAllLines(Path.Combine(_data, "usage.jsonl")).Should().ContainSingle().Subject;
+        line.Should().NotContain(bearer, "the ledger is written down like the record, so it is redacted like the record");
+        System.Text.Json.JsonDocument.Parse(line).RootElement.GetProperty("outcome").GetString().Should()
+            .Contain(tail, "the vendor's reason is the ledger's outcome whole, not its first 160 characters");
+    }
+
+    /// <summary>
     /// S4b item 5: the invariant fingerprints a GIT checkout; a root that is not one cannot be watched, and that used to
     /// be a log line nobody reads. The row now says it, so its answer is never read as one the invariant stood behind.
     /// </summary>

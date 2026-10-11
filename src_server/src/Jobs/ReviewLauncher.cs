@@ -29,17 +29,60 @@ public abstract record ReviewAttempt
     {
     }
 
+    /// <summary>
+    /// Both launches of an attempt that took two — the first and its follow-up in the same conversation (#515) — one
+    /// part each; empty for an attempt of one launch.
+    /// </summary>
+    /// <remarks>
+    /// The LEDGER's (story 3.3 of todo/PLAN_every_round_is_counted.md): <see cref="JobRunner"/> writes one line per part,
+    /// linked by the job's id, while the attempt's own usage stays the sum the job reports.
+    /// </remarks>
+    public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
+
+    /// <summary>
+    /// What the attempt's launch RAN WITH — its CLI, that CLI's version, its effort and tier each with its source — for
+    /// every ledger line the attempt writes (story 3.4 of todo/PLAN_every_round_is_counted.md). A follow-up continues the
+    /// same conversation with the same options, so one value serves both of its lines.
+    /// </summary>
+    public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
+
     /// <param name="Raw">
     /// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same
     /// parser does not exist twice and drift.
     /// </param>
-    public sealed record Answered(string Raw, long TokensIn, long TokensOut) : ReviewAttempt;
+    /// <param name="Usage">
+    /// What the launch reported — the WHOLE usage, cached and reasoning included, so the ledger line carries what the
+    /// vendor said (story 3.1 of todo/PLAN_every_round_is_counted.md: two longs used to drop the rest on the floor).
+    /// </param>
+    public sealed record Answered(string Raw, Usage Usage) : ReviewAttempt
+    {
+        /// <summary>An answer whose launch reported only its input and output counts.</summary>
+        public Answered(string raw, long tokensIn, long tokensOut)
+            : this(raw, new Usage(tokensIn, tokensOut, null))
+        {
+        }
+
+        public long TokensIn => Usage.TokensIn;
+
+        public long TokensOut => Usage.TokensOut;
+    }
 
     /// <param name="Outcome">
     /// The executor's own verdict, unchanged — this server maps it to a wire vocabulary and invents
     /// none of its own.
     /// </param>
-    public sealed record Failed(ReviewerOutcome Outcome) : ReviewAttempt;
+    /// <param name="Usage">
+    /// What the attempt's launches reported — a launch and its continuation together — whatever the verdict. A vendor
+    /// that ran and failed was billed for what it ran, so the ledger line keeps it (story 3.1).
+    /// </param>
+    public sealed record Failed(ReviewerOutcome Outcome, Usage Usage) : ReviewAttempt
+    {
+        /// <summary>A verdict alone: the attempt reports what the verdict itself carries (<see cref="ReviewerOutcome.TotalUsage"/>).</summary>
+        public Failed(ReviewerOutcome outcome)
+            : this(outcome, outcome.TotalUsage)
+        {
+        }
+    }
 }
 
 /// <summary>
@@ -62,8 +105,16 @@ public interface IReviewLauncher
 }
 
 /// <summary>Runs the vendor's real CLI through the executor both binaries share.</summary>
-public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exception>? onFailure = null) : IReviewLauncher
+/// <param name="versionOf">
+/// The version a runtime's CLI last said of itself, from a probe somebody ALREADY ran — the catalog's
+/// <see cref="VendorHealthCache.LastSeenVersion"/> — or empty. Never a <c>--version</c> of its own: a spawn per job would
+/// cost a process launch on the box whose memory is the deployment's binding constraint, for one field of a ledger line.
+/// </param>
+public sealed class ReviewLauncher(
+    IProcessLauncher launcher, Action<string, Exception>? onFailure = null, Func<string, string>? versionOf = null) : IReviewLauncher
 {
+    private readonly Func<string, string> _versionOf = versionOf ?? (_ => string.Empty);
+
     /// <summary>
     /// The least time a follow-up is worth starting with — issue #515.
     /// </summary>
@@ -97,32 +148,99 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         try
         {
             work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
-
-            // The clock starts before the FIRST launch: the job's budget bounds the reviewer, and a
-            // follow-up gets what the first launch left — the executor's own arithmetic.
-            var spent = System.Diagnostics.Stopwatch.StartNew();
-            var executor = new ReviewerExecutor(launcher);
             var first = Confined(runtime, vendor, job, work, environment);
-            var launch = await executor.LaunchAsync(first, ct);
-            var left = RetryLadder.Remaining(spent.Elapsed, job.RunBudget);
-            if (FollowUpOf(first, launch) is not { } followUp)
-            {
-                return Read(launch);
-            }
-            if (left < LeastFollowUp)
-            {
-                return Noted(Read(launch), $"; not asked again in its conversation: less than {LeastFollowUp.TotalSeconds:0} s of the job's budget was left");
-            }
+            var attempt = await AttemptAsync(first, job, ct);
 
-            // Inside the same try: the schema file and the job's TMPDIR are still there for it, and the
-            // finally deletes them after BOTH launches.
-            return Continued(launch, await executor.LaunchAsync(Within(followUp, left), ct));
+            // Every line the attempt writes says what its launch ran with (story 3.4 of todo/PLAN_every_round_is_counted.md):
+            // labelled from the confined launch itself — its argv and the slot's environment — never from the job's request.
+            return attempt with { RanWith = RanWith(vendor, job, first, environment) };
         }
         finally
         {
             Delete(work);
         }
     }
+
+    /// <summary>The launch, and the one continuation its adapter may ask for — inside the caller's try, so its finally covers both.</summary>
+    private async Task<ReviewAttempt> AttemptAsync(ReviewerInvocation first, JobRecord job, CancellationToken ct)
+    {
+        // The clock starts before the FIRST launch: the job's budget bounds the reviewer, and a
+        // follow-up gets what the first launch left — the executor's own arithmetic.
+        var spent = System.Diagnostics.Stopwatch.StartNew();
+        var executor = new ReviewerExecutor(launcher);
+        var launch = await executor.LaunchAsync(first, ct);
+        var firstTook = spent.Elapsed;
+        var left = RetryLadder.Remaining(firstTook, job.RunBudget);
+        if (FollowUpOf(first, launch) is not { } followUp)
+        {
+            return Read(launch);
+        }
+        if (left < LeastFollowUp)
+        {
+            return Noted(Read(launch), $"; not asked again in its conversation: less than {LeastFollowUp.TotalSeconds:0} s of the job's budget was left");
+        }
+
+        // The schema file and the job's TMPDIR are still there for it: the caller's finally deletes them after BOTH launches.
+        var second = await FollowedUpAsync(executor, Within(followUp, left), ct);
+
+        return Continued(launch, second) with { Launches = Launches(launch, firstTook, second, spent.Elapsed - firstTook) };
+    }
+
+    /// <summary>
+    /// The follow-up launch — and, when its launcher THROWS the cancellation rather than reporting it, the same
+    /// <see cref="ReviewerOutcome.Cancelled"/> launch the real launcher's <c>ProcessResult.Cancelled</c> becomes.
+    /// </summary>
+    /// <remarks>
+    /// The first launch has answered and been billed by the time this runs; a cancellation that escaped from here took
+    /// its usage with it, and the runner's catch could write a line for the kill but not for the launch that preceded
+    /// it. Caught HERE and nowhere earlier: a first launch that throws has nothing earlier to keep, and the runner's
+    /// own catch records it (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// </remarks>
+    private static async Task<ReviewerLaunch> FollowedUpAsync(ReviewerExecutor executor, ReviewerInvocation followUp, CancellationToken ct)
+    {
+        try
+        {
+            return await executor.LaunchAsync(followUp, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return new ReviewerLaunch(new ReviewerOutcome.Cancelled(), null, Usage.Unknown, string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// What a job's launch ran with: the vendor's runtime and the version the catalog last saw it say; the effort as the
+    /// argv carried it — the request's, taken as asked (<c>row</c>) or lowered to the cap (<c>server</c>) — or, when the
+    /// request's was refused, <c>dropped</c>; the tier as the argv carried it, the SERVER's choice, because the request
+    /// carries none; and for whatever nothing sent, what the SLOT's own codex configuration names.
+    /// </summary>
+    /// <remarks>
+    /// The slot's configuration is read through the launch's own environment — its <c>CODEX_HOME</c> and <c>HOME</c>, which a
+    /// codex slot's environment always names (<see cref="SlotEnvironment"/>) — so the file read is the one the CLI reads,
+    /// never the server's own (the rule <see cref="NoMcpServers.CodexConfigured"/> already keeps). Read to label the line
+    /// only: the argv was built before this runs.
+    /// </remarks>
+    private LaunchOptions RanWith(VendorConfig vendor, JobRecord job, ReviewerInvocation first, IReadOnlyDictionary<string, string?> slot)
+    {
+        var hasTier = CoaiMcp.Core.Catalog.FeatureAvailability.Builtin.RowHasFastTier(vendor.Runtime, job.Model, string.Empty);
+
+        return LaunchOptions.Of(
+            vendor.Runtime,
+            LaunchOptions.FirstLine(_versionOf(vendor.Runtime)),
+            new OptionChoice(
+                first.Sent.Effort,
+                job.EffortFrom == OptionSources.Server ? OptionSources.Server : OptionSources.Row,
+                job.EffortFrom == OptionSources.Dropped ? OptionSources.Dropped : string.Empty),
+            new OptionChoice(first.Sent.Tier, OptionSources.Server),
+            first.Adapter is CodexRuntime ? CliDefaults.OfCodex(SlotFirst(slot), hasTier) : CliDefaults.None);
+    }
+
+    /// <summary>
+    /// The environment a launch on this slot has, as a lookup: the slot's own variables first, this server's for the rest —
+    /// the one rule both readers of the slot's codex configuration use (its MCP servers, and the ledger's labels).
+    /// </summary>
+    private static Func<string, string?> SlotFirst(IReadOnlyDictionary<string, string?> slot) =>
+        name => slot.TryGetValue(name, out var value) && value is { Length: > 0 } ? value : Environment.GetEnvironmentVariable(name);
 
     /// <summary>
     /// The adapter's continuation of a launch that ended its turn with nothing — issue #515 — or null.
@@ -154,19 +272,36 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
 
     /// <summary>What a launch and its continuation mean together.</summary>
     /// <remarks>
-    /// The continuation decides — it is the later and the more specific word — and both launches are billed
-    /// when it answered or came back empty. A continuation that ended in a terminal outcome is that outcome,
-    /// which carries no usage on this server, like every terminal outcome here: the first launch's tokens
-    /// are then not recorded. (Our own reviewer; the documented gap, not a new one.)
+    /// The continuation decides — it is the later and the more specific word — and both launches are billed,
+    /// whatever it came to: the attempt carries the two launches' usage together, a terminal outcome included
+    /// (story 3.1 of todo/PLAN_every_round_is_counted.md closed the gap this used to document — a continuation that
+    /// ended badly dropped the first launch's tokens).
     /// </remarks>
     private static ReviewAttempt Continued(ReviewerLaunch first, ReviewerLaunch second) =>
         Noted(Read(second with { Usage = first.Usage.Add(second.Usage) }),
             ", and again when asked in the same conversation after an auto-denied command");
 
+    /// <summary>
+    /// The two launches as the ledger's two lines (story 3.3 of todo/PLAN_every_round_is_counted.md): the first — whose
+    /// clean exit said nothing, which is what a follow-up is asked after — and the follow-up, each with what IT reported.
+    /// </summary>
+    /// <remarks>
+    /// <para>The attempt's own usage stays the SUM (<see cref="Continued"/>, story 3.1): the job reports it, and the two
+    /// parts add up to it. A follow-up's usage is what its launch reported, as a local follow-up's line is; whether agy
+    /// reports a continued conversation cumulatively, and what the job's sum should then be, is
+    /// PLAN_the_reviewer_follow_up_is_billed_once.md's to measure, not this one's to assume.</para>
+    /// <para>The follow-up's words are the job's own ending, which <see cref="JobRunner"/> writes when it records the job.</para>
+    /// </remarks>
+    private static IReadOnlyList<LaunchPart> Launches(ReviewerLaunch first, TimeSpan firstTook, ReviewerLaunch second, TimeSpan secondTook) =>
+    [
+        new(LaunchAttempts.First, first.Usage, firstTook, nameof(FailureKind.UnparseableByVendor)),
+        new(LaunchAttempts.FollowUp, second.Usage, secondTook, string.Empty),
+    ];
+
     /// <summary>An empty answer's reason, with what became of its continuation; any other attempt unchanged.</summary>
     private static ReviewAttempt Noted(ReviewAttempt attempt, string note) =>
-        attempt is ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing }
-            ? new ReviewAttempt.Failed(nothing with { Reason = nothing.Reason + note })
+        attempt is ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing } failed
+            ? failed with { Outcome = nothing with { Reason = nothing.Reason + note } }
             : attempt;
 
     /// <summary>What one launch means to this server.</summary>
@@ -190,16 +325,16 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// </remarks>
     private static ReviewAttempt Read(ReviewerLaunch launch) => launch switch
     {
-        { Terminal: { } terminal } => new ReviewAttempt.Failed(terminal),
+        // The LAUNCH's usage, not the outcome's: after a continuation it is both launches together (Continued).
+        { Terminal: { } terminal } => new ReviewAttempt.Failed(terminal, launch.Usage),
         { Answer: null or "" } => Nothing(launch.Usage),
         { Answer: { } answer } when string.IsNullOrWhiteSpace(answer) => Nothing(launch.Usage),
-        { Answer: { } answer } => new ReviewAttempt.Answered(answer, launch.Usage.TokensIn, launch.Usage.TokensOut),
+        { Answer: { } answer } => new ReviewAttempt.Answered(answer, launch.Usage),
     };
 
     /// <summary>A clean exit that produced no answer — a failure, and NOT <c>NotStarted</c>.</summary>
     private static ReviewAttempt.Failed Nothing(Usage usage) =>
-        new(new ReviewerOutcome.Unparseable(
-            "the vendor exited cleanly without writing an answer", usage));
+        new(new ReviewerOutcome.Unparseable("the vendor exited cleanly without writing an answer", usage), usage);
 
     /// <summary>
     /// The ONE step that makes this a confined launch: the adapter's argv and the child's
@@ -253,8 +388,7 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
                 // A reviewer on this host starts no MCP server either (issue #514) — and the config codex
                 // reads is the SLOT's (its CODEX_HOME and HOME), not this server's: naming a server the
                 // slot does not declare would stop codex from starting at all.
-                McpServersToSwitchOff = NoMcpServers.CodexConfigured(name =>
-                    slot.TryGetValue(name, out var value) && value is { Length: > 0 } ? value : Environment.GetEnvironmentVariable(name)),
+                McpServersToSwitchOff = NoMcpServers.CodexConfigured(SlotFirst(slot)),
             }));
 
         return built with
