@@ -3224,3 +3224,12 @@ paid agy process. Run: `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.ex
 
 **NOT covered:** the HTTP host (`Program.cs` builds the launcher inline — a vendor double there needs a product seam);
 a real agy refusal on the deployed box — checked live at the next deploy.
+
+## The server image checks each installer before it runs it (2026-10-11)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheImageChecksEachInstallerTests` (4, server) | `NoInstallerIsPipedIntoAShell_EachGoesThroughTheCheckedScript` — no `curl … \| sh\|bash` left in `src_server/Dockerfile`, each of the three installer URLs run through `install-cli.sh`, which the image COPYs; `APageIsRefused_TriedAgain_AndNamed_NeverRun` — the REAL script with bash against a `file://` HTML page: three attempts, each naming what arrived, exit non-zero, nothing run; `AScriptIsRun_WithTheShellNamed` (and each fetch is announced BEFORE it starts — the code round: a stalled fetch is silent for up to five minutes; RED: `Expected stderr "" to contain "fetching"`); `AFetchThatFails_IsTriedAgain_AndThenFailsTheBuild`. Bash on CI's Linux and macOS legs, Git for Windows' bash here; `INSTALL_CLI_PAUSE=0` removes the pause | RED: the script missing (`No such file or directory`) and the Dockerfile still piping. Break-it: the shebang check replaced by `true` → the page was RUN — `syntax error near unexpected token`, the 2026-10-10 failure reproduced |
+
+**NOT covered:** a real vendor URL (the suite does not reach the network); the image build itself (no daemon here —
+the release workflow's image legs build it).

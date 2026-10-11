@@ -610,10 +610,18 @@ three CLIs through their vendors' own installers, each followed by `<cli> --vers
 so an image cannot be published with a CLI that does not start:
 
 ```
-curl -fsSL https://chatgpt.com/codex/install.sh      | sh
-curl -fsSL https://claude.ai/install.sh              | bash
-curl -fsSL https://antigravity.google/cli/install.sh | bash
+sh /tmp/install-cli.sh https://chatgpt.com/codex/install.sh      sh
+sh /tmp/install-cli.sh https://claude.ai/install.sh              bash
+sh /tmp/install-cli.sh https://antigravity.google/cli/install.sh bash
 ```
+
+**Fetched and checked, never piped (2026-10-11).** These were `curl -fsSL <url> | sh|bash` until the amd64 image of
+`server-v0.11.0` failed on one bad answer (release run 38075423539, 2026-10-10): bash was handed a page, not a script —
+`syntax error near unexpected token `)'` — while the arm64 image built from the same URL in the same run. A pipe cannot
+look before it runs and cannot try again. `src_server/install-cli.sh` fetches each installer to a file (each attempt
+bounded: 20 s to connect, 300 s in all), runs it only behind a shebang, tries three times saying what arrived instead,
+and still fails the build on a persistent bad answer. `TheImageChecksEachInstallerTests` keeps the Dockerfile wired to
+it and runs the real script with bash against `file://` pages and scripts.
 
 **Native installers, not npm — and that removes a whole layer.** An earlier draft of this section put
 Node 22 in the image because it assumed `npm i -g @openai/codex @anthropic-ai/claude-code`. The vendors'
