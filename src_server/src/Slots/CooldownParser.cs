@@ -39,6 +39,14 @@ public static partial class CooldownParser
     /// </remarks>
     public static readonly TimeSpan WeeklyWithoutDate = TimeSpan.FromHours(24);
 
+    /// <summary>The longest stated duration that is believed — fourteen days.</summary>
+    /// <remarks>
+    /// Longer than any window these vendors state (the longest seen: a weekly window, and agy's 110 h). A duration past
+    /// it — or one too large to be an instant at all — is a sentence with nothing usable in it, so the fallback applies
+    /// rather than a throw that would fail the job (story 5.3a of todo/PLAN_every_round_is_counted.md, its plan round).
+    /// </remarks>
+    public static readonly TimeSpan MaxStatedWait = TimeSpan.FromDays(14);
+
     /// <summary>
     /// When this account may be used again.
     /// </summary>
@@ -72,6 +80,12 @@ public static partial class CooldownParser
     /// <summary>An instant the vendor NAMED, or null when it named none.</summary>
     private static DateTimeOffset? NamedInstant(string text, DateTimeOffset nowUtc)
     {
+        // FIRST, so "resets in …" is never offered to the clock-time form, which also starts at "resets".
+        if (StatedDuration(text) is { } wait)
+        {
+            return nowUtc + wait;
+        }
+
         if (OnDate().Match(text) is { Success: true } date
             && DateTime.TryParse(date.Groups["d"].Value, CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
@@ -83,6 +97,33 @@ public static partial class CooldownParser
 
         return ClockTime().Match(text) is { Success: true } clock ? FromClock(clock, nowUtc) : null;
     }
+
+    /// <summary>
+    /// How long the vendor said to wait — <c>Resets in 88h49m9s</c> — or null when it said no usable duration.
+    /// </summary>
+    /// <remarks>
+    /// Story 5.3a of todo/PLAN_every_round_is_counted.md. Believed like any named instant, so <see cref="MaxGuess"/> does
+    /// not cap it; <see cref="MaxStatedWait"/> does, and anything past it — a number too large to be an instant at all
+    /// included — is no duration, never a throw: a malformed refusal must not fail the job (its plan round).
+    /// </remarks>
+    private static TimeSpan? StatedDuration(string text)
+    {
+        var said = Duration().Match(text);
+        if (!said.Success || said.Groups["h"].Length + said.Groups["m"].Length + said.Groups["s"].Length == 0)
+        {
+            return null;
+        }
+
+        var seconds = PartOf(said, "h") * 3600 + PartOf(said, "m") * 60 + PartOf(said, "s");
+
+        return seconds <= MaxStatedWait.TotalSeconds ? TimeSpan.FromSeconds(seconds) : null;
+    }
+
+    /// <summary>One part of a duration as a double — infinity for digits no long can hold, which the bound then refuses.</summary>
+    private static double PartOf(Match said, string part) =>
+        said.Groups[part].Length == 0 ? 0
+        : double.TryParse(said.Groups[part].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value
+        : double.PositiveInfinity;
 
     /// <summary>A time of day, resolved to the next instant that matches it.</summary>
     private static DateTimeOffset? FromClock(Match clock, DateTimeOffset nowUtc)
@@ -141,6 +182,12 @@ public static partial class CooldownParser
     [GeneratedRegex(@"(?:refreshes?|will refresh|resets)\s+on\s+(?<d>[A-Za-z]+\s+\d{1,2},?\s+\d{4})",
         RegexOptions.IgnoreCase)]
     private static partial Regex OnDate();
+
+    // Captured 2026-10-10 from agy 1.3.x on a Gemini quota refusal (research/RESULTS_vendor_quota_gauges.md §3.1):
+    //   "… Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s."
+    // and the fixture src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt: "… Resets in 33m52s".
+    [GeneratedRegex(@"resets\s+in\s+(?:(?<h>\d+)h)?(?:(?<m>\d+)m)?(?:(?<s>\d+)s)?", RegexOptions.IgnoreCase)]
+    private static partial Regex Duration();
 
     // "weekly limit reached" with no date attached — a day is the smallest wait that can help.
     [GeneratedRegex(@"weekly", RegexOptions.IgnoreCase)]

@@ -174,4 +174,54 @@ public sealed class CooldownParserTests
     [Fact]
     public void AWeeklyLimitWithNoDateWaitsADay() =>
         CooldownParser.Fallback("you have reached your weekly limit", 0).Should().Be(CooldownParser.WeeklyWithoutDate);
+
+    // ── a stated DURATION (story 5.3a of todo/PLAN_every_round_is_counted.md) ───────────────────────────────────────
+    // agy states how long, not when. Until this was read, the server parked an exhausted Gemini slot on its doubling
+    // 30-minute guess and asked again into the refusal for the whole ~110 h of a stated reset.
+
+    [Fact]
+    public void CooldownParser_ReadsResetsIn88h49m9s()
+    {
+        // Captured verbatim 2026-10-10 (research/RESULTS_vendor_quota_gauges.md §3.1), the error id redacted there.
+        const string Said = """AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s.","status":"RESOURCE_EXHAUSTED","error_code":429,"code_kind":"http","retryable":true,"error_id":"<redacted>"}""";
+
+        CooldownParser.Until(Said, Now).Should().Be(Now + new TimeSpan(88, 49, 9),
+            "the vendor said how long; the 30-minute guess re-asks an exhausted account into the refusal");
+    }
+
+    [Fact]
+    public void CooldownParser_ReadsResetsIn33m52s()
+    {
+        // The fixture src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt, verbatim.
+        const string Said = """AGY_ERROR {"code":"RESOURCE_EXHAUSTED","message":"RESOURCE_EXHAUSTED (code 429): Individual quota reached for gemini-3.1-pro-high. Resets in 33m52s"}""";
+
+        CooldownParser.Until(Said, Now).Should().Be(Now + new TimeSpan(0, 33, 52));
+    }
+
+    [Fact]
+    public void ADurationOfOnePartIsReadToo()
+    {
+        CooldownParser.Until("Resets in 5h.", Now).Should().Be(Now + TimeSpan.FromHours(5));
+        CooldownParser.Until("resets in 45s", Now).Should().Be(Now + TimeSpan.FromSeconds(45));
+        CooldownParser.Until("Resets in 12m", Now).Should().Be(Now + TimeSpan.FromMinutes(12));
+    }
+
+    [Fact]
+    public void ADurationNoVendorWindowCouldMean_IsTheFallback_NeverAThrow()
+    {
+        // The plan round's finding: a malformed refusal must not fail the job; it is a sentence with nothing usable
+        // in it, and the existing fallback applies. Fourteen days is longer than any window these vendors state.
+        CooldownParser.Until("Resets in 999999999999999999h", Now).Should().Be(Now + CooldownParser.Unparseable);
+        CooldownParser.Until("Resets in 9999h", Now).Should().Be(Now + CooldownParser.Unparseable,
+            "four hundred days is not a window, it is a parse of something else");
+        CooldownParser.Until("Resets in 336h", Now).Should().Be(Now + CooldownParser.MaxStatedWait, "exactly the ceiling is believed");
+    }
+
+    [Fact]
+    public void ADurationIsNotMistakenForAClockTime()
+    {
+        // "resets" is the word the clock-time form starts with; "in" must keep the two apart.
+        CooldownParser.Until("Resets in 9h30m", Now).Should().Be(Now + new TimeSpan(9, 30, 0));
+        CooldownParser.Until("resets 9:30pm (UTC)", Now).Should().Be(new DateTimeOffset(2026, 9, 6, 21, 30, 0, TimeSpan.Zero));
+    }
 }

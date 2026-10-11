@@ -157,7 +157,7 @@ wrong choice *for CI* and the right one everywhere else.
 | `VendorConfig`, `VendorCatalog`, `VendorCatalogHost` | `src/Vendors/` | `vendors.json`: the model allowlist, its validation, and its content-hash reload |
 | `AccountSlot`, `SlotSelector` | `src/Slots/AccountSlot.cs` | one account's state, and which account the next job goes to |
 | `SlotEnvironment` | `src/Slots/SlotEnvironment.cs` | the variables that make one launch use one account and see no other |
-| `CooldownParser` | `src/Slots/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant |
+| `CooldownParser` | `src/Slots/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant: a stated duration (`Resets in 88h49m9s`), a date, a clock time, *weekly*, else a doubling guess |
 | `SlotRegistry`, `SlotLease` | `src/Slots/SlotRegistry.cs` | the cross-process lock and the persisted per-account state |
 | `VendorLogin` | `src/Slots/VendorLogin.cs` | `coai-server login <vendor> <slot>` — the only interactive path |
 | `CatalogEndpoints`, `VendorHealthCache` | `src/Vendors/CatalogEndpoints.cs` | `GET /api/catalog`, and the 60 s cache that stops a poll launching a CLI per request |
@@ -519,6 +519,14 @@ sequenceDiagram
   too early spends quota against a live limit, which on some plans extends it. So an unzoned time is
   never allowed to resolve to less than the 30-minute fallback, repeats double to a 5 h ceiling, and
   every pattern in the parser matches a line somebody actually captured from the VM.
+- **A stated DURATION is believed (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`).** agy says how
+  long, not when — `… Individual quota reached. … Resets in 88h49m9s.` — and no form read it, so an exhausted Gemini
+  slot sat on the doubling 30-minute guess and was asked again into the refusal for the whole ~110 h. The duration
+  form (`Resets in <h>h<m>m<s>s`, any part may be absent) is read FIRST, so "resets in" is never offered to the
+  clock-time form that also starts at "resets"; it is believed like a named instant (`MaxGuess` caps only the guess)
+  up to `MaxStatedWait`, fourteen days — longer than any window these vendors state. Past it, or a number too large
+  to be an instant at all, it is no duration and the fallback applies: a malformed refusal never throws and never
+  fails the job. `SlotRegistry.MarkCoolingDown` already persisted what the parser answers, so this was the whole fix.
 - **`login` is attached to the terminal, and is the ONE thing here that does not use
   `ProcessLauncher`.** That launcher redirects stdout, stderr and stdin, which is right for
   everything that wants output as a string — and fatal for a sign-in, which prints a URL and a code

@@ -281,14 +281,26 @@ Answers the operator's question for this machine's work from the whole history, 
   `http/usage/usage.http` asserts them.
 - **5.2 The Team-server block** (Opus) — `VendorUsage` (`src_vs_code/src/teamServerApi.ts:134`) gains the optional
   fields; `teamUsageBlock` shows server rounds per vendor (5 h / 24 h / 7 d), `runsWithoutRound` apart, retries,
-  repairs, cancelled, budget refusals. A server too old for the windows answers 400 → *count unavailable* in that
-  column, never 0. The bundled-page harness asserts the line.
-- **5.3 A stated reset is read** (Opus) — `CooldownParser` moves to the shared runners library (the dependency runs
-  server → mcp, so `src_mcp` cannot reach it where it is) and gains the duration form; the RED test uses 1.1's
-  verbatim agy line and today's fixture `src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt`
-  (`Resets in 33m52s`). Locally: `gemini: quota out — resets in 110 h (Tue 07:20)` from the last refusal; the server
-  catalog adds the earliest reset per vendor (no account names). Ships with E5's deploy because the server is
-  re-asking an exhausted account every 30 min → 5 h today.
+  repairs, cancelled, budget refusals. **A server too old for the windows is judged by the SHAPE of its answer, not its
+  status** — today's `/api/usage` binds only `window` and answers `?windows=5h,24h,week` with **200 and today's range**
+  (`UsageEndpoints.cs:23`, `UsageWindow.Range(null)` → `today`; the E4–E6 cadence consultation, verified 2026-10-11):
+  an answer without the requested windows and count fields is *count unavailable* in those columns, never 0, and the
+  test runs against that 200-without-them, not against a 400. The bundled-page harness asserts the line.
+- **5.3a The server reads a stated duration** (Opus) — **extracted and shipped AHEAD of E4** (the cadence consultation,
+  2026-10-11): it needs neither round ids nor usage aggregation, and the server re-asks an exhausted Gemini slot on its
+  doubling 30-minute guess for the whole ~110 h of a stated reset today. `CooldownParser` (where it is,
+  `src_server/src/Slots/CooldownParser.cs`) gains the duration form (`Resets in 88h49m9s`, `Resets in 33m52s` — 1.1's
+  verbatim agy line and the fixture `src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt`); `SlotRegistry.MarkCoolingDown`
+  already persists what it parses. Behavioural test through the real `JobRunner`: the verbatim refusal parks the slot
+  until the stated instant (state reloaded from disk), a second queued job launches NOTHING before it, and — the
+  positive control — DOES launch once the stated instant has passed. Ships as a server patch with the deploy already
+  waiting for the Gemini reset.
+- **5.3b A stated reset is read locally** (Opus) — `CooldownParser` moves to the shared runners library (the dependency
+  runs server → mcp, so `src_mcp` cannot reach it where it is); locally: `gemini: quota out — resets in 110 h (Tue 07:20)`
+  from the last refusal; the server catalog adds the earliest reset per vendor (no account names). **Display only:**
+  the local scheduler still retries from phrase classification (`BoundedScheduler.cs:585`), so "parks the slot on both
+  halves" (what-must-be-true 7) needs local PERSISTENCE and ADMISSION of the reset — its own story (**5.3c**), or item
+  7 narrows to "shown locally, enforced on the server". Decided with 5.3b's plan round.
 - **5.4 Release and the live count** (Opus) — the client halves release first; then ONE manual `deploy-server.yml`
   dispatch carrying E3–E5's server, with the owner's approval, after 4.1's body was measured against the old server.
   Live: one round through the Team server → that vendor's `rounds` +1 exactly, its launches as made.
@@ -299,13 +311,20 @@ Answers the operator's question for this machine's work from the whole history, 
 - **6.1 Capture** (Fable) — per launch (if `--json` carries it) or per slot after each job INSIDE the lease (if only
   the app-server read does): `quota5hPct`, `quotaWeekPct`, `quotaResetsUtc` on the ledger line (trailing, defaulted)
   and the slot's `state.json` (one overwritten snapshot, the existing atomic write); locally the same into the local
-  ledger. Test: a fixture gauge event → captured → stored → rendered.
+  ledger. Test: a fixture gauge event → captured → stored → rendered. **Split by the cadence consultation
+  (2026-10-11):** 1.1 found the source (`codex app-server` · `account/rateLimits/read`, RESULTS §6), so E6 is not
+  reduced — but **6.1a server capture** (inside the slot's lease, after the expired-token measurement 1.1 still owes)
+  ships first, and **6.1b local capture** waits until a read is shown to be excluded from a concurrent launch of the
+  SAME store: `BoundedScheduler`'s semaphores belong to one process, and two coai processes (or direct codex use)
+  sharing one `CODEX_HOME` are not covered by an "idle" check.
 - **6.2 Show and derive** (Opus) — `codex: 5 h 37 % · week 81 % · resets Thu 07:00` beside the counter, and rounds per
   1 % of the weekly window, trailing over the last N gauge readings, computed ONCE in the shared runners library and
   answered by `--round-counts` and `/api/usage`. **Scope rule:** the derived number sums every consumer 1.1 recorded
   for that account (both local stores, plus the server rounds of that account's slot via `slot`); when a known
   consumer cannot be counted, the number is hidden and the tab says which consumer is missing. Tests: a reset boundary,
-  a missing reading, an unchanged reading, a missing consumer.
+  a missing reading, an unchanged reading, a missing consumer. **For codex today the number IS hidden:** direct use
+  outside coai is a recorded consumer that cannot be counted (RESULTS §2.4, §6.3) — so is the price per round derived
+  from it; showing it as an upper bound instead is the owner's call, not this plan's.
   **A subscription's share** (the operator's "price" for a flat plan): an optional monthly plan price the person types
   ONCE per vendor account — one subscription serves every model on it, so it lives with the account (the vendor's
   card on the Settings page), not on each model card — never looked up; a finite number ≥ 0, anything else refused at the card with the reason and
@@ -323,6 +342,8 @@ E1 → E2 → E3 → E4 → E5 → E6, each from the previous epic's commit.
 - E3 needs 1.2's fixtures. E4 writes its fields beside 3.3's and 3.4's on E3's reshaped ledger call.
 - E5 needs E4's fields on the wire and in the ledger and E3's outcomes and canary kind.
 - E6 needs E1's scope and E5's counter to sit beside.
+- **5.3a ships ahead of E4** as a server patch (it depends on nothing in E3–E5) and rides the deploy already waiting for
+  the Gemini reset of 2026-10-14.
 - **Server deploys:** once after E5 (after E4 instead if E5 slips — every undeployed day is a day of
   `runsWithoutRound`), and once more after E6 only if 6.1 exists. Client halves always release first.
 
@@ -380,7 +401,7 @@ records that failure).
 | `AJobWithoutBudget_IsEndedWithoutStartingTheVendor` (zero launches), `TheClaimMovesOnToTheNextJob`, `TheRunBudget_IsCappedAtWhatIsLeft`, `AClientClockTenMinutesOff_GetsTheSameDeadline`, `AHugeRemainingSeconds_IsCappedAtTheJobsOwnLifetime`, `TheNoBudgetReason_MatchesNoRateLimitPhrase`, `AnOldClient_IsNeverRefusedForBudget` | 4.3 |
 | `FourRolesOfOneRound_CountAsOneRound`, `ARetryAndARepair_AddNoRound`, `LinesWithoutARound_AreCountedApart`, `TheFiveHourWindow_IsTrailing`, `SeveralWindows_OneScan` | 5.1 |
 | `AnOlderServer_ShowsUnavailable_NotZero` | 5.2 |
-| `CooldownParser_ReadsResetsIn110h25m`, `…ReadsResetsIn33m52s` (verbatim) | 5.3 |
+| `CooldownParser_ReadsResetsIn88h49m9s`, `…ReadsResetsIn33m52s` (verbatim), `AStatedReset_ParksTheSlot_UntilThen_AndNotAfter` (the real `JobRunner`, state reloaded, nothing launched before the instant, a launch after it) | 5.3a |
 | a gauge fixture captured → stored → rendered; rounds per 1 % across a reset, with a missing reading, an unchanged reading, a missing consumer | 6.1 / 6.2 |
 
 Then every suite, not only the ones near the change: the `src_mcp` and `src_server` test executables, `npm test`,
