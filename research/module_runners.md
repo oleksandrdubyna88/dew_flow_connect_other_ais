@@ -63,9 +63,11 @@ sequenceDiagram
 | `RemoteAsk`, `RemotePoll`, `RemoteState` | `Reviewers/RemoteAsk.cs` | the PURE half of the shim: the request body, the poll parse, every exit code and every sentence a person will see — so each failure path is tested without a server |
 | `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
 | `RemoteProbe`, `RemoteCatalog` | `Reviewers/RemoteProbe.cs` | a remote vendor's health over `GET /api/catalog`: the server's own slot counts as the note, 401/403/426/outage told apart, a cache whose FAILURE wait is never shorter than its success wait, and a refusal that says WHICH of a row's two names was tried |
-| `UsageLedger`, `UsageEntry`, `UsageKinds`, `LedgerJsonContext` | `Reviewers/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape. Since 2026-09-09 a line also carries its **`kind`** — `review` or `chat` — because "what did the gate cost me" and "what did asking cost me" are two questions one total answers neither of. The field is trailing and defaulted, so every line already on disk stays valid and an absent kind is READ as a review, which is what all of them were. `UsageKinds` holds the two names here rather than only in the server's own `JobKind`, which this library cannot see: the dependency runs server → mcp and not back, and two vocabularies for one field is how a writer and a reader come to disagree. A test in `src_server` asserts the enum spells exactly these. **Since story 3.3 (2026-10-10) a line is one paid LAUNCH, not one turn**: `Record` writes each launch of a turn as its own line, every one carrying the turn's **`turn`** id (twelve hex characters of a GUID, minted per turn at record time) and its **`attempt`** (`first` / `repair` / `followUp` / `retry`); the failure's words are `ReviewerSummaryFactory.DescribeWhole` — the vendor's reason whole and redacted, never the summary's 160-character cut. `UsageKinds.Probe` (`probe`, local-only) is `coai-mcp --probe-api --model`'s kind |
+| `UsageLedger`, `UsageEntry`, `UsageKinds`, `LedgerJsonContext` | `Reviewers/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape. Since 2026-09-09 a line also carries its **`kind`** — `review` or `chat` — because "what did the gate cost me" and "what did asking cost me" are two questions one total answers neither of. The field is trailing and defaulted, so every line already on disk stays valid and an absent kind is READ as a review, which is what all of them were. `UsageKinds` holds the two names here rather than only in the server's own `JobKind`, which this library cannot see: the dependency runs server → mcp and not back, and two vocabularies for one field is how a writer and a reader come to disagree. A test in `src_server` asserts the enum spells exactly these. **Since story 3.3 (2026-10-10) a line is one paid LAUNCH, not one turn**: `Record` writes each launch of a turn as its own line, every one carrying the turn's **`turn`** id (twelve hex characters of a GUID, minted per turn at record time) and its **`attempt`** (`first` / `repair` / `followUp` / `retry`); the failure's words are `ReviewerSummaryFactory.DescribeWhole` — the vendor's reason whole and redacted, never the summary's 160-character cut. `UsageKinds.Probe` (`probe`, local-only) is `coai-mcp --probe-api --model`'s kind. **Since story 3.4 (2026-10-11) a line also says what its launch ran with** — `cli`, `cliVersion`, `effort`/`effortFrom`, `tier`/`tierFrom` (`UsageEntry.RanWith(LaunchOptions)`, the one place the record becomes columns), and on a Team server line `job` and `slot` — see the section *Each ledger line says what its launch ran with* |
 | `LaunchAttempts`, `LaunchPart`, `LaunchLines` | `Reviewers/LaunchParts.cs` | story 3.3's one rule both halves write by: the attempt vocabulary (`first`, `repair`, `followUp`, `retry`, `rotated`), one paid launch as (attempt, usage, elapsed, outcome), and `LaunchLines.Of` — one line per launch when the launches' usage adds up EXACTLY to the turn's (every count, both markers, the money to a hair), else the turn as the one line it always was; the last line takes the turn's own outcome and what is left of its seconds. `StepOf` labels a ladder step (`first`, then `retry`); `NewTurn` mints a local turn id |
 | `VendorReason` | `Reviewers/VendorReason.cs` | how much of a vendor's reason the ledger and the log keep: `SafetyCap` 4 000 characters (agy's longest recorded refusal is under 300), `Capped` for `ReviewerExecutor.TailOf`'s one-line-longer-than-the-budget case, `Written` = `Redaction.SafeText` at the cap — whole, and redacted first |
+| `LaunchOptions`, `OptionSources`, `SentOptions`, `OptionChoice`, `CliDefaults` | `Reviewers/LaunchOptions.cs` | story 3.4 (2026-10-11): what a launch RAN WITH, as a ledger line says it — `Cli` (the runtime), `CliVersion` (a `--version` somebody already asked, never one per launch), `Effort`/`EffortFrom`, `Tier`/`TierFrom`. `OptionSources` is the closed source vocabulary both halves write: `row`, `server`, `ignored`, `dropped`, `cli-config`, or empty. `SentOptions` is what an adapter's `Build` put on the argv (`ReviewerInvocation.Sent`; codex: the tier; claude: `--effort` and the fast-mode file as `fast`/`default`; local, api, remote: the effort); `OptionChoice.Labelled` decides a value and its source — sent, else why an asked value was not, else the CLI's own configuration, else nothing |
+| `CodexConfigFile` | `Reviewers/CodexConfigFile.cs` | the one locator and reader of codex's `config.toml` under a launch's environment (`CODEX_HOME`, else `HOME`/`USERPROFILE` + `.codex`) — extracted from `NoMcpServers` (which now reads the file through it) for story 3.4's `RootValue`: a root-level `key = value` before the first table header, unsure means empty |
 | `IAnsweringRuntime` | `Consultation/IAnsweringRuntime.cs` | the launch half of the consultant seam — `Vendor`, `Build`, `NeedsAnswerSchema`, `ReadAdvice` — extracted as the base of `IConsultantRuntime` for the question consultant (PLAN_question_consultant.md, S1); the conversation members stay on the derived interface and no shipped adapter changed shape |
 | `LaunchConfinement`, `ConsultantLaunch.Confinement` / `.ScratchDir` | `Consultation/LaunchConfinement.cs`, `IConsultantRuntime.cs` | how a launch is confined: `AsShipped` (the default — today's argv byte for byte) or `Planned(Confinement.Planned)` — the planner's fragments, a scratch or root cwd, one shot, the minimal environment |
 | `ApiConsultant`, `QuestionMaterial`, `AnsweringMemory`, `AnsweringTurn`, `IAnsweringFollowUps` | `Consultation/ApiConsultant.cs`, `AnsweringTurns.cs` | a hosted API answering a question row: composes `ApiRuntime` the way `LocalConsultant` composes `LocalRuntime`, `none` only, the key under the row's `VaultKeyName` read by the caller; its source turns serve `sourceRequests` from the pinned HEAD and hand back the same launch with a tail (A9) |
@@ -1549,6 +1551,46 @@ flowchart LR
   continued turns still fold into one line per turn (census rows 2 and 4); a cancellation landing during a repair
   still leaves no outcome to carry its parts on (story 3.2's).
 
+## Each ledger line says what its launch ran with (story 3.4, 2026-10-11)
+
+`todo/PLAN_every_round_is_counted.md`, story 3.4 — the plan's symptom 6: a codex row's effort is kept and never sent
+(`RosterBuilder.EffortFor`), so every local codex launch ran at whatever `~/.codex/config.toml` said (`high` on the
+operator's machine) and its tier came from the same file until fast mode; the ledger named neither, nor the CLI. Eight
+trailing, defaulted `UsageEntry` fields now say it: `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, and
+on a Team server line `job` and `slot` (module_team_server.md).
+
+```mermaid
+flowchart LR
+  B["adapter Build<br/>argv + Sent(effort, tier)"] --> L["RowLaunchOptions.Labelled<br/>(the roster, the security lane)"]
+  Row["the row: CliEffort, Fast, model"] --> L
+  Cfg["CodexConfigFile.TextIn(env)<br/>model_reasoning_effort, service_tier"] -->|"label only"| L
+  Ver["CodexTierSupport.Printed<br/>(the tier probe's answer)"] --> L
+  L -->|"invocation.RanWith"| U["UsageLedger.Record<br/>UsageEntry.RanWith(...)"]
+```
+
+- **What was sent** is the adapter's own record, taken from the very values it put on the argv
+  (`ReviewerInvocation.Sent`, beside #129's display `Effort`): codex sends a tier (`-c service_tier=default|fast`, or
+  none) and never an effort; claude sends `--effort` and a one-key fast-mode file (`fast` for `fastMode:true`,
+  `default` for `false` — codex's words, so one column compares across vendors); local and api send their
+  `--reasoning-effort`; a Team server row sends contract 2's `--effort` (what the server then applied is the SERVER's
+  line's to say). gemini and agy send neither.
+- **The label** (`OptionChoice.Labelled`, in this order): a value on the argv is `row`; a value the row set and the path
+  did not send is `ignored`, and empty — a codex row's effort, or an Off/On tier a codex release in 0.110–0.130 or a
+  claude launch with no data folder could not be told; a value nothing set or sent is what the CLI's own configuration
+  names, labelled `cli-config` (codex's `config.toml` only; on somebody else's endpoint its `service_tier` is not
+  read); else empty. **The configuration is read to label, never to change the launch**: `RowLaunchOptions` runs after
+  the argv is built and touches nothing on it, and an ignored row value is not relabelled as the configuration's —
+  the line's question is whether the row's setting ran.
+- **The version** is the codex tier probe's answer for this round (`CodexTierSupport.Printed`, `codex-cli 0.160.0`) — the
+  one `--version` a local launch already asks, and only for an Off codex row on codex's own service. Every other local
+  line's `cliVersion` is empty: a spawn per launch for one field is not paid.
+- **Where it is labelled.** `RowLaunchOptions.Labelled` (`src_mcp/src/Server/Rounds/RowLaunchOptions.cs`), called by
+  `RosterBuilder`'s turn builder (the launch and its repair) and `SecurityRoster.Build`; the ledger records the round's
+  first invocation, so every launch line of one reviewer carries the same options.
+- **Not labelled yet**: a consultation, a question row, a probe and a chat turn write their lines through `RecordJob`
+  with these fields empty — "not recorded", never "none". Claude's own settings (`fastMode`, `effortLevel`) are not read
+  for a label; only codex's configuration is.
+
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 
 Behind `COAI_STOP_LOCAL_WHEN_QUIET` (off by default). `BoundedScheduler.RunAllAsync(..., StandDown? standDown)`:
@@ -1585,7 +1627,8 @@ reviewers and the consultant need NONE. `NoMcpServers` (runners/Reviewers) holds
   their sub-tables), inline tables under `[mcp_servers]`, and dotted keys at the ROOT — and an array table
   `[[…]]` or an unreadable header ends what it knows until the next header. `CodexConfigured(env)` reads the
   config the LAUNCH will read: `CODEX_HOME`, else `HOME`/`USERPROFILE` + `.codex`, through the environment it
-  is given — on the Team server that is the SLOT's (`ReviewLauncher`), not the server's. Not
+  is given — on the Team server that is the SLOT's (`ReviewLauncher`), not the server's (since story 3.4 the file
+  is located and read by `CodexConfigFile.TextIn`, which the ledger's labels read too). Not
   `--ignore-user-config`: that would also drop the model, service tier and the Windows sandbox mode.
 - **agy / gemini**: no per-launch switch exists; a server named in `~/.gemini/config/mcp_config.json` or
   `~/.gemini/settings.json` is reported once per start as a log warning (`GeminiFamilyConfigured`).

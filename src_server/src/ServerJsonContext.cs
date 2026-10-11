@@ -166,7 +166,16 @@ public sealed record UsageEntryDto(
     long TokensReasoning = 0,
     string? UsageNote = null,
     string? Turn = null,
-    string? Attempt = null);
+    string? Attempt = null,
+    // What the launch ran with (story 3.4 of todo/PLAN_every_round_is_counted.md) — absent on every older line.
+    string? Cli = null,
+    string? CliVersion = null,
+    string? Effort = null,
+    string? EffortFrom = null,
+    string? Tier = null,
+    string? TierFrom = null,
+    string? Job = null,
+    string? Slot = null);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>

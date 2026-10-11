@@ -148,6 +148,19 @@ public sealed class VendorHealthCache(IProcessLauncher launcher, TimeSpan? ttl =
         }
     }
 
+    /// <summary>
+    /// The first line of what <paramref name="runtime"/>'s CLI last said of its own version, however long ago — or empty
+    /// when nobody has asked yet, or it did not answer. NEVER a probe: this is what a job's ledger line names
+    /// (story 3.4 of todo/PLAN_every_round_is_counted.md), and a launch per job is the cost this cache exists to avoid.
+    /// </summary>
+    /// <remarks>
+    /// Stale is acceptable here where it is not for the catalog: a CLI is upgraded on the box in months, and the catalog's
+    /// own sixty-second refresh replaces the answer whenever a panel looks. A server nobody's panel has asked since it
+    /// started has no answer, and its lines say so by being empty rather than by a guess.
+    /// </remarks>
+    public string LastSeenVersion(string runtime) =>
+        _seen.TryGetValue(runtime, out var seen) ? LaunchOptions.FirstLine(seen.Health.Version) : string.Empty;
+
     private VendorHealthDto? Fresh(string runtime) =>
         _seen.TryGetValue(runtime, out var cached) && DateTimeOffset.UtcNow - cached.AtUtc < _ttl
             ? cached.Health

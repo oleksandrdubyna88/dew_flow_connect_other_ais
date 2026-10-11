@@ -183,7 +183,9 @@ public static class ReviewEndpoints
                     caller.Email, request.Vendor, request.Model, role, taken.Prompt, kind,
                     request.TimeoutSeconds, taken.Effort),
             Effort: taken.Effort,
-            SystemPromptSha: taken.SystemPromptSha);
+            SystemPromptSha: taken.SystemPromptSha,
+            // What became of the request's effort, carried to the job's ledger line (story 3.4).
+            EffortFrom: taken.EffortFrom);
     }
 
     /// <summary>A contract-1 response has no notes at all, so an empty list is left out rather than sent.</summary>

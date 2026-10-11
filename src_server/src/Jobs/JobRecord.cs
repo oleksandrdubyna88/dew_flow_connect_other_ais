@@ -102,7 +102,10 @@ public sealed record JobRecord(
     /// Contract 2: the SHA-256 of a client system prompt the server took — the text itself is only inside
     /// <see cref="Prompt"/>, in memory; empty when none was taken.
     /// </summary>
-    string SystemPromptSha = "")
+    string SystemPromptSha = "",
+
+    /// <summary>What became of the request's effort — <see cref="TakenOptions.EffortFrom"/> — for the job's ledger line.</summary>
+    string EffortFrom = "")
 {
     /// <summary>
     /// What the vendor reported for this job — the whole usage, cached and reasoning included (story 3.1 of

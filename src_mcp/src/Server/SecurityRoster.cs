@@ -152,9 +152,11 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         var schema = SchemaFile.Ensure(settings.DataDir, SchemaShape.Security);
         var output = Directory.CreateTempSubdirectory("coai-answers-").FullName;
         var scratch = Directory.CreateTempSubdirectory("coai-noworkspace-").FullName;
-        return new(runtime.Build(run.Prompt, prompt, scratch, schema, output, launch),
-            runtime.Build(run.Prompt, prompt + RepairInstruction.Text, scratch, schema, output, launch),
-            run.Prompt, Encoding.UTF8.GetByteCount(prompt))
+        // Labelled with what each launch ran with, as the round's own reviewers are (story 3.4) — the lane writes ledger lines too.
+        ReviewerInvocation Built(string text) =>
+            RowLaunchOptions.Labelled(runtime.Build(run.Prompt, text, scratch, schema, output, launch), provider, runtime, launch);
+
+        return new(Built(prompt), Built(prompt + RepairInstruction.Text), run.Prompt, Encoding.UTF8.GetByteCount(prompt))
         { IsSecurity = true };
     }
 }

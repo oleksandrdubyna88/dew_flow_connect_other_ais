@@ -160,7 +160,60 @@ public sealed record UsageEntry(
     /// Empty on an old line, where a repair or a follow-up is folded into the one line its turn wrote, and on a kind
     /// that has no attempts (a consultation, a question row, a probe). Trailing and defaulted like the rest.
     /// </remarks>
-    string Attempt = "");
+    string Attempt = "",
+
+    /// <summary>The runtime that ran the launch — <see cref="LaunchOptions.Cli"/> — or empty.</summary>
+    /// <remarks>
+    /// <para><b>The eight fields below are story 3.4 of todo/PLAN_every_round_is_counted.md</b>: each line says what its
+    /// launch RAN WITH. A cross-vendor measurement must say which CLI ran each model and at which effort and tier, and
+    /// the ledger could not — the plan's hand-built answer had to reconstruct that a codex row inherited
+    /// <c>~/.codex/config.toml</c>'s <c>high</c> effort and, for a while, its <c>priority</c> tier.</para>
+    /// <para>Empty on a line written before them, and on a path that labels nothing yet — a consultation, a question row,
+    /// a probe, a chat turn: an empty field says "not recorded", never "none". Trailing and defaulted like the rest.</para>
+    /// </remarks>
+    string Cli = "",
+
+    /// <summary>The first line of the CLI's own <c>--version</c>, where one was already asked — see <see cref="LaunchOptions.CliVersion"/>.</summary>
+    string CliVersion = "",
+
+    /// <summary>The effort the launch ran with: what was sent, else what the CLI's own config names — or empty.</summary>
+    string Effort = "",
+
+    /// <summary>Where <paramref name="Effort"/> came from — one of <see cref="OptionSources"/>, or empty for unknown.</summary>
+    /// <remarks>
+    /// <c>row</c> (sent from the row's settings), <c>server</c> (sent, the Team server's choice: a cap or its own default),
+    /// <c>ignored</c> (the row set one this launch path never sends — a codex row's effort; the effort is then empty),
+    /// <c>dropped</c> (the Team server refused the request's; empty too), <c>cli-config</c> (nothing was asked or sent, and
+    /// the CLI's own configuration names the value shown — read to label the line, never to change the launch).
+    /// </remarks>
+    string EffortFrom = "",
+
+    /// <summary>The service tier the launch ran with, in codex's words (<c>default</c> is the standard tier, <c>fast</c>) — or empty.</summary>
+    string Tier = "",
+
+    /// <summary>Where <paramref name="Tier"/> came from — the same vocabulary as <paramref name="EffortFrom"/>.</summary>
+    string TierFrom = "",
+
+    /// <summary>The Team server's job id — empty on a local line. The same id the line's <paramref name="Turn"/> carries there.</summary>
+    string Job = "",
+
+    /// <summary>
+    /// The Team server account slot the launch ran on, by its NAME from <c>vendors.json</c> — never the account's email,
+    /// which nothing on this line may carry but <paramref name="Email"/>, the caller's. Empty on a local line.
+    /// </summary>
+    string Slot = "")
+{
+    /// <summary>This line with the six fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
+    public UsageEntry RanWith(LaunchOptions ranWith) => this with
+    {
+        Cli = ranWith.Cli,
+        CliVersion = ranWith.CliVersion,
+        Effort = ranWith.Effort,
+        EffortFrom = ranWith.EffortFrom,
+        Tier = ranWith.Tier,
+        TierFrom = ranWith.TierFrom,
+    };
+}
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -245,7 +298,7 @@ public sealed class UsageLedger(string dataDir)
 
     private static UsageEntry Entry(
         ReviewerInvocation invocation, string model, string stage, TimeSpan elapsed, Usage usage, string outcome) =>
-        new(
+        new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             invocation.Provider,
             model,
@@ -260,7 +313,7 @@ public sealed class UsageLedger(string dataDir)
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             // Unknown, in words, when the launch ended before its vendor reported anything — never a bare zero.
-            UsageNote: UsageNoteOf(usage));
+            UsageNote: UsageNoteOf(usage)).RanWith(invocation.RanWith);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>
@@ -309,10 +362,13 @@ public sealed class UsageLedger(string dataDir)
     /// reported anything was filed as a free 0/0, and the cache and reasoning counts never reached the ledger.
     /// <para><paramref name="turn"/> and <paramref name="attempt"/> are the Team server's, one line per launch of a job
     /// (story 3.3); every other caller of this overload records a kind that has no attempts and leaves them empty.</para>
+    /// <para><paramref name="ranWith"/>, <paramref name="job"/> and <paramref name="slot"/> are the Team server's too
+    /// (story 3.4): what the job's launch ran with, the job, and the account slot by its name. A consultation and a question
+    /// row label nothing yet and leave them empty, which the line then says.</para>
     /// </remarks>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string turn = "", string attempt = "") =>
+        string turn = "", string attempt = "", LaunchOptions? ranWith = null, string job = "", string slot = "") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
@@ -331,7 +387,9 @@ public sealed class UsageLedger(string dataDir)
             TokensReasoning: usage.TokensReasoning,
             UsageNote: UsageNoteOf(usage),
             Turn: turn,
-            Attempt: attempt));
+            Attempt: attempt,
+            Job: job,
+            Slot: slot).RanWith(ranWith ?? LaunchOptions.None));
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;

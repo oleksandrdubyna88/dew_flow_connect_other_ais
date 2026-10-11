@@ -678,6 +678,27 @@ sequenceDiagram
   - `UsageEntryDto` and `UsageLine` read `turn` and `attempt`; a line older than the fields reads both empty.
   Still NOT written: a job ended by the host stopping or by an infrastructure throw (story 3.2's), and the cumulative
   difference of an agy follow-up (each line carries its own launch's report — `todo/PLAN_the_reviewer_follow_up_is_billed_once.md`).
+- **Each line says what it ran with (2026-10-11, story 3.4 of `todo/PLAN_every_round_is_counted.md`).** A server line
+  said who, which vendor and model and what it cost — not which CLI release ran it, whether the request's effort was
+  applied, what tier the launch was told, or which account carried it. Now every line of a job carries:
+  - `cli` — the vendor's runtime — and `cliVersion`: the first line of what that CLI last said to the catalog's health
+    probe (`VendorHealthCache.LastSeenVersion`, handed to `ReviewLauncher` as `versionOf` in `Program.cs`). Never a
+    `--version` per job: a server nobody's panel has asked since it started writes it empty.
+  - `effort` / `effortFrom` as the launch's argv carried it: the request's effort taken as asked → `row`; lowered to
+    `Coai:MaxEffort` → `server`; refused (`ClientOptions`' `Dropped` — every codex effort) → `dropped`, effort empty.
+    `ClientOptions.Take` reads that off the same notes the 202 answers with (`TakenOptions.EffortFrom`), and the job
+    carries it (`JobRecord.EffortFrom`) to its line. A request that asked none: what the SLOT's own codex
+    `config.toml` names (`cli-config`), read through the launch's own environment — `CODEX_HOME`/`HOME` are the slot's.
+  - `tier` / `tierFrom` as the argv carried it, labelled `server`: the request carries no tier, and a server launch is
+    built with fast mode Off, so a codex job is told `service_tier=default` — whatever the slot's configuration says.
+    A claude job on this server is handed no fast-mode file (no data folder) and claude's own settings are not read,
+    so its tier is empty.
+  - `job` (the job's id, which its `turn` also carries) and `slot` — the slot's NAME from `vendors.json`, which
+    `VendorConfig.Refusal` holds to letters, digits, `-` and `_`; the account's sign-in is never named.
+  `ReviewLauncher.RanWith` labels the confined launch after it is built (`ReviewAttempt.RanWith`), `JobRunner.Ledger`
+  writes it on every line of the attempt — a requeued one's included — through `RecordJob`'s new `ranWith`, `job`
+  and `slot`. `UsageEntryDto` and `UsageLine` (`RanWith`, `Job`, `Slot`) read the eight fields back; a line older than
+  them reads `LaunchOptions.None` and empty.
 
 ### Story 2.4 — the money, and the contract suite
 

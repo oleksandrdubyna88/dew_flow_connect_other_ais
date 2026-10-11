@@ -181,7 +181,8 @@ var jobRunner = new JobRunner(
     jobs,
     catalog,
     slotRegistry,
-    new ReviewLauncher(new ProcessLauncher(), (message, error) => reportSessionFailure?.Invoke(message, error)),
+    // The CLI version a job's ledger line names is the catalog's last probe — never a --version per job (story 3.4).
+    new ReviewLauncher(new ProcessLauncher(), (message, error) => reportSessionFailure?.Invoke(message, error), vendorHealth.LastSeenVersion),
     new UsageLedger(dataDir),
     (message, error) => reportSessionFailure?.Invoke(message, error));
 builder.Services.AddSingleton(jobs);

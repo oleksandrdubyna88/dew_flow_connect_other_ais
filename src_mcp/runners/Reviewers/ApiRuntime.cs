@@ -134,6 +134,8 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
             Price = settings.Price,
             // The prompt file goes when the turn does (BoundedScheduler); it holds the change under review.
             TempFiles = [promptFile],
+            // What the argv above carries — the trimmed level, or nothing (story 3.4).
+            Sent = new(settings.ReasoningEffort.Trim()),
         };
     }
 

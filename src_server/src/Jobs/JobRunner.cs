@@ -159,14 +159,17 @@ public sealed class JobRunner(
             // line per refused attempt would count one review several times; a REVIEW is counted by its turn (the job's
             // id, on every line), and what one line counts now is one launch (story 3.3 of
             // todo/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
-            Ledger(vendor, job, Refused(job, attempt, now), attempt.Launches, LaunchAttempts.Rotated);
+            Ledger(new(vendor, slot, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated);
 
             return;
         }
 
         jobs.Finish(finished);
-        Ledger(vendor, job, finished, attempt.Launches, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
+        Ledger(new(vendor, slot, job, attempt), finished, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
     }
+
+    /// <summary>What every line of one attempt shares: the vendor, the account it ran on, the job, and the attempt itself.</summary>
+    private sealed record AttemptOn(VendorConfig Vendor, AccountSlot Slot, JobRecord Job, ReviewAttempt Attempt);
 
     /// <summary>
     /// The refused attempt as a terminal record of its own, for its ledger line only — never stored: the job itself went
@@ -255,11 +258,14 @@ public sealed class JobRunner(
     /// <c>rotated</c> — on a refused attempt and on the one that finally ran a job other accounts had refused.
     /// </param>
     /// <remarks>
-    /// The job id is the turn on this server, and deliberately: a job IS one reviewer turn — the client's whole request,
+    /// <para>The job id is the turn on this server, and deliberately: a job IS one reviewer turn — the client's whole request,
     /// whichever accounts it took and whatever its adapter continued — and the id is already unique, already in the
-    /// server's log beside the job, and what a person asking "what happened to this review" holds.
+    /// server's log beside the job, and what a person asking "what happened to this review" holds.</para>
+    /// <para>Every line also says what its launch ran with, which job it was and which account SLOT carried it — by the
+    /// slot's name from <c>vendors.json</c>, which <c>VendorConfig.Refusal</c> holds to letters, digits, <c>-</c> and
+    /// <c>_</c>; the account's own sign-in is never named (story 3.4 of todo/PLAN_every_round_is_counted.md).</para>
     /// </remarks>
-    private void Ledger(VendorConfig vendor, JobRecord job, JobRecord finished, IReadOnlyList<LaunchPart> launches, string firstAttempt)
+    private void Ledger(AttemptOn on, JobRecord finished, string firstAttempt)
     {
         if (ledger is null)
         {
@@ -270,11 +276,12 @@ public sealed class JobRunner(
         {
             // The whole-Usage overload: cached and reasoning tokens, a missing price and a usage nobody
             // captured are written as a reviewer's local line writes them (story 3.1).
-            foreach (var line in LaunchLines.Of(launches, finished.Usage, finished.Elapsed, OutcomeOf(finished), firstAttempt))
+            foreach (var line in LaunchLines.Of(on.Attempt.Launches, finished.Usage, finished.Elapsed, OutcomeOf(finished), firstAttempt))
             {
                 ledger.RecordJob(
-                    finished.Email, vendor.Id, job.Model, job.Role, line.Outcome, line.Elapsed, line.Usage,
-                    kind: JobKinds.Wire(job.Kind), stage: "TeamServer", turn: job.Id, attempt: line.Attempt);
+                    finished.Email, on.Vendor.Id, on.Job.Model, on.Job.Role, line.Outcome, line.Elapsed, line.Usage,
+                    kind: JobKinds.Wire(on.Job.Kind), stage: "TeamServer", turn: on.Job.Id, attempt: line.Attempt,
+                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot.Name);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

@@ -7436,6 +7436,12 @@ from both sides of the change. The help's spending article says both, in five la
 The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
 plan's deviations.
 
+**Story 3.4 (2026-10-11): the parser keeps what a launch ran with.** `usage.ts`'s `UsageEntry` gains the eight ledger
+fields `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, `job` and `slot`, and `ranWithFields` reads them —
+each present only when the line says it, so an empty value ("not recorded") and an old line both read as absent. Nothing
+renders them yet, so no help article changed; they are kept so a later surface reads them rather than drops them
+(`TheParser_KeepsWhatTheLaunchRanWith`).
+
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
 window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes

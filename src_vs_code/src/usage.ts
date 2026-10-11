@@ -45,6 +45,21 @@ export interface UsageEntry {
   readonly turn?: string;
   /** What the launch was inside its turn — `first`, `repair`, `followUp`, `retry`, `rotated`; absent like `turn`. */
   readonly attempt?: string;
+  /**
+   * What the launch RAN WITH (story 3.4 of todo/PLAN_every_round_is_counted.md): the runtime that ran it, the first line
+   * of that CLI's `--version` where one was already asked, the effort and the tier each with its source (`row`, `server`,
+   * `ignored`, `dropped`, `cli-config` — `OptionSources` in `src_mcp/runners/Reviewers/LaunchOptions.cs`), and on a Team
+   * server the job and the account slot by its name. Each is absent on a line older than the field, and where the line
+   * says nothing — an empty value is "not recorded", never a value.
+   */
+  readonly cli?: string;
+  readonly cliVersion?: string;
+  readonly effort?: string;
+  readonly effortFrom?: string;
+  readonly tier?: string;
+  readonly tierFrom?: string;
+  readonly job?: string;
+  readonly slot?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -107,6 +122,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...(typeof parsed.usageNote === 'string' && parsed.usageNote.length > 0 ? { usageNote: parsed.usageNote } : {}),
       ...ledgerExtras(parsed),
       ...launchFields(parsed),
+      ...ranWithFields(parsed),
     };
   } catch {
     return undefined;
@@ -148,6 +164,26 @@ function turnOf(value: unknown): Pick<UsageEntry, 'turn'> {
 
 function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
   return saidText(value) ? { attempt: value } : {};
+}
+
+/** The eight text fields story 3.4 of todo/PLAN_every_round_is_counted.md added — what the launch ran with. */
+const RAN_WITH_FIELDS = ['cli', 'cliVersion', 'effort', 'effortFrom', 'tier', 'tierFrom', 'job', 'slot'] as const;
+
+type RanWithField = (typeof RAN_WITH_FIELDS)[number];
+
+/**
+ * What the launch ran with, each field present only when the line says it — the rule `launchFields` keeps: an older line
+ * has none, and an empty value ("not recorded") is absent rather than a value nothing chose.
+ */
+function ranWithFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, RanWithField> {
+  const said: Partial<Record<RanWithField, string>> = {};
+  for (const name of RAN_WITH_FIELDS) {
+    const value: unknown = parsed[name];
+    if (saidText(value)) {
+      said[name] = value;
+    }
+  }
+  return said;
 }
 
 function number(value: unknown): number {

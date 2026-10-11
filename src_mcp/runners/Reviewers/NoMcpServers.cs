@@ -82,21 +82,10 @@ public static partial class NoMcpServers
     /// <param name="env">
     /// The environment the LAUNCH will have: on the Team server codex runs as a slot, with the slot's own
     /// <c>CODEX_HOME</c> and <c>HOME</c>, and the config it reads is that home's, not the server's. (Our own code
-    /// reviewer.)
+    /// reviewer.) The file is located and read by <see cref="CodexConfigFile.TextIn"/> — one locator for every reader.
     /// </param>
-    public static IReadOnlyList<string> CodexConfigured(Func<string, string?> env)
-    {
-        var path = Path.Combine(
-            env("CODEX_HOME") is { Length: > 0 } codexHome ? codexHome : Path.Combine(HomeIn(env), ".codex"), "config.toml");
-        try
-        {
-            return File.Exists(path) ? CodexServerNames(File.ReadAllText(path)) : [];
-        }
-        catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
-    }
+    public static IReadOnlyList<string> CodexConfigured(Func<string, string?> env) =>
+        CodexServerNames(CodexConfigFile.TextIn(env));
 
     /// <summary>
     /// Every MCP server a Codex <c>config.toml</c> declares for certain, in order, once each.
@@ -206,17 +195,6 @@ public static partial class NoMcpServers
     }
 
     private static string Home() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-    /// <summary>The home directory the given environment names — <c>HOME</c>, then <c>USERPROFILE</c> — else this process's.</summary>
-    private static string HomeIn(Func<string, string?> env)
-    {
-        if (env("HOME") is { Length: > 0 } unix)
-        {
-            return unix;
-        }
-
-        return env("USERPROFILE") is { Length: > 0 } windows ? windows : Home();
-    }
 
     /// <summary>The key path of a <c>[table]</c> header, or nothing when it is not one.</summary>
     private static IReadOnlyList<string>? HeaderPath(string line)
