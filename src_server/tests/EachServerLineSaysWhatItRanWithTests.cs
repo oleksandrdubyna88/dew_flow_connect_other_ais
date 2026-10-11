@@ -129,14 +129,16 @@ public sealed class EachServerLineSaysWhatItRanWithTests : IDisposable
         var job = await Accepted("codex", "gpt-5.6-luna", "high");
         job.Effort.Should().BeEmpty("codex takes no effort a server can apply");
         job.EffortFrom.Should().Be(OptionSources.Dropped, "the job must carry what became of the request's effort to its line");
-        // The slot's configuration names an effort — and the line still says the request's was DROPPED, not that it ran at
-        // the configuration's: whether the person's setting ran is the line's question.
+        // The slot's configuration names an effort. Two facts, two fields (the consultation of 2026-10-11): the request's
+        // effort was DROPPED, and what ran is the slot's configured 'low', labelled as the configuration's.
         Vendor("codex", "codex", "gpt-5.6-luna", "model_reasoning_effort = \"low\"\n");
         var launcher = new Received();
 
         var line = await RunOnce(launcher, job, "codex");
 
-        (Text(line, "effort"), Text(line, "effortFrom")).Should().Be((string.Empty, OptionSources.Dropped));
+        Text(line, "effortNotSent").Should().Be(OptionSources.Dropped);
+        (Text(line, "effort"), Text(line, "effortFrom")).Should().Be(("low", OptionSources.CliConfig),
+            "the person's setting did not run; the slot's configured effort did");
         Setting(launcher.Launch.Arguments, "model_reasoning_effort").Should().BeEmpty();
     }
 

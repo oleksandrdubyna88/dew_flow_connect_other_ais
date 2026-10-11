@@ -183,6 +183,9 @@ public sealed record UsageEntryDto(
     string? TierFrom = null,
     string? Job = null,
     string? Slot = null,
+    // Whether the asked-for effort / tier reached the CLI — apart from what ran (the consultation of 2026-10-11).
+    string? EffortNotSent = null,
+    string? TierNotSent = null,
     // Why the store killed a cancelled job (story 3.2) — absent on every older line and on every other ending.
     string? EndCause = null);
 

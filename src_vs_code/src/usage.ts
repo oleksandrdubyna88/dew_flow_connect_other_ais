@@ -60,6 +60,9 @@ export interface UsageEntry {
   readonly tierFrom?: string;
   readonly job?: string;
   readonly slot?: string;
+  /** `ignored` / `dropped` when the asked-for effort did not reach the CLI — apart from `effort`, which says what ran. */
+  readonly effortNotSent?: string;
+  readonly tierNotSent?: string;
   /**
    * WHY a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — `withdrawn`,
    * `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in `src_mcp/runners/Reviewers/EndCauses.cs`).
@@ -183,8 +186,13 @@ function endCauseOf(value: unknown): Pick<UsageEntry, 'endCause'> {
   return saidText(value) ? { endCause: value } : {};
 }
 
-/** The eight text fields story 3.4 of todo/PLAN_every_round_is_counted.md added — what the launch ran with. */
-const RAN_WITH_FIELDS = ['cli', 'cliVersion', 'effort', 'effortFrom', 'tier', 'tierFrom', 'job', 'slot'] as const;
+/**
+ * The text fields story 3.4 of todo/PLAN_every_round_is_counted.md added — what the launch ran with — and the two
+ * not-sent facts the consultation of 2026-10-11 split off them.
+ */
+const RAN_WITH_FIELDS = [
+  'cli', 'cliVersion', 'effort', 'effortFrom', 'tier', 'tierFrom', 'job', 'slot', 'effortNotSent', 'tierNotSent',
+] as const;
 
 type RanWithField = (typeof RAN_WITH_FIELDS)[number];
 

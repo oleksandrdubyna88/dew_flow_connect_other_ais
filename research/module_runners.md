@@ -1596,13 +1596,16 @@ flowchart LR
   `default` for `false` — codex's words, so one column compares across vendors); local and api send their
   `--reasoning-effort`; a Team server row sends contract 2's `--effort` (what the server then applied is the SERVER's
   line's to say). gemini and agy send neither.
-- **The label** (`OptionChoice.Labelled`, in this order): a value on the argv is `row`; a value the row set and the path
-  did not send is `ignored`, and empty — a codex row's effort, or an Off/On tier a codex release in 0.110–0.130 or a
-  claude launch with no data folder could not be told; a value nothing set or sent is what the CLI's own configuration
-  names, labelled `cli-config` (codex's `config.toml` only; on somebody else's endpoint its `service_tier` is not
-  read); else empty. **The configuration is read to label, never to change the launch**: `RowLaunchOptions` runs after
-  the argv is built and touches nothing on it, and an ignored row value is not relabelled as the configuration's —
-  the line's question is whether the row's setting ran.
+- **The label** (`OptionChoice.Labelled`, in this order): a value on the argv is `row` (or `server`); a value nothing
+  sent is what the CLI's own configuration names, labelled `cli-config` (codex's `config.toml` only, a root key — so an
+  inference, not the CLI's resolved configuration; on somebody else's endpoint its `service_tier` is not read); else
+  empty. **Whether the row's own setting reached the launch is a separate field** (`effortNotSent` / `tierNotSent`):
+  `ignored` for a value the row set and the path did not send — a codex row's effort, or an Off/On tier a codex release
+  in 0.110–0.130 or a claude launch with no data folder could not be told — and `dropped` for one the Team server
+  refused. Split on the consultation of 2026-10-11: as one field, an ignored codex effort made `effort` empty and so hid
+  the inherited `config.toml` effort that actually ran — the likely cost driver this plan exists to see — and the same
+  config read differently depending on an inert row setting. **The configuration is read to label, never to change the
+  launch**: `RowLaunchOptions` runs after the argv is built and touches nothing on it.
 - **The version** is the codex tier probe's answer for this round (`CodexTierSupport.Printed`, `codex-cli 0.160.0`) — the
   one `--version` a local launch already asks, and only for an Off codex row on codex's own service. Every other local
   line's `cliVersion` is empty: a spawn per launch for one field is not paid.

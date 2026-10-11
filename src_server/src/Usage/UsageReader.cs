@@ -209,7 +209,9 @@ public sealed class UsageReader(string dataDir)
                     entry.Effort ?? string.Empty,
                     entry.EffortFrom ?? string.Empty,
                     entry.Tier ?? string.Empty,
-                    entry.TierFrom ?? string.Empty),
+                    entry.TierFrom ?? string.Empty,
+                    entry.EffortNotSent ?? string.Empty,
+                    entry.TierNotSent ?? string.Empty),
                 Job = entry.Job ?? string.Empty,
                 Slot = entry.Slot ?? string.Empty,
                 // Read, not dropped (story 3.2): why the store killed a cancelled job. An older line, and every

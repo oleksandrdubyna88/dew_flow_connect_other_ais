@@ -182,9 +182,9 @@ public sealed record UsageEntry(
     /// <summary>Where <paramref name="Effort"/> came from — one of <see cref="OptionSources"/>, or empty for unknown.</summary>
     /// <remarks>
     /// <c>row</c> (sent from the row's settings), <c>server</c> (sent, the Team server's choice: a cap or its own default),
-    /// <c>ignored</c> (the row set one this launch path never sends — a codex row's effort; the effort is then empty),
-    /// <c>dropped</c> (the Team server refused the request's; empty too), <c>cli-config</c> (nothing was asked or sent, and
-    /// the CLI's own configuration names the value shown — read to label the line, never to change the launch).
+    /// <c>cli-config</c> (nothing was sent, and the CLI's own configuration names the value shown — read to label the line,
+    /// never to change the launch), or empty (unknown: the vendor's own default). Whether the row asked for a value that
+    /// did not reach the launch is <paramref name="EffortNotSent"/>'s, apart — the consultation of 2026-10-11.
     /// </remarks>
     string EffortFrom = "",
 
@@ -204,6 +204,15 @@ public sealed record UsageEntry(
     string Slot = "",
 
     /// <summary>
+    /// <c>ignored</c> or <c>dropped</c> when the row (or the request) asked for an effort that did not reach the CLI — or
+    /// empty. Apart from <paramref name="Effort"/>, which says what RAN, so an inert row setting never changes it.
+    /// </summary>
+    string EffortNotSent = "",
+
+    /// <summary>The same as <paramref name="EffortNotSent"/>, for the tier.</summary>
+    string TierNotSent = "",
+
+    /// <summary>
     /// WHY a launch the caller's token killed was killed — one of <see cref="EndCauses"/> — or empty.
     /// </summary>
     /// <remarks>
@@ -216,7 +225,7 @@ public sealed record UsageEntry(
     /// </remarks>
     string EndCause = "")
 {
-    /// <summary>This line with the six fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
+    /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
     {
         Cli = ranWith.Cli,
@@ -225,6 +234,8 @@ public sealed record UsageEntry(
         EffortFrom = ranWith.EffortFrom,
         Tier = ranWith.Tier,
         TierFrom = ranWith.TierFrom,
+        EffortNotSent = ranWith.EffortNotSent,
+        TierNotSent = ranWith.TierNotSent,
     };
 }
 

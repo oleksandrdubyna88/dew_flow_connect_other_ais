@@ -24,17 +24,19 @@ public static class OptionSources
     /// a tier its launch path sets because the request carries none.</summary>
     public const string Server = "server";
 
-    /// <summary>The row set a value and this launch path does not send it — a codex row's effort, which codex is never
-    /// told (<c>RosterBuilder.EffortFor</c>), or a tier the installed release cannot take. The value is then empty: what
-    /// the row asked for did not run, and nothing is claimed about what did.</summary>
+    /// <summary>A NOT-SENT word, not a source (<c>effortNotSent</c> / <c>tierNotSent</c>): the row set a value and this launch
+    /// path does not send it — a codex row's effort, which codex is never told (<c>RosterBuilder.EffortFor</c>), or a tier
+    /// the installed release cannot take. What RAN is the line's <c>effort</c>/<c>tier</c> with its own source — the CLI's
+    /// configuration's, when it names one (the consultation of 2026-10-11 split the two facts).</summary>
     public const string Ignored = "ignored";
 
-    /// <summary>The Team server refused the value the request carried (<c>ClientOptions</c>'s <c>Dropped</c>) — a codex
-    /// effort, which no server applies. The value is empty, for the same reason as <see cref="Ignored"/>.</summary>
+    /// <summary>A NOT-SENT word: the Team server refused the value the request carried (<c>ClientOptions</c>'s
+    /// <c>Dropped</c>) — a codex effort, which no server applies. What ran is labelled apart, as for <see cref="Ignored"/>.</summary>
     public const string Dropped = "dropped";
 
-    /// <summary>Nothing was asked and nothing was sent, and the CLI's own configuration names a value — which is what the
-    /// CLI then ran with. Read only to LABEL the line: reading it never adds a flag to the launch.</summary>
+    /// <summary>Nothing was sent, and the CLI's own configuration names a value — which is what the CLI then ran with, by
+    /// inference (a root key of its config file, not its resolved configuration). Read only to LABEL the line: reading it
+    /// never adds a flag to the launch. Whether the row ASKED for something else is the not-sent field's.</summary>
     public const string CliConfig = "cli-config";
 
     /// <summary>Every source this build names. An EMPTY source is the sixth answer: nothing was sent and nothing known
@@ -94,19 +96,21 @@ public sealed record CliDefaults(string Effort = "", string Tier = "")
 public sealed record OptionChoice(string Sent, string SentFrom, string NotSentAs = "")
 {
     /// <summary>
-    /// The value and its source, in this order: what was sent; else why what was asked was not; else what the CLI's own
-    /// configuration names; else nothing — the vendor's default, which nothing here knows.
+    /// The value the launch RAN with and its source: what was sent; else what the CLI's own configuration names; else
+    /// nothing — the vendor's default, which nothing here knows.
     /// </summary>
     /// <remarks>
-    /// Asked before sent is never possible: a value on the argv is what the launch ran with, whatever the row said. And
-    /// the configuration is read LAST, only for a value nothing chose — a row's ignored effort is not relabelled as the
-    /// configuration's, because the line's question is whether the row's setting ran, and it did not.
+    /// <para>Whether the row's own setting reached the launch is a DIFFERENT fact, kept apart in <see cref="NotSentAs"/>
+    /// (the consultation of 2026-10-11): an ignored codex effort used to make this value empty, which hid exactly the
+    /// inherited configuration effort that drives a round's cost, and made the same config read differently depending on
+    /// an inert row setting. Now the configuration labels every value nothing sent, asked for or not.</para>
+    /// <para>The configured value is INFERRED — a root key of the CLI's config file, not the CLI's resolved configuration
+    /// — and its source word says so.</para>
     /// </remarks>
-    public (string Value, string From) Labelled(string configured) => (Sent, NotSentAs, configured) switch
+    public (string Value, string From) Labelled(string configured) => (Sent, configured) switch
     {
-        ({ Length: > 0 }, _, _) => (Sent, SentFrom),
-        (_, { Length: > 0 }, _) => (string.Empty, NotSentAs),
-        (_, _, { Length: > 0 }) => (configured, OptionSources.CliConfig),
+        ({ Length: > 0 }, _) => (Sent, SentFrom),
+        (_, { Length: > 0 }) => (configured, OptionSources.CliConfig),
         _ => (string.Empty, string.Empty),
     };
 }
@@ -121,13 +125,18 @@ public sealed record OptionChoice(string Sent, string SentFrom, string NotSentAs
 /// <param name="CliVersion">The first line of the CLI's own <c>--version</c>, where one was ALREADY asked — never a spawn per
 /// launch: locally the codex tier probe's answer (an Off codex row on codex's own service), on a Team server the catalog's
 /// cached health probe. Empty where no version was asked, which is every other launch.</param>
+/// <param name="EffortNotSent"><see cref="OptionSources.Ignored"/> or <see cref="OptionSources.Dropped"/> when the row (or the
+/// request) asked for an effort that did not reach the CLI — apart from <paramref name="Effort"/>, which says what ran.</param>
+/// <param name="TierNotSent">The same, for the tier.</param>
 public sealed record LaunchOptions(
     string Cli = "",
     string CliVersion = "",
     string Effort = "",
     string EffortFrom = "",
     string Tier = "",
-    string TierFrom = "")
+    string TierFrom = "",
+    string EffortNotSent = "",
+    string TierNotSent = "")
 {
     /// <summary>Nothing known — a line written by a path that does not label its launches (a consultation, a probe).</summary>
     public static LaunchOptions None { get; } = new();
@@ -138,7 +147,7 @@ public sealed record LaunchOptions(
         var (effortValue, effortFrom) = effort.Labelled(configured.Effort);
         var (tierValue, tierFrom) = tier.Labelled(configured.Tier);
 
-        return new(cli, cliVersion, effortValue, effortFrom, tierValue, tierFrom);
+        return new(cli, cliVersion, effortValue, effortFrom, tierValue, tierFrom, effort.NotSentAs, tier.NotSentAs);
     }
 
     /// <summary>The first line of a <c>--version</c> answer — what a ledger line keeps of it.</summary>
