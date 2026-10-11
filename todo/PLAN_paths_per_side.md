@@ -792,6 +792,12 @@ compiling break-it on its deciding line; the observed messages are in the commit
     window of this version looks while its row is gone), and design (c)'s sentence corrected — a legacy value spelled for
     neither OS wins for BOTH families. The literal `code:` beside `DROPPED` in `cliPathKeepHost.ts` stays: the
     notification-sites census reads the literal at each call site.
+  - **Code round 2** (codex, 4 reviewers, `proceed`): the keeper's said set and the compat script's failure list are
+    replaced instead of changed in place — accepted (no behaviour change). Rejected with reasons: the German help (as
+    in round 1); two windows saving a row at the same moment (VS Code's configuration API has no compare-and-swap — the
+    same last-writer-wins every `coai.vendors` write had before E3); a stale copy written by one host (the next look on
+    either host rewrites it, and Restore names its values and re-reads the row at the click); one notice per dropped row
+    (only rows that had two values are kept — a batch Restore is E4's page).
 - **Not in E3:** any page change — the two fields (E4.1), the three folder groups (E4.2) and the other side's data
   directory (E4.3) are stored and decided here and drawn there; and the panel's **Restore** button (E4.1).
 
