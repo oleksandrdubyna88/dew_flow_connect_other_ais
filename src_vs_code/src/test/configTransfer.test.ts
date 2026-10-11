@@ -109,6 +109,31 @@ test('a path on this machine inside a vendor or a consultant is removed, the res
   assert.equal(JSON.stringify(out).includes('executablePath'), false);
 });
 
+test('the per-side CLI paths of a row leave with the legacy one, and an import puts both back from the entry this machine has', () => {
+  // todo/PLAN_paths_per_side.md E3.1: `executablePathBySide` holds a Windows and a WSL path of the machine that wrote the
+  // file — as much a path on that machine as `executablePath`, and as wrong on another.
+  const bySide = { windows: 'C:/tools/codex.cmd', posix: '/opt/codex', mirrored: 'C:/tools/codex.cmd' };
+  const out = exportedSettings(declared, base({ vendors: [{ id: 'codex', model: 'm', executablePath: 'C:/tools/codex.cmd', executablePathBySide: bySide }] }));
+  assert.deepEqual(out['vendors'], [{ id: 'codex', model: 'm' }], JSON.stringify(out));
+
+  const current = [{ id: 'codex', executablePath: 'C:/tools/codex.cmd', executablePathBySide: bySide }];
+  assert.deepEqual(withLocalPaths([{ id: 'codex', model: 'new' }, { id: 'fresh' }], current), [
+    { id: 'codex', model: 'new', executablePath: 'C:/tools/codex.cmd', executablePathBySide: bySide },
+    { id: 'fresh' },
+  ]);
+});
+
+test('a per-side CLI path inside an imported file is never applied either, and is refused by its own name', () => {
+  const back = importedConfig(JSON.stringify({
+    format: CONFIG_FORMAT, version: CONFIG_VERSION, prompts: {},
+    settings: { vendors: [{ id: 'fresh', executablePathBySide: { posix: '/tmp/evil' } }] },
+  }), declared);
+
+  assert.ok(back.ok);
+  assert.equal(JSON.stringify(back.settings).includes('executablePathBySide'), false, JSON.stringify(back.settings));
+  assert.deepEqual(back.refused.map((one) => one.name), ['vendors → executablePathBySide']);
+});
+
 test('a Team-server URL is configuration a person typed, and is exported', () => {
   const servers = [{ id: 'acme', name: 'Acme', url: 'https://coai.acme.example' }];
 

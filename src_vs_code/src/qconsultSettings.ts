@@ -1,7 +1,7 @@
 import { compareVersions } from './coaiInstall';
 import { positive } from './consultSettings';
-import { hostExecutableSide } from './hostSide';
-import { executableHere } from './pathFamily';
+import { hostExecutableSide, hostFamily } from './hostSide';
+import { executableHere, storedForThisSide } from './pathFamily';
 import { Vendor, vendorsFrom } from './vendors';
 
 /**
@@ -189,7 +189,8 @@ function throughRow(row: QuestionRowSetting, target: Vendor): QuestionRowSetting
     runtime: target.runtime,
     model: row.model || target.model,
     baseUrl: target.baseUrl,
-    executablePath: target.executablePath,
+    // THIS side's stored value (paths per side E3.1), which rowsOnTheWire resolves as the row would be.
+    executablePath: storedForThisSide(target, hostFamily()),
   };
 }
 

@@ -93,8 +93,8 @@ test('a root the disk could not answer for takes the warning tone and "could not
 
 // ---------- the Models card's CLI path ----------
 
-function modelsPage(executablePath: string, findings: readonly PathFinding[] | undefined): PageNode {
-  const vendors = vendorsFrom([{ ...DEFAULT_VENDORS[0]!, id: 'my-codex', runtime: 'codex', model: 'gpt-6.1-sol', enabled: true, executablePath }]);
+function modelsPage(executablePath: string, findings: readonly PathFinding[] | undefined, extra: Readonly<Record<string, unknown>> = {}): PageNode {
+  const vendors = vendorsFrom([{ ...DEFAULT_VENDORS[0]!, id: 'my-codex', runtime: 'codex', model: 'gpt-6.1-sol', enabled: true, executablePath, ...extra }]);
 
   return drawn({ ...panelState('reviewers'), vendors, hostFamily: 'windows', otherSideClis: [], pathFindings: findings }, 'models');
 }
@@ -108,6 +108,17 @@ test('a Models card whose CLI path is missing marks the box: the field path-miss
   assert.ok(box.parent !== undefined && classes(box.parent as PageNode).includes('path-missing'), `the field around the box is drawn as ${(box.parent as PageNode | undefined)?.className}`);
 
   assert.equal(marked(modelsPage('D:\\tools\\codex.exe', [])).length, 0, 'a card with no finding was marked');
+});
+
+test('a card whose row keeps a CLI path per side marks THIS side\'s value — the one its box draws and the watch names', () => {
+  // Paths per side E3 × E5: the WSL side saved last (legacy `/usr/local/bin/codex`); this Windows side's own value is in
+  // its member, and the watch's finding is about that value (`pathWatch.cliValues`).
+  const bySide = { executablePathBySide: { windows: 'D:\\mine\\codex.exe', posix: '/usr/local/bin/codex', mirrored: '/usr/local/bin/codex' } };
+  const tree = modelsPage('/usr/local/bin/codex', [finding('coai.vendors[].executablePath', 'models', 'D:\\mine\\codex.exe', 'missing', 'my-codex')], bySide);
+
+  const box = tree.one((node) => node.tagName === 'INPUT' && node.dataset['setting'] === 'executablePath' && node.dataset['vendor'] === 'my-codex', 'the CLI-path box');
+  assert.equal(box.attrs['value'], 'D:\\mine\\codex.exe', 'the box draws this side\'s value');
+  assert.equal(box.attrs['aria-invalid'], 'true', 'the finding about this side\'s value did not mark its box');
 });
 
 // ---------- Setup › MCP server: the watched folders and the data directory ----------

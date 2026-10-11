@@ -44,6 +44,7 @@ import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
 import { onDataRootBack, onFindings, refuseUnderMissingRootOnceSettled } from './findingsBoard';
 import { startPathWatch } from './pathWatchHost';
+import { startCliPathKeep } from './cliPathKeepHost';
 import { fileAt, useFileProbe } from './pathFamily';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
@@ -124,6 +125,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // settings mirror below writes the data directory, because the mirror and every ledger ask the watch's answer first
   // (E5.0): a named data root that is missing is never created by them.
   const pathWatch = startPathWatch(context);
+  // A per-side CLI path a save by an extension that does not know it dropped is said, and offered back on a click — never
+  // restored on its own (paths per side, E3 as built). Looked at now and on every settings change below.
+  const cliPathKeep = startCliPathKeep(context);
   // The review roles know this window's side from the start: the Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
@@ -576,6 +580,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
         storageReadsThisSide(context);
         // And the paths are asked of the disk again, the data root among them, before the mirror decides (E5.3).
         pathWatch.forget();
+        void cliPathKeep.check();
         mirrorSettings(settingsSync);
         void panel.render();
       }
