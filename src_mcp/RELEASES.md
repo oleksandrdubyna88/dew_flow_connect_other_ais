@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.48.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.47.0...mcp-v0.48.0) (2026-10-11)
+
+
+### Features
+
+* **tests:** local test runs take at most 8 workers, at lowered CPU priority ([#757](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/757)) ([328703f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/328703faf67d84ebb55944922215925157dc85aa))
+* the ledger tells the truth — whole usage, end causes, one line per paid launch, what each ran with (round counter E3) ([#761](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/761)) ([8d086c5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8d086c510518de52e7786f0d0b8ebd7f9a323a64))
+
 ## [0.47.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.46.0...mcp-v0.47.0) (2026-10-11)
 
 
