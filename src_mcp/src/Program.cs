@@ -1936,6 +1936,56 @@ internal static class Program
         return flags;
     }
 
+    /// <summary>Why serve may not serve here — the named root is confirmed absent — or empty when it may. Pure over the reads.</summary>
+    internal static string ServeRefusal(Func<string, string?> env, Func<string, FileAttributes> attributesOf) =>
+        Server.PanelSettings.NamedRootMissing(env, attributesOf) is { Length: > 0 } missing
+            ? missing + " This server refuses every tool until it does: restore it, then restart the MCP server."
+            : string.Empty;
+
+    /// <summary>
+    /// The server a client is given while the named data folder is missing: the real tool list over stdio, every call an
+    /// MCP error carrying <paramref name="reason"/> (<see cref="Server.RefusingServiceSource"/>). It writes nothing to disk —
+    /// the reason goes to stderr, which a client keeps as this server's log — and it does not watch for the folder: the
+    /// person restores it and restarts the server, as the reason says.
+    /// </summary>
+    /// <returns>74 when the client leaves — the extension words 74 as "could not use its data directory".</returns>
+    private static async Task<int> RefusingServeAsync(string reason)
+    {
+        Note(reason);
+        var options = new McpServerOptions
+        {
+            ServerInfo = new Implementation { Name = ServerName, Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0" },
+            ServerInstructions = Instructions,
+            ToolCollection = [.. Tools.All(new Server.RefusingServiceSource(reason))],
+            PromptCollection = [.. Prompts.All()],
+        };
+        using var stopping = new CancellationTokenSource();
+        using var terminated = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, context =>
+        {
+            context.Cancel = true;
+            stopping.Cancel();
+        });
+        using var interrupted = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGINT, context =>
+        {
+            context.Cancel = true;
+            stopping.Cancel();
+        });
+        await using var transport = new StdioServerTransport(ServerName);
+        // The token alone does not end a blocked stdin read (ServeAsync says so): the stop closes the transport too.
+        using var unblock = stopping.Token.Register(() => _ = transport.DisposeAsync().AsTask());
+        await using var server = McpServer.Create(transport, options);
+        try
+        {
+            await server.RunAsync(stopping.Token);
+        }
+        catch (Exception e) when (e is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            // A signal, or the client going away: the ending of a server that had nothing to do.
+        }
+
+        return 74; // EX_IOERR
+    }
+
     private static async Task<int> ServeAsync()
     {
         // The credential word list is EXERCISED here — before the logger, the settings and the
@@ -1946,6 +1996,14 @@ internal static class Program
         // it never uses. The release smoke runs a real `initialize` over stdio against the
         // published binary, which is what makes this line a check rather than a comment.
         CredentialWords.EnsureLoaded();
+
+        // A NAMED data folder that is confirmed absent is never created by this server (research/PLAN_names_and_a_missing_root.md,
+        // story 3.2): BEFORE the logger — whose file sink is the first thing that would make it — serving branches into a
+        // server that answers the protocol and refuses every tool by name. No host, notices, run marker, sweep or survey.
+        if (ServeRefusal(Environment.GetEnvironmentVariable, File.GetAttributes) is { Length: > 0 } refused)
+        {
+            return await RefusingServeAsync(refused);
+        }
 
         // Resolved once, for the log's root and for the run marker: a local, not a member, so the
         // census of what answers a `ResolvedDataDir` (TheOneAppendTests) still names every road.
