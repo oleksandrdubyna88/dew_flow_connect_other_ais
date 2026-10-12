@@ -2667,3 +2667,37 @@ sequenceDiagram
 ```
 
 Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
+
+## A request that ends its child on an answer owns the tree it ends (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+
+The Team server's gauge reader is a child that is a SERVER: `codex app-server` answers one request and then serves
+until it is told to stop, and the way this product stops a child is the tree kill. Three things were widened on the
+one launcher both halves share, and nothing a reviewer launch does changed:
+
+- **`ProcessRequest.EndsWhen`** — a predicate over the stdout so far, asked after every chunk; when it says yes the
+  child is ended and the launch returns with **`ProcessResult.Ended`** set (`TimedOut` stays false). The default is
+  `ProcessRequest.Never`, and `EndsEarly` says whether a request set it. A predicate that throws is "not answered yet".
+- **The tree discipline, for such a request only** (`EndItAsync` with `EndsEarly`): the child's descendants are listed
+  BEFORE the kill — a killed parent's children are reparented and cannot be found afterwards — and handed to the
+  tracker as identities (pid AND start time), so a crash in the middle of the kill leaves every member named on disk;
+  then stdin is closed, the tree killed and the root waited for, as before; then each member is checked by identity for
+  up to `ProcessTree.ConfirmationBound` (2 s), re-killed meanwhile, and the ones still there come back as
+  **`ProcessResult.Survivors`**. The deadline path of such a request takes the same discipline. A request without a
+  predicate is killed on its deadline exactly as it always was, and lists nothing.
+- **A child that cannot be recorded is ended before the failure travels** (`RecordedAsync`): `ProcessTracking.Record`
+  never throws, but a tracker that writes a slot's marker can, and a child alive with its identity on nobody's disk is
+  the one state the containment has no answer to.
+
+**`ProcessTree`** (`Processes/ProcessTree.cs`) lists a process's descendants with their start times — Linux reads
+`/proc/<pid>/stat` for each process's parent, Windows takes a Toolhelp32 snapshot through four blittable `DllImport`s
+(no unsafe code, nothing for the AOT analyser) — and answers `IsAlive`, `Terminate` and `ConfirmGoneAsync` on
+`ProcessIdentity`, the one identity record (`OrphanSweep.Same`'s slack). **macOS is not supported, and fails closed**:
+`Supported` is false there, `Descendants` answers none, and a caller that needs the confirmation refuses to spawn
+rather than inheriting an unprobed answer (the platform-limits rule). The production host is Linux.
+
+The fake CLI gained the server shape: `serve <pidFile> <afterEofMs> grandchild|alone <answer>` answers the request
+whose line carries `"id":2`, writes its own pid and its sleeping grandchild's, and lives on after stdin closes for as
+long as told (for ever when negative); `app-server` is the same, steered by `fakecli-appserver.json` in the temp
+directory, because a confined launch is handed no `FAKECLI_*` variable (`tests_fakecli/Serving.cs`).
+
+Tests: `AReaderIsEndedWithItsTreeTests` (mcp) — listed in [module_tests.md](module_tests.md).

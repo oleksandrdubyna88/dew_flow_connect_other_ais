@@ -1575,3 +1575,151 @@ flowchart LR
 Tests: `RoundCountsTests`, `SeveralWindowsTests`, `RoundCountsEndpointTests`, `TheWindowAnswerKeepsItsBytesTests`, the
 `http/usage/usage.http` requests over the round lines `http/run-contracts.mjs` seeds, and the seam suite's usage-counts
 leg that reads the real server through the extension's parser — listed in [module_tests.md](module_tests.md).
+
+## The vendor's own gauge, read inside the lease — and contained (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+
+The Team server reads the codex gauge — `codex app-server` · `account/rateLimits/read`, the source story 1.1 found
+(`RESULTS_vendor_quota_gauges.md` §2.2) — on each codex slot, after each job, INSIDE the job's own lease, and stores
+the reading on the slot and on the job's ledger lines. Everything here follows from one fact: that read runs on the
+slot's token set, and a refresh of that set while any other process uses it signs the company out
+(`invalid_grant`). Story 6.1b, the same read on a person's machine, is deferred: no lock there excludes direct use of
+the same `CODEX_HOME`.
+
+### What codex 0.160.0 does on the read — inspected in its source, not run (2026-10-11)
+
+Inspected at tag `rust-v0.160.0` (`79b1b666f2e8551f8abbbca34957227f67f3f553`), the version the measurement ran on
+Windows; the host's installed version is whatever `/root/.local/bin/codex` is on the day, and is not pinned in this
+repository — re-check `should_refresh_proactively` on an upgrade.
+
+| Moment | What the code does | Where |
+|---|---|---|
+| start-up | `AuthManager::shared_from_config` loads `auth.json` into a cache. A read, no refresh. | `app-server/src/lib.rs:579`, `login/src/auth/manager.rs` (`new_from_auth_config` → `load_auth`) |
+| every authenticated request | `auth()` calls `should_refresh_proactively`: with a readable access-token JWT, a refresh is made when **`exp ≤ now + 5 min`** (`CHATGPT_ACCESS_TOKEN_REFRESH_WINDOW_MINUTES`); only when the JWT's `exp` cannot be read does the second rule apply — `last_refresh` older than **8 days** (`TOKEN_REFRESH_INTERVAL`). A refresh goes to `https://auth.openai.com/oauth/token` and rewrites `auth.json`; a failed refresh is logged and the cached token is used. | `manager.rs:2393` (`auth`), `:3004` (`should_refresh_proactively`), `:2848` (`refresh_token`) |
+| the rate-limits read | `get_account_rate_limits_response` → `auth_manager.auth_with_http_client_factory()` (the proactive rule above) → `BackendClient::from_auth` → `get_rate_limits_with_reset_credits()`; an HTTP error, a 401 included, becomes a JSON-RPC error `failed to fetch codex rate limits: …`. **No refresh-and-retry in this path**: `BackendClient` has no refresh, and `unauthorized_recovery` (`manager.rs:2813`) is the model-request path's, not this one's. | `app-server/src/request_processors/account_processor.rs:1115–1225`, `backend-client/src/client.rs:385` |
+| external tokens | the server→client request `chatgptAuthTokens/refresh` (reason `unauthorized`) exists only for a client that supplied tokens at `initialize` (`ChatgptAuthTokens` mode, `app-server/src/external_auth.rs`). A file-backed slot (`chatgpt` mode) never receives it; the reader never answers one. | `external_auth.rs`, `auth_mode.rs` |
+
+So on a file-backed slot the read rotates the token set in exactly one case this code can see: **the access token is
+within five minutes of its expiry** (or has no readable expiry and is eight days stale). Not established from the
+source: what the deployed host's version does if it differs from 0.160.0; whether a 401 on the read ever ends in a
+rotation some layer above the backend client performs (none was found); the vendor's own behaviour when a refresh is
+interrupted. The expired-token read itself stays **unmeasured**, as the 6.1 consultation decided — the copy method was
+dropped as unsafe, and no disposable account exists.
+
+### The containment, in the slot — the order is the design
+
+The epic-6 risk consultation verified that a startup sweep alone cannot contain a reader: `AcquireAsync` handed back a
+lease the moment the lock opened, `VendorLogin` took the same path, `ProcessLauncher` started a child before
+`ProcessTracking.Record`, and `Sweep` killed without awaiting exit. So the reader's safety lives in the slot:
+
+1. **The lock** (`SlotRegistry.AcquireAsync`, `FileShare.None` as before) — and now `AcquireAsync` answers a closed
+   `Acquisition`: `Taken(lease)`, `Busy`, or **`Blocked(code)`**.
+2. **Reconcile the previous holder's marker before the lease is usable** (`BehindTheBarrierAsync` →
+   `ReconcileReaderAsync` → `ReaderReconcile.RunAsync`): every process the marker names is killed — its whole tree, by
+   pid AND start time (`ProcessTree.Terminate`, `OrphanSweep.Same`'s slack) — and CONFIRMED gone within
+   `ProcessTree.ConfirmationBound` (2 s, re-killing meanwhile). A marker that names nothing (`spawning`, or a record with
+   no start time) blocks with `reader-identity-missing`; a member still alive at the bound blocks with
+   `reader-termination-failed`. Blocked keeps the handle closed, persists `Blocked` on the slot, and is re-tried on
+   EVERY later acquisition — so a block over a member that later dies lifts without a human, and one over a nameless
+   reader does not (availability is the price of an ambiguous crash). `login` and the startup sweep take the same path.
+3. **The fail-closed marker before the spawn** (`SlotRegistry.MarkReaderExpected`, phase `spawning`): no marker
+   written, no spawn (`GaugeCodes.MarkerNotWritten`).
+4. **The child's identity as it starts**: the reader is launched through a `ProcessLauncher` built around
+   `SlotReaderTracker`, whose `Record` writes the pid and start time into the marker (phase `running`); a launcher whose
+   record fails ends the child before it throws ([module_runners.md](module_runners.md)).
+5. **Every descendant confirmed exited, then the marker cleared**: the reader is a request that ends its child on its
+   answer (`ProcessRequest.EndsWhen`), so the launcher lists the descendants BEFORE the kill, records them in the
+   marker, kills the tree, and reports survivors; a survivor blocks the slot (`MarkBlocked`), none clears the marker
+   (`ClearReader`) — and only then does the lease end.
+
+**The startup sweep** is `GaugeReaderSweep`, a hosted service registered before the pump: it acquires every configured
+slot for an instant (`AcquireAsync(slot, TimeSpan.Zero)`) and releases it — the acquisition IS the sweep. A slot another
+process holds is skipped (its holder reconciled it); a blocked one is logged with its code. The release touches
+`LastUsedUtc`, so the LRU order is level after a restart — accepted.
+
+**Recovery.** Automatic: the next acquisition proves the recorded members gone. Manual, for `reader-identity-missing`:
+stop the server, confirm on the box that no `codex app-server` runs with that slot's `CODEX_HOME`, remove the `reader`
+object from the slot's `state.json`, start the server. `login` refuses a blocked slot with exit **76**
+(`VendorLogin.BlockedExitCode`), saying so; `SlotSelector.Explain` says *every account is unavailable — a gauge reader of
+a crashed server could not be proved gone*. The catalog counts a blocked slot as not ready.
+
+### The capture (`GaugeCapture`, `JobRunner.RecordAsync`)
+
+After the job and inside its lease, in this order: the job is made terminal in the store (`Finish`) — a caller polling
+it is answered first and nothing the reader does changes what it is told; then the capture; then the ledger lines,
+carrying the reading. A requeued attempt (rate-limited, rotated) is not the job's end: no read. The pre-spawn guards,
+each a fixed `GaugeCodes` word in the log:
+
+- a codex slot (`vendor.Runtime`), not signed out, not blocked, capture not suspended (`slot-not-readable`);
+- a platform that can list descendants — Linux and Windows; macOS refuses to spawn (`platform-unsupported`);
+- **the expiry guard** (`CodexAuthExpiry.Of` → `GaugeCapture.Guard`): the access token's JWT `exp`, read from
+  `<slot>/.codex/auth.json` — the one claim decoded, the token never kept or logged — must exceed now by more than
+  `ReaderLifetime` (20 s) + `ExpiryMargin` (10 min — codex's five-minute window doubled for a clock a few minutes off);
+  an unknown expiry (no file, not `chatgpt` mode, no `last_refresh` — codex's own precondition —, no token, not a JWT,
+  no `exp`) skips. The guard NARROWS the risk and is not the safety boundary: the lease is.
+
+The reader: `codex app-server`, confined (`InheritsEnvironment = false`), in the slot's own home
+(`SlotEnvironment.For`), three stdin lines — `initialize`, `initialized`, `account/rateLimits/read` as request 2
+(`GaugeProtocol.Requests`) — ended on the first line carrying `"id":2` or a request FROM the server, else at its
+lifetime. Never `account/rateLimitResetCredit/consume`, never a login, never an answer to `chatgptAuthTokens/refresh`.
+
+What comes back (`GaugeProtocol.Parse`): a result → `GaugeReadingDto` (below); an error whose message speaks of
+authentication → **suspended** (`auth-refused`); `chatgptAuthTokens/refresh` or `account/login/*` → **suspended**
+(`refresh-requested`, `login-requested`); any other error, an unreadable result, no answer, a timeout → `Failed(code)`,
+the previous reading marked stale. A capture that threw marks the previous reading stale and clears a marker still in
+`spawning` (nothing was recorded, and the launcher ended what it could not record); a marker that names the child is
+kept for the next holder.
+
+**Suspension is the slot's OWN state** — `GaugeSuspended` (the code) and `GaugeSuspendedUtc` on `state.json`, never
+`NeedsSignIn`: the account still takes jobs, so the recovery launch stays schedulable. `MarkSucceeded` — a job that
+finished on that token set without a refusal — lifts it; a failed job lifts nothing. While suspended, no reader is
+spawned. **A capture failure never changes the finished job's result**: the job was terminal before the reader ran.
+
+**The log** gets one line per capture — `gauge codex/a: read codex primary 40% of 10080 min, resets 2026-10-14T07:48:11Z`,
+`gauge codex/a: skipped (token-near-expiry)`, `gauge codex/a: capture suspended (auth-refused)`,
+`gauge codex/a: slot blocked (reader-termination-failed)` — the slot by its `vendors.json` name, numbers, codes, an
+exception's type. Never a line of stdout or stderr: the raw stream carries the account id, an `account/updated`
+notification and `remoteControl/status/changed`, which names the machine (RESULTS §2.6).
+
+### What is stored, and where
+
+| Where | What | Shape |
+|---|---|---|
+| `accounts/<vendor>/<slot>/state.json` (one overwritten snapshot, the existing atomic write) | `reader` — the marker: `phase`, `ownerPid`, `ownerStartedUtc`, `sinceUtc`, `tree[]` of `{pid, startedUtc}`; `blocked` — a code or empty; `gauge` — the reading; `gaugeSuspended`, `gaugeSuspendedUtc` | `SlotStateDto`'s five trailing fields; an older file binds them to null, read as none |
+| the reading (`GaugeReadingDto`) | `observedUtc`, `planType`, `rateLimitReachedType`, `ordinaryUsageAllowed` (null when unsaid — never inferred), `resetCreditsAvailable` (`rateLimitResetCredits.availableCount`), `windows[]` — every window of every limit in `rateLimitsByLimitId` (else `rateLimits`), each `{limitId, kind, usedPercent, windowDurationMins, resetsAtUtc}` identified by limit identity + duration; `stale` | an absent window is absent — the measured plan reports no five-hour window, so there is one entry, never a 0 % |
+| the job's ledger lines (`usage.jsonl`, every line of the job) | `gaugeObservedUtc`, `gaugePlan`, `gaugeLimit`, `gaugePrimaryMins`, `gaugePrimaryUsedPercent`, `gaugePrimaryResetsUtc`, `gaugeSecondaryMins`, `gaugeSecondaryUsedPercent`, `gaugeSecondaryResetsUtc` — the preferred limit's two windows, flat (`GaugeOnLine`, `UsageEntry.WithGauge`) | nine trailing fields; the numbers are left off the line when null (`JsonIgnore WhenWritingNull`), so an absent window is absent and an old line reads none; mirrored in `UsageEntryDto`, `UsageLine.Gauge` and the extension's `usage.ts` (`gaugeFields`, which never coerces a missing number to 0) |
+| `GET /api/catalog` → `vendors[].slots.gauge` | the LATEST reading among the vendor's accounts by `observedUtc` — the reading only, never which account | nullable AND omitted when null, as `UsageDto.Daily`: an older server and a server that never read are the same absence, which story 6.2 renders as unavailable |
+
+Story 6.2 derives rounds per 1 % from consecutive readings of one window instance and renders all of this; 6.1a
+stores and serves it. Growth: one object per slot, overwritten; ~+150 bytes per server ledger line that carries a reading.
+
+```mermaid
+sequenceDiagram
+  participant P as JobPump
+  participant R as SlotRegistry
+  participant J as JobRunner
+  participant G as GaugeCapture
+  participant L as ProcessLauncher
+  participant C as codex app-server
+  P->>R: AcquireAsync(slot)
+  R->>R: lock; reconcile the previous holder's marker (kill by pid+start, confirm) — or Blocked
+  R-->>J: Taken(lease)
+  J->>J: the job runs, Finish (terminal)
+  J->>G: CaptureAsync — codex? not suspended? exp − now > 20 s + 10 min?
+  G->>R: MarkReaderExpected (phase spawning)
+  G->>L: RunAsync(app-server, EndsWhen id 2)
+  L->>C: start; tracker.Record(pid, start) → marker running
+  L->>C: initialize · initialized · account/rateLimits/read
+  C-->>L: the answer (or an auth error / a refresh request)
+  L->>L: list descendants → marker; kill the tree; confirm gone
+  L-->>G: result + survivors
+  G->>R: ClearReader (none) / MarkBlocked (survivors); SaveGauge / SuspendGauge / MarkGaugeStale
+  J->>J: the ledger lines, with the reading
+  J-->>R: release (Touch)
+```
+
+Tests: `GaugeCaptureTests`, `ReaderBarrierTests`, `GaugeReaderCrashHarnessTests` (the shipping proof, the real binary
+as a child), `SlotSelectorTests` (+1), the catalog's two gauge cases in `GaugeCaptureTests`,
+`http/catalog/catalog.http` (+1), `usagePricing.test.ts` (+1), the launcher's `AReaderIsEndedWithItsTreeTests` (mcp) —
+listed with their RED messages in [module_tests.md](module_tests.md). The older-client check:
+`npm run test:gauge-compat` (`scripts/live-gauge-compat.mjs`, needs the network — the released extension's own
+`fetchCatalog` and `parseUsage` against this tree's server).

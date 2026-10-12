@@ -45,6 +45,10 @@ Authorization: Bearer {{token}}
     const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
     assert.strictEqual(codex.slots.resetsUtc, '');
   });
+  test('nothing was ever read of the gauge, so the key is ABSENT — not null, not 0 % (story 6.1a)', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.ok(!('gauge' in codex.slots), 'an older server has no key either, and the client reads both as unavailable');
+  });
   test('health speaks only about the BINARY, and says so as a boolean', () => {
     const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
     assert.strictEqual(typeof codex.health.cliFound, 'boolean');

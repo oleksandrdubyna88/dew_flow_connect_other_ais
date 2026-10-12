@@ -119,6 +119,36 @@ test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effo
     'an old line says nothing of what it ran with');
 });
 
+test('TheParser_KeepsTheGaugeReading — a Team-server line keeps the gauge read after its launch; an absent window is absent, never 0; an old line has none', () => {
+  // Story 6.1a of todo/PLAN_every_round_is_counted.md — the extension's half of the nine trailing fields, read not dropped.
+  const [read, noSecondary, old] = parseUsage([
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
+    + '"gaugeObservedUtc":"2026-10-11T10:00:05.0000000Z","gaugePlan":"prolite","gaugeLimit":"codex",'
+    + '"gaugePrimaryMins":10080,"gaugePrimaryUsedPercent":40,"gaugePrimaryResetsUtc":"2026-10-14T07:48:11.0000000Z",'
+    + '"gaugeSecondaryMins":300,"gaugeSecondaryUsedPercent":12.5,"gaugeSecondaryResetsUtc":"2026-10-11T12:00:00.0000000Z"}',
+    '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
+    + '"gaugeObservedUtc":"2026-10-11T10:00:05.0000000Z","gaugePlan":"prolite","gaugeLimit":"codex",'
+    + '"gaugePrimaryMins":10080,"gaugePrimaryUsedPercent":40,"gaugePrimaryResetsUtc":"2026-10-14T07:48:11.0000000Z",'
+    + '"gaugeSecondaryResetsUtc":""}',
+    '{"utc":"2026-09-01T10:00:00Z","provider":"codex","tokensIn":5,"tokensOut":1}',
+  ].join('\n'));
+
+  assert.deepEqual(
+    [read?.gaugeObservedUtc, read?.gaugePlan, read?.gaugeLimit, read?.gaugePrimaryMins, read?.gaugePrimaryUsedPercent, read?.gaugePrimaryResetsUtc],
+    ['2026-10-11T10:00:05.0000000Z', 'prolite', 'codex', 10080, 40, '2026-10-14T07:48:11.0000000Z'],
+    'the gauge reading was dropped on the way in',
+  );
+  assert.deepEqual([read?.gaugeSecondaryMins, read?.gaugeSecondaryUsedPercent, read?.gaugeSecondaryResetsUtc], [300, 12.5, '2026-10-11T12:00:00.0000000Z']);
+  assert.deepEqual(
+    [noSecondary?.gaugeSecondaryMins, noSecondary?.gaugeSecondaryUsedPercent, noSecondary?.gaugeSecondaryResetsUtc],
+    [undefined, undefined, undefined],
+    'a window the plan does not report is absent — never a 0 % that would read as an empty window',
+  );
+  assert.equal(noSecondary?.gaugePrimaryUsedPercent, 40);
+  assert.deepEqual([old?.gaugeObservedUtc, old?.gaugePrimaryUsedPercent, old?.gaugePrimaryMins], [undefined, undefined, undefined],
+    'an old line says nothing about the gauge');
+});
+
 test('APastLine_IsPricedAtItsOwnModel — a row that changed model prices its earlier lines at the model that answered them', () => {
   // The Gemini row moved to flash-medium on 2026-10-02: every earlier flash-low line was priced as flash-medium.
   const prices = listed({

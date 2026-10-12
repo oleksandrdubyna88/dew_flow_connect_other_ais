@@ -197,13 +197,23 @@ type GaugeNumberField = (typeof GAUGE_NUMBER_FIELDS)[number];
  * `number()`, a missing number is NOT coerced to 0 — a window the plan did not report must not read as an empty one.
  */
 function gaugeFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, GaugeTextField | GaugeNumberField> {
-  const said: Partial<Record<GaugeTextField, string>> & Partial<Record<GaugeNumberField, number>> = {};
+  return { ...gaugeTexts(parsed), ...gaugeNumbers(parsed) };
+}
+
+function gaugeTexts(parsed: Partial<UsageEntry>): Partial<Record<GaugeTextField, string>> {
+  const said: Partial<Record<GaugeTextField, string>> = {};
   for (const name of GAUGE_TEXT_FIELDS) {
     const value: unknown = parsed[name];
     if (saidText(value)) {
       said[name] = value;
     }
   }
+  return said;
+}
+
+/** A finite number only — `number()`'s coercion of a missing value to 0 would turn an unreported window into an empty one. */
+function gaugeNumbers(parsed: Partial<UsageEntry>): Partial<Record<GaugeNumberField, number>> {
+  const said: Partial<Record<GaugeNumberField, number>> = {};
   for (const name of GAUGE_NUMBER_FIELDS) {
     const value: unknown = parsed[name];
     if (typeof value === 'number' && Number.isFinite(value)) {

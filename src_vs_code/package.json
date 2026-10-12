@@ -1327,6 +1327,7 @@
     "test:feature-vendor-compat": "npm run compile && node scripts/live-feature-vendor-compat.mjs",
     "test:api-settings-compat": "npm run compile && node scripts/live-api-settings-compat.mjs",
     "test:paths-per-side-compat": "npm run compile && node scripts/live-paths-per-side-compat.mjs",
+    "test:gauge-compat": "npm run compile && node scripts/live-gauge-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
     "measure:append": "node scripts/measure-append.mjs",

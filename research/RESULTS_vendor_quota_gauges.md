@@ -319,7 +319,11 @@ continued turns, **10**'s follow-up. Doubled: **6**.
 ## 7. What this does not settle, and what was not run
 
 - **Whether the read rotates the refresh token when the access token has expired.** Not run, by the plan round's
-  finding; the only safe way to run it is inside a lease with no other process on that token set.
+  finding; the only safe way to run it is inside a lease with no other process on that token set. **Inspected in
+  codex's source instead (2026-10-11, story 6.1a):** at `rust-v0.160.0` the read refreshes proactively when the access
+  token's JWT `exp` is within five minutes, and a 401 on the read is answered as an error with no refresh-and-retry in
+  that path — recorded with its file and line references in `module_team_server.md` (*What codex 0.160.0 does on the
+  read*). Source, not a run: the expired-token read itself stays unmeasured.
 - **Whether `exec --json` ever carries a rate-limit event.** Two launches on two versions carried none; the schema's
   `rate_limit_reached` is a value of the app-server's own `RateLimitReachedType`, not an exec event type. A launch
   that actually hits the limit was not provoked.
