@@ -19,7 +19,15 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-11 · mcp **0.48.0** and extension **0.69.0** (released) · server 0.11.0 released, NOT deployed —
+Last verified: 2026-10-12 · mcp **0.50.0** and extension **0.71.0** (released) · server 0.11.0 released, NOT deployed —
+the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them (item 2 failed twice while
+the Marketplace caught up, then passed); manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
+`MCP_VERSION=0.50.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.71.0`. The
+`mcp-v0.50.0` run (38264270369) published 12 assets; the `extension-v0.71.0` run (38266428555) attached and published
+the vsix. In these: #777 (the Security lane names its reviewers; the server words a stranded pick; no coai-mcp mode
+creates a missing NAMED data folder — writer modes exit 74, an MCP client's launch refuses every tool by name).
+
+Previously verified: 2026-10-11 · mcp **0.48.0** and extension **0.69.0** (released) · server 0.11.0 released, NOT deployed —
 the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 7, 8,
 11 and 12 were not run. Run locally:
 `MCP_VERSION=0.48.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.69.0`. The
