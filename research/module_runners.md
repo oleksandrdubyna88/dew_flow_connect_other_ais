@@ -78,6 +78,7 @@ sequenceDiagram
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of todo/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
+| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2 of todo/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
 | `CooldownParser` | `Reviewers/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant — ONE parser for both halves since story 5.3b (moved from `src_server/src/Slots`): `Until` (always an answer; the Team server parks a slot on it, falling back to a doubling guess) and `StatedReset` (only what the vendor NAMED — a duration up to 14 days, a date, a clock time — else null; the local ledger and the ladder read this one) |
 | `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
@@ -2706,3 +2707,42 @@ long as told (for ever when negative); `app-server` is the same, steered by `fak
 directory, because a confined launch is handed no `FAKECLI_*` variable (`tests_fakecli/Serving.cs`).
 
 Tests: `AReaderIsEndedWithItsTreeTests` (mcp) — listed in [module_tests.md](module_tests.md).
+
+## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+
+`RoundsPerPercent.Derive(lines)` (`Reviewers/RoundsPerPercent.cs`) is the formula E6's plan round fixed, in the library
+both halves compile against so it exists once. Pure: `GaugeLine`s in — when the line was written, its vendor, its
+account (the Team server's slot), its round id, whether it is a review, and the reading taken right after its launch
+(`GaugeOnLine`, story 6.1a) — and one `GaugeRatio` per vendor × window out.
+
+1. **A window is its limit identity plus its length** — a reading's primary and secondary windows are named by
+   `(limitId, mins)`, never by where the vendor filed them; a window with no stated length cannot be identified, and a
+   reading that does not report a window is a missing reading for it.
+2. **A reading belongs to the launch whose line carries it.** The server reads the gauge after a job and writes it on
+   that job's lines, so the rounds "between" two readings are the rounds of the lines carrying the later one. Readings
+   are per account and never paired across accounts; every line carrying one instant is one reading.
+3. **An interval is unusable — its figure unavailable, never 0 or infinity —** checked in this order: a launch between
+   the readings has no reading of its own, or either reading does not report the window (`missing-reading`); either
+   reading is older than its line by more than `StaleAfter` (5 min — `stale-reading`); either `resetsAt` is unstated
+   (`missing-reading`) or they differ — the window reset (`window-reset`); the percentage did not rise
+   (`percent-did-not-rise`); a review between them sent no round id (`run-without-round`).
+4. **A round's share.** A round that ran several launches on the vendor counts in each interval by its share of those
+   launches — a code round's four reviewers, each followed by its own reading, are one round over four intervals, not
+   four rounds. A non-review launch (a consultation, a canary) spends — its rise is in the interval — and counts no round.
+5. **The figure** is the rounds-weighted mean `Σ Rᵢ·(Rᵢ/Δᵢ) / Σ Rᵢ` over the last `LastIntervals` (10) usable intervals
+   of the vendor's accounts, oldest end first; with no interval at all, `too-few-readings`; with none usable, the LATEST
+   interval's reason; with usable ones that held no round, `no-rounds`.
+6. **Then the consumer rule:** `GaugeConsumers.UncountedFor(limitId)` names the known consumers coai cannot count —
+   `direct-codex-use` for the `codex` limit (RESULTS_vendor_quota_gauges.md §2.4, §6.3) — and a limit with one has its
+   figure hidden: `null`, `consumer-not-counted`, the consumer named. The window is still named, so the gauge beside it
+   is still shown.
+
+`NotReadHere` is what a machine that reads no gauge answers — `{ratios: [], unavailable: "local-capture-deferred"}` —
+and is what `coai-mcp --round-counts` carries as its trailing `gauge` (story 6.1b, local capture, is deferred).
+
+**A recorded limit, not a defect fixed here:** with whole-number percentages, consecutive readings after one job each
+often rise by 0 (unusable) or 1 (one job's rounds over 1 %), so the usable intervals over-represent the jobs that tipped
+the percentage. The plan round's formula is implemented as fixed; pairing a reading with the last reading whose
+percentage DIFFERED would remove the bias, and is an open question for the owner (recorded in the plan's deviations).
+
+Tests: `RoundsPerPercentTests` (18, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).

@@ -87,7 +87,7 @@ sequenceDiagram
 | `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models/**kinds** · `409` an idempotency key reused for a different request · `429 + Retry-After` over the queued cap |
 | `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer — and, for a queued job no account can take, `waiting` (story 5.3b) · `403` somebody else's · `404` unknown or lost. **A read that writes**: the poll is the only evidence anybody is still listening, so it stamps `LastPolledUtc` |
 | `DELETE /api/reviews/{id}` | owner | `204` |
-| `GET /api/usage?window=&scope=&windows=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind**; every vendor row carries `models[]` (since 2026-10-09) and the **round counts** (`rounds`, `runsWithoutRound`, `retries`, `repairs`, `followUps`, `cancelled`, `noBudget`, `launchesByKind` — story 5.1, 2026-10-11), and the company answer alone carries `daily` — thirty dense UTC calendar days of launches per vendor, its own range whatever the window. `windows=5h,24h,week` adds a `windows[]` block — each named window's range, vendors and (company) people — from the same scan; absent when not asked · `400` unknown window, in `window` or in `windows` · `403` company as a non-admin |
+| `GET /api/usage?window=&scope=&windows=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind**; every vendor row carries `models[]` (since 2026-10-09) and the **round counts** (`rounds`, `runsWithoutRound`, `retries`, `repairs`, `followUps`, `cancelled`, `noBudget`, `launchesByKind` — story 5.1, 2026-10-11), and the company answer alone carries `daily` — thirty dense UTC calendar days of launches per vendor, its own range whatever the window. `windows=5h,24h,week` adds a `windows[]` block — each named window's range, vendors and (company) people — from the same scan; absent when not asked — and, beside it, `gauges[]`: rounds per 1 % of each gauge window the ledger's readings name (story 6.2, *Rounds per 1 % of a gauge window* below), also absent when not asked · `400` unknown window, in `window` or in `windows` · `403` company as a non-admin |
 | `GET /api/people` | **admins** | who has an unexpired session this server still serves (the allow-list applied): `[{email, displayName, lastUsedUtc}]`, one row per case-insensitive email, sorted by email — and nothing else about a session · `403` as a non-admin, naming `Coai:Admins` (2026-10-09) |
 
 **Every route that has a caller reads its credential from `Authorization: Bearer …` and from
@@ -1789,3 +1789,49 @@ as a child), `SlotSelectorTests` (+1), the catalog's two gauge cases in `GaugeCa
 listed with their RED messages in [module_tests.md](module_tests.md). The older-client check:
 `npm run test:gauge-compat` (`scripts/live-gauge-compat.mjs`, needs the network — the released extension's own
 `fetchCatalog` and `parseUsage` against this tree's server).
+
+## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+
+`/api/usage` answers, beside the round windows a client asked for, **`gauges[]`** — for each vendor and each gauge
+window its ledger's readings name, how many rounds 1 % of that window bought. The figure is computed ONCE, in the shared
+runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); the server hands it its own ledger lines
+(`UsageGauges.Of`, `src/Usage/UsageGauges.cs`), so the server and `coai-mcp --round-counts` cannot compute it two ways.
+
+| Field | Meaning |
+|---|---|
+| `vendor`, `limitId`, `windowMins` | the window — identified by the vendor's limit identity AND its length, never by where the vendor filed it |
+| `roundsPerPercent` | the rounds-weighted mean of the last 10 usable intervals — or `null`, never 0 or infinity |
+| `intervals` | how many usable intervals the figure was taken over (0 when null) |
+| `unavailable` | empty when shown; else a fixed code: `too-few-readings`, `percent-did-not-rise`, `window-reset`, `stale-reading`, `missing-reading`, `run-without-round`, `no-rounds`, `consumer-not-counted` |
+| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for the `codex` limit today — else empty |
+
+- **Over every caller's lines, whatever the scope.** A gauge is the ACCOUNT's; every launch on it spent it, so counting
+  one person's rounds against the account's whole rise would be a figure about nobody. The answer names a vendor, a
+  window and a ratio — never a person, an account or an email. A budget refusal launched nothing and is left out.
+- **Eight days back**, whatever windows were asked (`UsageGauges.Lookback`): the one scan is widened to it when windows
+  are asked, so the figure never depends on which windows the client named. A weekly window is the longest any vendor
+  reports; an older interval belongs to an instance that has already reset.
+- **Absent unless asked.** Nullable AND omitted when null, exactly as `windows` is: an answer to `?window=` alone — every
+  client older than story 5.2 — is today's shape; a request that asked windows over a ledger with no readings gets `[]`.
+- **For codex the figure is hidden today.** Direct use of the account outside coai spends the same limit and writes no
+  ledger line (RESULTS_vendor_quota_gauges.md §2.4, §6.3), so `roundsPerPercent` is null with `missingConsumer:
+  direct-codex-use`. The observed gauge and its reset are still served — by the catalog (`slots.gauge`, story 6.1a) —
+  and still shown. Showing the figure as an upper bound instead is the owner's call, not this story's.
+
+```mermaid
+flowchart LR
+  L[usage.jsonl — each job's lines carry the reading taken after it] --> R[UsageReader]
+  R --> U["UsageGauges.Of — 8 days, no NoBudget"]
+  U --> D["RoundsPerPercent.Derive (shared runners library)"]
+  D --> A["/api/usage … gauges[] (only with ?windows=)"]
+  S["state.json — the slot's newest reading"] --> C["/api/catalog … slots.gauge"]
+  A --> T[Team server tab — teamGauge.ts]
+  C --> T
+```
+
+Tests: `RoundsPerPercentServedTests` (4) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (18),
+mcp; `http/usage/usage.http` (+3 assertions); the seam's gauge leg (`scripts/seam-gauge.mjs`, the real server over a
+seeded slot and ledger, read and DRAWN by the extension's own code). The older-client check now also asks the released
+client's `fetchUsage(company)`: `extension-v0.69.0` asks no windows and gets no `gauges`; `extension-v0.70.0` asks them,
+gets `gauges` and still reads its round counts — both exit 0 (`npm run test:gauge-compat -- --extension-tag=…`). All
+listed with their RED messages in [module_tests.md](module_tests.md).
