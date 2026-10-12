@@ -83,6 +83,11 @@ sequenceDiagram
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
 | `HostKind`, `HostKinds` | `Platform/HostKind.cs` | `Windows / Linux / Wsl / MacOs / Other` from `OperatingSystem` + `VendorDiagnosis.OnWsl`; the one answer to "which platform" for the limitations and the health files' `side` |
 | `ConsultantLimitations`, `ConsultantLimitation`, `LimitationEvidence` | `Consultation/ConsultantLimitations.cs` | `shared/consultant-limitations.json`, embedded and read through a source-generated context; fails closed on a row without exactly one kind of evidence; `Lookup(host, runtime, capability = "")` takes a qualifier WORD (a claude overload passes `ClaudeCapability.Qualifier`) and never answers with another platform's row |
+| `ReviewSnapshots`, `ReviewSnapshot`, `SnapshotSource` (`Pinned` / `Live`), `SnapshotOutcome`, `SnapshotRefresh`, `SnapshotPath`, `SnapshotRead` | `Snapshots/ReviewSnapshots.cs`, `ReviewSnapshot.cs`, `SnapshotSource.cs` | the sanitised snapshot (D6 of `todo/PLAN_vibe_and_kimi_runtimes.md`, S1, 2026-10-12): a fresh coai-owned copy of a pinned worktree or of the live tree with every project-configuration path left out, made whole-or-not inside the caller's `coai-answers-*` scratch directory; `MapBack` / `Resolve` / `Read` answer only from the manifest; `RefreshAsync` re-fills the SAME root from the live tree (a resumed Vibe session is bound to its folder); disposal deletes it and gives its bytes back — the section *The sanitised snapshot* below |
+| `SnapshotOptions`, `SnapshotExclusions`, `SnapshotManifest`, `SnapshotUnavailable` | `Snapshots/SnapshotOptions.cs`, `SnapshotManifest.cs` | the ceilings (512 MB, 50 000 files, 60 s — ten-plus times this repository's 38.8 MB, 2 737 files, 5.7 s), the names left out at every depth (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`, `agents.md` — one default set for both vendors, a parameter for more), and what a snapshot holds: copied paths, excluded paths, unavailable paths (an unpopulated submodule, an LFS pointer) and the destination's measured case rule |
+| `SnapshotBudget`, `SnapshotBudget.Hold` | `Snapshots/SnapshotBudget.cs` | the aggregate cap: a process-wide count of the bytes live snapshots hold, a new one refused with both numbers past a ceiling (2 GB) or when the volume's free space would fall under a floor (5 GB); the volume reader injectable; a refresh counts the refreshed size, not old plus new |
+| `SnapshotListing`, `SnapshotPlanner`, `SnapshotCopier`, `SnapshotPaths`, `DestinationCase` (internal) | `Snapshots/*.cs` | the four steps: git lists (`ls-files --stage`, descending into populated submodules; `--others --exclude-standard` for a live tree), the planner refuses everything D6 refuses before a byte moves, the copier notices a file that changed under it, and the path rules resolve a request lexically against the root and the manifest |
+| `IReviewerRuntime.NeedsASanitisedSnapshot`, `IConsultantRuntime.NeedsASanitisedSnapshot` | `Reviewers/ReviewerRuntime.cs`, `Consultation/IConsultantRuntime.cs` | the capability an adapter declares to be launched in a snapshot rather than in the tree — default false; nothing sets it true until the Vibe and Kimi adapters (S2/S4); never an `if` on a vendor name |
 
 ## The decisions a reader needs
 
@@ -2667,3 +2672,102 @@ sequenceDiagram
 ```
 
 Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
+
+## The sanitised snapshot — a CLI that reads only its working folder is given a copy without the branch's configuration (2026-10-12, S1 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+Vibe's reads are bounded to its working folder (M-V11: a `read_file` outside it, `tool_denied` 3 of 3), and the checkout
+carries whatever `.vibe/`, `.agents/skills/` and `AGENTS.md` the reviewed branch wrote — which Vibe loads from its
+working folder. So the working folder is neither the checkout nor an empty directory: it is a fresh coai-owned COPY of
+the tree with every project-configuration path left out (M-V14: a copy deliberately trusted still fired no hook from the
+source tree or the copy's parent, 3 of 3; research/RESULTS_vibe_confinement.md §1–§2). Kimi gets the same copy with its
+own names added (D15). The snapshot closes the path by which the reviewed BRANCH supplies configuration; the person's
+own configuration is closed by the owned home of D17, which is a different block and not this unit's. S1 builds the unit
+and its seams; S2–S5 wire it into the round's launch directory, the consultant's launch and the question row. The
+capability is the adapter's (`NeedsASanitisedSnapshot`, default false on both interfaces), never a vendor name at the
+seam.
+
+```mermaid
+flowchart TD
+  A["MakeAsync(source, scratch)"] --> B["probe the destination's case rule"]
+  B --> C["git ls-files --stage, into each populated submodule; a live tree adds --others --exclude-standard"]
+  C --> D{"plan, before a byte moves"}
+  D -->|excluded at any depth| D1["named in the manifest"]
+  D -->|a 120000 entry, a reparse point on the file or on a directory on the way, a path leaving the root, two names one under the case rule| R["refused, nothing published"]
+  D -->|unpopulated gitlink, LFS pointer header| D2["listed unavailable"]
+  D -->|over 50 000 files or 512 MB| R
+  D --> E["reserve the bytes: the sum over 2 GB or free space under 5 GB refuses with both numbers"]
+  E --> F["copy file by file into snapshot-id.partial; a stamp before and after; a change retries once over a fresh listing, then refuses; 60 s or a long path refuses"]
+  F --> G["rename .partial to snapshot-id"]
+  G --> H["ReviewSnapshot: Root, Manifest, MapBack, Resolve, Read, RefreshAsync, Dispose"]
+  H -->|RefreshAsync of the live tree| F2["the same build beside the root, then two renames under the SAME path; a refusal leaves the previous copy and manifest whole"]
+  H -->|Dispose| X["the directory deleted, the bytes given back"]
+```
+
+- **Two sources, one copy.** `SnapshotSource.Pinned(worktree)` copies what `git ls-files --stage` lists in the round's
+  pinned tree, descending into every populated submodule (the populator's own `HasGit` answers "populated"); never
+  `git archive`, whose `export-ignore` / `export-subst` attributes would drop or rewrite reviewed bytes
+  (`AnExportIgnoredOrSubstitutedFile_KeepsItsReviewedBytes`). `SnapshotSource.Live(checkout)` adds the untracked-not-
+  ignored files, copies the bytes as they are now, and leaves a deleted path absent; an untracked NESTED REPOSITORY,
+  which git lists as `dir/` and nothing beneath, is named unavailable ("add it as a submodule") rather than copied or
+  refused; a file that changes between its stamp and its copy (size, last write, copied length) makes the whole copy
+  retry once over a fresh listing, then refuse — a snapshot of a moving tree is a snapshot of nothing. **The link walk
+  runs again immediately before each copy** (`SnapshotLinks`, shared with `Resolve` and `Read`): a directory that became
+  a junction between the plan and the copy would hand `File.Copy` its target's bytes under the planned name with the
+  same length and time, which the stamp cannot see; the walk fails CLOSED — a component that cannot be inspected counts
+  as a link.
+- **Nothing partial is ever visible.** The copy goes into `snapshot-<id>.partial` inside the caller's scratch directory
+  and is renamed over at the end; every refusal deletes the partial directory. The scratch directory is the launch's own
+  `coai-answers-*`, so the snapshot goes with it when the launch ends and with the six-hour scratch sweep after a crash —
+  which now also runs on the consultation beat ([module_server.md](module_server.md), *The beat is the scratch sweep's
+  second caller*).
+- **What is refused, before a byte moves.** A name Windows would open as ANOTHER name — a component ending in a dot
+  or a space (`.vibe./config.toml` is `.vibe/config.toml` on the way to the disk, under the excluded name; the
+  review of S1 found this, and git admits such an index entry with `core.protectNTFS=false`) or a device name (`nul`,
+  `CON.txt`, `com1`, `LPT9.log`, `aux` with any extension) — refused on every platform, before the exclusions are even
+  asked, so it is never quietly excluded either; the exclusions themselves match each component as Windows opens it.
+  A symbolic link declared by the index (mode `120000`, on every platform,
+  even one whose git checked it out as a plain file), a reparse point on the file or on any directory between it and
+  the root (git on Windows lists the files under a junction as ordinary files; each directory is asked once), a path
+  that would leave the root, two names that are one under the destination's case rule (probed on the destination, not
+  assumed from the OS: `DestinationCase`), and the three ceilings — with the number. A link git lists nothing under is
+  not copied through and is not refused: what is refused is a byte from outside, not a name.
+- **What is named, not copied.** An excluded path goes into `Manifest.Excluded`; an unpopulated submodule and a file
+  whose first bytes are the git-LFS pointer header (`version https://git-lfs.github.com/spec/v1`, read only for files
+  of 1024 bytes or less, the spec's cap) go into `Manifest.Unavailable` with a sentence the prompt can show.
+- **The aggregate cap** (`SnapshotBudget`, plan gate 2026-10-12). Before a copy, the bytes it will take — known from the
+  listing — are reserved against a ceiling on what the process's live snapshots hold (2 GB) and a floor the temp volume's
+  free space may not fall under (5 GB); a refusal names both numbers; disposal gives the bytes back exactly once. The
+  volume reader is injected (`Func<string, long>`; the real one asks `DriveInfo` for the drive on Windows and the path on
+  Unix), and a reader that cannot answer refuses rather than guessing. "Live" means not yet disposed, whichever source
+  made the snapshot — a pinned copy holds disk the same way.
+- **The manifest decides, not the disk.** Every path is snapshot-relative with forward slashes, and therefore also the
+  repository-relative path. `MapBack(absolute)` answers that path only when the manifest holds it, else empty.
+  `Resolve(requested)` — what S4's ACP shim serves `fs/read_text_file` through — normalises lexically (components, `.`
+  and `..` by hand; the filesystem is asked nothing), requires the root's components as a prefix (the destination's
+  case rule for the root, ordinal for the rest) and a manifest entry, and answers the manifest's STORED path, never the
+  supplied spelling. Refused outright: an empty or relative path, a drive-relative `C:foo`, a root-relative `\foo`, a UNC
+  or device prefix (`\\?\`, `\\.\`, `\\server\`), a `:` in a component (an alternate data stream — refused on every
+  platform, so a Unix file so named is unservable, said plainly), a component ending in a dot or a space (Windows strips
+  them), and anything not in the manifest — which also refuses an unmatched 8.3 short name and a case variant.
+  `Resolve` also refuses when any component from the root down is a reparse point, or cannot be inspected, at that
+  moment — and its doc says a caller that will read must still read through `Read`, which asks again at the open
+  (`Resolve_RefusesAPathUnderALinkSwappedInAfterTheSnapshot`, `ALinkSwappedInAfterTheSnapshot_IsNotFollowedByRead`).
+  `Manifest.Holds` is an ordinal set, and a manifest compares by value.
+- **One stable path per conversation** (D6 as amended the same day; §22 of the RESULTS file). A resumed Vibe session is
+  bound to the folder it was created in — a read in a new `--workdir` was `tool_denied`, and the model re-asked turn 1's
+  absolute path — while the same path re-filled in place was read afresh 3 of 3. So `ReviewSnapshot.RefreshAsync(live)`
+  builds the new tree beside the root exactly as a first copy is built (exclusions, links, ceilings, the retry, the
+  budget with the replaced bytes counted once), then swaps it under the SAME root by two renames — the old copy aside,
+  the new one in, the old one back if the second rename fails — and replaces the manifest and the hold. A refused refresh
+  leaves the previous copy readable and its manifest the same object. A disposed or swept snapshot refuses a refresh; a
+  second refresh while one runs is refused rather than queued. **A disposal arriving during a refresh waits for it**
+  (the two take the same turn; the review of S1 found the other order deleting the root under the copy and disposing a
+  semaphore the refresh still held) and then deletes whatever landed; the turn is never disposed, so a later refresh is
+  refused, never thrown at. The budget's `Held` transiently counts old + new during a refresh — the truth about the
+  disk — and settles to the refreshed size at the swap; the ceiling check counts the replaced bytes once.
+- **Measured on this repository** (the defaults' origin): 2 737 files, a 38.8 MB tar, 5.7 s to copy. The ceilings are
+  50 000 files, 512 MB and 60 s; a refusal says the number it met.
+
+Tests: `ReviewSnapshotTests`, `ReviewSnapshotResolveTests`, `ReviewSnapshotRefreshTests`, `SnapshotBudgetTests`,
+`NoRuntimeAsksForASanitisedSnapshotYetTests`, `AScratchSweepRunsOnTheConsultationBeatTests` — listed in
+[module_tests.md](module_tests.md).

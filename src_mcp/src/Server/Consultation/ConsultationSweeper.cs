@@ -97,6 +97,11 @@ public static class ConsultationSweeper
             {
                 log.Information("swept {Count} escalation file(s) and question-phase record(s) past retention", cards);
             }
+
+            // The product's scratch directories in temp on the same beat (PLAN_vibe_and_kimi_runtimes.md §7): the round's
+            // build path was the only caller of this throttled sweep, so a crashed consult's snapshot outlived every server
+            // that ran no round. Throttled to once in ten minutes by the service itself; a quiet server pays one walk.
+            service.SweepScratch();
         }
         catch (Exception failure)
         {

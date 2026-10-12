@@ -351,6 +351,20 @@ public interface IReviewerRuntime
     bool TakesItsOwnTimeout => true;
 
     /// <summary>
+    /// Whether this runtime must run in a coai-owned SANITISED SNAPSHOT of the tree rather than in the tree itself
+    /// (D6 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>; the unit is <c>Snapshots/ReviewSnapshots</c>).
+    /// </summary>
+    /// <remarks>
+    /// A CLI whose reads are bounded to its working folder, and which loads its hooks, agents and project instructions
+    /// from that folder, cannot be started in the checkout: the reviewed branch would supply its configuration. Such a
+    /// runtime says so HERE, and the orchestration seams (the round's launch directory, the consultant's launch, the
+    /// question row — S2/S3) copy the tree with the configuration paths left out. A capability the adapter declares,
+    /// never an <c>if</c> on a vendor name. False by default: every runtime shipped before the Vibe and Kimi adapters
+    /// runs where it always did, byte for byte.
+    /// </remarks>
+    bool NeedsASanitisedSnapshot => false;
+
+    /// <summary>
     /// What this launch asked for and its runtime said it did NOT apply — one sentence for the reviewer's note, or empty.
     /// Only a Team server answers it (contract 2's dropped and clamped fields); a local launch applies what it sends.
     /// </summary>
