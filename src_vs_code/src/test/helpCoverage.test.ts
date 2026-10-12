@@ -298,6 +298,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.chatModel': 'which model a chat opens on',
   'coai.vendors': 'every model this side can use',
   'coai.teamServers': 'a team server is the other way to get a reviewer',
+  'coai.planPrices': 'subscription prices',
   'coai.onExhausted': 'when the rounds run out',
   'coai.maxConcurrency': 'reviewers at once',
   'coai.maxPerProvider': 'per vendor',

@@ -1,4 +1,5 @@
 import { CARD_COLUMNS } from './cardColumns';
+import { cardGaugeLines } from './cardGauge';
 import { CATALOG_USES } from './catalogFields';
 import { lastStagesOf } from './catalogWriteRules';
 import { escapeHtml } from './escapeHtml';
@@ -88,12 +89,16 @@ export function modelsTabHtml(shown: PanelState): string {
   const rows = state.vendors;
   const contextOf = cardContextFor(state);
   const binary = { installed: state.server.kind !== 'absent', features: state.serverFeatures };
+  const teamServers = state.teamServers ?? [];
+  const now = state.now ?? Date.now();
   const cards = rows.map((row) => modelCard(row, {
     context: contextOf(row), references: referencesOf(state, row.id), lastFor: lastStagesOf(rows, row), binary,
-    check: checkFactsOf(state.consultantHealth, row.id), teamServers: state.teamServers ?? [],
-    firstSeen: state.firstSeen ?? {}, now: state.now ?? Date.now(),
+    check: checkFactsOf(state.consultantHealth, row.id), teamServers,
+    firstSeen: state.firstSeen ?? {}, now,
     roundsLine: cardRoundsLine(state.roundsSnapshot, row.id),
     resetLine: cardResetLine(state.roundsSnapshot, row.id),
+    // The vendor's own gauge (story 6.2 of todo/PLAN_every_round_is_counted.md), from the cached catalogs and answer.
+    gaugeLines: cardGaugeLines(row, teamServers, state.roundsSnapshot, now),
   }));
 
   return `<p class="lead">Every model this side can use, added once. Tick what each one is used for; one model can be added `

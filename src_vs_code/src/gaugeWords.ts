@@ -139,7 +139,12 @@ export function ratioLine(ratio: GaugeRatio): string {
 
   return isShown(ratio.roundsPerPercent)
     ? `≈ ${ratio.roundsPerPercent.toFixed(1)} rounds per 1 % of ${name} — over the last ${ratio.intervals} intervals`
-    : `rounds per 1 % of ${name}: unavailable — ${said(REASON_WORDS, ratio.unavailable)}`;
+    : `rounds per 1 % of ${name}: unavailable — ${reasonWords(ratio.unavailable)}`;
+}
+
+/** A reason code in words — the server's figure and the local answer say their reasons alike. */
+export function reasonWords(code: string): string {
+  return said(REASON_WORDS, code);
 }
 
 /** A figure that may be shown: a positive number — never a 0, a negative, an infinity or a NaN. */

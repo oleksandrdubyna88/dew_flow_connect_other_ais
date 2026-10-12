@@ -73,7 +73,11 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   // the storage choice reads where data lives before any side is known.
   'sideConfig.ts forwarding reader': { count: 2, why: 'readerFor / userLayer and the storage choice — the door' },
   'sideConfig.ts global write': { count: 1, why: 'saveSetting, when this side keeps no settings of its own' },
-  'panelProvider.ts global write': { count: 2, why: 'coai.teamServers — one list every side shares, by design' },
+  'panelProvider.ts global write': {
+    count: 3,
+    why: 'coai.teamServers — one list every side shares, by design; and coai.planPrices (story 6.2) — what an account '
+      + 'costs the person, the same on every side, never a per-side setting',
+  },
   'chatPresetsHost.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
   'configTransferCommands.ts global write': { count: 1, why: 'an import writes the base layer; per-side overrides are never touched' },
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },

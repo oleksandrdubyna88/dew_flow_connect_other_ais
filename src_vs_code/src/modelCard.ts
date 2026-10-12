@@ -48,6 +48,11 @@ export interface ModelCardFacts {
    * (story 5.3b of todo/PLAN_every_round_is_counted.md, `cardResetLine`); empty when none is ahead, and then nothing is drawn.
    */
   readonly resetLine?: string;
+  /**
+   * The vendor's own gauge, a line per reported window — a Team server's reading for a row that runs there, or why this
+   * machine reads none (story 6.2 of todo/PLAN_every_round_is_counted.md, `cardGaugeLines`); none drawn when empty.
+   */
+  readonly gaugeLines?: readonly string[];
 }
 
 interface Access {
@@ -263,7 +268,8 @@ function usedLine(references: readonly string[]): string {
 function foot(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const prices = priceFields(vendor, id, vendor.runtime === 'local', vendor.runtime === 'remote', facts.context.price, '', '', false);
 
-  return `<div class="card-foot">${footLine('reset-line', facts.resetLine)}${footLine('rounds-line', facts.roundsLine)}`
+  return `<div class="card-foot">${footLine('reset-line', facts.resetLine)}${(facts.gaugeLines ?? []).map((line) => footLine('gauge-line', line)).join('')}`
+    + `${footLine('rounds-line', facts.roundsLine)}`
     + `${details('Connection', connectionOf(vendor, id, facts.context))}${details('Price', prices)}${usedLine(facts.references)}</div>`;
 }
 
