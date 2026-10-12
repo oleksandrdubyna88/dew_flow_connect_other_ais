@@ -106,22 +106,11 @@ public sealed class VerdictInstructionTests
 
         verdicts.Should().HaveCountGreaterThan(4, "the union has grown; this test is the reason to look");
 
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RoundEngine.cs"));
+        var source = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RoundEngine.cs"));
         foreach (var name in verdicts)
         {
             source.Should().Contain($"RoundVerdict.{name}",
                 $"{name} has no case in the instruction switch, so a caller would get a verdict with no guidance");
         }
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src_mcp")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("the repository root was not found");
     }
 }

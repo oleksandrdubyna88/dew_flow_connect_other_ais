@@ -49,7 +49,7 @@ public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
     [Fact]
     public void TheSanctionedModesAreTheOnesTheDocumentNames()
     {
-        var document = Path.Combine(RepoRoot(), ".agents", "PROJECT.md");
+        var document = Path.Combine(RepoPaths.Root(), ".agents", "PROJECT.md");
         File.Exists(document).Should().BeTrue(document);
 
         var named = File.ReadAllText(document);
@@ -77,7 +77,7 @@ public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
     /// </remarks>
     private static IReadOnlyList<string> Modes()
     {
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Program.cs"));
+        var source = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Program.cs"));
         var modes = System.Text.RegularExpressions.Regex
             .Matches(source, "\"(--[a-z-]+)\" => Startup\\.")
             .Select(match => match.Groups[1].Value)
@@ -89,18 +89,6 @@ public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
         modes.Should().HaveCountGreaterThan(10, "the switch that selects one-shot modes was not found");
 
         return modes;
-    }
-
-    /// <summary>Walks up to the repository root, which the test binary sits four folders under.</summary>
-    private static string RepoRoot()
-    {
-        var here = new DirectoryInfo(AppContext.BaseDirectory);
-        while (here is not null && !Directory.Exists(Path.Combine(here.FullName, ".agents")))
-        {
-            here = here.Parent;
-        }
-
-        return here?.FullName ?? AppContext.BaseDirectory;
     }
 
     /// <summary>A model that may not read findings is a bad ARGUMENT, not a missing mode.</summary>
