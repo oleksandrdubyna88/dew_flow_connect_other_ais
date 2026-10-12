@@ -645,7 +645,10 @@ that the binary starts.
 release legs' native runners, no push and no cache, on any pull request that changes `src_server/Dockerfile`,
 `install-cli.sh`, `install-agy.sh` or the workflow itself — so a GitHub runner proves the real installs before a tag
 rather than during one. Path-filtered because the AOT publish costs minutes per leg; not a required check, because a
-required check a path filter skipped never reports.
+required check a path filter skipped never reports. Since 2026-10-12 each leg also RUNS the image it built
+(`src_server/smoke-image.sh`): the contract runner's Local sign-in configuration, a seeded throwaway data directory, a
+signed-in `GET /api/usage` asserted to return the seeded ledger line, and each CLI's `--version` inside the running
+container — see [module_team_server.md](module_team_server.md) *The container image installs its CLIs checked*.
 
 **Native installers, not npm — and that removes a whole layer.** An earlier draft of this section put
 Node 22 in the image because it assumed `npm i -g @openai/codex @anthropic-ai/claude-code`. The vendors'

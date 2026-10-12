@@ -3417,6 +3417,19 @@ request that touches the Dockerfile or either installer script).
 both architectures); the script under `dash` (the image's `sh`) is syntax-checked only (`dash -n`), the suite runs it
 with bash.
 
+### The image job runs the image and uses the server (2026-10-12)
+
+`server-image.yml` used to stop after the build (CodeRabbit on #775: a delivery check must USE the capability). Each leg
+now loads the image and runs `src_server/smoke-image.sh`: the contract runner's Local sign-in configuration, a seeded data
+directory, `/api/health` bounded, a signed-in `GET /api/usage` asserted, each CLI's `--version` inside the container.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheImageSmokeUsesTheServerTests` (4, server, `ServerCollection`) | The script SOURCED for its functions, or run whole with a `docker` stub first on PATH that records every call and the key it saw in its environment. `TheTokenItMints_IsAcceptedByTheRealServer_AndTheSeededLedgerIsWhatItChecks` — `new_key` → `TeamServer` with that key, `seed` into its data dir, `mint` for `dev@example.com` → the in-process server answers `GET /api/usage?window=year` 200, the script's `check_usage` passes that body and fails `{"scope":"me","vendors":[]}`; `EachRunHasItsOwnKey_LongEnoughForTheServer` — two keys differ, each ≥ 32 bytes; `WithoutAnImage_ItRefuses_AndDockerIsNeverAsked`; `AStartThatNeverAnswers_ShowsTheContainersLog_StopsIt_AndNeverPutsTheKeyOnAnArgumentList` — `SMOKE_PORT=1`, `SMOKE_WAIT_SECONDS=2`: non-zero, the stub container's log printed, `run … --rm`, `stop … <that id>`, `-e Auth__Local__SigningKey` by name, the key in docker's environment but in no argument and in no output (`GITHUB_ACTIONS=false`, so the `::add-mask::` line is not printed) | RED: all 4 against the missing script — `bash: …/smoke-image.sh: No such file or directory` (`new_key: command not found`; `Expected output … to contain "usage"`; `… to contain "the stub server said boom"`). Break-it from a byte copy: the HMAC keyed with `"$1x"` → the real server answered 401 (`Expected … to be 200 … but found 401`); the key passed as `-e Auth__Local__SigningKey="$key"` → the argument-list case red; the log dump removed → `… to contain "the stub server said boom"` red. Restored, green |
+
+**NOT covered here:** a real container (no docker daemon in the suite) — the `server-image` job's two legs run it on
+every pull request that touches the image's files or `smoke-image.sh`.
+
 ## A round has an identity on the wire (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
 
 The client half of epic 4. The seam: the real `BoundedScheduler`, `ReviewerExecutor` and `RemoteRuntime` over a

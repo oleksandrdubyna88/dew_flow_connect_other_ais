@@ -9,6 +9,12 @@ name: server image
 # against fixtures in the server suite; THIS is where a real runner proves the real installs, before a
 # tag rather than during one.
 #
+# And a build is not a delivery check: it proves three binaries start, not that the image SERVES. So each
+# leg then RUNS the image it built (`src_server/smoke-image.sh`): the server started with the contract
+# runner's Local sign-in configuration and a seeded throwaway data directory, `/api/health` waited for,
+# a signed-in GET /api/usage asserted to return the seeded ledger line, and each CLI's `--version` run
+# inside the running container as the app user.
+#
 # PATH-FILTERED, on purpose: the build publishes Native AOT (clang, a full link) and downloads three
 # CLIs, minutes per leg, and ci.yml already explains why that is not paid on every pull request. It runs
 # when what the image installs, or how, changes — and when this file does.
@@ -26,6 +32,7 @@ on:
       - src_server/Dockerfile
       - src_server/install-cli.sh
       - src_server/install-agy.sh
+      - src_server/smoke-image.sh
       - .github/workflows/server-image.yml
   workflow_dispatch:
 
@@ -71,3 +78,11 @@ jobs:
           context: .
           file: src_server/Dockerfile
           push: false
+          # Into this runner's docker, under a local name, so the next step can RUN it. Still no push.
+          load: true
+          tags: coai-server:smoke
+
+      # Bounded inside (health wait, every curl) and by the job's timeout; the container runs with
+      # docker's own --rm and is stopped by the script on every way out, its log printed on a failure.
+      - name: Run the image and use the server
+        run: bash src_server/smoke-image.sh coai-server:smoke
