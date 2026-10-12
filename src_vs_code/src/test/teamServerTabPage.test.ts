@@ -394,6 +394,50 @@ test('AnOlderServer_ShowsUnavailable_NotZero — on the page: a 200 without the 
   assert.doesNotMatch(vendors, /5 h 0|7 d 0|\b0 runs without a round/, 'a server that cannot count rounds was shown as having none');
 });
 
+// ---------- story 6.2 of todo/PLAN_every_round_is_counted.md: the vendor's own gauge ----------
+
+/** A server whose catalog carries the codex account's reading, and whose company answer carries the derived figures. */
+function pushGauged(figures: readonly Record<string, unknown>[], planPrices: Readonly<Record<string, number>> = {}): TeamPush {
+  const reading = {
+    observedUtc: new Date(NOW - 12 * 60_000).toISOString(), planType: 'prolite', rateLimitReachedType: '', ordinaryUsageAllowed: true,
+    resetCreditsAvailable: null, stale: false,
+    windows: [{ limitId: 'codex', kind: 'primary', usedPercent: 37, windowDurationMins: 10080, resetsAtUtc: new Date(NOW + 3 * 86_400_000).toISOString() }],
+  };
+  const gauged: TeamServerState = {
+    ...server('acme', 'Acme'),
+    catalog: { serverVersion: '0.12.0', isAdmin: true, error: '', vendors: [{ id: 'codex', runtime: 'codex', models: [], slots: { total: 1, ready: 1, coolingDown: 0, needsSignIn: 0, gauge: reading } }] },
+  };
+  const usage = { ...countedCompany(), gauges: figures };
+  const cell: UsageCell = { usage, problem: '', answeredAt: NOW };
+
+  return teamTabPush({
+    states: [gauged], selection: withShown(NO_SELECTION, true), cell: () => cell, asking: () => false, palette,
+    people: () => undefined, peopleAsking: () => false, price: () => undefined, now: NOW, planPrices,
+  });
+}
+
+const HIDDEN_FIGURE = { vendor: 'codex', limitId: 'codex', windowMins: 10080, roundsPerPercent: null, intervals: 0, unavailable: 'consumer-not-counted', missingConsumer: 'direct-codex-use' };
+
+test('the vendor\'s own gauge on the page: the window, its reset and its age — and why rounds per 1 % is hidden, with no share beside it', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushGauged([HIDDEN_FIGURE], { 'acme/codex': 200 }));
+
+  const vendors = page.element('team-vendors').textContent;
+  assert.match(vendors, /Vendor gauges/);
+  assert.match(vendors, /codex \(weekly\): 37 % used · resets \w{3} \d{2}:\d{2} · seen 12 min ago/);
+  assert.match(vendors, /rounds per 1 % of codex \(weekly\): hidden — direct codex use outside coai spends the same limit and is not counted/);
+  assert.doesNotMatch(vendors, /of your plan per round/, 'a share drawn beside a figure that is hidden');
+});
+
+test('a shown weekly figure with a typed price carries the plan share, labelled as one and never a bill', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushGauged([{ ...HIDDEN_FIGURE, roundsPerPercent: 4, intervals: 5, unavailable: '', missingConsumer: '' }], { 'acme/codex': 200 }));
+
+  const vendors = page.element('team-vendors').textContent;
+  assert.match(vendors, /≈ 4\.0 rounds per 1 % of codex \(weekly\) — over the last 5 intervals/);
+  assert.match(vendors, /≈ \$0\.11 of your plan per round — a share of the \$200\/month plan, not a bill/);
+});
+
 test('a push keeps the chart\'s numbers open — they are its text alternative, not decoration', () => {
   const page = runningDomPage(bundle);
   send(page, pushNew());

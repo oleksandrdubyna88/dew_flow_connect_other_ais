@@ -408,6 +408,16 @@
             }
           }
         },
+        "coai.planPrices": {
+          "type": "object",
+          "default": {},
+          "scope": "application",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          },
+          "markdownDescription": "What each Team server vendor's subscription costs you per month, in US dollars, keyed `<server id>/<vendor>`. Typed once per account in **ConnectOtherAIs: Settings** → *Setup* → *Team servers* (Save price); 0 removes it. Used only to show *≈ $0.11 of your plan per round* beside the vendor's own gauge, when coai can count every consumer of that account — a share of a flat plan, never a bill, and never added to a list-price estimate."
+        },
         "coai.vendors": {
           "type": "array",
           "default": [

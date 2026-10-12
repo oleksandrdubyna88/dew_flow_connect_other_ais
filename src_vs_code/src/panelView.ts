@@ -65,6 +65,7 @@ import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } fr
 import { type WatchedDir } from './escalationDirs';
 import { roleOnServers } from './serverRoles';
 import type { RoundsSnapshot } from './roundCountsCache';
+import type { PlanPriceRefusal, PlanPrices } from './planPrice';
 import { CUSTOM_ROLES_SINCE } from './rolesBlocks';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -380,6 +381,13 @@ export interface PanelState {
    * never a read of its own (`roundCountsCache.ts`); absent before the first read, and the card then says nothing.
    */
   readonly roundsSnapshot?: RoundsSnapshot | undefined;
+  /**
+   * The monthly plan prices typed on Setup › Team servers, by `<server>/<vendor>` (story 6.2 of
+   * todo/PLAN_every_round_is_counted.md, `planPrice.ts`) — absent or empty when none is typed.
+   */
+  readonly planPrices?: PlanPrices | undefined;
+  /** The last plan price refused at its card, drawn beside the box with what was typed — absent when none was. */
+  readonly planPriceRefusal?: PlanPriceRefusal | undefined;
   /**
    * Each vendor's installed and published CLI version, by vendor id.
    *
@@ -3389,6 +3397,9 @@ export const PANEL_COMMANDS = [
   'signInTeamServer',
   'signOutTeamServer',
   'removeTeamServer',
+  // Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): the id is `<server>/<vendor>|<typed>`,
+  // posted by the page's own handler (it reads the box beside the button); the host validates and refuses at the card.
+  'savePlanPrice',
   // The Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
   // row duplicated, and a row removed after the page's own confirm — so the host asks no second question.
   'toggleUse',

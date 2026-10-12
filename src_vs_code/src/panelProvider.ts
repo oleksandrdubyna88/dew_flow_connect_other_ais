@@ -78,6 +78,7 @@ import { watchGlob } from './fileWatch';
 import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { finishedRounds, RoundCountsCache } from './roundCountsCache';
+import { PLAN_PRICES_SETTING, type PlanPriceRefusal, planPricesFrom, savePlanPrice } from './planPrice';
 import { otherStores, roundsLoader } from './roundCountsRead';
 import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
@@ -368,6 +369,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   public cliPathKeep: { dropped(): readonly DroppedValue[]; restore(offer: DroppedValue): Promise<void> } | undefined;
   /** Text typed into an other side's box and refused, by box — drawn beside the box on the next paint (E4.1, E4.2). */
   private typedRefusals: TypedRefusals = NO_REFUSALS;
+  /** The last plan price refused at its card on Setup › Team servers (story 6.2) — drawn beside the box, never saved. */
+  private planPriceRefusal: PlanPriceRefusal | undefined;
   private readonly qconsult: QconsultHost;
 
   /** `coai.qconsultRoots` changed: the next paint asks the disk again about the roots spelled for the other OS. */
@@ -838,6 +841,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Each model at ITS public list price (3.2, D4) — the window's price book; never this person's typed row rates.
       price: listPriceFrom(PRICE_BOOK),
       now: Date.now(),
+      // The plan prices typed on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md) — the share beside a figure.
+      planPrices: planPricesFrom(vscode.workspace.getConfiguration('coai').get(PLAN_PRICES_SETTING)),
     });
   }
 
@@ -1420,6 +1425,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       cliStatus: await this.vendorCliStatus(vendors),
       cardPrices: await this.cardPrices(vendors),
       roundsSnapshot: this.roundCounts.current(),
+      // Story 6.2 of todo/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
+      planPrices: planPricesFrom(config.get(PLAN_PRICES_SETTING)),
+      planPriceRefusal: this.planPriceRefusal,
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
@@ -2718,6 +2726,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
           await this.removeTeamServer(id);
         }
         break;
+      case 'savePlanPrice':
+        // `<server>/<vendor>|<what was typed>` from Setup › Team servers (story 6.2); the render below draws the refusal, if any.
+        await this.savePlanPrice(id ?? '');
+        break;
       case 'toggleUse':
         if (id !== undefined) {
           const [row, use] = id.split('|');
@@ -3923,6 +3935,28 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * that could only fail. The rows are NAMED and the person decides — they carry spending history,
    * so deleting them silently is not reversible.</p>
    */
+  /**
+   * Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): stored when it is a price (0
+   * takes it away), refused AT ITS CARD with the reason when it is not — and then nothing is stored.
+   */
+  private async savePlanPrice(id: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const saved = savePlanPrice(planPricesFrom(config.get(PLAN_PRICES_SETTING)), id);
+    if (saved.kind === 'refused') {
+      this.planPriceRefusal = saved.refusal;
+
+      return;
+    }
+    try {
+      await config.update(PLAN_PRICES_SETTING, saved.prices, vscode.ConfigurationTarget.Global);
+      this.planPriceRefusal = undefined;
+    } catch (e) {
+      // VS Code's own reason, said at the card — a stored price that did not store must not look stored.
+      const at = id.indexOf('|');
+      this.planPriceRefusal = { key: id.slice(0, Math.max(0, at)), typed: id.slice(at + 1), reason: `VS Code could not store it: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
   private async removeTeamServer(id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const servers = this.teamServers(config);

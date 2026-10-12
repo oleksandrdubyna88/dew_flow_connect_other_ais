@@ -26,8 +26,11 @@ function spanOf(ms: number): string {
   return ms >= HOUR_MS ? `${Math.ceil(ms / HOUR_MS)} h` : `${Math.ceil(ms / MINUTE_MS)} min`;
 }
 
-/** `Wed 04:49` — the day and the 24-hour time, in the viewer's zone unless one is named. */
-function clockOf(ms: number, timeZone: string | undefined): string {
+/**
+ * `Wed 04:49` — the day and the 24-hour time, in the viewer's zone unless one is named. Exported for the vendor gauge's
+ * `resets Thu 07:00` (story 6.2 of todo/PLAN_every_round_is_counted.md), so the two say an instant one way.
+ */
+export function clockOf(ms: number, timeZone: string | undefined): string {
   const zone = timeZone === undefined ? {} : { timeZone };
 
   return new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...zone }).format(new Date(ms));
