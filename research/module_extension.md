@@ -7824,6 +7824,13 @@ absent. The line's `outcome` stays `Cancelled`, so every reader that groups by o
 (`TheParser_KeepsTheEndCause`). The Team server's status answer carries the same word as a new optional `endCause`
 field beside the unchanged `failure: cancelled`; `remoteAsk.ts` branches on `status` alone and is untouched.
 
+**Story 4.2 (2026-10-11): the parser keeps the round a Team-server line names.** `UsageEntry` gains `round` (the
+client's 32-hex round id, written by the Team server on every line of a job whose request carried one) and
+`clientAttempt` (the client's own word for the request — `first`, `retry`, `repair`, `followUp` — beside the server's
+`attempt`, never over it), and `roundFields` reads both by `launchFields`' rule: an empty round is absent rather than an
+id every old client's line would share. Nothing renders them yet, so no help article changed; story 5.1 counts rounds
+from them on the server (`TheParser_KeepsTheRoundAndTheClientAttempt`).
+
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
 window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes

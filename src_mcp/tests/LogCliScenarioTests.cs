@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
@@ -25,8 +24,6 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class LogCliScenarioTests : IDisposable
 {
-    private static string ServerExe => ServerBinary.Path;
-
     private readonly string _data = Directory.CreateTempSubdirectory("coai-logcli-").FullName;
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
 
@@ -43,39 +40,14 @@ public sealed class LogCliScenarioTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Through the one runner — both pipes drained concurrently, a deadline, a kill by its own handle
+    /// (CodeRabbit, on the pull request; see <see cref="OneShotProcess"/>). This suite reads stdout only.
+    /// </summary>
     private (int Code, string Out) Run(params string[] args)
     {
-        var info = new ProcessStartInfo(ServerExe)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var arg in args)
-        {
-            info.ArgumentList.Add(arg);
-        }
-
-        info.Environment["COAI_DATA_DIR"] = _data;
-        using var process = Process.Start(info)!;
-
-        // BOTH pipes are drained, and concurrently. Reading stdout to the end while stderr fills its
-        // buffer is the classic deadlock: the child blocks writing, this blocks reading, and the
-        // timeout below never gets a chance because nothing is timing the READ. And a process that
-        // outlives its deadline is KILLED rather than left behind holding the temp directory this
-        // test is about to delete. (CodeRabbit, on the pull request.)
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(60_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit(5_000);
-            throw new TimeoutException("a one-shot mode did not answer and exit within a minute");
-        }
-
-        Task.WaitAll([stdout, stderr], 10_000).Should().BeTrue("the pipes close when the child does");
-
-        return (process.ExitCode, stdout.Result);
+        var (code, stdout, _) = OneShotProcess.Run(_data, args);
+        return (code, stdout);
     }
 
     private void Record()

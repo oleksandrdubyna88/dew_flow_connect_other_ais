@@ -12,7 +12,7 @@ version, the effort and tier and where each came from, the job, the slot by its 
 or tier the vendor ignored or dropped. Probes are lines of kind `probe`, and a vendor's reason is kept up to 4 000
 characters, redacted. Every new field is trailing and has a default, so older lines still read.
 
-## Unreleased
+## Extension 0.69.0 — 2026-10-11
 
 **Changed: a reviewer's CLI path belongs to the side that saved it.** A CLI path saved in a Windows window (say
 `C:\tools\codex.cmd`) no longer replaces the path a WSL window runs (`/usr/local/bin/codex`): each catalog row now keeps

@@ -126,13 +126,13 @@ public sealed class AbandonedJobTests
         var jobs = new JobStore();
         jobs.Submit(Queued(Now), Now);
         var claimed = jobs.TryClaim("codex", "a", Now);
-        claimed.Should().NotBeNull();
+        claimed.Job.Should().NotBeNull();
 
         var expired = jobs.Sweep(Now + JobTransitions.RunningAbandonedAfter);
 
         expired.Should().ContainSingle();
         expired[0].Reason.Should().Contain("nobody asking");
-        claimed!.Value.Token.IsCancellationRequested.Should().BeTrue(
+        claimed.Token.IsCancellationRequested.Should().BeTrue(
             "the vendor process must be stopped, not merely disowned");
     }
 

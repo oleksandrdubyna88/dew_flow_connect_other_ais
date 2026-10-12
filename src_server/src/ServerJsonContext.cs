@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace CoaiServer;
@@ -117,7 +118,21 @@ public sealed record ReviewRequestDto(
     /// <summary>Contract 2 (PLAN_one_model_catalog.md E2.5): the row's reasoning effort, applied where the runtime lists levels.</summary>
     string? Effort = null,
     /// <summary>Contract 2: the person's instruction for the row — taken only when the operator allows it, never logged.</summary>
-    string? SystemPrompt = null);
+    string? SystemPrompt = null,
+    /// <summary>
+    /// Story 4.2 of todo/PLAN_every_round_is_counted.md: the client's id for the ROUND this review belongs to — 32 hex
+    /// characters, minted at random per round. Bound as raw JSON and read by <see cref="RoundFields"/>, never by the
+    /// binder: a typed field refuses <c>"oops"</c> or <c>{}</c> with an error before anything runs, and a counting field
+    /// must never fail a review — a malformed value is DROPPED with a note instead (risk amendment 3).
+    /// </summary>
+    JsonElement? Round = null,
+    /// <summary>Story 4.2: what this request is inside the client's turn — <c>first</c>, <c>retry</c>, <c>repair</c>, <c>followUp</c>. Raw, like <see cref="Round"/>.</summary>
+    JsonElement? Attempt = null,
+    /// <summary>
+    /// Story 4.2: the seconds left on the client's own deadline when it submitted — RELATIVE, never an instant. Raw, like
+    /// <see cref="Round"/>; kept on the job for story 4.3, which is the one that acts on it.
+    /// </summary>
+    JsonElement? RemainingSeconds = null);
 
 /// <summary>A field the server did not take as sent: dropped, or clamped to the operator's cap — with why.</summary>
 public sealed record FieldNoteDto(string Field, string Reason);
@@ -187,7 +202,10 @@ public sealed record UsageEntryDto(
     string? EffortNotSent = null,
     string? TierNotSent = null,
     // Why the store killed a cancelled job (story 3.2) — absent on every older line and on every other ending.
-    string? EndCause = null);
+    string? EndCause = null,
+    // The client's round id and its own word for the request (story 4.2) — absent on every older line.
+    string? Round = null,
+    string? ClientAttempt = null);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>

@@ -56,18 +56,31 @@ public sealed class LiveRound
     /// one is the trap the plan round named, where production takes the quiet path while every
     /// injected test passes.
     /// </param>
+    /// <summary>
+    /// The round's identity across the wire — minted by the engine with the number, written with the running record
+    /// from the first save (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md).
+    /// </summary>
+    private readonly string _key;
+
     /// <param name="number">The round's number in this session's journal for its stage — see <see cref="_number"/>.</param>
+    /// <param name="key">
+    /// The round's identity across the wire — see <see cref="_key"/>. Trailing and defaulted for the harnesses that drive
+    /// the live record outside a round; the engine always mints one, and <c>ARoundIsMintedAKeyTests</c> reads it back
+    /// through the product, so a production caller that forgot it would be seen.
+    /// </param>
     public LiveRound(
         SessionStore store,
         PersistedSession session,
         int number,
         IReadOnlyList<ReviewerWork> work,
         string subject,
-        Noticing noticing)
+        Noticing noticing,
+        string key = "")
     {
         _subject = subject;
         _noticing = noticing;
         _number = number;
+        _key = key;
         _store = store;
         _session = session;
         _states = work.ToDictionary(
@@ -258,6 +271,7 @@ public sealed class LiveRound
             StartedUtc = _startedUtc,
             RunnerPid = Environment.ProcessId,
             Subject = _subject,
+            Key = _key,
             ReviewerStates = [.. _states.Values.OrderBy(s => s.Provider).ThenBy(s => s.Role)],
             // Taken from the session THIS round started from, so a later `open` by another client
             // cannot relabel it. See RoundRecord.Caller for what the two fields say apart.

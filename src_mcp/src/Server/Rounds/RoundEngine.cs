@@ -316,6 +316,10 @@ internal sealed class RoundEngine(
             // feature-review plan). The counter keeps counting rounds for the budget; this is the
             // round's name.
             var number = RoundNumber.Next(session.Rounds, stage.Stage);
+            // And the identity it carries across the wire (story 4.1 of todo/PLAN_every_round_is_counted.md): minted
+            // here, once per round that RUNS — `again`, the ladder and a person's Continue/Fix each come through here
+            // again and so get a new one — stamped on every launch of the round below, and kept on its record.
+            var key = RoundKeys.Mint();
 
             // A skip decided BEFORE anything is built: the stage's own reason (D17: a plan of fewer epics
             // than the feature gate runs for), or — for a stage that records skips — nobody to ask, read
@@ -347,7 +351,8 @@ internal sealed class RoundEngine(
                 : null;
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
-            var roundWork = await stage.MakeWork(session, workingDir, sha, roundClock.Token);
+            // Every launch the stage built — the round's reviewers, their repairs, the security lane — in this round.
+            var roundWork = (await stage.MakeWork(session, workingDir, sha, roundClock.Token)).InRound(key);
             var work = roundWork.Reviewers;
 
             // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round
@@ -384,7 +389,7 @@ internal sealed class RoundEngine(
             // What the round is about, derived from the plan the caller passed — a file name if
             // they handed a path, its title otherwise. Nobody has to remember to name the work.
             var subject = RoundSubject.From(planText, File.Exists);
-            var live = new LiveRound(_store, session, number, work, subject, _noticing);
+            var live = new LiveRound(_store, session, number, work, subject, _noticing, key);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), number);
             // Two kinds of exclusion, one list: a vendor this round cannot run AT ALL — no adapter,
             // no credential — and a vendor that cannot run one particular ROLE, which is what a Team

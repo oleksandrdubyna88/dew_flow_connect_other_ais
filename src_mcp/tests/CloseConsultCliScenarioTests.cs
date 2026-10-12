@@ -29,8 +29,6 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class CloseConsultCliScenarioTests : IDisposable
 {
-    private static string ServerExe => ServerBinary.Path;
-
     private readonly string _data = Directory.CreateTempSubdirectory("coai-close-cli-").FullName;
     private readonly string _repo = Directory.CreateTempSubdirectory("coai-close-repo-").FullName;
 
@@ -50,36 +48,14 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Through the one runner — both pipes drained concurrently, and a process past its deadline KILLED
+    /// (see <see cref="OneShotProcess"/>). This suite reads stdout only.
+    /// </summary>
     private (int Code, string Out) Run(params string[] args)
     {
-        var info = new ProcessStartInfo(ServerExe)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var arg in args)
-        {
-            info.ArgumentList.Add(arg);
-        }
-
-        info.Environment["COAI_DATA_DIR"] = _data;
-        using var process = Process.Start(info)!;
-
-        // Both pipes drained concurrently, and a process past its deadline KILLED — the deadlock and
-        // the orphan `LogCliScenarioTests` records, for the same reasons.
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(60_000))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit(5_000);
-            throw new TimeoutException("--close-consult did not answer and exit within a minute");
-        }
-
-        Task.WaitAll([stdout, stderr], 10_000).Should().BeTrue("the pipes close when the child does");
-
-        return (process.ExitCode, stdout.Result);
+        var (code, stdout, _) = OneShotProcess.Run(_data, args);
+        return (code, stdout);
     }
 
     /// <summary>A consultation on disk, as `consult` would have left it: answered, still open.</summary>

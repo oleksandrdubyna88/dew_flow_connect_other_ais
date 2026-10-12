@@ -59,6 +59,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
+    <!-- The Team server's tests drive the REAL ask-remote shim code in-process (AskRemote.RunAsync over Program.Flags)
+         to prove its budget rule against what the shim actually sends (story 4.3 of todo/PLAN_every_round_is_counted.md):
+         a hand-built request would miss the shim's own ten seconds. -->
+    <InternalsVisibleTo Include="CoaiServer.Tests" />
   </ItemGroup>
 
   <ItemGroup>
