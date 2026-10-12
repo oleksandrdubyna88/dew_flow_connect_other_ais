@@ -109,9 +109,13 @@ against the code or a run before it went in here — the question consultant had
   **The refresh is transactional** (plan gate, codex, 2026-10-12): the replacement tree is built COMPLETE beside the
   snapshot, under every rule above (exclusions, links, ceilings, the one retry on a mid-copy change), and only then swapped
   into the stable path; any refusal leaves the previous snapshot and its manifest exactly as they were, so no turn ever
-  reads a tree that never existed in the live repository. A swap that fails half-way puts the old tree back. Tests: a
-  refused refresh (ceiling, link, a tree that keeps changing) leaves the old snapshot readable with its manifest
-  unchanged.
+  reads a tree that never existed in the live repository. A swap that fails half-way puts the old tree back. **The whole
+  inventory is checked, not only each file** (plan gate, codex, 2026-10-12: a file copied early can stay unchanged while a
+  later one changes before its own copy, so per-file stamps alone can publish a mix of times): the live listing and every
+  copied file's stamp are taken again AFTER the last file is copied; any path added, removed or changed anywhere in the
+  inventory since the copy began retries the whole copy once, then refuses. Tests: a refused refresh (ceiling, link, a tree
+  that keeps changing) leaves the old snapshot readable with its manifest unchanged; a file changed after its own copy but
+  before the copy ends, and a file added during the copy, each make the copy retry, then refuse.
 - **D7 — the prompt on stdin, the answer from `--output json`, usage from `--output-dir`.** Answer = the last
   `role: assistant` message; session id = `sessionId` on any element (no `ReadHandle` interface change needed). The export
   folder is a per-ATTEMPT folder (a retry never reads a stale export) **inside the launch's own `coai-answers-*` scratch
@@ -372,7 +376,8 @@ runtime, the preset and installer maps); not on S3. Complete on its own: a Kimi 
   registered in `Default`, `RuntimeNames`, `Named`, and in `MachineOnlyRuntimes` (D12).
 - Kimi session retirement (§7): the ownership record written by the shim, the round's and conversation's recorded folders
   deleted at their end, the 6-hour sweep over recorded folders only. Tests: an unrecorded folder named `wd_snapshot-x_y` is
-  left alone; a recorded one is deleted at the end; a crash leftover goes after 6 hours.
+  left alone; a recorded one is deleted at the end; a crash leftover goes after 6 hours; a shim killed between the pending
+  line and `session/new`'s answer leaves a session the sweep still finds and retires.
 - `VendorDiagnosis`: Kimi's install cure per OS (Moonshot's own installer, D16) and the failure sentences M-K7 captured —
   including the subscription-model `401` of D15 and the billing `429` of D14.
 - Seeds: `feature-availability.json` rows for `kimi` (`effort` — Kimi's config lists `support_efforts` low/high/max per model,
@@ -458,7 +463,11 @@ Unit tests (red first where they guard a defect):
   reaches it (a test sets one in the parent and inspects the request). Linux/WSL child → refused (D18). Model: an alias outside
   the curated list refused before launch; an export whose `active_model` is absent or different → failure with usage kept.
 - `crossesTo`: a `vibe` / `kimi` row is not sent to a server older than its constant; a test that a host whose `RUNTIMES`
-  lacks `vibe` does not overwrite a `vibe` row in the server's settings file (D13).
+  lacks `vibe` does not overwrite a `vibe` row in the server's settings file (D13). **And one live compatibility check**
+  (plan gate, codex, 2026-10-12): the extension's REAL send path (the settings mirror the server reads) against the last
+  RELEASED `coai-mcp` binary, asserting the rows are withheld and the older server serves its other rows unchanged. The
+  Team server is not the counterpart here: these rows never reach it (D12 — machine-only; a Team-server row carries the
+  runtime `remote`).
 - Each launch path (reviewer, `consult`, question row) carries the model variable in the request's explicit environment,
   goes through the one MCP launch control (D8b), and starts in a sanitised snapshot (or an empty folder) — never the
   checkout (D6); an adapter that does not ask for a snapshot keeps today's directory, byte for byte.
@@ -524,9 +533,13 @@ Unit tests (red first where they guard a defect):
   2026-10-12: it needs a projection and an owner). Measured from the hand runs: **120–220 KB per session** (eight folders,
   1.6 MB). At 50 Kimi launches a day ≈ 10 MB a day, ≈ 3.6 GB a year if nothing retires it. **coai retires exactly what it
   created, by RECORD, never by name pattern** (code round, codex, 2026-10-12: a `wd_snapshot-*` wildcard would also match a
-  person's own session in a folder they happened to call `snapshot-…`). The shim learns each session's id from ACP
-  (`session/new`'s answer) and, before the prompt, appends the session folder it resolves to an ownership record in coai's
-  data folder (`kimi-sessions.jsonl`: path, session id, the round or conversation, the time). The round (or the closed or
+  person's own session in a folder they happened to call `snapshot-…`). BEFORE `session/new` the shim appends a PENDING
+  line to an ownership record in coai's data folder (`kimi-sessions.jsonl`: the working folder it will hand Kimi, the round
+  or conversation, the time, no session id yet); after `session/new` answers it appends the resolved line (the session id
+  and its folder). A pending line with no resolved line is a shim killed in between (plan gate, codex, 2026-10-12): the
+  sweep reconciles it by Kimi's own `wd_<working-folder name>_<hash>` folder for exactly that recorded working folder —
+  the one session folder whose name Kimi derives from it, created after the pending line's time — and retires it like a
+  resolved one. The round (or the closed or
   lapsed conversation) deletes the folders its record lines name and drops those lines; the consultation beat's sweep
   deletes recorded folders older than 6 hours whose owner is gone (a crash's leftovers). A folder no record line names is
   never touched, whatever its name. Whether Kimi's
