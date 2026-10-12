@@ -77,7 +77,8 @@ sequenceDiagram
 | `QuestionResolution` | `Consultation/QuestionResolution.cs` | which answering runtime a question row's vendor gets: `api` → `ApiConsultant`, the rest `ConsultantResolution.For` — `ConsultantResolution.Consulting` is NOT widened |
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
-| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
+| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of todo/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
+| `CooldownParser` | `Reviewers/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant — ONE parser for both halves since story 5.3b (moved from `src_server/src/Slots`): `Until` (always an answer; the Team server parks a slot on it, falling back to a doubling guess) and `StatedReset` (only what the vendor NAMED — a duration up to 14 days, a date, a clock time — else null; the local ledger and the ladder read this one) |
 | `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
 | `HostKind`, `HostKinds` | `Platform/HostKind.cs` | `Windows / Linux / Wsl / MacOs / Other` from `OperatingSystem` + `VendorDiagnosis.OnWsl`; the one answer to "which platform" for the limitations and the health files' `side` |
@@ -1199,6 +1200,58 @@ that sales footer reach the decision.
 *retry after 20 seconds* against *retry after 3 hours*. That is the general form of the rule and it
 would subsume the vocabulary; no sample of the string has been observed from a vendor this product
 runs, and this file already records what writing a rule against an imagined string cost once.
+*(Superseded in part 2026-10-11 — the next section: a stated RESET is now read and compared, on the observed agy line.)*
+
+### A stated reset is never waited out locally (2026-10-11, stories 5.3b and 5.3c of `todo/PLAN_every_round_is_counted.md`)
+
+agy's verbatim refusal — *"Individual quota reached. Please upgrade your subscription to increase your limits. Resets in
+88h49m9s."* — says none of `Spent`'s words, so a local agy row climbed the whole ladder, four launches each refused,
+into a reset almost four days away (measured RED: `AgysResetDaysAway_IsNotRetried_OneLaunchAndTheRefusal`, *"Expected
+launcher.Launched to be 1 … but found 4"*). Now the observed string IS a sample, and the rule above is taken in the
+form it named:
+
+```mermaid
+flowchart LR
+  R["RateLimited(reason)"] --> H{"RateLimit.Hopeless<br/>(Spent words)"}
+  H -->|yes| X["no retry — Attempts = 1"]
+  H -->|no| S{"RetryLadder.ResetOutlasts<br/>StatedReset(reason) − now<br/>beyond Remaining(elapsed, budget)?"}
+  S -->|yes| X
+  S -->|"no / nothing stated"| L["the ladder's next step<br/>(5 s, 30 s, 60 s, 120 s, jittered)"]
+```
+
+- **One parser.** `CooldownParser` moved from `src_server/src/Slots` to `Reviewers/CooldownParser.cs` (namespace
+  `CoaiMcp.Runners.Reviewers`); the Team server parks a slot on `Until` from here, and the local half reads
+  `StatedReset` — the same reading, minus the guess (`Until` falls back to a doubling 30 minutes, *weekly* to a day, a
+  wait it cannot read to 5 h; `StatedReset` answers null for all of those). The #754 boundary rules come with it: a
+  duration is read whole or not at all (`2h 30 minutes`, `2h, 30m`, `2h; 30m` err long), at most 14 days.
+- **Only the ladder's decision changes.** `BoundedScheduler.Hopeless(limited, elapsed, budget)` =
+  `RateLimit.Hopeless(reason) || RetryLadder.ResetOutlasts(reason, Remaining(elapsed, budget), clock.GetUtcNow())`.
+  A stated reset inside the budget (`Resets in 2s` with a minute left) is still waited out by the ladder's own steps;
+  a refusal that states no reset climbs exactly as before. The clock is `BoundedScheduler`'s new optional
+  `TimeProvider` (a duration needs none; a clock-time form does).
+- **Nothing is persisted.** No local park across rounds (E5's plan round): a local CLI's account can change under it
+  (a re-login), and a parked row would then refuse a working account; what a park saves is one refusal launch per
+  round. What-must-be-true item 7 reads *parked on the SERVER; locally never waited out, and shown*.
+- **Shown.** `UsageLedger.Record` writes the reset on the LAST line of a turn that ended `RateLimited` — the trailing,
+  defaulted `UsageEntry.ResetsUtc` (`O`, UTC), empty on every other line and on a refusal that stated no time — and
+  the extension turns it into *quota out — resets in 89 h (Wed 04:49)* (`statedReset.ts`, module_extension.md).
+  **Every local refusal carries it** (epic 5's code round): a consultation, a consultant check and a question row write
+  through `RecordJob`'s LOCAL overload, which takes `resetsUtc` — `UsageLedger.StatedResetOf(final.Terminal, now)`,
+  the one helper the reviewer path uses, reached through `ConsultantTurnBooks.StatedResetOf(final)`
+  (`ConsultationFailed.ResetsUtc` carries it from the failed consultation turn to its row). An answer, an interrupted
+  turn and a refusal that named no time write none. The Team server writes no `resetsUtc` on its own lines: its
+  overload of `RecordJob` has no such parameter (both build their line through one `JobEntry`), because the server
+  keeps the reset on the slot and says it in `/api/catalog` (module_team_server.md), so `UsageEntryDto` / `UsageLine`
+  are not widened.
+- **Seen from the shim.** `RemoteStatus` / `RemotePoll` read the server's new optional `waiting` field, and
+  `RemoteAsk.QueuedMessage(server, position, waiting)` appends it to the queued progress line — *queued on the Team
+  server at …, 0 ahead of it — every account is rate-limited; the first comes back at …* — whose stem `IsProgress`
+  still recognises; an older server sends no field and the line is unchanged.
+
+**A finding on the way, not acted on:** agy's SECOND stderr line, `AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED …`,
+contains *exhausted*, so when it is present `RateLimit.Reason` picks it and `Hopeless` already answered true — the
+ladder climbed only on the plain line. The consult fixture (`Resets in 33m52s`, `RESOURCE_EXHAUSTED`) is therefore
+hopeless by words even though 34 minutes may lie inside a long budget; `ResetOutlasts` does not change that direction.
 
 ## A reviewer whose command was auto-denied is asked again, in the same conversation (2026-09-24, issue #504)
 

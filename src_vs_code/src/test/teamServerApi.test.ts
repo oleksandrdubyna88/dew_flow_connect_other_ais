@@ -219,6 +219,19 @@ test('usage names its window and its scope on the wire', async () => {
   assert.ok(fetchImpl.seen[0]?.url.includes('scope=company'));
 });
 
+test('a company request asks for the round windows beside its own, and a personal one does not (story 5.2)', async () => {
+  const fetchImpl = stub(() => ({ status: 200, body: JSON.stringify({ window: 'today', vendors: [] }) }));
+
+  await fetchUsage('https://s', 'tok', 'month', 'company', fetchImpl);
+  await fetchUsage('https://s', 'tok', 'month', 'me', fetchImpl);
+
+  const company = new URL(fetchImpl.seen[0]?.url ?? '');
+  const mine = new URL(fetchImpl.seen[1]?.url ?? '');
+  assert.strictEqual(company.searchParams.get('windows'), '5h,24h,week', 'the tab\'s rounds come from the same request as its figures');
+  assert.strictEqual(company.searchParams.get('window'), 'month', 'and the window the admin chose is still the answer\'s top');
+  assert.strictEqual(mine.searchParams.get('windows'), null, 'nothing personal shows server rounds, so nothing asks for them');
+});
+
 // ---------- what the SERVER says about itself ----------
 
 /**

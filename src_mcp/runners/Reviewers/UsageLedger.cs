@@ -247,7 +247,20 @@ public sealed record UsageEntry(
     /// still the server's <c>first</c> — one field cannot say both. Empty on a local line, whose own
     /// <paramref name="Attempt"/> already IS the client's word, and on every line older than the field.
     /// </remarks>
-    string ClientAttempt = "")
+    string ClientAttempt = "",
+
+    /// <summary>
+    /// The instant the vendor STATED its quota comes back, in UTC (<c>O</c> format) — or empty.
+    /// </summary>
+    /// <remarks>
+    /// Story 5.3b of todo/PLAN_every_round_is_counted.md: the last line of a turn that ended rate-limited carries the
+    /// reset its refusal stated — agy's <i>"Resets in 88h49m9s"</i> — read by <see cref="CooldownParser.StatedReset"/>,
+    /// the parser the Team server parks a slot on, so the extension shows it without parsing vendor sentences itself.
+    /// Empty on every other line, on a refusal that stated no time (never the server's guess), on a line older than the
+    /// field, and on a Team-server line — the server keeps its reset on the slot and says it in its catalog. Trailing and
+    /// defaulted like the rest.
+    /// </remarks>
+    string ResetsUtc = "")
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -327,22 +340,42 @@ public sealed class UsageLedger(string dataDir)
         var last = elapsed - TimeSpan.FromTicks(outcome.EarlierTurns.Sum(turn => turn.Elapsed.Ticks));
 
         AppendTurn(
-            line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome));
+            line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome),
+            StatedResetOf(outcome, DateTimeOffset.UtcNow));
     }
 
     /// <summary>What every line of one reviewer shares: who ran, on which model, at which stage.</summary>
     private sealed record LineOf(ReviewerInvocation Invocation, string Model, string Stage);
 
-    /// <summary>One turn, as its lines: one per launch when they add up to the turn, else the turn as one line.</summary>
-    private void AppendTurn(LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome)
+    /// <summary>
+    /// One turn, as its lines: one per launch when they add up to the turn, else the turn as one line — its LAST line
+    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated.
+    /// </summary>
+    private void AppendTurn(
+        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "")
     {
         var turn = LaunchLines.NewTurn();
-        foreach (var launch in LaunchLines.Of(launches, usage, elapsed, outcome))
+        var lines = LaunchLines.Of(launches, usage, elapsed, outcome);
+        foreach (var (launch, at) in lines.Select((launch, at) => (launch, at)))
         {
             var entry = Entry(line.Invocation, line.Model, line.Stage, launch.Elapsed, launch.Usage, launch.Outcome);
-            Append(entry with { Turn = turn, Attempt = launch.Attempt });
+            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = at == lines.Count - 1 ? resetsUtc : string.Empty });
         }
     }
+
+    /// <summary>
+    /// The reset a rate-limited ending STATED, as a UTC instant — or empty for any other ending, and for a refusal that
+    /// named no time (story 5.3b of todo/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
+    /// </summary>
+    /// <remarks>
+    /// Public since epic 5's code round: every LOCAL path that records a refusal — a reviewer's turn here, a consultation,
+    /// a consultant check and a question row through <see cref="RecordJob(string, string, string, string, string, TimeSpan, Usage, string, string, string)"/>
+    /// — reads its reset through this ONE helper. A launch that never ended on a terminal outcome passes null: no reset.
+    /// </remarks>
+    public static string StatedResetOf(ReviewerOutcome? outcome, DateTimeOffset nowUtc) =>
+        outcome is ReviewerOutcome.RateLimited limited && CooldownParser.StatedReset(limited.Reason, nowUtc) is { } resets
+            ? resets.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
 
     private static UsageEntry Entry(
         ReviewerInvocation invocation, string model, string stage, TimeSpan elapsed, Usage usage, string outcome) =>
@@ -419,10 +452,17 @@ public sealed class UsageLedger(string dataDir)
     /// <see cref="LaunchOptions"/> to <see cref="LaunchOptions.None"/> and this repository's rule is that an absent value
     /// is an EMPTY value, never a null (the epic-3 code round).</para>
     /// </remarks>
+    /// <param name="resetsUtc">
+    /// The reset the turn's refusal STATED — <see cref="StatedResetOf"/> of its terminal outcome — or empty. Epic 5's code
+    /// round of todo/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
+    /// refusals like a reviewer's, and only the reviewer path wrote one, so the extension could not say when the vendor
+    /// comes back after a consultation met its quota. Never set on a Team-server line: the overload below has no such
+    /// parameter, because the server keeps the reset on the slot and says it in its catalog.
+    /// </param>
     public void RecordJob(
-        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage) =>
-        RecordJob(email, provider, model, role, outcome, elapsed, usage, kind, stage,
-            turn: string.Empty, attempt: string.Empty, ranWith: LaunchOptions.None, job: string.Empty, slot: string.Empty);
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
+        string resetsUtc = "") =>
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(LaunchOptions.None)) with { ResetsUtc = resetsUtc });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>
@@ -434,7 +474,19 @@ public sealed class UsageLedger(string dataDir)
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
         string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "",
         string round = "", string clientAttempt = "") =>
-        Append(new UsageEntry(
+        Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage,
+            new JobPlace(ranWith, turn, attempt, job, slot, endCause, round, clientAttempt)));
+
+    /// <summary>Where a job's line sits: the Team server's turn, attempt, launch options, job, slot, end cause and round — all empty locally.</summary>
+    private sealed record JobPlace(
+        LaunchOptions RanWith, string Turn = "", string Attempt = "", string Job = "", string Slot = "", string EndCause = "",
+        string Round = "", string ClientAttempt = "");
+
+    /// <summary>The ONE construction of a job's line, local or Team server — the two overloads differ only in what they fill.</summary>
+    private static UsageEntry JobEntry(
+        string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
+        JobPlace place) =>
+        new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
             model,
@@ -451,13 +503,13 @@ public sealed class UsageLedger(string dataDir)
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             UsageNote: UsageNoteOf(usage),
-            Turn: turn,
-            Attempt: attempt,
-            Job: job,
-            Slot: slot,
-            EndCause: endCause,
-            Round: round,
-            ClientAttempt: clientAttempt).RanWith(ranWith));
+            Turn: place.Turn,
+            Attempt: place.Attempt,
+            Job: place.Job,
+            Slot: place.Slot,
+            EndCause: place.EndCause,
+            Round: place.Round,
+            ClientAttempt: place.ClientAttempt).RanWith(place.RanWith);
 
     /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
     private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;

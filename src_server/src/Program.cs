@@ -324,6 +324,9 @@ app.MapReviewEndpoints(
     catalog,
     gate,
     acceptedRoles,
+    // What a queued job behind a parked or signed-out account is told (story 5.3b of todo/PLAN_every_round_is_counted.md):
+    // read from the same registry the runner claims from.
+    new QueueWaiting(catalog, slotRegistry),
     // How long a review may WAIT for a free account before giving up, having spent nothing. Not how
     // long the vendor may take — that is the caller's own timeoutSeconds, and the two are separate
     // clocks on purpose.

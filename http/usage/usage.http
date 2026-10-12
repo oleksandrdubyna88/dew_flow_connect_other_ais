@@ -89,9 +89,131 @@ Authorization: Bearer {{token}}
 
 {{
   const assert = require('node:assert');
-  test('all four names are in the message', () => {
-    for (const name of ['today', 'week', 'month', 'year']) {
+  test('every name is in the message, the trailing hour windows included', () => {
+    for (const name of ['today', '5h', '24h', 'week', 'month', 'year']) {
       assert.match(response.parsedBody.error, new RegExp(name));
+    }
+  });
+}}
+
+###
+
+# Rounds, counted by the server (story 5.1 of todo/PLAN_every_round_is_counted.md). The runner seeds, a minute ago, two
+# rounds through every client word — first, a retry whose job met a refusing account first (two lines, ONE request), a
+# cancelled repair, a follow-up, a budget refusal — a deploy canary, and the one line from an older client with no round.
+# Every count below is asserted BY VALUE: a field serialised under another name, or counted per line instead of per
+# request, is a red request here.
+
+# @name usage_over_several_windows_counts_rounds_and_requests_by_value
+GET {{baseUrl}}/api/usage?windows=5h,24h,week
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the windows come back by name, in the order asked, each naming its own range', () => {
+    const windows = response.parsedBody.windows;
+    assert.deepStrictEqual(windows.map((w) => w.window), ['5h', '24h', 'week']);
+    const hours = (w) => (Date.parse(w.toUtc) - Date.parse(w.fromUtc)) / 3600000;
+    assert.deepStrictEqual(windows.map(hours), [5, 24, 168]);
+    assert.deepStrictEqual(windows[0].people, [], 'a person\'s windows are not a directory of colleagues');
+  });
+  test('the seeded codex row is counted the same in every window, every count by value', () => {
+    for (const window of response.parsedBody.windows) {
+      const codex = window.vendors.find((v) => v.vendor === 'codex');
+      assert.ok(codex, `no codex row in the ${window.window} window`);
+      assert.deepStrictEqual(
+        [codex.runs, codex.rounds, codex.runsWithoutRound, codex.retries, codex.repairs, codex.followUps, codex.cancelled, codex.noBudget],
+        [8, 2, 1, 1, 1, 1, 1, 1],
+        `${window.window}: runs, rounds, runsWithoutRound, retries, repairs, followUps, cancelled, noBudget`);
+      assert.deepStrictEqual(codex.launchesByKind, { canary: 1, review: 6 }, 'the budget refusal launched nothing; the canary is its own kind');
+    }
+  });
+  test('the top of the answer is still today\'s window, and its vendor rows carry the counts too', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.vendor === 'codex');
+    assert.strictEqual(typeof codex.rounds, 'number');
+  });
+}}
+
+###
+
+# @name usage_over_a_window_alone_stays_todays_shape_with_the_counts_added
+# @prod
+GET {{baseUrl}}/api/usage?window=week
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('no several-window block on an answer to ?window= — absent, not null, so an older client reads today\'s shape', () => {
+    assert.ok(!('windows' in response.parsedBody));
+  });
+  test('every vendor row — however many there are — carries the round counts as numbers and the launches per kind', () => {
+    for (const vendor of response.parsedBody.vendors) {
+      for (const key of ['rounds', 'runsWithoutRound', 'retries', 'repairs', 'followUps', 'cancelled', 'noBudget']) {
+        assert.strictEqual(typeof vendor[key], 'number', `${vendor.vendor}.${key}`);
+      }
+      assert.strictEqual(typeof vendor.launchesByKind, 'object');
+    }
+  });
+}}
+
+###
+
+# @name usage_over_several_windows_has_the_shape_a_client_reads
+# @prod
+GET {{baseUrl}}/api/usage?windows=5h,24h,week
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('three windows by name, each with its range and its vendor rows', () => {
+    const windows = response.parsedBody.windows;
+    assert.deepStrictEqual(windows.map((w) => w.window), ['5h', '24h', 'week']);
+    for (const window of windows) {
+      assert.ok(Date.parse(window.fromUtc) < Date.parse(window.toUtc));
+      assert.ok(Array.isArray(window.vendors) && Array.isArray(window.people));
+    }
+  });
+}}
+
+###
+
+# @name an_unknown_window_among_several_is_refused_by_name
+GET {{baseUrl}}/api/usage?windows=5h,fortnight
+Authorization: Bearer {{token}}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal names the one that is not a window and the legal ones', () => {
+    assert.match(response.parsedBody.error, /'fortnight' is not a window/);
+    assert.match(response.parsedBody.error, /5h/);
+  });
+}}
+
+###
+
+# @name company_scope_over_several_windows_counts_each_persons_rounds
+GET {{baseUrl}}/api/usage?scope=company&windows=5h
+Authorization: Bearer {{adminToken}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the developer\'s codex row in the 5 h window carries the same counts as the company row', () => {
+    const five = response.parsedBody.windows[0];
+    const company = five.vendors.find((v) => v.vendor === 'codex');
+    const dev = five.people.find((p) => p.email === 'dev@example.com').vendors.find((v) => v.vendor === 'codex');
+    for (const row of [company, dev]) {
+      assert.deepStrictEqual([row.rounds, row.runsWithoutRound, row.retries, row.repairs, row.followUps, row.cancelled, row.noBudget],
+        [2, 1, 1, 1, 1, 1, 1]);
     }
   });
 }}

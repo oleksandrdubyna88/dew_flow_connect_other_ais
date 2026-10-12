@@ -223,6 +223,43 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
         UsageKinds.LocalOnly.Should().Contain(UsageKinds.Question, "the Team server never runs a question row");
     }
 
+    /// <summary>
+    /// Epic 5's code round (gating finding) of todo/PLAN_every_round_is_counted.md: a QUESTION row refused with a stated
+    /// reset wrote its ledger line without <c>resetsUtc</c> — only the reviewer path read the reset. The refusal here is
+    /// agy's verbatim line, on a claude row: the classification reads the words, and the scripted launcher answers claude.
+    /// </summary>
+    [Fact]
+    public async Task AQuestionRowRefusedWithAStatedReset_WritesTheResetOnItsLedgerLine()
+    {
+        const string AgyQuotaLine =
+            "error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 88h49m9s.";
+        var refusing = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable == "claude" ? new ScriptedAnswer(ExitCode: 3, StdErr: AgyQuotaLine) : null));
+        var service = Service(rows: [Row("sonnet", "claude", "sonnet")], launcher: refusing);
+        var before = DateTimeOffset.UtcNow;
+
+        await AskAsync(service);
+
+        var line = File.ReadAllLines(Path.Combine(_data, "usage.jsonl"))
+            .Select(one => JsonSerializer.Deserialize(one, LedgerJsonContext.Default.UsageEntry)!)
+            .Should().ContainSingle().Subject;
+        line.Kind.Should().Be(UsageKinds.Question);
+        line.Outcome.Should().StartWith("rate limited");
+        line.ResetsUtc.Should().NotBeEmpty("the vendor stated when its quota comes back, and the ledger is where the local half keeps it");
+        DateTimeOffset.Parse(line.ResetsUtc, System.Globalization.CultureInfo.InvariantCulture)
+            .Should().BeCloseTo(before + new TimeSpan(88, 49, 9), TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public async Task AQuestionRowThatAnswered_WritesNoReset()
+    {
+        await AskAsync(Service());
+
+        File.ReadAllLines(Path.Combine(_data, "usage.jsonl"))
+            .Select(one => JsonSerializer.Deserialize(one, LedgerJsonContext.Default.UsageEntry)!)
+            .Should().OnlyContain(line => line.ResetsUtc.Length == 0);
+    }
+
     [Fact]
     public async Task APathThatIsNoRepository_IsRefusedBeforeAnythingIsWritten()
     {

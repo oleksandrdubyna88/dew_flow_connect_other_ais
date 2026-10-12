@@ -141,14 +141,16 @@ void test('the same body without what a newer server adds says what it needs —
   if (!answer.ok) {
     assert.fail(`the company answer was refused: ${answer.status} — ${answer.message}`);
   }
-  // As today's server answers, whatever this one answers: the fields a newer server adds, removed.
-  const { daily: _daily, ...rest } = answer.value;
-  const strip = (rows: Usage['vendors']): Usage['vendors'] => rows.map(({ models: _models, ...row }) => row);
+  // As today's server answers, whatever this one answers: the fields a newer server adds, removed — the round windows
+  // and the round counts of story 5.1 among them.
+  const { daily: _daily, windows: _windows, ...rest } = answer.value;
+  const strip = (rows: Usage['vendors']): Usage['vendors'] => rows.map(({ models: _models, rounds: _r, runsWithoutRound: _w, retries: _t, repairs: _p, followUps: _f, cancelled: _c, noBudget: _n, launchesByKind: _k, ...row }) => row);
   const older: Usage = { ...rest, vendors: strip(rest.vendors), people: (rest.people ?? []).map((one) => ({ ...one, vendors: strip(one.vendors) })) };
   const parts = teamParts(state(true), { usage: older, problem: '', answeredAt: Date.now() }, false, () => 'var(--c)');
   const text = Object.values(parts).map((html) => pageTree(html).text()).join(' ');
 
   assert.match(text, /needs Team server ≥/);
+  assert.match(text, /Rounds: count unavailable/, 'an answer without the round windows drew rounds');
   assert.doesNotMatch(text, /\$0(\.0+)?\b/);
 });
 

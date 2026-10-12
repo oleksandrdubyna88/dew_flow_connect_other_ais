@@ -353,6 +353,47 @@ test('an OLD server after a new one: the sorts it cannot serve go back to saying
   assert.doesNotMatch(page.element('team-people').textContent, /last seen/, 'an old server\'s card shows a last-seen it cannot know');
 });
 
+// ---------- story 5.2 of todo/PLAN_every_round_is_counted.md: the server's own round counts ----------
+
+/** A NEW server's answer with the three round windows beside it (story 5.1's `windows`). */
+function countedCompany(): Usage {
+  const counted = (rounds: number, week = false) => ({
+    vendor: 'codex', runs: rounds * 4, failed: 0, tokensIn: 1, tokensOut: 1, seconds: 1, models: [],
+    rounds, runsWithoutRound: week ? 2 : 0, retries: week ? 3 : 0, repairs: week ? 1 : 0, followUps: 0,
+    cancelled: week ? 4 : 0, noBudget: week ? 5 : 0, launchesByKind: { review: rounds * 4 },
+  });
+  const window = (name: string, rounds: number) => ({
+    window: name, fromUtc: '2026-10-10T07:00:01Z', toUtc: '2026-10-10T12:00:01Z',
+    vendors: [counted(rounds, name === 'week')], people: [],
+  });
+
+  return { ...newCompany(), windows: [window('5h', 2), window('24h', 9), window('week', 31)] };
+}
+
+test('a NEW server\'s round counts: per vendor for 5 h / 24 h / 7 d, and the week\'s runs without a round, retries, repairs, cancelled and budget refusals', () => {
+  const page = runningDomPage(bundle);
+  send(page, pushNew(countedCompany()));
+
+  const vendors = page.element('team-vendors').textContent;
+  assert.match(vendors, /Rounds/);
+  assert.match(vendors, /codex/);
+  assert.match(vendors, /5 h 2 · 24 h 9 · 7 d 31/);
+  assert.match(vendors, /2 runs without a round/);
+  assert.match(vendors, /3 retries · 1 repair · 0 follow-ups · 4 cancelled · 5 budget refusals/);
+  assert.doesNotMatch(vendors, /count unavailable/);
+});
+
+test('AnOlderServer_ShowsUnavailable_NotZero — on the page: a 200 without the round windows says "count unavailable", and no round is drawn as 0', () => {
+  const page = runningDomPage(bundle);
+  // A NEW-enough server for models and the chart, but older than round counting: it answered the windows request with
+  // its own range and no `windows` — the 200 an older server gives, not a refusal.
+  send(page, pushNew());
+
+  const vendors = page.element('team-vendors').textContent;
+  assert.match(vendors, /Rounds: count unavailable/);
+  assert.doesNotMatch(vendors, /5 h 0|7 d 0|\b0 runs without a round/, 'a server that cannot count rounds was shown as having none');
+});
+
 test('a push keeps the chart\'s numbers open — they are its text alternative, not decoration', () => {
   const page = runningDomPage(bundle);
   send(page, pushNew());

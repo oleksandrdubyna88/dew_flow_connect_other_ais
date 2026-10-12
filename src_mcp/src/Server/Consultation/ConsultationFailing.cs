@@ -23,7 +23,12 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
 /// The caller's answer is NOT here: it depends on whether the call was given back, and the give-back happens
 /// only after the record is written (<see cref="ConsultationFailing.Answer"/>).
 /// </remarks>
-internal sealed record ConsultationFailed(ConsultationRecord Next, string LedgerOutcome, ConsultFailure Failure, bool Resumable, string Vendor, Usage Share);
+/// <param name="ResetsUtc">
+/// The reset the refusal STATED, for the ledger row — empty unless the turn's final launch was a rate limit that named a
+/// time (epic 5's code round of todo/PLAN_every_round_is_counted.md).
+/// </param>
+internal sealed record ConsultationFailed(
+    ConsultationRecord Next, string LedgerOutcome, ConsultFailure Failure, bool Resumable, string Vendor, Usage Share, string ResetsUtc = "");
 
 /// <summary>
 /// The ways a consultation turn ends without advice, as pure builders the service applies.

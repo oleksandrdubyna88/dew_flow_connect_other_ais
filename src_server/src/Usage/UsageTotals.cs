@@ -36,7 +36,27 @@ public sealed record UsageRange(DateTimeOffset FromUtc, DateTimeOffset ToUtc)
 /// </remarks>
 public static class UsageWindow
 {
-    public static IReadOnlyList<string> Names { get; } = ["today", "week", "month", "year"];
+    public static IReadOnlyList<string> Names { get; } = ["today", "5h", "24h", "week", "month", "year"];
+
+    /// <summary>The windows a <c>?windows=</c> list names, in the order asked, each once — or the first name that is none.</summary>
+    /// <remarks>
+    /// Comma-separated, each name trimmed and read as <see cref="Range"/> reads one; an empty item is nothing (so
+    /// <c>?windows=</c> asks for no windows, as <c>?window=</c> asks for the default), and a name asked twice is answered
+    /// once, under the server's own spelling. One name that is not a window refuses the whole list.
+    /// </remarks>
+    public static WindowsAsked Several(string? names, DateTimeOffset nowUtc)
+    {
+        var asked = (names ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(name => name.ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var unknown = asked.FirstOrDefault(name => Range(name, nowUtc) is null);
+
+        return unknown is null
+            ? new WindowsAsked.Read([.. asked.Select(name => new NamedRange(name, Range(name, nowUtc)!))])
+            : new WindowsAsked.Refused(unknown);
+    }
 
     /// <summary>The range a name means at <paramref name="nowUtc"/>, or null when the name is not one.</summary>
     /// <remarks>
@@ -54,12 +74,33 @@ public static class UsageWindow
         return (string.IsNullOrWhiteSpace(name) ? "today" : name).ToLowerInvariant() switch
         {
             "today" => new UsageRange(new DateTimeOffset(nowUtc.UtcDateTime.Date, TimeSpan.Zero), end),
+            // Trailing, as `week` is (story 5.1 of todo/PLAN_every_round_is_counted.md): a vendor's own five-hour window
+            // does not start at midnight, and the local counter's 5 h / 24 h are trailing too, so the two halves agree.
+            "5h" => new UsageRange(end.AddHours(-5), end),
+            "24h" => new UsageRange(end.AddHours(-24), end),
             "week" => new UsageRange(end.AddDays(-7), end),
             "month" => new UsageRange(end.AddDays(-30), end),
             "year" => new UsageRange(end.AddDays(-365), end),
             _ => null,
         };
     }
+}
+
+/// <summary>A window by the name it was asked for, and the range that name meant.</summary>
+public sealed record NamedRange(string Name, UsageRange Range);
+
+/// <summary>What a <c>?windows=</c> list asked for: the windows, or the name that is not one.</summary>
+public abstract record WindowsAsked
+{
+    private WindowsAsked()
+    {
+    }
+
+    /// <summary>Every name was a window — possibly none at all, which is no several-window block.</summary>
+    public sealed record Read(IReadOnlyList<NamedRange> Windows) : WindowsAsked;
+
+    /// <summary>The first name that is no window; refused naming the legal ones, as <c>?window=</c> is.</summary>
+    public sealed record Refused(string Name) : WindowsAsked;
 }
 
 /// <summary>What one vendor cost, over a window.</summary>
@@ -97,10 +138,29 @@ public sealed record VendorTotal(
     /// <para>An older server is recognised by the absence of <c>daily</c> on the company answer, never by
     /// an empty <c>models</c>, which a new server answers too for a vendor with no runs.</para>
     /// </remarks>
-    IReadOnlyList<ModelTotal> Models = null!)
+    IReadOnlyList<ModelTotal> Models = null!,
+    /// <summary>DISTINCT non-empty round ids on this vendor's REVIEW lines — the canary and the chats are no round (story 5.1).</summary>
+    int Rounds = 0,
+    /// <summary>Review lines with no round id: a client older than story 4.1, counted apart and never folded into a guess.</summary>
+    int RunsWithoutRound = 0,
+    /// <summary>Requests (distinct jobs) the CLIENT called <c>retry</c>.</summary>
+    int Retries = 0,
+    /// <summary>Requests (distinct jobs) the CLIENT called <c>repair</c>.</summary>
+    int Repairs = 0,
+    /// <summary>Requests (distinct jobs) the CLIENT called <c>followUp</c> — the server's own continuation is not one.</summary>
+    int FollowUps = 0,
+    /// <summary>Lines whose outcome is <c>Cancelled</c> — withdrawn, abandoned, backstopped or stopped with the host.</summary>
+    int Cancelled = 0,
+    /// <summary>Lines whose outcome is <c>NoBudget</c> — ended at claim because the caller could no longer wait.</summary>
+    int NoBudget = 0,
+    /// <summary>Launches per kind (<c>review</c>, <c>chat</c>, <c>canary</c>) — every line but a <c>NoBudget</c> one, which launched nothing.</summary>
+    IReadOnlyDictionary<string, int> LaunchesByKind = null!)
 {
     /// <summary>Never null, whatever a deserialiser did with the property — see <see cref="UsageDto.Kinds"/>.</summary>
     public IReadOnlyList<ModelTotal> Models { get; init; } = Models ?? [];
+
+    /// <summary>Never null, for the same reason as <see cref="Models"/>.</summary>
+    public IReadOnlyDictionary<string, int> LaunchesByKind { get; init; } = LaunchesByKind ?? new Dictionary<string, int>();
 }
 
 /// <summary>What one MODEL of a vendor cost, over a window — a row under its vendor.</summary>
@@ -197,7 +257,9 @@ public static class UsageTotals
     /// </remarks>
     private static VendorTotal Fold(IGrouping<string, UsageLine> group)
     {
-        var sum = Add(group);
+        var lines = group.ToList();
+        var sum = Add(lines);
+        var rounds = UsageRounds.Of(lines);
 
         return new VendorTotal(
             group.Key,
@@ -209,7 +271,16 @@ public static class UsageTotals
             sum.CostUsd,
             sum.CostIsFloor,
             sum.UnpricedRuns,
-            ByModel(group));
+            ByModel(lines),
+            // Story 5.1 of todo/PLAN_every_round_is_counted.md — the same lines, counted as rounds and requests.
+            rounds.Rounds,
+            rounds.RunsWithoutRound,
+            rounds.Retries,
+            rounds.Repairs,
+            rounds.FollowUps,
+            rounds.Cancelled,
+            rounds.NoBudget,
+            rounds.LaunchesByKind);
     }
 
     /// <summary>Per model, within one vendor's lines. Ordinal on the id — see <see cref="ModelTotal"/>.</summary>

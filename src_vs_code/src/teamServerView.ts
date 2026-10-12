@@ -8,6 +8,8 @@ import { SERVER_CONTRACT_REQUIRED } from './teamServerApi';
 // security rule names by example — "three byte-identical private copies | hardening one left the
 // other two behind" — and byte-identical is exactly what this one was. Caught on the code round.
 import { escapeHtml as escape } from './escapeHtml';
+// A leaf, so the Team servers view does not pull the ledger's import graph in (importCycles.test.mjs).
+import { untilWords } from './resetWords';
 
 /**
  * The *Team servers* section, as markup.
@@ -188,7 +190,7 @@ function accountGlyph(signedIn: boolean): string {
  * unusable rather than that it is — and the two reasons have different owners. Accounts that are
  * signed out never come back on their own; rate-limited ones always do.</p>
  */
-export function slotSentence(vendor: CatalogVendor): string {
+export function slotSentence(vendor: CatalogVendor, nowMs: number = Date.now(), timeZone?: string): string {
   const slots: SlotSummary = vendor.slots ?? { total: 0, ready: 0, coolingDown: 0, needsSignIn: 0 };
   if (slots.total === 0) {
     return `${vendor.id}: no accounts — ask the operator`;
@@ -202,7 +204,17 @@ export function slotSentence(vendor: CatalogVendor): string {
     return `${vendor.id}: all ${slots.total} signed out — the operator must sign them in`;
   }
 
-  return `${vendor.id}: all ${slots.total} rate-limited, they come back by themselves`;
+  return `${vendor.id}: all ${slots.total} rate-limited, they come back by themselves${firstBack(slots, nowMs, timeZone)}`;
+}
+
+/**
+ * ` — the first in 89 h (Wed 04:49)` from the catalog's `resetsUtc` (story 5.3b of todo/PLAN_every_round_is_counted.md),
+ * or nothing: a server older than the field, no account parked, or a reset already past.
+ */
+function firstBack(slots: SlotSummary, nowMs: number, timeZone: string | undefined): string {
+  const when = untilWords(Date.parse(slots.resetsUtc ?? ''), nowMs, timeZone);
+
+  return when.length > 0 ? ` — the first in ${when}` : '';
 }
 
 /**

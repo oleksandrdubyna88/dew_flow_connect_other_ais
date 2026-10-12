@@ -47,6 +47,11 @@ Authorization: Bearer {{token}}
     assert.strictEqual(response.parsedBody.endCause, '');
     assert.ok(Number.isInteger(response.parsedBody.tokensIn));
   });
+  test('a queued job no account can take says why, in `waiting` — never in `reason` (story 5.3b)', () => {
+    // The suite's one account was never signed in, so no account can take the job: the cure is said.
+    assert.match(response.parsedBody.waiting, /signed out/);
+    assert.strictEqual(response.parsedBody.reason, '', 'reason is a failure\'s words, and nothing has failed');
+  });
 }}
 
 ###

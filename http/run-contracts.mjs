@@ -147,21 +147,53 @@ writeFileSync(
 // warns about. One line gives the personal and the company answer a vendor row with a model under it,
 // and the thirty-day chart a launch in today's bucket, so those shapes are actually checked. The line
 // is the shape `coai-mcp`'s `UsageLedger` writes (mirrored by `UsageEntryDto` on the reading side).
+//
+// Then the round lines story 5.1 counts (todo/PLAN_every_round_is_counted.md), stamped a minute ago so the 5 h window
+// holds them: two rounds through every client word, a retry whose job met a refusing account first (two lines, one
+// request), a cancelled repair, a budget refusal, and a deploy canary. The first line above has no round — an older
+// client — so `usage/usage.http` can assert every count BY VALUE rather than its type.
+const ROUND_A = '0123456789abcdef0123456789abcdef';
+const ROUND_B = 'fedcba9876543210fedcba9876543210';
+const ledgerLine = (extra) => JSON.stringify({
+  utc: new Date(Date.now() - 60_000).toISOString(),
+  provider: 'codex',
+  model: 'gpt-5.6-luna',
+  role: 'Architecture',
+  stage: 'TeamServer',
+  seconds: 5,
+  tokensIn: 100,
+  tokensOut: 10,
+  costUsd: null,
+  outcome: 'ok',
+  email: DEVELOPER,
+  kind: 'review',
+  attempt: 'first',
+  ...extra,
+});
 writeFileSync(
   path.join(dataDir, 'usage.jsonl'),
-  `${JSON.stringify({
-    utc: new Date().toISOString(),
-    provider: 'codex',
-    model: 'gpt-5.6-luna',
-    role: 'Architecture',
-    stage: 'TeamServer',
-    seconds: 5,
-    tokensIn: 100,
-    tokensOut: 10,
-    costUsd: null,
-    outcome: 'ok',
-    email: DEVELOPER,
-  })}\n`,
+  `${[
+    JSON.stringify({
+      utc: new Date().toISOString(),
+      provider: 'codex',
+      model: 'gpt-5.6-luna',
+      role: 'Architecture',
+      stage: 'TeamServer',
+      seconds: 5,
+      tokensIn: 100,
+      tokensOut: 10,
+      costUsd: null,
+      outcome: 'ok',
+      email: DEVELOPER,
+    }),
+    ledgerLine({ round: ROUND_A, clientAttempt: 'first', job: 'job-1', turn: 'job-1' }),
+    ledgerLine({ round: ROUND_A, clientAttempt: 'retry', job: 'job-2', turn: 'job-2', attempt: 'rotated', outcome: 'RateLimited' }),
+    ledgerLine({ round: ROUND_A, clientAttempt: 'retry', job: 'job-2', turn: 'job-2', attempt: 'rotated' }),
+    ledgerLine({ round: ROUND_A, clientAttempt: 'repair', job: 'job-3', turn: 'job-3', outcome: 'Cancelled', endCause: 'withdrawn' }),
+    ledgerLine({ round: ROUND_B, clientAttempt: 'followUp', job: 'job-4', turn: 'job-4' }),
+    ledgerLine({ round: ROUND_B, clientAttempt: 'first', job: 'job-5', turn: 'job-5', outcome: 'NoBudget', tokensIn: 0, tokensOut: 0, seconds: 0 }),
+    ledgerLine({ kind: 'canary', job: 'job-6', turn: 'job-6' }),
+  ].join('\n')}\n`,
 );
 
 // The server's output goes to a FILE, never to a pipe this script holds.

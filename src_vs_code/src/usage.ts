@@ -82,6 +82,13 @@ export interface UsageEntry {
    * `attempt` already is the client's word.
    */
   readonly clientAttempt?: string;
+  /**
+   * The instant the vendor STATED its quota comes back, in UTC (story 5.3b of todo/PLAN_every_round_is_counted.md) —
+   * written by `coai-mcp` on the last line of a turn that ended rate-limited, read from the refusal by the one parser both
+   * halves use (`CooldownParser.StatedReset`). Absent on every other line, on a refusal that stated no time, and on a
+   * line older than the field; `statedReset.ts` turns it into the words a person reads.
+   */
+  readonly resetsUtc?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -147,6 +154,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...ranWithFields(parsed),
       ...endCauseOf(parsed.endCause),
       ...roundFields(parsed),
+      ...resetOf(parsed.resetsUtc),
     };
   } catch {
     return undefined;
@@ -197,6 +205,14 @@ function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
  */
 function endCauseOf(value: unknown): Pick<UsageEntry, 'endCause'> {
   return saidText(value) ? { endCause: value } : {};
+}
+
+/**
+ * The reset a refusal stated (story 5.3b of todo/PLAN_every_round_is_counted.md) — present only when the line says it,
+ * by `launchFields`' rule: an empty value is absent rather than an instant.
+ */
+function resetOf(value: unknown): Pick<UsageEntry, 'resetsUtc'> {
+  return saidText(value) ? { resetsUtc: value } : {};
 }
 
 /**

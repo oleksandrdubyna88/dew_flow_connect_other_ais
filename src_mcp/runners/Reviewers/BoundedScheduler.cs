@@ -92,8 +92,15 @@ public sealed class BoundedScheduler(
     TimeSpan? rateLimitBackoff = null,
     int sharedResourceCap = 1,
     IReadOnlyList<TimeSpan>? retryLadder = null,
-    Func<double>? jitterRoll = null)
+    Func<double>? jitterRoll = null,
+    TimeProvider? clock = null)
 {
+    /// <summary>
+    /// The clock a stated reset is read against — injected, so a vendor that names a clock time can be tested on a pinned
+    /// one (story 5.3c of todo/PLAN_every_round_is_counted.md). A stated DURATION needs no clock at all.
+    /// </summary>
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     /// <summary>
     /// The waits a rate-limited reviewer climbs, widest source first.
     /// </summary>
@@ -585,7 +592,7 @@ public sealed class BoundedScheduler(
         // todo/PLAN_every_round_is_counted.md) — set on the outcome only once a step was retried.
         var launches = LaunchLines.StepOf(outcome, watch.Elapsed, LaunchAttempts.First);
 
-        while (outcome is ReviewerOutcome.RateLimited limited && !RateLimit.Hopeless(limited.Reason))
+        while (outcome is ReviewerOutcome.RateLimited limited && !Hopeless(limited, watch.Elapsed, budget))
         {
             var wait = RetryLadder.NextWait(attempts - 1, _ladder, _roll(), watch.Elapsed, budget);
             if (wait is null)
@@ -624,6 +631,19 @@ public sealed class BoundedScheduler(
             ? hopeless with { Attempts = attempts }
             : outcome;
     }
+
+    /// <summary>
+    /// Whether no step of the ladder is worth taking: a SPENT allowance (<see cref="RateLimit.Hopeless"/>), or a reset
+    /// the vendor STATED beyond what is left of the reviewer's budget (<see cref="RetryLadder.ResetOutlasts"/>).
+    /// </summary>
+    /// <remarks>
+    /// The second half is story 5.3c of todo/PLAN_every_round_is_counted.md: agy's <i>"Resets in 88h49m9s"</i> said none
+    /// of the spent words, and the ladder climbed four launches into a reset days away. A stated reset inside the budget
+    /// is still waited out by the ladder's own steps.
+    /// </remarks>
+    private bool Hopeless(ReviewerOutcome.RateLimited limited, TimeSpan elapsed, TimeSpan budget) =>
+        RateLimit.Hopeless(limited.Reason)
+        || RetryLadder.ResetOutlasts(limited.Reason, RetryLadder.Remaining(elapsed, budget), _clock.GetUtcNow());
 
     /// <summary>
     /// Waits out one step of the ladder; <c>false</c> when the round ended first. Never throws the cancellation — the

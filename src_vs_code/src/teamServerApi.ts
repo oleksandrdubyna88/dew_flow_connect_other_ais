@@ -93,6 +93,11 @@ export interface SlotSummary {
   readonly ready: number;
   readonly coolingDown: number;
   readonly needsSignIn: number;
+  /**
+   * When the first parked account comes back, in UTC — empty when none is parked (story 5.3b of
+   * todo/PLAN_every_round_is_counted.md). Absent from a server older than the field; an instant, never an account name.
+   */
+  readonly resetsUtc?: string;
 }
 
 export interface CatalogVendor {
@@ -147,6 +152,27 @@ export interface VendorUsage {
    * server, never "no models": a new server answers it, empty, too.
    */
   readonly models?: readonly ModelUsage[];
+  /**
+   * The server's own round counts (story 5.1 of todo/PLAN_every_round_is_counted.md) — a newer server only. Absent is an
+   * OLDER server, never a count of none: read them through {@link serverRounds}, which says "unavailable" for that.
+   */
+  readonly rounds?: number;
+  readonly runsWithoutRound?: number;
+  readonly retries?: number;
+  readonly repairs?: number;
+  readonly followUps?: number;
+  readonly cancelled?: number;
+  readonly noBudget?: number;
+  readonly launchesByKind?: Readonly<Record<string, number>>;
+}
+
+/** One window of a several-window answer, as a newer server sends it (story 5.1). */
+export interface UsageWindowAnswer {
+  readonly window: string;
+  readonly fromUtc: string;
+  readonly toUtc: string;
+  readonly vendors: readonly VendorUsage[];
+  readonly people: readonly PersonUsage[];
 }
 
 /** One model's share of a vendor row, from a server new enough to say (E2). */
@@ -218,6 +244,11 @@ export interface Usage {
   readonly unreadableLines?: number;
   /** `company` answers from a newer server only (E2): launches per day for the last 30 UTC days. */
   readonly daily?: DailyUsage;
+  /**
+   * The round windows a company request asks for beside its own ({@link ROUND_WINDOWS}) — a server new enough to count
+   * rounds only (story 5.1). An older one ignores the parameter and answers 200 without this key.
+   */
+  readonly windows?: readonly UsageWindowAnswer[];
 }
 
 /** The bearer this machine holds for one server, or empty when it has never signed in. */
@@ -434,10 +465,171 @@ export function fetchUsage(
   scope: 'me' | 'company',
   fetchImpl?: typeof fetch,
 ): Promise<ServerResult<Usage>> {
-  return ask<Usage>(url, `api/usage?window=${encodeURIComponent(window)}&scope=${scope}`, {
-    token,
-    fetchImpl,
-  });
+  return ask<Usage>(url, usageRoute(window, scope), { token, fetchImpl });
+}
+
+/**
+ * The usage route for a window and a scope.
+ *
+ * <p>A company request — the Team server tab's — also asks for the round windows (story 5.2 of
+ * todo/PLAN_every_round_is_counted.md), so the rounds come from the same request, the same scan and the same answer as the
+ * figures they sit beside, whatever window the admin chose. A server older than round counting ignores the parameter and
+ * answers its own range; {@link serverRounds} tells that by the shape. Nothing personal shows server rounds, so a `me`
+ * request asks for none.</p>
+ */
+function usageRoute(window: string, scope: 'me' | 'company'): string {
+  const rounds = scope === 'company' ? `&windows=${ROUND_WINDOWS.join(',')}` : '';
+
+  return `api/usage?window=${encodeURIComponent(window)}&scope=${scope}${rounds}`;
+}
+
+/** The windows the Team server tab counts rounds over, beside the window it shows — trailing, as the local Rounds block's. */
+export const ROUND_WINDOWS = ['5h', '24h', 'week'] as const;
+
+export type RoundWindow = (typeof ROUND_WINDOWS)[number];
+
+/** The count fields a vendor row of a round-counting server carries, every one a whole number. */
+export const ROUND_COUNT_FIELDS = ['rounds', 'runsWithoutRound', 'retries', 'repairs', 'followUps', 'cancelled', 'noBudget'] as const;
+
+/** One vendor's round counts over one window, as the server counted them. */
+export interface VendorRounds {
+  readonly vendor: string;
+  readonly rounds: number;
+  readonly runsWithoutRound: number;
+  readonly retries: number;
+  readonly repairs: number;
+  readonly followUps: number;
+  readonly cancelled: number;
+  readonly noBudget: number;
+  readonly launchesByKind: Readonly<Record<string, number>>;
+}
+
+/** One person's vendors over one window — a company answer only. */
+export interface PersonRounds {
+  readonly email: string;
+  readonly vendors: readonly VendorRounds[];
+}
+
+/** One round window, read. */
+export interface WindowRounds {
+  readonly window: RoundWindow;
+  readonly fromUtc: string;
+  readonly toUtc: string;
+  readonly vendors: readonly VendorRounds[];
+  readonly people: readonly PersonRounds[];
+}
+
+/** What a usage answer says about rounds: every round window counted, or — from an older server — nothing at all. */
+export type ServerRounds =
+  | { readonly kind: 'counted'; readonly windows: readonly WindowRounds[] }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
+/** Why the counts are not shown when the answer has none — a server older than round counting (story 5.1). */
+export const ROUNDS_UNAVAILABLE = 'this Team server does not count rounds yet — it answered without the 5 h / 24 h / 7 d windows';
+
+/**
+ * A usage answer's round counts (story 5.2) — judged by the SHAPE of the answer, never by its status.
+ *
+ * <p>A server older than story 5.1 binds only `window`, so it answers `?windows=5h,24h,week` with 200 and its own range:
+ * no `windows`, and no count on any vendor row. So the counts are believed only when EVERY round window came back by
+ * name and every vendor row in it — the people's included — carries every count as a whole number; anything less is
+ * <i>unavailable</i>, never a zero, because a zero is a measurement and an absence is not one. A window that came back
+ * with no vendor in it IS a measurement: the server counted it and found nothing.</p>
+ *
+ * <p>A stranger's answer, so nothing is cast: every field is read by hand, and the result holds only what was read.</p>
+ */
+export function serverRounds(usage: unknown): ServerRounds {
+  const windows = ROUND_WINDOWS.map((name) => windowRounds(usage, name));
+
+  return windows.every(isRead) ? { kind: 'counted', windows } : { kind: 'unavailable', reason: ROUNDS_UNAVAILABLE };
+}
+
+function isRead<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function listAt(value: unknown, key: string): readonly unknown[] {
+  const found = isRecord(value) ? value[key] : undefined;
+
+  return Array.isArray(found) ? found : [];
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** One round window by its name, or undefined when the answer has none of that name or it is not whole. */
+function windowRounds(usage: unknown, name: RoundWindow): WindowRounds | undefined {
+  const found = listAt(usage, 'windows').find((one) => isRecord(one) && one['window'] === name);
+  if (!isRecord(found)) {
+    return undefined;
+  }
+  const vendors = rowsOf(found['vendors']);
+  const people = peopleOf(found['people']);
+
+  return vendors === undefined || people === undefined
+    ? undefined
+    : { window: name, fromUtc: textOf(found['fromUtc']), toUtc: textOf(found['toUtc']), vendors, people };
+}
+
+function textOf(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/** Every row a counted vendor row, or undefined: one row without its counts makes the whole window unknown. */
+function rowsOf(value: unknown): readonly VendorRounds[] | undefined {
+  const rows = Array.isArray(value) ? value.map(vendorRounds) : [undefined];
+
+  return rows.every(isRead) ? rows : undefined;
+}
+
+function vendorRounds(value: unknown): VendorRounds | undefined {
+  const row = isRecord(value) ? value : {};
+  const vendor = row['vendor'];
+
+  return typeof vendor === 'string' && ROUND_COUNT_FIELDS.every((field) => isCount(row[field])) ? countsOf(row, vendor) : undefined;
+}
+
+/** A row whose every count was checked whole — read off it by name. */
+function countsOf(row: Record<string, unknown>, vendor: string): VendorRounds {
+  const count = (field: (typeof ROUND_COUNT_FIELDS)[number]): number => Number(row[field]);
+
+  return {
+    vendor,
+    rounds: count('rounds'),
+    runsWithoutRound: count('runsWithoutRound'),
+    retries: count('retries'),
+    repairs: count('repairs'),
+    followUps: count('followUps'),
+    cancelled: count('cancelled'),
+    noBudget: count('noBudget'),
+    launchesByKind: launchesOf(row['launchesByKind']),
+  };
+}
+
+/** The launches per kind, keeping only whole counts — a kind this build has not heard of is kept by its own name. */
+function launchesOf(value: unknown): Readonly<Record<string, number>> {
+  return Object.fromEntries(Object.entries(isRecord(value) ? value : {})
+    .filter((entry): entry is [string, number] => isCount(entry[1])));
+}
+
+/** Each person's counted rows, or undefined when any row is not one; absent on a personal answer is no people. */
+function peopleOf(value: unknown): readonly PersonRounds[] | undefined {
+  const people = Array.isArray(value) ? value.map(personRounds) : [];
+
+  return people.every(isRead) ? people : undefined;
+}
+
+function personRounds(value: unknown): PersonRounds | undefined {
+  const row = isRecord(value) ? value : {};
+  const email = row['email'];
+  const vendors = rowsOf(row['vendors']);
+
+  return typeof email === 'string' && vendors !== undefined ? { email, vendors } : undefined;
 }
 
 /**

@@ -129,6 +129,19 @@ test('every language says what the Team server tab shows from a newer server —
   }
 });
 
+test('every language says the Team server tab shows the server\'s own rounds, the runs without a round apart, and count unavailable for an older server', () => {
+  // Story 5.2 of todo/PLAN_every_round_is_counted.md: the tab's Vendors column gains a Rounds block counted by the SERVER
+  // over 5 h / 24 h / 7 d. The block's words are English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
+  assert.ok(article !== undefined, 'the rounds-log article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['**Rounds**', '**5 h**', '**24 h**', '**7 d**', '**runs without a round**', '**budget refusals**', '*count unavailable*']) {
+      assert.ok(said.includes(named), `the ${language} rounds-log article never says “${named}” — stale rather than missing`);
+    }
+  }
+});
+
 test('every language says the spending tab prices each line at its own model and marks a floor ≥', () => {
   // Story 2.5 of todo/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
   // be priced. Same blind spot as above — a translation a release out of date is not a MISSING one — so the one string

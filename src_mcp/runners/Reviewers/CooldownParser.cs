@@ -1,12 +1,16 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace CoaiServer;
+namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
 /// How long to leave an account alone, read from the sentence the vendor itself printed.
 /// </summary>
 /// <remarks>
+/// <para><b>One parser, both halves</b> (story 5.3b of todo/PLAN_every_round_is_counted.md). It lived in
+/// <c>src_server</c>, where the Team server parks a slot on it; the dependency runs server → mcp, so <c>coai-mcp</c>
+/// could not reach it there, and a second copy for the local half is how two readings of one vendor sentence come to
+/// disagree. Here, in the library both halves compile against, the Team server parks a slot on <see cref="Until"/>.</para>
 /// <para><b>Every pattern here matches a line somebody actually saw.</b> That is the same discipline
 /// <c>ReviewerExecutor.Phrases</c> keeps for detecting a rate limit at all, and for the same reason:
 /// a guessed pattern is a test that passes and a production path that never fires. The captured
@@ -61,6 +65,23 @@ public static partial class CooldownParser
 
         return NamedInstant(text, nowUtc) ?? nowUtc + Fallback(text, consecutive);
     }
+
+    /// <summary>
+    /// The instant the vendor NAMED — a duration, a date or a clock time — or null when it named none.
+    /// </summary>
+    /// <remarks>
+    /// <para>Story 5.3b of todo/PLAN_every_round_is_counted.md: what the LOCAL half reads, where <see cref="Until"/> is
+    /// what the Team server parks a slot on. The difference is the guess: <see cref="Until"/> always answers, falling
+    /// back to <see cref="Fallback"/>'s policy; this answers only what the vendor said, because the local ledger writes
+    /// it down and a card shows it, and a guess in either place would be a claim the vendor never made. Null is the
+    /// legitimate "not found", never an error.</para>
+    /// <para>The same reading as the server's, to the instant: a duration up to <see cref="MaxStatedWait"/>, a date's
+    /// whole day, and a clock time — an UNZONED one no sooner than <see cref="Unparseable"/>, the one place the server's
+    /// reading errs long inside a stated time. One parser, so the client never gives up on a reset the server would
+    /// read as shorter.</para>
+    /// </remarks>
+    public static DateTimeOffset? StatedReset(string reason, DateTimeOffset nowUtc) =>
+        NamedInstant(reason ?? string.Empty, nowUtc);
 
     /// <summary>The wait to use when no instant could be read out of the text.</summary>
     public static TimeSpan Fallback(string reason, int consecutive)

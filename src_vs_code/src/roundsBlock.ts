@@ -8,6 +8,7 @@ import {
   inside, LedgerLine, MEDIAN_OUTPUT_LABEL, MoneyGroup, moneyGroups, PER_RECORDED_TURN, perUnit, RateOf, rollUp, Rollup,
   TimeWindow, tokenText, unitDivisor,
 } from './roundMoney';
+import { cardResetLine } from './statedReset';
 import { costText, shortNumber } from './usage';
 import type { Vendor } from './vendors';
 
@@ -123,6 +124,8 @@ interface Facts {
   readonly providers: readonly string[];
   readonly input: RoundsBlockInput;
   readonly ledgerFailure: string;
+  /** The snapshot itself — what a row's stated reset is read from (story 5.3b), at the snapshot's own clock. */
+  readonly snapshot: RoundsSnapshot;
 }
 
 function body(input: RoundsBlockInput, snapshot: RoundsSnapshot): string {
@@ -157,7 +160,9 @@ function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
   const window = sevenDays(snapshot);
   const groups = moneyGroups([...snapshot.ledger, ...input.chat], window, input.rateOf);
 
-  return { read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure };
+  return {
+    read: snapshot.read, window, groups, providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure, snapshot,
+  };
 }
 
 function providersOf(read: RoundCountsRead, groups: readonly MoneyGroup[]): readonly string[] {
@@ -176,7 +181,7 @@ function rowBlock(facts: Facts, provider: string): string {
 
 function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): string {
   const ranOn = facts.input.ranOn(provider);
-  const name = `<b>${escapeHtml(provider)}</b>${ranOnHint(ranOn)}`;
+  const name = `<b>${escapeHtml(provider)}</b>${ranOnHint(ranOn)}${resetHint(cardResetLine(facts.snapshot, provider))}`;
   const all = rollUp(mine);
 
   return tr('row', [
@@ -184,6 +189,11 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
     spent(facts, () => besideCell(mine)), reviewersCell(facts.read, provider), '', spent(facts, () => tokensCell(all)),
     spent(facts, () => costText(all.money)), spent(facts, () => perRoundCell(all, rowRounds(facts.read, provider))),
   ]);
+}
+
+/** The row's stated reset beside its name (story 5.3b) — `quota out — resets in 89 h (Wed 04:49)` — or nothing. */
+function resetHint(said: string): string {
+  return said.length > 0 ? ` <span class="warn reset">${escapeHtml(said)}</span>` : '';
 }
 
 /** *ran on &lt;server&gt;* beside a Team-server row's name; nothing for a row that runs here. */

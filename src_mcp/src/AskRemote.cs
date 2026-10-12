@@ -383,7 +383,8 @@ internal static class AskRemote
             // in the runners library has to be able to recognise them: a progress note must never be
             // mistaken for the reason a reviewer stopped. Two copies of these strings is how that
             // recognition would quietly stop working.
-            RemoteState.Queued => RemoteAsk.QueuedMessage(job.Server, state.Position),
+            // With the server's `waiting` sentence when it sent one (story 5.3b): why no account can take it, and when one comes back.
+            RemoteState.Queued => RemoteAsk.QueuedMessage(job.Server, state.Position, state.Waiting),
             RemoteState.Running => RemoteAsk.RunningMessage(job.Server),
             _ => string.Empty,
         };
