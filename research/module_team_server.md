@@ -1695,7 +1695,12 @@ lease the moment the lock opened, `VendorLogin` took the same path, `ProcessLaun
 5. **Every descendant confirmed exited, then the marker cleared**: the reader is a request that ends its child on its
    answer (`ProcessRequest.EndsWhen`), so the launcher lists the descendants BEFORE the kill, records them in the
    marker, kills the tree, and reports survivors; a survivor blocks the slot (`MarkBlocked`), none clears the marker
-   (`ClearReader`) — and only then does the lease end.
+   (`ClearReader`) — and only then does the lease end. **A descendant the marker would not take** (epic 6's code round:
+   the state file refused the write) no longer stops the end: the launcher still closes stdin, kills the whole tree and
+   confirms it, then raises `ProcessTreeNotRecordedException`; the capture makes the marker **`partial`** — unidentified,
+   so reconciling the root it does name can never clear it — and blocks the slot `reader-identity-missing`
+   (`SlotRegistry.MarkReaderPartial`). The job's result is untouched. Should even that write fail, the `running` marker
+   naming the root stays and the log says the block was not written.
 
 **The startup sweep** is `GaugeReaderSweep`, a hosted service registered before the pump: it acquires every configured
 slot for an instant (`AcquireAsync(slot, TimeSpan.Zero)`) and releases it — the acquisition IS the sweep. A slot another
@@ -1752,7 +1757,7 @@ notification and `remoteControl/status/changed`, which names the machine (RESULT
 |---|---|---|
 | `accounts/<vendor>/<slot>/state.json` (one overwritten snapshot, the existing atomic write) | `reader` — the marker: `phase`, `ownerPid`, `ownerStartedUtc`, `sinceUtc`, `tree[]` of `{pid, startedUtc}`; `blocked` — a code or empty; `gauge` — the reading; `gaugeSuspended`, `gaugeSuspendedUtc` | `SlotStateDto`'s five trailing fields; an older file binds them to null, read as none |
 | the reading (`GaugeReadingDto`) | `observedUtc`, `planType`, `rateLimitReachedType`, `ordinaryUsageAllowed` (null when unsaid — never inferred), `resetCreditsAvailable` (`rateLimitResetCredits.availableCount`), `windows[]` — every window of every limit in `rateLimitsByLimitId` (else `rateLimits`), each `{limitId, kind, usedPercent, windowDurationMins, resetsAtUtc}` identified by limit identity + duration; `stale` | an absent window is absent — the measured plan reports no five-hour window, so there is one entry, never a 0 % |
-| the job's ledger lines (`usage.jsonl`, every line of the job) | `gaugeObservedUtc`, `gaugePlan`, `gaugeLimit`, `gaugePrimaryMins`, `gaugePrimaryUsedPercent`, `gaugePrimaryResetsUtc`, `gaugeSecondaryMins`, `gaugeSecondaryUsedPercent`, `gaugeSecondaryResetsUtc` — the preferred limit's two windows, flat (`GaugeOnLine`, `UsageEntry.WithGauge`) | nine trailing fields; the numbers are left off the line when null (`JsonIgnore WhenWritingNull`), so an absent window is absent and an old line reads none; mirrored in `UsageEntryDto`, `UsageLine.Gauge` and the extension's `usage.ts` (`gaugeFields`, which never coerces a missing number to 0) |
+| the job's ledger lines (`usage.jsonl`, every line of the job) | `gaugeObservedUtc`, `gaugePlan`, `gaugeWindows[]` — EVERY window of EVERY limit the reading reported, each `{limitId, kind, mins, usedPercent, resetsUtc}` (`GaugeOnLine` / `GaugeWindowOnLine`, `UsageEntry.WithGauge`, `GaugeReadingDto.OnLine`) | three trailing fields; the list is left off the line when empty (`JsonIgnore WhenWritingNull`), so an absent window is absent and an old line reads none; mirrored in `UsageEntryDto` (`GaugeWindowEntryDto`), `UsageLine.Gauge` and the extension's `usage.ts` (`gaugeWindowsOf`, which reads only a WHOLE window and never coerces a missing number to 0). Epic 6's code round replaced the first shape — one limit's two windows in nine flat fields — because a codex answer with several limits in `rateLimitsByLimitId` lost all but one on the line, and `RoundsPerPercent` could not derive the rest; nothing had shipped, so the shape changed in place |
 | `GET /api/catalog` → `vendors[].slots.gauge` | the LATEST reading among the vendor's accounts by `observedUtc` — the reading only, never which account | nullable AND omitted when null, as `UsageDto.Daily`: an older server and a server that never read are the same absence, which story 6.2 renders as unavailable |
 
 Story 6.2 derives rounds per 1 % from consecutive readings of one window instance and renders all of this; 6.1a

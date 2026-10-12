@@ -2688,6 +2688,12 @@ one launcher both halves share, and nothing a reviewer launch does changed:
 - **A child that cannot be recorded is ended before the failure travels** (`RecordedAsync`): `ProcessTracking.Record`
   never throws, but a tracker that writes a slot's marker can, and a child alive with its identity on nobody's disk is
   the one state the containment has no answer to.
+- **A DESCENDANT that cannot be recorded does not stop the end** (epic 6's code round): the descendants' records were
+  written in a loop BEFORE stdin was closed and the tree killed, so a tracker throwing on one left the loop with nothing
+  ended. `RecordEach` now holds the failure, the end runs exactly as above (no member forgotten — the identity on disk
+  is partial), and once the drain has settled the launch throws **`ProcessTreeNotRecordedException`**
+  (`Processes/ProcessTreeNotRecordedException.cs`: the survivors, the tracker's own error inside) for the caller to
+  stay fail-closed on.
 - **A server is spoken to, not fed**: for an `EndsWhen` request our end of stdin stays OPEN after the request lines are
   written (flushed, not closed — `WriteStdInAsync(closeAfter: false)`), until the launcher ends the child, which
   closes it before the kill as always. A stdio server exits on the end of its input, and an exit that outran its own
@@ -2715,8 +2721,9 @@ both halves compile against so it exists once. Pure: `GaugeLine`s in — when th
 account (the Team server's slot), its round id, whether it is a review, and the reading taken right after its launch
 (`GaugeOnLine`, story 6.1a) — and one `GaugeRatio` per vendor × window out.
 
-1. **A window is its limit identity plus its length** — a reading's primary and secondary windows are named by
-   `(limitId, mins)`, never by where the vendor filed them; a window with no stated length cannot be identified, and a
+1. **A window is its limit identity plus its length** — every window of every limit a reading carries
+   (`GaugeOnLine.Windows`, a list since epic 6's code round, so a second limit reaches the derivation) is named by
+   `(limitId, mins)`, never by where the vendor filed it; a window with no stated length cannot be identified, and a
    reading that does not report a window is a missing reading for it.
 2. **A reading belongs to the launch whose line carries it.** The server reads the gauge after a job and writes it on
    that job's lines, so the rounds "between" two readings are the rounds of the lines carrying the later one. Readings
@@ -2739,10 +2746,18 @@ account (the Team server's slot), its round id, whether it is a review, and the 
 
 `NotReadHere` is what a machine that reads no gauge answers — `{ratios: [], unavailable: "local-capture-deferred"}` —
 and is what `coai-mcp --round-counts` carries as its trailing `gauge` (story 6.1b, local capture, is deferred).
+`GaugeAnswer.Ratios` defaults to `[]` and is normalised (`?? []`), so an answer read or built without its list is no
+ratios, never null (epic 6's code round).
+
+**Cost.** Each account is read ONCE per vendor (`AccountOf`: its readings, and for each interval whether a reading-less
+launch lies in `(before, after]`, found by a pointer over the reading-less lines' instants that only moves forward) and
+the result is shared by every window — linear in the lines after the sort. The first version rescanned every line for
+every interval of every window; epic 6's code round measured 4 000 lines on one account at 11.4 s before and 0.26 s
+after, the two answers byte-identical.
 
 **A recorded limit, not a defect fixed here:** with whole-number percentages, consecutive readings after one job each
 often rise by 0 (unusable) or 1 (one job's rounds over 1 %), so the usable intervals over-represent the jobs that tipped
 the percentage. The plan round's formula is implemented as fixed; pairing a reading with the last reading whose
 percentage DIFFERED would remove the bias, and is an open question for the owner (recorded in the plan's deviations).
 
-Tests: `RoundsPerPercentTests` (18, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
+Tests: `RoundsPerPercentTests` (19, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
