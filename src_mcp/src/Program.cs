@@ -142,6 +142,12 @@ internal static class Program
         AskApi,
 
         /// <summary>
+        /// One turn of an ACP agent (Kimi Code over <c>kimi acp</c>), this process the client that refuses every
+        /// write and bounds every read — D15 of <c>PLAN_vibe_and_kimi_runtimes.md</c>. See <see cref="Acp.AskAcpMode"/>.
+        /// </summary>
+        AskAcp,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -327,6 +333,7 @@ internal static class Program
                 "--ask-remote" => Startup.AskRemote,
                 Runners.Reviewers.AntigravityReadOnly.HookArgument => Startup.AgyHook,
                 "--ask-api" => Startup.AskApi,
+                "--ask-acp" => Startup.AskAcp,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -416,6 +423,11 @@ internal static class Program
             case Startup.AskApi:
                 // The key is read from THIS process's environment inside the mode, never from argv.
                 return await Api.AskApiMode.RunAsync(args, Note, Console.Out, Environment.GetEnvironmentVariable);
+
+            case Startup.AskAcp:
+                // The prompt is stdin to its end — the launcher closes it after writing — and the agent is this
+                // process's own child, started only after the prompt is whole.
+                return await Acp.AskAcpMode.RunAsync(args, Console.In, Note, Console.Out);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -2418,6 +2430,14 @@ internal static class Program
         [--timeout-seconds 60]` reads the vault (COAI_CREDS_KEY), lists GET /models and runs the
         request matrix a dialect is written from; prints status codes, model ids, refused fields and
         token counts — vendor text redacted and capped, the key never. 65 bad arguments, 78 no vault.
+        `--ask-acp --profile <kimi> --model <id> --cwd <folder> [--deadline-seconds n] [--executable <path>]`
+        runs ONE turn of an ACP agent (`kimi acp`) as this process's child, the prompt read from stdin to
+        its end: every permission request refused, reads served only from inside --cwd and never for a
+        vendor instruction file, the model set before the prompt. Prints one JSON object on stdout on
+        every exit — answer, end, usage (context tokens, no split), refusals, tool calls, reads. Exits
+        0 answered, 65 refused before the agent starts, 69 ended before an answer (not started, the
+        deadline, cancelled), 70 the agent failed, 75 a known spent sentence, 76 the stream broke,
+        77 a known sign-in or plan refusal.
         `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
         JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
         older shape, which carries every listed round's findings inline.

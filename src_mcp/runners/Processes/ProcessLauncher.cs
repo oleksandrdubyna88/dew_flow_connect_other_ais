@@ -358,8 +358,10 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// blocked for ever — with the launcher awaiting it, and on the Team server an account locked
     /// behind it. Closing our own end fails the write at once, whoever else is holding theirs.
     /// (codex, code round.)</para>
+    /// <para>Internal rather than private since the ACP transport (<c>Acp/AcpTransport</c>) ends its
+    /// agent the same way: the one tree kill of this repository, widened rather than copied.</para>
     /// </remarks>
-    private static async Task EndItAsync(Process process)
+    internal static async Task EndItAsync(Process process)
     {
         Close(process.StandardInput);
         try
@@ -389,7 +391,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// <para>Every one of these is an ordinary way for it to already be gone, so none of them is an
     /// error here: the point is that after this call nothing is holding our end open.</para>
     /// </remarks>
-    private static void Close(StreamWriter stream)
+    internal static void Close(StreamWriter stream)
     {
         try
         {

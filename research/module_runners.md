@@ -2771,3 +2771,99 @@ flowchart TD
 Tests: `ReviewSnapshotTests`, `ReviewSnapshotResolveTests`, `ReviewSnapshotRefreshTests`, `SnapshotBudgetTests`,
 `NoRuntimeAsksForASanitisedSnapshotYetTests`, `AScratchSweepRunsOnTheConsultationBeatTests` — listed in
 [module_tests.md](module_tests.md).
+
+## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)
+
+Kimi Code is driven over `kimi acp` — the Agent Client Protocol, JSON-RPC 2.0 over newline-delimited stdio — because
+prompt mode cannot carry a review prompt (`-p` takes it only as an argument, over Windows' command line;
+[RESULTS_kimi_confinement.md](RESULTS_kimi_confinement.md) §1). Over ACP the prompt rides on stdin and coai is the
+CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runners/Acp/` behind one profile interface
+(`IAcpProfile`, one module per vendor; `KimiAcpProfile` the only one today); the process half is the one-shot mode
+`coai-mcp --ask-acp` (`src_mcp/src/Acp/AskAcpMode.cs`), the third self-invocation shim after `--ask-local` and
+`--ask-api`. `KimiRuntime` above it, its registration, the seeds and the extension are the next step of S4.
+
+**The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
+`ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
+arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.git`; the known sentences: the subscription `401`
+(`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
+D14 `insufficient balance` (`balance_spent`).
+
+**The three blocks the shim owns** (each measured in RESULTS §2 before it was written):
+
+- **Permission requests.** Every `session/request_permission` is answered with the option whose kind is
+  `reject_once`, else any `reject_*`, else `outcome: cancelled` — the client never looks at which tool asked. Each is
+  recorded for the trace (tool title, kind, option).
+- **`fs/read_text_file`.** `initialize` offers exactly `fs.readTextFile: true`, `fs.writeTextFile: false`,
+  `terminal: false` — the offer is what routes every `Read`, Kimi's own instruction-file search included, through the
+  client (§2.2). `IAcpReadBoundary` is the seam; `FolderReadBoundary` serves only an absolute path lexically inside the
+  working folder by components and never an excluded name, declining by SHAPE before normalisation can tidy them (UNC
+  and device prefixes, drive-relative, root-relative, relative, a `:` beyond the drive letter, a component ending in a
+  dot or a space) and declining any step from the root down that is a reparse point. The agent sees JSON-RPC `-32602`
+  with a sentence that quotes nothing. An 8.3 short name and a link placed between the check and the read are the
+  snapshot manifest's (D6), which replaces this class behind the same interface.
+- **Everything else.** `fs/write_text_file`, `terminal/*` and any unknown request are answered `-32601`.
+  `session/new` sends `cwd` and `mcpServers: []` (the #514 rule, D8b); `session/set_config_option {configId: "model"}`
+  goes BEFORE `session/prompt` — a session comes up on Kimi's own default, which on this plan was a model the plan
+  lacks, and the prompt failed `401` (§2).
+
+**Not covered, and said so (RESULTS §2.3).** `Grep` and `Glob` do not go through the client, so a Kimi read in general
+has the codex standing; the boundary covers `Read` and the instruction-file search, the sanitised snapshot (D6) covers
+what the branch could supply, and the question-consultant `disk` standing for `kimi` will be `unconfined` (S5). ACP
+`mode: plan` changes nothing here (§2.4). Kimi's session store under `~/.kimi-code/sessions` is a permitted vendor write.
+
+**Lifecycle.** The shim reads its stdin to EOF — `ProcessLauncher` closes stdin after writing the prompt, so EOF means
+"complete", never cancel — and only then starts the agent, whose own stdin stays open for the replies; stdout and
+stderr are drained concurrently. The client has its own deadline (`--deadline-seconds`, under the row's timeout).
+**Every exit path ends the same way** — normal end, deadline, a protocol failure, the agent's early EOF, the caller's
+cancellation: `session/cancel` when a session exists, our end of stdin closed, a 1.5 s wait, then the tree kill by this
+process's own handle through `ProcessLauncher.EndItAsync` (widened to `internal`, never copied), then the wait. The
+agent's EXIT is watched beside its output: a grandchild inherits the stdout pipe's write end, so an agent that exits
+mid-turn leaving one behind never delivers EOF — the fake agent's heartbeat grandchild held the pipe until the deadline
+on the first run (`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*).
+
+**Exit codes** (never 64 — `.agents/PROJECT.md`): **0** answered (`stopReason: end_turn`); **65** declined before the
+agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, an empty prompt); **69** ended before an
+answer — not started, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
+failure — a JSON-RPC error to a client request, or a `stopReason` other than `end_turn`; **75** a known spent sentence;
+**76** (EX_PROTOCOL) the stream broke — output closed or the process gone before answering, not listening, over the
+answer ceiling; **77** a known sign-in or plan sentence.
+
+**The stdout shape**, one JSON object on EVERY exit (the future `KimiRuntime.ReadAnswer`/`ReadUsage` read it as
+`ApiRuntime` reads the api shim's line): `answer`, `end` (`answered` | `not_started` | `agent_failed` | `deadline` |
+`protocol` | `cancelled`), `stopReason`, `reason`, `sessionId`, `failure` (only when a known sentence matched), `usage`
+in the api shim's field names — `tokensIn`/`tokensOut` 0 with `notCaptured: true`, because ACP reports context tokens
+with no split (D15; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
+the trace: `refusals` (`tool`, `kind`, `option`), `toolCalls` (`id`, `title`, `kind`, `status`), `reads` (`path`,
+`served`, `reason`).
+
+```mermaid
+sequenceDiagram
+  participant P as ReviewerExecutor (later: KimiRuntime)
+  participant S as coai-mcp --ask-acp
+  participant A as kimi acp
+  P->>S: prompt on stdin, then EOF (= complete)
+  S->>A: initialize {fs.readTextFile:true, writeTextFile:false, terminal:false}
+  A-->>S: agentInfo, authMethods
+  S->>A: session/new {cwd, mcpServers: []}
+  A-->>S: sessionId, configOptions
+  S->>A: session/set_config_option {configId: model, value}
+  A-->>S: ok (an error here: 70/77, no prompt spent)
+  S->>A: session/prompt [{type: text, text}]
+  loop while the prompt is awaited
+    A-->>S: session/update agent_message_chunk · tool_call · usage_update
+    A->>S: session/request_permission
+    S-->>A: outcome selected reject_once (else any reject_*, else cancelled)
+    A->>S: fs/read_text_file {path}
+    S-->>A: content, or -32602 from the boundary
+    A->>S: any other request
+    S-->>A: -32601 not offered by this client
+  end
+  A-->>S: stopReason
+  Note over S,A: every way out: session/cancel → stdin closed → 1.5 s → tree kill by pid → wait
+  S-->>P: one JSON object on stdout; exit 0 / 65 / 69 / 70 / 75 / 76 / 77 — never 64
+```
+
+Tests: `AcpClientTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpShimScenarioTests`
+(the REAL binary through the real launcher) — listed in [module_tests.md](module_tests.md). The scripted agent is the
+fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
