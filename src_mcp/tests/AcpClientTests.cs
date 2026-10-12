@@ -313,6 +313,83 @@ public sealed class AcpClientTests
         Gone(grandchild).Should().BeTrue("a grandchild orphaned by the agent's own exit is still the client's to end");
     }
 
+    // ---------------------------------------------------------------------------------------
+    // The trace's SIZE is bounded, not only its count (the code round, two reviewers, 2026-10-12)
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>A read path near the line cap was retained whole in the trace: a thousand of them is gigabytes.</summary>
+    [Fact]
+    public async Task AReadPathOfAMillionCharacters_IsRetainedTruncated()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(FakeAcpAgent.FakeCliExe, new string('p', 1024 * 1024))), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var read = outcome.Reads.Should().ContainSingle().Which;
+        read.Served.Should().BeFalse();
+        read.Path.Length.Should().BeLessThanOrEqualTo(AcpSession.MaxTraceFieldChars, "the trace keeps a prefix of the path, never a megabyte of it");
+        read.Path.Should().EndWith("…", "a cut field says it was cut");
+        outcome.TruncatedTraceFields.Should().BeGreaterThanOrEqualTo(1);
+    }
+
+    /// <summary>A thousand permission requests with 64 Ki-character titles: what the trace retains stays under its budget.</summary>
+    [Fact]
+    public async Task AThousandPermissionRequestsWithHugeTitles_StayUnderTheTraceBudget()
+    {
+        var title = new string('t', 64 * 1024);
+        using var agent = new FakeAcpAgent(
+            [.. Enumerable.Range(0, 1000).Select(_ => FakeAcpAgent.Permission(title, "edit", ("r", "reject_once"))), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.Refusals.Sum(r => r.Tool.Length + r.Kind.Length + r.Option.Length).Should().BeLessThanOrEqualTo(AcpSession.MaxTraceChars);
+        outcome.Refusals.Should().OnlyContain(r => r.Tool.Length <= AcpSession.MaxTraceFieldChars);
+        (outcome.Refusals.Count + outcome.DroppedTraceEntries).Should().Be(1000, "every request is either retained or counted dropped");
+        agent.RepliesTo("session/request_permission").Should().HaveCount(1000, "every request was still answered — the trace is what is bounded, not the protocol");
+    }
+
+    /// <summary>The aggregate budget across all three lists: past it, entries are dropped and counted, whatever the per-list count.</summary>
+    [Fact]
+    public async Task TheAggregateTraceBudget_DropsEntriesPastIt_AndCountsThem()
+    {
+        var big = new string('b', 8 * 1024);
+        using var agent = new FakeAcpAgent(
+            [
+                .. Enumerable.Range(0, 1000).Select(_ => FakeAcpAgent.Permission(big, "edit", ("r", "reject_once"))),
+                // The index FIRST: ids that share their first 511 characters are one bounded id, and so one entry.
+                .. Enumerable.Range(0, 1000).Select(i => FakeAcpAgent.ToolCall(i + big, big, "search", "completed")),
+                FakeAcpAgent.Chunk("x"),
+            ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var retained = outcome.Refusals.Sum(r => r.Tool.Length + r.Kind.Length + r.Option.Length)
+            + outcome.ToolCalls.Sum(t => t.Id.Length + t.Title.Length + t.Kind.Length + t.Status.Length);
+        retained.Should().BeLessThanOrEqualTo(AcpSession.MaxTraceChars, "the budget is over every list together");
+        outcome.DroppedTraceEntries.Should().BePositive("two thousand entries of half a kilobyte and more each do not fit the budget");
+        (outcome.Refusals.Count + outcome.ToolCalls.Count + outcome.DroppedTraceEntries).Should().Be(2000);
+    }
+
+    /// <summary>A trace of ordinary size is retained exactly as it was — nothing cut, nothing counted.</summary>
+    [Fact]
+    public async Task ANormalShortTrace_IsRetainedWhole()
+    {
+        var asked = Path.Combine(FakeAcpAgent.FakeCliExe, "nowhere.txt");
+        using var agent = new FakeAcpAgent(
+            [FakeAcpAgent.Permission("Write pwned.txt", "edit", ("r", "reject_once")), FakeAcpAgent.ToolCall("t1", "Grep", "search", "completed"), FakeAcpAgent.Read(asked), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.Refusals.Should().ContainSingle().Which.Should().Be(new AcpRefusal("Write pwned.txt", "edit", "reject_once"));
+        outcome.ToolCalls.Should().ContainSingle().Which.Should().Be(new AcpToolCall("t1", "Grep", "search", "completed"));
+        outcome.Reads.Should().ContainSingle().Which.Path.Should().Be(asked);
+        outcome.TruncatedTraceFields.Should().Be(0);
+        outcome.DroppedTraceEntries.Should().Be(0);
+    }
+
     [Fact]
     public async Task TheCallersCancellationEndsTheTurn_AndLeavesNoChild()
     {

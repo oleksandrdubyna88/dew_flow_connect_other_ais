@@ -105,7 +105,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
 
         return new AcpOutcome(
             end, session.Answer, reason, stop, sessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads, transport.StdErr, transport.Pid,
-            session.DroppedTraceEntries);
+            session.DroppedTraceEntries, session.TruncatedTraceFields);
     }
 
     /// <summary>

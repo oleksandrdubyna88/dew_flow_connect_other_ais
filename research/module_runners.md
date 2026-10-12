@@ -2886,7 +2886,16 @@ heartbeat grandchild held the pipe until the deadline on the first run
 (`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*). Memory is
 bounded on every path: a line past 16 Mi characters is not read further (a protocol end, the agent killed), the
 answer past 8 Mi characters likewise, and the three trace lists keep at most 1000 entries each with the rest COUNTED
-(`droppedTraceEntries`), tool calls found by id rather than by a scan (finding 5).
+(`droppedTraceEntries`), tool calls found by id rather than by a scan (finding 5). **And the trace is bounded in
+SIZE, not only in count** (the code round, two reviewers, 2026-10-12): a thousand entries each carrying fields near the
+line cap — a read path, a permission title, a tool-call id — would have had the session retain gigabytes, so every
+string a trace entry keeps is cut to 512 characters with an ellipsis (`AcpSession.MaxTraceFieldChars`;
+`truncatedTraceFields` counts the cuts), and all three lists share a 1 Mi-character budget
+(`AcpSession.MaxTraceChars`) past which an entry is dropped and counted with the ones the entry cap drops; a tool-call
+update that would pass the budget leaves the kept entry standing, and the tool-call index is keyed by the bounded id.
+The report on stdout carries the same bounded lists and both counts; the answer keeps its own 8 Mi cap
+(`AReadPathOfAMillionCharacters_IsRetainedTruncated`, `AThousandPermissionRequestsWithHugeTitles_StayUnderTheTraceBudget`,
+`TheAggregateTraceBudget_DropsEntriesPastIt_AndCountsThem`, `ANormalShortTrace_IsRetainedWhole`).
 
 **Exit codes** (never 64 — `.agents/PROJECT.md`): **0** answered (`stopReason: end_turn`); **65** declined before the
 agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, a `--deadline-seconds` outside 1..86400,

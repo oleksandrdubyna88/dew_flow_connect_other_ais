@@ -62,6 +62,7 @@ public sealed record AcpReadRecord(string Path, bool Served, string Reason);
 /// <param name="StdErr">The agent's stderr, bounded — where a CLI writes its own diagnosis.</param>
 /// <param name="AgentPid">The agent's process id, 0 when it never started — what a test checks is gone, and what a trace names.</param>
 /// <param name="DroppedTraceEntries">How many refusals, tool calls and reads the trace caps dropped — said, never silently lost.</param>
+/// <param name="TruncatedTraceFields">How many retained trace fields were cut to the per-field limit, an ellipsis marking each.</param>
 public sealed record AcpOutcome(
     AcpEnd End,
     string Answer,
@@ -74,4 +75,5 @@ public sealed record AcpOutcome(
     IReadOnlyList<AcpReadRecord> Reads,
     string StdErr,
     int AgentPid,
-    int DroppedTraceEntries = 0);
+    int DroppedTraceEntries = 0,
+    int TruncatedTraceFields = 0);

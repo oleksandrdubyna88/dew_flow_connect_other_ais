@@ -169,8 +169,10 @@ internal static class AskAcpMode
             ["refusals"] = new JsonArray([.. outcome.Refusals.Select(r => (JsonNode?)new JsonObject { ["tool"] = r.Tool, ["kind"] = r.Kind, ["option"] = r.Option })]),
             ["toolCalls"] = new JsonArray([.. outcome.ToolCalls.Select(t => (JsonNode?)new JsonObject { ["id"] = t.Id, ["title"] = t.Title, ["kind"] = t.Kind, ["status"] = t.Status })]),
             ["reads"] = new JsonArray([.. outcome.Reads.Select(r => (JsonNode?)new JsonObject { ["path"] = r.Path, ["served"] = r.Served, ["reason"] = r.Reason })]),
-            // The three lists are capped (AcpSession.MaxTraceEntries); what they could not hold is counted here.
+            // The three lists are capped by count (AcpSession.MaxTraceEntries), by field (MaxTraceFieldChars) and by their
+            // sum (MaxTraceChars); what they could not hold is counted here, so the report stays inside the same bounds.
             ["droppedTraceEntries"] = outcome.DroppedTraceEntries,
+            ["truncatedTraceFields"] = outcome.TruncatedTraceFields,
         };
         if (diagnosis.Known)
         {

@@ -21,6 +21,13 @@ namespace CoaiMcp.Runners.Acp;
 /// that was not offered in <c>initialize</c> is served.</para>
 /// <para><b>The agent's end of output fails every pending request</b> with a protocol reason: a prompt awaited on a
 /// stream that has closed would otherwise wait for its deadline to say nothing.</para>
+/// <para><b>The trace is bounded in SIZE, not only in count</b> (the code round, two reviewers, 2026-10-12). A thousand
+/// entries was the cap, and each could carry fields near the 16 Mi-character line cap — a thousand read paths, a
+/// thousand permission titles — so a peer could have the session retain gigabytes. Every string a trace entry keeps is
+/// cut to <see cref="MaxTraceFieldChars"/> with an ellipsis (<see cref="TruncatedTraceFields"/> counts the cuts), and
+/// all three lists share <see cref="MaxTraceChars"/>; an entry that would pass it is dropped and counted with the ones the
+/// entry cap drops. The answer keeps its own cap (<see cref="MaxAnswerChars"/>); the report on stdout carries the same
+/// bounded lists and the two counts.</para>
 /// </remarks>
 internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary boundary, CancellationToken ct)
 {
@@ -32,6 +39,12 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     /// the agent is looping, and the trace says how many more it dropped rather than growing with the loop.
     /// </summary>
     public const int MaxTraceEntries = 1000;
+
+    /// <summary>The most characters one retained trace field keeps — a title, a kind, an option id, a path; past it, a prefix and an ellipsis.</summary>
+    public const int MaxTraceFieldChars = 512;
+
+    /// <summary>The most characters all three trace lists keep together; past it an entry is dropped and counted.</summary>
+    public const int MaxTraceChars = 1024 * 1024;
 
     /// <summary>
     /// How long lines the agent wrote before exiting may still be read after its exit, before its pending requests are
@@ -49,6 +62,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     private readonly List<AcpReadRecord> _reads = [];
     private long _nextId = 1;
     private int _droppedTraceEntries;
+    private long _traceChars;
     private AcpUsage _usage = AcpUsage.Unknown;
     private string _broken = string.Empty;
 
@@ -67,6 +81,9 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
     /// <summary>How many trace entries the caps dropped, over all three lists.</summary>
     public int DroppedTraceEntries => _droppedTraceEntries;
+
+    /// <summary>How many retained trace fields were cut to <see cref="MaxTraceFieldChars"/>.</summary>
+    public int TruncatedTraceFields { get; private set; }
 
     /// <summary>Why the stream is unusable, once it is — empty while it is fine.</summary>
     public string Broken => _broken;
@@ -266,7 +283,12 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         var toolCall = AcpMessages.Child(request.Params, "toolCall");
         var choice = Choose(AcpMessages.Child(request.Params, "options"));
         // The trace records the kind of the option ACTUALLY chosen — read off the choice, never looked up by an id.
-        Trace(_refusals, new AcpRefusal(AcpMessages.Text(toolCall, "title"), AcpMessages.Text(toolCall, "kind"), choice.Selected ? choice.Kind : "cancelled"));
+        var cuts = 0;
+        var refusal = new AcpRefusal(
+            Bounded(AcpMessages.Text(toolCall, "title"), ref cuts),
+            Bounded(AcpMessages.Text(toolCall, "kind"), ref cuts),
+            Bounded(choice.Selected ? choice.Kind : "cancelled", ref cuts));
+        Trace(_refusals, refusal, Chars(refusal), cuts);
 
         return transport.WriteLineAsync(
             AcpMessages.Result(request.Id, choice.Selected ? AcpMessages.Selected(choice.OptionId) : AcpMessages.CancelledOutcome()), ct);
@@ -276,7 +298,9 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     {
         var path = AcpMessages.Text(request.Params, "path");
         var answer = boundary.Read(path);
-        Trace(_reads, new AcpReadRecord(path, answer.Served, answer.Refusal));
+        var cuts = 0;
+        var record = new AcpReadRecord(Bounded(path, ref cuts), answer.Served, Bounded(answer.Refusal, ref cuts));
+        Trace(_reads, record, Chars(record), cuts);
 
         return transport.WriteLineAsync(
             answer.Served
@@ -346,22 +370,27 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         _answer.Append(text);
     }
 
-    /// <summary>A tool call, or the update of one by id: the last status reported stands. Found by id, not by a scan.</summary>
+    /// <summary>
+    /// A tool call, or the update of one by id: the last status reported stands. Found by id, not by a scan — and
+    /// the id is the BOUNDED one, so the index holds no more of it than the entry does; ids that share their first
+    /// 511 characters are therefore one entry, which is the bounded side of that bargain and is said here.
+    /// </summary>
     private void ToolCall(JsonElement update)
     {
-        var id = AcpMessages.Text(update, "toolCallId");
+        var cuts = 0;
+        var id = Bounded(AcpMessages.Text(update, "toolCallId"), ref cuts);
         var known = _toolCallAt.TryGetValue(id, out var at);
         var was = known ? _toolCalls[at] : new AcpToolCall(id, string.Empty, string.Empty, string.Empty);
         var now = new AcpToolCall(
             id,
-            Either(AcpMessages.Text(update, "title"), was.Title),
-            Either(AcpMessages.Text(update, "kind"), was.Kind),
-            Either(AcpMessages.Text(update, "status"), was.Status));
+            Either(Bounded(AcpMessages.Text(update, "title"), ref cuts), was.Title),
+            Either(Bounded(AcpMessages.Text(update, "kind"), ref cuts), was.Kind),
+            Either(Bounded(AcpMessages.Text(update, "status"), ref cuts), was.Status));
         if (known)
         {
-            _toolCalls[at] = now;
+            Replace(at, was, now, cuts);
         }
-        else if (Trace(_toolCalls, now))
+        else if (Trace(_toolCalls, now, Chars(now), cuts))
         {
             _toolCallAt[id] = _toolCalls.Count - 1;
         }
@@ -369,11 +398,28 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
     private static string Either(string fresh, string kept) => fresh.Length > 0 ? fresh : kept;
 
-    /// <summary>Adds to a trace list under the cap; past it the entry is counted as dropped instead.</summary>
-    /// <returns>True when the entry was kept.</returns>
-    private bool Trace<T>(List<T> list, T entry)
+    /// <summary>An update of a kept tool call, within the budget; one that would pass it is dropped and counted, the kept entry standing.</summary>
+    private void Replace(int at, AcpToolCall was, AcpToolCall now, int cuts)
     {
-        if (list.Count >= MaxTraceEntries)
+        var delta = Chars(now) - Chars(was);
+        if (_traceChars + delta > MaxTraceChars)
+        {
+            _droppedTraceEntries += 1;
+
+            return;
+        }
+
+        _toolCalls[at] = now;
+        _traceChars += delta;
+        TruncatedTraceFields += cuts;
+    }
+
+    /// <summary>Adds to a trace list under both caps — the list's count and the trace's characters; past either the entry is counted as dropped instead.</summary>
+    /// <param name="cuts">How many of the entry's fields were cut, counted only when the entry is kept.</param>
+    /// <returns>True when the entry was kept.</returns>
+    private bool Trace<T>(List<T> list, T entry, int chars, int cuts)
+    {
+        if (list.Count >= MaxTraceEntries || _traceChars + chars > MaxTraceChars)
         {
             _droppedTraceEntries += 1;
 
@@ -381,9 +427,30 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         }
 
         list.Add(entry);
+        _traceChars += chars;
+        TruncatedTraceFields += cuts;
 
         return true;
     }
+
+    /// <summary>The text within <see cref="MaxTraceFieldChars"/>: as it is, or its prefix and an ellipsis, <paramref name="cuts"/> counting the latter.</summary>
+    private static string Bounded(string text, ref int cuts)
+    {
+        if (text.Length <= MaxTraceFieldChars)
+        {
+            return text;
+        }
+
+        cuts += 1;
+
+        return string.Concat(text.AsSpan(0, MaxTraceFieldChars - 1), "…");
+    }
+
+    private static int Chars(AcpRefusal refusal) => refusal.Tool.Length + refusal.Kind.Length + refusal.Option.Length;
+
+    private static int Chars(AcpToolCall call) => call.Id.Length + call.Title.Length + call.Kind.Length + call.Status.Length;
+
+    private static int Chars(AcpReadRecord read) => read.Path.Length + read.Reason.Length;
 
     /// <summary>The stream is unusable from here on: every pending request fails with the reason, and no new one is sent.</summary>
     private void Break(string why)
