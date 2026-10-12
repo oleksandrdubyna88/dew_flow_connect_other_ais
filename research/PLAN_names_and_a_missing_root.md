@@ -1,12 +1,14 @@
 # PLAN — the Security lane names its reviewers, the server words a stranded pick, and a missing named data folder is never created by the server
 
-> Status: **built on `feat/names-and-a-missing-root` (2026-10-11), not yet merged — the operator promotes it after the
-> merge; see "As built" for the deviations.** Scope: `src_vs_code` (`securityLaneView.ts`,
+> Status: **IMPLEMENTED, 2026-10-12.** Built on `feat/names-and-a-missing-root` and gated (plan round: proceed, 2
+> accepted; code round 1: proceed, 1 accepted; code round 2: proceed, 1 accepted; this repository's own review found
+> and fixed three more — `--consultants`, the CHANGELOG under a released heading, the seam's isolation). Deviations
+> and what was left are in "As built"; the serve decision (a refusal-only stdio server) was verified over real stdio. Scope: `src_vs_code` (`securityLaneView.ts`,
 > `securityPromptCard.ts`, `consultantHealthPanel.ts`), `src_mcp` (`QuestionAdmission.cs`, `CapabilityMatrix.cs`,
 > `Program.cs` start-up, `ConsultantCheckMode.cs`, the writer modes that open `RoundsDb`, `PanelSettings.cs`).
 >
-> Related docs: [PLAN_paths_per_side.md](../research/PLAN_paths_per_side.md) (D3 and "E5 as built", item C and the
-> "Left" note), [module_extension.md](../research/module_extension.md), [module_server.md](../research/module_server.md).
+> Related docs: [PLAN_paths_per_side.md](PLAN_paths_per_side.md) (D3 and "E5 as built", item C and the
+> "Left" note), [module_extension.md](module_extension.md), [module_server.md](module_server.md).
 
 ## The request
 
@@ -164,13 +166,13 @@ the family checks (`plan-lifecycle`, `pin-check`, `gate-snippet-check`).
 - [x] The server's stranded-row sentence matches the extension's; no server sentence shows `''`; tests pin both.
 - [x] No coai-mcp mode creates a confirmed-absent named root; serve answers every tool with the named refusal; the default location and `<root>/<side>` are still made; tests prove each.
 - [x] The extension does not launch the health checks under a missing root; the mode census reclassified.
-- [ ] Help (five languages) for any new user-visible words; CHANGELOG under Unreleased; `module_extension.md`, `module_server.md`, `module_tests.md`; the paths plan's "Left" note corrected; this plan promoted when done. *(All but the promotion, which the operator does after the merge.)*
+- [x] Help (five languages) for any new user-visible words; CHANGELOG under Unreleased; `module_extension.md`, `module_server.md`, `module_tests.md`; the paths plan's "Left" note corrected; this plan promoted when done. *(All but the promotion, which the operator does after the merge.)*
 
 ## As built (2026-10-11)
 
 Eight commits on `feat/names-and-a-missing-root`, one per story plus the seam leg, the docs and the measurement of the
 three person's modes the plan did not list. Every story went RED
-first with the real symptom (the rows of [module_tests.md](../research/module_tests.md), "Names and a missing root",
+first with the real symptom (the rows of [module_tests.md](module_tests.md), "Names and a missing root",
 carry each message), then GREEN, then compiling break-its on the deciding lines, restored in `finally`.
 
 **What shipped as planned:** story 1 through `catalogPicks` (`rowPicks` + `optionHtml`, `rowLabel`, `offeredLine`) — no

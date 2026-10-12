@@ -1308,7 +1308,7 @@ sequenceDiagram
     Mcp->>Mcp: launch: row timeout, CLI effort, api module, system prompt frozen in the record, redacted from output
 ```
 
-### A data folder a person named, and missing: both halves decide alike, and neither makes it (2026-10-12, `todo/PLAN_names_and_a_missing_root.md`)
+### A data folder a person named, and missing: both halves decide alike, and neither makes it (2026-10-12, `research/PLAN_names_and_a_missing_root.md`)
 
 The owner's D3 (`research/PLAN_paths_per_side.md`): a data folder named with `COAI_DATA_DIR` that does not exist is said
 and never created — creating it writes into a bare mount point and hides the problem. The extension kept that since

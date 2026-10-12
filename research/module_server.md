@@ -6828,7 +6828,7 @@ an older session file reads an empty one. A skipped round is minted none. What a
 `ReviewerInvocation.Round`, `IReviewerRuntime.ForLaunch`, the shim's `remainingSeconds` — is the runners' half:
 [module_runners.md](module_runners.md), *A round has an identity on the wire*.
 
-## A stranded question row, in the extension's words (2026-10-11, story 2 of `todo/PLAN_names_and_a_missing_root.md`)
+## A stranded question row, in the extension's words (2026-10-11, story 2 of `research/PLAN_names_and_a_missing_root.md`)
 
 The extension sends a question row whose catalog pick is gone or no longer ticked as `{vendor:'<id>', runtime:''}` and
 says *"<id> is no longer ticked question consultant (or was removed) — pick another model"* (`qconsultWrite.noModel`).
@@ -6843,7 +6843,7 @@ test that builds it directly), not a sentence a person sees today. `CapabilityMa
 run on — pick one"* in both overloads — never `'' is not a runtime …` and never `asked for runtime ''`; the decision is
 unchanged, so `shared/capability-matrix-vectors.json` still holds.
 
-## A missing named data folder is never created by the server (2026-10-11, story 3 of `todo/PLAN_names_and_a_missing_root.md`)
+## A missing named data folder is never created by the server (2026-10-11, story 3 of `research/PLAN_names_and_a_missing_root.md`)
 
 **The decision.** `PanelSettings.NamedRootMissing(env, attributesOf)`: `COAI_DATA_DIR` set (trimmed) AND its ROOT
 (`DataRootFor`, before the side — `NamedRootOf`) confirmed `Absent` by `QuestionRoots.PresenceOf(root, attributesOf,

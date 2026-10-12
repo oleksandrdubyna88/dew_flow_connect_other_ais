@@ -530,7 +530,7 @@ of this OS*, `research/module_server.md` *`--providers` says which setting and w
   still let the server create the folder, as the move flow creates the folder it is given. *(Corrected 2026-10-11: this
   note also named `--check-security`, wrongly — it reads stdin and answers stdout and never touches the data directory
   (`CheckSecurityMode.cs`). The two checks, the server's other writer modes and serve itself were closed by
-  [PLAN_names_and_a_missing_root.md](../todo/PLAN_names_and_a_missing_root.md), story 3.)*
+  [PLAN_names_and_a_missing_root.md](PLAN_names_and_a_missing_root.md), story 3.)*
 - **5.5** the badge's words are *"N missing folders or paths"* (one: *"folder or path"*); a top tab counts every
   sub-place under it, a sub-tab its own.
 - **5.6 the agreement is one-way, by setting**: the server's problems replace this window's own findings for the

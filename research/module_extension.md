@@ -12509,7 +12509,7 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   reaches a Chat model block while one still reaches a Models card block. Design record:
   [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
 
-## The Security lane names its reviewers (2026-10-11, story 1 of `todo/PLAN_names_and_a_missing_root.md`)
+## The Security lane names its reviewers (2026-10-11, story 1 of `research/PLAN_names_and_a_missing_root.md`)
 
 Each pair's Reviewer select (`securityLaneView.reviewerSelect`) is built from `catalogPicks.rowPicks('security', pick,
 allRows, 'This pair')` through `optionHtml` — the question consultant's naming since #748, reused, not a second one: a
@@ -12528,7 +12528,7 @@ name at all for an empty pick. The prompt cards' reviewer ticks (`securityPrompt
 `security-lane` article in five languages (`helpCoverage.test.ts` asks each for the marks). Tests: the page RUN in
 `aSecurityPairNamesItsReviewer.test.ts`; `securityLane.test.ts`'s removed-reviewer sentence moved to the new wording.
 
-## A missing named data folder: the paid checks are held too (2026-10-11, story 3.3 of `todo/PLAN_names_and_a_missing_root.md`)
+## A missing named data folder: the paid checks are held too (2026-10-11, story 3.3 of `research/PLAN_names_and_a_missing_root.md`)
 
 `consultantCheckRun.runConsultantCheck` — the one road of the Consultant tab's **Check** and the Models tab's ✓ Check —
 reads the findings board before it spawns, as `consultantsProbe.asked` does (at once once the board has its first
