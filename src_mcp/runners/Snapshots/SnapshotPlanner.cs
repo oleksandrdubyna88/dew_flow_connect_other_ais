@@ -2,8 +2,19 @@ using System.Globalization;
 
 namespace CoaiMcp.Runners.Snapshots;
 
-/// <summary>One file to copy: where it is, where it goes, how big it was when planned.</summary>
-internal sealed record PlannedFile(string Relative, string Source, string Destination, long Bytes);
+/// <summary>What a file looked like at one moment: its length and last write — enough to see it change, cheap enough to take per file, twice.</summary>
+internal readonly record struct SnapshotStamp(long Length, DateTime WrittenUtc)
+{
+    public static SnapshotStamp Of(FileInfo info) => new(info.Length, info.LastWriteTimeUtc);
+
+    public static SnapshotStamp Of(string path) => Of(new FileInfo(path));
+}
+
+/// <summary>One file to copy: where it is, where it goes, what it looked like when planned.</summary>
+internal sealed record PlannedFile(string Relative, string Source, string Destination, SnapshotStamp Stamp)
+{
+    public long Bytes => Stamp.Length;
+}
 
 /// <summary>Everything the copy will do, decided before a byte moves.</summary>
 /// <param name="SourceRoot">Where the files come from — what the copier walks again, just before each copy, for a link that appeared since.</param>
@@ -161,7 +172,7 @@ internal static class SnapshotPlanner
             return string.Empty;
         }
 
-        files.Add(new PlannedFile(relative, source, Path.Combine(destinationRoot, relative.Replace('/', Path.DirectorySeparatorChar)), info.Length));
+        files.Add(new PlannedFile(relative, source, Path.Combine(destinationRoot, relative.Replace('/', Path.DirectorySeparatorChar)), SnapshotStamp.Of(info)));
 
         return string.Empty;
     }

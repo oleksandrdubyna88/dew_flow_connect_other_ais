@@ -2710,7 +2710,18 @@ flowchart TD
   ignored files, copies the bytes as they are now, and leaves a deleted path absent; an untracked NESTED REPOSITORY,
   which git lists as `dir/` and nothing beneath, is named unavailable ("add it as a submodule") rather than copied or
   refused; a file that changes between its stamp and its copy (size, last write, copied length) makes the whole copy
-  retry once over a fresh listing, then refuse — a snapshot of a moving tree is a snapshot of nothing. **The link walk
+  retry once over a fresh listing, then refuse — a snapshot of a moving tree is a snapshot of nothing. **And the whole
+  inventory is checked, not only each file** (D6 as amended by the plan gate, codex, 2026-10-12): per-file stamps let a
+  copy publish a MIX of times — a file copied early stays unchanged while a later one changes before its own copy, or a
+  file is added or removed while the copy runs — so after the last file the live tree is listed and planned AGAIN and
+  compared whole with what was copied (`SnapshotCopier.Settled`): every copied file's stamp at its own copy against its
+  stamp now, every path that appeared or went, the excluded and the unavailable included; any movement retries the whole
+  copy once, then refuses (`a.txt changed / added-2.txt was added / b.txt was removed while the tree was being copied,
+  on the retry as well`). Only a tree that CAN move pays the second listing — `SnapshotSource.MovesUnderTheCopy`, true
+  for a live checkout and false for a round's pinned worktree, which is coai's own detached checkout under its own root,
+  populated before the lease is handed out and read by nobody but read-only reviewers; its per-file stamp still stands,
+  and a second git listing plus a stat per file of a tree that cannot move would be paid for nothing on every round.
+  **The link walk
   runs again immediately before each copy** (`SnapshotLinks`, shared with `Resolve` and `Read`): a directory that became
   a junction between the plan and the copy would hand `File.Copy` its target's bytes under the planned name with the
   same length and time, which the stamp cannot see; the walk fails CLOSED — a component that cannot be inspected counts

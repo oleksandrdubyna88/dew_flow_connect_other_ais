@@ -23,6 +23,16 @@ public abstract record SnapshotSource
     public abstract bool IncludesUntracked { get; }
 
     /// <summary>
+    /// Whether the tree can be edited while it is copied — and so whether the whole inventory is listed and stamped
+    /// AGAIN after the last file (D6 as amended by the plan gate, 2026-10-12: per-file stamps let a copy publish a mix
+    /// of times). A live checkout is the person's working tree, edited while the consultation runs: yes. A round's
+    /// pinned worktree is coai's own detached checkout under its own root, made for the round, populated before the
+    /// lease is handed out, and read by nobody but read-only reviewers: no — the per-file stamp still guards it, and a
+    /// second git listing plus a stat per file of a tree that cannot move would be paid for nothing on every round.
+    /// </summary>
+    public abstract bool MovesUnderTheCopy { get; }
+
+    /// <summary>
     /// A round's pinned worktree: what <c>git ls-files</c> lists in it, plus every populated submodule's content at the
     /// revision checked out there — never <c>git archive</c>, whose <c>export-ignore</c> / <c>export-subst</c> attributes
     /// would drop or rewrite reviewed bytes.
@@ -32,18 +42,23 @@ public abstract record SnapshotSource
         public override string Directory => Worktree;
 
         public override bool IncludesUntracked => false;
+
+        public override bool MovesUnderTheCopy => false;
     }
 
     /// <summary>
     /// A live checkout: tracked plus untracked-not-ignored paths, their bytes as they are NOW, a deleted path absent
-    /// (a rename is the old path absent and the new one present). A file that changes while it is copied makes the
-    /// whole copy retry once, then refuse — the tree is moving under the copy.
+    /// (a rename is the old path absent and the new one present). A file that changes while it is copied — or any path
+    /// added, removed or changed anywhere in the inventory before the copy ends — makes the whole copy retry once, then
+    /// refuse: the tree is moving under the copy.
     /// </summary>
     public sealed record Live(string Checkout) : SnapshotSource
     {
         public override string Directory => Checkout;
 
         public override bool IncludesUntracked => true;
+
+        public override bool MovesUnderTheCopy => true;
     }
 }
 

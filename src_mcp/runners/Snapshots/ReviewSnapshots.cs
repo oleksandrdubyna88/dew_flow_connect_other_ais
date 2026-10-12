@@ -86,12 +86,13 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
 
         public sealed record Built(string Directory, SnapshotManifest Manifest, SnapshotBudget.Hold Hold) : Attempt;
 
-        public sealed record Changed(string Path) : Attempt;
+        /// <summary>A path moved under the copy — <c>changed</c>, <c>was added</c>, <c>was removed</c>, <c>appeared or went</c>.</summary>
+        public sealed record Changed(string Path, string How) : Attempt;
 
         public sealed record Refused(string Reason) : Attempt;
     }
 
-    /// <summary>The copy, retried once over a fresh listing when a file changed under it — then refused: the tree is moving.</summary>
+    /// <summary>The copy, retried once over a fresh listing when the tree moved under it — then refused: the tree is moving.</summary>
     private async Task<Attempt> BuildTwiceAsync(SnapshotSource source, string scratchDirectory, long replacing, CancellationToken ct)
     {
         var first = await BuildOnceAsync(source, scratchDirectory, 1, replacing, ct);
@@ -100,11 +101,11 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
             return first;
         }
 
-        note($"{changed.Path} changed while {source.Directory} was being copied; copying it again");
+        note($"{changed.Path} {changed.How} while {source.Directory} was being copied; copying it again");
         var second = await BuildOnceAsync(source, scratchDirectory, 2, replacing, ct);
 
         return second is Attempt.Changed again
-            ? new Attempt.Refused($"{again.Path} changed while the tree was being copied, on the retry as well; the tree is moving")
+            ? new Attempt.Refused($"{again.Path} {again.How} while the tree was being copied, on the retry as well; the tree is moving")
             : second;
     }
 
@@ -146,13 +147,13 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
         }
 
         var plan = ((Planning.Planned)planned).Plan;
-
-        return _budget.Reserve(plan.Bytes, Path.GetDirectoryName(partial)!, replacing) switch
+        var reserving = _budget.Reserve(plan.Bytes, Path.GetDirectoryName(partial)!, replacing);
+        if (reserving is SnapshotBudget.Reserving.Refused noRoom)
         {
-            SnapshotBudget.Reserving.Refused noRoom => new Attempt.Refused(noRoom.Reason.Trim()),
-            SnapshotBudget.Reserving.Held held => Copy(plan, partial, held.Hold, attempt, rule, clock, ct),
-            _ => throw new InvalidOperationException("the union is closed"),
-        };
+            return new Attempt.Refused(noRoom.Reason.Trim());
+        }
+
+        return await CopyAsync(source, plan, partial, ((SnapshotBudget.Reserving.Held)reserving).Hold, attempt, rule, clock, ct);
     }
 
     private async Task<Planning> PlanAsync(SnapshotSource source, string partial, StringComparison rule, CancellationToken ct) =>
@@ -163,15 +164,25 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
-    /// <summary>The copy under its hold: the hold goes with the attempt on success and is given back on anything else.</summary>
-    private Attempt Copy(CopyPlan plan, string partial, SnapshotBudget.Hold hold, int attempt, StringComparison rule, Stopwatch clock, CancellationToken ct)
+    /// <summary>
+    /// The copy under its hold, and — for a tree that can move — the whole inventory checked again after the last file:
+    /// the hold goes with the attempt on success and is given back on anything else.
+    /// </summary>
+    private async Task<Attempt> CopyAsync(
+        SnapshotSource source, CopyPlan plan, string partial, SnapshotBudget.Hold hold, int attempt, StringComparison rule, Stopwatch clock, CancellationToken ct)
     {
         try
         {
-            return SnapshotCopier.CopyAll(plan, _options, attempt, clock, ct) switch
+            var copied = SnapshotCopier.CopyAll(plan, _options, attempt, clock, ct);
+            if (copied is Copying.Done done && source.MovesUnderTheCopy)
+            {
+                copied = await SettledAsync(source, plan, done.Stamps, partial, rule, clock, ct);
+            }
+
+            return copied switch
             {
                 Copying.Done => new Attempt.Built(partial, Manifest(plan, rule), hold),
-                Copying.Changed changed => Released(hold, new Attempt.Changed(changed.Path)),
+                Copying.Changed changed => Released(hold, new Attempt.Changed(changed.Path, changed.How)),
                 Copying.Refused refused => Released(hold, new Attempt.Refused(refused.Reason)),
                 _ => throw new InvalidOperationException("the union is closed"),
             };
@@ -181,6 +192,28 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
             hold.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// The tree listed and planned AGAIN after the last file, compared whole with what was copied (D6 as amended: per-file
+    /// stamps alone can publish a mix of times). A plan that refuses now — a link that appeared, a ceiling the grown tree
+    /// passes — is a refusal; a tree that moved anywhere is the retry's case.
+    /// </summary>
+    private async Task<Copying> SettledAsync(
+        SnapshotSource source, CopyPlan copied, IReadOnlyDictionary<string, SnapshotStamp> stamps, string partial, StringComparison rule, Stopwatch clock, CancellationToken ct)
+    {
+        var again = await PlanAsync(source, partial, rule, ct);
+        if (clock.Elapsed > _options.MaxElapsed)
+        {
+            return new Copying.Refused(SnapshotCopier.TookTooLong(clock.Elapsed, _options.MaxElapsed));
+        }
+
+        return again switch
+        {
+            Planning.Refused refused => new Copying.Refused(refused.Reason),
+            Planning.Planned planned => SnapshotCopier.Settled(copied, stamps, planned.Plan),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
     }
 
     private static Attempt Released(SnapshotBudget.Hold hold, Attempt attempt)
