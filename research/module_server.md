@@ -6827,6 +6827,7 @@ writes `rounds.round_key` (schema step 21, under *`--round-counts`* above). `sta
 an older session file reads an empty one. A skipped round is minted none. What a launch does with the key on the wire —
 `ReviewerInvocation.Round`, `IReviewerRuntime.ForLaunch`, the shim's `remainingSeconds` — is the runners' half:
 [module_runners.md](module_runners.md), *A round has an identity on the wire*.
+
 ## A stranded question row, in the extension's words (2026-10-11, story 2 of `todo/PLAN_names_and_a_missing_root.md`)
 
 The extension sends a question row whose catalog pick is gone or no longer ticked as `{vendor:'<id>', runtime:''}` and
