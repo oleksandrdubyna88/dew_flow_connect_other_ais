@@ -1,5 +1,5 @@
 import { cardColumns } from './cardColumns';
-import { rowPicks } from './catalogPicks';
+import { offeredLine, optionHtml, rowLabel, rowPicks } from './catalogPicks';
 import { escapeHtml as esc } from './escapeHtml';
 import { SECURITY_SEED } from './securityLane.generated';
 import {
@@ -65,7 +65,8 @@ export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[],
     })).join(''))
     + promptsFooter(lane)
     + '<h3>Reviewer / prompt pairs</h3>'
-    + cardColumns(lane.runs.map((r, i) => runBody(r, i, lane, vendors, strandedNote(r.vendor, vendors, allRows))).join(''))
+    + offeredLine('security')
+    + cardColumns(lane.runs.map((r, i) => runBody(r, i, lane, vendors, allRows)).join(''))
     + runsFooter(lane, vendors);
 }
 
@@ -112,7 +113,7 @@ function versionNote(version: string): string {
  * One pair. Its Remove button and its Prompt select's "+ New custom prompt…" carry the pair's IDENTITY — row, reviewer,
  * prompt — so a pair that moved between the paint and the press is refused rather than the wrong one written (D5).
  */
-function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonly Vendor[], stranded: string): string {
+function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonly Vendor[], allRows: readonly Vendor[]): string {
   const v = vendors.find(v => v.id === r.vendor);
   const context = r.context ?? defaultContext(v);
   const field = (key: string): string => 'run:' + i + ':' + key;
@@ -122,8 +123,8 @@ function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonl
   const promptSelect = select(field('prompt'), r.prompt, prompts, ` data-seclane-run="${esc(identity)}"`)
     .replace('</select>', `<option value="${NEW_PROMPT_SENTINEL}">+ New custom prompt…</option></select>`);
   return `<fieldset><legend>Pair ${i + 1}${securityOnly(v) ? ' — security only' : ''}</legend>
-        ${runWarnings(r, lane, v, stranded)}
-        <label>Reviewer ${select(field('vendor'), r.vendor, vendors.map(v => v.id))}</label>
+        ${runWarnings(r, lane, v, strandedNote(r.vendor, vendors, allRows))}
+        <label>Reviewer ${reviewerSelect(field('vendor'), r.vendor, allRows)}</label>
         <label>Prompt ${promptSelect}</label>
         <label>Source ${select(field('context'), context, ['slice', 'diff'])}</label>
         <label>Context token budget ${count(field('contextTokens'), securityTokenBudget(r, context), 1024, 200000)}</label>
@@ -135,21 +136,37 @@ const defaultContext = (v: Vendor | undefined): string => v?.runtime === 'local'
 const securityOnly = (v: Vendor | undefined): boolean => v !== undefined && ![v.code, v.plan, v.document, v.feature].some(Boolean);
 
 /**
- * A pair's row the page does not offer, named (research/PLAN_one_model_catalog.md E4.2, D3): a row that is gone or not
- * ticked Security lane — '' when the page offers it.
+ * The pair's Reviewer select, by the one naming of a catalog pick (`catalogPicks.ts`; research/PLAN_names_and_a_missing_root.md
+ * story 1): each row ticked Security lane by its display name with the id as the value, a switched-off row marked, a
+ * stranded pick kept and marked — and a pair that names no reviewer gets a leading option that says so, never an empty one.
+ */
+function reviewerSelect(field: string, picked: string, allRows: readonly Vendor[]): string {
+  const none = picked === '' ? `<option value="" selected disabled>${esc(NO_REVIEWER_OPTION)}</option>` : '';
+  const options = rowPicks('security', picked, allRows, 'This pair').options.map(one => optionHtml(one, picked)).join('');
+  return `<select ${at(field)}>${none}${options}</select>`;
+}
+const NO_REVIEWER_OPTION = 'no reviewer — pick one';
+
+/**
+ * A pair's row the page does not offer, named (research/PLAN_one_model_catalog.md E4.2, D3) — '' when the page offers it.
+ * A row that is GONE gets the lane's own sentence: the server drops a pair whose reviewer is not a row
+ * (`SecurityLaneSetting.cs`, `Pair`), so the pair does not "keep asking" for it as a question consultant's row does.
  */
 function strandedNote(vendor: string, offered: readonly Vendor[], allRows: readonly Vendor[]): string {
-  return offered.some(v => v.id === vendor) ? '' : rowPicks('security', vendor, allRows, 'This pair').note;
+  if (vendor === '') return 'This pair names no reviewer — pick one.';
+  if (offered.some(v => v.id === vendor)) return '';
+  return allRows.some(v => v.id === vendor) ? rowPicks('security', vendor, allRows, 'This pair').note
+    : `${vendor} is no longer on Models. The server drops this pair until you pick another reviewer.`;
 }
 
-/** What to say about a pair's reviewer: stranded, switched off or gone — or ''. */
-function reviewerWarning(run: SecurityRun, vendor: Vendor | undefined, stranded: string): string {
+/** What to say about a pair's reviewer: stranded, named by nobody, gone or switched off — or ''. */
+function reviewerWarning(vendor: Vendor | undefined, stranded: string): string {
   if (stranded.length > 0) return stranded;
-  return vendor?.enabled ? '' : `Reviewer ${run.vendor} is unavailable; select an enabled reviewer.`;
+  return vendor === undefined || vendor.enabled ? '' : `Reviewer ${rowLabel(vendor)} is switched off; switch it on, on Models, or select an enabled reviewer.`;
 }
 
 function runWarnings(run: SecurityRun, lane: SecurityLane, vendor: Vendor | undefined, stranded: string): string {
-  const reviewer = reviewerWarning(run, vendor, stranded);
+  const reviewer = reviewerWarning(vendor, stranded);
   const warnings: string[] = reviewer.length > 0 ? [reviewer] : [];
   if (!lane.prompts.some(p => p.id === run.prompt)) warnings.push(`Prompt ${run.prompt} is missing; select a registered prompt.`);
   return warnings.map(message => `<p class="stale">${esc(message)}</p>`).join('');
