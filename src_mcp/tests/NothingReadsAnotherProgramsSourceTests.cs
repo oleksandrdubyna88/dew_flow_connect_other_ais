@@ -87,17 +87,6 @@ public sealed class NothingReadsAnotherProgramsSourceTests
             || start.StartsWith('*')
             || start.StartsWith("/*", StringComparison.Ordinal));
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src_vs_code")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("the repository root was not found from the test binary");
-    }
-
     /// <summary>
     /// Every file under a directory, with the noise pruned BEFORE it is walked.
     /// </summary>
@@ -147,7 +136,7 @@ public sealed class NothingReadsAnotherProgramsSourceTests
         // empty string — and an empty owner is the worst answer available here, because every
         // program then differs from it and a test reading its OWN source is reported.
         // (gemini, story C2's second code round.)
-        var segments = Path.GetRelativePath(RepoRoot(), path)
+        var segments = Path.GetRelativePath(RepoPaths.Root(), path)
             .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         return segments.Length > 0 && Programs.Contains(segments[0]) ? segments[0] : string.Empty;
@@ -188,7 +177,7 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     /// <summary>Every test file of every program, with the program that owns it.</summary>
     private static IEnumerable<(string File, string Mine)> TestFiles()
     {
-        var root = RepoRoot();
+        var root = RepoPaths.Root();
 
         return from program in Programs
                from file in SourceFiles(Path.Combine(root, program))
@@ -247,7 +236,7 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     [Fact]
     public void NoTest_ReachesIntoAnotherProgramsSourceFiles()
     {
-        var root = RepoRoot();
+        var root = RepoPaths.Root();
         var offenders = new List<string>();
         foreach (var (file, mine) in TestFiles())
         {
@@ -267,7 +256,7 @@ public sealed class NothingReadsAnotherProgramsSourceTests
         // reference in a generator, a script or a settings file would not be, and those are exactly
         // where a retired name survives. `research/` is not scanned at all, for the same reason
         // comments are exempt: both record what the system WAS as well as what it is.
-        var root = RepoRoot();
+        var root = RepoPaths.Root();
         var offenders = new List<string>();
         foreach (var dir in (string[])["src_mcp", "src_server", "src_vs_code", "shared"])
         {

@@ -223,8 +223,8 @@ model"* for a person — a vendor-less row is dropped at parse time with its own
 defence for a row built in code. Left as noted, not changed: the refusal server ends on SIGTERM/SIGINT or stdin closing
 without the full server's `Environment.Exit` backstop (Claude Code's own SIGKILL follows within half a second); the C#
 and TS admission checks order a blank runtime and an unknown capability differently (same decision, sentences may
-differ by the vectors' own rule); three older tests keep a private `RepoRoot()` while the new `RepoPaths.Root()` is the
-shared one (not rewritten unasked).
+differ by the vectors' own rule); the older tests' private `RepoRoot()` copies were left for the owner to decide, and
+were moved onto the shared `RepoPaths.Root()` afterwards at the owner's request (2026-10-12, five copies, not three).
 
 **Code rounds 2 and 3 (2026-10-12).** Round 2: `research/architecture.md` gained the cross-half section (accepted); the
 help languages rejected again. Round 3 re-read the whole diff: `WriterModes` as a hand-kept list — accepted, closed by

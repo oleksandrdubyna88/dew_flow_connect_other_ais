@@ -1,20 +1,30 @@
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Where this repository's checkout is, for a test that reads its sources. The folder holding <c>.agents</c>, walked up
-/// from the test binary — the same rule three older tests each spell privately (<c>ARequestFaultIsNotAnOldBinaryTests</c>,
-/// <c>GoodEnoughPolicyTests</c>, <c>NothingReadsAnotherProgramsSourceTests</c>); new tests use this one.
+/// Where this repository's checkout is, for a test that reads its sources: the first folder above the test binary that
+/// holds both halves, <c>src_mcp</c> and <c>src_vs_code</c>. The one helper every test uses — five tests used to spell their
+/// own, looking for three different markers, and two of them quietly answered the test binary's own folder when nothing
+/// was found, so a moved layout read the wrong files instead of failing.
 /// </summary>
 internal static class RepoPaths
 {
-    public static string Root()
+    /// <exception cref="InvalidOperationException">No folder above the test binary holds both halves.</exception>
+    public static string Root() => RootAbove(AppContext.BaseDirectory);
+
+    /// <summary>The first folder at or above <paramref name="start"/> that holds both halves — the seam its own test uses.</summary>
+    /// <exception cref="InvalidOperationException">No such folder: the message names where the search began.</exception>
+    internal static string RootAbove(string start)
     {
-        var here = new DirectoryInfo(AppContext.BaseDirectory);
-        while (here is not null && !Directory.Exists(Path.Combine(here.FullName, ".agents")))
+        var here = new DirectoryInfo(start);
+        while (here is not null && !HoldsBothHalves(here.FullName))
         {
             here = here.Parent;
         }
 
-        return here?.FullName ?? AppContext.BaseDirectory;
+        return here?.FullName
+            ?? throw new InvalidOperationException($"the repository root (a folder holding src_mcp and src_vs_code) was not found above {start}");
     }
+
+    private static bool HoldsBothHalves(string folder) =>
+        Directory.Exists(Path.Combine(folder, "src_mcp")) && Directory.Exists(Path.Combine(folder, "src_vs_code"));
 }
