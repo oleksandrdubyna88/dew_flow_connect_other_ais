@@ -246,10 +246,13 @@ public static class RateLimit
     /// 2026-09-27 on 8 of 20 grok-4.7 feature reviews, mid-generation, with nothing on our side
     /// correlating; the api shim reports it as a transient (exit 75) and this phrase is what lets the
     /// ladder retry it, bounded by what is left of the turn's deadline inside the twenty-minute cap.</item>
+    /// <item>Kimi Code on a spent API-key account answers <c>provider.api_error: 429 Your account … is suspended due to
+    /// insufficient balance</c> — measured 2026-10-11. Its 429 has no status label and no "too many", so the code pattern
+    /// below does not take it; this phrase does, and <see cref="Spent"/> names it hopeless.</item>
     /// </list>
     /// </summary>
     private static readonly string[] Phrases =
-        ["rate limit", "usage limit", "quota", "unavailable", "high demand", "auth context expired"];
+        ["rate limit", "usage limit", "quota", "unavailable", "high demand", "auth context expired", "insufficient balance"];
 
     /// <summary>
     /// The status codes, matched as CODES rather than as three digits anywhere in the output.
@@ -301,7 +304,7 @@ public static class RateLimit
     /// throttle that clears, and refusing to wait it out would lose a reviewer that would have
     /// answered. (The plan round, two vendors independently.)</para>
     /// </remarks>
-    internal static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit"];
+    internal static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit", "insufficient balance"];
 
     /// <summary>
     /// Whether waiting is pointless: a SPENT allowance, not a per-minute throttle.
