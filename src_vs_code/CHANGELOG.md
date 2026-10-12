@@ -1,5 +1,23 @@
 # Changelog
 
+## Server 0.49.0 — 2026-10-12
+
+**Every launch of a round carries the round's identity, and a spent budget is never sent.** Each review round now gets
+a random id when it starts, kept on the round in `coai.db` (schema step 21, `round_key`) and in the session file, and
+every launch of that round sends it to the Team server with its attempt (`first`, `retry`, `repair`, `followUp`) and
+the seconds left on its own deadline, so the server can count rounds and stop a job whose caller has already given up.
+A repair or a retry now advertises, and waits on, the time it really has left rather than the budget it was built with,
+and a launch whose time is already spent is not submitted at all. When the Team server ends a job because its caller
+could no longer wait, `--ask-remote` exits with its own code (79) and the reason, and the rate-limit ladder does not
+retry it. The request stays contract 2: the new fields are optional, and an older server ignores them.
+
+**A stated reset is read, recorded and never waited out.** When a vendor refuses with a stated reset (agy's
+`Resets in 88h49m9s`), the refusal's ledger line now carries the instant as `resetsUtc`, for reviews, consultations,
+consultant checks and question rows alike, read by the same parser the Team server uses. The rate-limit ladder no
+longer waits and launches again into a reset that lies beyond the reviewer's remaining time; a short reset inside it is
+still waited out. A job queued on the Team server behind accounts that are all parked or signed out now says why while
+it waits.
+
 ## Server 0.48.0 — 2026-10-11
 
 **The usage ledger tells the truth: one line per paid launch, how each ended, and what it ran with.** `usage.jsonl`
