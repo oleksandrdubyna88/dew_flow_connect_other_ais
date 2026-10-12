@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.70.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.69.0...extension-v0.70.0) (2026-10-12)
+
+
+### Features
+
+* a round has an identity across the wire, and no job starts without budget (round counter E4) ([#766](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/766)) ([722fc59](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/722fc5975b4b203250e10c1cd01ebc2c19e88ccd))
+* the Team server counts rounds per vendor and window, and a stated reset is read, shown and never waited out (round counter E5) ([#773](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/773)) ([bb95c1c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb95c1c4074a9e3d09d09412e8d4674f09bb9438))
+
+
+### Bug Fixes
+
+* **http:** a failed contract assertion is a regression (exit 1), not a misconfigured suite (exit 4) ([#771](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/771)) ([8e60622](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8e60622c48411e3eaecc45dfe61532e74d967920))
+
 ## [0.69.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.68.0...extension-v0.69.0) (2026-10-11)
 
 
