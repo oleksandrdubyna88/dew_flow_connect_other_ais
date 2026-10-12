@@ -55,6 +55,18 @@ through it (the inventory test `src_vs_code/src/test/dataDirWriters.ts`). The se
    tool that writes → `isError` naming the folder, the root still absent; put it back → the next call succeeds.
 4. Docs: `module_server.md`, `module_tests.md`, CHANGELOG under Unreleased.
 
+### The check-to-create race (the code round of the PR that recorded this plan, 2026-10-12, accepted)
+
+A presence check followed by `Directory.CreateDirectory` still races an unmount: the root answers present, the drive
+goes away, and the RECURSIVE create makes the root again at the bare mount point. So the maker must not use a recursive
+create at all. It creates each level below the named root with a NON-recursive primitive — the operating system's own
+`mkdir` / `CreateDirectoryW`, which fails (`ENOENT` / `ERROR_PATH_NOT_FOUND`) when the parent is not there — exactly what
+the extension's `dataDirMaker.ts` does with a non-recursive `mkdirSync`. .NET has no non-recursive create, so the maker
+needs its own (a small P/Invoke per OS, or creating each level only after opening its parent and treating "parent
+missing" as the refusal). A race is then a FAILED write — refused with the sentence — never a recreated root. The
+stated guarantee is exactly that; a test plants the race (the root removed between the presence answer and the create,
+through an injected file-system seam) and asserts the root stays absent.
+
 ### Added by the plan round of the PR that recorded this plan (2026-10-12, all accepted)
 
 - **The scan cannot pass vacuously.** A companion assertion that the scan FINDS a known writer (for example
