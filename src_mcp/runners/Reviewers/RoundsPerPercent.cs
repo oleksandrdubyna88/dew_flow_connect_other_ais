@@ -29,7 +29,11 @@ public sealed record GaugeRatio(
 /// <summary>Every window's figure, or — where nothing was read — why not.</summary>
 /// <param name="Ratios">One per vendor and window the readings named; empty when there are none.</param>
 /// <param name="Unavailable">Empty when the readings were looked at; a <see cref="GaugeReasons"/> code when there were none to look at.</param>
-public sealed record GaugeAnswer(IReadOnlyList<GaugeRatio> Ratios, string Unavailable);
+public sealed record GaugeAnswer(IReadOnlyList<GaugeRatio> Ratios = null!, string Unavailable = "")
+{
+    /// <summary>Never null, whatever a deserialiser or a caller did with the property — no ratios is an empty list.</summary>
+    public IReadOnlyList<GaugeRatio> Ratios { get; init; } = Ratios ?? [];
+}
 
 /// <summary>Why a figure is not a number — fixed codes, translated into words by the client.</summary>
 public static class GaugeReasons

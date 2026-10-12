@@ -234,6 +234,19 @@ public sealed class RoundsPerPercentTests
         answer.Ratios.Should().BeEmpty("a window nobody read is absent, never 0 rounds per 1 %");
     }
 
+    /// <summary>Epic 6's code round: a public list defaults to empty — an answer read without its list is no ratios, never null.</summary>
+    [Fact]
+    public void AnAnswerWithoutItsRatios_ReadsEmpty_NeverNull()
+    {
+        var constructed = new GaugeAnswer(null!, GaugeReasons.LocalCaptureDeferred);
+        var read = System.Text.Json.JsonSerializer.Deserialize(
+            """{"nowUtc":"2026-10-12T12:00:00Z","windows":[],"modelsKnownSince":null,"gauge":{"unavailable":"local-capture-deferred"}}""",
+            CoaiMcp.Server.ServerJsonContext.Default.RoundCountsAnswer)!;
+
+        constructed.Ratios.Should().BeEmpty("a null handed to the constructor is no ratios");
+        read.Gauge.Ratios.Should().BeEmpty("an answer whose gauge carries no list is read as no ratios, never null");
+    }
+
     [Fact]
     public void ThisMachine_SaysLocalCaptureIsDeferred()
     {
