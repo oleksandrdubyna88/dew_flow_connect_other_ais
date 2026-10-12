@@ -58,6 +58,8 @@ const { securitySeam } = await import('./seam-security.mjs');
 const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
 const { usageCountsSeam } = await import('./seam-usage-counts.mjs');
+// The vendor gauge (story 6.2): the slot's reading and the derived figures, read and drawn by the extension's own code.
+const { gaugeSeam } = await import('./seam-gauge.mjs');
 const { consultantRowSeam } = await import('./seam-consultant-row.mjs');
 const { featuresSeam } = await import('./seam-features.mjs');
 // The question consultant's roots of the other OS: the page's decision against the server's, one root at a time.
@@ -503,6 +505,11 @@ console.log(`  ok  a migrated catalog writes the same settings file, and the ser
 // The usage-counts leg (E5's plan round): the REAL Team server over a seeded ledger, read by the extension's own parser.
 const counts = await usageCountsSeam({ fail });
 console.log(`  ok  the Team server's round counts for ${counts.windows.join(', ')} (${counts.vendorsRead} vendor rows) read by value through the extension's own parser`);
+
+// The vendor-gauge leg (E6's plan round, story 6.2): the slot's stored reading and the ledger's derived rounds per 1 %,
+// served by the REAL Team server, read by the extension's own client and drawn by the Team server tab's own renderer.
+const gauges = await gaugeSeam({ fail });
+console.log(`  ok  the vendor gauge and ${gauges.figures} rounds-per-1 % figures cross from the server to the Team server tab — codex's hidden, with the reason`);
 
 // The consultant-row leg (C2 of the epics 1–3 consultation): a consultant's catalog row, written by the extension with
 // its effort, system prompt and timeout, is read by the server's own parser — and never handed to a binary without it.

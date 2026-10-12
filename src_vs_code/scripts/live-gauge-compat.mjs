@@ -2,9 +2,11 @@
  * An older client against the new server (E6's plan round, todo/PLAN_every_round_is_counted.md): the previously RELEASED
  * extension's own parsers against the answers this tree's server gives once they carry the gauge fields (story 6.1a).
  *
- * <p>What a shipped extension reads from a Team server is the catalog (`fetchCatalog`, with its per-vendor slot counts)
- * and the usage ledger's lines (`parseUsage`, which prices the Spending tab). The new server ADDS to both: a `gauge`
- * object under `slots` when a reading exists, and nine trailing `gauge*` fields on a Team-server ledger line. A client
+ * <p>What a shipped extension reads from a Team server is the catalog (`fetchCatalog`, with its per-vendor slot counts),
+ * the company usage answer (`fetchUsage`, with the round counts a 5.2 client asks for) and the usage ledger's lines
+ * (`parseUsage`, which prices the Spending tab). The new server ADDS to all three: a `gauge` object under `slots` when a
+ * reading exists, a top-level `gauges` list (rounds per 1 %, story 6.2) beside the round windows when they are asked, and
+ * nine trailing `gauge*` fields on a Team-server ledger line. A client
  * older than the fields must load both unchanged — the catalog with every vendor and count it read before, the lines
  * with every token count and outcome — and must not see a number it cannot name. No unit test holds two builds of one
  * half; this one does.</p>
@@ -108,6 +110,20 @@ try {
   say(line.tokensIn === 100 && line.tokensOut === 10 && line.outcome === 'ok' && line.provider === 'codex', 'its token counts, outcome and vendor are what they were', JSON.stringify(line));
   const totals = oldUsage.totalsByVendor?.(lines) ?? [];
   say(Array.isArray(totals), 'the released totals still compute over such lines', JSON.stringify(totals).slice(0, 200));
+
+  // Story 6.2: the company usage answer, asked exactly as the released Team server tab asks it. A client that asks the
+  // round windows now also receives `gauges` (rounds per 1 %); one that asks none receives today's shape.
+  const usage = await oldApi.fetchUsage(server.url, token, 'week', 'company');
+  say(usage.ok, 'the released usage client loads the company answer from the new server', usage.ok ? '' : `${usage.status} — ${usage.message}`);
+  const answer = usage.value ?? {};
+  const codexRow = (answer.vendors ?? []).find((v) => v.vendor === 'codex');
+  say(codexRow?.runs === 1 && codexRow?.tokensIn === 100, 'its vendor row is what it was beside the new key', JSON.stringify(codexRow ?? null));
+  if (typeof oldApi.serverRounds === 'function') {
+    const rounds = oldApi.serverRounds(answer);
+    say(rounds.kind === 'counted', 'the released round-count parser still reads the counts beside `gauges`', JSON.stringify(rounds).slice(0, 200));
+  }
+  say(('gauges' in answer) === ('windows' in answer), 'the new key rides exactly with the round windows the client asked for (the control)',
+    `windows ${'windows' in answer ? 'asked' : 'not asked'}, gauges ${'gauges' in answer ? 'sent' : 'not sent'}`);
 } catch (error) {
   say(false, 'the comparison ran to its end', error instanceof Error ? error.message : String(error));
 } finally {
@@ -117,7 +133,7 @@ try {
 }
 
 if (broken.length === 0) {
-  console.log('the older client loads the catalog and the ledger unchanged beside the gauge fields');
+  console.log('the older client loads the catalog, the company usage and the ledger unchanged beside the gauge fields');
   process.exit(0);
 }
 console.log(`${broken.length} assertion(s) failed:\n  ${broken.join('\n  ')}`);
