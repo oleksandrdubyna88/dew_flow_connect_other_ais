@@ -1,5 +1,17 @@
 # Changelog
 
+## Extension 0.70.0 — 2026-10-12
+
+**New: the Team server's rounds per vendor, on the Team server tab.** For an admin, each vendor row now shows how many
+distinct review rounds the Team server ran over the last 5 hours, 24 hours and 7 days, beside the runs that carried no
+round (from older clients), retries, repairs, follow-ups, cancellations, and jobs the server ended because their caller
+could no longer wait. A Team server too old to count says *count unavailable*, never zero. Help in all five languages.
+
+**New: when a vendor's quota comes back.** After a vendor refused with a stated reset, the Spending tab's Rounds block
+and the vendor's model card say *quota out — resets in 89 h (Wed 04:49)*, for as long as that refusal is the row's
+latest line and the instant is still ahead. The Team server catalog says when its first parked account comes back,
+without naming any account.
+
 ## Server 0.49.0 — 2026-10-12
 
 **Every launch of a round carries the round's identity, and a spent budget is never sent.** Each review round now gets
