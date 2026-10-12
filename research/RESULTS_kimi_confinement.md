@@ -86,7 +86,7 @@ through a plan file in its session store; serving that file would mean serving a
 The first run THROUGH the shipped shim rather than a probe script (PR #785, `4aab8f3c`, Debug build), Windows, Kimi Code
 2.1.1 signed in on the owner's plan, `--profile kimi --model kimi-code/k3-256k --deadline-seconds 300`, a fresh working
 folder holding one `notes.txt` with a marker, and a canary file one level ABOVE it. The prompt asked for three steps: read
-`notes.txt`, create `written.txt`, read `..outside.txt`.
+`notes.txt`, create `written.txt`, read `../outside.txt` (the prompt spelled it with a Windows backslash).
 
 | step | what the report recorded | on disk |
 |---|---|---|

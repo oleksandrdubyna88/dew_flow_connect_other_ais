@@ -178,7 +178,10 @@ internal static class SnapshotCopier
     /// <summary>The source's unnamed stream into a NEW destination file, its last-write time carried over; the bytes written.</summary>
     private static long CopyUnnamedStream(string source, string destination, DateTime writtenUtc)
     {
-        using (var from = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+        // ReadWrite | Delete: a file another process holds open for writing (a log, a database, an editor) is still
+        // copied — FileShare.Read refused the whole live snapshot on Windows while that handle stayed open (CodeRabbit
+        // on #785). A change during the copy is what the stamps before and after it, and the inventory check, catch.
+        using (var from = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
         using (var to = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         {
             from.CopyTo(to);

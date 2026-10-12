@@ -55,6 +55,13 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
     private readonly Dictionary<long, TaskCompletionSource<JsonElement>> _pending = [];
     private readonly Lock _gate = new();
+
+    /// <summary>
+    /// Held by every change to the answer and the trace, and by every read of them. The pump adds while the client may
+    /// already be reading — a pump that outlives the turn's wait (a grandchild holding the pipe, a tail line at disposal)
+    /// — and an enumeration racing an <c>Add</c> threw "Collection was modified" (CodeRabbit on #785). Readers get copies.
+    /// </summary>
+    private readonly Lock _traceGate = new();
     private readonly StringBuilder _answer = new();
     private readonly List<AcpRefusal> _refusals = [];
     private readonly List<AcpToolCall> _toolCalls = [];
@@ -62,6 +69,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     private readonly List<AcpReadRecord> _reads = [];
     private long _nextId = 1;
     private int _droppedTraceEntries;
+    private int _truncatedTraceFields;
     private long _traceChars;
     private AcpUsage _usage = AcpUsage.Unknown;
     private string _broken = string.Empty;
@@ -69,21 +77,60 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     /// <summary>The reader, started by <see cref="Pump"/>; awaited by the client on the way out.</summary>
     public Task Reading { get; private set; } = Task.CompletedTask;
 
-    public string Answer => _answer.ToString();
+    public string Answer
+    {
+        get
+        {
+            lock (_traceGate)
+            {
+                return _answer.ToString();
+            }
+        }
+    }
 
     public AcpUsage Usage => _usage;
 
-    public IReadOnlyList<AcpRefusal> Refusals => _refusals;
+    /// <summary>A copy, taken under the trace's lock — never the list the pump is adding to.</summary>
+    public IReadOnlyList<AcpRefusal> Refusals => Copy(_refusals);
 
-    public IReadOnlyList<AcpToolCall> ToolCalls => _toolCalls;
+    /// <summary>A copy, taken under the trace's lock — never the list the pump is adding to.</summary>
+    public IReadOnlyList<AcpToolCall> ToolCalls => Copy(_toolCalls);
 
-    public IReadOnlyList<AcpReadRecord> Reads => _reads;
+    /// <summary>A copy, taken under the trace's lock — never the list the pump is adding to.</summary>
+    public IReadOnlyList<AcpReadRecord> Reads => Copy(_reads);
 
     /// <summary>How many trace entries the caps dropped, over all three lists.</summary>
-    public int DroppedTraceEntries => _droppedTraceEntries;
+    public int DroppedTraceEntries
+    {
+        get
+        {
+            lock (_traceGate)
+            {
+                return _droppedTraceEntries;
+            }
+        }
+    }
 
     /// <summary>How many retained trace fields were cut to <see cref="MaxTraceFieldChars"/>.</summary>
-    public int TruncatedTraceFields { get; private set; }
+    public int TruncatedTraceFields
+    {
+        get
+        {
+            lock (_traceGate)
+            {
+                return _truncatedTraceFields;
+            }
+        }
+    }
+
+
+    private T[] Copy<T>(List<T> list)
+    {
+        lock (_traceGate)
+        {
+            return [.. list];
+        }
+    }
 
     /// <summary>Why the stream is unusable, once it is — empty while it is fine.</summary>
     public string Broken => _broken;
@@ -288,7 +335,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
             Bounded(AcpMessages.Text(toolCall, "title"), ref cuts),
             Bounded(AcpMessages.Text(toolCall, "kind"), ref cuts),
             Bounded(choice.Selected ? choice.Kind : "cancelled", ref cuts));
-        Trace(_refusals, refusal, Chars(refusal), cuts);
+        Traced(_refusals, refusal, Chars(refusal), cuts);
 
         return transport.WriteLineAsync(
             AcpMessages.Result(request.Id, choice.Selected ? AcpMessages.Selected(choice.OptionId) : AcpMessages.CancelledOutcome()), ct);
@@ -300,7 +347,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         var answer = boundary.Read(path);
         var cuts = 0;
         var record = new AcpReadRecord(Bounded(path, ref cuts), answer.Served, Bounded(answer.Refusal, ref cuts));
-        Trace(_reads, record, Chars(record), cuts);
+        Traced(_reads, record, Chars(record), cuts);
 
         return transport.WriteLineAsync(
             answer.Served
@@ -402,14 +449,17 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         }
 
         var text = AcpMessages.Text(content, "text");
-        if (_answer.Length + text.Length > MaxAnswerChars)
+        lock (_traceGate)
         {
-            Break($"the agent wrote more than {MaxAnswerChars / (1024 * 1024)} Mi characters of answer — not an answer, not kept");
+            if (_answer.Length + text.Length <= MaxAnswerChars)
+            {
+                _answer.Append(text);
 
-            return;
+                return;
+            }
         }
 
-        _answer.Append(text);
+        Break($"the agent wrote more than {MaxAnswerChars / (1024 * 1024)} Mi characters of answer — not an answer, not kept");
     }
 
     /// <summary>
@@ -421,6 +471,15 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     {
         var cuts = 0;
         var id = Bounded(AcpMessages.Text(update, "toolCallId"), ref cuts);
+        lock (_traceGate)
+        {
+            Merged(update, id, cuts);
+        }
+    }
+
+    /// <summary>The tool call merged into the trace by id; called under <see cref="_traceGate"/>.</summary>
+    private void Merged(JsonElement update, string id, int cuts)
+    {
         var known = _toolCallAt.TryGetValue(id, out var at);
         var was = known ? _toolCalls[at] : new AcpToolCall(id, string.Empty, string.Empty, string.Empty);
         var now = new AcpToolCall(
@@ -453,10 +512,19 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
         _toolCalls[at] = now;
         _traceChars += delta;
-        TruncatedTraceFields += cuts;
+        _truncatedTraceFields += cuts;
     }
 
-    /// <summary>Adds to a trace list under both caps — the list's count and the trace's characters; past either the entry is counted as dropped instead.</summary>
+    /// <summary><see cref="Trace{T}"/> under the trace's lock — for the entries that are not merged by id.</summary>
+    private void Traced<T>(List<T> list, T entry, int chars, int cuts)
+    {
+        lock (_traceGate)
+        {
+            Trace(list, entry, chars, cuts);
+        }
+    }
+
+    /// <summary>Adds to a trace list under both caps — the list's count and the trace's characters; past either the entry is counted as dropped instead. Called under <see cref="_traceGate"/>.</summary>
     /// <param name="cuts">How many of the entry's fields were cut, counted only when the entry is kept.</param>
     /// <returns>True when the entry was kept.</returns>
     private bool Trace<T>(List<T> list, T entry, int chars, int cuts)
@@ -470,7 +538,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
         list.Add(entry);
         _traceChars += chars;
-        TruncatedTraceFields += cuts;
+        _truncatedTraceFields += cuts;
 
         return true;
     }

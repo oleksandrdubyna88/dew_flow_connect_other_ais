@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
@@ -110,27 +111,45 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
             : second;
     }
 
+    /// <remarks>
+    /// A value, never an exception (CodeRabbit on #785, 2026-10-12): a scratch directory that cannot be made, a destination
+    /// the case probe cannot write, a <c>git</c> that cannot start — each is a refusal with its sentence, the partial copy
+    /// deleted. Only what nobody expects (a cancellation among it) still leaves as an exception.
+    /// </remarks>
     private async Task<Attempt> BuildOnceAsync(SnapshotSource source, string scratchDirectory, int attempt, long replacing, CancellationToken ct)
     {
         var clock = Stopwatch.StartNew();
-        Directory.CreateDirectory(scratchDirectory);
         var partial = Path.Combine(scratchDirectory, $"{Prefix}{ShortId()}{PartialSuffix}");
-        Directory.CreateDirectory(partial);
         try
         {
+            Directory.CreateDirectory(scratchDirectory);
+            Directory.CreateDirectory(partial);
             var made = await FillAsync(source, partial, attempt, replacing, clock, ct);
-            if (made is not Attempt.Built)
-            {
-                TryDelete(partial);
-            }
 
-            return made;
+            return Kept(made, partial);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            TryDelete(partial);
+
+            return new Attempt.Refused($"the snapshot could not be made in {scratchDirectory}: {e.Message}");
         }
         catch
         {
             TryDelete(partial);
             throw;
         }
+    }
+
+    /// <summary>The attempt as it is — the partial copy deleted unless it was built.</summary>
+    private Attempt Kept(Attempt made, string partial)
+    {
+        if (made is not Attempt.Built)
+        {
+            TryDelete(partial);
+        }
+
+        return made;
     }
 
     private async Task<Attempt> FillAsync(SnapshotSource source, string partial, int attempt, long replacing, Stopwatch clock, CancellationToken ct)

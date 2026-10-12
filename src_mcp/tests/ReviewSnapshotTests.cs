@@ -446,4 +446,46 @@ public sealed class ReviewSnapshotTests : IAsyncLifetime
         Path.GetFileName(snapshot.Root).Should().StartWith(ReviewSnapshots.Prefix).And.NotEndWith(".partial");
         Directory.GetDirectories(_scratch).Should().ContainSingle("the partial copy was renamed over, not left beside");
     }
+
+    // ---------------------------------------------------------------------------------------
+    // CodeRabbit on #785, 2026-10-12 — a value, never an exception
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A scratch directory that cannot be made (here a FILE stands at its path; a full or read-only temp is the real
+    /// case) is a refusal with a sentence, as <c>SnapshotOutcome</c> promises — not an <c>IOException</c> out of
+    /// <c>MakeAsync</c>, which would end a turn without the row's failure sentence.
+    /// </summary>
+    [Fact]
+    public async Task AScratchDirectoryThatCannotBeMade_IsARefusal_NotAnException()
+    {
+        await WriteAsync("a.txt", "a");
+        await _repo.CommitAsync("one");
+        var blocked = _scratch.At("not-a-directory");
+        await File.WriteAllTextAsync(blocked, "a file where the scratch directory should go");
+
+        var made = () => SnapshotTestKit.Snapshots(_launcher).MakeAsync(Pinned, blocked, TestContext.Current.CancellationToken);
+
+        (await made.Should().NotThrowAsync("a snapshot that cannot be made is a refusal")).Which
+            .Should().BeOfType<SnapshotOutcome.Refused>().Which.Reason.Should().Contain("not-a-directory");
+    }
+
+    /// <summary>
+    /// A file another process holds open for WRITING (a log, a database, an editor) is copied, not refused: Windows
+    /// enforces share modes, and the copy opened its source with <c>FileShare.Read</c> — a sharing violation that refused
+    /// the whole live snapshot for as long as the handle stayed open (CodeRabbit on #785). The stamps before and after
+    /// the copy, and the inventory check, are what notice a file that changes.
+    /// </summary>
+    [Fact]
+    public async Task AFileHeldOpenForWritingByAnother_IsCopied_NotRefused()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "share modes are enforced on Windows only");
+        await WriteAsync("app.log", "a line");
+        await _repo.CommitAsync("one");
+        await using var writer = new FileStream(Path.Combine(_repo.Path, "app.log"), FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+
+        var snapshot = await MadeAsync(Live);
+
+        (await File.ReadAllTextAsync(Path.Combine(snapshot.Root, "app.log"), TestContext.Current.CancellationToken)).Should().Be("a line");
+    }
 }
