@@ -16,10 +16,15 @@ namespace CoaiMcp.Runners.Acp;
 /// reused rather than copied: the UTF-8-without-BOM stdin, the executable resolution, and the end of a child —
 /// <see cref="ProcessLauncher.EndItAsync"/> (stdin closed, the whole tree killed, the exit waited for) and
 /// <see cref="ProcessLauncher.Close"/>.</para>
-/// <para><b>Every exit path ends the same way</b> (<see cref="EndAsync"/>): a bounded graceful step — the caller's
-/// <c>session/cancel</c>, then our end of stdin closed, which is the EOF a well-behaved agent exits on — a short
-/// wait, then the tree kill by this process's own handle, then the wait. The grandchild a CLI spawns is the point
-/// of the tree kill: a reviewer that outlives its round is a reviewer that never really failed.</para>
+/// <para><b>Every exit path ends the same way</b> (<see cref="EndAsync"/>): the caller's bounded graceful step — the
+/// <c>session/cancel</c> and a short wait for the agent to answer it — then the tree kill by this process's own
+/// handle WHILE THE AGENT IS STILL ALIVE, then the wait. Not "close stdin and let it leave first": a process that has
+/// exited can no longer name its children, so an agent that left on EOF took its grandchild out of the kill's reach
+/// (finding 8 of the security review — green only by the order of two timers). The grandchild a CLI spawns is the
+/// point of the tree kill: a reviewer that outlives its round is a reviewer that never really failed.</para>
+/// <para><b>Lines are read against a cap</b> (<see cref="MaxLineChars"/>): a line reader with no bound buffers a
+/// whole runaway before delivering anything, which is the launcher's own finding about ceilings; past the cap the
+/// stream is judged broken and the turn ends, the agent with it.</para>
 /// </remarks>
 internal sealed class AcpTransport : IDisposable
 {
@@ -29,14 +34,25 @@ internal sealed class AcpTransport : IDisposable
     /// <summary>How long a drain may outlive the kill, for the same reason the launcher's drain grace exists: a grandchild can hold a pipe.</summary>
     public static readonly TimeSpan DrainGrace = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// The longest one line may be. A message is kilobytes — a served file rides inside one, under the boundary's
+    /// 4 MiB — so a line past this is not a message, and reading it further is holding a runaway in memory.
+    /// </summary>
+    public const int MaxLineChars = 16 * 1024 * 1024;
+
     /// <summary>How much of the agent's stderr is kept — its diagnosis lives in the last lines.</summary>
     private const int StdErrChars = 64 * 1024;
+
+    private const int ChunkChars = 8192;
 
     private readonly Process _process;
     private readonly SemaphoreSlim _writing = new(1, 1);
     private readonly BoundedText _stderr = new(StdErrChars);
     private readonly CancellationTokenSource _draining = new();
     private readonly Task _stderrDrain;
+    private char[] _unread = new char[ChunkChars];
+    private int _length;
+    private int _scanned;
 
     private AcpTransport(Process process)
     {
@@ -89,18 +105,78 @@ internal sealed class AcpTransport : IDisposable
         return new AcpTransport(process);
     }
 
-    /// <summary>The next line the agent wrote — or null at the end of its output, which is the one fact a reader must see.</summary>
+    /// <summary>
+    /// The next line the agent wrote — or null at the end of its output, which is the one fact a reader must see.
+    /// Throws <see cref="AcpProtocolException"/> once a line passes <see cref="MaxLineChars"/> without ending.
+    /// </summary>
+    /// <remarks>
+    /// Its own reader rather than <c>StreamReader.ReadLineAsync</c>, which has no ceiling: it returns nothing until
+    /// the newline arrives, by which time the whole line is in memory. Here the unread text is scanned only where it
+    /// has not been scanned before, so a long line costs one pass, not one per chunk.
+    /// </remarks>
     public async Task<string?> ReadLineAsync(CancellationToken ct)
     {
+        while (true)
+        {
+            var at = Array.IndexOf(_unread, '\n', _scanned, _length - _scanned);
+            if (at > MaxLineChars || (at < 0 && _length > MaxLineChars))
+            {
+                // Over the cap whether its newline has arrived or not: the first run only caught the line that never ended.
+                throw new AcpProtocolException($"the agent wrote a line longer than {MaxLineChars / (1024 * 1024)} Mi characters — not a message, not read further");
+            }
+
+            if (at >= 0)
+            {
+                return TakeLine(at, newline: true);
+            }
+
+            _scanned = _length;
+
+            var read = await ReadChunkAsync(ct);
+            if (read == 0)
+            {
+                // The pipe closed: the tail without a newline is the last line, and nothing at all is the end.
+                return _length == 0 ? null : TakeLine(_length, newline: false);
+            }
+
+            _length += read;
+        }
+    }
+
+    /// <summary>More of the stream into the unread buffer, grown when full; zero at the end or when the pipe went with the child.</summary>
+    private async Task<int> ReadChunkAsync(CancellationToken ct)
+    {
+        if (_length == _unread.Length)
+        {
+            Array.Resize(ref _unread, _unread.Length * 2);
+        }
+
         try
         {
-            return await _process.StandardOutput.ReadLineAsync(ct);
+            return await _process.StandardOutput.ReadAsync(_unread.AsMemory(_length), ct);
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
         {
-            // The pipe went with the child: the same thing as its end of output.
-            return null;
+            return 0;
         }
+    }
+
+    /// <summary>The line up to <paramref name="at"/> (a trailing CR dropped), the rest kept for the next call.</summary>
+    private string TakeLine(int at, bool newline)
+    {
+        var end = at > 0 && _unread[at - 1] == '\r' ? at - 1 : at;
+        var line = new string(_unread, 0, end);
+        var consumed = newline ? at + 1 : at;
+        var rest = _length - consumed;
+        if (rest > 0)
+        {
+            Array.Copy(_unread, consumed, _unread, 0, rest);
+        }
+
+        _length = rest;
+        _scanned = 0;
+
+        return line;
     }
 
     /// <summary>Writes one line, serialised against the other writers — a reply to the agent can cross a request to it.</summary>
@@ -133,17 +209,20 @@ internal sealed class AcpTransport : IDisposable
     }
 
     /// <summary>
-    /// Ends the agent whatever state it is in: the graceful step, a bounded wait, then the tree kill and the wait for it.
+    /// Ends the agent whatever state it is in: the caller's bounded graceful step, then the tree kill — while the
+    /// agent still lives, so its children are still its — and the wait for it.
     /// </summary>
-    /// <param name="graceful">What to say before closing stdin — the <c>session/cancel</c> notification when a turn is in flight.</param>
+    /// <param name="graceful">
+    /// What to do before the kill — the <c>session/cancel</c> notification and a short wait for its answer when a
+    /// turn is in flight. Bounded by the caller; whatever it does, the kill follows. Stdin is NOT closed first: EOF is
+    /// what a well-behaved agent exits on, and an agent that has exited can no longer name its children.
+    /// </param>
     public async Task EndAsync(Func<Task> graceful)
     {
         await SettledAsync(graceful());
-        ProcessLauncher.Close(_process.StandardInput);
-        using var grace = new CancellationTokenSource(GraceWait);
-        await SettledAsync(_process.WaitForExitAsync(grace.Token));
 
-        // The tree, by this process's own handle — never by a name — then the wait the launcher already does.
+        // The tree, by this process's own handle — never by a name — then the wait the launcher already does. The
+        // launcher closes stdin first, which is the right order for a kill that follows at once.
         await ProcessLauncher.EndItAsync(_process);
 
         _draining.CancelAfter(DrainGrace);

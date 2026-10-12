@@ -41,6 +41,19 @@ public sealed class AskAcpModeTests
         Stderr.Should().Contain("no profile").And.Contain("kimi", "the refusal names what this build knows");
     }
 
+    /// <summary>Finding 4 of the security review: a deadline the clock cannot hold is a bad argument (65), never a throw past the child.</summary>
+    [Fact]
+    public async Task ADeadlineBeyondADay_IsRefused65_BeforeAnyLaunch()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        var code = await RunAsync(agent, deadlineSeconds: 2_000_000_000);
+
+        code.Should().Be(65, Stderr);
+        Stderr.Should().Contain("86400");
+        agent.Entries().Should().BeEmpty("nothing was launched");
+    }
+
     [Fact]
     public async Task AnUnknownProfile_IsRefused_NamingTheOnesThisBuildKnows()
     {

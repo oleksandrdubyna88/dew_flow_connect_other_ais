@@ -2792,20 +2792,29 @@ D14 `insufficient balance` (`balance_spent`).
 **The three blocks the shim owns** (each measured in RESULTS §2 before it was written):
 
 - **Permission requests.** Every `session/request_permission` is answered with the option whose kind is
-  `reject_once`, else any `reject_*`, else `outcome: cancelled` — the client never looks at which tool asked. Each is
-  recorded for the trace (tool title, kind, option).
+  `reject_once`, else any `reject_*`, else `outcome: cancelled` — the client never looks at which tool asked. A kind
+  that is not a non-empty string is no option; and the reject option is selected ONLY when its id is non-empty and no
+  other option shares it — an agent resolving a shared id may land on the allow, so a duplicate ends `cancelled`
+  (finding 1 of the 2026-10-12 security review). Each is recorded for the trace (tool title, kind, the kind of the
+  option actually chosen or `cancelled`).
 - **`fs/read_text_file`.** `initialize` offers exactly `fs.readTextFile: true`, `fs.writeTextFile: false`,
   `terminal: false` — the offer is what routes every `Read`, Kimi's own instruction-file search included, through the
   client (§2.2). `IAcpReadBoundary` is the seam; `FolderReadBoundary` serves only an absolute path lexically inside the
   working folder by components and never an excluded name, declining by SHAPE before normalisation can tidy them (UNC
   and device prefixes, drive-relative, root-relative, relative, a `:` beyond the drive letter, a component ending in a
-  dot or a space) and declining any step from the root down that is a reparse point. The agent sees JSON-RPC `-32602`
-  with a sentence that quotes nothing. An 8.3 short name and a link placed between the check and the read are the
-  snapshot manifest's (D6), which replaces this class behind the same interface.
-- **Everything else.** `fs/write_text_file`, `terminal/*` and any unknown request are answered `-32601`.
-  `session/new` sends `cwd` and `mcpServers: []` (the #514 rule, D8b); `session/set_config_option {configId: "model"}`
-  goes BEFORE `session/prompt` — a session comes up on Kimi's own default, which on this plan was a model the plan
-  lacks, and the prompt failed `401` (§2).
+  dot or a space, and on Windows any component with a `~` followed by a digit — the shape of every 8.3 alias such as
+  `VIBE~1`, which the long-name exclusions would never match; finding 2 of the review) and declining any step from
+  the root down that is a reparse point. The agent sees JSON-RPC `-32602` with a sentence that quotes nothing; a path
+  the filesystem cannot even normalise (40 000 characters, a refused character) is declined the same way, never
+  thrown (finding 3). A link placed between the check and the read is the snapshot manifest's (D6), which replaces
+  this class behind the same interface.
+- **Everything else.** `fs/write_text_file`, `terminal/*` and any unknown request are answered `-32601`. A handler
+  that throws what it did not foresee answers THAT request with an error (`-32602` for a read, `-32603` otherwise)
+  and the pump reads on — it used to fault and leave the agent waiting until the deadline (finding 3).
+  `session/new` sends `cwd` and `mcpServers: []` (the #514 rule, D8b); an answer without a `sessionId` is a protocol
+  end and nothing more is sent (finding 6); `session/set_config_option {configId: "model"}` goes BEFORE
+  `session/prompt` — a session comes up on Kimi's own default, which on this plan was a model the plan lacks, and the
+  prompt failed `401` (§2).
 
 **Not covered, and said so (RESULTS §2.3).** `Grep` and `Glob` do not go through the client, so a Kimi read in general
 has the codex standing; the boundary covers `Read` and the instruction-file search, the sanitised snapshot (D6) covers
@@ -2815,15 +2824,26 @@ what the branch could supply, and the question-consultant `disk` standing for `k
 **Lifecycle.** The shim reads its stdin to EOF — `ProcessLauncher` closes stdin after writing the prompt, so EOF means
 "complete", never cancel — and only then starts the agent, whose own stdin stays open for the replies; stdout and
 stderr are drained concurrently. The client has its own deadline (`--deadline-seconds`, under the row's timeout).
-**Every exit path ends the same way** — normal end, deadline, a protocol failure, the agent's early EOF, the caller's
-cancellation: `session/cancel` when a session exists, our end of stdin closed, a 1.5 s wait, then the tree kill by this
-process's own handle through `ProcessLauncher.EndItAsync` (widened to `internal`, never copied), then the wait. The
-agent's EXIT is watched beside its output: a grandchild inherits the stdout pipe's write end, so an agent that exits
-mid-turn leaving one behind never delivers EOF — the fake agent's heartbeat grandchild held the pipe until the deadline
-on the first run (`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*).
+Everything after the agent's start — the clock, the pump, the four requests — runs inside the one `try` whose
+`finally` ends it, and a deadline the clock cannot hold is refused BEFORE the start (the client's ceiling is a day,
+`AcpClient.MaxDeadline`; the shim refuses `--deadline-seconds` outside 1..86400 with 65) — it used to throw past a
+running child (finding 4). **Every exit path ends the same way** — normal end, deadline, a protocol failure, the
+agent's early EOF, the caller's cancellation: `session/cancel` when a session exists and at most 1.5 s for the agent
+to answer what is still pending, then the tree kill by this process's own handle through `ProcessLauncher.EndItAsync`
+(widened to `internal`, never copied) WHILE THE AGENT IS STILL ALIVE, then the wait. Stdin is not closed first and no
+voluntary exit is waited for: a process that has exited can no longer name its children, so an agent that left on EOF
+took its grandchild out of the kill's reach — green on the first run only by the order of two timers (finding 8;
+`AnAnsweredTurnsGrandchild_IsGoneToo`). The agent's EXIT is watched beside its output: a grandchild inherits the
+stdout pipe's write end, so an agent that exits mid-turn leaving one behind never delivers EOF — the fake agent's
+heartbeat grandchild held the pipe until the deadline on the first run
+(`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*). Memory is
+bounded on every path: a line past 16 Mi characters is not read further (a protocol end, the agent killed), the
+answer past 8 Mi characters likewise, and the three trace lists keep at most 1000 entries each with the rest COUNTED
+(`droppedTraceEntries`), tool calls found by id rather than by a scan (finding 5).
 
 **Exit codes** (never 64 — `.agents/PROJECT.md`): **0** answered (`stopReason: end_turn`); **65** declined before the
-agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, an empty prompt); **69** ended before an
+agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, a `--deadline-seconds` outside 1..86400,
+an empty prompt); **69** ended before an
 answer — not started, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
 failure — a JSON-RPC error to a client request, or a `stopReason` other than `end_turn`; **75** a known spent sentence;
 **76** (EX_PROTOCOL) the stream broke — output closed or the process gone before answering, not listening, over the
@@ -2835,7 +2855,7 @@ answer ceiling; **77** a known sign-in or plan sentence.
 in the api shim's field names — `tokensIn`/`tokensOut` 0 with `notCaptured: true`, because ACP reports context tokens
 with no split (D15; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
 the trace: `refusals` (`tool`, `kind`, `option`), `toolCalls` (`id`, `title`, `kind`, `status`), `reads` (`path`,
-`served`, `reason`).
+`served`, `reason`), and `droppedTraceEntries` — how many entries the three caps dropped, 0 when none.
 
 ```mermaid
 sequenceDiagram
@@ -2860,7 +2880,7 @@ sequenceDiagram
     S-->>A: -32601 not offered by this client
   end
   A-->>S: stopReason
-  Note over S,A: every way out: session/cancel → stdin closed → 1.5 s → tree kill by pid → wait
+  Note over S,A: every way out: session/cancel → ≤1.5 s for its answer → tree kill by pid, the agent still alive → wait
   S-->>P: one JSON object on stdout; exit 0 / 65 / 69 / 70 / 75 / 76 / 77 — never 64
 ```
 

@@ -24,6 +24,9 @@ internal static class AcpMessages
     /// <summary>JSON-RPC: the request's parameters were refused — the read boundary's answer.</summary>
     public const int InvalidParams = -32602;
 
+    /// <summary>JSON-RPC: this client could not serve the request for a reason of its own — a handler that threw.</summary>
+    public const int InternalError = -32603;
+
     public static string Request(long id, string method, JsonObject parameters) =>
         new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters }.ToJsonString();
 

@@ -45,6 +45,9 @@ internal static class AskAcpMode
     /// <summary>Without <c>--deadline-seconds</c>: the same ten minutes the api shim gives a turn.</summary>
     internal static readonly TimeSpan DefaultDeadline = TimeSpan.FromMinutes(10);
 
+    /// <summary>The most <c>--deadline-seconds</c> may ask for — a day, the client's own ceiling (<see cref="AcpClient.MaxDeadline"/>).</summary>
+    internal static readonly int MaxDeadlineSeconds = (int)AcpClient.MaxDeadline.TotalSeconds;
+
     private const string Mode = "--ask-acp";
 
     /// <param name="args">The argv from the mode on: <c>--profile</c>, <c>--model</c>, <c>--cwd</c>, <c>--deadline-seconds</c>, and an optional <c>--executable</c> (a row's configured path).</param>
@@ -62,10 +65,17 @@ internal static class AskAcpMode
     {
         var flags = Program.Flags(args);
         var known = profiles ?? AcpProfiles.All;
-        var profile = AcpProfiles.Find(known, flags.GetValueOrDefault("--profile", string.Empty));
+        // The one "not found" this mode has, and it is answered before anything else is looked at.
+        if (AcpProfiles.Find(known, flags.GetValueOrDefault("--profile", string.Empty)) is not { } profile)
+        {
+            note($"{Mode}: no profile '{flags.GetValueOrDefault("--profile", string.Empty)}' — this build knows {string.Join(", ", AcpProfiles.Names(known))}");
+
+            return BadRequest;
+        }
+
         var cwd = flags.GetValueOrDefault("--cwd", string.Empty);
         var model = flags.GetValueOrDefault("--model", string.Empty);
-        if (Refusal(flags, known, profile, cwd, model) is { Length: > 0 } refused)
+        if (Refusal(flags, cwd, model) is { Length: > 0 } refused)
         {
             note(refused);
 
@@ -80,8 +90,8 @@ internal static class AskAcpMode
             return BadRequest;
         }
 
-        var ask = new AcpAsk(Executable(flags, profile!), Path.GetFullPath(cwd), model, prompt, Deadline(flags));
-        var outcome = await new AcpClient(profile!, new FolderReadBoundary(ask.Cwd, profile!.ExcludedNames)).AskAsync(ask, ct);
+        var ask = new AcpAsk(Executable(flags, profile), Path.GetFullPath(cwd), model, prompt, Deadline(flags));
+        var outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask, ct);
         var diagnosis = AcpDiagnosis.Of(outcome.Reason + "\n" + outcome.StdErr, profile.KnownFailures);
         await output.WriteLineAsync(Report(outcome, diagnosis));
 
@@ -89,21 +99,24 @@ internal static class AskAcpMode
     }
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
-    internal static string Refusal(
-        IReadOnlyDictionary<string, string> flags, IReadOnlyList<IAcpProfile> known, IAcpProfile? profile, string cwd, string model)
+    internal static string Refusal(IReadOnlyDictionary<string, string> flags, string cwd, string model)
     {
-        if (profile is null)
-        {
-            return $"{Mode}: no profile '{flags.GetValueOrDefault("--profile", string.Empty)}' — this build knows {string.Join(", ", AcpProfiles.Names(known))}";
-        }
-
         if (cwd.Length == 0 || !Directory.Exists(cwd))
         {
             return $"{Mode} needs --cwd <an existing folder the agent works in>" + (cwd.Length == 0 ? string.Empty : $" — '{cwd}' is not one");
         }
 
-        return model.Length == 0
-            ? $"{Mode} needs --model <id> — the model is set on the session before the prompt, never left to the agent's default"
+        if (model.Length == 0)
+        {
+            return $"{Mode} needs --model <id> — the model is set on the session before the prompt, never left to the agent's default";
+        }
+
+        // Given, it must be a number of seconds the clock can hold: a value past the ceiling used to throw after the
+        // agent had started and leave it running (finding 4 of the security review).
+        var given = flags.GetValueOrDefault("--deadline-seconds", string.Empty);
+
+        return given.Length > 0 && !(int.TryParse(given, out var seconds) && seconds >= 1 && seconds <= MaxDeadlineSeconds)
+            ? $"{Mode}: --deadline-seconds must be a whole number from 1 to {MaxDeadlineSeconds} — '{given}' is not"
             : string.Empty;
     }
 
@@ -111,8 +124,9 @@ internal static class AskAcpMode
     private static string Executable(IReadOnlyDictionary<string, string> flags, IAcpProfile profile) =>
         flags.GetValueOrDefault("--executable", string.Empty) is { Length: > 0 } configured ? configured : profile.DefaultExecutable;
 
+    /// <summary>The given seconds — already checked by <see cref="Refusal"/> — or the default.</summary>
     private static TimeSpan Deadline(IReadOnlyDictionary<string, string> flags) =>
-        int.TryParse(flags.GetValueOrDefault("--deadline-seconds", string.Empty), out var seconds) && seconds > 0
+        int.TryParse(flags.GetValueOrDefault("--deadline-seconds", string.Empty), out var seconds)
             ? TimeSpan.FromSeconds(seconds)
             : DefaultDeadline;
 
@@ -155,6 +169,8 @@ internal static class AskAcpMode
             ["refusals"] = new JsonArray([.. outcome.Refusals.Select(r => (JsonNode?)new JsonObject { ["tool"] = r.Tool, ["kind"] = r.Kind, ["option"] = r.Option })]),
             ["toolCalls"] = new JsonArray([.. outcome.ToolCalls.Select(t => (JsonNode?)new JsonObject { ["id"] = t.Id, ["title"] = t.Title, ["kind"] = t.Kind, ["status"] = t.Status })]),
             ["reads"] = new JsonArray([.. outcome.Reads.Select(r => (JsonNode?)new JsonObject { ["path"] = r.Path, ["served"] = r.Served, ["reason"] = r.Reason })]),
+            // The three lists are capped (AcpSession.MaxTraceEntries); what they could not hold is counted here.
+            ["droppedTraceEntries"] = outcome.DroppedTraceEntries,
         };
         if (diagnosis.Known)
         {

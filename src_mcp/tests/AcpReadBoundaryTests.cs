@@ -28,6 +28,40 @@ public sealed class AcpReadBoundaryTests : IDisposable
         return path;
     }
 
+    /// <summary>
+    /// Finding 2 of the security review: Windows keeps an 8.3 alias (<c>VIBE~1</c>) for every long name, and the
+    /// exclusions compare long names — so the alias must be refused by its shape.
+    /// </summary>
+    [Fact]
+    public void AnEightDotThreeSpellingOfAnExcludedName_IsRefused()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(), "8.3 short names exist only on Windows volumes");
+        var hooks = Write(Path.Combine(".vibe", "hooks.toml"), "[[hooks]]");
+        var shortFolder = ShortPath(Path.Combine(Root, ".vibe"));
+        Assert.SkipWhen(
+            string.Equals(shortFolder, Path.Combine(Root, ".vibe"), StringComparison.OrdinalIgnoreCase),
+            $"8.3 name generation is disabled on this volume (GetShortPathName answered the long name for {Root}), so the alias cannot be made");
+        File.ReadAllText(Path.Combine(shortFolder, "hooks.toml")).Should().Be("[[hooks]]", "the alias really reaches the excluded file");
+
+        var answer = Boundary().Read(Path.Combine(shortFolder, "hooks.toml"));
+
+        answer.Served.Should().BeFalse($"{shortFolder} is {hooks} by another spelling");
+        answer.Refusal.Should().Contain("8.3");
+    }
+
+    /// <summary>The Windows 8.3 alias of the folder — what the shell shows as <c>VIBE~1</c>.</summary>
+    private static string ShortPath(string longPath)
+    {
+        var buffer = new System.Text.StringBuilder(1024);
+        var length = GetShortPathNameW(longPath, buffer, (uint)buffer.Capacity);
+        length.Should().BePositive($"GetShortPathName failed for {longPath}");
+
+        return buffer.ToString();
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetShortPathNameW(string longPath, System.Text.StringBuilder shortPath, uint length);
+
     [Fact]
     public void AFileInsideTheRootIsServed_AtAnyDepth()
     {
@@ -130,18 +164,33 @@ public sealed class AcpReadBoundaryTests : IDisposable
     [InlineData(@"C:\snap\marker.txt.", "dot or a space")]
     [InlineData(@"C:\snap\sub.\marker.txt", "dot or a space")]
     [InlineData(@"C:\snap\marker.txt ", "dot or a space")]
+    [InlineData(@"C:\snap\VIBE~1\hooks.toml", "8.3")]
+    [InlineData(@"C:\snap\src\AGENTS~1.MD", "8.3")]
+    [InlineData(@"C:\snap\KIMI-C~1\config.toml", "8.3")]
     public void AWindowsSpellingThatResolvesElsewhere_IsRefusedByShape(string spelling, string refusal)
     {
         if (!OperatingSystem.IsWindows())
         {
             // Path.GetFullPath reads these as relative on POSIX — refused there too, but by the absolute-path rule.
-            FolderReadBoundary.Refusal("/snap/", spelling, KimiAcpProfile.Exclusions, StringComparison.Ordinal).Should().NotBeEmpty(spelling);
+            FolderReadBoundary.Refusal("/snap/", spelling, KimiAcpProfile.Exclusions, StringComparison.Ordinal, shortNames: false).Should().NotBeEmpty(spelling);
 
             return;
         }
 
-        FolderReadBoundary.Refusal(@"C:\snap\", spelling, KimiAcpProfile.Exclusions, StringComparison.OrdinalIgnoreCase)
+        FolderReadBoundary.Refusal(@"C:\snap\", spelling, KimiAcpProfile.Exclusions, StringComparison.OrdinalIgnoreCase, shortNames: true)
             .Should().Contain(refusal, spelling);
+    }
+
+    /// <summary>Where no 8.3 alias exists, a tilde-digit name is just a name — the rule is the flag's, not the platform's.</summary>
+    [Fact]
+    public void WithoutShortNames_ATildeDigitNameIsJustAName()
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Root)) + Path.DirectorySeparatorChar;
+
+        FolderReadBoundary.Refusal(root, Path.Combine(Root, "notes~1.txt"), KimiAcpProfile.Exclusions, StringComparison.Ordinal, shortNames: false)
+            .Should().BeEmpty("on a filesystem without 8.3 aliases the spelling names only itself");
+        FolderReadBoundary.Refusal(root, Path.Combine(Root, "notes~1.txt"), KimiAcpProfile.Exclusions, StringComparison.Ordinal, shortNames: true)
+            .Should().Contain("8.3", "with aliases the same spelling may name an excluded folder");
     }
 
     [Fact]

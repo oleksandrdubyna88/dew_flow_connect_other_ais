@@ -45,8 +45,14 @@ public sealed record AcpReadAnswer(bool Served, string Text, string Refusal)
 /// link — and the read is refused if one is on the way. The check and the read are two operations, so a link
 /// planted between them is not closed here; the snapshot's manifest (D6) closes it by serving retained bytes, and
 /// swaps in behind <see cref="IAcpReadBoundary"/> when it lands.</para>
-/// <para><b>What it does not know.</b> An 8.3 short name (<c>PROGRA~1</c>) is not refused by this class: the
-/// manifest lookup refuses it by not holding that spelling. The root itself is the caller's and is not checked.</para>
+/// <para><b>8.3 short names are refused by shape on Windows.</b> Every long name has an alias (<c>VIBE~1</c>,
+/// <c>AGENTS~1.MD</c>) that the exclusions, comparing long names, would never match — so a component with a
+/// <c>~</c> followed by a digit is declined outright (finding 2 of the security review). A legitimate name of that
+/// shape is refused too, and the sentence says why.</para>
+/// <para><b>What it does not know.</b> A link placed between the check and the read is the snapshot manifest's to
+/// close. The root itself is the caller's and is not checked. And a path the filesystem cannot even normalise — too
+/// long, a character it refuses — is declined with a sentence rather than thrown, so the agent's request is
+/// answered (finding 3).</para>
 /// </remarks>
 /// <param name="root">The folder served — the sanitised snapshot, or a scratch folder.</param>
 /// <param name="excludedNames">The profile's exclusions, as relative fragments.</param>
@@ -68,16 +74,24 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
 
     public AcpReadAnswer Read(string requestedPath)
     {
-        var refusal = Refusal(_root, requestedPath, excludedNames, Names);
-        if (refusal.Length > 0)
+        try
         {
-            return AcpReadAnswer.Refused(refusal);
+            var refusal = Refusal(_root, requestedPath, excludedNames, Names, OperatingSystem.IsWindows());
+            if (refusal.Length > 0)
+            {
+                return AcpReadAnswer.Refused(refusal);
+            }
+
+            var full = Path.GetFullPath(requestedPath);
+            var onTheWay = LinkOnTheWay(_root, full[_root.Length..]);
+
+            return onTheWay.Length > 0 ? AcpReadAnswer.Refused(onTheWay) : ReadFile(full);
         }
-
-        var full = Path.GetFullPath(requestedPath);
-        var onTheWay = LinkOnTheWay(_root, full[_root.Length..]);
-
-        return onTheWay.Length > 0 ? AcpReadAnswer.Refused(onTheWay) : ReadFile(full);
+        catch (Exception e) when (e is PathTooLongException or ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            // The filesystem would not even normalise it: declined, not thrown — the agent is owed an answer.
+            return AcpReadAnswer.Refused("a path this boundary cannot judge — too long, or a character the filesystem refuses");
+        }
     }
 
     /// <summary>
@@ -85,11 +99,17 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
     /// so every spelling is a row in a test on any platform.
     /// </summary>
     /// <param name="root">Normalised, with its trailing separator.</param>
-    public static string Refusal(string root, string requested, IReadOnlyList<string> excluded, StringComparison names)
+    /// <param name="shortNames">Whether the filesystem keeps 8.3 aliases — Windows — so a <c>NAME~1</c> component is refused.</param>
+    public static string Refusal(string root, string requested, IReadOnlyList<string> excluded, StringComparison names, bool shortNames)
     {
         if (Shape(requested) is { Length: > 0 } shape)
         {
             return shape;
+        }
+
+        if (shortNames && HasShortName(requested))
+        {
+            return "an 8.3 short name (NAME~1) is not served — the exclusions compare long names";
         }
 
         var full = Path.GetFullPath(requested);
@@ -132,6 +152,12 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
             .Any(component => component is not ("." or "..") && (component.EndsWith('.') || component.EndsWith(' ')))
             ? "a path component ending in a dot or a space"
             : string.Empty;
+
+    /// <summary>A component with a <c>~</c> followed by a digit — the shape of every Windows 8.3 alias (<c>VIBE~1</c>, <c>AGENTS~1.MD</c>).</summary>
+    private static bool HasShortName(string requested) =>
+        requested.Split(Separators, StringSplitOptions.RemoveEmptyEntries)
+            .Any(component => Enumerable.Range(0, Math.Max(component.Length - 1, 0))
+                .Any(i => component[i] == '~' && char.IsAsciiDigit(component[i + 1])));
 
     /// <summary>The first excluded fragment the relative components contain, as a refusal — or empty.</summary>
     private static string ExcludedIn(string[] components, IReadOnlyList<string> excluded, StringComparison names)

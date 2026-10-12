@@ -28,6 +28,12 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     public const int MaxAnswerChars = 8 * 1024 * 1024;
 
     /// <summary>
+    /// The most entries each trace list keeps (refusals, tool calls, reads). A review makes dozens; past a thousand
+    /// the agent is looping, and the trace says how many more it dropped rather than growing with the loop.
+    /// </summary>
+    public const int MaxTraceEntries = 1000;
+
+    /// <summary>
     /// How long lines the agent wrote before exiting may still be read after its exit, before its pending requests are
     /// failed. The process going is the fact; the pipe may lag it by a buffer — or never close at all, when a grandchild
     /// holds it (<see cref="AcpTransport.Exited"/>).
@@ -39,8 +45,10 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     private readonly StringBuilder _answer = new();
     private readonly List<AcpRefusal> _refusals = [];
     private readonly List<AcpToolCall> _toolCalls = [];
+    private readonly Dictionary<string, int> _toolCallAt = new(StringComparer.Ordinal);
     private readonly List<AcpReadRecord> _reads = [];
     private long _nextId = 1;
+    private int _droppedTraceEntries;
     private AcpUsage _usage = AcpUsage.Unknown;
     private string _broken = string.Empty;
 
@@ -56,6 +64,9 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     public IReadOnlyList<AcpToolCall> ToolCalls => _toolCalls;
 
     public IReadOnlyList<AcpReadRecord> Reads => _reads;
+
+    /// <summary>How many trace entries the caps dropped, over all three lists.</summary>
+    public int DroppedTraceEntries => _droppedTraceEntries;
 
     /// <summary>Why the stream is unusable, once it is — empty while it is fine.</summary>
     public string Broken => _broken;
@@ -99,24 +110,53 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     }
 
     /// <summary>
-    /// The option that says no: <c>reject_once</c>, else the first whose kind starts with <c>reject</c>, else none
-    /// (the outcome is then <c>cancelled</c>). Pure, so every option list is a row in a test.
+    /// Waits, at most <paramref name="atMost"/>, for every request of ours to be answered — the graceful step of a
+    /// teardown: <c>session/cancel</c> was sent, and an agent that is listening answers the prompt <c>cancelled</c>
+    /// within a moment. Nothing is waited for when nothing is pending, and nothing past the agent's own exit.
     /// </summary>
-    public static string Permission(JsonElement options)
+    public async Task WaitUntilQuietAsync(TimeSpan atMost)
+    {
+        var until = DateTime.UtcNow + atMost;
+        while (DateTime.UtcNow < until && !transport.Exited.IsCompleted)
+        {
+            lock (_gate)
+            {
+                if (_pending.Count == 0)
+                {
+                    return;
+                }
+            }
+
+            await Task.Delay(50, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// The option that says no: <c>reject_once</c>, else the first whose kind starts with <c>reject</c>, else none
+    /// — and none, too, when the reject option's id is empty or is shared with ANY other option, because an agent
+    /// resolving a shared id may land on the allow (finding 1 of the security review). The outcome is then
+    /// <c>cancelled</c>. Pure, so every option list is a row in a test.
+    /// </summary>
+    public static AcpChoice Choose(JsonElement options)
     {
         if (options.ValueKind != JsonValueKind.Array)
         {
-            return string.Empty;
+            return AcpChoice.None;
         }
 
-        var offered = options.EnumerateArray().ToArray();
-        var once = offered.FirstOrDefault(option => AcpMessages.Text(option, "kind") == "reject_once");
-        var any = once.ValueKind == JsonValueKind.Object
-            ? once
-            : offered.FirstOrDefault(option => AcpMessages.Text(option, "kind").StartsWith("reject", StringComparison.Ordinal));
+        var offered = options.EnumerateArray()
+            .Where(option => option.ValueKind == JsonValueKind.Object)
+            .Select(option => new AcpChoice(AcpMessages.Text(option, "optionId"), AcpMessages.Text(option, "kind")))
+            .ToArray();
+        var chosen = offered.FirstOrDefault(option => option.Kind == "reject_once")
+            ?? offered.FirstOrDefault(option => option.Kind.StartsWith("reject", StringComparison.Ordinal))
+            ?? AcpChoice.None;
 
-        return AcpMessages.Text(any, "optionId");
+        return chosen.OptionId.Length > 0 && offered.Count(option => option.OptionId == chosen.OptionId) == 1 ? chosen : AcpChoice.None;
     }
+
+    /// <summary>The id of <see cref="Choose"/>'s option, or empty when the outcome is <c>cancelled</c>.</summary>
+    public static string Permission(JsonElement options) => Choose(options).OptionId;
 
     private async Task PumpAsync()
     {
@@ -133,6 +173,11 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         {
             // The turn's token, in a read or in a reply: the caller already knows why; the pending requests learn it here.
             Break("the turn was ended");
+        }
+        catch (AcpProtocolException e)
+        {
+            // The transport's own verdict — a line past the cap is not a message.
+            Break(e.Message);
         }
     }
 
@@ -152,13 +197,35 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         Break($"the agent exited with code {transport.ExitCode} before answering");
     }
 
-    private Task HandleAsync(AcpIncoming message) => message.Kind switch
+    /// <summary>
+    /// One line, handled — and a handler's own exception is this line's problem, never the pump's: a request is
+    /// answered with an error, a notification is dropped, and the next line is read (finding 3 of the security
+    /// review: a path the filesystem could not normalise faulted the pump and left the agent waiting until the deadline).
+    /// </summary>
+    private async Task HandleAsync(AcpIncoming message)
     {
-        AcpIncomingKind.Response => Resolved(message),
-        AcpIncomingKind.Request => AnswerAsync(message),
-        AcpIncomingKind.Notification => Noted(message),
-        _ => Task.CompletedTask,
-    };
+        try
+        {
+            await (message.Kind switch
+            {
+                AcpIncomingKind.Response => Resolved(message),
+                AcpIncomingKind.Request => AnswerAsync(message),
+                AcpIncomingKind.Notification => Noted(message),
+                _ => Task.CompletedTask,
+            });
+        }
+        catch (Exception e) when (e is not OperationCanceledException && message.Kind == AcpIncomingKind.Request)
+        {
+            // The agent is told the request failed, not what broke: a system message can name a path.
+            await transport.WriteLineAsync(
+                AcpMessages.Error(message.Id, message.Method == "fs/read_text_file" ? AcpMessages.InvalidParams : AcpMessages.InternalError, "the request could not be served"),
+                ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A notification or a response this client could not take: nothing to answer, nothing to stop for.
+        }
+    }
 
     private Task Resolved(AcpIncoming response)
     {
@@ -197,25 +264,19 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     private Task RefuseAsync(AcpIncoming request)
     {
         var toolCall = AcpMessages.Child(request.Params, "toolCall");
-        var optionId = Permission(AcpMessages.Child(request.Params, "options"));
-        var option = optionId.Length > 0 ? OptionKind(request.Params, optionId) : "cancelled";
-        _refusals.Add(new AcpRefusal(AcpMessages.Text(toolCall, "title"), AcpMessages.Text(toolCall, "kind"), option));
+        var choice = Choose(AcpMessages.Child(request.Params, "options"));
+        // The trace records the kind of the option ACTUALLY chosen — read off the choice, never looked up by an id.
+        Trace(_refusals, new AcpRefusal(AcpMessages.Text(toolCall, "title"), AcpMessages.Text(toolCall, "kind"), choice.Selected ? choice.Kind : "cancelled"));
 
         return transport.WriteLineAsync(
-            AcpMessages.Result(request.Id, optionId.Length > 0 ? AcpMessages.Selected(optionId) : AcpMessages.CancelledOutcome()), ct);
+            AcpMessages.Result(request.Id, choice.Selected ? AcpMessages.Selected(choice.OptionId) : AcpMessages.CancelledOutcome()), ct);
     }
-
-    private static string OptionKind(JsonElement parameters, string optionId) =>
-        AcpMessages.Child(parameters, "options").EnumerateArray()
-            .Where(option => AcpMessages.Text(option, "optionId") == optionId)
-            .Select(option => AcpMessages.Text(option, "kind"))
-            .FirstOrDefault() ?? string.Empty;
 
     private Task ReadAsync(AcpIncoming request)
     {
         var path = AcpMessages.Text(request.Params, "path");
         var answer = boundary.Read(path);
-        _reads.Add(new AcpReadRecord(path, answer.Served, answer.Refusal));
+        Trace(_reads, new AcpReadRecord(path, answer.Served, answer.Refusal));
 
         return transport.WriteLineAsync(
             answer.Served
@@ -285,28 +346,44 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         _answer.Append(text);
     }
 
-    /// <summary>A tool call, or the update of one by id: the last status reported stands.</summary>
+    /// <summary>A tool call, or the update of one by id: the last status reported stands. Found by id, not by a scan.</summary>
     private void ToolCall(JsonElement update)
     {
         var id = AcpMessages.Text(update, "toolCallId");
-        var at = _toolCalls.FindIndex(call => call.Id == id);
-        var was = at >= 0 ? _toolCalls[at] : new AcpToolCall(id, string.Empty, string.Empty, string.Empty);
+        var known = _toolCallAt.TryGetValue(id, out var at);
+        var was = known ? _toolCalls[at] : new AcpToolCall(id, string.Empty, string.Empty, string.Empty);
         var now = new AcpToolCall(
             id,
             Either(AcpMessages.Text(update, "title"), was.Title),
             Either(AcpMessages.Text(update, "kind"), was.Kind),
             Either(AcpMessages.Text(update, "status"), was.Status));
-        if (at >= 0)
+        if (known)
         {
             _toolCalls[at] = now;
         }
-        else
+        else if (Trace(_toolCalls, now))
         {
-            _toolCalls.Add(now);
+            _toolCallAt[id] = _toolCalls.Count - 1;
         }
     }
 
     private static string Either(string fresh, string kept) => fresh.Length > 0 ? fresh : kept;
+
+    /// <summary>Adds to a trace list under the cap; past it the entry is counted as dropped instead.</summary>
+    /// <returns>True when the entry was kept.</returns>
+    private bool Trace<T>(List<T> list, T entry)
+    {
+        if (list.Count >= MaxTraceEntries)
+        {
+            _droppedTraceEntries += 1;
+
+            return false;
+        }
+
+        list.Add(entry);
+
+        return true;
+    }
 
     /// <summary>The stream is unusable from here on: every pending request fails with the reason, and no new one is sent.</summary>
     private void Break(string why)
@@ -328,6 +405,16 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
             request.TrySetException(new AcpProtocolException(why));
         }
     }
+}
+
+/// <summary>The option a permission request is answered with — or <see cref="None"/>, which is the <c>cancelled</c> outcome.</summary>
+/// <param name="OptionId">The id sent back as <c>selected</c>; empty for none.</param>
+/// <param name="Kind">The chosen option's kind (<c>reject_once</c>, <c>reject_always</c>), or <c>cancelled</c>.</param>
+internal sealed record AcpChoice(string OptionId, string Kind)
+{
+    public static readonly AcpChoice None = new(string.Empty, "cancelled");
+
+    public bool Selected => OptionId.Length > 0;
 }
 
 /// <summary>The agent answered a request of ours with a JSON-RPC error — its refusal, in its words.</summary>

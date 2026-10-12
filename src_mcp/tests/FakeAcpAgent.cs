@@ -124,6 +124,10 @@ internal sealed class FakeAcpAgent : IDisposable
 
     public static string Stray(string text) => $$"""{"kind":"stray","text":{{Quote(text)}}}""";
 
+    public static string Spew(int chars) => $$"""{"kind":"spew","chars":{{chars}}}""";
+
+    public const string AwaitCancel = """{"kind":"awaitCancel"}""";
+
     public static string Sleep(int ms) => $$"""{"kind":"sleep","ms":{{ms}}}""";
 
     public const string Hang = """{"kind":"hang"}""";

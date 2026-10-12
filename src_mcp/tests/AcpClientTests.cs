@@ -318,10 +318,153 @@ public sealed class AcpClientTests
     [InlineData("""[{"optionId":"a","kind":"allow_once"},{"optionId":"ra","kind":"reject_always"}]""", "ra")]
     [InlineData("""[{"optionId":"a","kind":"allow_once"},{"optionId":"aa","kind":"allow_always"}]""", "")]
     [InlineData("""[]""", "")]
+    // A duplicate id: the agent may resolve "x" to the allow, so nothing is selected.
+    [InlineData("""[{"optionId":"x","kind":"allow_once"},{"optionId":"x","kind":"reject_once"}]""", "")]
+    [InlineData("""[{"optionId":"x","kind":"reject_once"},{"optionId":"x","kind":"allow_once"}]""", "")]
+    // An empty id cannot be selected; a kind that is not a non-empty string is no reject option.
+    [InlineData("""[{"optionId":"","kind":"reject_once"}]""", "")]
+    [InlineData("""[{"optionId":"r","kind":5},{"optionId":"a","kind":"allow_once"}]""", "")]
+    [InlineData("""[{"optionId":"r"},{"optionId":"a","kind":"allow_once"}]""", "")]
     public void ThePermissionChoice_IsRejectOnce_ThenAnyReject_ThenNone(string options, string chosen)
     {
         using var parsed = JsonDocument.Parse(options);
 
         AcpSession.Permission(parsed.RootElement).Should().Be(chosen);
+    }
+
+    /// <summary>Finding 1 of the security review: a duplicate optionId must end in `cancelled`, and the trace must say so.</summary>
+    [Fact]
+    public async Task ADuplicateOptionId_IsCancelled_NeverSelected_AndTheTraceSaysCancelled()
+    {
+        using var agent = new FakeAcpAgent(
+        [
+            FakeAcpAgent.Permission("Write x", "edit", ("x", "allow_once"), ("x", "reject_once")),
+            FakeAcpAgent.Chunk("done"),
+        ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        agent.RepliesTo("session/request_permission").Single().GetProperty("result").GetProperty("outcome").GetRawText()
+            .Should().Be("""{"outcome":"cancelled"}""", "an id two options share may be resolved to the allow by the agent");
+        outcome.Refusals.Should().Equal(new AcpRefusal("Write x", "edit", "cancelled"));
+    }
+
+    /// <summary>Finding 3: a path the filesystem cannot even normalise must be refused at once, not left unanswered until the deadline.</summary>
+    [Fact]
+    public async Task AReadPathTooLongToNormalise_IsRefusedPromptly_AndTheTurnGoesOn()
+    {
+        using var agent = new FakeAcpAgent([]);
+        using var scripted = new FakeAcpAgent([FakeAcpAgent.Read(agent.Inside(new string('a', 40_000))), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await new AcpClient(scripted.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions))
+            .AskAsync(scripted.Ask(deadline: TimeSpan.FromSeconds(5)) with { Cwd = agent.Cwd });
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var reply = scripted.RepliesTo("fs/read_text_file").Should().ContainSingle().Subject;
+        reply.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+    }
+
+    /// <summary>Finding 3: an exception a handler did not foresee answers THAT request with an error; the pump keeps reading.</summary>
+    [Fact]
+    public async Task AHandlerThatThrows_AnswersTheRequestWithAnError_AndThePumpGoesOn()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(Path.GetTempPath(), "any.txt")), FakeAcpAgent.Chunk("after")]);
+
+        var outcome = await new AcpClient(agent.Profile(), new ThrowingBoundary()).AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(5)));
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.Answer.Should().Be("after");
+        var reply = agent.RepliesTo("fs/read_text_file").Should().ContainSingle().Subject;
+        reply.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+        reply.GetProperty("error").GetProperty("message").GetString().Should().NotContain("boom", "the agent is not told what broke");
+    }
+
+    /// <summary>Finding 4: a deadline the clock cannot hold must not throw past the child — it is refused before any start.</summary>
+    [Fact]
+    public async Task ADeadlineBeyondADay_IsRefusedBeforeTheAgentStarts()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(2_000_000_000)));
+
+        outcome.End.Should().Be(AcpEnd.NotStarted);
+        outcome.Reason.Should().Contain("86400");
+        outcome.AgentPid.Should().Be(0);
+        agent.Entries().Should().BeEmpty("nothing was launched");
+    }
+
+    /// <summary>Finding 5: a line past the cap is not read into memory — the stream is judged broken and the agent ended.</summary>
+    [Fact]
+    public async Task ALineLongerThanTheCap_IsAProtocolEnd()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Spew(AcpTransport.MaxLineChars + 1), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
+        outcome.Reason.Should().Contain("longer than");
+        Gone(outcome.AgentPid).Should().BeTrue();
+    }
+
+    /// <summary>Finding 5: the trace lists are bounded; what is dropped is counted, not silently lost.</summary>
+    [Fact]
+    public async Task TheTraceIsCapped_AndTheRestIsCounted()
+    {
+        using var agent = new FakeAcpAgent(
+            [.. Enumerable.Range(0, 1005).Select(i => FakeAcpAgent.ToolCall($"t{i}", "Grep", "search", "completed")), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.ToolCalls.Should().HaveCount(AcpSession.MaxTraceEntries, "the trace is bounded at 1000 entries per list");
+        outcome.DroppedTraceEntries.Should().Be(5, "what the cap dropped is counted, not silently lost");
+    }
+
+    /// <summary>Finding 6: without a session id there is no session to configure or prompt — a protocol end, nothing more sent.</summary>
+    [Fact]
+    public async Task ANewSessionWithoutAnId_IsAProtocolEnd_AndNothingMoreIsSent()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], ""","omitSessionId":true""");
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
+        outcome.Reason.Should().Contain("sessionId");
+        agent.Received("session/set_config_option").Should().BeEmpty();
+        agent.Received("session/prompt").Should().BeEmpty();
+    }
+
+    /// <summary>Finding 8: an agent that leaves on its own after an answered turn must not take its grandchild out of the tree kill's reach.</summary>
+    [Fact]
+    public async Task AnAnsweredTurnsGrandchild_IsGoneToo()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Chunk("x"));
+
+        var outcome = await RunAsync(agent);
+        var grandchild = agent.GrandchildPid();
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        Gone(outcome.AgentPid).Should().BeTrue();
+        Gone(grandchild).Should().BeTrue("the tree must be killed while the agent is still alive to name its children");
+    }
+
+    /// <summary>The graceful step is real: an agent still reading its stdin sees `session/cancel` before the kill.</summary>
+    [Fact]
+    public async Task TheCancelReachesAnAgentThatIsStillListening()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.AwaitCancel, FakeAcpAgent.Chunk("late")]);
+
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(1)));
+
+        outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
+        agent.Received("session/cancel").Should().ContainSingle();
+        Gone(outcome.AgentPid).Should().BeTrue();
+    }
+
+    /// <summary>A boundary that throws what no boundary should — the pump's defence, not the boundary's.</summary>
+    private sealed class ThrowingBoundary : IAcpReadBoundary
+    {
+        public AcpReadAnswer Read(string requestedPath) => throw new InvalidOperationException("boom");
     }
 }

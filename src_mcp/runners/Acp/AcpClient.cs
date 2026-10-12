@@ -26,8 +26,20 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
     /// <summary>The prompt's <c>stopReason</c> that IS an answer. Everything else is the agent stopping short.</summary>
     public const string EndTurn = "end_turn";
 
+    /// <summary>
+    /// The longest deadline a turn may be given — a day. A review is minutes; a value the clock cannot hold at all
+    /// (<c>CancelAfter</c> refuses past ~24.8 days) used to throw AFTER the agent was started and leave it running
+    /// (finding 4 of the security review). Refused here, before any start, with the number in the sentence.
+    /// </summary>
+    public static readonly TimeSpan MaxDeadline = TimeSpan.FromDays(1);
+
     public async Task<AcpOutcome> AskAsync(AcpAsk ask, CancellationToken ct = default)
     {
+        if (ask.Deadline <= TimeSpan.Zero || ask.Deadline > MaxDeadline)
+        {
+            return NotStarted(ask, $"a deadline of {ask.Deadline.TotalSeconds:F0}s is outside 1..{MaxDeadline.TotalSeconds:F0} seconds, so nothing was started");
+        }
+
         AcpTransport transport;
         try
         {
@@ -35,7 +47,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
-            return NotStarted(ask, e);
+            return NotStarted(ask, $"could not start `{ask.Executable}`: {e.Message}");
         }
 
         using (transport)
@@ -44,19 +56,29 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
         }
     }
 
+    /// <summary>
+    /// The turn. Everything after the start is inside the one <c>try</c> whose <c>finally</c> ends the agent — the
+    /// clock, the pump, the four requests — so nothing that throws can leave the child running.
+    /// </summary>
     private async Task<AcpOutcome> TurnAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(ask.Deadline);
         var session = new AcpSession(transport, boundary, deadline.Token);
-        session.Pump();
-
         var sessionId = string.Empty;
         var (end, reason, stop) = (AcpEnd.Answered, string.Empty, string.Empty);
         try
         {
+            deadline.CancelAfter(ask.Deadline);
+            session.Pump();
             await session.CallAsync("initialize", AcpMessages.Initialize());
             sessionId = AcpMessages.Text(await session.CallAsync("session/new", AcpMessages.NewSession(ask.Cwd)), "sessionId");
+            if (sessionId.Length == 0)
+            {
+                // Without an id there is no session to configure or prompt — and a request sent with an empty one
+                // would be answered by whatever the agent does with it (finding 6 of the security review).
+                throw new AcpProtocolException("session/new answered with no sessionId — nothing to configure or prompt");
+            }
+
             await session.CallAsync("session/set_config_option", AcpMessages.SetConfigOption(sessionId, profile.ModelOptionId, ask.Model));
             stop = AcpMessages.Text(await session.CallAsync("session/prompt", AcpMessages.Prompt(sessionId, ask.Prompt)), "stopReason");
             (end, reason) = Stopped(stop);
@@ -77,12 +99,29 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
         }
         finally
         {
-            await transport.EndAsync(() => sessionId.Length > 0 ? session.NotifyAsync("session/cancel", AcpMessages.Cancel(sessionId)) : Task.CompletedTask);
+            await transport.EndAsync(() => GracefulAsync(session, sessionId));
             await SettledAsync(session.Reading);
         }
 
         return new AcpOutcome(
-            end, session.Answer, reason, stop, sessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads, transport.StdErr, transport.Pid);
+            end, session.Answer, reason, stop, sessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads, transport.StdErr, transport.Pid,
+            session.DroppedTraceEntries);
+    }
+
+    /// <summary>
+    /// The graceful step before the kill: <c>session/cancel</c> when a session exists, then at most the grace for the
+    /// agent to answer what is still pending (an answered turn has nothing pending and waits for nothing). The agent
+    /// is alive throughout — its stdin stays open — so the kill that follows still finds its children.
+    /// </summary>
+    private static async Task GracefulAsync(AcpSession session, string sessionId)
+    {
+        if (sessionId.Length == 0)
+        {
+            return;
+        }
+
+        await session.NotifyAsync("session/cancel", AcpMessages.Cancel(sessionId));
+        await session.WaitUntilQuietAsync(AcpTransport.GraceWait);
     }
 
     /// <summary>
@@ -107,10 +146,10 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
             ? (AcpEnd.Answered, string.Empty)
             : (AcpEnd.AgentFailed, $"the agent stopped with `{(stopReason.Length > 0 ? stopReason : "no stopReason")}` rather than an answer");
 
-    private static AcpOutcome NotStarted(AcpAsk ask, Exception why) => new(
+    private static AcpOutcome NotStarted(AcpAsk ask, string why) => new(
         AcpEnd.NotStarted,
         string.Empty,
-        $"could not start `{ask.Executable}`: {why.Message}",
+        why,
         string.Empty,
         string.Empty,
         AcpUsage.Unknown,

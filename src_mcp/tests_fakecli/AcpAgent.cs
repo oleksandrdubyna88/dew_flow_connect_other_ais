@@ -19,6 +19,7 @@ namespace CoaiMcp.FakeCli;
 ///   "promptError": "…",           answer session/prompt with this JSON-RPC error, after the steps
 ///   "stopReason": "end_turn",     the prompt's stopReason when nothing cancelled it
 ///   "omitStopReason": false,      true: the prompt is answered with an empty result, no stopReason at all
+///   "omitSessionId": false,       true: session/new answers with no sessionId at all
 ///   "ignoreCancel": false,        true: a session/cancel changes nothing
 ///   "steps": [                    run in order while session/prompt is open
 ///     {"kind":"chunk","text":"…"}                      an agent_message_chunk
@@ -29,6 +30,8 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"read","path":"…","line":1,"limit":10}   an fs/read_text_file; the reply is logged
 ///     {"kind":"request","method":"fs/write_text_file","params":{…}}   any other client request; the reply is logged
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
+///     {"kind":"spew","chars":N}                        one line of N characters
+///     {"kind":"awaitCancel"}                           reads stdin until session/cancel arrives, then goes on (the prompt ends cancelled)
 ///     {"kind":"sleep","ms":100}
 ///     {"kind":"hang"}                                  never returns: the kill path
 ///     {"kind":"exit","code":3}                         leaves mid-turn: the premature EOF
@@ -85,7 +88,10 @@ internal static class AcpAgent
                 });
                 break;
             case "session/new":
-                Reply(id, new JsonObject { ["sessionId"] = _sessionId, ["configOptions"] = new JsonArray() });
+                // `omitSessionId`: an agent that mints no session id at all — a shape the client must not go on with.
+                Reply(id, script.TryGetProperty("omitSessionId", out var noId) && noId.ValueKind == JsonValueKind.True
+                    ? new JsonObject { ["configOptions"] = new JsonArray() }
+                    : new JsonObject { ["sessionId"] = _sessionId, ["configOptions"] = new JsonArray() });
                 break;
             case "session/set_config_option":
                 SetConfigOption(script, id);
@@ -192,6 +198,13 @@ internal static class AcpAgent
             case "stray":
                 Write(Text(step, "text"));
                 break;
+            case "spew":
+                // One line of N characters and no newline among them: the shape a line reader must bound.
+                Write(new string('x', (int)Number(step, "chars")));
+                break;
+            case "awaitCancel":
+                AwaitCancel();
+                break;
             case "sleep":
                 Thread.Sleep((int)Number(step, "ms"));
                 break;
@@ -241,6 +254,23 @@ internal static class AcpAgent
         info.ArgumentList.Add("600000");
         var child = Process.Start(info)!;
         File.WriteAllText(pidFile, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>Reads stdin, logging every line, until a <c>session/cancel</c> arrives — the prompt then ends <c>cancelled</c>.</summary>
+    private static void AwaitCancel()
+    {
+        while (Console.In.ReadLine() is { } line)
+        {
+            Log("in", line);
+            if (TryParse(line, out var message) && Text(message, "method") == "session/cancel")
+            {
+                _cancelled = true;
+
+                return;
+            }
+        }
+
+        Environment.Exit(0);
     }
 
     /// <summary>Sends a request of the agent's own and waits for its reply, logging it; a cancel seen meanwhile is noted.</summary>
