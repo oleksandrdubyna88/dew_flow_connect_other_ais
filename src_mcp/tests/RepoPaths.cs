@@ -9,16 +9,20 @@ namespace CoaiMcp.Tests;
 internal static class RepoPaths
 {
     /// <exception cref="InvalidOperationException">No folder above the test binary holds both halves.</exception>
-    public static string Root()
+    public static string Root() => RootAbove(AppContext.BaseDirectory);
+
+    /// <summary>The first folder at or above <paramref name="start"/> that holds both halves — the seam its own test uses.</summary>
+    /// <exception cref="InvalidOperationException">No such folder: the message names where the search began.</exception>
+    internal static string RootAbove(string start)
     {
-        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        var here = new DirectoryInfo(start);
         while (here is not null && !HoldsBothHalves(here.FullName))
         {
             here = here.Parent;
         }
 
         return here?.FullName
-            ?? throw new InvalidOperationException($"the repository root (a folder holding src_mcp and src_vs_code) was not found above {AppContext.BaseDirectory}");
+            ?? throw new InvalidOperationException($"the repository root (a folder holding src_mcp and src_vs_code) was not found above {start}");
     }
 
     private static bool HoldsBothHalves(string folder) =>
