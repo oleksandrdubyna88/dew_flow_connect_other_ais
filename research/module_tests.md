@@ -3596,6 +3596,7 @@ already existed.
 | `QuestionConsultServiceTests` (+2) | `AQuestionRowRefusedWithAStatedReset_WritesTheResetOnItsLedgerLine` — the real `QuestionConsultService` and row launch over `ScriptedLauncher`, one claude row refused with agy's verbatim line (exit 3; the classification reads the words): the `question` line's outcome starts `rate limited` and its `resetsUtc` is now + 88h49m9s; `AQuestionRowThatAnswered_WritesNoReset` — answered rows write none | RED: `Did not expect line.ResetsUtc to be empty because the vendor stated when its quota comes back …`. Break-it (the same plant, which also wrote `x` for a launch with no terminal): both red, the answered one included |
 | `TheWindowAnswerKeepsItsBytesTests` (test-only change) | `WithoutTheCounts` builds a filtered COPY of the parsed answer instead of removing keys from it in place (the repository's no-mutation rule) | no RED: a test helper's shape, not behaviour — its two tests stay green against the same golden text |
 | `RoundCountsTests`, `SeveralWindowsTests`, `RoundCountsEndpointTests` (unchanged — the guard) | `UsageRounds` counts retries, repairs and follow-ups in ONE pass (`RequestsByWord`) instead of one pass per word | no RED: a refactor that must not change a number — the 24 tests and the seam leg are the guard, green before and after |
+
 ## Names and a missing root (2026-10-11, `research/PLAN_names_and_a_missing_root.md`)
 
 Every break-it below was a compiling one-line plant, applied from a `.mjs` that restored the file in `finally` and
