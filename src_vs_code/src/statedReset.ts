@@ -46,9 +46,14 @@ export function cardResetLine(snapshot: RoundsSnapshot | undefined, provider: st
   return snapshot === undefined ? '' : resetLine(snapshot.ledger, provider, snapshot.atMs);
 }
 
-/** The newest line by its own `utc`; of two at the same instant, the later in the list. */
+/**
+ * The newest line by its own `utc`; of two at the same instant, the later in the list. A line whose `utc` is no date
+ * decides nothing: compared as NaN it would have stayed "newest" for good (CodeRabbit on #773).
+ */
 function newestOf(lines: readonly ResetLine[]): ResetLine | undefined {
-  return lines.reduce<ResetLine | undefined>((newest, line) => (newest === undefined || at(line) >= at(newest) ? line : newest), undefined);
+  return lines
+    .filter((line) => Number.isFinite(at(line)))
+    .reduce<ResetLine | undefined>((newest, line) => (newest === undefined || at(line) >= at(newest) ? line : newest), undefined);
 }
 
 function at(line: ResetLine): number {

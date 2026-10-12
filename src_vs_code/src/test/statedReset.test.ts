@@ -53,6 +53,17 @@ test('AResetThatHasPassed_IsNotShown', () => {
   assert.equal(resetLine([refused({ resetsUtc: hoursAgo(0.1) })], 'gemini', NOW, 'UTC'), '');
 });
 
+test('ALineWhoseUtcIsNoDate_NeverHidesTheNewestRefusal — a torn or hand-edited line is not "newest" (CodeRabbit on #773)', () => {
+  // `parseUsageLine` only asks that `utc` be a string. A line whose date does not parse compared as NaN, every comparison
+  // with NaN is false, so a FIRST such line stayed "newest" for good and the refusal after it was never read.
+  const torn = usageLine({ provider: 'gemini', utc: 'not a date' });
+
+  assert.equal(resetLine([torn, refused()], 'gemini', NOW, 'UTC'), 'quota out — resets in 89 h (Wed 04:49)',
+    'the refusal is the newest line with a date; a line without one decides nothing');
+  assert.equal(resetLine([refused(), torn], 'gemini', NOW, 'UTC'), 'quota out — resets in 89 h (Wed 04:49)',
+    'and it does not decide when it comes last either');
+});
+
 test('ALaterAnswer_HidesAnEarlierReset — the account works again, whatever the vendor said before', () => {
   const answered = usageLine({ provider: 'gemini', utc: hoursAgo(0.1) });
 
