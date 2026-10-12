@@ -1681,7 +1681,9 @@ lease the moment the lock opened, `VendorLogin` took the same path, `ProcessLaun
    `Acquisition`: `Taken(lease)`, `Busy`, or **`Blocked(code)`**.
 2. **Reconcile the previous holder's marker before the lease is usable** (`BehindTheBarrierAsync` →
    `ReconcileReaderAsync` → `ReaderReconcile.RunAsync`): every process the marker names is killed — its whole tree, by
-   pid AND start time (`ProcessTree.Terminate`, `OrphanSweep.Same`'s slack) — and CONFIRMED gone within
+   pid AND start time (`ProcessTree.Terminate`, `OrphanSweep.Same`'s slack) — and CONFIRMED gone, together with the
+   live descendants of each member listed BEFORE the kill (`ProcessTree.DescendantsOf`: children started after the
+   record are waited for too, and a Linux zombie counts as gone), within
    `ProcessTree.ConfirmationBound` (2 s, re-killing meanwhile). A marker that names nothing (`spawning`, or a record with
    no start time) blocks with `reader-identity-missing`; a member still alive at the bound blocks with
    `reader-termination-failed`. Blocked keeps the handle closed, persists `Blocked` on the slot, and is re-tried on

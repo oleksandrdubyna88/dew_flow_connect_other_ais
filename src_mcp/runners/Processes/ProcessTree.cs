@@ -77,9 +77,17 @@ public static class ProcessTree
         return found;
     }
 
-    /// <summary>True while the process with that pid is the one <paramref name="identity"/> names.</summary>
+    /// <summary>
+    /// Every live descendant of the process <paramref name="identity"/> names — or none when that pid is somebody else's
+    /// now, whose children are nothing of ours.
+    /// </summary>
+    public static IReadOnlyList<ProcessIdentity> DescendantsOf(ProcessIdentity identity) =>
+        IsAlive(identity) ? Descendants(identity.Pid) : [];
+
+    /// <summary>True while the process with that pid is the one <paramref name="identity"/> names and has not exited.</summary>
+    /// <remarks>An exited process its parent has not reaped yet — a Linux zombie — is NOT alive; see <see cref="Exited"/>.</remarks>
     public static bool IsAlive(ProcessIdentity identity) =>
-        ProcessTracking.StartedAt(identity.Pid) is { } started && OrphanSweep.Same(started, identity.StartedUtc);
+        ProcessTracking.StartedAt(identity.Pid) is { } started && OrphanSweep.Same(started, identity.StartedUtc) && !Exited(identity.Pid);
 
     /// <summary>Kills the process <paramref name="identity"/> names — its whole tree — if it is still that process.</summary>
     /// <returns>False when the kill was refused or the process is not ours any more; true when the signal was sent.</returns>
@@ -153,26 +161,37 @@ public static class ProcessTree
     }
 
     /// <summary>The parent pid in one <c>/proc/&lt;pid&gt;/stat</c> line — the field after the state, which follows the bracketed name.</summary>
+    private static int? ParentOf(string statPath) =>
+        StatFields(statPath) is [_, var field, ..] && int.TryParse(field, out var parent) ? parent : null;
+
+    /// <summary>
+    /// True when the Linux process <paramref name="pid"/> has exited and only its table entry is left — a zombie
+    /// (<c>Z</c>) or one being removed (<c>X</c>).
+    /// </summary>
+    /// <remarks>
+    /// A killed process keeps its <c>/proc</c> entry, start time included, until its parent reaps it; under a parent that
+    /// never reaps, that is for ever. It holds no file, socket or token any more, so for "is anything of the reader
+    /// still running" it is gone. Always false off Linux, where the start-time read already fails for an exited process.
+    /// </remarks>
+    private static bool Exited(int pid) =>
+        OperatingSystem.IsLinux() && StatFields($"/proc/{pid}/stat") is [var state, ..] && state is "Z" or "X";
+
+    /// <summary>The fields of one <c>/proc/&lt;pid&gt;/stat</c> line AFTER the bracketed name: state, parent pid, …</summary>
     /// <remarks>The name may itself hold spaces and brackets, so the fields are counted from the LAST closing bracket.</remarks>
-    private static int? ParentOf(string statPath)
+    /// <returns>Empty when the line is unreadable — the process exited between the listing and this read.</returns>
+    private static string[] StatFields(string statPath)
     {
         try
         {
             var stat = File.ReadAllText(statPath);
             var afterName = stat.LastIndexOf(')');
-            if (afterName < 0)
-            {
-                return null;
-            }
 
-            var fields = stat[(afterName + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            return fields.Length > 1 && int.TryParse(fields[1], out var parent) ? parent : null;
+            return afterName < 0 ? [] : stat[(afterName + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // A process that exited between the directory listing and this read. Nothing to say about it.
-            return null;
+            return [];
         }
     }
 

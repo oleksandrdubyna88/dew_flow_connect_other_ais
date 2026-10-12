@@ -306,7 +306,9 @@ public sealed class GaugeCaptureTests : IDisposable
         gauge.Should().NotBeNull();
         gauge!.ObservedUtc.Should().Be(newer.ObservedUtc, "the latest reading among the vendor's accounts, whichever read it");
         gauge.Windows.Single().UsedPercent.Should().Be(40);
-        body.Should().NotContain("\"name\"").And.NotContain("@", "the reading only: never an account's name, never an email");
+        // An email, not a bare "@": on a machine without codex the catalog's install hint names "@openai/codex".
+        body.Should().NotContain("\"name\"").And.NotMatchRegex(
+            @"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", "the reading only: never an account's name, never an email");
         body.Should().Contain("\"gauge\":");
     }
 

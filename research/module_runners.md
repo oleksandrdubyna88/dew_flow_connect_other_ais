@@ -2706,6 +2706,11 @@ one launcher both halves share, and nothing a reviewer launch does changed:
 `ProcessIdentity`, the one identity record (`OrphanSweep.Same`'s slack). **macOS is not supported, and fails closed**:
 `Supported` is false there, `Descendants` answers none, and a caller that needs the confirmation refuses to spawn
 rather than inheriting an unprobed answer (the platform-limits rule). The production host is Linux.
+**An exited process is not alive even while its table entry stays**: on Linux a killed process keeps its `/proc` entry
+and start time until its parent reaps it — under a parent that never reaps, for ever — so `IsAlive` also reads the state
+field of `/proc/<pid>/stat` and answers false for a zombie (`Z`) or a dying entry (`X`); found by PR #790's Linux CI.
+`DescendantsOf(identity)` lists the descendants only of a process that is still the one recorded — a reused number's
+children are nobody's to kill.
 
 The fake CLI gained the server shape: `serve <pidFile> <afterEofMs> grandchild|alone <answer>` answers the request
 whose line carries `"id":2`, writes its own pid and its sleeping grandchild's, and lives on after stdin closes for as

@@ -96,28 +96,39 @@ public abstract record Reconciled
 /// </remarks>
 public static class ReaderReconcile
 {
-    /// <summary>With the real process control: <see cref="ProcessTree.Terminate"/> and <see cref="ProcessTree.ConfirmGoneAsync"/>.</summary>
+    /// <summary>
+    /// With the real process control: <see cref="ProcessTree.DescendantsOf"/>, <see cref="ProcessTree.Terminate"/> and
+    /// <see cref="ProcessTree.ConfirmGoneAsync"/>.
+    /// </summary>
     public static Task<Reconciled> RunAsync(ReaderMarkerDto marker) =>
-        RunAsync(marker, ProcessTree.Terminate, ProcessTree.ConfirmGoneAsync);
+        RunAsync(marker, ProcessTree.Terminate, ProcessTree.ConfirmGoneAsync, ProcessTree.DescendantsOf);
 
+    /// <param name="marker">The previous holder's marker.</param>
     /// <param name="terminate">Kills the process an identity names, its tree included, when it is still that process.</param>
     /// <param name="confirmGone">Waits for the members to be gone and answers with the survivors.</param>
+    /// <param name="descendants">
+    /// The live descendants of a member that is still the process recorded — listed BEFORE the kill, because a killed
+    /// parent's children are reparented and a later listing finds nothing of theirs. The marker names what was recorded;
+    /// a member may have started children after its record, and a tree is confirmed gone, not its recorded part.
+    /// </param>
     public static async Task<Reconciled> RunAsync(
         ReaderMarkerDto marker,
         Func<ProcessIdentity, bool> terminate,
-        Func<IReadOnlyList<ProcessIdentity>, Task<IReadOnlyList<ProcessIdentity>>> confirmGone)
+        Func<IReadOnlyList<ProcessIdentity>, Task<IReadOnlyList<ProcessIdentity>>> confirmGone,
+        Func<ProcessIdentity, IReadOnlyList<ProcessIdentity>> descendants)
     {
         if (marker.Unidentified)
         {
             return new Reconciled.Blocked(BlockedReasons.ReaderIdentityMissing);
         }
 
+        IReadOnlyList<ProcessIdentity> tree = [.. marker.Tree.Concat(marker.Tree.SelectMany(descendants)).Distinct()];
         foreach (var member in marker.Tree)
         {
             terminate(member);
         }
 
-        var survivors = await confirmGone(marker.Tree);
+        var survivors = await confirmGone(tree);
 
         return survivors.Count == 0
             ? new Reconciled.Cleared()

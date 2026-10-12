@@ -208,7 +208,9 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
         return (int.Parse(lines[0]), int.Parse(lines[1]));
     }
 
-    private static bool Alive(int pid) => ProcessTracking.StartedAt(pid) is not null;
+    /// <summary>Alive by the product's own rule — so a killed child its parent has not reaped yet (a Linux zombie) is gone.</summary>
+    private static bool Alive(int pid) =>
+        ProcessTracking.StartedAt(pid) is { } started && ProcessTree.IsAlive(new ProcessIdentity(pid, started));
 
     private static async Task WaitForAsync(Func<bool> condition, Process child)
     {

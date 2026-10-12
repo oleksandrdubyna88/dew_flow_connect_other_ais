@@ -3669,6 +3669,26 @@ Also seen once in a run of its class and never alone: `TheDescendantsOfALiveServ
 the child's pid file while the child still held it open (`IOException … being used by another process`) — a read race in
 that test's wait, older than this round; its class passed on the next two runs.
 
+### Epic 6 on Linux CI — two containment holes (2026-10-12)
+
+PR #790's Linux job failed `ReaderBarrierTests.TheStartupSweep_TakesTheSameLockedPath_ForEverySlot` with
+`Expected ProcessTree.IsAlive(grandchild) to be False, but found True.` — a hole the Windows runs could not show. Both
+causes were reproduced RED first, the Linux one under WSL (Ubuntu, .NET 10.0.112).
+
+| Hole | Test | Seen red as |
+|---|---|---|
+| A killed but unreaped process (a zombie) read as alive | `AZombieIsNotAliveTests.AKilledButUnreapedProcess_IsNotAlive` (mcp, Linux only): `sh -c 'sleep 600 & echo $!; exec sleep 600'` — the outer `sleep` never reaps, so the killed background one stays `Z`; `IsAlive` must be false and `ConfirmGoneAsync` must return no survivors | `Expected ProcessTree.IsAlive(identity) to be False because a zombie has exited; only its table entry is left, but found True.` |
+| The reconcile confirmed only the RECORDED members | `ReaderBarrierTests.TheReconcile_ConfirmsTheDescendantsOfEveryLiveMember_NotOnlyTheRecordedOnes` (server, through the seams): a marker naming the reader, whose grandchild was never recorded — the confirmation must receive both, and the descendants must be listed BEFORE the kill | `Expected confirmed to be a collection with 2 item(s) because the grandchild the reader started after its record is waited for too, but {…424243…} contains 1 item(s) less than …` |
+
+Also on that run: `GaugeCaptureTests.TheCatalog_ServesTheLatestReadingPerVendor_NamingNoAccount` found `@` in the
+catalog — the install hint `npm install -g @openai/codex` of a runner without codex, the false positive E5's
+`AParkedSlotIsHeardTests` already met. It now looks for an email, as that test does.
+
+Re-running under WSL also turned `AReaderIsEndedWithItsTreeTests.ATrackerThatFailsOnADescendant_StillEndsTheWholeTree_ThenSaysSo`
+red — `Expected Alive(grandchild) to be False … but found True.` — through the same zombie: the test's own `Alive` helper
+read the start time alone. It now asks `ProcessTree.IsAlive`, the product's rule; Linux CI had passed it on timing only
+(the runner's init reaps faster than WSL's).
+
 ## Names and a missing root (2026-10-11, `research/PLAN_names_and_a_missing_root.md`)
 
 Every break-it below was a compiling one-line plant, applied from a `.mjs` that restored the file in `finally` and

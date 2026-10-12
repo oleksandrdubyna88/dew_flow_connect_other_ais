@@ -136,6 +136,32 @@ public sealed class ReaderBarrierTests : IDisposable
         ((Acquisition.Taken)taken).Lease.Dispose();
     }
 
+    /// <summary>
+    /// The marker names what was recorded; a member may have started children after its record. Those are listed from
+    /// each live member BEFORE the kill and waited for too — a tree is confirmed gone, not its recorded part.
+    /// </summary>
+    [Fact]
+    public async Task TheReconcile_ConfirmsTheDescendantsOfEveryLiveMember_NotOnlyTheRecordedOnes()
+    {
+        var reader = new ProcessIdentity(424243, new DateTime(2026, 10, 11, 0, 0, 0, DateTimeKind.Utc));
+        var grandchild = new ProcessIdentity(424244, new DateTime(2026, 10, 11, 0, 0, 1, DateTimeKind.Utc));
+        var marker = new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow, DateTimeOffset.UtcNow, [reader]);
+        var killedAt = -1;
+        var listedAt = -1;
+        var step = 0;
+        IReadOnlyList<ProcessIdentity> confirmed = [];
+
+        var reconciled = await ReaderReconcile.RunAsync(
+            marker,
+            _ => { killedAt = step++; return true; },
+            members => { confirmed = members; return Task.FromResult<IReadOnlyList<ProcessIdentity>>([]); },
+            member => { listedAt = step++; return member == reader ? [grandchild] : []; });
+
+        reconciled.Should().BeOfType<Reconciled.Cleared>();
+        confirmed.Should().BeEquivalentTo([reader, grandchild], "the grandchild the reader started after its record is waited for too");
+        listedAt.Should().BeLessThan(killedAt, "a killed parent's children are reparented, so they are listed before the kill");
+    }
+
     [Fact]
     public async Task AFailedTermination_KeepsTheSlotUnavailable_AcrossARestart()
     {
@@ -143,7 +169,7 @@ public sealed class ReaderBarrierTests : IDisposable
         Plant(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow, DateTimeOffset.UtcNow, [stubborn]));
         // A kill that never takes: no test machine can make such a process safely, so the reconcile is handed one.
         Task<Reconciled> KillsFail(ReaderMarkerDto marker) =>
-            ReaderReconcile.RunAsync(marker, _ => false, members => Task.FromResult(members));
+            ReaderReconcile.RunAsync(marker, _ => false, members => Task.FromResult(members), _ => []);
 
         (await New(KillsFail).AcquireAsync(Slot(), TimeSpan.Zero)).Should().BeOfType<Acquisition.Blocked>()
             .Which.Code.Should().Be(BlockedReasons.ReaderTerminationFailed);
