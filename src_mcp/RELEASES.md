@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.49.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.48.0...mcp-v0.49.0) (2026-10-12)
+
+
+### Features
+
+* a round has an identity across the wire, and no job starts without budget (round counter E4) ([#766](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/766)) ([722fc59](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/722fc5975b4b203250e10c1cd01ebc2c19e88ccd))
+* the Team server counts rounds per vendor and window, and a stated reset is read, shown and never waited out (round counter E5) ([#773](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/773)) ([bb95c1c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb95c1c4074a9e3d09d09412e8d4674f09bb9438))
+
 ## [0.48.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.47.0...mcp-v0.48.0) (2026-10-11)
 
 
