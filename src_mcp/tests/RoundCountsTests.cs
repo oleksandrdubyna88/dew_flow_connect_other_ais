@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
 using CoaiMcp.Store;
 using FluentAssertions;
@@ -205,6 +207,28 @@ public sealed class RoundCountsTests : IDisposable
         answer.Windows.Single(w => w.Name == "5h").Rows.Should().BeEmpty();
         answer.Windows.Single(w => w.Name == "24h").Rows.Should().BeEmpty();
         Row(answer, "7d", Codex).Rounds.Code.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Story 6.2 of todo/PLAN_every_round_is_counted.md: the local answer carries the gauge figure from the ONE derivation,
+    /// and on this machine that is "not read here" — local capture (6.1b) is deferred — never an empty gauge read as 0 %.
+    /// </summary>
+    [Fact]
+    public void TheAnswer_SaysTheGaugeIsNotReadOnThisMachine()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            Record(db, "s", nameof(Stage.CodeReview), Now.AddHours(-1), Ran(Codex, Luna));
+        }
+
+        var answer = RoundCounts.Read(_dir, Now);
+        var gauge = System.Text.Json.Nodes.JsonNode.Parse(
+            JsonSerializer.Serialize(answer, CoaiMcp.Server.ServerJsonContext.Default.RoundCountsAnswer))!["gauge"]!;
+
+        answer.Gauge.Should().Be(RoundsPerPercent.NotReadHere);
+        gauge["unavailable"]!.GetValue<string>().Should().Be(GaugeReasons.LocalCaptureDeferred, "the extension reads the reason by name");
+        gauge["ratios"]!.AsArray().Should().BeEmpty();
+        RoundCounts.Read(Path.Combine(_dir, "nothing-here"), Now).Gauge.Should().Be(RoundsPerPercent.NotReadHere, "and with no database at all");
     }
 
     [Fact]

@@ -94,20 +94,25 @@ public static class UsageEndpoints
     {
         if (ask.Scope == UsageScope.Me)
         {
-            var mine = read(Spanning(ask, ask.Range));
+            var mine = read(Spanning(ask, ask.Range, nowUtc));
 
-            return Mine(mine, ask.Range, caller) with { Windows = MyWindows(mine, ask.Windows, caller) };
+            return Mine(mine, ask.Range, caller) with { Windows = MyWindows(mine, ask.Windows, caller), Gauges = UsageGauges.Of(mine, ask.Windows, nowUtc) };
         }
 
         var chart = UsageDaily.Range(nowUtc);
-        var scan = read(Spanning(ask, ask.Range.Union(chart)));
+        var scan = read(Spanning(ask, ask.Range.Union(chart), nowUtc));
 
-        return Company(scan, ask.Range, chart) with { Windows = CompanyWindows(scan, ask.Windows) };
+        return Company(scan, ask.Range, chart) with { Windows = CompanyWindows(scan, ask.Windows), Gauges = UsageGauges.Of(scan, ask.Windows, nowUtc) };
     }
 
-    /// <summary>The range one read must cover: the answer's own, and every window asked.</summary>
-    private static UsageRange Spanning(UsageAsk ask, UsageRange own) =>
-        ask.Windows.Aggregate(own, (span, window) => span.Union(window.Range));
+    /// <summary>
+    /// The range one read must cover: the answer's own, every window asked — and, when windows were asked, the gauge
+    /// derivation's own reach back (story 6.2), so its figure never depends on which windows the client named.
+    /// </summary>
+    private static UsageRange Spanning(UsageAsk ask, UsageRange own, DateTimeOffset nowUtc) =>
+        ask.Windows.Aggregate(
+            ask.Windows.Count == 0 ? own : own.Union(UsageGauges.Range(nowUtc)),
+            (span, window) => span.Union(window.Range));
 
     /// <summary>A person's windows — their own vendors in each, nobody else's, and no people list.</summary>
     private static IReadOnlyList<UsageWindowDto>? MyWindows(UsageScan scan, IReadOnlyList<NamedRange> windows, Caller caller) =>

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Reviewers;
 using Microsoft.Data.Sqlite;
 
 namespace CoaiMcp.Store;
@@ -13,10 +14,22 @@ namespace CoaiMcp.Store;
 /// Written as <c>null</c> rather than omitted — the contract says null, and an absent key is a different
 /// thing to a reader than a present one.
 /// </param>
+/// <param name="Gauge">
+/// Rounds per 1 % of each vendor gauge window, from the ONE derivation both halves use (story 6.2 of
+/// todo/PLAN_every_round_is_counted.md). On this machine it is always <see cref="RoundsPerPercent.NotReadHere"/>: local
+/// capture (story 6.1b) is deferred, so no local line carries a reading — the extension shows a Team server's observation
+/// only for a row that runs on that server, and says <i>not read on this machine</i> for any other. Trailing, so an older
+/// extension reads the answer unchanged.
+/// </param>
 public sealed record RoundCountsAnswer(
     string NowUtc,
     IReadOnlyList<RoundCountsWindow> Windows,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ModelsKnownSince);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ModelsKnownSince,
+    GaugeAnswer Gauge = null!)
+{
+    /// <summary>Never null, whatever a deserialiser did with the property.</summary>
+    public GaugeAnswer Gauge { get; init; } = Gauge ?? RoundsPerPercent.NotReadHere;
+}
 
 /// <summary>One trailing window, <c>(FromUtc, ToUtc]</c>, and the vendor rows that ran a round inside it.</summary>
 public sealed record RoundCountsWindow(string Name, string FromUtc, string ToUtc, IReadOnlyList<RoundCountsRow> Rows);

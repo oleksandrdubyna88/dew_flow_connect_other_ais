@@ -284,7 +284,17 @@ public sealed record UsageDto(
     /// client older than story 5.2 — is today's shape with no new key at the top, and a client that ASKED for windows
     /// tells an older server (which ignores the parameter and answers 200 with today's range) by the ABSENCE of this key.
     /// </remarks>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<UsageWindowDto>? Windows = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<UsageWindowDto>? Windows = null,
+    /// <summary>
+    /// Rounds per 1 % of each gauge window the ledger's readings name (story 6.2 of todo/PLAN_every_round_is_counted.md) —
+    /// the shared library's <see cref="CoaiMcp.Runners.Reviewers.RoundsPerPercent"/> over the server's own lines.
+    /// </summary>
+    /// <remarks>
+    /// Nullable AND omitted when null, exactly when <see cref="Windows"/> is: only a request that asked round windows — the
+    /// Team server tab's — carries it, so every older client's answer is today's shape. A figure that is unavailable or
+    /// hidden is <c>null</c> with its reason beside it, never 0; a window no reading names is not in the list.
+    /// </remarks>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<CoaiMcp.Runners.Reviewers.GaugeRatio>? Gauges = null)
 {
     /// <summary>Never null, whatever a deserialiser did with the property.</summary>
     /// <remarks>
@@ -366,4 +376,5 @@ public sealed record SlotStateDto(
 [JsonSerializable(typeof(ReviewStatusDto))]
 [JsonSerializable(typeof(UsageEntryDto))]
 [JsonSerializable(typeof(UsageDto))]
+[JsonSerializable(typeof(CoaiMcp.Runners.Reviewers.GaugeRatio))]
 public sealed partial class ServerJsonContext : JsonSerializerContext;
