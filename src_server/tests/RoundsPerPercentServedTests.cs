@@ -21,7 +21,7 @@ public sealed class RoundsPerPercentServedTests
     private static UsageLine Line(int minutesAgo, string round, double used, string vendor = "acme", string limit = "acme")
     {
         var observed = Now.AddMinutes(-minutesAgo);
-        var gauge = new GaugeOnLine(observed.UtcDateTime.ToString("O"), "plus", limit, 10080, used, Resets, null, null, string.Empty);
+        var gauge = new GaugeOnLine(observed.UtcDateTime.ToString("O"), "plus", [new GaugeWindowOnLine(limit, "primary", 10080, used, Resets)]);
 
         return new UsageLine(observed.AddSeconds(1), "dev@example.com", vendor, "m", "Architecture", "ok", 5, 100, 10, null)
         {
@@ -30,6 +30,41 @@ public sealed class RoundsPerPercentServedTests
             Slot = "a",
             Gauge = gauge,
         };
+    }
+
+    /// <summary>
+    /// Epic 6's code round: codex answers <c>rateLimitsByLimitId</c> with SEVERAL limits, and the slot keeps them all —
+    /// so must the ledger line, or the derivation cannot see the second one. Through the real writer and reader.
+    /// </summary>
+    [Fact]
+    public void EveryLimitOfAReading_SurvivesTheLedger_AndIsDerived()
+    {
+        var dir = Directory.CreateTempSubdirectory("coai-two-limits-").FullName;
+        try
+        {
+            var ledger = new UsageLedger(dir);
+            foreach (var (minutesAgo, round, used) in new[] { (30, "r0", 10.0), (20, "r1", 12.0) })
+            {
+                var reading = new GaugeReadingDto(DateTimeOffset.UtcNow.AddMinutes(-minutesAgo), "prolite", string.Empty, true, null,
+                [
+                    new GaugeWindowDto("codex", "primary", used, 10080, Resets),
+                    new GaugeWindowDto("codex_other", "primary", used * 2, 300, "2026-10-12T15:00:00.0000000Z"),
+                ]);
+                ledger.RecordJob("dev@example.com", "acme", "m", "Architecture", "ok", TimeSpan.FromSeconds(1), CoaiMcp.Core.Findings.Usage.None,
+                    "review", "TeamServer", round, "first", LaunchOptions.None, round, "a", reading.OnLine(), round: round);
+            }
+
+            var lines = new UsageReader(dir).Read(new UsageRange(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddHours(1))).Lines;
+            var derived = RoundsPerPercent.Derive(lines.Select(l => new GaugeLine(l.AtUtc, l.Vendor, l.Slot, l.Round, true, l.Gauge)));
+
+            derived.Ratios.Select(r => (r.LimitId, r.WindowMins)).Should().BeEquivalentTo(
+                [("codex", 10080L), ("codex_other", 300L)],
+                "the second limit the vendor reported was on the slot, and the ledger line must not drop it");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     private static UsageDto Answer(string windows, UsageScope scope, params UsageLine[] ledger) =>
@@ -108,11 +143,7 @@ public sealed class RoundsPerPercentEndpointTests
         clientAttempt = "first",
         gaugeObservedUtc = (DateTimeOffset.UtcNow - ago - TimeSpan.FromSeconds(1)).ToString("O"),
         gaugePlan = "prolite",
-        gaugeLimit = "codex",
-        gaugePrimaryMins = 10080,
-        gaugePrimaryUsedPercent = used,
-        gaugePrimaryResetsUtc = "2026-10-15T07:00:00.0000000Z",
-        gaugeSecondaryResetsUtc = "",
+        gaugeWindows = new[] { new { limitId = "codex", kind = "primary", mins = 10080, usedPercent = used, resetsUtc = "2026-10-15T07:00:00.0000000Z" } },
     };
 
     private static async Task<JsonNode> Get(TeamServer server, string query)

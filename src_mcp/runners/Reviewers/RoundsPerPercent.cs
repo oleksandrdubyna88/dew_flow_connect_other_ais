@@ -153,22 +153,16 @@ public static class RoundsPerPercent
             .GroupBy(line => line.Round, StringComparer.Ordinal)
             .ToDictionary(round => round.Key, round => round.Count(), StringComparer.Ordinal);
 
-    /// <summary>The windows a reading reports: its primary and secondary, each with its use and its reset.</summary>
-    private static IEnumerable<(Window Window, double? Used, string Resets)> Reported(GaugeOnLine gauge)
-    {
-        if (gauge.LimitId.Length == 0 || ObservedOf(gauge) is null)
-        {
-            yield break;
-        }
-        if (gauge.PrimaryMins is { } primary)
-        {
-            yield return (new Window(gauge.LimitId, primary), gauge.PrimaryUsedPercent, gauge.PrimaryResetsUtc);
-        }
-        if (gauge.SecondaryMins is { } secondary)
-        {
-            yield return (new Window(gauge.LimitId, secondary), gauge.SecondaryUsedPercent, gauge.SecondaryResetsUtc);
-        }
-    }
+    /// <summary>
+    /// The windows a reading reports — every limit's, each with its use and its reset. A window with no limit or no
+    /// stated length cannot be identified and is not one.
+    /// </summary>
+    private static IEnumerable<(Window Window, double? Used, string Resets)> Reported(GaugeOnLine gauge) =>
+        ObservedOf(gauge) is null
+            ? []
+            : gauge.Windows
+                .Where(window => window.LimitId.Length > 0 && window.Mins is not null)
+                .Select(window => (new Window(window.LimitId, window.Mins!.Value), window.UsedPercent, window.ResetsUtc ?? string.Empty));
 
     private static DateTimeOffset? ObservedOf(GaugeOnLine gauge) =>
         DateTimeOffset.TryParse(

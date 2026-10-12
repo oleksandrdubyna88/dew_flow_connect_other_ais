@@ -42,8 +42,8 @@ function line(hoursAgo, vendor, limit, round, used) {
     utc: new Date(at).toISOString(), provider: vendor, model: 'm', role: 'Architecture', stage: 'TeamServer', seconds: 3,
     tokensIn: 100, tokensOut: 10, costUsd: null, outcome: 'ok', email: ADMIN, kind: 'review', attempt: 'first',
     job: round, turn: round, slot: 'a', round, clientAttempt: 'first',
-    gaugeObservedUtc: new Date(at - 1000).toISOString(), gaugePlan: 'prolite', gaugeLimit: limit,
-    gaugePrimaryMins: 10080, gaugePrimaryUsedPercent: used, gaugePrimaryResetsUtc: RESETS, gaugeSecondaryResetsUtc: '',
+    gaugeObservedUtc: new Date(at - 1000).toISOString(), gaugePlan: 'prolite',
+    gaugeWindows: [{ limitId: limit, kind: 'primary', mins: 10080, usedPercent: used, resetsUtc: RESETS }],
   });
 }
 

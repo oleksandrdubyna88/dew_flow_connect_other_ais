@@ -83,18 +83,15 @@ public sealed record GaugeReadingDto(
     [JsonIgnore]
     public GaugeWindowDto? Secondary => Windows.FirstOrDefault(window => window.Kind == "secondary");
 
-    /// <summary>This reading as the ledger line carries it — the preferred limit's two windows, flat.</summary>
+    /// <summary>
+    /// This reading as the ledger line carries it — EVERY window of EVERY limit, as the slot keeps it (epic 6's code round:
+    /// the first shape kept the preferred limit's two windows only, and a second limit never reached the derivation).
+    /// </summary>
     public GaugeOnLine OnLine() =>
         new(
             ObservedUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             PlanType,
-            Primary?.LimitId ?? Secondary?.LimitId ?? string.Empty,
-            Primary?.WindowDurationMins,
-            Primary?.UsedPercent,
-            Primary?.ResetsAtUtc ?? string.Empty,
-            Secondary?.WindowDurationMins,
-            Secondary?.UsedPercent,
-            Secondary?.ResetsAtUtc ?? string.Empty);
+            [.. Windows.Select(window => new GaugeWindowOnLine(window.LimitId, window.Kind, window.WindowDurationMins, window.UsedPercent, window.ResetsAtUtc))]);
 }
 
 /// <summary>What the gauge capture answered, for the ledger and the log — a closed set.</summary>

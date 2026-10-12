@@ -84,16 +84,19 @@ public sealed class GaugeCaptureTests : IDisposable
 
         var line = Lines().Single();
         line.GetProperty("gaugePlan").GetString().Should().Be("prolite");
-        line.GetProperty("gaugeLimit").GetString().Should().Be("codex");
-        line.GetProperty("gaugePrimaryUsedPercent").GetDouble().Should().Be(40);
-        line.GetProperty("gaugePrimaryMins").GetInt64().Should().Be(10080);
-        line.GetProperty("gaugePrimaryResetsUtc").GetString().Should().Be("2026-10-14T07:48:11.0000000Z");
+        var onLine = line.GetProperty("gaugeWindows").EnumerateArray().Should().ContainSingle().Subject;
+        onLine.GetProperty("limitId").GetString().Should().Be("codex");
+        onLine.GetProperty("kind").GetString().Should().Be("primary");
+        onLine.GetProperty("usedPercent").GetDouble().Should().Be(40);
+        onLine.GetProperty("mins").GetInt64().Should().Be(10080);
+        onLine.GetProperty("resetsUtc").GetString().Should().Be("2026-10-14T07:48:11.0000000Z");
         line.GetProperty("gaugeObservedUtc").GetString().Should().EndWith("Z");
         line.GetProperty("job").GetString().Should().Be(job.Id, "the reading sits on the job's own line");
 
         var read = new UsageReader(_dir).Read(new UsageRange(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddHours(1))).Lines.Single();
-        read.Gauge.PrimaryUsedPercent.Should().Be(40, "the server's reader reads the writer's own record back");
-        read.Gauge.PrimaryMins.Should().Be(10080);
+        read.Gauge.Windows.Should().ContainSingle().Which.Should().Be(
+            new GaugeWindowOnLine("codex", "primary", 10080, 40, "2026-10-14T07:48:11.0000000Z"),
+            "the server's reader reads the writer's own record back");
     }
 
     [Fact]
@@ -130,7 +133,7 @@ public sealed class GaugeCaptureTests : IDisposable
         counting.Launches.Should().Be(0, "a token this close to its expiry is one codex would refresh on the read");
         _notes.Should().ContainSingle(note => note.Contains(GaugeCodes.TokenNearExpiry, StringComparison.Ordinal));
         State().Reader.Should().BeNull("no marker is written for a reader that is not spawned");
-        Lines().Single().TryGetProperty("gaugePrimaryUsedPercent", out _).Should().BeFalse("no reading, no number — never 0");
+        Lines().Single().TryGetProperty("gaugeWindows", out _).Should().BeFalse("no reading, no window — never 0");
     }
 
     [Fact]
@@ -226,8 +229,8 @@ public sealed class GaugeCaptureTests : IDisposable
 
         Slot().Gauge!.Secondary.Should().BeNull("the measured plan reports no five-hour window");
         var line = Lines().Single();
-        line.TryGetProperty("gaugeSecondaryUsedPercent", out _).Should().BeFalse("absent, never 0");
-        line.GetProperty("gaugeSecondaryResetsUtc").GetString().Should().BeEmpty();
+        line.GetProperty("gaugeWindows").EnumerateArray().Select(w => w.GetProperty("kind").GetString()).Should().Equal(
+            ["primary"], "an absent window is not on the line at all, never a 0 %");
 
         var (jobs2, runner2) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.Reader(GaugeFixtures.AnswerWithSecondary + "\n").For);
         jobs2.Submit(Job());
@@ -237,8 +240,9 @@ public sealed class GaugeCaptureTests : IDisposable
         secondary.Should().NotBeNull();
         secondary!.UsedPercent.Should().Be(12.5);
         secondary.WindowDurationMins.Should().Be(300);
-        Lines()[1].GetProperty("gaugeSecondaryUsedPercent").GetDouble().Should().Be(12.5);
-        Lines()[1].GetProperty("gaugeSecondaryMins").GetInt64().Should().Be(300);
+        var kept = Lines()[1].GetProperty("gaugeWindows").EnumerateArray().Single(w => w.GetProperty("kind").GetString() == "secondary");
+        kept.GetProperty("usedPercent").GetDouble().Should().Be(12.5);
+        kept.GetProperty("mins").GetInt64().Should().Be(300);
     }
 
     [Fact]

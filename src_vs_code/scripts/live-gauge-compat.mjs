@@ -6,7 +6,7 @@
  * the company usage answer (`fetchUsage`, with the round counts a 5.2 client asks for) and the usage ledger's lines
  * (`parseUsage`, which prices the Spending tab). The new server ADDS to all three: a `gauge` object under `slots` when a
  * reading exists, a top-level `gauges` list (rounds per 1 %, story 6.2) beside the round windows when they are asked, and
- * nine trailing `gauge*` fields on a Team-server ledger line. A client
+ * three trailing `gauge*` fields on a Team-server ledger line (the windows a list, every limit's). A client
  * older than the fields must load both unchanged — the catalog with every vendor and count it read before, the lines
  * with every token count and outcome — and must not see a number it cannot name. No unit test holds two builds of one
  * half; this one does.</p>
@@ -48,9 +48,12 @@ const LINE_WITH_GAUGE = JSON.stringify({
   utc: new Date(Date.now() - 3_600_000).toISOString(), provider: 'codex', model: 'gpt-6-luna', role: 'Architecture', stage: 'TeamServer',
   seconds: 3, tokensIn: 100, tokensOut: 10, costUsd: null, outcome: 'ok', email: ADMIN, kind: 'review', tokensCached: 80,
   turn: 'j1', attempt: 'first', job: 'j1', slot: 'a',
-  gaugeObservedUtc: '2026-10-11T10:00:05.0000000Z', gaugePlan: 'prolite', gaugeLimit: 'codex',
-  gaugePrimaryMins: 10080, gaugePrimaryUsedPercent: 40, gaugePrimaryResetsUtc: '2026-10-14T07:48:11.0000000Z',
-  gaugeSecondaryResetsUtc: '',
+  gaugeObservedUtc: '2026-10-11T10:00:05.0000000Z', gaugePlan: 'prolite',
+  // Every window of every limit (epic 6's code round) — two limits, so an older parser meets the list's full shape.
+  gaugeWindows: [
+    { limitId: 'codex', kind: 'primary', mins: 10080, usedPercent: 40, resetsUtc: '2026-10-14T07:48:11.0000000Z' },
+    { limitId: 'codex_other', kind: 'primary', mins: 300, usedPercent: 12, resetsUtc: '2026-10-11T15:00:00.0000000Z' },
+  ],
 });
 
 /** The slot state the new server serves a reading from — written as `SlotRegistry.SaveGauge` writes it. */

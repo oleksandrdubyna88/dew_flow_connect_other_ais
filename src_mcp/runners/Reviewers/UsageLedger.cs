@@ -267,39 +267,22 @@ public sealed record UsageEntry(
     /// When the vendor's own gauge was read on the account right after this launch, UTC (<c>O</c>) — or empty.
     /// </summary>
     /// <remarks>
-    /// <para><b>The nine gauge fields are story 6.1a of todo/PLAN_every_round_is_counted.md</b>: the Team server reads
+    /// <para><b>The three gauge fields are story 6.1a of todo/PLAN_every_round_is_counted.md</b>: the Team server reads
     /// <c>codex app-server</c> · <c>account/rateLimits/read</c> inside the slot's lease after each job, and every line of
-    /// that job carries the reading (<see cref="GaugeOnLine"/>), flat: the preferred limit's primary and secondary
-    /// windows, each by its length, its use and its reset. Story 6.2 derives rounds per 1 % from consecutive readings.</para>
-    /// <para>Empty or null on a local line, on a line older than the fields, and on a job after which nothing was read —
-    /// a number that was not reported is NULL, never 0, which would read as an empty window. Trailing and defaulted
-    /// like the rest; the nullable numbers are left off the line when null.</para>
+    /// that job carries the reading (<see cref="GaugeOnLine"/>): when, the plan word, and EVERY window of EVERY limit the
+    /// vendor reported, each with its limit, kind, length, use and reset. Story 6.2 derives rounds per 1 % from
+    /// consecutive readings. Epic 6's code round replaced the first shape — one limit's two windows, flat — because a
+    /// codex answer with several limits lost all but one on the line; nothing had shipped, so it was changed in place.</para>
+    /// <para>Empty on a local line, on a line older than the fields, and on a job after which nothing was read; the
+    /// window list is left off the line then — never a 0 %. Trailing and defaulted like the rest.</para>
     /// </remarks>
     string GaugeObservedUtc = "",
 
     /// <summary>The vendor's plan word (<c>prolite</c>) at the reading, or empty.</summary>
     string GaugePlan = "",
 
-    /// <summary>The limit the two windows belong to (<c>codex</c>), or empty.</summary>
-    string GaugeLimit = "",
-
-    /// <summary>The primary window's length in minutes — null when not reported.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? GaugePrimaryMins = null,
-
-    /// <summary>The primary window's use in percent — null, never 0, when not reported.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? GaugePrimaryUsedPercent = null,
-
-    /// <summary>When the primary window resets, UTC (<c>O</c>) — empty when not reported.</summary>
-    string GaugePrimaryResetsUtc = "",
-
-    /// <summary>The secondary window's length — null when the plan reports none (the measured plan reports none).</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? GaugeSecondaryMins = null,
-
-    /// <summary>The secondary window's use — null when the plan reports none.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? GaugeSecondaryUsedPercent = null,
-
-    /// <summary>When the secondary window resets — empty when the plan reports none.</summary>
-    string GaugeSecondaryResetsUtc = "")
+    /// <summary>Every window the reading reported, each with its limit — null (left off the line) when there is no reading.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GaugeWindowOnLine>? GaugeWindows = null)
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -319,13 +302,7 @@ public sealed record UsageEntry(
     {
         GaugeObservedUtc = gauge.ObservedUtc,
         GaugePlan = gauge.PlanType,
-        GaugeLimit = gauge.LimitId,
-        GaugePrimaryMins = gauge.PrimaryMins,
-        GaugePrimaryUsedPercent = gauge.PrimaryUsedPercent,
-        GaugePrimaryResetsUtc = gauge.PrimaryResetsUtc,
-        GaugeSecondaryMins = gauge.SecondaryMins,
-        GaugeSecondaryUsedPercent = gauge.SecondaryUsedPercent,
-        GaugeSecondaryResetsUtc = gauge.SecondaryResetsUtc,
+        GaugeWindows = gauge.Windows.Count == 0 ? null : gauge.Windows,
     };
 }
 

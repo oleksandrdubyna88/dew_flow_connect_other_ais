@@ -235,17 +235,15 @@ public sealed record UsageEntryDto(
     // The client's round id and its own word for the request (story 4.2) — absent on every older line.
     string? Round = null,
     string? ClientAttempt = null,
-    // The vendor's own gauge read on the account right after the launch (story 6.1a) — absent on every older line, on
-    // a local line, and after a capture that produced nothing; a number is null, never 0, when it was not reported.
+    // The vendor's own gauge read on the account right after the launch (story 6.1a; every limit's windows since epic
+    // 6's code round) — absent on every older line, on a local line, and after a capture that produced nothing; a
+    // number is null, never 0, when it was not reported.
     string? GaugeObservedUtc = null,
     string? GaugePlan = null,
-    string? GaugeLimit = null,
-    long? GaugePrimaryMins = null,
-    double? GaugePrimaryUsedPercent = null,
-    string? GaugePrimaryResetsUtc = null,
-    long? GaugeSecondaryMins = null,
-    double? GaugeSecondaryUsedPercent = null,
-    string? GaugeSecondaryResetsUtc = null);
+    IReadOnlyList<GaugeWindowEntryDto>? GaugeWindows = null);
+
+/// <summary>One window of a ledger line's gauge, as a stranger's line may spell it — every field optional.</summary>
+public sealed record GaugeWindowEntryDto(string? LimitId, string? Kind, long? Mins, double? UsedPercent, string? ResetsUtc);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>

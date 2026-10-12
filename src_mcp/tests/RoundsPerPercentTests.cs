@@ -19,7 +19,7 @@ public sealed class RoundsPerPercentTests
     private const string NextWeek = "2026-10-22T07:00:00.0000000Z";
 
     private static GaugeOnLine Reading(DateTimeOffset observed, double? used, string resets, string limit, long? mins) =>
-        new(observed.UtcDateTime.ToString("O"), "plus", limit, mins, used, resets, null, null, string.Empty);
+        new(observed.UtcDateTime.ToString("O"), "plus", [new GaugeWindowOnLine(limit, "primary", mins, used, resets)]);
 
     /// <summary>A review launch on an account, its line written a second after the reading taken right after it.</summary>
     private static GaugeLine Job(
@@ -216,7 +216,11 @@ public sealed class RoundsPerPercentTests
         static GaugeLine Both(int minute, string round, double fiveHour, double weekly)
         {
             var observed = T0.AddMinutes(minute);
-            var gauge = new GaugeOnLine(observed.UtcDateTime.ToString("O"), "plus", "acme", 300, fiveHour, "2026-10-12T12:00:00.0000000Z", 10080, weekly, Resets);
+            var gauge = new GaugeOnLine(observed.UtcDateTime.ToString("O"), "plus",
+            [
+                new GaugeWindowOnLine("acme", "primary", 300, fiveHour, "2026-10-12T12:00:00.0000000Z"),
+                new GaugeWindowOnLine("acme", "secondary", 10080, weekly, Resets),
+            ]);
 
             return new GaugeLine(observed.AddSeconds(1), "acme", "a", round, true, gauge);
         }

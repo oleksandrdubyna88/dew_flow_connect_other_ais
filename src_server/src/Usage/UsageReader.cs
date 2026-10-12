@@ -161,6 +161,14 @@ public sealed class UsageReader(string dataDir)
         }
     }
 
+    /// <summary>A line's gauge — every window it carries, each field as said; none when the line carries no reading.</summary>
+    private static GaugeOnLine GaugeOf(UsageEntryDto entry) =>
+        new(
+            entry.GaugeObservedUtc ?? string.Empty,
+            entry.GaugePlan ?? string.Empty,
+            [.. (entry.GaugeWindows ?? []).Select(window => new GaugeWindowOnLine(
+                window.LimitId ?? string.Empty, window.Kind ?? string.Empty, window.Mins, window.UsedPercent, window.ResetsUtc ?? string.Empty))]);
+
     /// <summary>One line, or null when it will not parse.</summary>
     /// <remarks>
     /// A line from before the email column simply has an empty one — the field is trailing and
@@ -239,18 +247,9 @@ public sealed class UsageReader(string dataDir)
                 // Read, not dropped (story 4.2): the client's round and its word for the request. An older line has neither.
                 Round = entry.Round ?? string.Empty,
                 ClientAttempt = entry.ClientAttempt ?? string.Empty,
-                // Read, not dropped (story 6.1a): the gauge read after the launch. An older line has none, and a number it
-                // does not carry stays null — never 0.
-                Gauge = new GaugeOnLine(
-                    entry.GaugeObservedUtc ?? string.Empty,
-                    entry.GaugePlan ?? string.Empty,
-                    entry.GaugeLimit ?? string.Empty,
-                    entry.GaugePrimaryMins,
-                    entry.GaugePrimaryUsedPercent,
-                    entry.GaugePrimaryResetsUtc ?? string.Empty,
-                    entry.GaugeSecondaryMins,
-                    entry.GaugeSecondaryUsedPercent,
-                    entry.GaugeSecondaryResetsUtc ?? string.Empty),
+                // Read, not dropped (story 6.1a): the gauge read after the launch, every limit's windows. An older line
+                // has none, and a number it does not carry stays null — never 0.
+                Gauge = GaugeOf(entry),
             };
         }
         catch (JsonException)
