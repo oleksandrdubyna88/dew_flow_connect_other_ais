@@ -359,11 +359,41 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// behind it. Closing our own end fails the write at once, whoever else is holding theirs.
     /// (codex, code round.)</para>
     /// <para>Internal rather than private since the ACP transport (<c>Acp/AcpTransport</c>) ends its
-    /// agent the same way: the one tree kill of this repository, widened rather than copied.</para>
+    /// agent through the same parts — in the other order, <see cref="EndTreeFirstAsync"/>: the one tree
+    /// kill of this repository, widened rather than copied.</para>
     /// </remarks>
     internal static async Task EndItAsync(Process process)
     {
         Close(process.StandardInput);
+        KillTree(process);
+
+        // No token: this is the wait for a process we have already killed, and a cancelled one would
+        // return before the handle is free.
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Ends a child whose stdin is a CONVERSATION: the tree killed first, while the child still lives to name its
+    /// children, then stdin closed, then the wait.
+    /// </summary>
+    /// <remarks>
+    /// The launcher's own order (<see cref="EndItAsync"/>: stdin first) is right for a child that was handed one
+    /// prompt and closed: nothing of it exits on EOF. An ACP agent DOES exit on EOF — that is how a well-behaved one
+    /// leaves — and a process that has exited can no longer name its children: on Linux they are reparented to init
+    /// the moment it goes, and the kill that follows finds an empty tree (finding G of the risk consultations,
+    /// 2026-10-12). Only the ACP transport takes this road; every other caller keeps the launcher's order, whose own
+    /// reason (a write blocked on a full pipe, failed by the close) the <see cref="Close"/> after the kill still serves.
+    /// </remarks>
+    internal static async Task EndTreeFirstAsync(Process process)
+    {
+        KillTree(process);
+        Close(process.StandardInput);
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    /// <summary>The whole tree, by this handle; a child that exited between the deadline and the kill is fine either way.</summary>
+    private static void KillTree(Process process)
+    {
         try
         {
             process.Kill(entireProcessTree: true);
@@ -372,10 +402,6 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         {
             // It exited between the deadline and the kill; the race loser is fine either way.
         }
-
-        // No token: this is the wait for a process we have already killed, and a cancelled one would
-        // return before the handle is free.
-        await process.WaitForExitAsync(CancellationToken.None);
     }
 
     /// <summary>

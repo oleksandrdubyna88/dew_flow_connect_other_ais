@@ -47,13 +47,13 @@ public sealed class ReviewSnapshotInventoryTests : IAsyncLifetime
 
     private async Task Write(string relative, string text) => await File.WriteAllTextAsync(At(relative), text);
 
-    /// <summary>The seam: on the last tracked file's copy, <paramref name="mutate"/> the tree — every attempt, unless gated by the switch file.</summary>
-    private SnapshotOptions Mutating(Action<int> mutate, bool onlyWhenSwitched = false) =>
+    /// <summary>The seam: on <paramref name="trigger"/>'s copy (the last tracked file by default), <paramref name="mutate"/> the tree — every attempt, unless gated by the switch file.</summary>
+    private SnapshotOptions Mutating(Action<int> mutate, bool onlyWhenSwitched = false, string trigger = "z.txt") =>
         SnapshotOptions.Default with
         {
             BeforeCopyOf = (attempt, path) =>
             {
-                if (path != "z.txt" || (onlyWhenSwitched && !File.Exists(At("switch"))))
+                if (path != trigger || (onlyWhenSwitched && !File.Exists(At("switch"))))
                 {
                     return;
                 }
@@ -62,6 +62,45 @@ public sealed class ReviewSnapshotInventoryTests : IAsyncLifetime
                 mutate(attempt);
             },
         };
+
+    // ---------------------------------------------------------------------------------------
+    // Finding A of the risk consultations: a file that grows between the plan and its own copy
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The planned stamp was never compared with the pre-copy stamp, so a later file grown from an earlier file's copy
+    /// was copied whole while the reservation and the manifest carried its PLANNED size — the budget understated.
+    /// </summary>
+    [Fact]
+    public async Task ALaterFileGrownBeforeItsOwnCopy_RetriesOnce_ThenRefuses_AndTheBudgetHoldsNothing()
+    {
+        var reason = await RefusedMakeAsync(Mutating(attempt => File.AppendAllText(At("z.txt"), new string('z', 40 + attempt)), trigger: "a.txt"));
+
+        reason.Should().Contain("z.txt", "the file that grew between the plan and its copy is named");
+        _attempts.Should().Equal(1, 2);
+        _budget.Held.Should().Be(0);
+        SnapshotTestKit.NothingPublishedUnder(_scratch);
+    }
+
+    [Fact]
+    public async Task ALaterFileGrownOnce_IsRetried_AndTheManifestAndTheBudgetCountTheGrownSize()
+    {
+        var options = Mutating(attempt =>
+        {
+            if (attempt == 1)
+            {
+                File.AppendAllText(At("z.txt"), new string('z', 40));
+            }
+        }, trigger: "a.txt");
+
+        using var snapshot = await SnapshotTestKit.MadeAsync(SnapshotTestKit.Snapshots(_launcher, options, _budget), Live, _scratch);
+
+        var actual = new[] { "a.txt", "b.txt", "z.txt" }.Sum(name => new FileInfo(At(name)).Length);
+        snapshot.Manifest.Bytes.Should().Be(actual, "the retry's plan measured the grown file; the first attempt's plan did not");
+        _budget.Held.Should().Be(actual, "what is held is what is on disk, never a size from before the copy");
+        SnapshotTestKit.TextAt(snapshot, "z.txt").Should().EndWith(new string('z', 40));
+        _attempts.Should().Equal(1, 2);
+    }
 
     private Task<string> RefusedMakeAsync(SnapshotOptions options) =>
         SnapshotTestKit.RefusedAsync(SnapshotTestKit.Snapshots(_launcher, options, _budget), Live, _scratch);

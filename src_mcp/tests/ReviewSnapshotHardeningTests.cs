@@ -47,25 +47,7 @@ public sealed class ReviewSnapshotHardeningTests : IAsyncLifetime
     private Task CommitTheIndexAsync(string message) =>
         _repo.GitAsync("-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-m", message);
 
-    /// <summary>A directory link made synchronously — the copier's test seam is synchronous.</summary>
-    private static void LinkNow(string link, string target)
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            Directory.CreateSymbolicLink(link, target);
-            return;
-        }
-
-        var start = new ProcessStartInfo("cmd") { UseShellExecute = false, CreateNoWindow = true };
-        foreach (var arg in new[] { "/c", "mklink", "/J", link, target })
-        {
-            start.ArgumentList.Add(arg);
-        }
-
-        using var made = Process.Start(start)!;
-        made.WaitForExit();
-        made.ExitCode.Should().Be(0, "a junction is how this test swaps the directory");
-    }
+    private static void LinkNow(string link, string target) => SnapshotTestKit.LinkNow(link, target);
 
     // ---------------------------------------------------------------------------------------
     // Finding 1 — a name Windows normalises into an excluded one
@@ -181,6 +163,43 @@ public sealed class ReviewSnapshotHardeningTests : IAsyncLifetime
     // ---------------------------------------------------------------------------------------
     // Finding 5 — the manifest
     // ---------------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------------
+    // Finding B of the risk consultations — an alternate data stream rides File.Copy past the ceilings
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AnAlternateDataStream_IsNotCopied_AndCannotPassTheByteCeiling()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(), "alternate data streams are NTFS's");
+        await WriteAsync("a.txt", "x");
+        // A 1 000-byte stream behind a 1-byte file: git sees the byte, CopyFileEx copies both.
+        await File.WriteAllBytesAsync(Path.Combine(_repo.Path, "a.txt:payload"), new byte[1000]);
+        await _repo.CommitAsync("one byte, and a stream git cannot see");
+
+        using var snapshot = await SnapshotTestKit.MadeAsync(
+            SnapshotTestKit.Snapshots(_launcher, SnapshotOptions.Default with { MaxBytes = 100 }), new SnapshotSource.Pinned(_repo.Path), _scratch);
+
+        var copied = Path.Combine(snapshot.Root, "a.txt");
+        new FileInfo(copied).Length.Should().Be(1);
+        snapshot.Manifest.Bytes.Should().Be(1, "what the ceiling counted");
+        HasStream(copied, "payload").Should().BeFalse("only the unnamed stream is the file; the payload would have ridden past the 100-byte ceiling");
+    }
+
+    /// <summary>Whether <paramref name="path"/> carries the named stream — opening <c>file:stream</c> succeeds only when it exists.</summary>
+    private static bool HasStream(string path, string stream)
+    {
+        try
+        {
+            using var opened = File.OpenRead($"{path}:{stream}");
+
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+    }
 
     [Fact]
     public void TheManifest_HoldsOrdinally_AndComparesByValue()

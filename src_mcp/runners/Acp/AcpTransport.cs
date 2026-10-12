@@ -14,8 +14,8 @@ namespace CoaiMcp.Runners.Acp;
 /// (<c>session/request_permission</c>, <c>fs/read_text_file</c>) while the prompt is still being answered, so
 /// stdin stays open for the replies and both streams are drained while the turn runs. What IS the launcher's is
 /// reused rather than copied: the UTF-8-without-BOM stdin, the executable resolution, and the end of a child —
-/// <see cref="ProcessLauncher.EndItAsync"/> (stdin closed, the whole tree killed, the exit waited for) and
-/// <see cref="ProcessLauncher.Close"/>.</para>
+/// <see cref="ProcessLauncher.EndTreeFirstAsync"/> (the whole tree killed while the agent still lives, then stdin
+/// closed, then the exit waited for) and <see cref="ProcessLauncher.Close"/>.</para>
 /// <para><b>Every exit path ends the same way</b> (<see cref="EndAsync"/>): the caller's bounded graceful step — the
 /// <c>session/cancel</c> and a short wait for the agent to answer it — then the tree kill by this process's own
 /// handle WHILE THE AGENT IS STILL ALIVE, then the wait. Not "close stdin and let it leave first": a process that has
@@ -221,9 +221,11 @@ internal sealed class AcpTransport : IDisposable
     {
         await SettledAsync(graceful());
 
-        // The tree, by this process's own handle — never by a name — then the wait the launcher already does. The
-        // launcher closes stdin first, which is the right order for a kill that follows at once.
-        await ProcessLauncher.EndItAsync(_process);
+        // The tree FIRST, by this process's own handle — never by a name — then stdin, then the wait. Not the
+        // launcher's own order (stdin first): closing stdin is the EOF a well-behaved agent exits on, and an agent that
+        // has exited can no longer name its children — on Linux they are reparented to init the moment it goes, and the
+        // kill that follows finds an empty tree (finding G of the risk consultations, 2026-10-12).
+        await ProcessLauncher.EndTreeFirstAsync(_process);
 
         _draining.CancelAfter(DrainGrace);
         await SettledAsync(_stderrDrain);

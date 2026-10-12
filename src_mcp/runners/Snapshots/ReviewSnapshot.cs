@@ -45,6 +45,9 @@ public sealed class ReviewSnapshot : IDisposable
     /// <summary>The snapshot's directory — the CLI's working folder.</summary>
     public string Root { get; }
 
+    /// <summary>A seam for the tests, run between the link walk and the open of a read — the window a swapped-in link must not win.</summary>
+    internal Action BeforeOpen { get; set; } = static () => { };
+
     /// <summary>What the snapshot holds now; replaced whole by a refresh, never edited.</summary>
     public SnapshotManifest Manifest { get; private set; }
 
@@ -193,15 +196,19 @@ public sealed class ReviewSnapshot : IDisposable
 
     private string Stored(string relative) => Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar));
 
+    /// <summary>
+    /// The read itself, by handle: opened, the handle's own name checked against the entry, the bytes read from it
+    /// against <see cref="HandleRead.DefaultCap"/> — <see cref="HandleRead"/> says why a read by path was not enough.
+    /// </summary>
     private SnapshotRead ReadStored(string relative)
     {
-        try
+        BeforeOpen();
+
+        return HandleRead.Read(Root, relative, HandleRead.DefaultCap, RootRule) switch
         {
-            return new SnapshotRead.Served(File.ReadAllBytes(Stored(relative)));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new SnapshotRead.Refused($"{relative} could not be read from the snapshot ({e.Message})");
-        }
+            FileRead.Served served => new SnapshotRead.Served(served.Bytes),
+            FileRead.Refused refused => new SnapshotRead.Refused($"{relative}: {refused.Reason}"),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
     }
 }

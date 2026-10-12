@@ -2709,8 +2709,12 @@ flowchart TD
   (`AnExportIgnoredOrSubstitutedFile_KeepsItsReviewedBytes`). `SnapshotSource.Live(checkout)` adds the untracked-not-
   ignored files, copies the bytes as they are now, and leaves a deleted path absent; an untracked NESTED REPOSITORY,
   which git lists as `dir/` and nothing beneath, is named unavailable ("add it as a submodule") rather than copied or
-  refused; a file that changes between its stamp and its copy (size, last write, copied length) makes the whole copy
-  retry once over a fresh listing, then refuse — a snapshot of a moving tree is a snapshot of nothing. **And the whole
+  refused; a file that changes between its stamp and its copy (size, last write, copied length) — or between the PLAN
+  and its stamp (finding A of the risk consultations, 2026-10-12: a later file grown from an earlier file's copy was
+  copied whole while the reservation and the manifest carried the size the plan saw, so the budget understated; the
+  pre-copy stamp must now equal the planned one) — makes the whole copy retry once over a fresh listing, then refuse: a
+  snapshot of a moving tree is a snapshot of nothing. The detection is by length and last-write time — best effort
+  against an editor at work, not a guarantee against a deliberate writer who restores both. **And the whole
   inventory is checked, not only each file** (D6 as amended by the plan gate, codex, 2026-10-12): per-file stamps let a
   copy publish a MIX of times — a file copied early stays unchanged while a later one changes before its own copy, or a
   file is added or removed while the copy runs — so after the last file the live tree is listed and planned AGAIN and
@@ -2725,7 +2729,12 @@ flowchart TD
   runs again immediately before each copy** (`SnapshotLinks`, shared with `Resolve` and `Read`): a directory that became
   a junction between the plan and the copy would hand `File.Copy` its target's bytes under the planned name with the
   same length and time, which the stamp cannot see; the walk fails CLOSED — a component that cannot be inspected counts
-  as a link.
+  as a link — and asks about the ROOT itself first (finding D: a snapshot root renamed aside and replaced by a junction
+  served the junction's target under every manifest name; `ARootSwappedForALink_RefusesResolveAndRead`). **Only the
+  unnamed stream is copied** (finding B): `File.Copy` is `CopyFileEx`, which copies every NTFS alternate data stream, so
+  a one-byte file with a large `:payload` stream passed the ceilings — which count the unnamed stream — and landed whole;
+  the bytes now go through a stream opened on the source into a NEW destination file, the last-write time carried over
+  (`AnAlternateDataStream_IsNotCopied_AndCannotPassTheByteCeiling`, Windows only).
 - **Nothing partial is ever visible.** The copy goes into `snapshot-<id>.partial` inside the caller's scratch directory
   and is renamed over at the end; every refusal deletes the partial directory. The scratch directory is the launch's own
   `coai-answers-*`, so the snapshot goes with it when the launch ends and with the six-hour scratch sweep after a crash —
@@ -2763,7 +2772,17 @@ flowchart TD
   `Resolve` also refuses when any component from the root down is a reparse point, or cannot be inspected, at that
   moment — and its doc says a caller that will read must still read through `Read`, which asks again at the open
   (`Resolve_RefusesAPathUnderALinkSwappedInAfterTheSnapshot`, `ALinkSwappedInAfterTheSnapshot_IsNotFollowedByRead`).
-  `Manifest.Holds` is an ordinal set, and a manifest compares by value.
+  `Manifest.Holds` is an ordinal set, and a manifest compares by value. **The read is by handle, not by path**
+  (finding F, the one shared helper `Files/HandleRead` both confined readers use — this one and the ACP boundary): the
+  walk and the open were two operations, and a link swapped in between them was followed. Now the file is opened
+  first; the OPENED handle is asked what it names (Windows `GetFinalPathNameByHandleW`, the root's own canonical form by
+  the same call on a directory handle so a CI runner's `RUNNER~1` temp spelling compares equal; Linux
+  `readlink /proc/self/fd/N`) and that must be the manifest entry under the root's real path, component by component;
+  and the bytes are read FROM THAT HANDLE against a 4 MiB cap — at most one byte over is ever read, and it is a
+  refusal, so there is no size check a growing file can outrun. **macOS cannot name a handle** (`F_GETPATH` is a
+  variadic `fcntl`, unsafe to P/Invoke on arm64; `/dev/fd/N` is not a readable link), so there the fallback is the
+  weaker check — the walk for links once more AFTER the open — said as such, not claimed as closed
+  (`ALinkSwappedInBetweenTheWalkAndTheOpen_IsNotFollowedByRead`, `AFileThatGrowsPastTheCap_BeforeTheOpen_IsRefused`).
 - **One stable path per conversation** (D6 as amended the same day; §22 of the RESULTS file). A resumed Vibe session is
   bound to the folder it was created in — a read in a new `--workdir` was `tool_denied`, and the model re-asked turn 1's
   absolute path — while the same path re-filled in place was read afresh 3 of 3. So `ReviewSnapshot.RefreshAsync(live)`
@@ -2776,6 +2795,11 @@ flowchart TD
   semaphore the refresh still held) and then deletes whatever landed; the turn is never disposed, so a later refresh is
   refused, never thrown at. The budget's `Held` transiently counts old + new during a refresh — the truth about the
   disk — and settles to the refreshed size at the swap; the ceiling check counts the replaced bytes once.
+- **Known limits, said plainly.** A HARD LINK in a live tree imports an outside file's bytes: git records no hard
+  links, the walk sees an ordinary file, and the copy reads it — it needs a locally prepared tree (nothing a branch can
+  commit), and no check here sees it. Mixed-time detection — per file and across the inventory — is by length and
+  last-write time, which an editor at work changes and a deliberate writer can restore; it is best effort, not a
+  guarantee. On macOS the handle-named read falls back to a walk after the open (above).
 - **Measured on this repository** (the defaults' origin): 2 737 files, a 38.8 MB tar, 5.7 s to copy. The ceilings are
   50 000 files, 512 MB and 60 s; a refusal says the number it met.
 
@@ -2817,8 +2841,13 @@ D14 `insufficient balance` (`balance_spent`).
   `VIBE~1`, which the long-name exclusions would never match; finding 2 of the review) and declining any step from
   the root down that is a reparse point. The agent sees JSON-RPC `-32602` with a sentence that quotes nothing; a path
   the filesystem cannot even normalise (40 000 characters, a refused character) is declined the same way, never
-  thrown (finding 3). A link placed between the check and the read is the snapshot manifest's (D6), which replaces
-  this class behind the same interface.
+  thrown (finding 3). The read itself goes through `Files/HandleRead`, shared with the snapshot (finding F of the
+  risk consultations, 2026-10-12): the file is opened FIRST, the opened handle is asked what it names and that must be
+  the entry under the root's canonical path, and the bytes come from that handle against the 4 MiB ceiling — a link
+  swapped in between the check and the open is not followed, and a file that grows after its size would have been
+  looked at is refused at the read (`ALinkSwappedInBetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted`,
+  `AFileThatGrowsPastTheCeiling_AfterItsSizeWasChecked_IsRefused`; macOS falls back to a walk after the open, said
+  so in `HandleRead`). The snapshot's manifest-based resolve (D6) replaces this class behind the same interface.
 - **Everything else.** `fs/write_text_file`, `terminal/*` and any unknown request are answered `-32601`. A handler
   that throws what it did not foresee answers THAT request with an error (`-32602` for a read, `-32603` otherwise)
   and the pump reads on — it used to fault and leave the agent waiting until the deadline (finding 3).
@@ -2840,11 +2869,18 @@ Everything after the agent's start — the clock, the pump, the four requests �
 `AcpClient.MaxDeadline`; the shim refuses `--deadline-seconds` outside 1..86400 with 65) — it used to throw past a
 running child (finding 4). **Every exit path ends the same way** — normal end, deadline, a protocol failure, the
 agent's early EOF, the caller's cancellation: `session/cancel` when a session exists and at most 1.5 s for the agent
-to answer what is still pending, then the tree kill by this process's own handle through `ProcessLauncher.EndItAsync`
-(widened to `internal`, never copied) WHILE THE AGENT IS STILL ALIVE, then the wait. Stdin is not closed first and no
-voluntary exit is waited for: a process that has exited can no longer name its children, so an agent that left on EOF
-took its grandchild out of the kill's reach — green on the first run only by the order of two timers (finding 8;
-`AnAnsweredTurnsGrandchild_IsGoneToo`). The agent's EXIT is watched beside its output: a grandchild inherits the
+to answer what is still pending, then the tree kill by this process's own handle through
+`ProcessLauncher.EndTreeFirstAsync` (the launcher's parts in the other order, never copied) WHILE THE AGENT IS STILL
+ALIVE, then stdin closed, then the wait. The kill comes BEFORE the close (finding G of the risk consultations,
+2026-10-12 — `EndItAsync` closed stdin first, the launcher's right order for a child handed one prompt): closing stdin
+is the EOF a well-behaved agent exits on, and a process that has exited can no longer name its children — on Linux
+they are reparented to init the moment it goes, and the kill that follows finds an empty tree. **Not observable on
+Windows, and said so:** the `Process` object keeps the exited parent's handle and .NET's tree kill still finds the
+children by their stale parent pid, so `APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo` — the parent definitely
+gone before the cleanup, the grandchild's pid recorded at its spawn — passed under the old order too; the fix is by
+the finding's reasoning. **Known limit:** a parent that exits BEFORE the kill (its own early EOF, a crash) loses its
+tree on Linux; the follow-up is a Windows Job Object / a Unix process group owned by the transport, proposed and not
+built here. Earlier: green on the first run only by the order of two timers (finding 8; `AnAnsweredTurnsGrandchild_IsGoneToo`). The agent's EXIT is watched beside its output: a grandchild inherits the
 stdout pipe's write end, so an agent that exits mid-turn leaving one behind never delivers EOF — the fake agent's
 heartbeat grandchild held the pipe until the deadline on the first run
 (`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*). Memory is

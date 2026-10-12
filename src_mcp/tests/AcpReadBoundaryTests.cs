@@ -238,4 +238,50 @@ public sealed class AcpReadBoundaryTests : IDisposable
 
         Boundary().Read(big).Refusal.Should().Contain("ceiling");
     }
+
+    /// <summary>Finding F of the risk consultations: the link check and the open were two operations on a path.</summary>
+    [Fact]
+    public void ALinkSwappedInBetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted()
+    {
+        var inside = Write(Path.Combine("dir", "inner.txt"), "inside");
+        var target = _dir.At("elsewhere");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "inner.txt"), "LYNX-404");
+        var boundary = Boundary();
+        boundary.BeforeOpen = () =>
+        {
+            Directory.Delete(Path.Combine(Root, "dir"), recursive: true);
+            SnapshotTestKit.LinkNow(Path.Combine(Root, "dir"), target);
+        };
+        try
+        {
+            var answer = boundary.Read(inside);
+
+            answer.Served.Should().BeFalse("what was opened is not the file that was checked");
+            answer.Text.Should().NotContain("LYNX-404");
+            answer.Refusal.Should().NotContain("LYNX-404");
+        }
+        finally
+        {
+            DirectoryLink.Remove(Path.Combine(Root, "dir"));
+        }
+    }
+
+    /// <summary>Finding F: a size checked before the open is a size the file can outgrow.</summary>
+    [Fact]
+    public void AFileThatGrowsPastTheCeiling_AfterItsSizeWasChecked_IsRefused()
+    {
+        var growing = Write("grows.bin", "small");
+        var boundary = Boundary();
+        boundary.BeforeOpen = () =>
+        {
+            using var grown = new FileStream(growing, FileMode.Open, FileAccess.Write);
+            grown.SetLength(FolderReadBoundary.MaxBytes + 1);
+        };
+
+        var answer = boundary.Read(growing);
+
+        answer.Served.Should().BeFalse("the read itself is capped, not a size looked at earlier");
+        answer.Refusal.Should().Contain("ceiling");
+    }
 }

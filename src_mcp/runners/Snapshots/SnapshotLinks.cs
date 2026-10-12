@@ -6,9 +6,19 @@ namespace CoaiMcp.Runners.Snapshots;
 /// </summary>
 internal static class SnapshotLinks
 {
-    /// <summary>The first component from <paramref name="root"/> down to <paramref name="relative"/> (forward slashes) that is a reparse point, or empty.</summary>
+    /// <summary>The first component from <paramref name="root"/> — the root itself included — down to <paramref name="relative"/> (forward slashes) that is a reparse point, or empty.</summary>
+    /// <remarks>
+    /// The root is asked first (finding D of the risk consultations): the walk checked every descendant and never the
+    /// directory they hang from, so a snapshot root renamed aside and replaced by a junction served the junction's
+    /// target under every manifest name.
+    /// </remarks>
     public static string FirstLinkOnTheWay(string root, string relative)
     {
+        if (IsLink(root))
+        {
+            return root;
+        }
+
         var at = root;
         foreach (var part in relative.Split('/'))
         {

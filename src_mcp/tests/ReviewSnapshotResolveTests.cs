@@ -213,4 +213,68 @@ public sealed class ReviewSnapshotResolveTests : IAsyncLifetime
         SnapshotLinks.FirstLinkOnTheWay(_snapshot.Root, "missing/inner.txt")
             .Should().Be(Path.Combine(_snapshot.Root, "missing"), "what cannot be inspected is not known to be safe");
     }
+
+    /// <summary>Finding D of the risk consultations: the walk checked every descendant and never the root itself.</summary>
+    [Fact]
+    public async Task ARootSwappedForALink_RefusesResolveAndRead()
+    {
+        using var outside = TempDir.For("coai-snap-outside-");
+        await File.WriteAllTextAsync(outside.At("a.txt"), "OUTSIDE");
+        var aside = _snapshot.Root + "-aside";
+        Directory.Move(_snapshot.Root, aside);
+        await DirectoryLink.MakeAsync(_launcher, _snapshot.Root, outside);
+        try
+        {
+            _snapshot.Resolve(Inside("a.txt")).Should().BeOfType<SnapshotPath.Refused>("the root itself is a link now");
+            _snapshot.Read(Inside("a.txt")).Should().BeOfType<SnapshotRead.Refused>("never the canary behind the link");
+        }
+        finally
+        {
+            DirectoryLink.Remove(_snapshot.Root);
+            Directory.Move(aside, _snapshot.Root);
+        }
+    }
+
+    /// <summary>Finding F: the walk and the open were two operations on a path; a link swapped in between them was followed.</summary>
+    [Fact]
+    public async Task ALinkSwappedInBetweenTheWalkAndTheOpen_IsNotFollowedByRead()
+    {
+        using var outside = TempDir.For("coai-snap-outside-");
+        await File.WriteAllTextAsync(outside.At("inner.txt"), "OUTSIDE");
+        _snapshot.BeforeOpen = () =>
+        {
+            Directory.Delete(Inside("dir"), recursive: true);
+            SnapshotTestKit.LinkNow(Inside("dir"), outside);
+        };
+        try
+        {
+            var read = _snapshot.Read(Inside("dir/inner.txt"));
+
+            read.Should().BeOfType<SnapshotRead.Refused>("what was opened is not the manifest's entry").Which.Reason.Should().NotContain("OUTSIDE");
+        }
+        finally
+        {
+            _snapshot.BeforeOpen = static () => { };
+            DirectoryLink.Remove(Inside("dir"));
+        }
+    }
+
+    /// <summary>Finding F: a size checked before the open is a size the file can outgrow; the read itself must be capped.</summary>
+    [Fact]
+    public void AFileThatGrowsPastTheCap_BeforeTheOpen_IsRefused()
+    {
+        _snapshot.BeforeOpen = () =>
+        {
+            using var grown = new FileStream(Inside("a.txt"), FileMode.Open, FileAccess.Write);
+            grown.SetLength(4L * 1024 * 1024 + 1);
+        };
+        try
+        {
+            _snapshot.Read(Inside("a.txt")).Should().BeOfType<SnapshotRead.Refused>("over the cap at the moment of the read");
+        }
+        finally
+        {
+            _snapshot.BeforeOpen = static () => { };
+        }
+    }
 }

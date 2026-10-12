@@ -282,6 +282,20 @@ public sealed class AcpClientTests
         Gone(grandchild).Should().BeTrue("the tree kill reaches the heartbeat the agent spawned");
     }
 
+    /// <summary>
+    /// The parent has DEFINITELY exited before the cleanup begins: the agent leaves by its own <c>exit</c> step after
+    /// spawning the grandchild, and the client observes that exit (the reason names the code) before it tears down. The
+    /// grandchild's pid was recorded at its spawn, in the pid file, so what is asserted gone is the real process.
+    /// </summary>
+    /// <remarks>
+    /// Finding G of the risk consultations (2026-10-12): the transport used to close stdin BEFORE the tree kill, and an
+    /// agent that exits on EOF could leave the kill an empty tree. On Windows this test passed under the old order too —
+    /// the <c>Process</c> object keeps the exited parent's handle, and .NET's tree kill still finds the children by their
+    /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning, and the
+    /// case this test pins is the one that would lose on Linux, where an orphan is reparented to init the moment its
+    /// parent goes. That case, a parent gone BEFORE the kill, is a known limit on Linux (a Windows Job Object, or a
+    /// process group on Unix, is the follow-up — see module_runners.md).
+    /// </remarks>
     [Fact]
     public async Task APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo()
     {
@@ -292,8 +306,9 @@ public sealed class AcpClientTests
 
         outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
         // The grandchild inherited the stdout pipe, so no EOF ever comes: the exit itself is what ends the turn.
-        outcome.Reason.Should().Contain("before answering").And.Contain("exited with code 0");
+        outcome.Reason.Should().Contain("before answering").And.Contain("exited with code 0", "the parent's exit was observed before any cleanup");
         outcome.Answer.Should().Be("half");
+        grandchild.Should().NotBe(outcome.AgentPid, "the pid file names the grandchild, not the agent");
         Gone(outcome.AgentPid).Should().BeTrue();
         Gone(grandchild).Should().BeTrue("a grandchild orphaned by the agent's own exit is still the client's to end");
     }

@@ -57,4 +57,24 @@ internal static class SnapshotTestKit
 
         return File.Exists(at) || Directory.Exists(at);
     }
+
+    /// <summary>A directory link made SYNCHRONOUSLY — for a seam that runs inside a copy or a read: a junction on Windows, a symlink elsewhere.</summary>
+    public static void LinkNow(string link, string target)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateSymbolicLink(link, target);
+            return;
+        }
+
+        var start = new System.Diagnostics.ProcessStartInfo("cmd") { UseShellExecute = false, CreateNoWindow = true };
+        foreach (var arg in new[] { "/c", "mklink", "/J", link, target })
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        using var made = System.Diagnostics.Process.Start(start)!;
+        made.WaitForExit();
+        made.ExitCode.Should().Be(0, "a junction is how this test swaps the directory");
+    }
 }

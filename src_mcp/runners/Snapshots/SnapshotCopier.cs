@@ -117,17 +117,30 @@ internal static class SnapshotCopier
     /// One file: stamped, checked for a link on the way AGAIN, copied, stamped again — the first stamp kept for the inventory check.
     /// </summary>
     /// <remarks>
-    /// The planner asked about links when it planned; the copy may be seconds later, and a directory on the way that
-    /// became a junction in between would hand <c>File.Copy</c> its target's bytes under the planned name — with the
+    /// <para>The planner asked about links when it planned; the copy may be seconds later, and a directory on the way
+    /// that became a junction in between would hand the copy its target's bytes under the planned name — with the
     /// same length and time, the stamp alone cannot see it (the review of S1). So the walk runs once more, immediately
     /// before the copy. A window remains between this check and the open, as it does for every path-based API; what
-    /// is closed is the plan-to-copy gap.
+    /// is closed is the plan-to-copy gap.</para>
+    /// <para><b>The stamp before the copy must be the PLANNED stamp</b> (finding A of the risk consultations): a
+    /// file that grew between the plan and its own copy was copied whole while the reservation and the manifest
+    /// carried the size the plan saw, so the budget understated. A difference is the retry's case, like any change.</para>
+    /// <para><b>Only the unnamed stream is copied</b> (finding B): <c>File.Copy</c> is <c>CopyFileEx</c>, which copies
+    /// every alternate data stream of an NTFS file — a one-byte file with a large <c>:payload</c> stream passed the
+    /// ceilings, which count the unnamed stream, and landed whole in the snapshot. The bytes go through a stream
+    /// opened on the source and a new destination file; the last-write time is carried over so the tree reads as the
+    /// source does.</para>
     /// </remarks>
     private static Copying CopyOne(string sourceRoot, PlannedFile file, SnapshotOptions options, int attempt, Dictionary<string, SnapshotStamp> stamps)
     {
         try
         {
             var before = SnapshotStamp.Of(file.Source);
+            if (before != file.Stamp)
+            {
+                return new Copying.Changed(file.Relative, "changed");
+            }
+
             // Between the stamp and the copy: the one moment a test can change the file and the check must see it.
             options.BeforeCopyOf(attempt, file.Relative);
             var linked = SnapshotLinks.FirstLinkOnTheWay(sourceRoot, file.Relative);
@@ -137,8 +150,8 @@ internal static class SnapshotCopier
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(file.Destination)!);
-            File.Copy(file.Source, file.Destination);
-            if (before != SnapshotStamp.Of(file.Source) || new FileInfo(file.Destination).Length != before.Length)
+            var copied = CopyUnnamedStream(file.Source, file.Destination, before.WrittenUtc);
+            if (before != SnapshotStamp.Of(file.Source) || copied != before.Length)
             {
                 return new Copying.Changed(file.Relative, "changed");
             }
@@ -160,5 +173,19 @@ internal static class SnapshotCopier
         {
             return new Copying.Refused($"{file.Relative} could not be copied ({e.Message})");
         }
+    }
+
+    /// <summary>The source's unnamed stream into a NEW destination file, its last-write time carried over; the bytes written.</summary>
+    private static long CopyUnnamedStream(string source, string destination, DateTime writtenUtc)
+    {
+        using (var from = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var to = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            from.CopyTo(to);
+        }
+
+        File.SetLastWriteTimeUtc(destination, writtenUtc);
+
+        return new FileInfo(destination).Length;
     }
 }

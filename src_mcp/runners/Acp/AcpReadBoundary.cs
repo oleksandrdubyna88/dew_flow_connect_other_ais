@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Files;
+
 namespace CoaiMcp.Runners.Acp;
 
 /// <summary>
@@ -60,9 +62,10 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
 {
     /// <summary>
     /// The most of one file that is served. A review's files are kilobytes; past this a file is a binary or a
-    /// log, and reading it would hold it in the shim's memory to send it down a pipe one line at a time.
+    /// log, and reading it would hold it in the shim's memory to send it down a pipe one line at a time. The one
+    /// number both confined readers use (<see cref="HandleRead.DefaultCap"/>), enforced on the read itself.
     /// </summary>
-    public const long MaxBytes = 4 * 1024 * 1024;
+    public const long MaxBytes = HandleRead.DefaultCap;
 
     private static readonly char[] Separators = ['\\', '/'];
 
@@ -71,6 +74,9 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private readonly string _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+
+    /// <summary>A seam for the tests, run immediately before the file is opened — the window a swapped-in link or a growing file must not win.</summary>
+    internal Action BeforeOpen { get; set; } = static () => { };
 
     public AcpReadAnswer Read(string requestedPath)
     {
@@ -82,10 +88,10 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
                 return AcpReadAnswer.Refused(refusal);
             }
 
-            var full = Path.GetFullPath(requestedPath);
-            var onTheWay = LinkOnTheWay(_root, full[_root.Length..]);
+            var relative = Path.GetFullPath(requestedPath)[_root.Length..];
+            var onTheWay = LinkOnTheWay(_root, relative);
 
-            return onTheWay.Length > 0 ? AcpReadAnswer.Refused(onTheWay) : ReadFile(full);
+            return onTheWay.Length > 0 ? AcpReadAnswer.Refused(onTheWay) : ReadFile(relative);
         }
         catch (Exception e) when (e is PathTooLongException or ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
         {
@@ -198,24 +204,34 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
         return string.Empty;
     }
 
-    private static AcpReadAnswer ReadFile(string full)
+    /// <summary>
+    /// The read itself, by handle (<see cref="HandleRead"/>): opened, the handle's own name checked against the
+    /// entry under the root, the bytes read from it against <see cref="MaxBytes"/> — never a size looked at before
+    /// the open, which a growing file outruns, and never a second open by path, which a swapped-in link wins.
+    /// </summary>
+    private AcpReadAnswer ReadFile(string relative)
     {
-        try
+        if (Directory.Exists(Path.Combine(_root, relative)))
         {
-            var info = new FileInfo(full);
-            if ((info.Attributes & FileAttributes.Directory) != 0)
-            {
-                return AcpReadAnswer.Refused("a directory, not a file");
-            }
+            return AcpReadAnswer.Refused("a directory, not a file");
+        }
 
-            return info.Length > MaxBytes
-                ? AcpReadAnswer.Refused($"over the {MaxBytes / (1024 * 1024)} MiB ceiling for one read")
-                : AcpReadAnswer.Of(File.ReadAllText(full));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        BeforeOpen();
+
+        return HandleRead.Read(_root, relative, MaxBytes, Names) switch
         {
-            // The sentence names no path and no system message: the agent is told the read failed, not what is there.
-            return AcpReadAnswer.Refused("the file could not be read");
-        }
+            FileRead.Served served => AcpReadAnswer.Of(Decoded(served.Bytes)),
+            // The sentence names no path and no system message: the agent is told why not, not what is there.
+            FileRead.Refused refused => AcpReadAnswer.Refused(refused.Reason),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
+    }
+
+    /// <summary>The bytes as text the way <c>File.ReadAllText</c> read them: UTF-8 unless a byte-order mark says otherwise.</summary>
+    private static string Decoded(byte[] bytes)
+    {
+        using var reader = new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true);
+
+        return reader.ReadToEnd();
     }
 }
