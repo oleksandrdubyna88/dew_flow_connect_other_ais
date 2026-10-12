@@ -223,15 +223,30 @@ public static partial class HandleRead
         return canonical.Length > 0 ? canonical : WorktreePaths.Real(root);
     }
 
+    /// <remarks>
+    /// The one raw descriptor read in this file: <c>/proc/self/fd/N</c> is named by the number itself, and no API takes
+    /// the handle instead. A reference is held across the read so the number cannot be closed and reused under it.
+    /// </remarks>
     private static string LinuxFinalPath(SafeFileHandle handle)
     {
+        var held = false;
         try
         {
+            handle.DangerousAddRef(ref held);
+#pragma warning disable S3869 // the descriptor's NUMBER names /proc/self/fd/N; the reference above keeps it ours for the read
             return new FileInfo($"/proc/self/fd/{handle.DangerousGetHandle().ToInt64()}").LinkTarget ?? string.Empty;
+#pragma warning restore S3869
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ObjectDisposedException)
         {
             return string.Empty;
+        }
+        finally
+        {
+            if (held)
+            {
+                handle.DangerousRelease();
+            }
         }
     }
 
@@ -249,10 +264,15 @@ public static partial class HandleRead
     }
 
     /// <summary><c>\\?\C:\x</c> is <c>C:\x</c>, and <c>\\?\UNC\server\share</c> is <c>\\server\share</c>.</summary>
-    private static string WithoutDevicePrefix(string final) =>
-        final.StartsWith(@"\\?\UNC\", StringComparison.Ordinal) ? @"\\" + final[@"\\?\UNC\".Length..]
-        : final.StartsWith(@"\\?\", StringComparison.Ordinal) ? final[@"\\?\".Length..]
-        : final;
+    private static string WithoutDevicePrefix(string final)
+    {
+        if (final.StartsWith(@"\\?\UNC\", StringComparison.Ordinal))
+        {
+            return @"\\" + final[@"\\?\UNC\".Length..];
+        }
+
+        return final.StartsWith(@"\\?\", StringComparison.Ordinal) ? final[@"\\?\".Length..] : final;
+    }
 
     private const uint FileReadAttributes = 0x0080;
     private const uint ShareAll = 0x1 | 0x2 | 0x4;

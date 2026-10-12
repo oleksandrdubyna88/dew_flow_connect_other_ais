@@ -111,7 +111,7 @@ public sealed class ReviewSnapshot : IDisposable
     /// </summary>
     public async Task<SnapshotRefresh> RefreshAsync(SnapshotSource.Live source, CancellationToken ct = default)
     {
-        if (!_turn.Wait(0, ct))
+        if (!await _turn.WaitAsync(0, ct))
         {
             return new SnapshotRefresh.Refused($"{Root} is busy: a refresh or a disposal is in progress");
         }

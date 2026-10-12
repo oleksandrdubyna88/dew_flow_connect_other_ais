@@ -45,6 +45,7 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
     /// <summary>A note sink that says nothing — the default, and what a test passes when it listens to nothing.</summary>
     public static void Quiet(string note)
     {
+        // Deliberately nothing: the caller asked for no notes.
     }
 
     /// <summary>A snapshot of <paramref name="source"/> inside <paramref name="scratchDirectory"/>, or a refusal with a sentence.</summary>

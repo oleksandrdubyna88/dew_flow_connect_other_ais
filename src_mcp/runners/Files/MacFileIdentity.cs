@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -13,9 +14,11 @@ namespace CoaiMcp.Runners.Files;
 /// the open, so a link swapped in for the open and the directory put back before the walk passed it — and the outside
 /// file's bytes were served. A file opened through such a link is a different inode from the one the restored path
 /// names, so this check refuses it, whatever the path looks like by then.</para>
-/// <para>The 64-bit-inode <c>struct stat</c>: <c>st_dev</c> (int32) at 0, <c>st_ino</c> (uint64) at 8, 144 bytes in all.
-/// arm64 has only that layout under the plain names; x64 reaches it through the <c>$INODE64</c> entry points. Anything
-/// that cannot be asked — a missing library or entry point, a failed call — is not known to be the same file.</para>
+/// <para>The 64-bit-inode <c>struct stat</c>, little-endian on both Mac architectures: <c>st_dev</c> (int32) at 0,
+/// <c>st_ino</c> (uint64) at 8, 144 bytes in all. arm64 has only that layout under the plain names; x64 reaches it
+/// through the <c>$INODE64</c> entry points. The handle is marshalled as itself (the runtime holds a reference for the
+/// call) and the buffer as a span, so nothing here is unsafe code. Anything that cannot be asked — a missing library or
+/// entry point, a failed call — is not known to be the same file.</para>
 /// </remarks>
 internal static partial class MacFileIdentity
 {
@@ -23,6 +26,8 @@ internal static partial class MacFileIdentity
 
     /// <summary>Room past the 144 bytes of <c>struct stat</c>, so a layout that ever grows cannot overrun the buffer.</summary>
     private const int StatBytes = 256;
+
+    private static readonly bool Arm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
 
     public static bool SameEntry(SafeFileHandle handle, string path)
     {
@@ -34,13 +39,12 @@ internal static partial class MacFileIdentity
 
     private readonly record struct Identity(bool Known, int Device, ulong Inode);
 
-    private static unsafe Identity OfHandle(SafeFileHandle handle)
+    private static Identity OfHandle(SafeFileHandle handle)
     {
         try
         {
-            var stat = stackalloc byte[StatBytes];
-            var fd = (int)handle.DangerousGetHandle();
-            var result = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? FStat(fd, stat) : FStatInode64(fd, stat);
+            Span<byte> stat = stackalloc byte[StatBytes];
+            var result = Arm64 ? FStat(handle, stat) : FStatInode64(handle, stat);
 
             return result == 0 ? Of(stat) : default;
         }
@@ -50,12 +54,12 @@ internal static partial class MacFileIdentity
         }
     }
 
-    private static unsafe Identity OfPath(string path)
+    private static Identity OfPath(string path)
     {
         try
         {
-            var stat = stackalloc byte[StatBytes];
-            var result = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? LStat(path, stat) : LStatInode64(path, stat);
+            Span<byte> stat = stackalloc byte[StatBytes];
+            var result = Arm64 ? LStat(path, stat) : LStatInode64(path, stat);
 
             return result == 0 ? Of(stat) : default;
         }
@@ -65,17 +69,18 @@ internal static partial class MacFileIdentity
         }
     }
 
-    private static unsafe Identity Of(byte* stat) => new(true, *(int*)stat, *(ulong*)(stat + 8));
+    private static Identity Of(ReadOnlySpan<byte> stat) =>
+        new(true, BinaryPrimitives.ReadInt32LittleEndian(stat), BinaryPrimitives.ReadUInt64LittleEndian(stat[8..]));
 
     [LibraryImport(LibSystem, EntryPoint = "fstat", SetLastError = true)]
-    private static unsafe partial int FStat(int fd, byte* stat);
+    private static partial int FStat(SafeFileHandle fd, Span<byte> stat);
 
     [LibraryImport(LibSystem, EntryPoint = "fstat$INODE64", SetLastError = true)]
-    private static unsafe partial int FStatInode64(int fd, byte* stat);
+    private static partial int FStatInode64(SafeFileHandle fd, Span<byte> stat);
 
     [LibraryImport(LibSystem, EntryPoint = "lstat", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
-    private static unsafe partial int LStat(string path, byte* stat);
+    private static partial int LStat(string path, Span<byte> stat);
 
     [LibraryImport(LibSystem, EntryPoint = "lstat$INODE64", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
-    private static unsafe partial int LStatInode64(string path, byte* stat);
+    private static partial int LStatInode64(string path, Span<byte> stat);
 }

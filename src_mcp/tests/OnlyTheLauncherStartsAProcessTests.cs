@@ -14,9 +14,10 @@ namespace CoaiMcp.Tests;
 /// Architecture): <c>AcpTransport.Start</c> built its own <c>ProcessStartInfo</c> — the encodings and the resolver copied,
 /// the environment rule left out — because it needs a long-lived duplex pipe the one-shot <c>RunAsync</c> does not give.
 /// </remarks>
-public sealed class OnlyTheLauncherStartsAProcessTests
+public sealed partial class OnlyTheLauncherStartsAProcessTests
 {
-    private static readonly Regex Starts = new(@"new\s+ProcessStartInfo\s*\(|new\s+Process\s*\{|Process\.Start\s*\(", RegexOptions.Compiled);
+    [GeneratedRegex(@"new\s+ProcessStartInfo\s*\(|new\s+Process\s*\{|Process\.Start\s*\(")]
+    private static partial Regex Starts();
 
     [Fact]
     public void NoProductionFile_ButTheLauncher_BuildsOrStartsAProcess()
@@ -27,7 +28,7 @@ public sealed class OnlyTheLauncherStartsAProcessTests
             .Where(static file => !IsBuildOutput(file) && Path.GetFileName(file) != "ProcessLauncher.cs")
             .SelectMany(static file => File.ReadLines(file)
                 .Select((line, i) => (file, number: i + 1, line))
-                .Where(static hit => !IsComment(hit.line) && Starts.IsMatch(hit.line)))
+                .Where(static hit => !IsComment(hit.line) && Starts().IsMatch(hit.line)))
             .Select(hit => $"{Path.GetRelativePath(root, hit.file)}:{hit.number}: {hit.line.Trim()}")
             .ToList();
 

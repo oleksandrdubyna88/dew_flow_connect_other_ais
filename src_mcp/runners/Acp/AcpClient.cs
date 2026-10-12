@@ -141,10 +141,17 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
     }
 
     /// <summary>What a <c>stopReason</c> means: <c>end_turn</c> is the answer; anything else is the agent stopping short, in its own word.</summary>
-    private static (AcpEnd End, string Reason) Stopped(string stopReason) =>
-        stopReason == EndTurn
-            ? (AcpEnd.Answered, string.Empty)
-            : (AcpEnd.AgentFailed, $"the agent stopped with `{(stopReason.Length > 0 ? stopReason : "no stopReason")}` rather than an answer");
+    private static (AcpEnd End, string Reason) Stopped(string stopReason)
+    {
+        if (stopReason == EndTurn)
+        {
+            return (AcpEnd.Answered, string.Empty);
+        }
+
+        var said = stopReason.Length > 0 ? stopReason : "no stopReason";
+
+        return (AcpEnd.AgentFailed, $"the agent stopped with `{said}` rather than an answer");
+    }
 
     private static AcpOutcome NotStarted(AcpAsk ask, string why) => new(
         AcpEnd.NotStarted,
