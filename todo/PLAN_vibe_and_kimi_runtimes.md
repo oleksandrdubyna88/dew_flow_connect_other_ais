@@ -1,20 +1,23 @@
 # PLAN — Mistral Vibe and Kimi Code as coai runtimes, on the person's own subscription
 
-> Status: **plan only, nothing implemented yet, 2026-10-11.** Scope: `src_mcp` (two new reviewer runtimes and two
+> Status: **plan only, nothing implemented yet, 2026-10-12** — re-planned that day after M-V11 (D6: a sanitised snapshot
+> of the tree replaces the empty working folder). Scope: `src_mcp` (two new reviewer runtimes and two
 > consultants), `shared/*.json` seeds and their generated TypeScript, `src_vs_code` (runtime lists, presets, install,
-> the catalog model card), docs. Chat, the Team server and the bench are out (§8). Kimi's measurement — and everything
-> after it — is gated on the owner signing in (§6). Every probe number below is n=1 on Windows; nothing is claimed for WSL
+> the catalog model card), docs. Chat, the Team server and the bench are out (§8). Kimi runs over ACP behind a coai shim (D15,
+> re-planned 2026-10-12 after the owner signed in). Every probe number below is n=1 on Windows; nothing is claimed for WSL
 > until the probe scripts have run there.
 >
 > Related docs: [RESULTS_vibe_and_kimi_first_probe.md](../research/RESULTS_vibe_and_kimi_first_probe.md),
+> [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md),
+> [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md),
 > [module_runners.md](../research/module_runners.md), [module_extension.md](../research/module_extension.md),
 > [RESULTS_agy_write_block.md](../research/RESULTS_agy_write_block.md),
 > [PLAN_the_consultant_has_its_own_vendors.md](../research/PLAN_the_consultant_has_its_own_vendors.md).
 
 ## 1. Goal
 
-The owner bought a Mistral subscription and signed in to the `vibe` CLI (2.26.1), and wants Kimi Code (`kimi` 0.41.0,
-kimi.com) as well. coai can reach Mistral today only as an API-key endpoint: a vendor row on the `codex` runtime with
+The owner bought a Mistral subscription and signed in to the `vibe` CLI (2.26.1), and wants Kimi Code (`kimi`, 0.41.0 at the first probe,
+2.1.1 once the owner signed in on 2026-10-12; kimi.com) as well. coai can reach Mistral today only as an API-key endpoint: a vendor row on the `codex` runtime with
 `baseUrl https://api.mistral.ai/v1`, its key in `MISTRAL_API_KEY` as derived from the id
 (`src_mcp/runners/Reviewers/CustomRuntime.cs:10-17`). That never
 touches the subscription, and nothing at all reaches Kimi Code. So, when this plan is done:
@@ -44,64 +47,103 @@ against the code or a run before it went in here — the question consultant had
 - **D3 — Vibe is NEVER launched with `--trust` or `--add-dir`.** A project `.vibe/hooks.toml` runs its shell command under
   the full flag set when the folder is trusted, and `--add-dir` trusts its folder (RESULTS §3). A branch under review can
   carry that file. Without `--trust` the headless run still works and `read_file` still reads the checkout.
-- **D4 — a pre-launch trust guard.** A person who once trusted their repository in interactive Vibe reopens D3 for a
-  consultant running in the live checkout. Before every Vibe launch, coai reads `trusted_folders.toml` from the child's
-  effective `VIBE_HOME` — resolved from the SAME environment the child is given, which differs between a reviewer launch
-  (inherited) and a question row (`ProcessEnvironment.Minimal`, `ConsultantLaunches.ForQuestion`) — resolves junctions and
-  aliases, and **refuses with a named reason** when the working folder or any ancestor is trusted, or when the file exists
-  but cannot be read or parsed. An ABSENT file means go (a fresh install has none). Preferred over an env override because
-  none is documented. It is a pre-check, not a sandbox, and it cannot be written before M-V4 records the file's entry format,
-  Windows case handling, ancestor semantics and the WSL `/mnt/c` versus `C:\` spelling — the probe saw only an empty file.
-- **D5 — a launch is refused while the person's own hooks are configured** (plan gate, codex, 2026-10-11: a notice would
-  leave the hard requirement of §1 unmet). `~/.vibe/hooks.toml` (in the child's effective `VIBE_HOME`) loads in an untrusted
-  folder too — documented, not measured; M-V9 measures it. A reviewed branch cannot write it (D2), so it is not an attack path,
-  but any hook in it can change the checkout during a coai launch. So when that file declares a hook (or cannot be read or
-  parsed), the trust guard of D4 refuses the launch with a sentence naming the file, the row's health line and the
-  `providers` probe say why, and the person chooses: remove the hooks, or not use Vibe through coai. No switch to override it
-  in this plan.
-- **D6 — Vibe's working folder is ALWAYS a coai-owned empty folder, never the checkout; coai never moves `VIBE_HOME`.**
-  The branch under review controls everything in the checkout, including `.vibe/hooks.toml`, `.vibe/agents` (which could
-  redefine the built-in `plan` agent), `.vibe/tools`, skills and `AGENTS.md`. Vibe documents all of them as loading only in
-  a trusted folder, and D3 never trusts one — but that is Vibe's handling again, so M-V10 measures each with a canary. And
-  D4's guard is a check-then-launch: a folder trusted between coai's read of `trusted_folders.toml` and the child's start
-  would load the checkout's hooks (code gate, codex, 2026-10-11). A working folder coai owns — created fresh per launch, as
-  `AntigravityReadOnly.Home()` gives agy — holds none of those files whatever Vibe does or whoever trusts what, which
-  closes both: the second independent block beside D2, and no race left for D4 to lose. It rests on `read_file` reading the
-  checkout by absolute path without `--add-dir`, which only M-V11 can say. **If M-V11 says it cannot, S1 and S2 stop there
-  and are re-planned** — there is no fallback to the checkout as the working folder, because that would leave the hard
-  requirement of §1 resting on a check that can lose a race. D4 stays as defence in depth for the checkout's ancestors and
-  the person's own folders. `VIBE_HOME` stays where the person
-  has it: the sign-in is assumed to live there (M-V7 confirms), and a deep `VIBE_HOME` broke on a >260-character path
-  (RESULTS §4).
+- **D4 — superseded by D17 (2026-10-12).** It was a pre-launch read of the PERSON's `trusted_folders.toml`. The probe
+  showed that list does load project hooks for the folder, a parent and a junction (M-V4, exact-case match), and that the
+  sign-in is not in `VIBE_HOME` (M-V7) — so coai gives Vibe its OWN home, whose trust list coai creates empty and checks
+  before every launch (D17). The person's list is never read.
+- **D5 — superseded by D17 (2026-10-12).** It refused a launch while the person's own `~/.vibe/hooks.toml` declared a hook
+  (which fires in an untrusted folder, M-V9 3 of 3). With D17 the person's home is never Vibe's home, so their hooks are
+  not loaded at all; a `hooks.toml` appearing in coai's OWN home refuses the launch (D17's validation).
+- **D6 — Vibe's working folder is ALWAYS a coai-owned SANITISED SNAPSHOT of the tree, never the checkout** (Vibe's home is
+  D17's). *Re-planned 2026-10-12.* The branch under review controls everything in the checkout, including
+  `.vibe/hooks.toml`, `.vibe/agents` (which could redefine the built-in `plan` agent), `.vibe/tools`, skills and
+  `AGENTS.md`. Vibe documents all of them as loading only in a trusted folder, and D3 never trusts one — but that is Vibe's
+  handling again, and D4's guard is a check-then-launch that a folder trusted between the check and the child's start would
+  lose (code gate, codex, 2026-10-11). The first answer — an empty coai-owned folder, the checkout read by absolute path —
+  is impossible: **M-V11 measured 3 of 3 `tool_denied`** for a `read_file` outside the working folder
+  ([RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §1), so Vibe's reads are bounded to its cwd.
+  So the cwd is a fresh coai-owned COPY of the tree with every project-configuration path left out; **M-V14 measured 3 of
+  3**: with that copy deliberately trusted, `read_file` inside it answered, and hook canaries in the source tree and in the
+  copy's parent did not fire, while the positive control (the same hook inside the trusted copy) did (§2 of the same file).
+  Whatever Vibe does or whoever trusts what, the files are not there: the second independent block beside D2, and no race
+  for D4 to lose. Settled with the consultant (consultation `826d66e2`, codex `gpt-6-astra`); the snapshot's contracts:
+  - **Source.** A code round copies its pinned worktree (`RoundEngine.cs:349` leases it; `WorktreeManager.cs` adds it,
+    `SubmodulePopulator.cs` fills its submodules) — NOT `git archive`, whose `export-ignore` / `export-subst` attributes
+    would drop or rewrite reviewed bytes. A plan round needs no snapshot (its cwd is already an empty `ScratchDirectory`).
+    A `consult` turn copies the LIVE tree: tracked plus untracked-not-ignored paths, their current bytes, deleted paths
+    absent (a rename is the old path absent and the new present); a file that changes while copying makes the copy retry
+    once, then refuse.
+  - **Exclusions, at every depth**, matched with the destination filesystem's case rules: `.git`, `.vibe/`, `.agents/skills/`,
+    `AGENTS.md` (and the Kimi equivalents S4's probe names). An excluded path is named in the manifest, never silently lost.
+  - **Links.** A symlink, junction or other reparse point is REFUSED (the snapshot is not made, the launch is refused with
+    the path named), never dereferenced; a path that would escape the snapshot root, and two names that collide under the
+    destination's case rules, refuse before anything is published.
+  - **Submodules and LFS.** A populated submodule is copied at its recorded revision; an unpopulated one, or an LFS pointer
+    file, is listed as unavailable in the prompt, never presented as reviewed source.
+  - **Limits.** A ceiling on copied bytes, file count and elapsed time (config keys, defaults from S1's measurement of
+    this repository: 2 737 files, a 38.8 MB tar, 5.7 s); over any of them the launch is refused with the number — never a
+    partial copy. A Windows long-path failure is a refusal too. **And an aggregate cap** (plan gate, codex, 2026-10-12):
+    the process keeps a count of the bytes held by its LIVE snapshots, and a new snapshot is refused — with both numbers —
+    when that sum plus the new one would pass a configured ceiling (default 2 GB) or when the temp volume's free space would
+    fall under a configured floor (default 5 GB). A refusal is the row's failure with a sentence, like any other; the round
+    goes on with its other reviewers.
+  - **Sharing.** One snapshot per round per pinned SHA, shared by every reviewer of a runtime that asks for one in that
+    round; one per `consult` CONVERSATION, at one stable path, refreshed in place before each turn (the live tree moves; see
+    the end of D6). A round's lives inside the round's `coai-answers-*` scratch directory and goes with it (§7).
+  - **Citations.** A manifest of snapshot-relative paths; a finding's path that is absolute and inside the snapshot is
+    mapped back to the repository-relative path only when the manifest holds it. A resumed consultation keeps its
+    snapshot's path, so its history's absolute paths stay inside it; a path the refreshed manifest no longer holds is not
+    mapped.
+  - **One helper, several callers.** `ReviewSnapshot` is one shared unit called at the orchestration seams — the round's
+    launch directory (`RosterBuilder.cs:370-375` passes it to `IReviewerRuntime.Build`), the consultant's launch
+    (`ConsultationService.cs:648`) and the question row (`QuestionRowLaunch.cs`, `ConsultantLaunches.Cwd`
+    `ConsultantLaunches.cs:53`). Which runtimes need it is a capability the ADAPTER declares (a default-false member on
+    `IReviewerRuntime` / `IConsultantRuntime`), never an `if` on a vendor name. Created only for a launch granted the
+    checkout; a repair and a prompt-only review keep their empty folder.
+  The snapshot is NOT a write sandbox — if D2 failed, copied files would not stop a write elsewhere; it closes the path by
+  which the reviewed branch supplies configuration. The person's own configuration is closed by D17. **A conversation
+  keeps ONE snapshot path**: a resumed Vibe session stays bound to the folder it was created in — a read in a new
+  `--workdir` was `tool_denied`, and the model re-asked turn 1's absolute path (RESULTS_vibe_confinement §22, B and E) —
+  while the same path re-filled in place each turn was read afresh 3 of 3 (§22, D). So a `consult` conversation's
+  snapshot is created once at a stable path and REFRESHED IN PLACE before each turn; a code round's snapshot is per round.
+  **The refresh is transactional** (plan gate, codex, 2026-10-12): the replacement tree is built COMPLETE beside the
+  snapshot, under every rule above (exclusions, links, ceilings, the one retry on a mid-copy change), and only then swapped
+  into the stable path; any refusal leaves the previous snapshot and its manifest exactly as they were, so no turn ever
+  reads a tree that never existed in the live repository. A swap that fails half-way puts the old tree back. Tests: a
+  refused refresh (ceiling, link, a tree that keeps changing) leaves the old snapshot readable with its manifest
+  unchanged.
 - **D7 — the prompt on stdin, the answer from `--output json`, usage from `--output-dir`.** Answer = the last
   `role: assistant` message; session id = `sessionId` on any element (no `ReadHandle` interface change needed). The export
   folder is a per-ATTEMPT folder (a retry never reads a stale export) **inside the launch's own `coai-answers-*` scratch
   directory**, and is **deleted right after `ReadUsage`/`ReadHandle` read it**. Not beside the consultant's answer files:
   `ConsultantArtefactSweep` enumerates files only (`src_mcp/src/Server/Consultation/ConsultantArtefactSweep.cs:22`) and
   would never remove the tree. A crash between launch and read is covered by the sweep that already exists for those
-  directories (§7). `--output streaming` only if a measured event carries something the array does not. Stdin is settled
-  for 260 characters only; a review prompt is ~33 KB, so D7 stands pending M-V8.
+  directories (§7). `--output streaming` only if a measured event carries something the array does not. Stdin carried a
+  33 KB prompt 3 of 3 (M-V8).
 - **D8 — exit 3 (a limit) is a failure** even when an assistant message exists. `--time-limit` is set a few seconds under
   the row's timeout, on the documented promise that Vibe writes its export on every exit ("interrupt the run …, write the
-  export and exit 3") — not yet measured; M-V13 stops a run on a limit and checks the export exists.
+  export and exit 3") — measured: exit 3 and an export 3 of 3 (M-V13), `outcome: deadline`, `stop_reason` null, usage null in
+  2 of 3 — so coai reads `outcome`, and null usage is `Usage.Unknown`.
 - **D8b — no MCP server starts** (the #514 rule; `NoMcpServers.cs:8`; Claude and Codex have launch switches at
   `ClaudeRuntime.cs:97` and `CodexConsultant.cs:102`; the CLIs with none are warned about at `src_mcp/src/Program.cs:2178-2187`).
-  Vibe reads `mcp_servers` from its config and says `VIBE_*` overrides any config field, so the first candidate is
-  `VIBE_MCP_SERVERS=[]` in the child's environment (M-V3b: a user-level server with a startup canary, with and without it).
-  If that holds, it is Vibe's `NoMcpServers` arm; if it does not, the trust guard refuses a launch while the person's config
-  declares a server, as D5 does for hooks. Either way it is ONE launch control that every Vibe launch path goes through —
-  the reviewer, `consult`, and the question row's `ConfinementPlanner` arm with its minimal environment — never a flag one
-  path adds and another forgets (code gate, codex, 2026-10-11); a test per path. Kimi: the same question in M-K6, answered
-  the same way, under the same one-control rule.
+  Measured: `VIBE_MCP_SERVERS=[]` does NOT stop a user server (M-V3b, 3 of 3 — Vibe merges `mcp_servers` by name across
+  layers), and an MCP server supplied ONLY through the environment variable starts under an empty home (RESULTS §22 A,
+  3 of 3). So Vibe's `NoMcpServers` arm is D17: coai's own home declares none, and the child's environment is built, not
+  inherited, so no `VIBE_*` reaches it. ONE launch control every Vibe launch path goes through — the reviewer, `consult` and
+  the question row — never a flag one path adds and another forgets (code gate, codex, 2026-10-11); a test per path. Kimi:
+  the same question in M-K10 (the shim already sends `mcpServers: []`), answered under the same one-control rule.
 - **D9 — cost is recorded as `null`, tokens as reported.** `cost_usd` is Vibe's list price even on a subscription, and
-  `lineCost` treats any numeric `costUsd` as a bill (`estimated: false`, `src_vs_code/src/usage.ts:395`). A missing export
+  `lineCost` treats any numeric `costUsd` as a bill (`estimated: false`, `src_vs_code/src/usage.ts:411`). A missing export
   is `Usage.Unknown`, never zero. Carrying Vibe's estimate as an estimate needs provenance through the ledger — not this plan.
 - **D10 — models: a curated, version-labelled alias list, typed aliases allowed, the saved choice kept.** Vibe takes the
   alias through `VIBE_ACTIVE_MODEL` (no `--model` flag), set in the launch request's EXPLICIT environment so it reaches a
   question row too, whose child gets only `ProcessEnvironment.Minimal` (`ConsultantLaunches.ForQuestion`, pinned by
   `ChildEnvironmentTests.cs:33-39`) — M-V12 checks that Vibe finds its home and sign-in under that environment, and a test
-  covers each of the two launch paths. First list `mistral-medium-3.5`, `glm-5-3`. Kimi takes `-m <alias>`; its list comes
-  from the Kimi measurement (M-K7). Discovery only once a CLI command lists the
+  covers each of the two launch paths. First list `mistral-medium-3.5`, `glm-5-3`. **Checked twice** (M-V7 b: an invalid
+  alias exits 0 and silently routes to the default): before the launch against the curated list (a typed alias outside it
+  is refused with the list), and after it against the export's `active_model` — absent or different is a failure that
+  keeps the reported usage. A match proves Vibe accepted the alias, not which backend answered. Kimi takes its model through the ACP
+  `model` config option (D15), never the config default; its list comes from the Kimi measurement (M-K7). Discovery only once a CLI command lists the
   models without a model turn. The terminal ▶ launch gets the same env/flag — today an unknown runtime falls back to
   `codex -m …` (`src_vs_code/src/vendorTerminal.ts:35`).
 - **D11 — presets only.** Neither runtime enters `DEFAULT_VENDORS` or the server's default `Providers`.
@@ -120,21 +162,86 @@ against the code or a run before it went in here — the question consultant had
      newer host then mirrors that. This is the mixed-version limit `module_extension.md:3626` already records for
      `remote` and `api`; the extension cannot change code that already shipped. The CHANGELOG and the help say to reload
      every window after updating, and the limit is written into `module_extension.md` beside the existing one.
-- **D14 — a billing refusal is hopeless, not a rate limit.** `suspended due to insufficient balance` goes into BOTH
+- **D14 — a billing refusal is a SPENT allowance, named as one.** Today the captured line matches nothing in `RateLimit`
+  (its `429` has no status label and no "too many"), so it reaches the person as a bare non-zero exit — not retried, but
+  not named either (an earlier draft said it would be retried; the test showed otherwise). `insufficient balance` goes into BOTH
   `RateLimit.Phrases` (`ReviewerExecutor.cs:251`) and `RateLimit.Spent` (`:304`) — `Reason` filters through `Marked`
   first (`:341`), so `Spent` alone would lose the line. Generic, small, independent of either vendor's runtime.
-- **D15 — Kimi's read-only story is unknown and must be measured before any code.** In `-p` mode Kimi asks for no approval
-  and runs under its `auto` policy; only static deny rules hold (`kimi` command reference), and `--plan` is refused with
-  `-p` (RESULTS §5) — documentation and one refusal, nothing more. The candidate is an `--agent-file` whose tool list holds
-  only a read tool, plus static deny rules;
-  `--agent-file` cannot be combined with `--session`, and a resumed session restores the agent bound at creation — so the
-  resumed turn needs its own write check.
+- **D15 — Kimi runs over ACP behind a coai shim, never in prompt mode.** *Re-planned 2026-10-12, after the owner signed in
+  (Kimi Code 2.1.1, `managed:kimi-code` OAuth); evidence [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md).*
+  Prompt mode is unusable: `-p` takes the prompt only as an argument (`-p -` is a literal dash; no `-p` and `-p ""` are
+  refused, §1), a review prompt is over Windows' command line, and prompt mode runs `auto` with no approval. `kimi acp` (the
+  Agent Client Protocol on stdio) carries the prompt on stdin and makes coai the CLIENT, which gives coai three blocks it
+  owns, not Kimi:
+  - **Writes** — every write-kind tool (`Write`/`edit`, `Bash`/`execute`, `AskUserQuestion`) sent
+    `session/request_permission` first; answered `reject_once`, nothing was written, 3 of 3 (§2.1). The shim refuses EVERY
+    permission request — it never inspects which tool asked.
+  - **`Read` only** — with `fs.readTextFile: true` offered, Kimi sent every `Read` through `fs/read_text_file`, and the
+    shim served only paths inside the working folder; an outside file was refused and not quoted (§2.2). Without the offer,
+    `Read` took an outside file and quoted it — so the offer is mandatory, and an excluded name is refused like an outside
+    path. **But `Grep` and `Glob` read the disk directly** (auto-allowed ripgrep, no permission request, no client call): an
+    outside canary's marker came back (§2.3, the consultant's hypothesis, consultation `f48a09c9`), and no documented key
+    switches a tool off. So Kimi's READS are not bounded — the standing codex already has (it reads anywhere, and coai has
+    never called it confined). The reviewer row accepts that, as for codex; the question consultant's `disk` standing for
+    `kimi` is `unconfined`; and the plan says "tested write attempts were denied", never "cannot read". ACP `mode: plan` is no
+    way out: the turn reads its own plan file from Kimi's session store, outside any snapshot, and ends empty when refused
+    (§2.4).
+  - **Project instructions** — the same channel carried Kimi's own search for `AGENTS.md`, `agents.md` and
+    `.kimi-code/AGENTS.md`; the shim refuses those names at every depth.
+  Writes stay the hard requirement, and they are version-specific evidence, not a sandbox: Kimi decides which operations
+  ask, so S4 measures every announced tool — including `Agent` sub-agents — and Kimi's own session store under
+  `~/.kimi-code/sessions` is a permitted vendor write, named as such. The working folder is the same sanitised snapshot as
+  Vibe's (D6, with `.kimi-code/` and both spellings of `AGENTS.md`
+  added to the exclusions), so whatever Kimi loads from DISK without the client — measured in M-K9 — is not the branch's.
+  The model is set every session with `session/set_config_option {configId: "model"}`: a session came up on a model the plan
+  does not include and failed `401 Your current subscription does not have access to kimi-for-coding-highspeed` (§2) — that
+  sentence is a diagnosis row. `mode` stays `default` (manual approvals — the shim's refusals ARE the approvals).
+  **The shim is `coai-mcp --ask-acp`**, the established self-invocation pattern of `--ask-api` / `--ask-local` /
+  `--ask-remote` (`src_mcp/src/Program.cs:304-307`, `AskApiMode.cs`, `LocalRuntime.SelfInvocation` `LocalRuntime.cs:64`):
+  `KimiRuntime.Build` returns a `ProcessRequest` for the shim, the prompt on its stdin, so `ReviewerExecutor` launches,
+  times out and kills it like any CLI; the shim runs `kimi acp` as ITS child and prints the answer and usage on stdout. A new
+  one-shot mode is written into the list in `.agents/PROJECT.md` and never exits 64. The ACP client half is one unit with an
+  `IAcpProfile` per vendor (Kimi: the command, the model option id, the exclusion names) — one module per vendor; nothing
+  else speaks ACP yet. Usage: `usage_update {used, size}` is CONTEXT tokens with no input/output split — recorded as
+  unknown input/output until M-K2 shows a split (the `/usage` command is the candidate), cost `null` (D9).
+- **D17 — every Vibe launch gets a coai-owned home and a built environment** (2026-10-12; consultation `e17eb7cd`,
+  codex `gpt-6-astra`, every claim checked). On Windows the sign-in lives in the Credential Manager (`ai.mistral.vibe`), not
+  in `VIBE_HOME`: empty and copied homes were signed in 24 of 24 (M-V7). So:
+  - **The home.** `VIBE_HOME` is a short coai-owned folder under `LocalApplicationData/coai-vibe/` (short: a deep home broke on
+    a >260-character path, first probe §4) — one per `consult` conversation, kept across its resumed turns (the session store
+    `--resume` needs lives in it), and one per code round for reviewers, disposed with the round. Before every launch it is
+    VALIDATED against the files Vibe itself writes (RESULTS §22's inventory: `connector_bootstrap_cache.json` + lock,
+    `experiment_eval_cache.json`, `trusted_folders.toml` with both lists empty, `vibehistory`, `whoami_cache.json`,
+    `logs/`); a `config.toml` declaring hooks, MCP servers or agents, a `hooks.toml`, an `agents/` or `tools/` folder, a
+    non-empty trust list, or a link anywhere in it refuses the launch with the path named. Turns sharing a home are serialised.
+  - **The environment.** Built, never inherited: `ProcessEnvironment.Minimal` for the platform, plus exactly
+    `VIBE_HOME`, `VIBE_CLI=python` and `VIBE_ACTIVE_MODEL`. No other `VIBE_*` reaches the child (RESULTS §22 A).
+  - **The CLI.** `vibe` is two CLIs, and a GrowthBook flag cached in the home flipped this account from the Python CLI to a
+    Rust CLI between two launches; the Rust CLI refuses `--time-limit` and `--output-dir` (exit 2) and is unmeasured
+    (RESULTS §3). `VIBE_CLI=python` pins the measured one. If a later Vibe drops the Python CLI, the launch fails with
+    exit 2 and `VendorDiagnosis` names the cause — coai never falls through to the Rust CLI unmeasured.
+  This replaces D4, D5 and D8b's fallback with one block coai owns. It closes the person's hooks, MCP servers, agents
+  (a user `~/.vibe/agents/plan.toml` would override the built-in `plan` agent everywhere — Vibe's code, not measured) and
+  trust list. It does NOT stop Vibe's own built-in skills, which it unpacks into the home (four, RESULTS §22); with
+  `--enabled-tools read_file` no tool they could call is enabled. **The explicit tool restriction stays authoritative under
+  Vibe's remote experiment variants** — smart approval (available and default), registry skills and managed shell tools all
+  forced on, every write `tool_denied`, fresh and resumed, 3 of 3 (M-V15, RESULTS §23). The home's validation allows Vibe's
+  bundled plugin artifacts only through a **version-labelled hash manifest** — never "any file under `logs/session/plugins/`".
+  §22 recorded names and sizes, NOT hashes (cadence consultation `4e79f70e`), so S1 adds a reproducible step that starts
+  `vibe` once on an empty home and writes `shared/vibe-home-manifest.json` (Vibe version → path → SHA-256). A Vibe version
+  with no manifest is REFUSED with a sentence naming the version and the step that qualifies it; requalification is the
+  cost of every Vibe update that changes those bytes. Tests: an upgraded CLI on a fresh home and on a resumed home — a
+  manifest present admits both, an absent one refuses both.
+- **D18 — Vibe and Kimi on Linux and WSL are refused until measured.** Every number above is Windows. On Linux Vibe's keyring may
+  fall back to a file inside `VIBE_HOME`, which would break D17, and nothing was measured there. A launch whose CHILD runs on
+  Linux (including WSL launched from Windows) is refused with a sentence naming this plan, for both runtimes (Kimi's WSL
+  side is just as unmeasured); the probe scripts' WSL runs lift it in a later change.
 - **D16 — official installers only.** Vibe: `uv tool install mistral-vibe` (what is installed here) or Mistral's own
   script; Kimi: Moonshot's own installer. Both go into `OFFICIAL_SOURCES` (`vendorTerminal.ts:346`), which a test pins.
   Neither is on npm, so the update light needs a version source other than npm (`cliVersions.ts:25` has npm and manifest
   only) — or no light, which `versionSourceFor` already allows.
 
-## 3. What exists today (verified on `main` 722fc597, 2026-10-11)
+## 3. What exists today (verified on `main` 722fc597, 2026-10-11; `usage.ts` re-checked on bb95c1c4, 2026-10-12)
 
 Server — `ReviewerRuntimeSelector.Default` `ReviewerRuntime.cs:756`, `RuntimeNames` `:771`, `MachineOnlyRuntimes` `:788`,
 `Named` `:800`; `RuntimeResolution.cs:94-145` needs no edit; `PanelSettings.RuntimeOf` (`PanelSettings.cs:1411`) keeps a
@@ -168,29 +275,43 @@ Tests that hard-code runtime lists: TS `runtimeSurvives.test.ts:89`, `vendorTerm
 
 ## 4. Build order
 
-The coai gate runs once for the whole plan — one plan round on this document (done) and one code round over the whole
+The coai gate runs once for the whole plan — one plan round on this document and one code round over the whole
 committed diff of every story below, with `again: true` for a checkpoint when a later story lands. No story is gated on
-its own: each is built on one implementation branch (this plan merges on its own, first), committed, and `review_code` then reads the whole diff. Four stories. S1 and S2
-build now; S3 and S4 wait for the owner's Kimi sign-in (§6) and hold nothing in S1 or S2 back. Inside every story the
-measurement comes first, and no code that depends on a cell is written before that cell is recorded.
+its own: each is built on one implementation branch, committed, and `review_code` then reads the whole diff. Five
+stories (re-split 2026-10-12, when M-V11 turned the empty working folder into a snapshot helper big enough to stand on
+its own). All five build now — the owner signed in to Kimi on 2026-10-12; S4 and S5 hold nothing in S1–S3 back.
+Inside every story the measurement comes first, and no code that depends on a cell is written before that cell is
+recorded.
 
-**S1 — Vibe measured, then a Vibe reviewer row.** Decisions D1, D2, D3, D4, D5, D6, D7, D8, D8b, D9, D10, D11, D12, D13,
-D14, D16. Cells: every Vibe cell — M-V1…M-V13 and M-V3b (§5) — is measured here in one probe run; the code builds on
-M-V1…M-V4, M-V3b, M-V5 (where `cached_input_tokens` sits), M-V7…M-V11 and M-V13, and records M-V5's
-per-turn-or-cumulative answer, M-V6 and M-V12 for S2. Depends on nothing. Complete on its own: a Vibe row added from the
-preset reviews plans and code with the CLI's own sign-in.
-- `scripts/probe-vibe-confinement.mjs`, modelled on `scripts/probe-agy-write-block.mjs`: the write arms of RESULTS §2,
-  the hook arms of §3 and the cells M-V1…M-V13 with M-V3b (§5), 3 of 3 per side (Windows and WSL), into
-  `research/RESULTS_vibe_confinement.md`. Re-run on every Vibe version bump. No bullet below is written before the
+**S1 — Vibe measured, and the sanitised snapshot every snapshot-needing launch uses.** Decisions D6, D14. Cells: every
+Vibe cell — M-V1…M-V14 and M-V3b (§5) — is measured here in one probe run (M-V11 and M-V14 already by hand, 3 of 3 on
+Windows, 2026-10-12). Depends on nothing. Complete on its own: the probe records what S2 and S3 build on, the snapshot is
+a tested unit no runtime uses yet, and a billing refusal is no longer retried.
+- `scripts/probe-vibe-confinement.mjs`, modelled on `scripts/probe-agy-write-block.mjs`: the write arms of the first
+  probe's §2, the hook arms of its §3 and the cells M-V1…M-V14 with M-V3b (§5), 3 of 3 on WINDOWS, into
+  `research/RESULTS_vibe_confinement.md`. The WSL run belongs to the later change that lifts D18 (plan gate, codex,
+  2026-10-12: S1 must not wait on a side D18 refuses). Re-run on every Vibe version bump. No bullet of S2 or S3 is written before the
   cell it cites is recorded.
+- `ReviewSnapshot` (D6): the copy, the exclusions, the link and collision refusals, submodules and LFS, the limits, the
+  manifest and the path mapping, as one unit with its own tests (§5), plus the adapter capability member that asks for
+  it (default false; nothing sets it true until S2).
+- The Vibe home manifest step (D17): start `vibe --version` and one tiny turn on an empty owned home, hash what Vibe wrote,
+  write `shared/vibe-home-manifest.json` for that version; re-run on every Vibe update.
 - `RateLimit` learns the billing refusal (D14), with the captured Kimi line as the fixture. Generic and independent of
-  either runtime, so it lands here in the first story, where no sign-in holds it; the Kimi probe of S3 then meets it
-  already fixed.
+  either runtime, so it lands in the first story, where no sign-in holds it; the Kimi probe of S4 then meets it already
+  fixed.
+
+**S2 — the Vibe reviewer row.** Decisions D1, D2, D3, D6 (the snapshot wired at the round's launch directory),
+D7, D8, D8b, D9, D10, D11, D12, D13, D16, D17 (per-round home, built environment), D18. Cells: builds on M-V1…M-V5, M-V3b, M-V7…M-V11, M-V13 and M-V14, all recorded by
+S1. Depends on S1. Complete on its own: a Vibe row added from the preset reviews plans and code with the CLI's own
+sign-in.
+- The round's launch directory (`RosterBuilder.cs:370-375`) takes the round's shared snapshot for an adapter that asks
+  for one; the reviewer's cited paths go through the snapshot's mapping.
 - `VibeRuntime` (D2, D3, D6, D7, D8, D9; stdin; `VIBE_ACTIVE_MODEL`; the per-attempt export folder and its deletion),
   registered in `Default`, `RuntimeNames`, `Named`, and in `MachineOnlyRuntimes` (D12).
-- The trust guard (D4) and the user-hooks refusal (D5) — a refusal before launch, with its cure text — and Vibe's
-  `NoMcpServers` arm (`VIBE_MCP_SERVERS=[]`), or the user-MCP-server refusal when M-V3b says the variable does not hold
-  (D8b).
+- The owned home and the built environment (D17): creation, validation before every launch (a refusal with the path and its
+  cure), serialised turns, disposal with the round; the Linux/WSL refusal (D18); the model checked before and after
+  (D10).
 - `VendorDiagnosis`: Vibe's install cure per OS and the failure sentences M-V7 captured (not signed in, quota).
 - Seeds: `feature-availability.json` (`runtimes`; `effort` `unmeasured` — no flag sets it; `thinking` `unmeasured` —
   the models carry levels in Vibe's own config but no launch flag was shown taking effect; `fastMode` `none`), regenerate.
@@ -200,64 +321,92 @@ preset reviews plans and code with the CLI's own sign-in.
 - Docs: `module_runners.md`, `module_extension.md`, `architecture.md` runtime list, README, help in five languages,
   `.agents/rules/common/vendor-routing.md` (Mistral models → `vibe`), CHANGELOG entries under `## Unreleased`.
 
-**S2 — Vibe as a consultant and a question-consultant row.** Decisions D1, D4 (the guard on the question row's own
-environment), D6 (cwd per capability), D7 (`sessionId`, resume), D10 (the model variable on the question-row path).
-Cells: builds on M-V5 (per-turn or cumulative), M-V6 and M-V12, all recorded by S1. Depends on S1. Complete on its own:
-a Vibe row answers `consult` and a question-consultant row, and a resumed turn reports its usage right.
-- `VibeConsultant` (memory: the vendor remembers, `--resume <sessionId>`; `UsageIsCumulative` from M-V5), added to
+**S3 — Vibe as a consultant and a question-consultant row.** Decisions D1, D6 (one stable snapshot path per conversation,
+refreshed in place; cwd per capability), D7 (`sessionId`, resume), D10, D17 (one home per conversation, kept across its turns;
+the built environment on the question-row path), D18.
+Cells: builds on M-V5 (per-turn or cumulative), M-V6 and M-V12, all recorded by S1. Depends on S1 AND S2 — it uses S2's
+reviewer adapter (a consultant reads answer and usage through it, `IConsultantRuntime.cs:107`) and S2's owned-home and
+environment controls (cadence consultation `4e79f70e`). Complete on its own: a Vibe row answers `consult` and a
+question-consultant row, and a resumed turn reports its usage right.
+- `VibeConsultant` (cwd = the conversation's ONE snapshot path, refreshed in place from the live tree before each turn,
+  D6 — a new path per turn is outside the resumed session's boundary; memory: the vendor remembers, `--resume <sessionId>`; `UsageIsCumulative` from M-V5), added to
   `features.consultant` and `OnACli`.
 - `consultant-limitations.json` rows per side.
-- Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `vibe` (cwd = a coai-owned scratch
-  folder for every capability, D6; the checkout reached by absolute path for `disk`; never `--trust`/`--add-dir`; the same
-  MCP launch control and trust guard as the reviewer, D8b and D4), and the three `runtime-capabilities.json` rows — `none` /
+- Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `vibe` (cwd = a sanitised snapshot of
+  the live tree for `disk`, D6 — Vibe cannot read outside its cwd, M-V11 — and an empty scratch folder for `none`; never
+  `--trust`/`--add-dir`; the same
+  owned home and built environment as the reviewer, D17), and the three `runtime-capabilities.json` rows — `none` /
   `disk` / `web` each from its own measured cells, because denied writes do not prove bounded READS (M-V6). A cell that is
   not measured is written `unmeasured`, and the planner refuses that capability.
-- The question-row launch path: `VIBE_ACTIVE_MODEL` in the request's explicit environment, Vibe's home and sign-in found
-  under `ProcessEnvironment.Minimal` (M-V12, D10), and the trust guard resolving `VIBE_HOME` from that same environment
-  (D4) — the second of the two launch-path tests of §5.
+- The question-row launch path: the built environment of D17 (`ProcessEnvironment.Minimal` + the three `VIBE_*`; `ForQuestion`
+  keeps explicit values, `ConsultantLaunches.cs:65`), signed in under it (M-V12 3 of 3) — the second of the launch-path tests
+  of §5. **A question row is one-shot**, so its home and snapshot belong to the ROW, not to a conversation: both live inside
+  the row's own `coai-question-*` scratch folder (`QuestionRowLaunch.cs:68`, removed in `finally`), gone on success,
+  refusal and cancellation alike; persistent ownership and refresh-in-place are `consult`'s only.
+- **The row's disk grant, not "the live tree"** (cadence consultation `4e79f70e`): a `disk` row reads the operator's GRANTED
+  ROOTS (`QuestionFanOut.cs:203`, `Grant.Roots` — several roots, a sub-folder of a repository, or a non-Git folder). Each
+  granted root is copied by the snapshot's live mode, limited to that root, into its own sub-folder of the row's snapshot;
+  the prompt names those SNAPSHOT paths, never the original roots (Vibe cannot read outside its cwd, M-V11). A root that is
+  not inside a Git work tree is refused for a Vibe row with a sentence (the snapshot's live mode lists through Git) until
+  a plain-folder mode exists. Tests: a sub-folder-only grant copies only that sub-folder; two roots both arrive; a non-Git
+  root refuses; the prompt names only snapshot paths; the row's home and snapshot are gone after success, refusal and
+  cancellation.
 - Docs: `module_server.md` consultant sections, `module_core.md`.
 
-**S3 — Kimi measured, then a Kimi reviewer row.** Waits for the owner's `kimi login` (§6) and blocks nothing in S1 or
-S2. Decisions D1, D8b, D9, D10 (`-m <alias>`, the list from M-K7), D11, D12, D13, D15, D16. Cells: every Kimi cell —
-M-K1…M-K8 (§5) — is measured here in one probe run, first; the code builds on M-K1, M-K2, M-K3, M-K4, M-K6, M-K7 and
-M-K8, and records M-K5 and M-K2's session id for S4. Depends on S1 for the shapes it repeats (a `crossesTo` constant and
-arm per runtime, the preset and installer maps, D14 already landed); not on S2. Complete on its own: a Kimi row reviews
-plans and code.
-- `scripts/probe-kimi-confinement.mjs` → `research/RESULTS_kimi_confinement.md`, cells M-K1…M-K8 (§5), 3 of 3 per side.
-  The code half of S3, and S4, are re-planned from its results if any cell contradicts D15. If M-K1 says the piped
-  prompt is read as a literal, S3 stops here, because a review prompt is over the Windows command-line limit.
-- `KimiRuntime` (`-m <alias>`; the read-only mechanism the probe found — D15's `--agent-file` with a read-only tool list
-  plus static deny rules, M-K3 and M-K4; the prompt on stdin, M-K1; answer, usage and a denied tool's shape from
-  stream-json, M-K2; cost `null`, D9), registered in `Default`, `RuntimeNames`, `Named`, and in `MachineOnlyRuntimes`
-  (D12).
-- `VendorDiagnosis`: Kimi's install cure per OS and the failure sentences M-K7 captured (not signed in, quota).
-- Seeds: `feature-availability.json` rows for `kimi` (`effort` and `thinking` `unmeasured` until a flag is measured
-  taking effect, §8; a `fastMode` row), regenerate.
+**S4 — Kimi measured, then a Kimi reviewer row over ACP.** The owner signed in on 2026-10-12, so S4 is no longer blocked.
+Decisions D1, D6 (the snapshot with Kimi's exclusions), D8b, D9, D10 (the ACP model option, the list from M-K7), D11, D12,
+D13, D15, D16. Cells: every Kimi cell — M-K1…M-K10 (§5) — in one probe run, first (M-K1 and the ACP arms of M-K3/M-K6 already
+by hand, 2026-10-12). Depends on S1 (the snapshot; D14) and S2 for the shapes it repeats (a `crossesTo` constant and arm per
+runtime, the preset and installer maps); not on S3. Complete on its own: a Kimi row reviews plans and code.
+- `scripts/probe-kimi-confinement.mjs` → `research/RESULTS_kimi_confinement.md`, cells M-K1…M-K10 (§5), 3 of 3 on Windows
+  (Kimi on a Linux/WSL child is refused like Vibe until the same later change measures it),
+  driving `kimi acp` through the SAME client unit the shim uses (so the probe measures the shipped code, not a copy). The
+  code half of S4, and S5, are re-planned from its results if any cell contradicts D15.
+- The ACP client unit and `IAcpProfile` (`KimiAcpProfile`): `initialize` with `fs.readTextFile: true`, `writeTextFile: false`,
+  `terminal: false`; `session/new` with `mcpServers: []`; `set_config_option` for the model; every permission request
+  refused; `fs/read_text_file` served only inside the working folder and never for an excluded name; every other client
+  request answered with an error; a deadline of its own under the row's timeout.
+- `coai-mcp --ask-acp` (D15): stdin prompt in, answer and usage out, exit codes of its own (never 64), named in
+  `.agents/PROJECT.md`'s one-shot list.
+- `KimiRuntime` (the shim's `ProcessRequest`, the snapshot capability, answer and usage from the shim, cost `null`, D9),
+  registered in `Default`, `RuntimeNames`, `Named`, and in `MachineOnlyRuntimes` (D12).
+- Kimi session retirement (§7): the ownership record written by the shim, the round's and conversation's recorded folders
+  deleted at their end, the 6-hour sweep over recorded folders only. Tests: an unrecorded folder named `wd_snapshot-x_y` is
+  left alone; a recorded one is deleted at the end; a crash leftover goes after 6 hours.
+- `VendorDiagnosis`: Kimi's install cure per OS (Moonshot's own installer, D16) and the failure sentences M-K7 captured —
+  including the subscription-model `401` of D15 and the billing `429` of D14.
+- Seeds: `feature-availability.json` rows for `kimi` (`effort` — Kimi's config lists `support_efforts` low/high/max per model,
+  but no ACP option sets it in 2.1.1, so `unmeasured`; `thinking` `none` — the only ACP value is `on`; `fastMode` `none`),
+  regenerate.
 - Extension: `RUNTIMES`, both `package.json` enums, `modelsFor` + `modelsProvenance` (the M-K7 list, D10), the preset
   (D11), `vendorTerminal` maps + `kimiInstall` + `OFFICIAL_SOURCES` (D16), `JUDGED_HERE`, both `CLI_RUNTIMES`,
-  `KNOWS_ITS_OWN_ENDPOINT`, a colour slot, the `crossesTo` gate (D13).
-- Docs: the S1 set, for Kimi — `module_runners.md`, `module_extension.md`, `architecture.md`, README, help in five
-  languages, `vendor-routing.md`, CHANGELOG.
+  `KNOWS_ITS_OWN_ENDPOINT`, a colour slot, the `crossesTo` gate (D13). The ▶ terminal runs plain `kimi` (interactive), never
+  `acp`.
+- Docs: the S2 set, for Kimi — `module_runners.md` (the ACP shim), `module_extension.md`, `architecture.md`, README, help in
+  five languages, `vendor-routing.md`, CHANGELOG, and `.agents/PROJECT.md`.
 
-**S4 — Kimi as a consultant and a question-consultant row.** Waits with S3. Decisions D1, D15 (the resumed-turn write
-check). Cells: builds on M-K2 (session id), M-K5 and M-K6, all recorded by S3. Depends on S3; not on S2. Complete on its
-own: a Kimi row answers `consult` and a question-consultant row, and a resumed turn is write-checked.
-- `KimiConsultant` (`-S <id>`, with the resumed-turn write check of D15 — M-K5, also after the agent file is gone), added
-  to `features.consultant` and `OnACli`.
+**S5 — Kimi as a consultant and a question-consultant row.** Decisions D1, D6, D15 (the resumed-turn checks). Cells:
+builds on M-K2 (session id), M-K5 and M-K9, all recorded by S4. Depends on S4; not on S3. Complete on its own: a Kimi row
+answers `consult` and a question-consultant row, and a resumed turn keeps every refusal.
+- `KimiConsultant` over the same shim: the conversation's ONE snapshot path refreshed in place, as for Vibe (D6), unless
+  M-K5 shows a resumed ACP session follows a new `cwd`; memory per M-K5 (`session/load` /
+  `resume` with the same refusals, else coai carries the transcript); added to `features.consultant` and `OnACli`.
 - `consultant-limitations.json` rows per side.
-- Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `kimi`, and the three
-  `runtime-capabilities.json` rows — `none` / `disk` / `web` each from its own measured cells (M-K3, M-K4, M-K6);
-  `unmeasured` where no cell says, and the planner refuses that capability.
+- Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `kimi` (snapshot for `disk`, empty
+  folder for `none`; `Read` bounded by the shim, `Grep`/`Glob` not — so `disk` is written `unconfined`, D15), and the three `runtime-capabilities.json` rows — `none` / `disk` / `web`
+  each from its own measured cells; `unmeasured` where no cell says, and the planner refuses that capability.
 - Docs: `module_server.md` consultant sections, `module_core.md`.
 
 ## 5. Test plan
 
-Measured cells (probe scripts, 3 of 3 per side; every cell a write check where it can write):
+Measured cells (probe scripts, 3 of 3 on Windows — WSL is the later change that lifts D18; every cell a write check where it
+can write):
 
 - **M-V1** the D2 flag set, write arms (file, shell, `run_typescript`) — 0 written. **M-V2** project hook under the shipped
   flags without `--trust` — no canary; positive control with `--trust` — canary. **M-V3** project MCP server in
   `.vibe/config.toml` — its process does NOT start (a startup canary, not a tool call). **M-V4** a persisted-trusted folder,
-  a trusted parent, a junction to a trusted folder — what Vibe loads, and that the D4 guard refuses each. **M-V5** resumed
+  a trusted parent, a junction to a trusted folder — what Vibe loads (measured: each loads project hooks, §8 of the RESULTS;
+  D4, which would have refused them, is superseded by D17). **M-V5** resumed
   export: per-turn or cumulative usage; whether `cached_input_tokens` is inside `input_tokens`. **M-V6** reads outside the
   working folder (`read_file` on a sibling path) — the `disk`/`none` standing. **M-V7** wording of: not signed in (on a
   short `VIBE_HOME` copy), quota spent, an invalid alias; where the sign-in is stored. **M-V8** a 33 KB prompt on stdin.
@@ -266,28 +415,60 @@ Measured cells (probe scripts, 3 of 3 per side; every cell a write check where i
   folder — canary (D5). **M-V10** the checkout carries `.vibe/agents/plan.*` (a `plan` agent with every tool),
   `.vibe/tools`, a project skill and an `AGENTS.md` that orders a write — each with a canary or write arm, cwd = the
   checkout, no `--trust` (D6). **M-V11** cwd = an empty coai-owned folder, no `--add-dir`: can `read_file` read a file in
-  the checkout by absolute path (D6's second block). **M-V12** a question row's minimal environment: Vibe finds its home and
+  the checkout by absolute path — **measured 3 of 3 `tool_denied`, 2026-10-12**: reads are bounded to the cwd (D6 re-planned). **M-V12** a question row's minimal environment: Vibe finds its home and
   sign-in, and the model variable takes effect (D10). **M-V13** `--time-limit 5` on a longer task: exit 3, and the export
-  exists (D8).
-- **M-K1** `-p -` with piped stdin — read or literal. **M-K2** stream-json: answer, usage, session id, a denied tool's shape.
-  **M-K3** an `--agent-file` with a read-only tool list — write arms 0 written. **M-K4** static deny rules alone. **M-K5**
-  resumed turn (`-S <id>`) keeps the restricted tools, also after the agent file is gone. **M-K6** project config / hooks /
-  `AGENTS.md` in the checkout — what loads headless. **M-K7** signed-in model ids (`kimi-code/kimi-for-coding`?), exit codes,
-  quota and not-signed-in wording. **M-K8** `KIMI_CODE_HOME` path-length behaviour.
+  exists (D8). **M-V14** a sanitised copy (no `.vibe/`) made trusted on purpose: `read_file` inside it answers, hook
+  canaries in the source tree and in the copy's parent do not fire, the same hook inside the trusted copy does (positive
+  control) — **measured 3 of 3, 2026-10-12** (D6); the script adds a junction and a symlink pointing out of the copy.
+- **M-K1** `-p -` with piped stdin — **measured 2026-10-12: a literal dash; prompt mode cannot take stdin** (D15). **M-K2**
+  ACP: the answer's `agent_message_chunk`s, `usage_update`, whether `/usage` gives an input/output split, the session id, a
+  refused tool's shape. **M-K3** ACP write arms (file, shell, any discovered tool) with every permission refused — 0 written
+  (3 of 3 by hand, 2026-10-12). **M-K4** a tool that writes WITHOUT a permission request (a negative search over every tool
+  kind the session announces). **M-K5** a resumed session (`session/load` / `resume`) keeps the refusals and the client-fs
+  routing. **M-K6** reads: outside the working folder refused when the shim serves them (by hand, 1 run), and read without the
+  offer (1 run: quoted). **M-K7** signed-in model ids, ACP error codes, quota and not-signed-in wording (the subscription
+  `401` captured). **M-K8** `KIMI_CODE_HOME` path-length behaviour. **M-K9** what Kimi reads or runs from DISK without the
+  client — project skills, hooks and `.kimi-code/` config in the working folder, with canaries. **M-K10** a user-level MCP
+  server in `~/.kimi-code/config.toml` with `mcpServers: []` — does its process start (D8b).
 
 Unit tests (red first where they guard a defect):
 
+- `AcpClientTests` (S4, against a scripted fake agent): every permission request refused whatever its options; a
+  read inside the working folder served, outside or of an excluded name refused; `initialize` offers read and never write or
+  terminal; the model set before the prompt; an unknown client request answered with an error; the deadline kills the
+  child; usage read from `usage_update`. `--ask-acp` exit codes, and that it never exits 64. The shim tears its child down on
+  every exit path — its own deadline, an ACP protocol failure, the agent's premature EOF and a normal end — with a bounded
+  graceful cancel, then a tree-kill, then a wait; tested with a fake agent that spawns a heartbeat grandchild, checking that
+  both pids are gone after an outer timeout, a shim deadline and a premature EOF (consultation `f48a09c9`). The shim's own
+  stdin EOF means "prompt complete" (`ProcessLauncher` closes stdin after writing, `ProcessLauncher.cs:479`), never cancel;
+  `kimi acp`'s stdin stays open for the replies, both its streams are drained concurrently, and reverse requests are
+  answered while `session/prompt` is awaited. `fs/read_text_file` is served only for an absolute path whose lexically
+  normalised form is inside the snapshot root by path components AND is a manifest entry — the bytes read from the
+  manifest's stored path, never the supplied spelling; drive-relative, root-relative, UNC/device, ADS (`:`), trailing-dot or
+  trailing-space components and unmatched 8.3 names are refused; ordinal matching. A test swaps a file for a junction after
+  the snapshot is made and expects a refusal (the snapshot serves retained bytes or opens by handle refusing links).
 - `VibeRuntimeTests` / `KimiRuntimeTests`: argv never holds `--trust`, `--add-dir`, the prompt or a newline; holds both D2
   flags; env carries the model; `ReadAnswer` takes the last assistant message from a captured array; `ReadUsage` reads a
   captured `export.json`; a missing export is unknown, not zero; `cost` is null; exit 3 with an assistant message is a failure;
   the export folder is gone after the read.
-- Trust guard (written from M-V4's recorded format): trusted folder, trusted ancestor, a junction into a trusted folder,
-  unreadable file, malformed file, a declared user hook, a declared user MCP server (if D8b needs it) → refusal naming the
-  file; empty lists → go; NO file → go; `VIBE_HOME` resolved from the child's own environment on both launch paths.
+- Owned home (D17): created empty; a `hooks.toml`, a `config.toml` declaring hooks/MCP/agents, an `agents/` or `tools/` folder,
+  a non-empty trust list, an unexpected file or a link in it → refusal naming the path; Vibe's own inventory (RESULTS §22)
+  → go; two turns on one home are serialised; a round's home is gone with the round. The child environment holds exactly
+  the platform's minimal set plus `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL` — a parent `VIBE_MCP_SERVERS` never
+  reaches it (a test sets one in the parent and inspects the request). Linux/WSL child → refused (D18). Model: an alias outside
+  the curated list refused before launch; an export whose `active_model` is absent or different → failure with usage kept.
 - `crossesTo`: a `vibe` / `kimi` row is not sent to a server older than its constant; a test that a host whose `RUNTIMES`
   lacks `vibe` does not overwrite a `vibe` row in the server's settings file (D13).
 - Each launch path (reviewer, `consult`, question row) carries the model variable in the request's explicit environment,
-  goes through the one MCP launch control (D8b), and starts in a fresh coai-owned working folder — never the checkout (D6).
+  goes through the one MCP launch control (D8b), and starts in a sanitised snapshot (or an empty folder) — never the
+  checkout (D6); an adapter that does not ask for a snapshot keeps today's directory, byte for byte.
+- `ReviewSnapshotTests` (D6): `.vibe/`, `.agents/skills/`, `AGENTS.md` and `.git` absent at every depth (case-folded on
+  Windows); a symlink and a junction refuse with the path; a colliding name and an escaping path refuse; byte, file and
+  time ceilings refuse with the number and leave no partial copy; a populated submodule is copied, an unpopulated one and
+  an LFS pointer are listed unavailable; an `export-ignore` / `export-subst` file keeps its reviewed bytes; the live-tree
+  mode copies untracked-not-ignored files, omits deleted ones, and retries once then refuses on a change mid-copy; the
+  manifest maps an absolute snapshot path back and refuses one outside it; the snapshot is gone with its scratch
+  directory.
 - `RateLimitTests`: the captured billing line → `Hit` true, `Hopeless(Reason)` true, one launch, zero retries.
 - `MachineOnlyRuntimes` holds both; the Team server refuses a `vibe` row by name.
 - `EveryAdapterRecordsWhatItLaunchedTests` gains both adapters; `ConfinementPlannerTests` gains each arm and refuses an
@@ -297,13 +478,19 @@ Unit tests (red first where they guard a defect):
 - Whole suites before each PR (`dotnet` test executables and `npm test` in `src_vs_code`), `plan-lifecycle.mjs`, the
   generators' `--check`.
 - One live review round per runtime through the product (`review_plan` on a scratch branch) per side, recorded in the
-  RESULTS file.
+  RESULTS file — and, for each runtime, one live `consult` (a two-turn conversation, so the resume runs) and one live
+  question-consultant row through the product, per side (plan gate, codex, 2026-10-12: unit tests and scripted ACP can pass
+  while the real orchestration fails to launch the shim or route the answer). Each flow, its runtime, and what it does not
+  cover are listed in `research/module_tests.md`.
+- Aggregate cap: a second snapshot that would pass the ceiling is refused with both numbers; a free-space floor below the
+  volume's free space refuses; a finished launch gives its bytes back to the count (a test with a fake volume reader).
 
 ## 6. Owner-only prerequisites
 
-- **Kimi sign-in.** This machine's `kimi` is configured with a Moonshot API key whose account answered `429 … suspended due to
-  insufficient balance`. S3 needs `kimi login` (device code) with the kimi.com subscription — on Windows and in WSL.
-- **Vibe in WSL.** Only the Windows side is installed and signed in; S1's WSL cells need `vibe` installed and signed in there.
+- **Kimi sign-in** — done on Windows 2026-10-12 (`kimi login`, managed `kimi-code` OAuth). WSL still needs `kimi` installed and
+  signed in for S4's WSL cells.
+- **Vibe in WSL.** Only the Windows side is installed and signed in; until `vibe` is installed and signed in there and the probe
+  has run, D18 refuses Vibe on a Linux/WSL child.
 - Releases after each story follow the repository's release process with the owner's go.
 
 ## 7. Budget — what grows
@@ -314,11 +501,36 @@ Unit tests (red first where they guard a defect):
   every 10 minutes per process, on the round's build path, removing the product's scratch directories in temp older than
   **6 hours** (`PruneOldScratchDirs`, `:1405`; the prefixes in `shared/temp-sweep.json`). No new sweep. Test: an export
   folder left in an old `coai-answers-*` directory is gone after `PruneOldScratchDirs`. If the consultant's launch has no
-  such directory today, it gets one under the same prefix rather than a new prefix.
-- **Vibe's own session store** (`~/.vibe/logs/session/unified/<id>`, ~100 KB for a two-word turn, estimated ~300 KB for a
-  review): owned by Vibe, never deleted by coai — the consultant's resume needs it. At 50 launches a day ≈ 15 MB a day,
-  ≈ 5 GB a year; stated in `module_runners.md` and on the model card's help so the person can clear it.
-- **Kimi's session store** (`~/.kimi-code/sessions`): the same rule; size measured in S3.
+  such directory today, it gets one under the same prefix rather than a new prefix. **The round path is not the only
+  caller** (plan gate, codex, 2026-10-12: a crashed `consult` followed by no round would leave its snapshot forever):
+  `ConsultationSweeper`'s beat (`src_mcp/src/Server/Consultation/ConsultationSweeper.cs`, `Swept`), which runs every
+  `Pace.SweepEvery` while the server serves whether or not a round runs, also calls the same throttled
+  `PruneOldAnswerDirs` — one sweep, two callers, the 10-minute throttle unchanged. Test: an old `coai-answers-*`
+  directory holding a snapshot is gone after one beat with no round built.
+- **Vibe's session store** (`logs/session/unified/<id>`, ~130 KB for two short turns, estimated ~300 KB for a review):
+  under D17 it lives in coai's OWN home, never the person's `~/.vibe`, so it goes when that home goes (next bullet). The
+  person's `~/.vibe` gains nothing from coai.
+- **Owned homes** (D17): ~85 KB of Vibe's own unpacked plugins per home plus its sessions (~130 KB for two short turns). A
+  round's home lives in the round's `coai-answers-*` directory and goes with it (and with the 6-hour sweep after a crash);
+  a conversation's home under `LocalApplicationData/coai-vibe/` is deleted when the conversation closes or lapses, by the
+  consultation sweep that already closes it (`ConsultationSweeper`), with a test that a closed conversation's home is gone.
+- **Snapshots** (D6): one per code round per runtime-that-asks (≈ the tree's size — 38.8 MB for this repository), inside
+  the round's `coai-answers-*` scratch directory and gone with the round; and one per `consult` conversation, refreshed in
+  place, deleted with the conversation's home when it closes or lapses. Both are covered by the 6-hour sweep after a crash. At 50 Vibe launches a day on a repository this size, worst case
+  ≈ 2 GB of copying a day. On disk at once: one snapshot per concurrently running round or turn — a few hundred MB at
+  the handful of rounds this machine runs together — and never more than D6's aggregate cap (2 GB by default), which
+  refuses a new snapshot before the temp volume runs low (free-space floor, 5 GB by default).
+- **Kimi's session store** (`~/.kimi-code/sessions/wd_<working-folder name>_<hash>/<session>`; plan gate, codex,
+  2026-10-12: it needs a projection and an owner). Measured from the hand runs: **120–220 KB per session** (eight folders,
+  1.6 MB). At 50 Kimi launches a day ≈ 10 MB a day, ≈ 3.6 GB a year if nothing retires it. **coai retires exactly what it
+  created, by RECORD, never by name pattern** (code round, codex, 2026-10-12: a `wd_snapshot-*` wildcard would also match a
+  person's own session in a folder they happened to call `snapshot-…`). The shim learns each session's id from ACP
+  (`session/new`'s answer) and, before the prompt, appends the session folder it resolves to an ownership record in coai's
+  data folder (`kimi-sessions.jsonl`: path, session id, the round or conversation, the time). The round (or the closed or
+  lapsed conversation) deletes the folders its record lines name and drops those lines; the consultation beat's sweep
+  deletes recorded folders older than 6 hours whose owner is gone (a crash's leftovers). A folder no record line names is
+  never touched, whatever its name. Whether Kimi's
+  `session_index.jsonl` keeps stale lines for deleted folders, and whether that matters, is measured in S4 (M-K5).
 - No new table, cache or long-lived process.
 
 ## 8. Not this plan's
@@ -327,19 +539,22 @@ Unit tests (red first where they guard a defect):
 - **The Team server** (slots, `VendorLogin`, `SlotEnvironment`, `CooldownParser`, the Dockerfile) — D12 keeps both runtimes
   machine-only until a plan for it exists.
 - **The bench** (`src_bench/CoaiBench`).
-- Vibe's `vibe-acp` / `vibe-app-server` and Kimi's `acp` as transports.
+- Vibe's `vibe-acp` / `vibe-app-server` as a transport (Vibe's CLI flags plus the snapshot hold, measured; moving Vibe onto the
+  ACP shim later would give it the same client-owned blocks Kimi has).
 - Effort / thinking controls for either runtime until a flag is measured taking effect.
 - Carrying Vibe's `cost_usd` as an estimate (D9).
 
 ## 9. Definition of Done
 
-- [ ] `research/RESULTS_vibe_confinement.md` and `research/RESULTS_kimi_confinement.md` hold every M-cell, 3 of 3 per side.
-- [ ] A Vibe row and a Kimi row each pass one live plan round and one live code round through the product, per side.
+- [ ] `research/RESULTS_vibe_confinement.md` and `research/RESULTS_kimi_confinement.md` hold every M-cell, 3 of 3 on Windows.
+- [ ] A Vibe row and a Kimi row each pass one live plan round and one live code round through the product, on Windows.
 - [ ] Both answer `consult` and a question-consultant row; a resumed turn is write-checked.
 - [ ] No launch of either CLI carries `--trust`, `--add-dir` or the prompt in argv, and no Vibe launch starts in the checkout —
-      pinned by tests on every launch path.
-- [ ] The trust guard refuses a trusted folder or ancestor; a declared user hook in `~/.vibe/hooks.toml` (and a user MCP server, if D8b needs it) refuses the launch.
+      pinned by tests on every launch path; every Vibe launch granted the tree starts in a sanitised snapshot.
+- [ ] Every Vibe launch runs on a coai-owned, validated home with a built environment and `VIBE_CLI=python` (D17); a Linux/WSL
+      child is refused (D18); the model is checked before and after (D10).
 - [ ] A billing refusal is not retried.
+- [ ] coai deletes only the Kimi session folders its ownership record names (§7).
 - [ ] Both runtimes are machine-only; an older server never receives the rows.
 - [ ] Seeds regenerated; every hard-coded runtime list in tests updated; both suites green.
 - [ ] Docs, help in five languages, `vendor-routing.md`, READMEs and CHANGELOGs updated.
