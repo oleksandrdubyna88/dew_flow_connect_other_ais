@@ -391,7 +391,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         var reading = Task.WhenAll(
             DrainAsync(process.StandardOutput, stdout, draining.Token, onStdOut),
             DrainAsync(process.StandardError, stderr, draining.Token, static () => { }));
-        var writing = WriteStdInAsync(process, request.StdIn, deadline.Token);
+        var writing = WriteStdInAsync(process, request.StdIn, closeAfter: !request.EndsEarly, deadline.Token);
 
         var end = await UntilExitOrAnswerAsync(process, answered.Task, deadline.Token);
         var survivors = end == WaitEnd.Exited
@@ -648,18 +648,28 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// including a write the deadline ended — otherwise a child that read everything would sit
     /// waiting for an end-of-file that never came.</para>
     /// </remarks>
-    private static async Task WriteStdInAsync(Process process, string text, CancellationToken ct)
+    /// <param name="closeAfter">
+    /// False for a child that is SPOKEN TO rather than fed — a request that ends its child itself: a stdio server exits
+    /// on the end of its input, and an exit that outran its own answer would skip the tree discipline the answer path
+    /// takes. Our end stays open until the launcher ends the child, which closes it before the kill as always.
+    /// </param>
+    private static async Task WriteStdInAsync(Process process, string text, bool closeAfter, CancellationToken ct)
     {
         try
         {
             if (text.Length > 0)
             {
                 await process.StandardInput.WriteAsync(text.AsMemory(), ct);
+                // Flushed here, because the close that used to flush it is what a held-open end does not do.
+                await process.StandardInput.FlushAsync(ct);
             }
         }
         finally
         {
-            Close(process.StandardInput);
+            if (closeAfter)
+            {
+                Close(process.StandardInput);
+            }
         }
     }
 }

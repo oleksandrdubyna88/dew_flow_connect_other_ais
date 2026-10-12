@@ -29,6 +29,49 @@ static class Serving
     public static int Run(string pidFile, int afterEofMs, bool grandchild, string answer) =>
         Serve(new Steering(answer, afterEofMs, grandchild, pidFile, string.Empty, 0, string.Empty, string.Empty, false));
 
+    /// <summary>A server that SHUTS DOWN ON EOF before it answers — exit 3, unanswered — the one the stdin rule exists for.</summary>
+    public const int ShutDownOnEofExitCode = 3;
+
+    /// <summary>
+    /// The <c>serve-shy</c> verb: answers the request carrying id 2 only <paramref name="answerAfterMs"/> after it
+    /// arrived — unless the end of its input comes first, in which case it writes <c>&lt;pidFile&gt;.eof</c> and exits
+    /// <see cref="ShutDownOnEofExitCode"/> without answering, as a stdio server that stops on EOF does. Answered, it
+    /// serves for ever until it is ended.
+    /// </summary>
+    public static int RunShy(string pidFile, int answerAfterMs, string answer)
+    {
+        File.WriteAllLines(pidFile, [Environment.ProcessId.ToString()]);
+        using var asked = new ManualResetEventSlim();
+        using var eof = new ManualResetEventSlim();
+        var reading = new Thread(() =>
+        {
+            while (Console.In.ReadLine() is { } line)
+            {
+                if (line.Contains("\"id\":2", StringComparison.Ordinal))
+                {
+                    asked.Set();
+                }
+            }
+
+            eof.Set();
+        })
+        { IsBackground = true };
+        reading.Start();
+
+        asked.Wait(TimeSpan.FromSeconds(30));
+        if (eof.Wait(answerAfterMs))
+        {
+            File.WriteAllText(pidFile + ".eof", "eof");
+
+            return ShutDownOnEofExitCode;
+        }
+
+        Say(answer);
+        Thread.Sleep(Timeout.Infinite);
+
+        return 0;
+    }
+
     /// <summary>The <c>app-server</c> argv: steered by the file in the temp directory, or the defaults.</summary>
     public static int AppServer()
     {

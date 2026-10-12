@@ -85,6 +85,31 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
     }
 
     [Fact]
+    public async Task AServerIsSpokenTo_NotFed_SoOneThatShutsDownOnEofStillAnswersAndIsEnded()
+    {
+        var pids = Path.Combine(_dir, "pids");
+        var launcher = new ProcessLauncher();
+
+        // A server that answers 300 ms after it is asked — unless its input ends first, when it shuts down unanswered
+        // (exit 3), as a stdio server does. Fed and then closed, the end of its input arrives in milliseconds and it is
+        // gone before it ever answers; spoken to, it answers and is ended by the launcher.
+        var shy = new ProcessRequest(FakeCliInvocations.Exe, ["serve-shy", pids, "300", Answer], AppContext.BaseDirectory)
+        {
+            StdIn = "{\"id\":1,\"method\":\"initialize\"}\n{\"id\":2,\"method\":\"read\"}\n",
+            Timeout = Generous,
+            EndsWhen = Answered,
+        };
+
+        var result = await launcher.RunAsync(shy);
+
+        result.Ended.Should().BeTrue("the launcher's end, not the child's own exit on EOF, is what ends a server it ends itself");
+        result.StdOut.Should().Contain(Answer, "a server that is still being spoken to answers");
+        result.ExitCode.Should().NotBe(3, "it never saw the end of its input before it answered");
+        File.Exists(pids + ".eof").Should().BeFalse("our end of stdin stays open until the launcher ends the child");
+        Alive(int.Parse(File.ReadAllLines(pids)[0])).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ARequestWithoutAPredicate_IsUnchanged_NoEndNoSurvivors()
     {
         var launcher = new ProcessLauncher();

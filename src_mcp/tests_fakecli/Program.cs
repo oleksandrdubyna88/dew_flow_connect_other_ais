@@ -323,6 +323,11 @@ switch (args0)
     case ["serve", var pidFile, var afterEofMs, var tree, var answer]:
         return Serving.Run(pidFile, int.Parse(afterEofMs), tree == "grandchild", answer);
 
+    // A server that answers only <answerAfterMs> after it was asked — and SHUTS DOWN on the end of its input first if
+    // that comes first, exit 3, unanswered: the shape the launcher's "spoken to, not fed" rule exists for.
+    case ["serve-shy", var shyPidFile, var answerAfterMs, var shyAnswer]:
+        return Serving.RunShy(shyPidFile, int.Parse(answerAfterMs), shyAnswer);
+
     // What the Team server's gauge reader starts, confined: steered by a file in the temp directory, never by argv.
     case ["app-server"]:
         return Serving.AppServer();

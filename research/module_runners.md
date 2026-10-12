@@ -2687,6 +2687,11 @@ one launcher both halves share, and nothing a reviewer launch does changed:
 - **A child that cannot be recorded is ended before the failure travels** (`RecordedAsync`): `ProcessTracking.Record`
   never throws, but a tracker that writes a slot's marker can, and a child alive with its identity on nobody's disk is
   the one state the containment has no answer to.
+- **A server is spoken to, not fed**: for an `EndsWhen` request our end of stdin stays OPEN after the request lines are
+  written (flushed, not closed — `WriteStdInAsync(closeAfter: false)`), until the launcher ends the child, which
+  closes it before the kill as always. A stdio server exits on the end of its input, and an exit that outran its own
+  answer would skip the tree discipline the answer path takes — its descendants reparented and unlisted. Every other
+  request still has its stdin closed after the write, which is what a child waiting for EOF is waiting for.
 
 **`ProcessTree`** (`Processes/ProcessTree.cs`) lists a process's descendants with their start times — Linux reads
 `/proc/<pid>/stat` for each process's parent, Windows takes a Toolhelp32 snapshot through four blittable `DllImport`s
