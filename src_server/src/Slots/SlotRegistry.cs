@@ -281,11 +281,15 @@ public sealed class SlotRegistry(
 
     /// <summary>Adds one process the reader's launcher reported — the child, then each descendant before the kill — to the marker.</summary>
     public void RecordReader(AccountSlot slot, CoaiMcp.Runners.Processes.ProcessIdentity identity) =>
-        Save(slot, s => s with
-        {
-            Reader = (s.Reader ?? new ReaderMarkerDto(ReaderPhases.Spawning, Environment.ProcessId, DateTime.UtcNow, DateTimeOffset.UtcNow))
-                with { Phase = ReaderPhases.Running, Tree = [.. (s.Reader?.Tree ?? []), identity] },
-        });
+        Save(slot, s => s with { Reader = Running(s.Reader, identity) });
+
+    /// <summary>The marker with one more process in its tree, phase Running — a fresh Spawning marker when none was written.</summary>
+    private static ReaderMarkerDto Running(ReaderMarkerDto? reader, CoaiMcp.Runners.Processes.ProcessIdentity identity)
+    {
+        var marker = reader ?? new ReaderMarkerDto(ReaderPhases.Spawning, Environment.ProcessId, DateTime.UtcNow, DateTimeOffset.UtcNow);
+
+        return marker with { Phase = ReaderPhases.Running, Tree = [.. (reader?.Tree ?? []), identity] };
+    }
 
     /// <summary>The reader's tree is confirmed gone: the marker is cleared, and with it any block.</summary>
     public void ClearReader(AccountSlot slot) =>
