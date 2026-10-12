@@ -20,7 +20,11 @@ namespace CoaiServer.Tests;
 /// <see cref="ReaderBarrierTests"/>'s and the crash harness's.</para>
 /// <para>Every credential is fake and disposable: a token set in codex's shape under a temp directory, a JWT signed by
 /// nobody whose one claim is its expiry.</para>
+/// <para>In the server collection because two of these start the in-process <see cref="TeamServer"/>, whose
+/// configuration is process-global environment variables: run beside another class's server, the catalog read
+/// another test's data directory — seen once in the full suite (1 of 572) and never alone.</para>
 /// </remarks>
+[Collection(ServerCollection.Name)]
 public sealed class GaugeCaptureTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-gauge-" + Guid.NewGuid().ToString("N"));
