@@ -33,6 +33,9 @@ public sealed class ReviewSnapshot : IDisposable
     private SnapshotBudget.Hold _hold;
     private bool _disposed;
 
+    /// <summary>The root as it was when the snapshot was made — what every opened handle is compared with (<see cref="ReadRoot"/>).</summary>
+    private readonly ReadRoot _trusted;
+
     internal ReviewSnapshot(ReviewSnapshots maker, string root, SnapshotManifest manifest, SnapshotBudget.Hold hold, Action<string> note)
     {
         _maker = maker;
@@ -40,6 +43,7 @@ public sealed class ReviewSnapshot : IDisposable
         _hold = hold;
         Root = root;
         Manifest = manifest;
+        _trusted = HandleRead.Trust(root);
     }
 
     /// <summary>The snapshot's directory — the CLI's working folder.</summary>
@@ -204,7 +208,7 @@ public sealed class ReviewSnapshot : IDisposable
     {
         BeforeOpen();
 
-        return HandleRead.Read(Root, relative, HandleRead.DefaultCap, RootRule) switch
+        return HandleRead.Read(_trusted, relative, HandleRead.DefaultCap, RootRule) switch
         {
             FileRead.Served served => new SnapshotRead.Served(served.Bytes),
             FileRead.Refused refused => new SnapshotRead.Refused($"{relative}: {refused.Reason}"),

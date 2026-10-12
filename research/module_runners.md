@@ -2784,9 +2784,16 @@ flowchart TD
   `readlink /proc/self/fd/N`) and that must be the manifest entry under the root's real path, component by component;
   and the bytes are read FROM THAT HANDLE against a 4 MiB cap — at most one byte over is ever read, and it is a
   refusal, so there is no size check a growing file can outrun. **macOS cannot name a handle** (`F_GETPATH` is a
-  variadic `fcntl`, unsafe to P/Invoke on arm64; `/dev/fd/N` is not a readable link), so there the fallback is the
-  weaker check — the walk for links once more AFTER the open — said as such, not claimed as closed
-  (`ALinkSwappedInBetweenTheWalkAndTheOpen_IsNotFollowedByRead`, `AFileThatGrowsPastTheCap_BeforeTheOpen_IsRefused`).
+  variadic `fcntl`, unsafe to P/Invoke on arm64; `/dev/fd/N` is not a readable link), so there the path is walked for
+  links once more AFTER the open, the root included, and then the opened file's IDENTITY is compared with the path's —
+  device and inode, `fstat` of the handle against `lstat` of the path (`Files/MacFileIdentity`): a link swapped in for
+  the open and removed again before the walk names a different inode and is refused (the cadence consultation of
+  epics 4-5, 2026-10-12, found the walk alone passed it). **The root is fixed when the reader is made**
+  (`ReadRoot`, from `HandleRead.Trust` in the snapshot's constructor and the ACP boundary's): its canonical path used
+  to be asked for AFTER the open, so a root renamed aside and replaced by a link in between named the outside folder
+  too, the outside handle matched it, and its bytes were served — red on Windows before the fix
+  (`ALinkSwappedInBetweenTheWalkAndTheOpen_IsNotFollowedByRead`, `ARootSwappedForALink_BetweenTheWalkAndTheOpen_IsNotFollowedByRead`,
+  `AFileThatGrowsPastTheCap_BeforeTheOpen_IsRefused`).
 - **One stable path per conversation** (D6 as amended the same day; §22 of the RESULTS file). A resumed Vibe session is
   bound to the folder it was created in — a read in a new `--workdir` was `tool_denied`, and the model re-asked turn 1's
   absolute path — while the same path re-filled in place was read afresh 3 of 3. So `ReviewSnapshot.RefreshAsync(live)`
@@ -2803,7 +2810,8 @@ flowchart TD
   links, the walk sees an ordinary file, and the copy reads it — it needs a locally prepared tree (nothing a branch can
   commit), and no check here sees it. Mixed-time detection — per file and across the inventory — is by length and
   last-write time, which an editor at work changes and a deliberate writer can restore; it is best effort, not a
-  guarantee. On macOS the handle-named read falls back to a walk after the open (above).
+  guarantee. On macOS the handle is not named but its identity is checked against the path's (above); a hard link is
+  the same inode by definition, so this check does not see one either.
 - **Measured on this repository** (the defaults' origin): 2 737 files, a 38.8 MB tar, 5.7 s to copy. The ceilings are
   50 000 files, 512 MB and 60 s; a refusal says the number it met.
 
@@ -2850,8 +2858,12 @@ D14 `insufficient balance` (`balance_spent`).
   the entry under the root's canonical path, and the bytes come from that handle against the 4 MiB ceiling — a link
   swapped in between the check and the open is not followed, and a file that grows after its size would have been
   looked at is refused at the read (`ALinkSwappedInBetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted`,
-  `AFileThatGrowsPastTheCeiling_AfterItsSizeWasChecked_IsRefused`; macOS falls back to a walk after the open, said
-  so in `HandleRead`). The snapshot's manifest-based resolve (D6) replaces this class behind the same interface.
+  `AFileThatGrowsPastTheCeiling_AfterItsSizeWasChecked_IsRefused`; on macOS a walk after the open plus the opened
+  file's device and inode against the path's, `ALinkSwappedInForTheOpen_AndRemovedBeforeTheCheck_IsRefused`). The
+  working folder's canonical path is fixed when the boundary is made, so a root swapped for a link between the check
+  and the open is refused (`ARootSwappedForALink_BetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted`; the cadence
+  consultation of epics 4-5 found it served). The snapshot's manifest-based resolve (D6) replaces this class behind
+  the same interface.
 - **Everything else.** `fs/write_text_file`, `terminal/*` and any unknown request are answered `-32601`. A handler
   that throws what it did not foresee answers THAT request with an error (`-32602` for a read, `-32603` otherwise)
   and the pump reads on — it used to fault and leave the agent waiting until the deadline (finding 3).

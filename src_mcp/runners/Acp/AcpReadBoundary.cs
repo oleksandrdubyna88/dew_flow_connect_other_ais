@@ -52,7 +52,8 @@ public sealed record AcpReadAnswer(bool Served, string Text, string Refusal)
 /// <c>~</c> followed by a digit is declined outright (finding 2 of the security review). A legitimate name of that
 /// shape is refused too, and the sentence says why.</para>
 /// <para><b>What it does not know.</b> A link placed between the check and the read is the snapshot manifest's to
-/// close. The root itself is the caller's and is not checked. And a path the filesystem cannot even normalise — too
+/// close. The root is fixed when the boundary is made (<see cref="ReadRoot"/>): a root swapped for a link afterwards is
+/// a different place from the one every handle is compared with. And a path the filesystem cannot even normalise — too
 /// long, a character it refuses — is declined with a sentence rather than thrown, so the agent's request is
 /// answered (finding 3).</para>
 /// </remarks>
@@ -75,8 +76,14 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
 
     private readonly string _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
 
+    /// <summary>The root as it is now, when the boundary is made — what every opened handle is compared with (<see cref="ReadRoot"/>).</summary>
+    private readonly ReadRoot _trusted = HandleRead.Trust(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)));
+
     /// <summary>A seam for the tests, run immediately before the file is opened — the window a swapped-in link or a growing file must not win.</summary>
     internal Action BeforeOpen { get; set; } = static () => { };
+
+    /// <summary>A seam for the tests, run between the open and the check of what was opened.</summary>
+    internal Action AfterOpen { get; set; } = static () => { };
 
     public AcpReadAnswer Read(string requestedPath)
     {
@@ -218,7 +225,7 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
 
         BeforeOpen();
 
-        return HandleRead.Read(_root, relative, MaxBytes, Names) switch
+        return HandleRead.Read(_trusted, relative, MaxBytes, Names, AfterOpen) switch
         {
             FileRead.Served served => AcpReadAnswer.Of(Decoded(served.Bytes)),
             // The sentence names no path and no system message: the agent is told why not, not what is there.

@@ -259,6 +259,38 @@ public sealed class ReviewSnapshotResolveTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// The cadence consultation of epics 4-5 (2026-10-12): the root's walk passed, THEN the root was renamed aside and a
+    /// link put in its place before the open. The root's canonical path was asked for after the open, so it named the
+    /// outside folder too, and the outside file matched. The root's identity is fixed when the snapshot is made.
+    /// </summary>
+    [Fact]
+    public async Task ARootSwappedForALink_BetweenTheWalkAndTheOpen_IsNotFollowedByRead()
+    {
+        using var outside = TempDir.For("coai-snap-outside-");
+        await File.WriteAllTextAsync(outside.At("a.txt"), "ROOT-SWAP-CANARY");
+        var aside = _snapshot.Root + "-aside";
+        _snapshot.BeforeOpen = () =>
+        {
+            Directory.Move(_snapshot.Root, aside);
+            SnapshotTestKit.LinkNow(_snapshot.Root, outside);
+        };
+        try
+        {
+            _snapshot.Read(Inside("a.txt")).Should().BeOfType<SnapshotRead.Refused>("the handle names a file outside the snapshot made")
+                .Which.Reason.Should().NotContain("ROOT-SWAP-CANARY");
+        }
+        finally
+        {
+            _snapshot.BeforeOpen = static () => { };
+            DirectoryLink.Remove(_snapshot.Root);
+            if (Directory.Exists(aside))
+            {
+                Directory.Move(aside, _snapshot.Root);
+            }
+        }
+    }
+
     /// <summary>Finding F: a size checked before the open is a size the file can outgrow; the read itself must be capped.</summary>
     [Fact]
     public void AFileThatGrowsPastTheCap_BeforeTheOpen_IsRefused()

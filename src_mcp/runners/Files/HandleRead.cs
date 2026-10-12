@@ -17,6 +17,13 @@ public abstract record FileRead
 }
 
 /// <summary>
+/// A root as it was when a reader was made: the path it is reached by, and the place the kernel says that path was
+/// then. Made once, by <see cref="HandleRead.Trust"/>, and never asked again — a root renamed aside and replaced by a
+/// link later is then a different place from this one, not a new truth.
+/// </summary>
+public sealed record ReadRoot(string Path, string Canonical);
+
+/// <summary>
 /// Reads a file FROM ITS OPENED HANDLE, after asking the handle what it really names — the one read both confined
 /// readers go through (the snapshot's <c>ReviewSnapshot.Read</c> and the ACP boundary's <c>FolderReadBoundary.Read</c>).
 /// </summary>
@@ -32,8 +39,13 @@ public abstract record FileRead
 /// equal to its long form. Linux: the kernel's own answer, <c>readlink /proc/self/fd/N</c>, through
 /// <see cref="FileSystemInfo.LinkTarget"/>. macOS: <c>F_GETPATH</c> is a variadic <c>fcntl</c>, which P/Invoke cannot call
 /// safely on arm64, and <c>/dev/fd/N</c> is not a readable link — so the handle cannot be named there, and the
-/// fallback is the weaker check: the path is walked for links again AFTER the open (a link still present is caught; one
-/// swapped in and removed again inside the open's own window is not). Said plainly rather than claimed.</para>
+/// fallback is the path walked for links again AFTER the open, the root included, and then the opened file's identity
+/// (device and inode, <see cref="MacFileIdentity"/>) compared with the path's: a link swapped in for the open and
+/// removed again before the walk names a different inode, so it is refused too.</para>
+/// <para><b>The root is fixed when the reader is made</b> (<see cref="ReadRoot"/>; the cadence consultation of epics
+/// 4-5, 2026-10-12). Its canonical path used to be asked for AFTER the open: a root renamed aside and replaced by a
+/// link in between then named the outside folder too, the outside file's handle matched it, and its bytes were
+/// served.</para>
 /// <para>Anything the platform cannot answer is a refusal: an unnamed handle is not known to be the file.</para>
 /// </remarks>
 public static partial class HandleRead
@@ -51,13 +63,21 @@ public static partial class HandleRead
     /// </summary>
     /// <param name="cap">The most bytes served; one more is a refusal.</param>
     /// <param name="rule">How path components compare on this filesystem.</param>
-    public static FileRead Read(string root, string relative, long cap, StringComparison rule)
+    /// <summary>The root a reader serves from, fixed now: its path, and the place that path is at this moment.</summary>
+    public static ReadRoot Trust(string root) => new(root, CanonicalDirectory(root));
+
+    public static FileRead Read(ReadRoot root, string relative, long cap, StringComparison rule) =>
+        Read(root, relative, cap, rule, static () => { });
+
+    /// <param name="afterOpen">A seam for the tests, run between the open and the check of what was opened.</param>
+    internal static FileRead Read(ReadRoot root, string relative, long cap, StringComparison rule, Action afterOpen)
     {
-        var path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+        var path = Path.Combine(root.Path, relative.Replace('/', Path.DirectorySeparatorChar));
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.None);
-            var verified = Verified(stream.SafeFileHandle, root, relative, rule);
+            afterOpen();
+            var verified = Verified(stream.SafeFileHandle, root, relative, path, rule);
 
             return verified.Length > 0 ? new FileRead.Refused(verified) : Capped(stream, cap);
         }
@@ -69,11 +89,11 @@ public static partial class HandleRead
     }
 
     /// <summary>Why the opened handle is not the expected entry under the root, or empty when it is.</summary>
-    private static string Verified(SafeFileHandle handle, string root, string relative, StringComparison rule)
+    private static string Verified(SafeFileHandle handle, ReadRoot root, string relative, string path, StringComparison rule)
     {
         if (OperatingSystem.IsMacOS())
         {
-            return WalkedAgain(root, relative);
+            return WalkedAgain(handle, root.Path, relative, path);
         }
 
         var final = FinalPathOf(handle);
@@ -82,27 +102,44 @@ public static partial class HandleRead
             return "what was opened cannot be named by its handle on this platform, so nothing is served from it";
         }
 
-        var expected = Path.Combine(CanonicalDirectory(root), relative.Replace('/', Path.DirectorySeparatorChar));
+        var expected = Path.Combine(root.Canonical, relative.Replace('/', Path.DirectorySeparatorChar));
 
         return SameByComponents(final, expected, rule)
             ? string.Empty
             : "what was opened is not the file that was asked for: a link appeared under the path, and it is not followed";
     }
 
-    /// <summary>The macOS fallback: the walk for links once more, after the open — best effort, and documented as such.</summary>
-    private static string WalkedAgain(string root, string relative)
+    /// <summary>The macOS check: no link from the root down after the open, and the opened file IS the file the path names.</summary>
+    private static string WalkedAgain(SafeFileHandle handle, string root, string relative, string path)
     {
-        var at = root;
+        if (LinkFromTheRoot(root, relative))
+        {
+            return "a link is on the path at the moment of the read, and it is not followed";
+        }
+
+        return MacFileIdentity.SameEntry(handle, path)
+            ? string.Empty
+            : "what was opened is not the file the path names now: it was swapped, and it is not served";
+    }
+
+    private static bool LinkFromTheRoot(string root, string relative)
+    {
+        var at = Path.TrimEndingDirectorySeparator(root);
+        if (IsLink(at))
+        {
+            return true;
+        }
+
         foreach (var part in relative.Split(Separators, StringSplitOptions.RemoveEmptyEntries))
         {
             at = Path.Combine(at, part);
             if (IsLink(at))
             {
-                return "a link is on the path at the moment of the read, and it is not followed";
+                return true;
             }
         }
 
-        return string.Empty;
+        return false;
     }
 
     private static bool IsLink(string path)

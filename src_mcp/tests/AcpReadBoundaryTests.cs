@@ -267,6 +267,89 @@ public sealed class AcpReadBoundaryTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The cadence consultation of epics 4-5 (2026-10-12): the root's canonical path was asked for AFTER the open, so a
+    /// root renamed aside and replaced by a link between the check and the open made the outside file's handle match the
+    /// outside "root" — and its bytes were served. The root's identity is fixed when the boundary is made.
+    /// </summary>
+    [Fact]
+    public void ARootSwappedForALink_BetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted()
+    {
+        var inside = Write(Path.Combine("dir", "inner.txt"), "inside");
+        var outside = _dir.At("outside-root");
+        Directory.CreateDirectory(Path.Combine(outside, "dir"));
+        File.WriteAllText(Path.Combine(outside, "dir", "inner.txt"), "ROOT-SWAP-CANARY");
+        var aside = _dir.At("snap-aside");
+        var boundary = Boundary();
+        boundary.BeforeOpen = () =>
+        {
+            Directory.Move(Root, aside);
+            SnapshotTestKit.LinkNow(Root, outside);
+        };
+        try
+        {
+            var answer = boundary.Read(inside);
+
+            answer.Served.Should().BeFalse("the root the boundary was made for is not the one the handle names");
+            answer.Text.Should().NotContain("ROOT-SWAP-CANARY");
+            answer.Refusal.Should().NotContain("ROOT-SWAP-CANARY");
+        }
+        finally
+        {
+            DirectoryLink.Remove(Root);
+            if (Directory.Exists(aside))
+            {
+                Directory.Move(aside, Root);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The same consultation, on the platform that cannot name a handle (macOS): a link swapped in for the open and the
+    /// directory put BACK before the check after it — a walk of the path then finds nothing, so the check must be of what
+    /// was opened (its identity), not of the path again. Elsewhere the handle's own name already refuses it.
+    /// </summary>
+    [Fact]
+    public void ALinkSwappedInForTheOpen_AndRemovedBeforeTheCheck_IsRefused()
+    {
+        var inside = Write(Path.Combine("dir", "inner.txt"), "inside");
+        var outside = _dir.At("elsewhere-2");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "inner.txt"), "RESTORED-CANARY");
+        var aside = _dir.At("dir-aside");
+        var boundary = Boundary();
+        boundary.BeforeOpen = () =>
+        {
+            Directory.Move(Path.Combine(Root, "dir"), aside);
+            SnapshotTestKit.LinkNow(Path.Combine(Root, "dir"), outside);
+        };
+        boundary.AfterOpen = () =>
+        {
+            DirectoryLink.Remove(Path.Combine(Root, "dir"));
+            Directory.Move(aside, Path.Combine(Root, "dir"));
+        };
+        try
+        {
+            var answer = boundary.Read(inside);
+
+            answer.Served.Should().BeFalse("what was opened is the outside file, whatever the path says afterwards");
+            answer.Text.Should().NotContain("RESTORED-CANARY");
+        }
+        finally
+        {
+            // AfterOpen put the real directory back; only a link still standing (a failure before it) is removed.
+            if (new DirectoryInfo(Path.Combine(Root, "dir")).LinkTarget is not null)
+            {
+                DirectoryLink.Remove(Path.Combine(Root, "dir"));
+            }
+
+            if (Directory.Exists(aside))
+            {
+                Directory.Move(aside, Path.Combine(Root, "dir"));
+            }
+        }
+    }
+
     /// <summary>Finding F: a size checked before the open is a size the file can outgrow.</summary>
     [Fact]
     public void AFileThatGrowsPastTheCeiling_AfterItsSizeWasChecked_IsRefused()
