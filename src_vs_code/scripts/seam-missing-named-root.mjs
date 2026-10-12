@@ -105,7 +105,11 @@ export async function missingNamedRootSeam({ binary, sessionsFor, timeoutMs, fai
   const missing = join(parent, 'named-but-missing');
   const existing = join(parent, 'named-and-there');
   mkdirSync(existing);
+  // The stand-in for ~/.local/share must EXIST: on a POSIX host .NET answers an empty LocalApplicationData for a folder
+  // that is not there, the default data directory becomes the bare `coai-mcp`, and the server stops on its own
+  // "not rooted" guard (seen in CI, Linux, PR #777). A real ~/.local/share exists; this one is made to match.
   const xdg = join(parent, 'xdg');
+  mkdirSync(xdg);
   const posix = process.platform !== 'win32';
   // No vault in any case: a COAI_CREDS_KEY inherited from the developer's shell made every run call the real `creds
   // config` (the code round's own review); an empty key is "no vault" (KeyVault.ReadAsync). No inherited side either.
