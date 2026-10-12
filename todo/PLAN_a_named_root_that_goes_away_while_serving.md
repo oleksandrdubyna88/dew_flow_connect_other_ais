@@ -67,6 +67,18 @@ missing" as the refusal). A race is then a FAILED write — refused with the sen
 stated guarantee is exactly that; a test plants the race (the root removed between the presence answer and the create,
 through an injected file-system seam) and asserts the root stays absent.
 
+### A named root that IS a mount point (CodeRabbit on the PR that recorded this plan, 2026-10-12, accepted)
+
+When `COAI_DATA_DIR` names the mount point itself (`/mnt/z`, `Z:\` on a drive that stays lettered), an unmount leaves
+the EMPTY mount-point directory behind: every presence check — the extension's and the server's — answers "present", and
+writes land in the bare mount point. Neither half catches it today. Options for the plan round of this work: (a) a
+**marker file** (`.coai-data-root`, written when the folder is chosen or first adopted) — a named root without its
+marker is "not our folder", refused like an absent one, with a sentence that names the case; (b) comparing the root's
+device id with its parent's on POSIX (equal → nothing mounted); (c) refusing a root that is itself a mount point and
+asking for a folder inside it. (a) works on every OS and for both halves; it needs a one-time adoption for existing
+data folders (one that already holds `coai.db` or `sessions/` is ours). A test: a named root that exists but is empty
+and unmarked (the unmounted mount point) is refused by the server and the extension alike, and a marked one is used.
+
 ### Added by the plan round of the PR that recorded this plan (2026-10-12, all accepted)
 
 - **The scan cannot pass vacuously.** A companion assertion that the scan FINDS a known writer (for example
