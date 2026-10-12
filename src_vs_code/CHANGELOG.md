@@ -16,7 +16,7 @@ and writes nothing: no log file, run marker, sweep or survey. A folder the disk 
 refused read) is never treated as missing; the default location and a side folder inside an existing one are still
 made when first needed. Every mode is classified by a test, so a new one is checked before it ships.
 
-## Unreleased
+## Extension 0.71.0 — 2026-10-12
 
 **Changed: the Security lane names its reviewers.** A pair's Reviewer list now reads like the question consultant's: a
 model by its card's name with its id beside it (*GPT-6-Astra (chat-preset-…)*), *(switched off)* for one that is off,
