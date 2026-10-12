@@ -134,16 +134,62 @@ public static class RoundsPerPercent
     /// <summary>One interval between two readings: when it ended, its rounds and its rise — or why it is unusable.</summary>
     private sealed record Interval(DateTimeOffset EndUtc, double Rounds, double Rise, string Unusable);
 
+    /// <summary>
+    /// One account's readings, oldest first, and — for each reading after the first — whether a launch with no reading of
+    /// its own lies between it and the one before. Built ONCE per account and shared by every window (epic 6's code
+    /// round: the missing-reading check used to rescan every line for every interval of every window).
+    /// </summary>
+    private sealed record Account(IReadOnlyList<Reading> Readings, IReadOnlyList<bool> BareBefore);
+
     private static IEnumerable<GaugeRatio> FiguresOf(string vendor, IReadOnlyList<GaugeLine> lines, Func<string, IReadOnlyList<string>> uncounted)
     {
         var launches = LaunchesPerRound(lines);
+        var accounts = AccountsOf(lines);
 
         return lines
             .SelectMany(line => Reported(line.Gauge).Select(one => one.Window))
             .Distinct()
             .OrderBy(window => window.LimitId, StringComparer.Ordinal)
             .ThenBy(window => window.Mins)
-            .Select(window => Hidden(Figure(vendor, window, IntervalsOf(window, lines, launches)), uncounted(window.LimitId)));
+            .Select(window => Hidden(Figure(vendor, window, IntervalsOf(window, accounts, launches)), uncounted(window.LimitId)))
+            .ToList();
+    }
+
+    /// <summary>Every account of the vendor, each read once.</summary>
+    private static List<Account> AccountsOf(IEnumerable<GaugeLine> lines) =>
+        [.. lines
+            .GroupBy(line => line.Account, StringComparer.Ordinal)
+            .Select(account => AccountOf([.. account.OrderBy(line => line.AtUtc)]))];
+
+    /// <summary>
+    /// One account, in ONE ordered pass: its readings, and for each interval whether a reading-less launch falls in
+    /// <c>(before, after]</c> — a pointer over the reading-less lines' instants that only moves forward.
+    /// </summary>
+    private static Account AccountOf(IReadOnlyList<GaugeLine> ordered)
+    {
+        var readings = ReadingsOf(ordered);
+        var bare = ordered.Where(line => ObservedOf(line.Gauge) is null).Select(line => line.AtUtc).ToList();
+        var flags = new bool[readings.Count];
+        var next = 0;
+        for (var k = 1; k < readings.Count; k++)
+        {
+            next = FirstAfter(bare, next, readings[k - 1].ObservedUtc);
+            flags[k] = next < bare.Count && bare[next] <= readings[k].ObservedUtc;
+        }
+
+        return new Account(readings, flags);
+    }
+
+    /// <summary>The first index from <paramref name="from"/> whose instant is after <paramref name="instant"/>.</summary>
+    private static int FirstAfter(IReadOnlyList<DateTimeOffset> instants, int from, DateTimeOffset instant)
+    {
+        var at = from;
+        while (at < instants.Count && instants[at] <= instant)
+        {
+            at++;
+        }
+
+        return at;
     }
 
     /// <summary>Every review launch of each round on this vendor — what a round's share of one interval is measured against.</summary>
@@ -174,20 +220,15 @@ public static class RoundsPerPercent
             : null;
 
     /// <summary>Every interval of the window on every account, oldest end first.</summary>
-    private static List<Interval> IntervalsOf(Window window, IReadOnlyList<GaugeLine> lines, IReadOnlyDictionary<string, int> launches) =>
-        [.. lines
-            .GroupBy(line => line.Account, StringComparer.Ordinal)
-            .SelectMany(account => AccountIntervals(window, [.. account.OrderBy(line => line.AtUtc)], launches))
+    private static List<Interval> IntervalsOf(Window window, IReadOnlyList<Account> accounts, IReadOnlyDictionary<string, int> launches) =>
+        [.. accounts
+            .SelectMany(account => AccountIntervals(window, account, launches))
             .OrderBy(interval => interval.EndUtc)];
 
-    /// <summary>One account's intervals: each pair of consecutive readings, with the lines between them.</summary>
-    private static IEnumerable<Interval> AccountIntervals(Window window, IReadOnlyList<GaugeLine> lines, IReadOnlyDictionary<string, int> launches)
-    {
-        var readings = ReadingsOf(lines);
-
-        return readings.Zip(readings.Skip(1), (before, after) =>
-            Between(PointOf(window, before), PointOf(window, after), after, Bare(lines, before, after), launches));
-    }
+    /// <summary>One account's intervals: each pair of consecutive readings, and whether a launch between them has none.</summary>
+    private static IEnumerable<Interval> AccountIntervals(Window window, Account account, IReadOnlyDictionary<string, int> launches) =>
+        Enumerable.Range(1, Math.Max(0, account.Readings.Count - 1)).Select(k =>
+            Between(PointOf(window, account.Readings[k - 1]), PointOf(window, account.Readings[k]), account.Readings[k], account.BareBefore[k], launches));
 
     /// <summary>The account's readings, by observation time — every line carrying one instant is one reading.</summary>
     private static List<Reading> ReadingsOf(IEnumerable<GaugeLine> lines) =>
@@ -197,10 +238,6 @@ public static class RoundsPerPercent
             .GroupBy(one => one.At!.Value)
             .OrderBy(reading => reading.Key)
             .Select(reading => new Reading(reading.Key, [.. reading.Select(one => one.Line)]))];
-
-    /// <summary>The lines written between two readings that carry none — launches whose reading is missing.</summary>
-    private static bool Bare(IEnumerable<GaugeLine> lines, Reading before, Reading after) =>
-        lines.Any(line => ObservedOf(line.Gauge) is null && line.AtUtc > before.ObservedUtc && line.AtUtc <= after.ObservedUtc);
 
     /// <summary>What a reading says about the window, and whether it is stale against the lines that carry it.</summary>
     private static Point PointOf(Window window, Reading reading)
