@@ -154,16 +154,21 @@ internal static class SnapshotPlanner
     {
         var source = Path.Combine(sourceRoot, relative.Replace('/', Path.DirectorySeparatorChar));
         var info = new FileInfo(source);
-        if (!info.Exists)
-        {
-            // A live tree's file deleted since the listing is simply absent; a pinned tree's is a broken tree.
-            return live ? string.Empty : $"{relative} is listed in the pinned tree but is not there";
-        }
-
+        // A link is judged BEFORE existence. On Unix git lists a symlink to a directory as ONE entry, and to FileInfo
+        // that entry does not "exist" (its target is a directory) — so the old order, existence first, skipped it as a
+        // file deleted from a live tree, and the link was never judged: the snapshot was MADE where Windows refused (CI on
+        // Linux and macOS, 2026-10-12). What the entry IS — its link target, its reparse bit — does not depend on what it
+        // reaches, or on whether that exists; a dangling link is a link too.
         var onTheWay = directories.LinkOnTheWayTo(relative);
         if (onTheWay.Length > 0 || IsLink(info))
         {
             return $"{(onTheWay.Length > 0 ? onTheWay : relative)} is a link (a symbolic link, junction or other reparse point); a snapshot follows none";
+        }
+
+        if (!info.Exists)
+        {
+            // A live tree's file deleted since the listing is simply absent; a pinned tree's is a broken tree.
+            return live ? string.Empty : $"{relative} is listed in the pinned tree but is not there";
         }
 
         if (info.Length <= LfsPointerUpTo && IsLfsPointer(source))
@@ -177,7 +182,30 @@ internal static class SnapshotPlanner
         return string.Empty;
     }
 
-    private static bool IsLink(FileSystemInfo info) => info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint);
+    /// <summary>
+    /// Whether the entry ITSELF is a link, by lstat-level facts: its link target (a symlink on Unix, a symlink or
+    /// junction on Windows, dangling or not), else its reparse bit. An entry that is not there at all is not a link —
+    /// its attributes read as -1, every bit set, which the flag test alone would take for a reparse point. Anything that
+    /// cannot be inspected counts as a link.
+    /// </summary>
+    private static bool IsLink(FileSystemInfo info)
+    {
+        try
+        {
+            if (info.LinkTarget is not null)
+            {
+                return true;
+            }
+
+            var attributes = info.Attributes;
+
+            return attributes != (FileAttributes)(-1) && attributes.HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
 
     private static bool IsLfsPointer(string path)
     {

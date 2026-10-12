@@ -161,6 +161,93 @@ public sealed class ReviewSnapshotHardeningTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------
+    // CI on Linux and macOS, 2026-10-12 — a link git lists as ONE entry was skipped as "missing", never refused
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// On Unix <c>git ls-files --others</c> lists a symlink to a directory as one entry; <c>FileInfo.Exists</c> is false
+    /// for it (its target is a directory), and the live planner skipped it as deleted — the link was never judged, and
+    /// the snapshot was MADE where the Windows run had refused (CI: <c>ADirectoryLinkInTheSource_…</c>,
+    /// <c>ARefusedRefresh_…</c>). A junction is the same shape here, so the planner is handed the entry git would list.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ALinkListedAsOneEntry_IsRefusedBeforeItsExistenceIsAsked(bool live)
+    {
+        using var outside = TempDir.For("coai-snap-outside-");
+        await File.WriteAllTextAsync(outside.At("marker.txt"), "OUTSIDE");
+        var link = Path.Combine(_repo.Path, "jdir");
+        await DirectoryLink.MakeAsync(_launcher, link, outside);
+        try
+        {
+            new FileInfo(link).Exists.Should().BeFalse("the shape under test: a link whose target is a directory is not a file to FileInfo");
+
+            var planned = SnapshotPlanner.Plan(
+                _repo.Path, _scratch.At("dest"), [new SnapshotEntry("jdir", EntryKind.File)], [], SnapshotOptions.Default, live, StringComparison.OrdinalIgnoreCase);
+
+            planned.Should().BeOfType<Planning.Refused>($"a link is judged before its existence, live: {live}")
+                .Which.Reason.Should().Contain("jdir").And.ContainEquivalentOf("link", "refused AS A LINK, not as a file that is not there");
+        }
+        finally
+        {
+            DirectoryLink.Remove(link);
+        }
+    }
+
+    /// <summary>A link with no target at all is still a link — judged by what the entry IS, not by what it reaches.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADanglingLink_IsRefusedNotSkipped(bool live)
+    {
+        var link = Path.Combine(_repo.Path, "dangling");
+        if (!await TryDanglingLinkAsync(link))
+        {
+            Assert.Skip("this machine cannot make a dangling link without privilege");
+        }
+
+        try
+        {
+            var planned = SnapshotPlanner.Plan(
+                _repo.Path, _scratch.At("dest"), [new SnapshotEntry("dangling", EntryKind.File)], [], SnapshotOptions.Default, live, StringComparison.OrdinalIgnoreCase);
+
+            planned.Should().BeOfType<Planning.Refused>($"live: {live}").Which.Reason.Should().Contain("dangling").And.ContainEquivalentOf("link");
+        }
+        finally
+        {
+            DirectoryLink.Remove(link);
+            if (File.Exists(link))
+            {
+                File.Delete(link);
+            }
+        }
+    }
+
+    /// <summary>A junction to a folder that does not exist (Windows makes one without looking), a symlink to nowhere elsewhere.</summary>
+    private async Task<bool> TryDanglingLinkAsync(string link)
+    {
+        var nowhere = Path.Combine(_repo.Path, "no-such-target");
+        if (OperatingSystem.IsWindows())
+        {
+            var made = await _launcher.RunAsync(new ProcessRequest("cmd", ["/c", "mklink", "/J", link, nowhere], _repo.Path));
+
+            return made.ExitCode == 0;
+        }
+
+        try
+        {
+            File.CreateSymbolicLink(link, nowhere);
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Finding 5 — the manifest
     // ---------------------------------------------------------------------------------------
 

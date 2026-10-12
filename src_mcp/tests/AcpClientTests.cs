@@ -284,7 +284,10 @@ public sealed class AcpClientTests
 
     /// <summary>
     /// The parent has DEFINITELY exited before the cleanup begins: the agent leaves by its own <c>exit</c> step after
-    /// spawning the grandchild, and the client observes that exit (the reason names the code) before it tears down. The
+    /// spawning the grandchild, and the client observes that exit before it tears down — as the process's exit
+    /// (Windows) or as the pipe's EOF the kernel delivers as the process goes (Linux, macOS: CI on 2026-10-12 read
+    /// "the agent closed its output before answering" where Windows reads "exited with code 0"). Either sentence is
+    /// the same exit seen from one of its two sides; the pid being gone is what says the parent is not there, and the
     /// grandchild's pid was recorded at its spawn, in the pid file, so what is asserted gone is the real process.
     /// </summary>
     /// <remarks>
@@ -305,8 +308,12 @@ public sealed class AcpClientTests
         var grandchild = agent.GrandchildPid();
 
         outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
-        // The grandchild inherited the stdout pipe, so no EOF ever comes: the exit itself is what ends the turn.
-        outcome.Reason.Should().Contain("before answering").And.Contain("exited with code 0", "the parent's exit was observed before any cleanup");
+        // The exit itself is what ends the turn — seen as the process's exit, or as the EOF its exit delivers; which one the
+        // client sees first is the platform's, not the client's (the grandchild holds the pipe, so on Windows the exit wins).
+        outcome.Reason.Should().Contain("before answering");
+        outcome.Reason.Should().Match(
+            reason => reason.Contains("exited with code 0") || reason.Contains("closed its output"),
+            "the agent's own exit, from one of its two sides, is what ended the turn: {0}", outcome.Reason);
         outcome.Answer.Should().Be("half");
         grandchild.Should().NotBe(outcome.AgentPid, "the pid file names the grandchild, not the agent");
         Gone(outcome.AgentPid).Should().BeTrue();

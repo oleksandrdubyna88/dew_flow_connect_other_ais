@@ -2750,7 +2750,11 @@ flowchart TD
   the root (git on Windows lists the files under a junction as ordinary files; each directory is asked once), a path
   that would leave the root, two names that are one under the destination's case rule (probed on the destination, not
   assumed from the OS: `DestinationCase`), and the three ceilings — with the number. A link git lists nothing under is
-  not copied through and is not refused: what is refused is a byte from outside, not a name.
+  not copied through and is not refused: what is refused is a byte from outside, not a name. A link git lists AS an
+  entry is judged a link BEFORE its existence is asked, on every platform (CI on Linux and macOS, 2026-10-12): on Unix
+  `git ls-files --others` lists a symlink to a directory as one path, `FileInfo.Exists` is false for it, and the live
+  planner had skipped it as a deleted file — the snapshot was made where Windows refused. The entry's own link target or
+  reparse bit decides, so a dangling link is refused too; an entry that cannot be inspected counts as a link.
 - **What is named, not copied.** An excluded path goes into `Manifest.Excluded`; an unpopulated submodule and a file
   whose first bytes are the git-LFS pointer header (`version https://git-lfs.github.com/spec/v1`, read only for files
   of 1024 bytes or less, the spec's cap) go into `Manifest.Unavailable` with a sentence the prompt can show.

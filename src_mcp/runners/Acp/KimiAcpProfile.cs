@@ -86,11 +86,14 @@ public sealed class KimiAcpProfile : IAcpProfile
     /// <para>Every other host gets bare <c>kimi</c> and no guess: nothing here has run Kimi on Linux, WSL or a Mac,
     /// and a path nobody observed is not one to start a process from (the <c>agy</c> precedent for macOS). The WSL
     /// cells of S4 lift this when they run.</para>
+    /// <para>Pure over <paramref name="host"/>, which means the Windows path is spelled with Windows separators
+    /// whatever OS runs this: <c>Path.Combine</c> spelled it with the RUNNING OS's separator, so on Linux and macOS CI
+    /// (2026-10-12) the path never equalled the one the file test was given and the answer was bare <c>kimi</c>.</para>
     /// </remarks>
     public static string InstalledExecutableFor(HostKind host, string home, string? pathVariable, Func<string, bool> exists) =>
         host switch
         {
-            HostKind.Windows => IfThere(Path.Combine(home, ".kimi-code", "bin", "kimi.exe"), exists),
+            HostKind.Windows => IfThere($@"{home.TrimEnd('\\', '/')}\.kimi-code\bin\kimi.exe", exists),
             _ => ProfileName,
         };
 
