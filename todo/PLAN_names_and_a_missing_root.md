@@ -168,7 +168,8 @@ the family checks (`plan-lifecycle`, `pin-check`, `gate-snippet-check`).
 
 ## As built (2026-10-11)
 
-Seven commits on `feat/names-and-a-missing-root`, one per story plus the seam leg and the docs. Every story went RED
+Eight commits on `feat/names-and-a-missing-root`, one per story plus the seam leg, the docs and the measurement of the
+three person's modes the plan did not list. Every story went RED
 first with the real symptom (the rows of [module_tests.md](../research/module_tests.md), "Names and a missing root",
 carry each message), then GREEN, then compiling break-its on the deciding lines, restored in `finally`.
 
@@ -196,6 +197,10 @@ hides any other, exactly as advised. Nothing was written past a sweep's beat (12
 | 7 | 3.3: `--check-security` "touching no data directory" | A census kind of its own (*touches no data directory*), held by the server's reader inventory; the two checks' kind (*a person acts, held by the extension*) is held by a new census test that requires them in the server's writer test | The plan named the reclassification; this is how each new kind is held. |
 | 8 | Seam (c): a served `initialize` + tool call with no `COAI_DATA_DIR` | Served only on POSIX (`XDG_DATA_HOME` moves the default into a temp folder); on Windows (c) asks `--check-model` alone, which writes nothing for an unavailable row | On Windows .NET reads `%LOCALAPPDATA%` from the shell, not the environment: a served run would write logs, a run marker and sweeps into the developer's own data. |
 | 9 | Help | Two additions in five languages: the `security-lane` article (the marks) and `where-your-data-lives` (the server creates no missing named folder either); both held by `helpCoverage.test.ts` | — |
+| 10 | The writer modes named in 3.1 | Plus `--probe-api`: measured to make the root (its `usage.jsonl` line), so it joined `Program.WriterModes` and `ProbeApiMode.RunAsync` refuses before the vault read and before anything is sent | The DoD says NO mode creates a confirmed-absent named root; the three modes the plan did not list were measured (the coordinator's follow-up, same day). |
 
-**Left (not in this plan):** `--tree-remove`, `--close-consult` and `--probe-api` under a missing named root were not
-measured or changed; `module_server.md` says so where it lists them.
+**The three person's modes the plan did not list, measured.** `--probe-api` made the root (`holding: usage.jsonl`) and
+is now refused (exit 74, nothing sent). `--close-consult` makes nothing — it finds no record under a missing root and
+refuses with 65 — and `--tree-remove` makes nothing — it works under the review root; both are pinned by
+`AReaderModeNeverMakesTheDataDirectoryTests`. The census (`everyServerModeTheExtensionLaunches.test.ts`) has no
+unmeasured *a person acts* kind any more: every launch is held by the server's reader test or its writer test.

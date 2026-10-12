@@ -19,8 +19,16 @@ import { codeOf, shippedSources } from './dataDirWriters';
 type Launch =
   /** Launched to read — on a render, a probe, a page — with nobody acting: must never make the data directory. */
   | 'reader'
-  /** Launched on a person's own act — a button, a check, a send: the person's consent, as the move flow is. */
-  | 'a person acts'
+  /**
+   * Launched on a person's own act, and it WRITES under the data directory: the server refuses it while the named root is
+   * missing (exit 74, `Program.WriterModes`) and its test runs it against one (research/PLAN_names_and_a_missing_root.md).
+   */
+  | 'a person acts, refused by the server'
+  /**
+   * Launched on a person's own act, and measured to make no missing named root: `--close-consult` finds no record there and
+   * refuses (65); `--tree-remove` works under the review root. Held by the server's reader test.
+   */
+  | 'a person acts, makes no missing root'
   /**
    * A person's paid check, which writes its state under the data directory: not started while the named root is missing
    * (`consultantCheckRun.runConsultantCheck`), and refused by the server too (research/PLAN_names_and_a_missing_root.md 3.3).
@@ -48,16 +56,16 @@ const LAUNCHES: Readonly<Record<string, Launch>> = {
   '--features': 'reader',
   '--version': 'reader',
   '--cadence': 'reader',
-  '--collect-bugs': 'a person acts',
-  '--pairs-keep': 'a person acts',
-  '--pairs-decide': 'a person acts',
-  '--tree-remove': 'a person acts',
-  '--upload-pairs': 'a person acts',
-  '--close-consult': 'a person acts',
+  '--collect-bugs': 'a person acts, refused by the server',
+  '--pairs-keep': 'a person acts, refused by the server',
+  '--pairs-decide': 'a person acts, refused by the server',
+  '--tree-remove': 'a person acts, makes no missing root',
+  '--upload-pairs': 'a person acts, refused by the server',
+  '--close-consult': 'a person acts, makes no missing root',
   '--check-consultant': 'a person acts, held by the extension',
   '--check-model': 'a person acts, held by the extension',
   '--check-security': 'touches no data directory',
-  '--probe-api': 'a person acts',
+  '--probe-api': 'a person acts, refused by the server',
   '--consultants': 'survey, held by the extension',
   '--help': 'not a coai-mcp launch',
 };
@@ -98,19 +106,35 @@ test('every READER is run by the server\'s test against a missing data directory
   const held = fs.readFileSync(path.join(REPO, 'src_mcp', 'tests', 'AReaderModeNeverMakesTheDataDirectoryTests.cs'), 'utf8');
   const covered = new Set([...held.matchAll(/"(--[a-z-]+)"/gu)].map((match) => match[1]!));
 
-  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => launch === 'reader' || launch === 'touches no data directory')) {
-    assert.ok(covered.has(mode), `${mode} is launched to read, and AReaderModeNeverMakesTheDataDirectoryTests.cs never runs it against a missing data directory`);
+  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => HELD_BY_THE_READER_TEST.has(launch))) {
+    assert.ok(covered.has(mode), `${mode} must make no missing named root, and AReaderModeNeverMakesTheDataDirectoryTests.cs never runs it against a missing data directory`);
   }
 });
 
-test('every check the extension holds under a missing root is refused by the server too — the two halves agree', () => {
-  // reads-another-program: research/PLAN_names_and_a_missing_root.md 3.3 — the extension does not start these while the
-  // named root is missing, and the server's own test runs each against one (exit 74, nothing made), so a check started
-  // another way — a terminal, an older extension — still makes nothing.
+/** The kinds the server's reader test must run: none of them may make a missing named root. */
+const HELD_BY_THE_READER_TEST: ReadonlySet<Launch> = new Set<Launch>(['reader', 'touches no data directory', 'a person acts, makes no missing root']);
+
+/** The kinds that write, which the server refuses under a missing named root and its writer test runs. */
+const HELD_BY_THE_WRITER_TEST: ReadonlySet<Launch> = new Set<Launch>(['a person acts, held by the extension', 'a person acts, refused by the server']);
+
+test('every writer a person starts is refused by the server under a missing root — the two halves agree', () => {
+  // reads-another-program: research/PLAN_names_and_a_missing_root.md — the extension does not start the checks while the
+  // named root is missing, and the server's own test runs every writer against one (exit 74, nothing made), so a mode
+  // started another way — a terminal, an older extension — still makes nothing.
   const held = fs.readFileSync(path.join(REPO, 'src_mcp', 'tests', 'AWriterModeRefusesAMissingNamedRootTests.cs'), 'utf8');
   const covered = new Set([...held.matchAll(/"(--[a-z-]+)"/gu)].map((match) => match[1]!));
 
-  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => launch === 'a person acts, held by the extension')) {
-    assert.ok(covered.has(mode), `${mode} is held by the extension, and AWriterModeRefusesAMissingNamedRootTests.cs never runs it against a missing data directory`);
+  for (const [mode] of Object.entries(LAUNCHES).filter(([, launch]) => HELD_BY_THE_WRITER_TEST.has(launch))) {
+    assert.ok(covered.has(mode), `${mode} writes on a person's act, and AWriterModeRefusesAMissingNamedRootTests.cs never runs it against a missing data directory`);
   }
+});
+
+test('no mode a person starts is left unmeasured — each is held by the reader test or the writer test', () => {
+  // The coordinator's follow-up of 2026-10-11: "a person acts" used to be a kind no test held. Every launch now names
+  // which server test holds it, so a new person's mode is red here until it is measured.
+  const unheld = Object.entries(LAUNCHES)
+    .filter(([, launch]) => !HELD_BY_THE_READER_TEST.has(launch) && !HELD_BY_THE_WRITER_TEST.has(launch))
+    .map(([mode]) => mode);
+
+  assert.deepEqual(unheld.sort(), ['--consultants', '--help'], 'a mode is held by neither server test — measure it against a missing root');
 });

@@ -96,6 +96,33 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         err.Should().Contain(Missing);
     }
 
+    // ---------- the person's other acts, measured (the coordinator's follow-up, 2026-10-11) ----------
+
+    /// <summary>
+    /// <c>--probe-api</c> through its own entry point, as the dispatch calls it: a vault that answers a key and an endpoint
+    /// that answers — a probe that spends writes its usage line into the data directory (story 3.3 of the round counter).
+    /// </summary>
+    [Fact]
+    public async Task ProbeApi_StopsAt74_BeforeItSpends_AndLeavesTheMissingNamedRootAbsent()
+    {
+        Program.Classify(["--probe-api"]).Should().Be(Program.Startup.ProbeApi, "the entry below is what this mode runs");
+        Program.WriterModes.Should().Contain(Program.Startup.ProbeApi, "and the dispatch refuses it before it starts");
+        using var endpoint = ApiEndpointStub.Start();
+        var said = new List<string>();
+
+        var code = await Api.ProbeApiMode.RunAsync(
+            ["--probe-api", "--vendor", "grok", "--endpoint", endpoint.Endpoint, "--model", "grok-4"],
+            said.Add,
+            new StringWriter(),
+            name => name switch { "COAI_DATA_DIR" => Missing, "COAI_CREDS_KEY" => "the-config-key", _ => null },
+            new ProbeApiModeTests.VaultAnswers("{\"grok\":\"sk-vault-0123456789abcdefghijklmnopqrstuv\"}"));
+
+        Directory.Exists(Missing).Should().BeFalse($"--probe-api exited {code} and made the missing data folder, holding: {Inside()}");
+        code.Should().Be(74, string.Join("\n", said));
+        string.Join("\n", said).Should().Contain(Missing);
+        endpoint.Requests.Should().BeEmpty("nothing is spent that could not be written down");
+    }
+
     // ---------- the helper: three answers, and only a confirmed absence refuses ----------
 
     /// <summary>An attribute read the disk refuses — the root may be there; it would not say.</summary>

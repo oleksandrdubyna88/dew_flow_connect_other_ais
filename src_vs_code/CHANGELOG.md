@@ -59,8 +59,9 @@ run on — pick one"* — no server sentence shows `''` any more.
 **Fixed: nothing creates a data folder you named that is missing — the MCP server included.** With `COAI_DATA_DIR`
 naming a folder that is not there, the extension already created nothing; now the server does not either. **Check** on
 the Consultant tab and on Models is not started (it says the folder is missing and that nothing was sent); the server's
-own actions that write — collecting bugs, deciding and uploading pairs, the checks — stop at once, name the folder and
-exit 74; and an MCP client that starts the server gets one that answers but refuses every tool with that folder's name:
+own actions that write — collecting bugs, deciding and uploading pairs, the checks, probing an API key (before anything
+is sent) — stop at once, name the folder and exit 74; closing a consultation by hand and removing a review tree were
+measured and make nothing there; and an MCP client that starts the server gets one that answers but refuses every tool with that folder's name:
 restore it, then restart the MCP server. A folder the disk will not describe (a sleeping share, a refused read) is never
 treated as missing, the default location is still created the first time it is needed, and so is a side folder inside
 a folder that exists. Help in all five languages. Needs the MCP server of this release for the server's half.

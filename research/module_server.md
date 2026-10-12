@@ -1158,8 +1158,8 @@ until it is run here. The modes launched on a person's act (`--collect-bugs`, `-
 person's act is the consent, as the move flow's is; the consultants survey writes its health file and is not started by
 the extension while the named root is missing. The MCP serve mode, started by an MCP client and not by the extension,
 still makes its data directory. *(Superseded 2026-10-11 by "A missing named data folder is never created by the server"
-below: the writer modes and serve refuse a confirmed-absent named root; `--tree-remove`, `--close-consult` and
-`--probe-api` were outside that plan and are as described here.)*
+below: the writer modes — `--probe-api` among them — and serve refuse a confirmed-absent named root; `--close-consult`
+and `--tree-remove` were measured to make nothing there and are pinned by the reader test.)*
 
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
@@ -6851,11 +6851,18 @@ root that is there is made when first written. `PanelSettings.NamedDataRoot` car
 rather than an environment (`NamedRootRefusal(attributesOf)`).
 
 **The writer modes** a person starts — `Program.WriterModes`: `--check-consultant`, `--check-model`, `--collect-bugs`,
-`--pairs-keep`, `--pairs-decide`, `--upload-pairs`, `--requeue-refused` — stop in `Program.RunAsync` before they start
-(`MissingRootRefusal`): one stderr sentence naming the folder plus *"Connect the drive or create the folder, then run this
-again."*, exit 74 (which the extension already words as "could not use its data directory"), nothing written. The two
-checks' entry points (`ConsultantCheckMode.AnswerAsync` / `AnswerModelAsync`) refuse the same way before their lock,
-whose `CreateDirectory(<data>/consultations/health)` is recursive and made the root.
+`--pairs-keep`, `--pairs-decide`, `--upload-pairs`, `--requeue-refused`, `--probe-api` — stop in `Program.RunAsync` before
+they start (`MissingRootRefusal`): one stderr sentence naming the folder plus *"Connect the drive or create the folder,
+then run this again."*, exit 74 (which the extension already words as "could not use its data directory"), nothing
+written. The two checks' entry points (`ConsultantCheckMode.AnswerAsync` / `AnswerModelAsync`) refuse the same way before
+their lock, whose `CreateDirectory(<data>/consultations/health)` is recursive and made the root; so does
+`ProbeApiMode.RunAsync` (its own environment), before the vault read and before anything is sent — a probe that spends
+writes its `usage.jsonl` line (measured: it made the root holding `usage.jsonl`).
+
+**Measured and not writers here:** `--close-consult` builds its service, finds no record — a consultation's record lives
+in the data directory, so under a missing root there is none — and refuses with 65, making nothing; `--tree-remove`
+works under the REVIEW root (`COAI_REVIEW_ROOT`, machine-local) and never touches the data directory.
+`AReaderModeNeverMakesTheDataDirectoryTests` pins both, so a close that starts writing first turns red.
 
 **Serve** branches BEFORE the logger is built (`Program.ServeRefusal` → `RefusingServeAsync`): a refusal-only stdio server
 with the real tool and prompt lists, each tool resolved through `RefusingServiceSource`, whose `CurrentAsync` throws

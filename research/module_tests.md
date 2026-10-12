@@ -3615,6 +3615,18 @@ rebuilt; TS plants were held to `tsc` exiting 0, C# plants to a build that succe
 | `helpCoverage.test.ts` — data article | every language's `where-your-data-lives` says `**Check**` and `` `COAI_DATA_DIR` `` in the sentence that the MCP server creates no missing named folder either | RED: `the en data article never says **Check**`. Break-it: the Russian `**Check**` unmarked → `the ru data article never says **Check**` |
 | `scripts/seam-missing-named-root.mjs` (`npm run test:seam`) | (a) a missing named root: the extension's `dataDirFinding` says missing, the real `--check-model` exits 74 naming it, a served `providers` is `isError` naming it, and the folder is not made; (b) an existing root with a missing side: neither refuses, and the served run makes the side folder; (c) no `COAI_DATA_DIR`: neither refuses — served only on POSIX (`XDG_DATA_HOME` moves the default into a temp folder; on Windows .NET reads `%LOCALAPPDATA%` from the shell, and a served run would write into the developer's own data) | Break-its against the server, rebuilt: serve not branching → `seam: a missing named data folder: (a) a named root that does not exist: the halves disagree — the extension refuses; --check-model exit 74: …; serve answered (isError false)`; the named root never found missing → red. The writer dispatch alone disabled stays GREEN — `--check-model`'s own entry guard still refuses — a second guard, on purpose |
 
+**The person's other acts, measured (the follow-up of the same day).** Every mode the extension launches on a person's
+act is now held by one of the two server tests:
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `AWriterModeRefusesAMissingNamedRootTests.ProbeApi_StopsAt74_BeforeItSpends_AndLeavesTheMissingNamedRootAbsent` (mcp) | `--probe-api` through `ProbeApiMode.RunAsync` with a vault that answers a key and an endpoint stub that answers: exit 74, the folder named, the root absent, and NO request reached the endpoint; `--probe-api` is in `Program.WriterModes` | RED: `--probe-api exited 0 and made the missing data folder, holding: usage.jsonl` (the probe's usage line). Break-its: the entry-point guard never firing → that RED again; `ProbeApi` out of `WriterModes` → `Expected Program.WriterModes {…} to contain Startup.ProbeApi` |
+| `AReaderModeNeverMakesTheDataDirectoryTests.CloseConsultLeavesAMissingNamedDataDirectoryAbsent` (mcp) | `--close-consult --repo … --id c-1 --outcome solved` under a missing root: exit 65 (no record to close — records live in the data directory), the root absent | GREEN on first run: measured to make nothing, so pinned rather than changed |
+| `AReaderModeNeverMakesTheDataDirectoryTests.TreeRemoveLeavesAMissingNamedDataDirectoryAbsent` (mcp) | `--tree-remove --tree t-1` with `COAI_REVIEW_ROOT` in the test's own folder: exit 0, the root absent | GREEN on first run: the review root is machine-local, never the data directory |
+| `everyServerModeTheExtensionLaunches.test.ts` (+1) | the kind *a person acts* is gone: the RoundsDb writers and `--probe-api` are *a person acts, refused by the server* (in the writer test), `--close-consult` / `--tree-remove` *a person acts, makes no missing root* (in the reader test); a new test fails when any launch is held by neither server test (only `--consultants` and `--help` are) | Break-its: `--close-consult`'s run renamed in the reader test → `--close-consult must make no missing named root, and AReaderModeNeverMakesTheDataDirectoryTests.cs never runs it…`; `--probe-api` reclassified out of both → `a mode is held by neither server test — measure it against a missing root` |
+
+`ProbeApiModeTests.VaultAnswers` became `internal` so the writer test reuses it rather than a third copy of a fake vault.
+
 **NOT covered:** `consultantHealthPanel.runCheck` itself (`vscode` wiring; it calls `runConsultantCheck`, which holds the
-guard); serve (c) on Windows (above); `--tree-remove`, `--close-consult` and `--probe-api` under a missing root (outside
-this plan).
+guard); serve (c) on Windows (above); `--probe-api` through the dispatch with the real vault (its entry point is tested;
+the dispatch's set membership is asserted).

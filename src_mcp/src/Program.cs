@@ -293,13 +293,16 @@ internal static class Program
 
     /// <summary>
     /// The modes a PERSON starts that write under the data directory (research/PLAN_names_and_a_missing_root.md, story
-    /// 3.1): the paid checks through their lock, and the rest through <c>RoundsDb.Open</c>. Each stops before it starts
-    /// while the NAMED data root is confirmed absent — <c>AWriterModeRefusesAMissingNamedRootTests</c> runs every one.
+    /// 3.1): the paid checks through their lock, <c>--probe-api</c> through its usage line, and the rest through
+    /// <c>RoundsDb.Open</c>. Each stops before it starts while the NAMED data root is confirmed absent —
+    /// <c>AWriterModeRefusesAMissingNamedRootTests</c> runs every one. Measured and NOT here: <c>--close-consult</c> (finds no
+    /// record under a missing root and refuses, 65) and <c>--tree-remove</c> (the review root, never the data directory) —
+    /// <c>AReaderModeNeverMakesTheDataDirectoryTests</c> pins both.
     /// </summary>
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>

@@ -89,6 +89,44 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         Directory.Exists(Missing).Should().BeFalse($"--findings-many left the missing data directory behind, holding: {Inside()}");
     }
 
+    /// <summary>
+    /// <c>--tree-remove</c> (research/PLAN_names_and_a_missing_root.md, the coordinator's follow-up): a person's act, but its
+    /// trees live under the REVIEW root (<c>COAI_REVIEW_ROOT</c>, machine-local), never the data directory — measured here
+    /// with the review root in this test's own folder, so nothing of this machine's is touched.
+    /// </summary>
+    [Fact]
+    public async Task TreeRemoveLeavesAMissingNamedDataDirectoryAbsent()
+    {
+        var reviewRootWas = Environment.GetEnvironmentVariable("COAI_REVIEW_ROOT");
+        Environment.SetEnvironmentVariable("COAI_REVIEW_ROOT", Path.Combine(_parent, "review-trees"));
+        try
+        {
+            var (said, code) = await Stdout.OfAsync(() => Program.RunAsync(["--tree-remove", "--tree", "t-1"]));
+
+            Directory.Exists(Missing).Should().BeFalse($"--tree-remove exited {code} ({said.Trim()}) and made the missing data directory, holding: {Inside()}");
+            code.Should().Be(0, "a tree this machine holds no record of is an answer, not a failure");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COAI_REVIEW_ROOT", reviewRootWas);
+        }
+    }
+
+    /// <summary>
+    /// <c>--close-consult</c> the way the panel launches it — a repository, a consultation id, an outcome — under a missing
+    /// named root (the coordinator's follow-up, 2026-10-11). Measured: it builds its service and finds no record (a
+    /// consultation's record lives in the data directory, so under a missing root there is none to close) and refuses
+    /// with 65, making nothing. Pinned here, so a close that starts writing first turns this red.
+    /// </summary>
+    [Fact]
+    public async Task CloseConsultLeavesAMissingNamedDataDirectoryAbsent()
+    {
+        var (said, code) = await Stdout.OfAsync(() => Program.RunAsync(["--close-consult", "--repo", _parent, "--id", "c-1", "--outcome", "solved"]));
+
+        Directory.Exists(Missing).Should().BeFalse($"--close-consult exited {code} ({said.Trim()}) and made the missing data directory, holding: {Inside()}");
+        code.Should().Be(65, "no consultation can be recorded in a folder that is not there — a refusal, never a write");
+    }
+
     [Fact]
     public async Task CadenceLeavesAMissingNamedDataDirectoryAbsent()
     {
