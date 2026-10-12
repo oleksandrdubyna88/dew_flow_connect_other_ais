@@ -42,8 +42,11 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         File.WriteAllText(Path.Combine(_parent, "none.json"), """{"items":[]}""");
     }
 
-    // WRITER MODES — every mode a person starts that opens the rounds database (`everyServerModeTheExtensionLaunches.test.ts`
-    // reads this block). Each row reaches the open with arguments the mode accepts.
+    // WRITER MODES — every mode run through the dispatch that writes under the data directory: those that open the rounds
+    // database, and `--consultants`, whose survey writes `consultations/health/consultants.json` (found by the code round's
+    // own review — a terminal or an older extension without the probe's guard made the folder)
+    // (`everyServerModeTheExtensionLaunches.test.ts` reads this block). Each row reaches its write with arguments the mode
+    // accepts.
     public static TheoryData<string[]> RoundsDbWriters => new()
     {
         new[] { "--collect-bugs" },
@@ -51,6 +54,7 @@ public sealed class AWriterModeRefusesAMissingNamedRootTests : IDisposable
         new[] { "--pairs-decide", "--in", "{none}" },
         new[] { "--upload-pairs", "--server", "http://127.0.0.1:9" },
         new[] { "--requeue-refused" },
+        new[] { "--consultants" },
     };
     // END WRITER MODES
 

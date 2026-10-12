@@ -36,7 +36,10 @@ type Launch =
   | 'a person acts, held by the extension'
   /** Launched on a person's act, but reads stdin and answers stdout only: never touches the data directory (`CheckSecurityMode`). */
   | 'touches no data directory'
-  /** The consultants survey: writes its health file, and is not started while the named root is missing (`consultantsProbe`). */
+  /**
+   * The consultants survey: writes its health file, is not started while the named root is missing (`consultantsProbe`),
+   * and is refused by the server too — a terminal or an older extension made the folder (the code round's own review).
+   */
   | 'survey, held by the extension'
   /** The literal names a mode but launches no `coai-mcp` (another program's flag). */
   | 'not a coai-mcp launch';
@@ -115,7 +118,7 @@ test('every READER is run by the server\'s test against a missing data directory
 const HELD_BY_THE_READER_TEST: ReadonlySet<Launch> = new Set<Launch>(['reader', 'touches no data directory', 'a person acts, makes no missing root']);
 
 /** The kinds that write, which the server refuses under a missing named root and its writer test runs. */
-const HELD_BY_THE_WRITER_TEST: ReadonlySet<Launch> = new Set<Launch>(['a person acts, held by the extension', 'a person acts, refused by the server']);
+const HELD_BY_THE_WRITER_TEST: ReadonlySet<Launch> = new Set<Launch>(['a person acts, held by the extension', 'a person acts, refused by the server', 'survey, held by the extension']);
 
 test('every writer a person starts is refused by the server under a missing root — the two halves agree', () => {
   // reads-another-program: research/PLAN_names_and_a_missing_root.md — the extension does not start the checks while the
@@ -136,5 +139,5 @@ test('no mode a person starts is left unmeasured — each is held by the reader 
     .filter(([, launch]) => !HELD_BY_THE_READER_TEST.has(launch) && !HELD_BY_THE_WRITER_TEST.has(launch))
     .map(([mode]) => mode);
 
-  assert.deepEqual(unheld.sort(), ['--consultants', '--help'], 'a mode is held by neither server test — measure it against a missing root');
+  assert.deepEqual(unheld.sort(), ['--help'], 'a mode is held by neither server test — measure it against a missing root');
 });

@@ -204,3 +204,22 @@ is now refused (exit 74, nothing sent). `--close-consult` makes nothing — it f
 refuses with 65 — and `--tree-remove` makes nothing — it works under the review root; both are pinned by
 `AReaderModeNeverMakesTheDataDirectoryTests`. The census (`everyServerModeTheExtensionLaunches.test.ts`) has no
 unmeasured *a person acts* kind any more: every launch is held by the server's reader test or its writer test.
+
+**The code round (2026-10-12): the gate (codex, 4 reviewers, `proceed`) and this repository's own reviewer.** The gate:
+the help in five languages — rejected (the owner's standing ruling); `NamedDataRoot` and `DataDir` as two independent
+fields — accepted as a pinned invariant: one construction (`PanelSettings.WithCatalog`) fills both from one environment
+and nothing in `src_mcp/src` moves `DataDir` with `with`, so `TheNamedRootAndTheDataDirAreBuiltTogetherTests` pins exactly
+that (two compiling break-its red); merging them into one value was rejected as a larger change than the risk, which
+has no caller today. The own reviewer found three real defects: **`--consultants` still made a missing named root**
+from a terminal or an older extension (its survey file) — RED as recorded in `module_tests.md`, now in
+`Program.WriterModes`, the census tightened to leave only `--help` unheld; **the three CHANGELOG paragraphs sat inside
+the RELEASED `Extension 0.69.0` section** after the rebase — moved to a new `## Unreleased`, the released sections
+byte-identical to main; **the seam leg's case (c) on Windows read the developer's real default folder and could call
+the real vault** — every child now gets an empty `COAI_CREDS_KEY` and no inherited side, and (c) on Windows asks the
+extension only. Also corrected: `module_server.md` no longer claims the server words an EMPTY pick as *"this row picks no
+model"* for a person — a vendor-less row is dropped at parse time with its own complaint; `NoModel`'s sentence is the
+defence for a row built in code. Left as noted, not changed: the refusal server ends on SIGTERM/SIGINT or stdin closing
+without the full server's `Environment.Exit` backstop (Claude Code's own SIGKILL follows within half a second); the C#
+and TS admission checks order a blank runtime and an unknown capability differently (same decision, sentences may
+differ by the vectors' own rule); three older tests keep a private `RepoRoot()` while the new `RepoPaths.Root()` is the
+shared one (not rewritten unasked).

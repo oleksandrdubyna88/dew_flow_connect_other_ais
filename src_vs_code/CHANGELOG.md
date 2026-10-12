@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+**Changed: the Security lane names its reviewers.** A pair's Reviewer list now reads like the question consultant's: a
+model by its card's name with its id beside it (*GPT-6-Astra (chat-preset-…)*), *(switched off)* for one that is off,
+and *(stranded)* for a pick the list no longer holds. A pair whose model was removed from Models says the server drops
+that pair until you pick another reviewer; a pair that names no reviewer shows *no reviewer — pick one* instead of an
+empty entry, and a warning that names nobody is gone. The ticks on the prompt cards use the same names, and an
+*Offered:* line with **Change on Models** sits above the pairs. Help in all five languages.
+
+**Changed (MCP server): a question row whose model is gone is refused in the extension's words.** The server now says
+*"<id> is no longer ticked question consultant (or was removed) — pick another model"* where it used to talk about a
+vendor that is neither a reviewer row nor a runtime, and a row with no model is refused with *"this row has no model to
+run on — pick one"* — no server sentence shows `''` any more.
+
+**Fixed: nothing creates a data folder you named that is missing — the MCP server included.** With `COAI_DATA_DIR`
+naming a folder that is not there, the extension already created nothing; now the server does not either. **Check** on
+the Consultant tab and on Models is not started (it says the folder is missing and that nothing was sent); the server's
+own actions that write — collecting bugs, deciding and uploading pairs, the checks, the consultants survey started
+from a terminal, probing an API key (before anything
+is sent) — stop at once, name the folder and exit 74; closing a consultation by hand and removing a review tree were
+measured and make nothing there; and an MCP client that starts the server gets one that answers but refuses every tool with that folder's name:
+restore it, then restart the MCP server. A folder the disk will not describe (a sleeping share, a refused read) is never
+treated as missing, the default location is still created the first time it is needed, and so is a side folder inside
+a folder that exists. Help in all five languages. Needs the MCP server of this release for the server's half.
+
 ## Extension 0.70.0 — 2026-10-12
 
 **New: the Team server's rounds per vendor, on the Team server tab.** For an admin, each vendor row now shows how many
@@ -43,28 +68,6 @@ or tier the vendor ignored or dropped. Probes are lines of kind `probe`, and a v
 characters, redacted. Every new field is trailing and has a default, so older lines still read.
 
 ## Extension 0.69.0 — 2026-10-11
-
-**Changed: the Security lane names its reviewers.** A pair's Reviewer list now reads like the question consultant's: a
-model by its card's name with its id beside it (*GPT-6-Astra (chat-preset-…)*), *(switched off)* for one that is off,
-and *(stranded)* for a pick the list no longer holds. A pair whose model was removed from Models says the server drops
-that pair until you pick another reviewer; a pair that names no reviewer shows *no reviewer — pick one* instead of an
-empty entry, and a warning that names nobody is gone. The ticks on the prompt cards use the same names, and an
-*Offered:* line with **Change on Models** sits above the pairs. Help in all five languages.
-
-**Changed (MCP server): a question row whose model is gone is refused in the extension's words.** The server now says
-*"<id> is no longer ticked question consultant (or was removed) — pick another model"* where it used to talk about a
-vendor that is neither a reviewer row nor a runtime, and a row with no model is refused with *"this row has no model to
-run on — pick one"* — no server sentence shows `''` any more.
-
-**Fixed: nothing creates a data folder you named that is missing — the MCP server included.** With `COAI_DATA_DIR`
-naming a folder that is not there, the extension already created nothing; now the server does not either. **Check** on
-the Consultant tab and on Models is not started (it says the folder is missing and that nothing was sent); the server's
-own actions that write — collecting bugs, deciding and uploading pairs, the checks, probing an API key (before anything
-is sent) — stop at once, name the folder and exit 74; closing a consultation by hand and removing a review tree were
-measured and make nothing there; and an MCP client that starts the server gets one that answers but refuses every tool with that folder's name:
-restore it, then restart the MCP server. A folder the disk will not describe (a sleeping share, a refused read) is never
-treated as missing, the default location is still created the first time it is needed, and so is a side folder inside
-a folder that exists. Help in all five languages. Needs the MCP server of this release for the server's half.
 
 **Changed: a reviewer's CLI path belongs to the side that saved it.** A CLI path saved in a Windows window (say
 `C:\tools\codex.cmd`) no longer replaces the path a WSL window runs (`/usr/local/bin/codex`): each catalog row now keeps

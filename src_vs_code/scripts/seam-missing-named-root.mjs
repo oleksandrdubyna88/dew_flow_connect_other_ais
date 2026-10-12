@@ -21,9 +21,11 @@
  *
  * <p><b>(c) and the real default folder.</b> On Windows the default location is <code>%LOCALAPPDATA%\coai-mcp</code>, which
  * .NET reads from the shell, not from the environment — so a served run would write its log, run marker and sweeps into
- * the developer's own data. There the server is asked through <code>--check-model</code> alone, which reads and writes
- * nothing for an unavailable row; on a POSIX host <code>XDG_DATA_HOME</code> moves the default into a temporary folder
- * and the served run happens too.</p>
+ * the developer's own data, and even <code>--check-model</code> reads that folder's settings file first. There the
+ * server half is NOT run (the code round's own review): the C# tests <code>TheDefaultLocation_IsNeverRefused</code> and
+ * <code>ServeRefuses_OnlyAConfirmedAbsence</code> hold that decision, and the extension's half is still asked. On a
+ * POSIX host <code>XDG_DATA_HOME</code> moves the default into a temporary folder and both server halves run. In every
+ * case the child gets an empty <code>COAI_CREDS_KEY</code> (no vault) and no inherited <code>COAI_DATA_SIDE</code>.</p>
  */
 import { promises as fsp } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -105,15 +107,20 @@ export async function missingNamedRootSeam({ binary, sessionsFor, timeoutMs, fai
   mkdirSync(existing);
   const xdg = join(parent, 'xdg');
   const posix = process.platform !== 'win32';
+  // No vault in any case: a COAI_CREDS_KEY inherited from the developer's shell made every run call the real `creds
+  // config` (the code round's own review); an empty key is "no vault" (KeyVault.ReadAsync). No inherited side either.
+  const isolated = { COAI_CREDS_KEY: '', COAI_DATA_SIDE: '' };
   const cases = [
-    { name: '(a) a named root that does not exist', env: { COAI_DATA_DIR: missing }, root: missing, refuses: true, serve: true },
-    { name: '(b) a named root with a missing side folder', env: { COAI_DATA_DIR: existing, COAI_DATA_SIDE: 'seamside' }, root: existing, refuses: false, serve: true, lazy: join(existing, 'seamside') },
-    { name: '(c) no COAI_DATA_DIR, the default location', env: { COAI_DATA_DIR: '', ...(posix ? { XDG_DATA_HOME: xdg } : {}) }, root: '', refuses: false, serve: posix, lazy: posix ? join(xdg, 'coai-mcp') : '' },
+    { name: '(a) a named root that does not exist', env: { ...isolated, COAI_DATA_DIR: missing }, root: missing, refuses: true, serve: true, server: true },
+    { name: '(b) a named root with a missing side folder', env: { ...isolated, COAI_DATA_DIR: existing, COAI_DATA_SIDE: 'seamside' }, root: existing, refuses: false, serve: true, server: true, lazy: join(existing, 'seamside') },
+    { name: '(c) no COAI_DATA_DIR, the default location', env: { ...isolated, COAI_DATA_DIR: '', ...(posix ? { XDG_DATA_HOME: xdg } : {}) }, root: '', refuses: false, serve: posix, server: posix, lazy: posix ? join(xdg, 'coai-mcp') : '' },
   ];
   const lazy = [];
   for (const one of cases) {
-    const extension = await extensionRefuses({ COAI_DATA_DIR: one.env.COAI_DATA_DIR || undefined, COAI_DATA_SIDE: one.env.COAI_DATA_SIDE });
-    const check = await checkModelRefuses({ binary, env: one.env, root: one.root, timeoutMs });
+    const extension = await extensionRefuses({ COAI_DATA_DIR: one.env.COAI_DATA_DIR || undefined, COAI_DATA_SIDE: one.env.COAI_DATA_SIDE || undefined });
+    const check = one.server
+      ? await checkModelRefuses({ binary, env: one.env, root: one.root, timeoutMs })
+      : { refused: false, said: 'not asked (the default folder of this OS is the developer\'s own; TheDefaultLocation_IsNeverRefused holds it)' };
     const served = one.serve ? await serveRefuses({ sessionsFor, binary, env: one.env, root: one.root, timeoutMs }) : { refused: check.refused, said: 'not served (the default folder of this OS is the developer\'s own)' };
     if (extension !== one.refuses || check.refused !== one.refuses || served.refused !== one.refuses) {
       leave(`${one.name}: the halves disagree — the extension ${extension ? 'refuses' : 'does not refuse'}; --check-model ${check.said}; serve ${served.said}`);

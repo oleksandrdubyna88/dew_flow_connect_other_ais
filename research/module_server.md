@@ -6835,8 +6835,11 @@ says *"<id> is no longer ticked question consultant (or was removed) — pick an
 `QuestionRowResolver.NoModel` now blocks the same row in the same words, *"… — pick another model, in ConnectOtherAIs >
 Question consultant (COAI_QCONSULT_ROWS)"*, where it used to talk about a vendor that is "neither a reviewer row nor a
 runtime". A RUNTIME's own name the question consultant cannot launch (`ReviewerRuntimeSelector.RuntimeNames`, e.g.
-`gemini`, `remote`) keeps the old sentence with the list of runtimes that answer, which is its cure; an empty pick says
-*"this row picks no model — pick one"*. `CapabilityMatrix.Admit` refuses a blank runtime with *"this row has no model to
+`gemini`, `remote`) keeps the old sentence with the list of runtimes that answer, which is its cure. A row with no
+vendor at all never gets this far from the wire: `QuestionRow.Fields` drops it when the setting is parsed, with its own
+complaint (*"the row '<id>' names no vendor — a row is a model and exactly one base prompt"*, in the startup notice and
+`--providers`); `NoModel`'s *"this row picks no model — pick one"* is the defence for a row built in code (pinned by a
+test that builds it directly), not a sentence a person sees today. `CapabilityMatrix.Admit` refuses a blank runtime with *"this row has no model to
 run on — pick one"* in both overloads — never `'' is not a runtime …` and never `asked for runtime ''`; the decision is
 unchanged, so `shared/capability-matrix-vectors.json` still holds.
 
@@ -6852,13 +6855,22 @@ root that is there is made when first written. `PanelSettings.NamedDataRoot` car
 rather than an environment (`NamedRootRefusal(attributesOf)`).
 
 **The writer modes** a person starts — `Program.WriterModes`: `--check-consultant`, `--check-model`, `--collect-bugs`,
-`--pairs-keep`, `--pairs-decide`, `--upload-pairs`, `--requeue-refused`, `--probe-api` — stop in `Program.RunAsync` before
+`--pairs-keep`, `--pairs-decide`, `--upload-pairs`, `--requeue-refused`, `--probe-api`, `--consultants` — stop in `Program.RunAsync` before
 they start (`MissingRootRefusal`): one stderr sentence naming the folder plus *"Connect the drive or create the folder,
 then run this again."*, exit 74 (which the extension already words as "could not use its data directory"), nothing
 written. The two checks' entry points (`ConsultantCheckMode.AnswerAsync` / `AnswerModelAsync`) refuse the same way before
 their lock, whose `CreateDirectory(<data>/consultations/health)` is recursive and made the root; so does
 `ProbeApiMode.RunAsync` (its own environment), before the vault read and before anything is sent — a probe that spends
-writes its `usage.jsonl` line (measured: it made the root holding `usage.jsonl`).
+writes its `usage.jsonl` line (measured: it made the root holding `usage.jsonl`). `--consultants` joined after the code
+round's own review: the extension does not start the survey under a missing root (`consultantsProbe`), but a terminal or
+an older extension did, and its survey file made the root (RED: *"`coai-mcp --consultants` exited 0 and made the missing
+data folder, holding: consultations, consultations\health, consultations\health\consultants.json"*).
+
+**One place builds the settings.** `PanelSettings.NamedDataRoot` (what a writer checks) and `PanelSettings.DataDir`
+(where it writes) are two init properties filled together from one environment in `PanelSettings.WithCatalog`; a second
+construction or a `with` moving `DataDir` would check one root and write to another (E4-style finding of the code gate).
+`TheNamedRootAndTheDataDirAreBuiltTogetherTests` pins both rules over `src_mcp/src` (break-its: a planted `with {
+DataDir = … }` and a planted `new PanelSettings()` each turn their test red).
 
 **Measured and not writers here:** `--close-consult` builds its service, finds no record — a consultation's record lives
 in the data directory, so under a missing root there is none — and refuses with 65, making nothing; `--tree-remove`
@@ -6878,7 +6890,7 @@ decision), verified before anything else was built.
 ```mermaid
 flowchart TD
     start([coai-mcp started]) --> classify{Program.Classify}
-    classify -->|a writer mode| wroot{NamedRootMissing?}
+    classify -->|a writer mode, --consultants included| wroot{NamedRootMissing?}
     wroot -->|Absent| w74[stderr sentence, exit 74 — nothing written]
     wroot -->|Present / Unknown / default| wrun[the mode runs; side folder made lazily]
     classify -->|serve| sroot{ServeRefusal?}
