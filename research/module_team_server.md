@@ -921,7 +921,10 @@ regression in queue acceptance or cancellation could ship with the suite green.
 **The runner's own failures are classified as carefully as the API's.** Exit **1** is a contract
 regression and nothing else; **3** is the machine (the build failed, the server never answered, the
 harness was killed); **4** is a misconfigured suite. Reporting a missing httpyac as exit 1 would tell
-whoever reads it that the API is broken when the harness is. A server that comes up and answers 500
+whoever reads it that the API is broken when the harness is. The mapping lives in `http/verdict.mjs`, held by
+`src_vs_code/src/test/httpContractVerdict.test.mjs` to the pinned httpyac's own codes: 6.16.7 exits **20** for a
+failed assertion (its `testExitCode` hook), so until 2026-10-11 — when the runner knew only 1 — every real contract
+regression was reported as exit 4, the misconfigured suite (seen by two agents' break-it runs on epic 4 and 5). A server that comes up and answers 500
 to `/api/health` is reported as a CONTRACT failure at once, rather than being polled for forty
 seconds and called an environment problem — which is what happened the first time, for the very
 defect above.
