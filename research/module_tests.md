@@ -3156,9 +3156,12 @@ section is declared for the settings surface.
 ## The local round counter — `--round-counts` and schema step 20 (2026-10-10, story 2.1 of `todo/PLAN_every_round_is_counted.md`)
 
 Three suites, real SQLite over temp directories, and the mode run as the PROCESS the extension will run
-(`OneShotProcess`, the one-shot runner written once for this scenario — `LogCliScenarioTests`,
-`CloseConsultCliScenarioTests` and `ConsultantModesCliScenarioTests` still carry their own private copies; folding them
-is proposed in the task's summary, not done). The clock is a constant (`2026-10-10T12:00Z`) handed to the reader, never
+(`OneShotProcess`, the one-shot runner written once for this scenario; on 2026-10-11 `LogCliScenarioTests`,
+`CloseConsultCliScenarioTests` and `ConsultantModesCliScenarioTests` lost their private copies of it and run through it
+too — the first two as they are, the third shaping the fake CLI's environment on `OneShotProcess.StartInfo` and running
+it with its own three-minute deadline through `OneShotProcess.Run(info, deadline)`; its stdio-server and killed-holder
+tests start a long-lived child and keep only the start info, since a deadline that kills them is not their contract;
+a refactor with no behaviour change, guarded by the four classes' 33 tests). The clock is a constant (`2026-10-10T12:00Z`) handed to the reader, never
 read off the machine, so no window expires overnight. Every behaviour was observed RED first — against stubs that kept
 today's behaviour (the records and an empty `Read`), and against today's binary for the process — then GREEN, then red
 again with ONE production line reverted per build (ten builds, each file restored byte for byte with a fresh mtime).

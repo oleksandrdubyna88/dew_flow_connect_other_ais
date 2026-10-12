@@ -13,7 +13,10 @@ node http/run-contracts.mjs
 ```
 
 Exit code is the verdict: **0** pass · **1** a contract regression · **3** environment (the build or
-the server would not start) · **4** configuration.
+the server would not start) · **4** configuration. httpyac's own status is mapped in
+[verdict.mjs](verdict.mjs): the pinned 6.16.7 exits **20** for a failed assertion, which is a contract regression —
+until 2026-10-11 the runner knew only 1, so every real regression read as exit 4 (`httpContractVerdict.test.mjs` in
+the extension's suite holds the mapping).
 
 It does the whole lifecycle itself, so a fresh checkout needs nothing prepared:
 

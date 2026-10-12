@@ -13,15 +13,10 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CONFIG, CONTRACT, ENVIRONMENT, PASS, verdictOf } from './verdict.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-
-/** Exit codes, so a caller can tell a broken contract from a broken machine. */
-const PASS = 0;
-const CONTRACT = 1;
-const ENVIRONMENT = 3;
-const CONFIG = 4;
 
 /**
  * A fresh HMAC key for THIS run, never a constant.
@@ -337,25 +332,11 @@ if (httpyac.error) {
   fail(CONFIG, `httpyac could not be started: ${httpyac.error.message}`);
 }
 
-// The rule reserves exit 1 for a CONTRACT regression — an API that answered something other than
-// what its file says. Everything else is the machine: a missing binary, a bad argument, a run that
-// produced no report at all. Reporting those as 1 tells whoever reads the exit code that the server
-// is broken when it is the harness that is.
-if (httpyac.status === null) {
-  fail(ENVIRONMENT, 'httpyac was killed before it finished — no verdict was produced.');
-}
-
-// httpyac answers 0 for a clean run and 1 when a request failed its assertions. Anything ELSE is
-// the harness — bad arguments, a crash, a version that does not understand the flags — and reporting
-// those as 1 tells whoever reads the exit code that the API is broken when it is the suite that is.
-if (httpyac.status === 1) {
-  fail(CONTRACT, 'a contract request failed — the API did not answer what its .http file says it does.');
-}
-
-if (httpyac.status !== 0) {
-  const code = httpyac.status;
-  fail(CONFIG, `httpyac exited ${code}, which is neither pass nor a failed assertion — `
-    + 'the suite is misconfigured, not the API.');
+// What httpyac's status means is http/verdict.mjs's — one mapping, held by a test to the pinned
+// httpyac's own codes (a failed assertion is 20, not 1: every regression used to read as exit 4).
+const verdict = verdictOf(httpyac.status);
+if (verdict.code !== PASS) {
+  fail(verdict.code, verdict.message);
 }
 
 console.log('\n  contracts: every request answered what its file says.\n');
