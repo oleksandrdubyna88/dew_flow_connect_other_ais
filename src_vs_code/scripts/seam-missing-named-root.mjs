@@ -98,10 +98,20 @@ async function serveRefuses({ sessionsFor, binary, env, root, timeoutMs }) {
  */
 export async function missingNamedRootSeam({ binary, sessionsFor, timeoutMs, fail }) {
   const parent = mkdtempSync(join(tmpdir(), 'coai-seam-named-root-'));
+  // The temporary folder is removed in the `finally` below on EVERY way out — a disagreement, a timeout or a spawn
+  // error included (CodeRabbit on #777).
   const leave = (why) => {
-    rmSync(parent, { recursive: true, force: true });
     fail(`a missing named data folder: ${why}`);
   };
+  try {
+    return await namedRootCases({ parent, binary, sessionsFor, timeoutMs, leave });
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+}
+
+/** The three cases of the leg, run inside `parent`, which the caller removes. */
+async function namedRootCases({ parent, binary, sessionsFor, timeoutMs, leave }) {
   const missing = join(parent, 'named-but-missing');
   const existing = join(parent, 'named-and-there');
   mkdirSync(existing);
@@ -139,7 +149,6 @@ export async function missingNamedRootSeam({ binary, sessionsFor, timeoutMs, fai
       lazy.push(one.lazy);
     }
   }
-  rmSync(parent, { recursive: true, force: true });
 
   return { refusedBoth: missing, lazy };
 }

@@ -42,14 +42,26 @@ public sealed class TheServerRefusesAMissingNamedRootTests : IDisposable
             await Task.Delay(TimeSpan.FromSeconds(12), TestContext.Current.CancellationToken);
             Directory.Exists(Missing).Should().BeFalse($"the server made the missing data folder while serving, holding: {Inside()}");
 
-            var answer = await StdioServer.RoundTrip(server,
-                """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"providers","arguments":{}}}""");
-            var result = answer.RootElement.GetProperty("result");
-            var said = result.GetProperty("content")[0].GetProperty("text").GetString() ?? string.Empty;
+            // Every tool goes through the refusing service source, not only one (CodeRabbit on #777): a read, the session
+            // door and both gates.
+            var calls = new[]
+            {
+                """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"providers","arguments":{}}}""",
+                """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"open","arguments":{"repoPath":"repo","branch":"main"}}}""",
+                """{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"review_plan","arguments":{"repoPath":"repo","branch":"main","planText":"plan"}}}""",
+                """{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"review_code","arguments":{"repoPath":"repo","branch":"main","baseRef":"HEAD^","planText":"plan"}}}""",
+            };
 
-            result.GetProperty("isError").GetBoolean().Should().BeTrue($"the call must be refused, not answered: {answer.RootElement}");
-            said.Should().Contain(Missing, "the refusal names the folder a person has to restore")
-                .And.Contain("restore it, then restart the MCP server");
+            foreach (var call in calls)
+            {
+                var answer = await StdioServer.RoundTrip(server, call);
+                var result = answer.RootElement.GetProperty("result");
+                var said = result.GetProperty("content")[0].GetProperty("text").GetString() ?? string.Empty;
+
+                result.GetProperty("isError").GetBoolean().Should().BeTrue($"the call must be refused, not answered: {answer.RootElement}");
+                said.Should().Contain(Missing, "the refusal names the folder a person has to restore")
+                    .And.Contain("restore it, then restart the MCP server");
+            }
             Directory.Exists(Missing).Should().BeFalse($"the refused call made the missing data folder, holding: {Inside()}");
         }
         finally

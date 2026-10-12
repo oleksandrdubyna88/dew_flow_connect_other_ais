@@ -166,7 +166,7 @@ the family checks (`plan-lifecycle`, `pin-check`, `gate-snippet-check`).
 - [x] The server's stranded-row sentence matches the extension's; no server sentence shows `''`; tests pin both.
 - [x] No coai-mcp mode creates a confirmed-absent named root; serve answers every tool with the named refusal; the default location and `<root>/<side>` are still made; tests prove each.
 - [x] The extension does not launch the health checks under a missing root; the mode census reclassified.
-- [x] Help (five languages) for any new user-visible words; CHANGELOG under Unreleased; `module_extension.md`, `module_server.md`, `module_tests.md`; the paths plan's "Left" note corrected; this plan promoted when done. *(All but the promotion, which the operator does after the merge.)*
+- [x] Help (five languages) for any new user-visible words; CHANGELOG under Unreleased; `module_extension.md`, `module_server.md`, `module_tests.md`; the paths plan's "Left" note corrected; this plan promoted when done (promoted 2026-10-12 in the same pull request, #777).
 
 ## As built (2026-10-11)
 
