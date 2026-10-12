@@ -6866,6 +6866,11 @@ round's own review: the extension does not start the survey under a missing root
 an older extension did, and its survey file made the root (RED: *"`coai-mcp --consultants` exited 0 and made the missing
 data folder, holding: consultations, consultations\health, consultations\health\consultants.json"*).
 
+**Every mode is classified.** `WriterModes` is a hand-kept list, so `EveryModeIsClassifiedForAMissingNamedRootTests`
+(the code gate's third round) makes every `Program.Startup` say which it is: a refused writer, a mode the reader test runs
+against a missing root, serve, or a mode whose code never reaches the data directory (named with why: the `--ask-*`
+reviewer shims, the agy hook, `--normalize`, `--outline`, help, an unknown argument). A new mode is red until classified.
+
 **One place builds the settings.** `PanelSettings.NamedDataRoot` (what a writer checks) and `PanelSettings.DataDir`
 (where it writes) are two init properties filled together from one environment in `PanelSettings.WithCatalog`; a second
 construction or a `with` moving `DataDir` would check one root and write to another (E4-style finding of the code gate).

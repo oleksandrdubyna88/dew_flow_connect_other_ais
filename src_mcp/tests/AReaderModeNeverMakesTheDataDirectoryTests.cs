@@ -48,6 +48,8 @@ public sealed class AReaderModeNeverMakesTheDataDirectoryTests : IDisposable
         new[] { "--version" },
         // Launched on a person's act, but it reads stdin and answers stdout only (research/PLAN_names_and_a_missing_root.md 3.3).
         new[] { "--check-security" },
+        // Reads the Security lane's prompt texts from the data directory (`RolePrompts`) and prints them; writes nothing.
+        new[] { "--security-prompt-text", "--ids", "redteam-authz" },
     };
     // END READER MODES
 

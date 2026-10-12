@@ -225,3 +225,12 @@ without the full server's `Environment.Exit` backstop (Claude Code's own SIGKILL
 and TS admission checks order a blank runtime and an unknown capability differently (same decision, sentences may
 differ by the vectors' own rule); three older tests keep a private `RepoRoot()` while the new `RepoPaths.Root()` is the
 shared one (not rewritten unasked).
+
+**Code rounds 2 and 3 (2026-10-12).** Round 2: `research/architecture.md` gained the cross-half section (accepted); the
+help languages rejected again. Round 3 re-read the whole diff: `WriterModes` as a hand-kept list — accepted, closed by
+`EveryModeIsClassifiedForAMissingNamedRootTests` (every `Startup` must be a refused writer, run by the reader test, serve,
+or named with why; `--security-prompt-text` measured into the reader test; two compiling break-its red). Rejected with
+reasons: `McpException` as control flow (the SDK keeps only an McpException's message in the tool result — measured; an
+ordinary exception gives generic text); the help languages; a target-typed `new()` setting `DataDir` (three other types
+own a `DataDir` property, so a text scan would cry wolf, and no such construction exists); the removed-model check
+waiting on an unsettled data-root probe (bounded by the settle ceiling, and rare).
