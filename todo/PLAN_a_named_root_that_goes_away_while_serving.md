@@ -55,6 +55,17 @@ through it (the inventory test `src_vs_code/src/test/dataDirWriters.ts`). The se
    tool that writes → `isError` naming the folder, the root still absent; put it back → the next call succeeds.
 4. Docs: `module_server.md`, `module_tests.md`, CHANGELOG under Unreleased.
 
+### Added by the plan round of the PR that recorded this plan (2026-10-12, all accepted)
+
+- **The scan cannot pass vacuously.** A companion assertion that the scan FINDS a known writer (for example
+  `RoundsDb.Open`'s folder creation routed through the maker, and a planted `Directory.CreateDirectory` in a fixture
+  string), as the repository's other scans do (`everyServerModeTheExtensionLaunches.test.ts`'s "the scan reads the
+  server's modes").
+- **The stdio test goes RED first against today's behaviour**: start serving with the root present, remove it, call a
+  writing tool, and see the root made again — recorded — before the maker exists; then GREEN; then a compiling break-it.
+- **The scenario is recorded with its coverage** in `research/module_tests.md` (what the stdio test proves, and what it
+  does not — a real unmounted drive, a share that sleeps).
+
 ## Build order
 
 1 → 2 → 3 → 4, one branch, one pull request, one coai-mcp release.
