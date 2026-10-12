@@ -3402,10 +3402,37 @@ fields, by decision, so nothing asserts their absence there.
 
 | Suite | What it holds | Seen red as |
 |---|---|---|
-| `TheImageChecksEachInstallerTests` (4, server) | `NoInstallerIsPipedIntoAShell_EachGoesThroughTheCheckedScript` — no `curl … \| sh\|bash` left in `src_server/Dockerfile`, each of the three installer URLs run through `install-cli.sh`, which the image COPYs; `APageIsRefused_TriedAgain_AndNamed_NeverRun` — the REAL script with bash against a `file://` HTML page: three attempts, each naming what arrived, exit non-zero, nothing run; `AScriptIsRun_WithTheShellNamed` (and each fetch is announced BEFORE it starts — the code round: a stalled fetch is silent for up to five minutes; RED: `Expected stderr "" to contain "fetching"`); `AFetchThatFails_IsTriedAgain_AndThenFailsTheBuild`. Bash on CI's Linux and macOS legs, Git for Windows' bash here; `INSTALL_CLI_PAUSE=0` removes the pause | RED: the script missing (`No such file or directory`) and the Dockerfile still piping. Break-it: the shebang check replaced by `true` → the page was RUN — `syntax error near unexpected token`, the 2026-10-10 failure reproduced |
+| `TheImageChecksEachInstallerTests` (4, server) | `NoInstallerIsPipedIntoAShell_EachGoesThroughTheCheckedScript` — no `curl … \| sh\|bash` left in `src_server/Dockerfile`, the codex and claude installer URLs run through `install-cli.sh`, which the image COPYs, and agy through `install-agy.sh` (COPYed, followed by `agy --version`, no `https://antigravity.google` left — updated 2026-10-11, RED against the old Dockerfile: `Expected dockerfile … to contain "COPY src_server/install-agy.sh"`); `APageIsRefused_TriedAgain_AndNamed_NeverRun` — the REAL script with bash against a `file://` HTML page: three attempts, each naming what arrived, exit non-zero, nothing run; `AScriptIsRun_WithTheShellNamed` (and each fetch is announced BEFORE it starts — the code round: a stalled fetch is silent for up to five minutes; RED: `Expected stderr "" to contain "fetching"`); `AFetchThatFails_IsTriedAgain_AndThenFailsTheBuild`. Bash on CI's Linux and macOS legs, Git for Windows' bash here; `INSTALL_CLI_PAUSE=0` removes the pause | RED: the script missing (`No such file or directory`) and the Dockerfile still piping. Break-it: the shebang check replaced by `true` → the page was RUN — `syntax error near unexpected token`, the 2026-10-10 failure reproduced |
 
 **NOT covered:** a real vendor URL (the suite does not reach the network); the image build itself (no daemon here —
-the release workflow's image legs build it).
+the release workflow's image legs build it, and since 2026-10-11 `.github/workflows/server-image.yml` builds it on a pull
+request that touches the Dockerfile or either installer script).
+
+### agy installs from its release manifest, checked (2026-10-11)
+
+`antigravity.google/cli/install.sh` answered HTML on GitHub's runners (release run 38075423539), so agy left
+`install-cli.sh` for `src_server/install-agy.sh`, which reads Google's manifest (`{version, url, sha512}`) directly.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheImageInstallsAgyFromItsManifestTests` (12, server) | The REAL `install-agy.sh` with bash, `HOME` in a temp dir, `AGY_MANIFEST_BASE` at `file://` fixtures, `INSTALL_CLI_PAUSE=0`, stub `uname`/`ldd` first on PATH (so the machine is the test's choice); the tarball (one `antigravity`, mode 0755) and its SHA-512 are built in C# (`TarWriter` + `GZipStream`), so the test needs no `tar`/`sha512sum` of its own. `AManifestWhoseHashMatches_InstallsAgy_AndItRuns` — installed at `~/.local/bin/agy`, executable (unix mode checked off Windows), `agy --version` answers, each step announced; `APayloadWhoseHashDiffers_IsRefused_AndNothingIsInstalled`; `APageInPlaceOfTheManifest_IsRefused_Shown_AndTriedAgain` — three refusals, `<!doctype html>` shown; `AManifestWithoutAChecksum_IsRefused`; `AMissingManifest_IsTriedAgain_AndThenFails`; `AMissingPayload_IsTriedAgain_AndNothingIsInstalled`; `ARawBinaryPayload_IsInstalledAsItIs` (Google's non-`.tar.gz` branch); `EachMachineFetchesItsOwnManifest` ×4 — x86_64/aarch64 × glibc/musl → `linux_amd64`, `linux_arm64`, `linux_amd64_musl`, `linux_arm64_musl` (only that manifest exists); `AnUnsupportedMachine_IsRefusedByName_BeforeAnyFetch` (`armv7l`) | RED: all 12 against the missing script — `bash: …/install-agy.sh: No such file or directory`, exit 127 (`Expected code to be 0 … but found 127`; the refusal cases `Expected RefusalLines(…) to be 3, but found 0`). Break-it from a byte copy: the SHA-512 check replaced by `if false` → `APayloadWhoseHashDiffers…` red (`Did not expect code to be 0`); the manifest check reduced to `true` → `APageInPlaceOfTheManifest…` and `AManifestWithoutAChecksum…` red (the page was taken as a manifest); the `ldd … musl` detection removed → both `_musl` cases red. Restored, green 16/16 with the neighbour |
+
+**NOT covered here:** the real manifest and tarball (no network in the suite — `server-image.yml` installs the real one on
+both architectures); the script under `dash` (the image's `sh`) is syntax-checked only (`dash -n`), the suite runs it
+with bash.
+
+### The image job runs the image and uses the server (2026-10-12)
+
+`server-image.yml` used to stop after the build (CodeRabbit on #775: a delivery check must USE the capability). Each leg
+now loads the image and runs `src_server/smoke-image.sh`: the contract runner's Local sign-in configuration, a seeded data
+directory, `/api/health` bounded, a signed-in `GET /api/usage` asserted, each CLI's `--version` inside the container.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheImageSmokeUsesTheServerTests` (4, server, `ServerCollection`) | The script SOURCED for its functions, or run whole with a `docker` stub first on PATH that records every call and the key it saw in its environment. `TheTokenItMints_IsAcceptedByTheRealServer_AndTheSeededLedgerIsWhatItChecks` — `new_key` → `TeamServer` with that key, `seed` into its data dir, `mint` for `dev@example.com` → the in-process server answers `GET /api/usage?window=year` 200, the script's `check_usage` passes that body and fails `{"scope":"me","vendors":[]}`; `EachRunHasItsOwnKey_LongEnoughForTheServer` — two keys differ, each ≥ 32 bytes; `WithoutAnImage_ItRefuses_AndDockerIsNeverAsked`; `AStartThatNeverAnswers_ShowsTheContainersLog_StopsIt_AndNeverPutsTheKeyOnAnArgumentList` — `SMOKE_PORT=1`, `SMOKE_WAIT_SECONDS=2`: non-zero, the stub container's log printed, `run … --rm`, `stop … <that id>`, `-e Auth__Local__SigningKey` by name, the key in docker's environment but in no argument and in no output (`GITHUB_ACTIONS=false`, so the `::add-mask::` line is not printed) | RED: all 4 against the missing script — `bash: …/smoke-image.sh: No such file or directory` (`new_key: command not found`; `Expected output … to contain "usage"`; `… to contain "the stub server said boom"`). Break-it from a byte copy: the HMAC keyed with `"$1x"` → the real server answered 401 (`Expected … to be 200 … but found 401`); the key passed as `-e Auth__Local__SigningKey="$key"` → the argument-list case red; the log dump removed → `… to contain "the stub server said boom"` red. Restored, green |
+
+**NOT covered here:** a real container (no docker daemon in the suite) — the `server-image` job's two legs run it on
+every pull request that touches the image's files or `smoke-image.sh`.
 
 ## A round has an identity on the wire (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
 

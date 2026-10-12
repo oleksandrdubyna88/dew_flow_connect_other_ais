@@ -90,13 +90,20 @@ WORKDIR /home/coai
 # bounded), runs it only behind a shebang, and tries three times. On 2026-10-10 the amd64 image of
 # server-v0.11.0 failed because bash was handed a page instead of a script, once — the arm64 image
 # built from the same URL in the same run (TheImageChecksEachInstallerTests).
+#
+# agy does not go through a fetched script at all. Its install page was the one that answered HTML on
+# GitHub's runners, and Google's script only reads a release MANIFEST ({version, url, sha512}) and
+# downloads the tarball it names. `install-agy.sh` does that from the same endpoints: the payload's
+# SHA-512 checked against the manifest, nothing installed on a mismatch, and no `agy install` (shell
+# set-up the image does not need: PATH is set below). TheImageInstallsAgyFromItsManifestTests.
 # --------------------------------------------------------------------------
 COPY src_server/install-cli.sh /tmp/install-cli.sh
+COPY src_server/install-agy.sh /tmp/install-agy.sh
 RUN sh /tmp/install-cli.sh https://chatgpt.com/codex/install.sh sh \
     && "$HOME/.local/bin/codex" --version
 RUN sh /tmp/install-cli.sh https://claude.ai/install.sh bash \
     && "$HOME/.local/bin/claude" --version
-RUN sh /tmp/install-cli.sh https://antigravity.google/cli/install.sh bash \
+RUN sh /tmp/install-agy.sh \
     && "$HOME/.local/bin/agy" --version
 
 ENV PATH="/home/coai/.local/bin:${PATH}"

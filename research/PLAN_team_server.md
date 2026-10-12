@@ -612,7 +612,7 @@ so an image cannot be published with a CLI that does not start:
 ```
 sh /tmp/install-cli.sh https://chatgpt.com/codex/install.sh      sh
 sh /tmp/install-cli.sh https://claude.ai/install.sh              bash
-sh /tmp/install-cli.sh https://antigravity.google/cli/install.sh bash
+sh /tmp/install-agy.sh
 ```
 
 **Fetched and checked, never piped (2026-10-11).** These were `curl -fsSL <url> | sh|bash` until the amd64 image of
@@ -622,6 +622,33 @@ look before it runs and cannot try again. `src_server/install-cli.sh` fetches ea
 bounded: 20 s to connect, 300 s in all), runs it only behind a shebang, tries three times saying what arrived instead,
 and still fails the build on a persistent bad answer. `TheImageChecksEachInstallerTests` keeps the Dockerfile wired to
 it and runs the real script with bash against `file://` pages and scripts.
+
+**agy from its release manifest, not from a page (2026-10-11).** The retry did not cure the agy case: on GitHub's
+runners `https://antigravity.google/cli/install.sh` answered HTML (release run 38075423539) while it serves `text/x-sh`
+everywhere else, so three attempts are three refusals. Google's script never needed that page for the real download — it
+reads `https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/<platform>.json`
+(`{version, url, sha512}`; 1.3.3 on 2026-10-11, the tarballs on `storage.googleapis.com/antigravity-public/…`), downloads
+the tarball, checks its SHA-512, and copies the `antigravity` binary to `~/.local/bin/agy`. `src_server/install-agy.sh`
+does that from the same endpoints, without the page: platform `linux_amd64`/`linux_arm64` (+ `_musl`), each fetch
+bounded, announced and tried three times (`INSTALL_CLI_PAUSE`), the manifest accepted only as JSON with a `url` and a
+128-hex `sha512` (else its first bytes are shown), the payload's hash checked — a mismatch is refused at once and
+nothing is installed — and the binary appearing as `agy` only once complete and executable. `AGY_MANIFEST_BASE` points
+it at fixtures in the suite (`TheImageInstallsAgyFromItsManifestTests`).
+
+It does NOT run Google's last step, `agy install`: that edits shell start-up files so an interactive shell finds agy on
+PATH. The image sets `PATH` with `ENV` and the server reads no start-up file; Google's own script already ignores the
+step's exit status (`|| true`); and running a just-downloaded, unpinned binary's set-up command in the build would make
+the image depend on whatever it does that day, for nothing the image uses. The build's `agy --version` stays the proof
+that the binary starts.
+
+**And a pull request now builds the image.** `.github/workflows/server-image.yml` builds it, amd64 and arm64 on the
+release legs' native runners, no push and no cache, on any pull request that changes `src_server/Dockerfile`,
+`install-cli.sh`, `install-agy.sh` or the workflow itself — so a GitHub runner proves the real installs before a tag
+rather than during one. Path-filtered because the AOT publish costs minutes per leg; not a required check, because a
+required check a path filter skipped never reports. Since 2026-10-12 each leg also RUNS the image it built
+(`src_server/smoke-image.sh`): the contract runner's Local sign-in configuration, a seeded throwaway data directory, a
+signed-in `GET /api/usage` asserted to return the seeded ledger line, and each CLI's `--version` inside the running
+container — see [module_team_server.md](module_team_server.md) *The container image installs its CLIs checked*.
 
 **Native installers, not npm — and that removes a whole layer.** An earlier draft of this section put
 Node 22 in the image because it assumed `npm i -g @openai/codex @anthropic-ai/claude-code`. The vendors'
@@ -641,7 +668,8 @@ with an answer rather than an assumption, and a round that starts failing has so
 install and answer `--version`. None of the three installers takes a version argument — each fetches
 whatever is current, which is what the operator asked for. Antigravity's does publish a pinnable path if
 one is ever wanted: `…/manifests/linux_amd64.json` names a tarball URL **and its sha512**, so a pin there
-would be a checksummed artefact rather than a flag that does not exist.
+would be a checksummed artefact rather than a flag that does not exist. (Since 2026-10-11 the image reads
+that manifest directly and checks the sha512 — still the latest version, but never an unverified download.)
 
 ### The binaries live under a HOME, and the slots depend on that not mattering
 
