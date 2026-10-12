@@ -199,13 +199,7 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
                 copied = await SettledAsync(source, plan, done.Stamps, partial, rule, clock, ct);
             }
 
-            return copied switch
-            {
-                Copying.Done => new Attempt.Built(partial, Manifest(plan, rule), hold),
-                Copying.Changed changed => Released(hold, new Attempt.Changed(changed.Path, changed.How)),
-                Copying.Refused refused => Released(hold, new Attempt.Refused(refused.Reason)),
-                _ => throw new InvalidOperationException("the union is closed"),
-            };
+            return Attempted(copied, plan, partial, rule, hold);
         }
         catch
         {
@@ -213,6 +207,15 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
             throw;
         }
     }
+
+    /// <summary>What the copy came to, as an attempt: built, with the hold; or changed or refused, the hold given back.</summary>
+    private static Attempt Attempted(Copying copied, CopyPlan plan, string partial, StringComparison rule, SnapshotBudget.Hold hold) => copied switch
+    {
+        Copying.Done => new Attempt.Built(partial, Manifest(plan, rule), hold),
+        Copying.Changed changed => Released(hold, new Attempt.Changed(changed.Path, changed.How)),
+        Copying.Refused refused => Released(hold, new Attempt.Refused(refused.Reason)),
+        _ => throw new InvalidOperationException("the union is closed"),
+    };
 
     /// <summary>
     /// The tree listed and planned AGAIN after the last file, compared whole with what was copied (D6 as amended: per-file

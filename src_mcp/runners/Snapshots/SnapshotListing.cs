@@ -75,8 +75,13 @@ internal sealed class SnapshotListing(IProcessLauncher launcher)
             }
         }
 
-        return untracked ? await OthersAsync(dir, prefix, entries, unavailable, ct) : string.Empty;
+        return await UntrackedAsync(dir, prefix, untracked, entries, unavailable, ct);
     }
+
+    /// <summary>The untracked files when the tree includes them (<see cref="OthersAsync"/>); nothing to do when it does not.</summary>
+    private Task<string> UntrackedAsync(
+        string dir, string prefix, bool untracked, List<SnapshotEntry> entries, List<SnapshotUnavailable> unavailable, CancellationToken ct) =>
+        untracked ? OthersAsync(dir, prefix, entries, unavailable, ct) : Task.FromResult(string.Empty);
 
     private async Task<string> TakeAsync(
         string dir, string prefix, string mode, string path, bool untracked, int depth,
@@ -164,6 +169,10 @@ internal sealed class SnapshotListing(IProcessLauncher launcher)
 
         return result.ExitCode == 0 && !result.TimedOut
             ? (true, result.StdOut, string.Empty)
-            : (false, string.Empty, $"git {string.Join(' ', args)} in {dir}: {(result.TimedOut ? "did not answer in time" : WorktreeManager.FatalLine(result.StdErr))}");
+            : (false, string.Empty, $"git {string.Join(' ', args)} in {dir}: {Failure(result)}");
     }
+
+    /// <summary>Why git gave no answer: it ran out of time, or the fatal line of what it wrote.</summary>
+    private static string Failure(ProcessResult result) =>
+        result.TimedOut ? "did not answer in time" : WorktreeManager.FatalLine(result.StdErr);
 }

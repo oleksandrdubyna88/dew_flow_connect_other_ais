@@ -57,15 +57,15 @@ public static partial class HandleRead
 
     private static readonly char[] Separators = ['\\', '/'];
 
+    /// <summary>The root a reader serves from, fixed now: its path, and the place that path is at this moment.</summary>
+    public static ReadRoot Trust(string root) => new(root, CanonicalDirectory(root));
+
     /// <summary>
     /// The bytes of <paramref name="relative"/> (forward or native slashes) under <paramref name="root"/>, read from the
     /// handle that was opened and verified — or a refusal.
     /// </summary>
     /// <param name="cap">The most bytes served; one more is a refusal.</param>
     /// <param name="rule">How path components compare on this filesystem.</param>
-    /// <summary>The root a reader serves from, fixed now: its path, and the place that path is at this moment.</summary>
-    public static ReadRoot Trust(string root) => new(root, CanonicalDirectory(root));
-
     public static FileRead Read(ReadRoot root, string relative, long cap, StringComparison rule) =>
         Read(root, relative, cap, rule, static () => { });
 

@@ -40,18 +40,17 @@ internal static class SnapshotPaths
     /// on the way to the disk, and the copy would have landed under the excluded name. Asked of every component, on
     /// every platform: the index came from somewhere, and the snapshot may be made on Windows.
     /// </remarks>
-    public static string Unsafe(string relative)
+    public static string Unsafe(string relative) =>
+        new[] { EmptyPath(relative), AbsolutePath(relative), Unplaceable(relative) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
+
+    private static string EmptyPath(string relative) => relative.Length == 0 ? "an empty path was listed" : string.Empty;
+
+    private static string AbsolutePath(string relative) =>
+        relative.StartsWith('/') || IsDriveSpelling(relative) ? $"{relative} is absolute, so it would leave the snapshot root" : string.Empty;
+
+    /// <summary>Why the path's components could not be placed under the root — the path named in front — or empty.</summary>
+    private static string Unplaceable(string relative)
     {
-        if (relative.Length == 0)
-        {
-            return "an empty path was listed";
-        }
-
-        if (relative.StartsWith('/') || IsDriveSpelling(relative))
-        {
-            return $"{relative} is absolute, so it would leave the snapshot root";
-        }
-
         var parts = relative.Split('/');
         var why = new[] { Leaving(parts), Unnameable(parts), Rewritten(parts) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
 
@@ -103,12 +102,13 @@ internal static class SnapshotPaths
         }
 
         var asked = Lexical(requested);
-        if (asked.Refusal.Length > 0)
-        {
-            return Resolved.Refuse(asked.Refusal);
-        }
 
-        var inside = Under(Lexical(root), asked, rootRule);
+        return asked.Refusal.Length > 0 ? Resolved.Refuse(asked.Refusal) : InManifest(Under(Lexical(root), asked, rootRule), holds);
+    }
+
+    /// <summary>The path inside the root, resolved when the manifest holds it — refused when it is outside, or held by nothing.</summary>
+    private static Resolved InManifest(string inside, Func<string, bool> holds)
+    {
         if (inside.Length == 0)
         {
             return Resolved.Refuse("the path is outside the snapshot");
@@ -117,26 +117,26 @@ internal static class SnapshotPaths
         return holds(inside) ? new Resolved(inside, string.Empty) : Resolved.Refuse($"{inside} is not in the snapshot's manifest");
     }
 
+    /// <summary>
+    /// The forms refused before the absolute-or-relative question, in order — each asked only when every one before it
+    /// passed, so a later one may index characters an earlier one ruled out as missing.
+    /// </summary>
+    private static readonly (Func<string, bool> Is, string Form)[] RefusedForms =
+    [
+        (string.IsNullOrWhiteSpace, "an empty path"),
+        (HasNul, "a path with a NUL character"),
+        (IsUncSpelling, "a UNC or device path (\\\\?\\, \\\\.\\, \\\\server\\)"),
+    ];
+
     /// <summary>The form the request takes when it is not a plain absolute path, or empty when it is one.</summary>
-    private static string NotAbsolute(string requested)
-    {
-        if (string.IsNullOrWhiteSpace(requested))
-        {
-            return "an empty path";
-        }
+    private static string NotAbsolute(string requested) =>
+        RefusedForms.Where(rule => rule.Is(requested)).Select(static rule => rule.Form).FirstOrDefault()
+        ?? (Path.IsPathFullyQualified(requested) ? string.Empty : RelativeForm(requested));
 
-        if (requested.Contains('\0'))
-        {
-            return "a path with a NUL character";
-        }
+    private static bool HasNul(string requested) => requested.Contains('\0');
 
-        if (requested.Length >= 2 && Separators.Contains(requested[0]) && Separators.Contains(requested[1]))
-        {
-            return "a UNC or device path (\\\\?\\, \\\\.\\, \\\\server\\)";
-        }
-
-        return Path.IsPathFullyQualified(requested) ? string.Empty : RelativeForm(requested);
-    }
+    private static bool IsUncSpelling(string requested) =>
+        requested.Length >= 2 && Separators.Contains(requested[0]) && Separators.Contains(requested[1]);
 
     private static string RelativeForm(string requested) =>
         IsDriveSpelling(requested) ? "a drive-relative path (C:foo)"
@@ -171,16 +171,22 @@ internal static class SnapshotPaths
             case "" or ".":
                 return string.Empty;
             case "..":
-                if (stack.Count == 0)
-                {
-                    return "the path leaves its root";
-                }
-
-                stack.RemoveAt(stack.Count - 1);
-                return string.Empty;
+                return Pop(stack);
             default:
                 return Odd(part, stack);
         }
+    }
+
+    /// <summary>A <c>..</c> applied: the last component dropped — or the refusal, when there is none to drop.</summary>
+    private static string Pop(List<string> stack)
+    {
+        if (stack.Count == 0)
+        {
+            return "the path leaves its root";
+        }
+
+        stack.RemoveAt(stack.Count - 1);
+        return string.Empty;
     }
 
     private static string Odd(string part, List<string> stack)
@@ -202,15 +208,19 @@ internal static class SnapshotPaths
     }
 
     /// <summary>The manifest-relative path when <paramref name="asked"/> starts with every component of <paramref name="root"/>, else empty.</summary>
-    private static string Under(Parts root, Parts asked, StringComparison rule)
+    private static string Under(Parts root, Parts asked, StringComparison rule) =>
+        StartsWithRoot(root, asked, rule)
+            ? string.Join('/', asked.Components.Skip(root.Components.Count))
+            : string.Empty;
+
+    /// <summary>Whether <paramref name="asked"/> has <paramref name="root"/>'s prefix and every one of its components, and goes deeper.</summary>
+    private static bool StartsWithRoot(Parts root, Parts asked, StringComparison rule)
     {
         var prefixesMatch = string.Equals(Trim(root.Prefix), Trim(asked.Prefix), StringComparison.OrdinalIgnoreCase);
         var deeper = asked.Components.Count > root.Components.Count;
         var sameStart = root.Components.Select((component, i) => deeper && string.Equals(component, asked.Components[i], rule)).All(same => same);
 
-        return prefixesMatch && deeper && sameStart
-            ? string.Join('/', asked.Components.Skip(root.Components.Count))
-            : string.Empty;
+        return prefixesMatch && deeper && sameStart;
 
         static string Trim(string prefix) => prefix.TrimEnd(Separators);
     }

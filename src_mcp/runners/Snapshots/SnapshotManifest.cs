@@ -34,7 +34,11 @@ public sealed record SnapshotManifest(
         other is not null
         && Bytes == other.Bytes
         && CaseInsensitive == other.CaseInsensitive
-        && Files.SequenceEqual(other.Files, StringComparer.Ordinal)
+        && SameLists(other);
+
+    /// <summary>The three lists of both, element by element — the paths ordinally.</summary>
+    private bool SameLists(SnapshotManifest other) =>
+        Files.SequenceEqual(other.Files, StringComparer.Ordinal)
         && Excluded.SequenceEqual(other.Excluded, StringComparer.Ordinal)
         && Unavailable.SequenceEqual(other.Unavailable);
 

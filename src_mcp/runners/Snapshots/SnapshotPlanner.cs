@@ -111,6 +111,12 @@ internal static class SnapshotPlanner
             return string.Empty;
         }
 
+        return Kept(entry, kept, seen);
+    }
+
+    /// <summary>A placeable, not-excluded entry kept — unless it is a link, or collides with one already kept; the refusal then.</summary>
+    private static string Kept(SnapshotEntry entry, List<string> kept, Dictionary<string, string> seen)
+    {
         if (entry.Kind == EntryKind.Symlink)
         {
             return $"{entry.Path} is a symbolic link in the tree; a snapshot copies no link and follows none";
@@ -159,19 +165,18 @@ internal static class SnapshotPlanner
         // file deleted from a live tree, and the link was never judged: the snapshot was MADE where Windows refused (CI on
         // Linux and macOS, 2026-10-12). What the entry IS — its link target, its reparse bit — does not depend on what it
         // reaches, or on whether that exists; a dangling link is a link too.
-        var onTheWay = directories.LinkOnTheWayTo(relative);
-        if (onTheWay.Length > 0 || IsLink(info))
+        var linked = Linked(relative, info, directories);
+        if (linked.Length > 0)
         {
-            return $"{(onTheWay.Length > 0 ? onTheWay : relative)} is a link (a symbolic link, junction or other reparse point); a snapshot follows none";
+            return linked;
         }
 
         if (!info.Exists)
         {
-            // A live tree's file deleted since the listing is simply absent; a pinned tree's is a broken tree.
-            return live ? string.Empty : $"{relative} is listed in the pinned tree but is not there";
+            return Missing(relative, live);
         }
 
-        if (info.Length <= LfsPointerUpTo && IsLfsPointer(source))
+        if (IsUnfetched(info, source))
         {
             unavailable.Add(new SnapshotUnavailable(relative, "a git-LFS pointer: the content was not fetched, so it is not reviewed source"));
             return string.Empty;
@@ -181,6 +186,24 @@ internal static class SnapshotPlanner
 
         return string.Empty;
     }
+
+    /// <summary>The link judgement: a linked directory on the way, or the entry itself a link — the refusal naming it, or empty.</summary>
+    private static string Linked(string relative, FileInfo info, Directories directories)
+    {
+        var onTheWay = directories.LinkOnTheWayTo(relative);
+
+        return onTheWay.Length > 0 || IsLink(info)
+            ? $"{(onTheWay.Length > 0 ? onTheWay : relative)} is a link (a symbolic link, junction or other reparse point); a snapshot follows none"
+            : string.Empty;
+    }
+
+    /// <summary>The existence judgement, for a listed file that is not there.</summary>
+    /// <remarks>A live tree's file deleted since the listing is simply absent; a pinned tree's is a broken tree.</remarks>
+    private static string Missing(string relative, bool live) =>
+        live ? string.Empty : $"{relative} is listed in the pinned tree but is not there";
+
+    /// <summary>The LFS judgement: small enough to be a pointer, and starting with the pointer's header.</summary>
+    private static bool IsUnfetched(FileInfo info, string source) => info.Length <= LfsPointerUpTo && IsLfsPointer(source);
 
     /// <summary>
     /// Whether the entry ITSELF is a link, by lstat-level facts: its link target (a symlink on Unix, a symlink or

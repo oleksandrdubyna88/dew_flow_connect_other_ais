@@ -60,8 +60,12 @@ internal static class SnapshotCopier
             }
         }
 
-        return clock.Elapsed > options.MaxElapsed ? new Copying.Refused(TookTooLong(clock.Elapsed, options.MaxElapsed)) : new Copying.Done(stamps);
+        return Finished(stamps, options, clock);
     }
+
+    /// <summary>The copy as it ended: refused when the last file took it past the time ceiling, else done.</summary>
+    private static Copying Finished(Dictionary<string, SnapshotStamp> stamps, SnapshotOptions options, Stopwatch clock) =>
+        clock.Elapsed > options.MaxElapsed ? new Copying.Refused(TookTooLong(clock.Elapsed, options.MaxElapsed)) : new Copying.Done(stamps);
 
     /// <summary>
     /// The whole inventory after the last file against the copy: <see cref="Copying.Done"/> when nothing moved since the
@@ -71,6 +75,14 @@ internal static class SnapshotCopier
     /// <param name="stamps">What each copied file looked like at its own copy.</param>
     /// <param name="fresh">The tree listed and planned again, after the last file.</param>
     public static Copying Settled(CopyPlan copied, IReadOnlyDictionary<string, SnapshotStamp> stamps, CopyPlan fresh)
+    {
+        var files = CopiedFilesSettled(copied, stamps, fresh);
+
+        return files is Copying.Done ? InventorySettled(copied, stamps, fresh) : files;
+    }
+
+    /// <summary>The first pass: every copied file still there, at the stamp it had at its own copy.</summary>
+    private static Copying CopiedFilesSettled(CopyPlan copied, IReadOnlyDictionary<string, SnapshotStamp> stamps, CopyPlan fresh)
     {
         var now = fresh.Files.ToDictionary(static file => file.Relative, static file => file.Stamp, StringComparer.Ordinal);
         foreach (var file in copied.Files)
@@ -86,19 +98,37 @@ internal static class SnapshotCopier
             }
         }
 
-        var added = fresh.Files.Select(static file => file.Relative).FirstOrDefault(relative => !stamps.ContainsKey(relative)) ?? string.Empty;
+        return new Copying.Done(stamps);
+    }
+
+    /// <summary>The second pass: no file added since the copy, and the excluded and the unavailable as they were.</summary>
+    private static Copying InventorySettled(CopyPlan copied, IReadOnlyDictionary<string, SnapshotStamp> stamps, CopyPlan fresh)
+    {
+        var added = Added(stamps, fresh);
         if (added.Length > 0)
         {
             return new Copying.Changed(added, "was added");
         }
 
+        var elsewhere = MovedElsewhere(copied, fresh);
+
+        return elsewhere.Length > 0 ? new Copying.Changed(elsewhere, "appeared or went") : new Copying.Done(stamps);
+    }
+
+    /// <summary>The first file the fresh plan has and the copy did not, or empty.</summary>
+    private static string Added(IReadOnlyDictionary<string, SnapshotStamp> stamps, CopyPlan fresh) =>
+        fresh.Files.Select(static file => file.Relative).FirstOrDefault(relative => !stamps.ContainsKey(relative)) ?? string.Empty;
+
+    /// <summary>The first excluded path, else the first unavailable one, that appeared or went — or empty.</summary>
+    private static string MovedElsewhere(CopyPlan copied, CopyPlan fresh)
+    {
         var elsewhere = Moved(copied.Excluded, fresh.Excluded);
         if (elsewhere.Length == 0)
         {
             elsewhere = Moved(copied.Unavailable.Select(static u => u.Path), fresh.Unavailable.Select(static u => u.Path));
         }
 
-        return elsewhere.Length > 0 ? new Copying.Changed(elsewhere, "appeared or went") : new Copying.Done(stamps);
+        return elsewhere;
     }
 
     /// <summary>The first path in one list and not the other, or empty — the excluded and the unavailable are inventory too.</summary>
@@ -136,44 +166,66 @@ internal static class SnapshotCopier
         try
         {
             var before = SnapshotStamp.Of(file.Source);
-            if (before != file.Stamp)
-            {
-                return new Copying.Changed(file.Relative, "changed");
-            }
+            var unmoved = Unmoved(sourceRoot, file, before, options, attempt, stamps);
 
-            // Between the stamp and the copy: the one moment a test can change the file and the check must see it.
-            options.BeforeCopyOf(attempt, file.Relative);
-            var linked = SnapshotLinks.FirstLinkOnTheWay(sourceRoot, file.Relative);
-            if (linked.Length > 0)
-            {
-                return new Copying.Refused($"{linked} is a link, or cannot be inspected, since the copy was planned; a snapshot follows none");
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(file.Destination)!);
-            var copied = CopyUnnamedStream(file.Source, file.Destination, before.WrittenUtc);
-            if (before != SnapshotStamp.Of(file.Source) || copied != before.Length)
-            {
-                return new Copying.Changed(file.Relative, "changed");
-            }
-
-            stamps[file.Relative] = before;
-
-            return new Copying.Done(stamps);
-        }
-        catch (FileNotFoundException)
-        {
-            // Gone between the listing and the copy: the tree moved, which is the retry's case.
-            return new Copying.Changed(file.Relative, "was removed");
-        }
-        catch (Exception e) when (e is PathTooLongException or DirectoryNotFoundException)
-        {
-            return new Copying.Refused($"{file.Relative} could not be copied: the path is too long for this filesystem, or its directory went away ({e.Message})");
+            return unmoved is Copying.Done ? CopiedUnchanged(file, before, stamps) : unmoved;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new Copying.Refused($"{file.Relative} could not be copied ({e.Message})");
+            return Failed(file.Relative, e);
         }
     }
+
+    /// <summary>
+    /// The pre-check: the file still carries its PLANNED stamp, and — walked again just before the copy — nothing on
+    /// its way is a link. <see cref="Copying.Done"/> (the stamps as they are) when the copy may go ahead.
+    /// </summary>
+    private static Copying Unmoved(
+        string sourceRoot, PlannedFile file, SnapshotStamp before, SnapshotOptions options, int attempt, Dictionary<string, SnapshotStamp> stamps)
+    {
+        if (before != file.Stamp)
+        {
+            return new Copying.Changed(file.Relative, "changed");
+        }
+
+        // Between the stamp and the copy: the one moment a test can change the file and the check must see it.
+        options.BeforeCopyOf(attempt, file.Relative);
+        var linked = SnapshotLinks.FirstLinkOnTheWay(sourceRoot, file.Relative);
+        if (linked.Length > 0)
+        {
+            return new Copying.Refused($"{linked} is a link, or cannot be inspected, since the copy was planned; a snapshot follows none");
+        }
+
+        return new Copying.Done(stamps);
+    }
+
+    /// <summary>The copy, then the post-copy comparison: the source's stamp unchanged and every byte it had written — the stamp kept for the inventory check.</summary>
+    private static Copying CopiedUnchanged(PlannedFile file, SnapshotStamp before, Dictionary<string, SnapshotStamp> stamps)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(file.Destination)!);
+        var copied = CopyUnnamedStream(file.Source, file.Destination, before.WrittenUtc);
+        if (before != SnapshotStamp.Of(file.Source) || copied != before.Length)
+        {
+            return new Copying.Changed(file.Relative, "changed");
+        }
+
+        stamps[file.Relative] = before;
+
+        return new Copying.Done(stamps);
+    }
+
+    /// <summary>
+    /// What a copy that threw came to. The named types are all <see cref="IOException"/>s, so the arms' order is the
+    /// decision: the specific ones first, then any other I/O or access failure.
+    /// </summary>
+    private static Copying Failed(string relative, Exception e) => e switch
+    {
+        // Gone between the listing and the copy: the tree moved, which is the retry's case.
+        FileNotFoundException => new Copying.Changed(relative, "was removed"),
+        PathTooLongException or DirectoryNotFoundException =>
+            new Copying.Refused($"{relative} could not be copied: the path is too long for this filesystem, or its directory went away ({e.Message})"),
+        _ => new Copying.Refused($"{relative} could not be copied ({e.Message})"),
+    };
 
     /// <summary>The source's unnamed stream into a NEW destination file, its last-write time carried over; the bytes written.</summary>
     private static long CopyUnnamedStream(string source, string destination, DateTime writtenUtc)

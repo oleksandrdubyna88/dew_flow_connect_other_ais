@@ -101,11 +101,7 @@ internal sealed class AcpTransport : IDisposable
         while (true)
         {
             var at = Array.IndexOf(_unread, '\n', _scanned, _length - _scanned);
-            if (at > MaxLineChars || (at < 0 && _length > MaxLineChars))
-            {
-                // Over the cap whether its newline has arrived or not: the first run only caught the line that never ended.
-                throw new AcpProtocolException($"the agent wrote a line longer than {MaxLineChars / (1024 * 1024)} Mi characters — not a message, not read further");
-            }
+            RefuseOverCap(at, _length);
 
             if (at >= 0)
             {
@@ -117,13 +113,30 @@ internal sealed class AcpTransport : IDisposable
             var read = await ReadChunkAsync(ct);
             if (read == 0)
             {
-                // The pipe closed: the tail without a newline is the last line, and nothing at all is the end.
-                return _length == 0 ? null : TakeLine(_length, newline: false);
+                return Tail();
             }
 
             _length += read;
         }
     }
+
+    /// <summary>Throws <see cref="AcpProtocolException"/> once the unread text holds a line past <see cref="MaxLineChars"/>.</summary>
+    /// <param name="at">Where the next newline is, or -1 when it has not arrived.</param>
+    /// <param name="length">How much unread text there is.</param>
+    private static void RefuseOverCap(int at, int length)
+    {
+        if (OverCap(at, length))
+        {
+            // Over the cap whether its newline has arrived or not: the first run only caught the line that never ended.
+            throw new AcpProtocolException($"the agent wrote a line longer than {MaxLineChars / (1024 * 1024)} Mi characters — not a message, not read further");
+        }
+    }
+
+    private static bool OverCap(int at, int length) => at > MaxLineChars || (at < 0 && length > MaxLineChars);
+
+    /// <summary>The end of the stream, as a line.</summary>
+    /// <remarks>The pipe closed: the tail without a newline is the last line, and nothing at all is the end.</remarks>
+    private string? Tail() => _length == 0 ? null : TakeLine(_length, newline: false);
 
     /// <summary>More of the stream into the unread buffer, grown when full; zero at the end or when the pipe went with the child.</summary>
     private async Task<int> ReadChunkAsync(CancellationToken ct)
@@ -146,8 +159,7 @@ internal sealed class AcpTransport : IDisposable
     /// <summary>The line up to <paramref name="at"/> (a trailing CR dropped), the rest kept for the next call.</summary>
     private string TakeLine(int at, bool newline)
     {
-        var end = at > 0 && _unread[at - 1] == '\r' ? at - 1 : at;
-        var line = new string(_unread, 0, end);
+        var line = new string(_unread, 0, LineEnd(_unread, at));
         var consumed = newline ? at + 1 : at;
         var rest = _length - consumed;
         if (rest > 0)
@@ -160,6 +172,9 @@ internal sealed class AcpTransport : IDisposable
 
         return line;
     }
+
+    /// <summary>Where the line before <paramref name="at"/> ends: before a trailing CR, which is dropped.</summary>
+    private static int LineEnd(char[] unread, int at) => at > 0 && unread[at - 1] == '\r' ? at - 1 : at;
 
     /// <summary>Writes one line, serialised against the other writers — a reply to the agent can cross a request to it.</summary>
     /// <remarks>

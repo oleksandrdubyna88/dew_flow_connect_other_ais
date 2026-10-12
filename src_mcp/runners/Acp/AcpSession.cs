@@ -216,8 +216,12 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
             ?? offered.FirstOrDefault(option => option.Kind.StartsWith("reject", StringComparison.Ordinal))
             ?? AcpChoice.None;
 
-        return chosen.OptionId.Length > 0 && offered.Count(option => option.OptionId == chosen.OptionId) == 1 ? chosen : AcpChoice.None;
+        return Unshared(chosen, offered);
     }
+
+    /// <summary>The chosen option when its id is non-empty and no other option carries it; otherwise none.</summary>
+    private static AcpChoice Unshared(AcpChoice chosen, AcpChoice[] offered) =>
+        chosen.OptionId.Length > 0 && offered.Count(option => option.OptionId == chosen.OptionId) == 1 ? chosen : AcpChoice.None;
 
     /// <summary>The id of <see cref="Choose"/>'s option, or empty when the outcome is <c>cancelled</c>.</summary>
     public static string Permission(JsonElement options) => Choose(options).OptionId;
@@ -231,7 +235,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
                 await HandleAsync(AcpIncoming.Parse(line));
             }
 
-            Break(ct.IsCancellationRequested ? "the turn was ended" : "the agent closed its output before answering");
+            Break(EndOfOutput(ct.IsCancellationRequested));
         }
         catch (OperationCanceledException)
         {
@@ -244,6 +248,10 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
             Break(e.Message);
         }
     }
+
+    /// <summary>Why the stream ended when the agent's output did: the turn's own end, or the agent closing it first.</summary>
+    private static string EndOfOutput(bool turnEnded) =>
+        turnEnded ? "the turn was ended" : "the agent closed its output before answering";
 
     /// <summary>The agent's exit, as the end of the conversation — after the grace for what it wrote on its way out.</summary>
     private async Task WatchExitAsync()
@@ -270,26 +278,31 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     {
         try
         {
-            await (message.Kind switch
-            {
-                AcpIncomingKind.Response => Resolved(message),
-                AcpIncomingKind.Request => AnswerAsync(message),
-                AcpIncomingKind.Notification => Noted(message),
-                _ => Task.CompletedTask,
-            });
+            await Dispatched(message);
         }
         catch (Exception e) when (e is not OperationCanceledException && message.Kind == AcpIncomingKind.Request)
         {
             // The agent is told the request failed, not what broke: a system message can name a path.
-            await transport.WriteLineAsync(
-                AcpMessages.Error(message.Id, message.Method == "fs/read_text_file" ? AcpMessages.InvalidParams : AcpMessages.InternalError, "the request could not be served"),
-                ct);
+            await transport.WriteLineAsync(AcpMessages.Error(message.Id, FailureCode(message.Method), "the request could not be served"), ct);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             // A notification or a response this client could not take: nothing to answer, nothing to stop for.
         }
     }
+
+    /// <summary>The line handed to what its kind calls for; a stray line is nothing to do.</summary>
+    private Task Dispatched(AcpIncoming message) => message.Kind switch
+    {
+        AcpIncomingKind.Response => Resolved(message),
+        AcpIncomingKind.Request => AnswerAsync(message),
+        AcpIncomingKind.Notification => Noted(message),
+        _ => Task.CompletedTask,
+    };
+
+    /// <summary>The JSON-RPC error a failed handler answers with: a read's parameters were refused, anything else is this client's own fault.</summary>
+    private static int FailureCode(string method) =>
+        method == "fs/read_text_file" ? AcpMessages.InvalidParams : AcpMessages.InternalError;
 
     private Task Resolved(AcpIncoming response)
     {
@@ -304,6 +317,14 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
             }
         }
 
+        Settle(waiting, response);
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The awaiting caller completed: with the agent's error as <see cref="AcpAgentException"/>, else with the result.</summary>
+    private static void Settle(TaskCompletionSource<JsonElement> waiting, AcpIncoming response)
+    {
         if (response.Error.ValueKind == JsonValueKind.Object)
         {
             waiting.TrySetException(new AcpAgentException(
@@ -313,8 +334,6 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         {
             waiting.TrySetResult(response.Result);
         }
-
-        return Task.CompletedTask;
     }
 
     private Task AnswerAsync(AcpIncoming request) => request.Method switch
@@ -368,7 +387,12 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
         // Cut by scanning for the window's own newlines, never by splitting the file: a two-line window of a served file
         // of two million short lines allocated 80 MB that way (the code gate of epic 4, 2026-10-12).
-        var from = LineStart(text, Math.Max(line - 1, 0));
+        return Windowed(text, LineStart(text, Math.Max(line - 1, 0)), limit);
+    }
+
+    /// <summary>The text from <paramref name="from"/> — empty when the text has fewer lines — for <paramref name="limit"/> lines, or to its end without one.</summary>
+    private static string Windowed(string text, int from, long limit)
+    {
         if (from < 0)
         {
             return string.Empty;

@@ -73,6 +73,13 @@ internal static class AskAcpMode
             return BadRequest;
         }
 
+        return await TurnAsync(profile, flags, stdin, note, output, ct);
+    }
+
+    /// <summary>The request checked, the prompt read, the turn run and reported — for the profile <see cref="RunAsync"/> found.</summary>
+    private static async Task<int> TurnAsync(
+        IAcpProfile profile, IReadOnlyDictionary<string, string> flags, TextReader stdin, Action<string> note, TextWriter output, CancellationToken ct)
+    {
         var cwd = flags.GetValueOrDefault("--cwd", string.Empty);
         var model = flags.GetValueOrDefault("--model", string.Empty);
         if (Refusal(flags, cwd, model) is { Length: > 0 } refused)
@@ -99,26 +106,34 @@ internal static class AskAcpMode
     }
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
-    internal static string Refusal(IReadOnlyDictionary<string, string> flags, string cwd, string model)
+    internal static string Refusal(IReadOnlyDictionary<string, string> flags, string cwd, string model) =>
+        new[] { FolderRefusal(cwd), ModelRefusal(model), DeadlineRefusal(flags) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
+
+    private static string FolderRefusal(string cwd) =>
+        cwd.Length == 0 || !Directory.Exists(cwd)
+            ? $"{Mode} needs --cwd <an existing folder the agent works in>" + (cwd.Length == 0 ? string.Empty : $" — '{cwd}' is not one")
+            : string.Empty;
+
+    private static string ModelRefusal(string model) =>
+        model.Length == 0
+            ? $"{Mode} needs --model <id> — the model is set on the session before the prompt, never left to the agent's default"
+            : string.Empty;
+
+    /// <remarks>
+    /// Given, it must be a number of seconds the clock can hold: a value past the ceiling used to throw after the
+    /// agent had started and leave it running (finding 4 of the security review).
+    /// </remarks>
+    private static string DeadlineRefusal(IReadOnlyDictionary<string, string> flags)
     {
-        if (cwd.Length == 0 || !Directory.Exists(cwd))
-        {
-            return $"{Mode} needs --cwd <an existing folder the agent works in>" + (cwd.Length == 0 ? string.Empty : $" — '{cwd}' is not one");
-        }
-
-        if (model.Length == 0)
-        {
-            return $"{Mode} needs --model <id> — the model is set on the session before the prompt, never left to the agent's default";
-        }
-
-        // Given, it must be a number of seconds the clock can hold: a value past the ceiling used to throw after the
-        // agent had started and leave it running (finding 4 of the security review).
         var given = flags.GetValueOrDefault("--deadline-seconds", string.Empty);
 
-        return given.Length > 0 && !(int.TryParse(given, out var seconds) && seconds >= 1 && seconds <= MaxDeadlineSeconds)
+        return given.Length > 0 && !HoldableSeconds(given)
             ? $"{Mode}: --deadline-seconds must be a whole number from 1 to {MaxDeadlineSeconds} — '{given}' is not"
             : string.Empty;
     }
+
+    private static bool HoldableSeconds(string given) =>
+        int.TryParse(given, out var seconds) && seconds >= 1 && seconds <= MaxDeadlineSeconds;
 
     /// <summary>A configured path is the whole answer; otherwise the profile's own.</summary>
     private static string Executable(IReadOnlyDictionary<string, string> flags, IAcpProfile profile) =>
@@ -138,22 +153,32 @@ internal static class AskAcpMode
             return Ok;
         }
 
-        if (diagnosis.Known && outcome.End is not (AcpEnd.Deadline or AcpEnd.Cancelled))
+        if (Diagnosed(outcome.End, diagnosis))
         {
             note($"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}");
 
-            return diagnosis.Kind == AcpFailureKind.Spent ? Spent : Refused;
+            return DiagnosedExit(diagnosis.Kind);
         }
 
         note(outcome.Reason);
 
-        return outcome.End switch
-        {
-            AcpEnd.AgentFailed => Failed,
-            AcpEnd.Protocol => Protocol,
-            _ => Unavailable,
-        };
+        return EndExit(outcome.End);
     }
+
+    /// <summary>Whether a known failure names the end — never one the clock or the caller decided, whatever the agent said.</summary>
+    private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
+        diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled);
+
+    /// <summary>A known failure's exit: a spent allowance, or a refusal.</summary>
+    private static int DiagnosedExit(AcpFailureKind kind) => kind == AcpFailureKind.Spent ? Spent : Refused;
+
+    /// <summary>An undiagnosed end's exit: the agent's own failure, a broken stream, or ended before an answer.</summary>
+    private static int EndExit(AcpEnd end) => end switch
+    {
+        AcpEnd.AgentFailed => Failed,
+        AcpEnd.Protocol => Protocol,
+        _ => Unavailable,
+    };
 
     /// <summary>The one JSON object on stdout — see the type's remarks for the shape.</summary>
     internal static string Report(AcpOutcome outcome, AcpDiagnosis diagnosis)

@@ -81,16 +81,11 @@ internal static class AcpMessages
 
     /// <summary>A string property, or empty — the agent's optional fields are read without a null in the caller.</summary>
     public static string Text(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() ?? string.Empty
-            : string.Empty;
+        Child(element, name) is { ValueKind: JsonValueKind.String } value ? value.GetString() ?? string.Empty : string.Empty;
 
     /// <summary>A number property, or zero — a string where a number was expected is zero too, never a throw in the pump.</summary>
     public static long Number(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
-            ? number
-            : 0;
+        Child(element, name) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt64(out var number) ? number : 0;
 
     /// <summary>An object property, or an undefined element.</summary>
     public static JsonElement Child(JsonElement element, string name) =>
@@ -113,27 +108,32 @@ internal sealed record AcpIncoming(AcpIncomingKind Kind, JsonElement Id, string 
         {
             using var document = JsonDocument.Parse(line);
             var root = document.RootElement.Clone();
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return Stray;
-            }
 
-            var method = AcpMessages.Text(root, "method");
-            var hasId = root.TryGetProperty("id", out var id) && id.ValueKind != JsonValueKind.Null;
-
-            return (method.Length > 0, hasId) switch
-            {
-                (true, true) => new AcpIncoming(AcpIncomingKind.Request, id, method, AcpMessages.Child(root, "params"), default, default),
-                (true, false) => new AcpIncoming(AcpIncomingKind.Notification, default, method, AcpMessages.Child(root, "params"), default, default),
-                (false, true) => new AcpIncoming(AcpIncomingKind.Response, id, string.Empty, default, AcpMessages.Child(root, "result"), AcpMessages.Child(root, "error")),
-                _ => Stray,
-            };
+            return root.ValueKind == JsonValueKind.Object ? Classified(root) : Stray;
         }
         catch (JsonException)
         {
             return Stray;
         }
     }
+
+    /// <summary>A JSON object read as a message by what it carries: a method and an id, a method alone, an id alone — else stray.</summary>
+    private static AcpIncoming Classified(JsonElement root)
+    {
+        var method = AcpMessages.Text(root, "method");
+
+        return (method.Length > 0, HasId(root, out var id)) switch
+        {
+            (true, true) => new AcpIncoming(AcpIncomingKind.Request, id, method, AcpMessages.Child(root, "params"), default, default),
+            (true, false) => new AcpIncoming(AcpIncomingKind.Notification, default, method, AcpMessages.Child(root, "params"), default, default),
+            (false, true) => new AcpIncoming(AcpIncomingKind.Response, id, string.Empty, default, AcpMessages.Child(root, "result"), AcpMessages.Child(root, "error")),
+            _ => Stray,
+        };
+    }
+
+    /// <summary>Whether the message carries an id that is not <c>null</c> — a JSON-RPC notification has none.</summary>
+    private static bool HasId(JsonElement root, out JsonElement id) =>
+        root.TryGetProperty("id", out id) && id.ValueKind != JsonValueKind.Null;
 
     private static readonly AcpIncoming Stray = new(AcpIncomingKind.Stray, default, string.Empty, default, default, default);
 }

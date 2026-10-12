@@ -83,19 +83,9 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
             stop = AcpMessages.Text(await session.CallAsync("session/prompt", AcpMessages.Prompt(sessionId, ask.Prompt)), "stopReason");
             (end, reason) = Stopped(stop);
         }
-        catch (AcpAgentException e)
+        catch (Exception e) when (e is AcpAgentException or AcpProtocolException or OperationCanceledException)
         {
-            (end, reason) = (AcpEnd.AgentFailed, $"the agent answered with an error ({e.Code}): {e.Message}");
-        }
-        catch (AcpProtocolException e)
-        {
-            (end, reason) = (AcpEnd.Protocol, e.Message);
-        }
-        catch (OperationCanceledException)
-        {
-            (end, reason) = ct.IsCancellationRequested
-                ? (AcpEnd.Cancelled, "the turn was cancelled by its caller")
-                : (AcpEnd.Deadline, $"the agent did not answer within the {ask.Deadline.TotalSeconds:F0}s this turn was given");
+            (end, reason) = Failed(e, ct.IsCancellationRequested, ask.Deadline);
         }
         finally
         {
@@ -139,6 +129,20 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
             // The transport is disposed next, which ends the read the grace walked away from.
         }
     }
+
+    /// <summary>How a turn that threw ended: the agent's error, a broken stream, or a cancellation — the caller's or the deadline's.</summary>
+    /// <param name="cancelledByCaller">Whether the caller's own token fired; otherwise a cancellation is the deadline.</param>
+    private static (AcpEnd End, string Reason) Failed(Exception e, bool cancelledByCaller, TimeSpan deadline) => e switch
+    {
+        AcpAgentException agent => (AcpEnd.AgentFailed, $"the agent answered with an error ({agent.Code}): {agent.Message}"),
+        AcpProtocolException protocol => (AcpEnd.Protocol, protocol.Message),
+        _ => Cancelled(cancelledByCaller, deadline),
+    };
+
+    private static (AcpEnd End, string Reason) Cancelled(bool cancelledByCaller, TimeSpan deadline) =>
+        cancelledByCaller
+            ? (AcpEnd.Cancelled, "the turn was cancelled by its caller")
+            : (AcpEnd.Deadline, $"the agent did not answer within the {deadline.TotalSeconds:F0}s this turn was given");
 
     /// <summary>What a <c>stopReason</c> means: <c>end_turn</c> is the answer; anything else is the agent stopping short, in its own word.</summary>
     private static (AcpEnd End, string Reason) Stopped(string stopReason)

@@ -115,56 +115,66 @@ public sealed class FolderReadBoundary(string root, IReadOnlyList<string> exclud
     /// <param name="shortNames">Whether the filesystem keeps 8.3 aliases — Windows — so a <c>NAME~1</c> component is refused.</param>
     public static string Refusal(string root, string requested, IReadOnlyList<string> excluded, StringComparison names, bool shortNames)
     {
-        if (Shape(requested) is { Length: > 0 } shape)
+        if (Spelled(requested, shortNames) is { Length: > 0 } spelled)
         {
-            return shape;
+            return spelled;
         }
 
-        if (shortNames && HasShortName(requested))
-        {
-            return "an 8.3 short name (NAME~1) is not served — the exclusions compare long names";
-        }
-
-        var full = Path.GetFullPath(requested);
-        if (!full.StartsWith(root, names) || full.Length == root.Length)
-        {
-            return "outside the working folder";
-        }
-
-        return ExcludedIn(full[root.Length..].Split(Separators, StringSplitOptions.RemoveEmptyEntries), excluded, names);
+        return Placed(root, Path.GetFullPath(requested), excluded, names);
     }
+
+    /// <summary>The refusals of the requested spelling: its <see cref="Shape"/>, then an 8.3 short name where the filesystem keeps them.</summary>
+    private static string Spelled(string requested, bool shortNames) =>
+        Shape(requested) is { Length: > 0 } shape ? shape : ShortName(requested, shortNames);
+
+    private static string ShortName(string requested, bool shortNames) =>
+        shortNames && HasShortName(requested) ? "an 8.3 short name (NAME~1) is not served — the exclusions compare long names" : string.Empty;
+
+    /// <summary>The refusals of the normalised path <paramref name="full"/>: outside the root, or under an excluded name.</summary>
+    private static string Placed(string root, string full, IReadOnlyList<string> excluded, StringComparison names) =>
+        !full.StartsWith(root, names) || full.Length == root.Length
+            ? "outside the working folder"
+            : ExcludedIn(full[root.Length..].Split(Separators, StringSplitOptions.RemoveEmptyEntries), excluded, names);
+
+    /// <summary>
+    /// The spelling rules of <see cref="Shape"/>, in order: each is asked only when every one before it passed, so a rule
+    /// may rely on what the earlier ones ruled out.
+    /// </summary>
+    private static readonly Func<string, string>[] SpellingRules = [EmptyOrNul, Unc, NotAbsolute, AlternateStream, Components];
 
     /// <summary>The refusals decided by the SPELLING alone, before normalisation can tidy it.</summary>
-    private static string Shape(string requested)
-    {
-        if (requested.Length == 0 || requested.Contains('\0'))
-        {
-            return "an empty path, or one with a NUL in it";
-        }
+    private static string Shape(string requested) =>
+        SpellingRules.Select(rule => rule(requested)).FirstOrDefault(static why => why.Length > 0) ?? string.Empty;
 
-        if (requested.StartsWith(@"\\", StringComparison.Ordinal) || requested.StartsWith("//", StringComparison.Ordinal))
-        {
-            return "a UNC or device path (\\\\server, \\\\?\\, \\\\.\\) is not inside the working folder";
-        }
+    private static string EmptyOrNul(string requested) =>
+        requested.Length == 0 || requested.Contains('\0') ? "an empty path, or one with a NUL in it" : string.Empty;
 
-        if (!Path.IsPathFullyQualified(requested))
-        {
-            return "not an absolute path — relative, drive-relative (C:name) and root-relative (\\name) spellings are refused";
-        }
+    private static string Unc(string requested) =>
+        requested.StartsWith(@"\\", StringComparison.Ordinal) || requested.StartsWith("//", StringComparison.Ordinal)
+            ? "a UNC or device path (\\\\server, \\\\?\\, \\\\.\\) is not inside the working folder"
+            : string.Empty;
 
-        return requested.IndexOf(':', 2) >= 0
-            ? "a ':' beyond the drive letter names an alternate data stream"
-            : Components(requested);
-    }
+    private static string NotAbsolute(string requested) =>
+        Path.IsPathFullyQualified(requested)
+            ? string.Empty
+            : "not an absolute path — relative, drive-relative (C:name) and root-relative (\\name) spellings are refused";
+
+    private static string AlternateStream(string requested) =>
+        requested.IndexOf(':', 2) >= 0 ? "a ':' beyond the drive letter names an alternate data stream" : string.Empty;
 
     /// <summary>A component ending in a dot or a space — which Windows strips, so the spelling and the file differ.</summary>
     /// <remarks>The drive (<c>C:</c>) is not a component; <c>.</c> and <c>..</c> are spellings normalisation keeps honest.</remarks>
     private static string Components(string requested) =>
         requested.Split(Separators, StringSplitOptions.RemoveEmptyEntries)
-            .Where(component => !(component.Length == 2 && component[1] == ':'))
-            .Any(component => component is not ("." or "..") && (component.EndsWith('.') || component.EndsWith(' ')))
+            .Where(component => !IsDrive(component))
+            .Any(StripsToAnother)
             ? "a path component ending in a dot or a space"
             : string.Empty;
+
+    private static bool IsDrive(string component) => component.Length == 2 && component[1] == ':';
+
+    private static bool StripsToAnother(string component) =>
+        component is not ("." or "..") && (component.EndsWith('.') || component.EndsWith(' '));
 
     /// <summary>A component with a <c>~</c> followed by a digit — the shape of every Windows 8.3 alias (<c>VIBE~1</c>, <c>AGENTS~1.MD</c>).</summary>
     private static bool HasShortName(string requested) =>
