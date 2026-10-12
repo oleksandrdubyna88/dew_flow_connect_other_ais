@@ -422,13 +422,20 @@ public sealed class AcpClientTests
         outcome.DroppedTraceEntries.Should().Be(0);
     }
 
+    /// <remarks>
+    /// The caller cancels once the grandchild's pid file exists — the turn is under way and the agent is about to hang —
+    /// never on a fixed clock: a 1.5 s timer counted the agent's own start, and a loaded machine (a 48-minute full run,
+    /// 2026-10-12) spent it before the grandchild existed.
+    /// </remarks>
     [Fact]
     public async Task TheCallersCancellationEndsTheTurn_AndLeavesNoChild()
     {
         using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Hang);
-        using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(1500));
+        using var caller = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        var cancelling = CancelWhenAsync(() => File.Exists(agent.PidFile), caller);
 
         var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromMinutes(5)), caller.Token);
+        await cancelling;
         var grandchild = agent.GrandchildPid();
 
         outcome.End.Should().Be(AcpEnd.Cancelled, "the caller's token fired, not the deadline — the two lead to opposite conclusions above");
@@ -579,11 +586,24 @@ public sealed class AcpClientTests
     {
         using var agent = new FakeAcpAgent([FakeAcpAgent.AwaitCancel, FakeAcpAgent.Chunk("late")]);
 
-        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(1)));
+        // Five seconds, not one: the deadline counts the agent's own start too, and a loaded machine spent one second
+        // before the prompt was even sent (2026-10-12) — the cancel then had no session to reach.
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(5)));
 
         outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
         agent.Received("session/cancel").Should().ContainSingle();
         Gone(outcome.AgentPid).Should().BeTrue();
+    }
+
+    /// <summary>Cancels <paramref name="caller"/> once <paramref name="ready"/> holds — an event, not a clock.</summary>
+    private static async Task CancelWhenAsync(Func<bool> ready, CancellationTokenSource caller)
+    {
+        while (!ready() && !caller.IsCancellationRequested)
+        {
+            await Task.Delay(25);
+        }
+
+        await caller.CancelAsync();
     }
 
     /// <summary>A boundary that throws what no boundary should — the pump's defence, not the boundary's.</summary>
