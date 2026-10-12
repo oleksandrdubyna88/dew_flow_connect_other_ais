@@ -75,9 +75,12 @@ public sealed record GaugeReadingDto(
     public IReadOnlyList<GaugeWindowDto> Windows { get; init; } = Windows ?? [];
 
     /// <summary>The window the vendor filed as primary for the preferred limit, or null when none was reported.</summary>
+    /// <remarks>A view over <see cref="Windows"/>, never written: the reading is its windows (TheGaugeIsWrittenOnceTests).</remarks>
+    [JsonIgnore]
     public GaugeWindowDto? Primary => Windows.FirstOrDefault(window => window.Kind == "primary");
 
     /// <summary>The window the vendor filed as secondary for the preferred limit, or null when none was reported.</summary>
+    [JsonIgnore]
     public GaugeWindowDto? Secondary => Windows.FirstOrDefault(window => window.Kind == "secondary");
 
     /// <summary>This reading as the ledger line carries it — the preferred limit's two windows, flat.</summary>
