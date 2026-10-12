@@ -63,8 +63,11 @@ public sealed class AParkedSlotIsHeardTests
         vendor.Slots.ResetsUtc.Should().NotBeEmpty("the catalog says when the vendor can serve again, not only that it cannot");
         Instant(vendor.Slots.ResetsUtc).Should().BeCloseTo(now + TimeSpan.FromHours(2), TimeSpan.FromMinutes(1),
             "the EARLIEST parked account decides when the vendor comes back — bob's two hours, not alice's 88");
-        body.Should().NotContain("alice-account").And.NotContain("bob-account", "the catalog names no account")
-            .And.NotContain("@", "and carries no email");
+        body.Should().NotContain("alice-account").And.NotContain("bob-account", "the catalog names no account");
+        // No EMAIL — not "no @": on a machine without codex the health note says "npm install -g @openai/codex", which
+        // is an install hint, not an account (CI's Linux and macOS legs on PR #773; this machine has codex, so the note
+        // never appeared here).
+        body.Should().NotMatchRegex(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", "and carries no email");
     }
 
     [Fact]
