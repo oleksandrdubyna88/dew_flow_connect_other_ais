@@ -171,6 +171,45 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
+        using var process = Started(request);
+        var stdout = new BoundedText(request.MaxOutputChars);
+        var stderr = new BoundedText(request.MaxOutputChars);
+
+        // Recorded as soon as it exists and forgotten however this method leaves — returned,
+        // timed out, cancelled or thrown. The record is what a LATER server reads: the kill below
+        // is performed by this process, so it cannot happen if this process is the one that dies,
+        // which is exactly how a reviewer ends up outliving its round by ten hours.
+        var tracked = request.TrackAs.Length > 0;
+        if (tracked)
+        {
+            _tracker.Record(process.Id, process.StartTime.ToUniversalTime(), request.TrackAs);
+        }
+
+        try
+        {
+            return await RunToCompletionAsync(process, request, stdout, stderr, ct);
+        }
+        finally
+        {
+            if (tracked)
+            {
+                _tracker.Forget(process.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The ONE place a child process is built and started — <see cref="RunAsync"/> and the ACP transport's long-lived
+    /// duplex pipe alike — with all three streams redirected. Throws what <see cref="Process.Start()"/> throws.
+    /// </summary>
+    /// <remarks>
+    /// Extracted for the code gate of epic 4 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c> (2026-10-12): the ACP
+    /// transport had its own copy of the resolver and the encodings and none of the environment rule, so a launch
+    /// policy written here would have reached every runtime but Kimi. <c>OnlyTheLauncherStartsAProcessTests</c> keeps it
+    /// the only one.
+    /// </remarks>
+    internal static Process Started(ProcessRequest request)
+    {
         // Resolved here, at the one place a process is started, so every caller — reviewers, git,
         // the creds probe — gets the npm-shim fix without knowing it exists.
         var info = new ProcessStartInfo(ExecutableResolver.Resolve(request.Executable))
@@ -202,33 +241,18 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
 
         ApplyEnvironment(info.Environment, request);
 
-        using var process = new Process { StartInfo = info };
-        var stdout = new BoundedText(request.MaxOutputChars);
-        var stderr = new BoundedText(request.MaxOutputChars);
-
-        process.Start();
-
-        // Recorded as soon as it exists and forgotten however this method leaves — returned,
-        // timed out, cancelled or thrown. The record is what a LATER server reads: the kill below
-        // is performed by this process, so it cannot happen if this process is the one that dies,
-        // which is exactly how a reviewer ends up outliving its round by ten hours.
-        var tracked = request.TrackAs.Length > 0;
-        if (tracked)
-        {
-            _tracker.Record(process.Id, process.StartTime.ToUniversalTime(), request.TrackAs);
-        }
-
+        var process = new Process { StartInfo = info };
         try
         {
-            return await RunToCompletionAsync(process, request, stdout, stderr, ct);
+            process.Start();
         }
-        finally
+        catch
         {
-            if (tracked)
-            {
-                _tracker.Forget(process.Id);
-            }
+            process.Dispose();
+            throw;
         }
+
+        return process;
     }
 
     /// <summary>

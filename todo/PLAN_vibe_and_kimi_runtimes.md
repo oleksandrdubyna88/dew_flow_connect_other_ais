@@ -381,6 +381,13 @@ runtime, the preset and installer maps); not on S3. Complete on its own: a Kimi 
   consultation `ba5f661a`): ACP makes `session/request_permission` optional for the agent, so refusing every request does
   not prove every write asks — a sub-agent, a hook or a user MCP server must be measured with canaries and positive
   controls before `KimiRuntime` ships.
+- **Before the shim launches Kimi on any host but Windows** (the code gate of epic 4, 2026-10-12, codex): an agent that
+  exits before the teardown loses its children on Linux and macOS — they are reparented and the tree kill finds none
+  (`research/module_runners.md`, the ACP teardown's known limit). The transport must own the tree independently of the
+  agent — a Unix process group (or session) killed as a group after the leader is gone — with a test that the grandchild
+  of an agent that crashed first is gone. Windows keeps the exited parent's handle and finds the children; a Job Object
+  there is the stronger form. Today `KimiAcpProfile` names an install only for Windows, so nothing launches Kimi
+  elsewhere yet.
 - `KimiRuntime` classifies the shim's outcome from its STRUCTURED report (`end`, `failure`, the exit code), never by
   scanning its stdout text through `RateLimit` — a read trace naming `quota.cs` would otherwise turn a sign-in refusal
   (77) into a retryable rate limit (risk consultation `ba5f661a`); and the report's `notCaptured` usage survives a failure

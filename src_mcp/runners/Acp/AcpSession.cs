@@ -319,11 +319,53 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
             return text;
         }
 
-        var lines = text.Split('\n');
-        var from = (int)Math.Clamp(line - 1, 0, lines.Length);
-        var count = limit > 0 ? (int)Math.Min(limit, lines.Length - from) : lines.Length - from;
+        // Cut by scanning for the window's own newlines, never by splitting the file: a two-line window of a served file
+        // of two million short lines allocated 80 MB that way (the code gate of epic 4, 2026-10-12).
+        var from = LineStart(text, Math.Max(line - 1, 0));
+        if (from < 0)
+        {
+            return string.Empty;
+        }
 
-        return string.Join('\n', lines.Skip(from).Take(count));
+        return text[from..(limit > 0 ? LineEnd(text, from, limit) : text.Length)];
+    }
+
+    /// <summary>Where the 0-based line <paramref name="index"/> starts, or -1 when the text has fewer lines.</summary>
+    private static int LineStart(string text, long index)
+    {
+        var at = 0;
+        for (var i = 0L; i < index; i++)
+        {
+            var newline = text.IndexOf('\n', at);
+            if (newline < 0)
+            {
+                return -1;
+            }
+
+            at = newline + 1;
+        }
+
+        return at;
+    }
+
+    /// <summary>Where <paramref name="count"/> lines from <paramref name="from"/> end — before their last newline, or at the end of the text.</summary>
+    private static int LineEnd(string text, int from, long count)
+    {
+        var at = from;
+        for (var i = 1L; i < count; i++)
+        {
+            var newline = text.IndexOf('\n', at);
+            if (newline < 0)
+            {
+                return text.Length;
+            }
+
+            at = newline + 1;
+        }
+
+        var end = text.IndexOf('\n', at);
+
+        return end < 0 ? text.Length : end;
     }
 
     private Task Noted(AcpIncoming notification)

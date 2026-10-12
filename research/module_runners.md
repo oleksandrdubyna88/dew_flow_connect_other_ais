@@ -2895,8 +2895,13 @@ Windows, and said so:** the `Process` object keeps the exited parent's handle an
 children by their stale parent pid, so `APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo` — the parent definitely
 gone before the cleanup, the grandchild's pid recorded at its spawn — passed under the old order too; the fix is by
 the finding's reasoning. **Known limit:** a parent that exits BEFORE the kill (its own early EOF, a crash) loses its
-tree on Linux; the follow-up is a Windows Job Object / a Unix process group owned by the transport, proposed and not
-built here. Earlier: green on the first run only by the order of two timers (finding 8; `AnAnsweredTurnsGrandchild_IsGoneToo`). The agent's EXIT is watched beside its output: a grandchild inherits the
+tree on Linux and macOS — shown by CI on both on 2026-10-12, where the test now reports itself skipped with the limit named; the follow-up is a Windows Job Object / a Unix process group owned by the transport, proposed and not
+built here — recorded in `todo/PLAN_vibe_and_kimi_runtimes.md` §4 as a condition before the shim launches Kimi on any
+host but Windows (the code gate of epic 4, 2026-10-12). The agent is STARTED by `ProcessLauncher.Started`, the one
+place a child is built (the same gate: the transport's own copy had the resolver and the encodings but not the
+environment rule; `OnlyTheLauncherStartsAProcessTests` scans `src_mcp/runners` and `src_mcp/src` and keeps it the
+only one). The agent's optional `line`/`limit` window on a read is cut by scanning for its newlines, never by
+splitting the file (`AcpSessionWindowTests`: a two-line window of two million lines allocated 80 MB before). Earlier: green on the first run only by the order of two timers (finding 8; `AnAnsweredTurnsGrandchild_IsGoneToo`). The agent's EXIT is watched beside its output: a grandchild inherits the
 stdout pipe's write end, so an agent that exits mid-turn leaving one behind never delivers EOF — the fake agent's
 heartbeat grandchild held the pipe until the deadline on the first run
 (`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*). Memory is

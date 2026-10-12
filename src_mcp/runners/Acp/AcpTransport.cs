@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Acp;
@@ -9,11 +8,13 @@ namespace CoaiMcp.Runners.Acp;
 /// them, and one teardown that leaves nothing of its tree alive.
 /// </summary>
 /// <remarks>
-/// <para><b>Not <see cref="ProcessLauncher"/>, and the difference is the shape of the conversation.</b> The
-/// launcher writes stdin once, closes it, and waits for the end; an ACP agent asks questions back
-/// (<c>session/request_permission</c>, <c>fs/read_text_file</c>) while the prompt is still being answered, so
-/// stdin stays open for the replies and both streams are drained while the turn runs. What IS the launcher's is
-/// reused rather than copied: the UTF-8-without-BOM stdin, the executable resolution, and the end of a child —
+/// <para><b>Started by <see cref="ProcessLauncher"/>, not run by it — the difference is the shape of the
+/// conversation.</b> <see cref="ProcessLauncher.RunAsync"/> writes stdin once, closes it, and waits for the end; an ACP
+/// agent asks questions back (<c>session/request_permission</c>, <c>fs/read_text_file</c>) while the prompt is still being
+/// answered, so stdin stays open for the replies and both streams are drained while the turn runs. The START is the
+/// launcher's (<see cref="ProcessLauncher.Started"/>: the executable resolution, the UTF-8-without-BOM stdin, the
+/// environment rule — the code gate of epic 4 found a copy here that had left the environment rule out), and so is the
+/// end of a child —
 /// <see cref="ProcessLauncher.EndTreeFirstAsync"/> (the whole tree killed while the agent still lives, then stdin
 /// closed, then the exit waited for) and <see cref="ProcessLauncher.Close"/>.</para>
 /// <para><b>Every exit path ends the same way</b> (<see cref="EndAsync"/>): the caller's bounded graceful step — the
@@ -80,30 +81,11 @@ internal sealed class AcpTransport : IDisposable
     public string StdErr => _stderr.ToString();
 
     /// <summary>Starts the agent. Throws what <see cref="Process.Start()"/> throws when it cannot — the caller names that.</summary>
-    public static AcpTransport Start(string executable, IReadOnlyList<string> arguments, string cwd)
-    {
-        var info = new ProcessStartInfo(ExecutableResolver.Resolve(executable))
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            // Without the BOM: three stray bytes in front of the first JSON line would be a parse error on the agent's side.
-            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-        };
-        foreach (var argument in arguments)
-        {
-            info.ArgumentList.Add(argument);
-        }
-
-        var process = new Process { StartInfo = info };
-        process.Start();
-
-        return new AcpTransport(process);
-    }
+    /// <remarks>Started by <see cref="ProcessLauncher.Started"/>, the one place a child is built — its resolver, its
+    /// UTF-8 streams without a byte-order mark (three stray bytes before the first JSON line would be a parse error on
+    /// the agent's side) and its environment rule are the launcher's, not a copy.</remarks>
+    public static AcpTransport Start(string executable, IReadOnlyList<string> arguments, string cwd) =>
+        new(ProcessLauncher.Started(new ProcessRequest(executable, arguments, cwd)));
 
     /// <summary>
     /// The next line the agent wrote — or null at the end of its output, which is the one fact a reader must see.
