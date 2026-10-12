@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.71.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.70.0...extension-v0.71.0) (2026-10-12)
+
+
+### Features
+
+* the Security lane names its reviewers, the server words a stranded pick, and no mode creates a missing named data folder ([76e393f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/76e393ffab52c1047cc1d575dd8e18ffc49eb5a9))
+
 ## [0.70.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.69.0...extension-v0.70.0) (2026-10-12)
 
 
