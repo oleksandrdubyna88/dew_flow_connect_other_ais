@@ -350,6 +350,12 @@ public sealed record PanelSettings
     public string DataDir { get; init; } = DefaultDataDir;
 
     /// <summary>
+    /// The data folder a person NAMED with <c>COAI_DATA_DIR</c>, before the side (<see cref="DataRootFor"/>) — empty when the
+    /// default location is in use. What <see cref="NamedRootRefusal"/> checks before a mode writes.
+    /// </summary>
+    public string NamedDataRoot { get; init; } = string.Empty;
+
+    /// <summary>
     /// Where a code round's worktree is made. Empty means <c>{DataDir}/worktrees</c>, which is what a
     /// settings object built in a test gets.
     /// </summary>
@@ -790,6 +796,37 @@ public sealed record PanelSettings
     public static string DataRootFor(Func<string, string?> env) =>
         ResolveDataDir(name => name == "COAI_DATA_SIDE" ? null : env(name));
 
+    /// <summary>The root a person NAMED with <c>COAI_DATA_DIR</c> (<see cref="DataRootFor"/>), or empty for the default location.</summary>
+    public static string NamedRootOf(Func<string, string?> env) =>
+        env("COAI_DATA_DIR")?.Trim() is { Length: > 0 } ? DataRootFor(env) : string.Empty;
+
+    /// <summary>
+    /// Why no mode may write: the NAMED data root is confirmed absent (research/PLAN_names_and_a_missing_root.md, story 3) —
+    /// or empty, when it may. Pure over the attribute read.
+    /// </summary>
+    /// <remarks>
+    /// <para>The extension never creates a named data folder that is not there (research/PLAN_paths_per_side.md, D3) — a
+    /// folder made in a bare <c>/mnt/z</c> mount point hides the missing drive — and this is the server's half of that
+    /// promise. THREE answers, through <see cref="QuestionRoots.PresenceOf(string, Func{string, FileAttributes}, bool)"/>:
+    /// only <see cref="RootPresence.Absent"/> refuses. A root the disk would not describe (access denied, busy, an I/O
+    /// error, a sleeping share) is <see cref="RootPresence.Unknown"/> and is never refused, as the extension's guard
+    /// never refuses it; the default location is no named root and is made lazily; and the check is on the ROOT, so
+    /// <c>&lt;root&gt;/&lt;side&gt;</c> inside a root that is there is still made when first written.</para>
+    /// </remarks>
+    public static string NamedRootMissing(Func<string, string?> env, Func<string, FileAttributes> attributesOf) =>
+        MissingRootSentence(NamedRootOf(env), attributesOf);
+
+    /// <summary><see cref="NamedRootMissing"/> for the root these settings were read with.</summary>
+    public string NamedRootRefusal(Func<string, FileAttributes> attributesOf) => MissingRootSentence(NamedDataRoot, attributesOf);
+
+    /// <summary>What a mode a person started adds to <see cref="NamedRootMissing"/>'s sentence before it exits 74.</summary>
+    public const string WriterCure = " Connect the drive or create the folder, then run this again.";
+
+    private static string MissingRootSentence(string namedRoot, Func<string, FileAttributes> attributesOf) =>
+        namedRoot.Length > 0 && QuestionRoots.PresenceOf(namedRoot, attributesOf, wantsDirectory: true) == RootPresence.Absent
+            ? $"The data folder {namedRoot} (COAI_DATA_DIR) was not found on this machine just now — nothing is written there until it exists."
+            : string.Empty;
+
     private static string ResolveDataDir(Func<string, string?> env)
     {
         // Whitespace is not a configured directory. `COAI_DATA_DIR=' '` reaching Path.GetFullPath
@@ -873,6 +910,7 @@ public sealed record PanelSettings
         QuestionConsultSetting questions) => new PanelSettings
         {
             Rounds = Config(env, catalog),
+            NamedDataRoot = NamedRootOf(env),
             // The data directory's own notes ride here rather than in a channel of their own: this list
             // is already "things said out loud at startup, because silence made a working configuration
             // look broken", and a database left behind in a shared root is exactly that.

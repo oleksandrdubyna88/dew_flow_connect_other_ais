@@ -1,3 +1,4 @@
+import { rowLabel } from './catalogPicks';
 import { escapeHtml as esc } from './escapeHtml';
 import { promptFileIn } from './rolesPrompts';
 import { SECURITY_SEED } from './securityLane.generated';
@@ -41,7 +42,7 @@ export function promptCard(card: CardInput): string {
     + triggerWarning(prompt, card.state)
     + textProblem(card)
     + `<p>${card.vendors.filter(v => v.enabled).map(v =>
-      check('pair:' + v.id + ':' + prompt.id, card.paired(v.id), v.id, card.old)).join(' ')}</p>`
+      check('pair:' + v.id + ':' + prompt.id, card.paired(v.id), rowLabel(v), card.old)).join(' ')}</p>`
     + whereTheTextLives(card)
     + actions(card)
     + conditionsBody(prompt)

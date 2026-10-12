@@ -154,9 +154,9 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // assertions are the whole fix: the sentence is interpolated into every prompt the composer
         // builds, and the call site passes the REAL mode rather than a constant. A `true` wired in
         // here would pass every other test in this file and ship the original defect.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"))
-            + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
-            + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
+        var source = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "PanelService.cs"))
+            + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
+            + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
 
         source.Should().Contain("{WhatYouHave(material, followUps)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
@@ -184,8 +184,8 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // The paragraph lives in the runners since S3.2 (`RepairInstruction`), because a feature
         // reviewer's follow-up turn composes its own repair from its own prompt; the roster is held to
         // USING it rather than keeping a copy that would drift.
-        var paragraph = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "runners", "Reviewers", "RepairInstruction.cs"));
-        var roster = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"));
+        var paragraph = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "runners", "Reviewers", "RepairInstruction.cs"));
+        var roster = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"));
 
         paragraph.Should().Contain("DID NOT PRODUCE A USABLE ANSWER");
         paragraph.Should().Contain("refused", "the second failure shape has to be named to be answered");
@@ -235,16 +235,5 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         const string onlyTheClaim = "You have the checkout read-only and the diff below.";
 
         ReviewerPrompt.WithoutTheStaleClaim(onlyTheClaim).Should().Be(onlyTheClaim);
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src_vs_code")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("the repository root was not found from the test binary");
     }
 }

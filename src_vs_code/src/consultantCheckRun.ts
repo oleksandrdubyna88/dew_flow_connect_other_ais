@@ -1,5 +1,8 @@
 import { type CheckRecord, type CheckRunResult, MODE_UNKNOWN, parseCheckDocument } from './consultantHealth';
 import { refusalIn } from './consultations';
+import { coaiDataDir } from './dataDir';
+import { dataRootKnown, missingRootRefusal, refusedDataRoot, refusedDataRootOnceSettled } from './findingsBoard';
+import type { PathFinding } from './pathFindings';
 
 /**
  * One Check press, as a process: `coai-mcp --check-consultant --caller <kind>` — E5.3 of
@@ -64,10 +67,31 @@ export function checkArgs(kind: string): readonly string[] {
  * @param input what the server reads on stdin — a model check's `{"row": …}`; empty for a caller kind's
  */
 export async function runConsultantCheck(kind: string, ports: CheckRunPorts, input = ''): Promise<CheckRunResult> {
-  // A model's check with no row to read: the row was removed while the paid turn was being confirmed. Nothing is spawned.
-  if (isModelCheck(kind) && input.length === 0) {
-    return { kind: 'crashed', why: 'the model was removed before its check could run — nothing was sent' };
+  // Read at once when the board has its first data-root answer — so the spawn starts in this turn, as before — and only
+  // otherwise after it (bounded): the survey's guard (`consultantsProbe.asked`), asked the same way.
+  const missing = dataRootKnown() ? refusedDataRoot(coaiDataDir()) : await refusedDataRootOnceSettled(coaiDataDir());
+  const held = notStarted(kind, input, missing);
+  if (held.length > 0) {
+    return { kind: 'crashed', why: held };
   }
+
+  return spawned(kind, ports, input);
+}
+
+/**
+ * Why a check is not spawned at all — '' when it is. A model's check with no row to read: the row was removed while the
+ * paid turn was being confirmed. A NAMED data root that is missing (research/PLAN_names_and_a_missing_root.md, story
+ * 3.3): the server's lock would make `<root>/consultations/health`, and the root with it — the folder nothing creates.
+ */
+function notStarted(kind: string, input: string, missing: PathFinding | undefined): string {
+  if (isModelCheck(kind) && input.length === 0) {
+    return 'the model was removed before its check could run — nothing was sent';
+  }
+
+  return missing === undefined ? '' : `${missingRootRefusal(missing).message} The check was not started — nothing was sent.`;
+}
+
+async function spawned(kind: string, ports: CheckRunPorts, input: string): Promise<CheckRunResult> {
   const spawnedMs = ports.nowMs();
   let capAtMs = spawnedMs + CHECK_INITIAL_CAP_MS;
   const stopPolling = ports.every(CHECK_STATE_POLL_MS, () => {

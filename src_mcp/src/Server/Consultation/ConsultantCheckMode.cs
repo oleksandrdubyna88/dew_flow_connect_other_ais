@@ -108,6 +108,11 @@ internal static class ConsultantCheckMode
             return (65, string.Empty, Usage); // EX_DATAERR — never 64
         }
 
+        if (MissingRoot(settings) is { Length: > 0 } missing)
+        {
+            return (74, string.Empty, missing); // EX_IOERR — no lock taken, nothing written
+        }
+
         try
         {
             return await CheckAsync(new ConsultantParts(settings, launcher, warn, noticing, keys), kind, tempRoot, ct);
@@ -133,6 +138,11 @@ internal static class ConsultantCheckMode
             return (65, string.Empty, ModelUsage); // EX_DATAERR — never 64
         }
 
+        if (MissingRoot(settings) is { Length: > 0 } missing)
+        {
+            return (74, string.Empty, missing); // EX_IOERR — no lock taken, nothing written
+        }
+
         try
         {
             return await CheckRowAsync(new ConsultantParts(settings, launcher, warn, noticing, keys), ModelKey(rows[0]), rows[0], tempRoot, ct);
@@ -142,6 +152,13 @@ internal static class ConsultantCheckMode
             return (74, string.Empty, $"the model check could not use the data directory {settings.DataDir}: {e.Message}"); // EX_IOERR
         }
     }
+
+    /// <summary>
+    /// The lock's <c>CreateDirectory(&lt;data&gt;/consultations/health)</c> is recursive, so a check would make a NAMED data
+    /// root that is not there (research/PLAN_names_and_a_missing_root.md, story 3.1): refused first, as the dispatch refuses it.
+    /// </summary>
+    private static string MissingRoot(PanelSettings settings) =>
+        settings.NamedRootRefusal(File.GetAttributes) is { Length: > 0 } missing ? missing + PanelSettings.WriterCure : string.Empty;
 
     /// <summary>Whether this run is <c>--check-model</c> — the one mode of the two that reads its row on stdin.</summary>
     private static bool IsModelCheck(string[] args) => args.Length > 0 && args[0] == "--check-model";

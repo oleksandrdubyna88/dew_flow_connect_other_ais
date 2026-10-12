@@ -1157,7 +1157,9 @@ until it is run here. The modes launched on a person's act (`--collect-bugs`, `-
 `--tree-remove`, `--upload-pairs`, `--close-consult`, the three checks, `--probe-api`) may still make the folder — the
 person's act is the consent, as the move flow's is; the consultants survey writes its health file and is not started by
 the extension while the named root is missing. The MCP serve mode, started by an MCP client and not by the extension,
-still makes its data directory.
+still makes its data directory. *(Superseded 2026-10-11 by "A missing named data folder is never created by the server"
+below: the writer modes — `--probe-api` among them — and serve refuse a confirmed-absent named root; `--close-consult`
+and `--tree-remove` were measured to make nothing there and are pinned by the reader test.)*
 
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
@@ -6830,3 +6832,79 @@ writes `rounds.round_key` (schema step 21, under *`--round-counts`* above). `sta
 an older session file reads an empty one. A skipped round is minted none. What a launch does with the key on the wire —
 `ReviewerInvocation.Round`, `IReviewerRuntime.ForLaunch`, the shim's `remainingSeconds` — is the runners' half:
 [module_runners.md](module_runners.md), *A round has an identity on the wire*.
+
+## A stranded question row, in the extension's words (2026-10-11, story 2 of `research/PLAN_names_and_a_missing_root.md`)
+
+The extension sends a question row whose catalog pick is gone or no longer ticked as `{vendor:'<id>', runtime:''}` and
+says *"<id> is no longer ticked question consultant (or was removed) — pick another model"* (`qconsultWrite.noModel`).
+`QuestionRowResolver.NoModel` now blocks the same row in the same words, *"… — pick another model, in ConnectOtherAIs >
+Question consultant (COAI_QCONSULT_ROWS)"*, where it used to talk about a vendor that is "neither a reviewer row nor a
+runtime". A RUNTIME's own name the question consultant cannot launch (`ReviewerRuntimeSelector.RuntimeNames`, e.g.
+`gemini`, `remote`) keeps the old sentence with the list of runtimes that answer, which is its cure. A row with no
+vendor at all never gets this far from the wire: `QuestionRow.Fields` drops it when the setting is parsed, with its own
+complaint (*"the row '<id>' names no vendor — a row is a model and exactly one base prompt"*, in the startup notice and
+`--providers`); `NoModel`'s *"this row picks no model — pick one"* is the defence for a row built in code (pinned by a
+test that builds it directly), not a sentence a person sees today. `CapabilityMatrix.Admit` refuses a blank runtime with *"this row has no model to
+run on — pick one"* in both overloads — never `'' is not a runtime …` and never `asked for runtime ''`; the decision is
+unchanged, so `shared/capability-matrix-vectors.json` still holds.
+
+## A missing named data folder is never created by the server (2026-10-11, story 3 of `research/PLAN_names_and_a_missing_root.md`)
+
+**The decision.** `PanelSettings.NamedRootMissing(env, attributesOf)`: `COAI_DATA_DIR` set (trimmed) AND its ROOT
+(`DataRootFor`, before the side — `NamedRootOf`) confirmed `Absent` by `QuestionRoots.PresenceOf(root, attributesOf,
+wantsDirectory: true)` gives *"The data folder <root> (COAI_DATA_DIR) was not found on this machine just now — nothing is
+written there until it exists."*; anything else gives ''. Three answers, and only a confirmed absence refuses: a root the
+disk will not describe (access denied, busy, an I/O error — a sleeping share) is `Unknown` and is served, as the
+extension's guard serves it; the default location is never a named root and is made lazily; `<root>/<side>` inside a
+root that is there is made when first written. `PanelSettings.NamedDataRoot` carries the root for code that has settings
+rather than an environment (`NamedRootRefusal(attributesOf)`).
+
+**The writer modes** a person starts — `Program.WriterModes`: `--check-consultant`, `--check-model`, `--collect-bugs`,
+`--pairs-keep`, `--pairs-decide`, `--upload-pairs`, `--requeue-refused`, `--probe-api`, `--consultants` — stop in `Program.RunAsync` before
+they start (`MissingRootRefusal`): one stderr sentence naming the folder plus *"Connect the drive or create the folder,
+then run this again."*, exit 74 (which the extension already words as "could not use its data directory"), nothing
+written. The two checks' entry points (`ConsultantCheckMode.AnswerAsync` / `AnswerModelAsync`) refuse the same way before
+their lock, whose `CreateDirectory(<data>/consultations/health)` is recursive and made the root; so does
+`ProbeApiMode.RunAsync` (its own environment), before the vault read and before anything is sent — a probe that spends
+writes its `usage.jsonl` line (measured: it made the root holding `usage.jsonl`). `--consultants` joined after the code
+round's own review: the extension does not start the survey under a missing root (`consultantsProbe`), but a terminal or
+an older extension did, and its survey file made the root (RED: *"`coai-mcp --consultants` exited 0 and made the missing
+data folder, holding: consultations, consultations\health, consultations\health\consultants.json"*).
+
+**Every mode is classified.** `WriterModes` is a hand-kept list, so `EveryModeIsClassifiedForAMissingNamedRootTests`
+(the code gate's third round) makes every `Program.Startup` say which it is: a refused writer, a mode the reader test runs
+against a missing root, serve, or a mode whose code never reaches the data directory (named with why: the `--ask-*`
+reviewer shims, the agy hook, `--normalize`, `--outline`, help, an unknown argument). A new mode is red until classified.
+
+**One place builds the settings.** `PanelSettings.NamedDataRoot` (what a writer checks) and `PanelSettings.DataDir`
+(where it writes) are two init properties filled together from one environment in `PanelSettings.WithCatalog`; a second
+construction or a `with` moving `DataDir` would check one root and write to another (E4-style finding of the code gate).
+`TheNamedRootAndTheDataDirAreBuiltTogetherTests` pins both rules over `src_mcp/src` (break-its: a planted `with {
+DataDir = … }` and a planted `new PanelSettings()` each turn their test red).
+
+**Measured and not writers here:** `--close-consult` builds its service, finds no record — a consultation's record lives
+in the data directory, so under a missing root there is none — and refuses with 65, making nothing; `--tree-remove`
+works under the REVIEW root (`COAI_REVIEW_ROOT`, machine-local) and never touches the data directory.
+`AReaderModeNeverMakesTheDataDirectoryTests` pins both, so a close that starts writing first turns red.
+
+**Serve** branches BEFORE the logger is built (`Program.ServeRefusal` → `RefusingServeAsync`): a refusal-only stdio server
+with the real tool and prompt lists, each tool resolved through `RefusingServiceSource`, whose `CurrentAsync` throws
+`McpException(reason)` — the reason ending *"This server refuses every tool until it does: restore it, then restart the MCP
+server."* It builds no host, notices, run marker, sweep, consultants survey or file log; the reason goes to stderr, which
+a client keeps as the server's log; SIGTERM/SIGINT or stdin closing end it, exit 74. It does not watch for the folder to
+come back — the reason says to restart. **Why an McpException:** the SDK keeps ITS message in the error tool result
+(`isError: true`); an ordinary exception reaches the client as *"An error occurred invoking 'providers'."* — measured by
+the break-it on `TheServerRefusesAMissingNamedRootTests`. That was the gate consultant's advice (option B of the plan's
+decision), verified before anything else was built.
+
+```mermaid
+flowchart TD
+    start([coai-mcp started]) --> classify{Program.Classify}
+    classify -->|a writer mode, --consultants included| wroot{NamedRootMissing?}
+    wroot -->|Absent| w74[stderr sentence, exit 74 — nothing written]
+    wroot -->|Present / Unknown / default| wrun[the mode runs; side folder made lazily]
+    classify -->|serve| sroot{ServeRefusal?}
+    sroot -->|Absent| refusing[refusal-only stdio server: real tools, every call McpException naming the folder]
+    sroot -->|Present / Unknown / default| full[logger, notices, run marker, StartingHost, sweeps, survey]
+    classify -->|a reader / one-shot| reader[as before — never makes the folder]
+```

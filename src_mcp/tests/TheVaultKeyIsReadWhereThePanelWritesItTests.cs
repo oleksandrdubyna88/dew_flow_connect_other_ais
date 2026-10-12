@@ -150,7 +150,7 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
 
     private static List<string> ProductionSources()
     {
-        var root = Path.Combine(RepoRoot(), "src_mcp", "src");
+        var root = Path.Combine(RepoPaths.Root(), "src_mcp", "src");
         var files = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                            && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
@@ -160,23 +160,11 @@ public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDispo
         return files;
     }
 
-    private static string Relative(string file) => Path.GetRelativePath(RepoRoot(), file);
+    private static string Relative(string file) => Path.GetRelativePath(RepoPaths.Root(), file);
 
     /// <summary>Whether a launch is the vault's own read — <c>creds config -</c> — rather than a CLI probe.</summary>
     private static bool IsTheVaultRead(ProcessRequest request) =>
         request.Arguments.Count > 0 && request.Arguments[0] == "config";
-
-    /// <summary>Walks up to the repository root, which the test binary sits four folders under.</summary>
-    private static string RepoRoot()
-    {
-        var here = new DirectoryInfo(AppContext.BaseDirectory);
-        while (here is not null && !Directory.Exists(Path.Combine(here.FullName, ".agents")))
-        {
-            here = here.Parent;
-        }
-
-        return here?.FullName ?? AppContext.BaseDirectory;
-    }
 
     /// <summary>
     /// The vault, answering <c>creds config</c> with a body and every other launch — the vendor CLIs'

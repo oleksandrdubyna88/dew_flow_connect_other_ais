@@ -1,6 +1,6 @@
 {
-  "src_mcp": "0.49.0",
-  "src_vs_code": "0.70.0",
-  "src_server": "0.11.0",
+  "src_mcp": "0.50.0",
+  "src_vs_code": "0.71.0",
+  "src_server": "0.12.0",
   "src_bugs": "0.4.0"
 }

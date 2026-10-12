@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.12.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.11.0...server-v0.12.0) (2026-10-12)
+
+
+### Features
+
+* a round has an identity across the wire, and no job starts without budget (round counter E4) ([#766](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/766)) ([722fc59](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/722fc5975b4b203250e10c1cd01ebc2c19e88ccd))
+* **tests:** local test runs take at most 8 workers, at lowered CPU priority ([#757](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/757)) ([328703f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/328703faf67d84ebb55944922215925157dc85aa))
+* the ledger tells the truth — whole usage, end causes, one line per paid launch, what each ran with (round counter E3) ([#761](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/761)) ([8d086c5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8d086c510518de52e7786f0d0b8ebd7f9a323a64))
+* the Team server counts rounds per vendor and window, and a stated reset is read, shown and never waited out (round counter E5) ([#773](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/773)) ([bb95c1c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb95c1c4074a9e3d09d09412e8d4674f09bb9438))
+
+
+### Bug Fixes
+
+* **server:** a stated reset duration parks the slot until then (story 5.3a) ([#754](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/754)) ([7b9d092](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7b9d092845330253314f6e37e0e34600d4588f7d))
+* **server:** the image checks each vendor installer before it runs it, and retries a bad answer ([#759](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/759)) ([5b91a78](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5b91a787a1cd6388b72188485d704ba2790d9d12))
+* **server:** the image installs agy from its release manifest, checked, and a PR builds the image ([#775](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/775)) ([2f31542](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2f31542144b22049a3292fcbb7d3e8d2a8adfcf0))
+
 ## [0.11.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.10.0...server-v0.11.0) (2026-10-10)
 
 

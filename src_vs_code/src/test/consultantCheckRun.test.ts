@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
 import { test } from 'node:test';
 
 import { type CheckRecord, parseCheckDocument } from '../consultantHealth';
+import { NOTHING_CHOSEN, useStorageSettings } from '../dataDir';
+import { forgetFindingsBoard, publishFindings } from '../findingsBoard';
+import { familyOf } from '../pathFamily';
 import {
   CHECK_DEADLINE_SLACK_MS,
   CHECK_INITIAL_CAP_MS,
@@ -180,4 +184,49 @@ test('a state read that throws is a tick that tightens nothing — never the rea
   kit.finish();
 
   assert.equal((await done).kind, 'reported');
+});
+
+test('a check under a missing NAMED data root spawns nothing and says why — the server would make the folder (names and a missing root, 3.3)', async () => {
+  // research/PLAN_names_and_a_missing_root.md story 3.3: the Consultant tab's Check and the Models tab's ✓ Check launched
+  // `--check-consultant` / `--check-model` with no guard, and the server's lock made `<root>/consultations/health` —
+  // the named root with it. The survey (`consultantsProbe.asked`) was already held; the checks are held the same way.
+  const root = resolve('/srv/coai-missing-for-a-check');
+  forgetFindingsBoard();
+  useStorageSettings({ directory: root, side: '' }, NOTHING_CHOSEN);
+  publishFindings([{ key: 'coai.dataDirectory', place: 'setup/mcp', value: root, family: familyOf(process.platform), state: 'missing', owner: '' }]);
+  try {
+    let spawned = 0;
+    const port = {
+      run: () => { spawned += 1; return Promise.resolve({ code: 0, output: JSON.stringify(record({ state: 'answered' })) }); },
+      readState: () => Promise.resolve(undefined),
+      nowMs: () => SPAWN,
+      every: () => () => undefined,
+    };
+
+    const caller = await runConsultantCheck('claude', port);
+    const model = await runConsultantCheck('model-codex-2', port, '{"row":{"id":"codex-2"}}');
+
+    assert.equal(spawned, 0, 'a check was spawned under a data root that is not there — the server\'s lock makes it');
+    for (const result of [caller, model]) {
+      assert.equal(result.kind, 'crashed');
+      assert.match(result.kind === 'crashed' ? result.why : '', /was not found on this machine .*The check was not started — nothing was sent\./u);
+    }
+  } finally {
+    useStorageSettings(NOTHING_CHOSEN, NOTHING_CHOSEN);
+    forgetFindingsBoard();
+  }
+});
+
+test('a check whose data root the board has not heard is missing is spawned as before', async () => {
+  forgetFindingsBoard();
+  let spawned = 0;
+  const port: CheckRunPorts = {
+    run: () => { spawned += 1; return Promise.resolve({ code: 64, output: '' }); },
+    readState: () => Promise.resolve(undefined),
+    nowMs: () => SPAWN,
+    every: () => () => undefined,
+  };
+
+  assert.deepEqual(await runConsultantCheck('claude', port), { kind: 'too-old' });
+  assert.equal(spawned, 1);
 });

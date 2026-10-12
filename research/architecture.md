@@ -1308,6 +1308,38 @@ sequenceDiagram
     Mcp->>Mcp: launch: row timeout, CLI effort, api module, system prompt frozen in the record, redacted from output
 ```
 
+### A data folder a person named, and missing: both halves decide alike, and neither makes it (2026-10-12, `research/PLAN_names_and_a_missing_root.md`)
+
+The owner's D3 (`research/PLAN_paths_per_side.md`): a data folder named with `COAI_DATA_DIR` that does not exist is said
+and never created — creating it writes into a bare mount point and hides the problem. The extension kept that since
+paths per side E5; this makes the SERVER keep it too, and makes the two halves one rule:
+
+- **One decision, two spellings.** The extension's `dataDirFinding` / `findingsBoard.absentDataRoot` and the server's
+  `PanelSettings.NamedRootMissing` both ask: is a NAMED root (before the side) confirmed ABSENT? An answer the disk will
+  not give (a sleeping share, a refused read) is never "absent"; the default location (no `COAI_DATA_DIR`) and a side
+  folder inside an existing root are made lazily on both sides. The seam leg `scripts/seam-missing-named-root.mjs`
+  runs the extension's decision beside the REAL binary for the same environments and fails when they disagree.
+- **Who stops what.** The extension does not start its own writing launches under a missing root (`consultantsProbe`
+  for `--consultants`, `consultantCheckRun` for `--check-consultant` / `--check-model`). The server refuses every writer
+  mode itself — exit 74, one stderr sentence naming the folder (the code the extension already words as "could not use
+  its data directory") — so a launch from a terminal or an older extension makes nothing either. An MCP CLIENT's launch,
+  which the extension cannot stop, gets a refusal-only server: the protocol answers and every tool returns an
+  `McpException` naming the folder and "restore it, then restart the MCP server", with no log file, marker, sweep or
+  survey.
+- **The census crosses the boundary.** `everyServerModeTheExtensionLaunches.test.ts` classifies every mode the extension
+  launches and requires each to be run by the server's reader test (makes nothing) or its writer test (refuses), so a
+  new launch on either side is red until both halves agree on it.
+
+```mermaid
+flowchart LR
+    env[COAI_DATA_DIR names a root that is confirmed absent] --> ext{extension}
+    env --> srv{coai-mcp}
+    ext -->|its own launches| hold[not started; the notice and the page mark say why]
+    srv -->|a writer mode, any launcher| w74[exit 74, the folder named, nothing written]
+    srv -->|serve, an MCP client's launch| refuse[every tool: McpException naming the folder]
+    srv -->|a reader| empty[answers as for an empty store, makes nothing]
+```
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

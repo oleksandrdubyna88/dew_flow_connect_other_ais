@@ -39,6 +39,7 @@ internal static class ProbeApiMode
     internal const int Ok = 0;
     internal const int BadRequest = 65;
     internal const int NoVault = 78; // EX_CONFIG
+    internal const int MissingDataRoot = 74; // EX_IOERR — the named data folder is not there
 
     /// <summary>How much of a vendor's error text is printed, after redaction.</summary>
     internal const int QuoteLimit = 300;
@@ -71,6 +72,16 @@ internal static class ProbeApiMode
         IProcessLauncher launcher,
         HttpMessageHandler? handler = null)
     {
+        // A probe that spends writes its usage line into the data directory (UsageLedger), and that write made a NAMED
+        // data folder that is missing (research/PLAN_names_and_a_missing_root.md, measured: `usage.jsonl`). Refused before
+        // anything is read or spent — the dispatch refuses it too; this entry point takes its own environment.
+        if (PanelSettings.NamedRootMissing(env, File.GetAttributes) is { Length: > 0 } missing)
+        {
+            note(missing + PanelSettings.WriterCure);
+
+            return MissingDataRoot;
+        }
+
         var flags = Program.Flags(args);
         var vendor = flags.GetValueOrDefault("--vendor", string.Empty).Trim().ToLowerInvariant();
         if (vendor.Length == 0)

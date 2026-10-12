@@ -67,6 +67,8 @@ const { qconsultRootsSeam } = await import('./seam-qconsult-roots.mjs');
 const { cliPathOtherSideSeam } = await import('./seam-cli-path-other-side.mjs');
 // A missing root of this OS: the server's `settingProblems` against the page's own findings (E5.6).
 const { pathMissingSeam } = await import('./seam-path-missing.mjs');
+// A missing NAMED data folder: the extension's own decision against the real binary's writer mode and served tools.
+const { missingNamedRootSeam } = await import('./seam-missing-named-root.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -845,6 +847,14 @@ const missing = await pathMissingSeam({
 });
 console.log('  ok  a missing question-consultant root is named by the server as a settingProblem, and the page agrees on the same (key, value, kind) set');
 
+// A missing NAMED data folder (research/PLAN_names_and_a_missing_root.md, the plan round's finding 1): the extension and the
+// real binary — `--check-model` and a served tool call — refuse it together, and neither refuses a side folder or the default.
+const namedRoot = await missingNamedRootSeam({
+  binary, sessionsFor, timeoutMs: TIMEOUT_MS,
+  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
+});
+console.log('  ok  a missing named data folder is refused by the extension and by the server alike, and nothing makes it; a side folder and the default are still made');
+
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
@@ -857,4 +867,5 @@ console.log(`seam: and a REAL refusal carrying a secret was written with it take
 console.log(`seam: and the question consultant's roots — kept ${qroots.kept}, skipped ${qroots.skipped}, the page agreeing on both`);
 console.log(`seam: and a reviewer's CLI path of the other side — ${clipath.skipped} skipped by the page and by the server; an existing one spelled without its drive: ${clipath.kept}`);
 console.log(`seam: and a missing root of this OS — ${missing.missing} named by both halves as ${missing.agreed.join(', ')}`);
+console.log(`seam: and a missing named data folder — ${namedRoot.refusedBoth} refused by both halves; made lazily: ${namedRoot.lazy.join(', ') || '(none asked of a served run here)'}`);
 console.log(`seam: asked ${binary}`);
