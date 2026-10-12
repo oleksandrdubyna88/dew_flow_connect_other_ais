@@ -210,8 +210,9 @@ test('a removed reviewer stays visible with a repair instruction, and choosing o
   });
   assert.equal(lane.runs[0]?.vendor, 'removed-reviewer');
   const page = pageWith(lane);
-  // The new page's own sentence for a pair whose row left Models (E4.2), where the old page said "unavailable".
-  const stranded = /removed-reviewer is no longer on Models\. This pair keeps asking for it until you pick another/;
+  // The new page's own sentence for a pair whose row left Models (E4.2), where the old page said "unavailable" — and
+  // since research/PLAN_names_and_a_missing_root.md story 1 it says what the server does: it drops the pair.
+  const stranded = /removed-reviewer is no longer on Models\. The server drops this pair until you pick another reviewer/;
   assert.match(lanePane(page), stranded);
   assert.match(lanePane(page), /Prompt redteam-removed is missing; select a registered prompt/);
 

@@ -69,9 +69,11 @@ The not-signed-in wording this arm was meant to capture was NOT captured.
 | A call | `"…" \| kimi -p - --output-format stream-json`: first line `{"role":"meta","type":"system.version","version":"0.41.0"}`, then exit 1 with `provider.api_error: 429 Your account … is suspended due to insufficient balance, please recharge your account or check your plan and billing details` |
 | Not settled | whether `-p -` read stdin or sent a literal `-`; the stream's answer / usage / session fields; the agent-file tool list; trust, hooks and project config; exit codes in prompt mode |
 
-The 429 above is a **billing** failure. coai's `RateLimit.Hit` (`src_mcp/runners/Reviewers/ReviewerExecutor.cs:284`) matches
-a real 429 and would retry it on the ladder as a rate limit; `RateLimit.Spent` (`:304`) does not name it, so it is not
-treated as hopeless either.
+The 429 above is a **billing** failure. *Corrected 2026-10-12, when the test was written:* this paragraph first said coai's
+`RateLimit.Hit` would retry it as a rate limit. It would not — `RateLimit`'s status pattern counts a `429` only after
+`http`/`status` or before "too many" (`src_mcp/runners/Reviewers/ReviewerExecutor.cs:275-281`), and no phrase matched, so
+the line reached the person as a bare non-zero exit: never retried, but never named as a spent allowance either. The plan's
+D14 names it.
 
 ## 6. Where these results go
 

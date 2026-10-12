@@ -1,5 +1,71 @@
 # Changelog
 
+## Server 0.50.0 — 2026-10-12
+
+**Changed: a question row whose model is gone is refused in the extension's words.** The server now says
+*"<id> is no longer ticked question consultant (or was removed) — pick another model"* where it used to talk about a
+vendor that is neither a reviewer row nor a runtime, and a row with no model is refused with *"this row has no model to
+run on — pick one"* — no server sentence shows `''` any more.
+
+**Fixed: no mode creates a data folder you named that is missing.** With `COAI_DATA_DIR` naming a folder that is
+confirmed absent, every mode that writes there — `--check-consultant`, `--check-model`, `--collect-bugs`,
+`--pairs-keep`, `--pairs-decide`, `--upload-pairs`, `--requeue-refused`, `--probe-api` (before anything is sent),
+`--consultants` — stops with one sentence naming the folder and exit 74, whoever started it. Started by an MCP client,
+the server answers the protocol but refuses every tool with that folder and "restore it, then restart the MCP server",
+and writes nothing: no log file, run marker, sweep or survey. A folder the disk will not describe (a sleeping share, a
+refused read) is never treated as missing; the default location and a side folder inside an existing one are still
+made when first needed. Every mode is classified by a test, so a new one is checked before it ships.
+
+## Extension 0.71.0 — 2026-10-12
+
+**Changed: the Security lane names its reviewers.** A pair's Reviewer list now reads like the question consultant's: a
+model by its card's name with its id beside it (*GPT-6-Astra (chat-preset-…)*), *(switched off)* for one that is off,
+and *(stranded)* for a pick the list no longer holds. A pair whose model was removed from Models says the server drops
+that pair until you pick another reviewer; a pair that names no reviewer shows *no reviewer — pick one* instead of an
+empty entry, and a warning that names nobody is gone. The ticks on the prompt cards use the same names, and an
+*Offered:* line with **Change on Models** sits above the pairs. Help in all five languages.
+
+**Fixed: nothing creates a data folder you named that is missing — the MCP server included.** With `COAI_DATA_DIR`
+naming a folder that is not there, the extension already created nothing; now the server does not either. **Check** on
+the Consultant tab and on Models is not started (it says the folder is missing and that nothing was sent); the server's
+own actions that write — collecting bugs, deciding and uploading pairs, the checks, the consultants survey started
+from a terminal, probing an API key (before anything
+is sent) — stop at once, name the folder and exit 74; closing a consultation by hand and removing a review tree were
+measured and make nothing there; and an MCP client that starts the server gets one that answers but refuses every tool with that folder's name:
+restore it, then restart the MCP server. A folder the disk will not describe (a sleeping share, a refused read) is never
+treated as missing, the default location is still created the first time it is needed, and so is a side folder inside
+a folder that exists. Help in all five languages. The server's half is coai-mcp 0.50.0.
+
+## Extension 0.70.0 — 2026-10-12
+
+**New: the Team server's rounds per vendor, on the Team server tab.** For an admin, each vendor row now shows how many
+distinct review rounds the Team server ran over the last 5 hours, 24 hours and 7 days, beside the runs that carried no
+round (from older clients), retries, repairs, follow-ups, cancellations, and jobs the server ended because their caller
+could no longer wait. A Team server too old to count says *count unavailable*, never zero. Help in all five languages.
+
+**New: when a vendor's quota comes back.** After a vendor refused with a stated reset, the Spending tab's Rounds block
+and the vendor's model card say *quota out — resets in 89 h (Wed 04:49)*, for as long as that refusal is the row's
+latest line and the instant is still ahead. The Team server catalog says when its first parked account comes back,
+without naming any account.
+
+## Server 0.49.0 — 2026-10-12
+
+**Every launch of a round carries the round's identity, and a spent budget is never sent.** Each review round now gets
+a random id when it starts, kept on the round in `coai.db` (schema step 21, `round_key`) and in the session file, and
+every launch of that round sends it to the Team server with its attempt (`first`, `retry`, `repair`, `followUp`) and
+the seconds left on its own deadline, so the server can count rounds and stop a job whose caller has already given up.
+A repair or a retry now advertises, and waits on, the time it really has left rather than the budget it was built with,
+and a launch whose time is already spent is not submitted at all. When the Team server ends a job because its caller
+could no longer wait, `--ask-remote` exits with its own code (79) and the reason, and the rate-limit ladder does not
+retry it. The request stays contract 2: the new fields are optional, and an older server ignores them.
+
+**A stated reset is read, recorded and never waited out.** When a vendor refuses with a stated reset (agy's
+`Resets in 88h49m9s`), the refusal's ledger line now carries the instant as `resetsUtc`, for reviews, consultations,
+consultant checks and question rows alike, read by the same parser the Team server uses. The rate-limit ladder no
+longer waits and launches again into a reset that lies beyond the reviewer's remaining time; a short reset inside it is
+still waited out. A job queued on the Team server behind accounts that are all parked or signed out now says why while
+it waits.
+
 ## Server 0.48.0 — 2026-10-11
 
 **The usage ledger tells the truth: one line per paid launch, how each ended, and what it ran with.** `usage.jsonl`

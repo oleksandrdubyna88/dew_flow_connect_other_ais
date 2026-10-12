@@ -204,6 +204,20 @@ public sealed class CapabilityMatrixTests
         refused.Reason.Should().Contain("cannot fetch a page headless", "the row's note is the reason a person reads");
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ARowWithNoRuntime_IsRefused_AskingForAModel_NeverQuotingNothing(string runtime)
+    {
+        // research/PLAN_names_and_a_missing_root.md story 2.2: a row with no runtime used to be "'' is not a runtime …".
+        var refused = CapabilityMatrix.Admit(runtime, Capability.None).Should().BeOfType<Admission.Refused>().Which;
+
+        refused.Reason.Should().Be("this row has no model to run on — pick one");
+        // The words' overload too, with a capability that does not parse: its sentence used to say "asked for runtime ''".
+        CapabilityMatrix.Admit(runtime, "shell").Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Be("this row has no model to run on — pick one");
+    }
+
     [Fact]
     public void AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown()
     {

@@ -297,7 +297,7 @@ public sealed class ProbeApiModeTests : IDisposable
     /// The vault, answering `creds config` with a body — and recording the READS it was asked for. Its
     /// `--help` probe is answered as a current creds CLI would, naming the stdin marker, and not recorded.
     /// </summary>
-    private sealed class VaultAnswers(string stdout, int exitCode = 0) : IProcessLauncher
+    internal sealed class VaultAnswers(string stdout, int exitCode = 0) : IProcessLauncher
     {
         public List<ProcessRequest> Requests { get; } = [];
 

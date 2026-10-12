@@ -59,7 +59,8 @@ public static class CapabilityMatrix
 {
     /// <summary>The decision for a pair given by its words — what a settings row or a vector carries.</summary>
     public static Admission Admit(string runtime, string capability) =>
-        Capabilities.TryParse(capability, out var parsed)
+        string.IsNullOrWhiteSpace(runtime) ? NoRuntime
+        : Capabilities.TryParse(capability, out var parsed)
             ? Admit(runtime, parsed)
             : new Admission.Refused($"'{capability}' is not a capability a prompt can declare — a prompt needs one of: {Capabilities.AllSpelled} (asked for runtime '{runtime}')");
 
@@ -69,6 +70,11 @@ public static class CapabilityMatrix
     /// <summary>The decision from a given table — the embedded one in the product, a hand-built one in a test.</summary>
     public static Admission Admit(RuntimeCapabilities table, string runtime, Capability capability)
     {
+        if (string.IsNullOrWhiteSpace(runtime))
+        {
+            return NoRuntime;
+        }
+
         var row = table.Of(runtime, capability);
         if (row is null)
         {
@@ -85,6 +91,13 @@ public static class CapabilityMatrix
             _ => new Admission.Refused(Unmeasured(row)),
         };
     }
+
+    /// <summary>
+    /// A row with no runtime: its pick is gone, or it picks nothing — never "'' is not a runtime"
+    /// (research/PLAN_names_and_a_missing_root.md story 2.2). Refused as before; only the words changed, so
+    /// <c>shared/capability-matrix-vectors.json</c> still holds.
+    /// </summary>
+    private static Admission.Refused NoRuntime => new("this row has no model to run on — pick one");
 
     private static string Unsupported(RuntimeCapabilityRow row) =>
         $"'{row.Runtime}' cannot do '{row.Capability.Spelled()}': {row.MeasuredWith.Note} — give this row a prompt of another capability, or this prompt another runtime";
