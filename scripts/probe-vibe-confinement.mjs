@@ -42,7 +42,7 @@
 //   M-V13  --time-limit 5 on a longer task → exit 3 and an export
 //   M-V14  a sanitised copy trusted on purpose: source + parent canaries, a junction and a file symlink pointing out
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
@@ -64,7 +64,7 @@ const CLIS = ['python', 'rust', 'inherit'];
 const cli = flag('--cli', 'python');
 const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
-if (unknown.length > 0 || !(repeats > 0) || !CLIS.includes(cli)) {
+if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.includes(cli)) {
   console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli ${CLIS.join('|')}] [--cells ${ALL_CELLS.join(',')}]`);
   process.exit(65);
 }
@@ -72,8 +72,9 @@ const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(tmpdir(), '
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Vibe's design), so it is
 // held to characters that need no quoting beyond the double quotes the command puts around it — never a quote, `$`, `%`,
 // a backtick or a newline (the code round, codex, 2026-10-12: a crafted path could otherwise inject into the canary).
+const SCRATCH_PUNCTUATION = String.raw`_-.:\/~()`;
 if (!/^[A-Za-z0-9 _\-.:\\/~()]+$/.test(scratch)) {
-  console.error(`refusing --scratch ${JSON.stringify(scratch)}: only letters, digits, space and _-.:\\/~() are allowed`);
+  console.error(`refusing --scratch ${JSON.stringify(scratch)}: only letters, digits, space and ${SCRATCH_PUNCTUATION} are allowed`);
   process.exit(65);
 }
 mkdirSync(scratch, { recursive: true });
@@ -123,12 +124,15 @@ function shortHome({ copy }) {
  * always a timeout, and a timeout kills the child's WHOLE tree by its PID before this returns — a stuck vibe leaves python
  * children behind otherwise (the code round, codex, 2026-10-12). Never by image name.
  */
+/** A Windows system tool by its absolute path, never looked up through PATH (SonarCloud S4036, the code round 2026-10-12). */
+const SYSTEM32 = (exe) => join(process.env.SystemRoot ?? String.raw`C:\Windows`, 'System32', exe);
+
 function run(file, args, options) {
   const r = spawnSync(file, args, { ...options, timeout: options.timeout ?? 60_000 });
-  const timedOut = r.error?.code === 'ETIMEDOUT' || (r.signal !== null && r.signal !== undefined);
+  const timedOut = r.error?.code === 'ETIMEDOUT' || Boolean(r.signal);
   if (timedOut && r.pid) {
     if (process.platform === 'win32') {
-      spawnSync('taskkill', ['/PID', String(r.pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
+      spawnSync(SYSTEM32('taskkill.exe'), ['/PID', String(r.pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
     } else {
       try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
     }
@@ -148,7 +152,7 @@ function trustWithVibe(home, paths) {
 }
 
 function junction(link, target) {
-  const r = run('cmd.exe', ['/d', '/c', 'mklink', '/J', link, target], { encoding: 'utf8', timeout: 30_000 });
+  const r = run(SYSTEM32('cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target], { encoding: 'utf8', timeout: 30_000 });
   return r.status === 0 ? '' : `mklink /J failed: ${(r.stdout + r.stderr).trim()}`;
 }
 
@@ -173,7 +177,7 @@ function files(dir) {
     }
   };
   walk(dir);
-  return out.sort();
+  return out.sort((a, b) => a.localeCompare(b));
 }
 
 // ---------------------------------------------------------------------------------------------------------------- arms
@@ -568,7 +572,7 @@ function runResume(n) {
 
 // --------------------------------------------------------------------------------------------------------------- report
 
-const cut = (s, k) => String(s ?? '').replace(/\s+/gu, ' ').replace(/\|/gu, '\\|').slice(0, k);
+const cut = (s, k) => String(s ?? '').replaceAll(/\s+/gu, ' ').replaceAll('\\', '\\\\').replaceAll('|', String.raw`\|`).slice(0, k);
 const flags = (o) => Object.entries(o ?? {}).map(([k, v]) => `${k}=${v ? 'yes' : 'no'}`).join(' ');
 
 function table(cell, rows) {
@@ -604,7 +608,7 @@ function report(byCell) {
 if (reparse) {
   // Rebuild from the saved run folders (spec.json + meta/stdout/export), e.g. after a parser fix — no launch.
   const prior = JSON.parse(readFileSync(join(scratch, 'results.json'), 'utf8'));
-  const rebuilt = readdirSync(scratch).filter((d) => existsSync(join(scratch, d, 'spec.json'))).sort()
+  const rebuilt = readdirSync(scratch).filter((d) => existsSync(join(scratch, d, 'spec.json'))).sort((a, b) => a.localeCompare(b))
     .map((name) => ({ name, ...JSON.parse(readFileSync(join(scratch, name, 'spec.json'), 'utf8')) }))
     .filter((s) => s.cell !== 'M-V5') // two launches: kept from the original results
     .reduce((acc, s) => ({ ...acc, [s.cell]: [...(acc[s.cell] ?? []), rowOf(join(scratch, s.name), s.cell, s.arm, s.n, s.spec)] }), {});
