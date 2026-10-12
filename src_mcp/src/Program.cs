@@ -834,7 +834,7 @@ internal static class Program
         if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) == Server.RootPresence.Absent)
         {
             // No database yet, so nothing has been collected: an empty list — and the data directory is NOT made, because
-            // a reader must never create the folder it reads (todo/PLAN_paths_per_side.md E5.7, D3).
+            // a reader must never create the folder it reads (research/PLAN_paths_per_side.md E5.7, D3).
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
                 new Collecting.PairsAnswer([]), Server.ServerJsonContext.Default.PairsAnswer));
 
@@ -1050,7 +1050,7 @@ internal static class Program
         if (Store.RoundsDb.PresenceOf(settings.DataDir, attributesOf) == Server.RootPresence.Absent)
         {
             // No database, so no such pair — answered as the pair that is not there, and NOTHING is made: a reader must
-            // never create the data directory it reads (todo/PLAN_paths_per_side.md E5.7, D3).
+            // never create the data directory it reads (research/PLAN_paths_per_side.md E5.7, D3).
             await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(await answer(findingId, null), shape));
 
             return 0;
@@ -1376,7 +1376,7 @@ internal static class Program
         try
         {
             // Only a database that is THERE is migrated and swept: opening one that is not would create the data
-            // directory this reader reads — a missing NAMED one included (todo/PLAN_paths_per_side.md E5.7, D3). With no
+            // directory this reader reads — a missing NAMED one included (research/PLAN_paths_per_side.md E5.7, D3). With no
             // file the read below answers an empty corpus, which is the truth about a machine that never ran a round.
             // CONFIRMED absent alone skips the open: a database the disk would not describe (access denied, busy) goes on to
             // the open, which fails and is reported 74 — never answered as an empty corpus (the E5 code round).

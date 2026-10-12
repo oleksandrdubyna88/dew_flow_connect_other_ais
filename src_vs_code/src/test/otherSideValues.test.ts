@@ -6,7 +6,7 @@ import { otherSideDataDirectories } from '../otherSideValues';
 import { sideHereOf, sideSeenKey, stampSide, type SideReader } from '../sidesSeen';
 
 /**
- * The other side's data directory, read from its overlay through the side registry (todo/PLAN_paths_per_side.md E3.4):
+ * The other side's data directory, read from its overlay through the side registry (research/PLAN_paths_per_side.md E3.4):
  * a WSL window wrote `/mnt/z/coai` into ITS overlay, and a Windows window — whose own choice is `Z:\coai` — can show it,
  * read-only. The keys are computed by the real `overlayKey` / `sideSeenKey` / `sideHereOf`, never typed by hand.
  */

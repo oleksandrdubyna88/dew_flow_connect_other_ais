@@ -5,7 +5,7 @@ import { type PathFinding, agreed, findingsFromServer, kindOfState } from '../pa
 import { type SettingProblem, withoutCovered } from '../providers';
 
 /**
- * Never two toasts for one folder (todo/PLAN_paths_per_side.md E5.3, risk 6): the generic "the server could not
+ * Never two toasts for one folder (research/PLAN_paths_per_side.md E5.3, risk 6): the generic "the server could not
  * understand a setting" toast drops every sentence the server also named structurally — the missing-path notice says
  * those, with the place and its button — and keeps every other sentence; a server before the field covers nothing, so
  * the toast stays the only surface, as before. And E5.6's half: for the roots the server's problems replace the page's own.

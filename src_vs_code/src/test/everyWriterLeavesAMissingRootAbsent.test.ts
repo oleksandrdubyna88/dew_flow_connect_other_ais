@@ -18,7 +18,7 @@ import { UNDER_THE_DATA_DIRECTORY, WRITERS, codeOf } from './dataDirWriters';
 
 /**
  * Every writer that can make a folder under the data directory, RUN with a named root that is not there — and the root
- * is still not there afterwards (todo/PLAN_paths_per_side.md E5.7; the gate's plan-round item B: "text in a file proves
+ * is still not there afterwards (research/PLAN_paths_per_side.md E5.7; the gate's plan-round item B: "text in a file proves
  * nothing about call order or effect"). The inventory scan (`everyWriterOfTheDataDirectory.test.ts`) says which files
  * those are; this runs each one.
  *

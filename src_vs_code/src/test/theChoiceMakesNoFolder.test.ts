@@ -5,7 +5,7 @@ import { MAKES_A_DIRECTORY, WRITERS, codeOf } from './dataDirWriters';
 
 /**
  * Where the data lives is CHOSEN without making anything, and only the MOVE makes a folder — the folder a person just
- * picked (todo/PLAN_paths_per_side.md E5.0/E5.7; the gate's plan-round item A, verified 2026-10-10).
+ * picked (research/PLAN_paths_per_side.md E5.0/E5.7; the gate's plan-round item A, verified 2026-10-10).
  *
  * <p><b>What the gate said, and what the code does.</b> The plan round took the choice flow (`askWhereDataLives`) to
  * create the folder a person chooses, and asked for that to be recorded as the intended exception to "nothing creates a

@@ -5,7 +5,7 @@ import { KNOWN_FOR_MS, knownFamilies, twoPathFields, type PathFieldsMode, type S
 
 /**
  * Setup › This side's list of the sides this profile has been used on, with **Forget** per side, and the switch that
- * decides how many fields a path setting shows (todo/PLAN_paths_per_side.md E2.4).
+ * decides how many fields a path setting shows (research/PLAN_paths_per_side.md E2.4).
  *
  * <p>Pure: the host reads the registry on every render (`sidesIn`) and hands it in, so a side another window stamped
  * appears at the next repaint — the measured E0 result says the stamp itself reaches an open window live. Forget is a

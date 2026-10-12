@@ -38,7 +38,7 @@ export const FEATURES = {
   fastMode: 'fastMode',
   /**
    * `--providers` carries `settingProblems` — which setting and which stored value a refusal is about, by kind
-   * (todo/PLAN_paths_per_side.md E5.2). The page prefers that answer to its own probe of the roots only from a server
+   * (research/PLAN_paths_per_side.md E5.2). The page prefers that answer to its own probe of the roots only from a server
    * that lists it; an older one gets the generic toast and the page's own stat, as before.
    */
   settingProblems: 'settingProblems',

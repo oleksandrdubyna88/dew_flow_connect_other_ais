@@ -91,7 +91,7 @@ import { askPerson } from './personWait';
 
 /**
  * What activation hands back. Read-only, and read by the `test:host` scenarios — a host cannot reach this extension's
- * `globalState` any other way (todo/PLAN_paths_per_side.md E2.4: activation leaves a `coai.sideSeen@` record).
+ * `globalState` any other way (research/PLAN_paths_per_side.md E2.4: activation leaves a `coai.sideSeen@` record).
  */
 export interface CoaiExports {
   /** The sides this profile has been used on, as Setup › This side lists them. */
@@ -362,6 +362,11 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   };
   questionConsults.start();
 
+  // A Models card offers a dropped per-side CLI path back with Restore, and repaints when the keeper's list changes (E4.1).
+  panel.cliPathKeep = cliPathKeep;
+  const stopKeepTelling = cliPathKeep.onChanged(() => { void panel.render(); });
+  context.subscriptions.push({ dispose: stopKeepTelling });
+
   // The settings the server reads, mirrored from activation — never from the panel.
   //
   // This was the defect a colleague hit on macOS: the write lived in `PanelProvider.render()`
@@ -411,7 +416,7 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   onDataRootBack(() => { mirrorSettings(settingsSync); });
   // When each new control of the Settings page was first seen here, so its "new" mark lasts a week (newTags.ts).
   void context.globalState.update(FIRST_SEEN_KEY, seenNow(context.globalState.get(FIRST_SEEN_KEY), NEW_CONTROLS, Date.now()));
-  // The sides this profile has been used on (todo/PLAN_paths_per_side.md E2.2): this side stamped at most once a day,
+  // The sides this profile has been used on (research/PLAN_paths_per_side.md E2.2): this side stamped at most once a day,
   // the sides gone for 90 days pruned — never awaited, so a slow store never delays a window's start.
   // A refusal is logged to the extension host, never a toast: the side is tried again at the next start.
   void stampThisSide(context.globalState, sideHereOf(thisSide(context.globalStorageUri), process.platform), Date.now(), (error) => {
@@ -1049,7 +1054,7 @@ async function writeSettingsFile(json: string): Promise<void> {
   const target = vscode.Uri.joinPath(dataDir(), 'settings.json');
   const temp = vscode.Uri.joinPath(dataDir(), `settings.json.${process.pid}.tmp`);
   // Node's write and rename, never VS Code's: those make missing parent folders, so a named data root removed after
-  // `createDataDirectory` asked for it was made again by the write (todo/PLAN_paths_per_side.md E5.7, risk item F).
+  // `createDataDirectory` asked for it was made again by the write (research/PLAN_paths_per_side.md E5.7, risk item F).
   await fsp.writeFile(temp.fsPath, json, 'utf8');
 
   // The last thing before the rename: are we still the holder? A process suspended past the stale
@@ -1116,7 +1121,7 @@ async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
  * The ONE road by which this file makes the data directory — for the settings file and for its lock.
  *
  * <p>It makes the default location, and a side folder inside a named root that exists; it REFUSES a named root that is
- * missing (todo/PLAN_paths_per_side.md E5.7, decided with the operator as D3): creating `/mnt/z/coai` while the drive is
+ * missing (research/PLAN_paths_per_side.md E5.7, decided with the operator as D3): creating `/mnt/z/coai` while the drive is
  * not mounted wrote the server's settings into a bare mount point, and hid the one condition the page and the notice
  * now report. The refusal is the finding's sentence; the mirror reads it as a write it must not retry
  * (`no-data-root`), and the person is told once per start by the notice, never twice for one folder.</p>

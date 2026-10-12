@@ -2,7 +2,7 @@ import { bySideOf, familyLabel, spelledForTheOtherOs, type ExecutableBySide, typ
 
 /**
  * A kept copy of every catalog row's per-side CLI path, and the one-click way back when a save drops it
- * (todo/PLAN_paths_per_side.md, E3 as built: the plan-gate's Major finding and the risk consultant's findings a and b).
+ * (research/PLAN_paths_per_side.md, E3 as built: the plan-gate's Major finding and the risk consultant's findings a and b).
  *
  * <p><b>Why it exists.</b> A released extension (v0.67.0, v0.65.0 — measured by `scripts/live-paths-per-side-compat.mjs`)
  * rebuilds every row from the fields it knows when it saves `coai.vendors`, so ANY vendor save it makes removes
@@ -165,7 +165,15 @@ function spelledForNeither(path: string): boolean {
   return !spelledForTheOtherOs(path, true) && !spelledForTheOtherOs(path, false);
 }
 
-function sameIdentity(row: KeptRow, offer: DroppedValue): boolean {
+/**
+ * The dropped value a row's card offers back — matched by the same identity a restore re-reads it by (id, runtime and
+ * model), so a card never offers a copy the click would refuse as another row's (research/PLAN_paths_per_side.md E4.1).
+ */
+export function droppedFor(dropped: readonly DroppedValue[], row: Pick<KeptRow, 'id' | 'runtime' | 'model'>): DroppedValue | undefined {
+  return dropped.find((one) => sameIdentity(row, one));
+}
+
+function sameIdentity(row: Pick<KeptRow, 'id' | 'runtime' | 'model'>, offer: DroppedValue): boolean {
   return row.id === offer.id && row.runtime === offer.runtime && row.model === offer.model;
 }
 

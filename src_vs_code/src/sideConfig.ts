@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ALWAYS_PER_SIDE, ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
+import { ConfigReader, keptPerSide } from './settingsShape';
 import { declaresSetting, refusalNotice, settingRefusal, type RefusalSentences, type SettingRefusal } from './settingRefused';
 import { readOverlay, sideConfigReader, writeOverlay } from './sideSettings';
 import { asText } from './asText';
@@ -120,7 +120,7 @@ export function bugzServerThisSide(context: vscode.ExtensionContext): string {
  * the other side of this machine, where the same string names a path that does not exist.
  */
 export function writesTheOverlay(config: vscode.WorkspaceConfiguration, key: string): boolean {
-  return (config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key)) || ALWAYS_PER_SIDE.includes(key);
+  return keptPerSide(config.get<boolean>('perSideSettings') === true, key);
 }
 
 /**

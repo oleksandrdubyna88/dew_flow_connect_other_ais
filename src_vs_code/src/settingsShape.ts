@@ -353,6 +353,18 @@ export const OVERLAID_SETTINGS: readonly string[] = [
 export const ALWAYS_PER_SIDE: readonly string[] = ['dataDirectory', 'dataSide'];
 
 /**
+ * Whether a key is saved into THIS side's own settings rather than the shared layer — the decision `sideConfig.saveSetting`
+ * writes by (`writesTheOverlay`), here without `vscode` so the Settings page can ask it too: a value this side saves
+ * there is one the other side never reads, so the page draws no box for the other side's value of such a key
+ * (research/PLAN_paths_per_side.md, E4's own review, item 1).
+ *
+ * @param perSide `coai.perSideSettings`
+ */
+export function keptPerSide(perSide: boolean, key: string): boolean {
+  return (perSide && OVERLAID_SETTINGS.includes(key)) || ALWAYS_PER_SIDE.includes(key);
+}
+
+/**
  * A reader that answers from this side's overlay first, and from the shared settings otherwise.
  *
  * <p>The fallback is what keeps a forked side working after an update: a setting added by a new

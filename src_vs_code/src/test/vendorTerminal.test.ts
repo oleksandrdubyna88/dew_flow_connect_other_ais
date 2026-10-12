@@ -4,7 +4,7 @@ import { keyVariable, OFFICIAL_SOURCES, vendorInstall, vendorTerminal , executab
 import { hostFamily } from '../hostSide';
 import { Vendor } from '../vendors';
 
-// A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (todo/PLAN_paths_per_side.md E1.2).
+// A path spelled for THIS host's OS: one of the other OS is the other side's and is skipped (research/PLAN_paths_per_side.md E1.2).
 const onThisOs = (posix: string, windows: string): string => (hostFamily() === 'windows' ? windows : posix);
 
 const vendor = (over: Partial<Vendor> = {}): Vendor => ({

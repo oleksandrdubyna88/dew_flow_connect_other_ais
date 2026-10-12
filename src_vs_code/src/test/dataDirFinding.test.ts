@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { NOTHING_CHOSEN, dataDirFinding, namedRoot, useStorageSettings, whereData } from '../dataDir';
 
 /**
- * A NAMED data directory that does not exist is always red (todo/PLAN_paths_per_side.md E5.7; decided with the operator,
+ * A NAMED data directory that does not exist is always red (research/PLAN_paths_per_side.md E5.7; decided with the operator,
  * D3): the finding beside `whereData`, pure over the chosen storage and what the disk said about its ROOT.
  */
 

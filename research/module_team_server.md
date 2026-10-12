@@ -527,8 +527,9 @@ sequenceDiagram
   "resets in" is never offered to the clock-time form that also starts at "resets"; it is believed like a named
   instant (`MaxGuess` caps only the guess) up to `MaxStatedWait`, fourteen days — longer than any window these vendors
   state. **It is read whole or not at all:** text glued to a unit (`2seconds`) or a spaced number after it
-  (`2h 30 minutes`) refuses the match, because its first part alone is a SHORTER wait than the one stated (CodeRabbit
-  on #754). A wait that was stated and could not be read — such a form, a wait in words (`Resets in one hour`), a
+  (`2h 30 minutes`) refuses the match, and so does a punctuation separator before more digits (`2h, 30m`, `2h; 30m`),
+  because its first part alone is a SHORTER wait than the one stated (CodeRabbit on #754, twice); a comma that ENDS
+  the duration (`2h, then try again`) still reads it. A wait that was stated and could not be read — such a form, a wait in words (`Resets in one hour`), a
   number past the ceiling, one too large to be an instant — errs LONG, to `MaxGuess` (5 h), never the 30-minute retry
   and never a throw that fails the job. **"Weekly" is checked first**, because its guess is the longer one (a day): a
   line saying both errs to the day.
@@ -943,7 +944,10 @@ regression in queue acceptance or cancellation could ship with the suite green.
 **The runner's own failures are classified as carefully as the API's.** Exit **1** is a contract
 regression and nothing else; **3** is the machine (the build failed, the server never answered, the
 harness was killed); **4** is a misconfigured suite. Reporting a missing httpyac as exit 1 would tell
-whoever reads it that the API is broken when the harness is. A server that comes up and answers 500
+whoever reads it that the API is broken when the harness is. The mapping lives in `http/verdict.mjs`, held by
+`src_vs_code/src/test/httpContractVerdict.test.mjs` to the pinned httpyac's own codes: 6.16.7 exits **20** for a
+failed assertion (its `testExitCode` hook), so until 2026-10-11 — when the runner knew only 1 — every real contract
+regression was reported as exit 4, the misconfigured suite (seen by two agents' break-it runs on epic 4 and 5). A server that comes up and answers 500
 to `/api/health` is reported as a CONTRACT failure at once, rather than being polled for forty
 seconds and called an environment problem — which is what happened the first time, for the very
 defect above.
@@ -1247,6 +1251,68 @@ Behind the **host** nginx on the CredsForDevs VM — not the vault's container, 
 and terminates no TLS. `coai.remsoft.dev` has its own site file and its own certificate; the app
 binds `127.0.0.1:8090` and nothing else can reach it. See the plan's *Deployment* section for the
 topology and for why the box's 3.8 GB of RAM is a design input rather than a footnote.
+
+### The container image installs its CLIs checked (2026-10-11)
+
+The image (`src_server/Dockerfile`, for a host that has no CLIs of its own — `coai.remsoft.dev` does not run it) installs
+codex and claude through `src_server/install-cli.sh` (fetched to a file, accepted only behind a shebang, three bounded
+attempts) and agy through `src_server/install-agy.sh`, which reads Google's release manifest
+(`…us-central1.run.app/manifests/<platform>.json` → `{version, url, sha512}`), checks the tarball's SHA-512 and installs
+the `antigravity` binary as `~/.local/bin/agy` — never the `antigravity.google` install page, which answered HTML on a
+GitHub runner and broke a release (run 38075423539). Google's final `agy install` (shell start-up set-up) is not run: the
+image sets `PATH` with `ENV`. Each CLI's `--version` runs in the build. `.github/workflows/server-image.yml` builds the
+image (amd64 + arm64, no push, no cache) on pull requests that touch those files, so a runner proves the installs
+before a release does. Detail and reasons: [PLAN_team_server.md](PLAN_team_server.md) *Deployment*; tests
+`TheImageChecksEachInstallerTests` and `TheImageInstallsAgyFromItsManifestTests`.
+
+**The job RUNS what it built (2026-10-12).** A build only proves three binaries start; each leg then loads the image
+into the runner's docker (`load: true`, still no push) and runs `src_server/smoke-image.sh coai-server:smoke`:
+
+- a throwaway data directory seeded as `http/run-contracts.mjs` seeds its own — one codex vendor in `vendors.json`, one
+  ledger line for `dev@example.com` in `usage.jsonl`;
+- the container started with that runner's Local sign-in configuration: a fresh random key per run
+  (`Auth__Local__SigningKey`, passed by NAME from the environment, never on an argument list, masked on GitHub),
+  `Coai__AllowedDomains=example.com`, `Coai__Admins=boss@example.com`, `Coai__RequireForwardedHttps=false`, Microsoft
+  and Google off;
+- `/api/health` waited for (60 s bound, early exit if the container is gone);
+- a token minted the way the runner mints it (HS256, `iss: coai-local`, one hour), sent through a header file, and
+  `GET /api/usage?window=year` asserted to carry the seeded launch (`scope: me`, vendor `codex`, model
+  `gpt-5.6-luna`) — the server read its own ledger;
+- `agy`, `codex` and `claude --version` run inside the running container as uid 10001.
+
+The container runs with docker's own `--rm` and is stopped by id on every way out; its log is streamed to a file from the
+start (a crashed `--rm` container takes its log with it) and printed on any failure. `TheImageSmokeUsesTheServerTests`
+runs the parts that need no daemon: the key, the token and the seed against the real server in-process, the body check,
+and — with a `docker` stub — the argument list, the log dump and the stop.
+
+```mermaid
+flowchart LR
+  P["install-agy.sh<br/>platform linux_amd64 / linux_arm64 (+_musl)"] --> M["manifest JSON<br/>url + 128-hex sha512?"]
+  M -- "no (page, missing): retry x3, show first bytes" --> F["build fails"]
+  M -- yes --> D["download payload<br/>(retry x3)"]
+  D --> H{"SHA-512 matches?"}
+  H -- no --> F
+  H -- yes --> X["extract antigravity<br/>install ~/.local/bin/agy 0755"]
+  X --> V["Dockerfile: agy --version"]
+```
+
+```mermaid
+sequenceDiagram
+  participant J as server-image job (per arch)
+  participant S as smoke-image.sh
+  participant C as container (coai-server:smoke, --rm)
+  J->>J: build, load: true, no push
+  J->>S: bash src_server/smoke-image.sh coai-server:smoke
+  S->>S: seed vendors.json + usage.jsonl, new random key
+  S->>C: docker run -d --rm, key passed by name, data dir mounted
+  loop until ok or 60 s
+    S->>C: GET /api/health
+  end
+  S->>C: GET /api/usage?window=year (Bearer, minted HS256)
+  C-->>S: scope me, vendor codex, model gpt-5.6-luna
+  S->>C: docker exec --user 10001 agy / codex / claude --version
+  S->>C: docker stop (log printed on failure)
+```
 
 ### The server knows a chat from a review, and outlives the client that asked (2026-09-09)
 

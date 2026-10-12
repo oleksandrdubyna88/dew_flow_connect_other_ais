@@ -13,7 +13,7 @@ import { cliGroups } from '../setupTab';
 import { executableFor, executableForRuntime } from '../vendorTerminal';
 
 /**
- * A reviewer row stores a CLI path PER SIDE (todo/PLAN_paths_per_side.md E3.1, design (b) O2 and (c) rule 1): VS Code
+ * A reviewer row stores a CLI path PER SIDE (research/PLAN_paths_per_side.md E3.1, design (b) O2 and (c) rule 1): VS Code
  * shares `coai.vendors` between a Windows window and a WSL window, and one `executablePath` cannot hold both a
  * `C:\…\codex.cmd` and a `/usr/local/bin/codex`. `executablePathBySide: { windows?, posix?, mirrored? }` is additive
  * on the row — an older extension ignores it, coai-mcp never sees it — and a PRESENT per-side value wins over the

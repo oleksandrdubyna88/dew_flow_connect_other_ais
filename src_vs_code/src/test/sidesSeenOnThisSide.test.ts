@@ -11,7 +11,7 @@ import { pageTree, type PageNode } from './pageTree';
 
 /**
  * Setup › This side lists the sides this profile has been used on, with **Forget** and the path-fields switch
- * (todo/PLAN_paths_per_side.md E2.4) — the new Settings page RUN through its own script, the list read off the page as
+ * (research/PLAN_paths_per_side.md E2.4) — the new Settings page RUN through its own script, the list read off the page as
  * drawn (`pageTree`), and every press asserted by what it POSTS (`.agents/PROJECT.md`: never a regex over the html).
  *
  * <p>Times come from one fixed `NOW`; the page is handed it in the view, so nothing here reads the clock.</p>

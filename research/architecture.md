@@ -1164,7 +1164,7 @@ the Settings page says so beside them (`pathFamily.ts`) — and held level the c
 ([module_server.md](module_server.md), [module_extension.md](module_extension.md)). Since 2026-10-10 the file also holds
 the `executable` set — a reviewer's CLI path of the other OS is skipped (PATH lookup) by the extension's writer
 (`pathForThisSide`) and by the server's vendor read (`ExecutablePaths.Here`) alike, checked against each other by the
-seam leg `seam-cli-path-other-side.mjs` (`todo/PLAN_paths_per_side.md` E1).
+seam leg `seam-cli-path-other-side.mjs` (`research/PLAN_paths_per_side.md` E1).
 
 **A root of THIS OS that is missing is named by both halves too (2026-10-10, the same plan's E5).** coai-mcp's
 `--providers` carries `settingProblems: [{key, kind, value, sentence}]` (kinds `missing-folder` / `unreadable-folder`;

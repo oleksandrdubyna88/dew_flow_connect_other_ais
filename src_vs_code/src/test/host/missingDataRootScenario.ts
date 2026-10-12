@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 /**
- * A NAMED data directory that is missing is always red, and nothing creates it (todo/PLAN_paths_per_side.md E5.7, D3)
+ * A NAMED data directory that is missing is always red, and nothing creates it (research/PLAN_paths_per_side.md E5.7, D3)
  * — the two halves a real editor can answer, each in the launch that can reach it (`scripts/run-host.mjs` runs two).
  *
  * <p><b>The first-start guarantee</b>, in the ordinary launch: the launcher names an existing data directory, the

@@ -52,7 +52,7 @@ export interface WhatWasRead {
   /** How long the reads were given, so the failure sentence can say it. */
   readonly waitedSeconds: number;
   /**
-   * The notices this window is HOLDING in memory (todo/PLAN_paths_per_side.md E5.0): a missing-path notice raised while
+   * The notices this window is HOLDING in memory (research/PLAN_paths_per_side.md E5.0): a missing-path notice raised while
    * the named data folder itself is missing is written to no ledger — a write would create the very folder it reports —
    * so the page shows it from here for this window run. Absent reads as none, which every earlier draw is.
    */

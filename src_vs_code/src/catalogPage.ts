@@ -33,7 +33,7 @@ function subStrip(tab: CatalogTab, findings: readonly PathFinding[]): string {
 }
 
 /**
- * The count badge a tab carries for the MISSING paths under its place (todo/PLAN_paths_per_side.md E5.5) — nothing for
+ * The count badge a tab carries for the MISSING paths under its place (research/PLAN_paths_per_side.md E5.5) — nothing for
  * none, so a page with no finding is the page it always was. The top tab counts every sub-place under it.
  */
 function markFor(place: string, findings: readonly PathFinding[]): { readonly mark?: TabMark } {

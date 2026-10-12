@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.69.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.68.0...extension-v0.69.0) (2026-10-11)
+
+
+### Features
+
+* **extension:** a CLI path per side — stored, resolved, and offered back when an older save drops it (paths per side E3) ([234d954](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/234d954356fe5503bbe02b39400997e994d38e9b))
+* **extension:** two path fields — Windows and WSL — on the Settings page once both sides are known (paths per side E4) ([822fc4d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/822fc4d1e850624637facbba0b1ddb781069c6bc))
+* **tests:** local test runs take at most 8 workers, at lowered CPU priority ([#757](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/757)) ([328703f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/328703faf67d84ebb55944922215925157dc85aa))
+* the ledger tells the truth — whole usage, end causes, one line per paid launch, what each ran with (round counter E3) ([#761](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/761)) ([8d086c5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8d086c510518de52e7786f0d0b8ebd7f9a323a64))
+
 ## [0.68.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.67.0...extension-v0.68.0) (2026-10-11)
 
 

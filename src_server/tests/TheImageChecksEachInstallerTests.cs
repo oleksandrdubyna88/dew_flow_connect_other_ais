@@ -18,11 +18,12 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class TheImageChecksEachInstallerTests : IDisposable
 {
+    /// <summary>The installers still fetched as scripts. agy is not one of them: it installs from its release manifest
+    /// through <c>install-agy.sh</c> (<see cref="TheImageInstallsAgyFromItsManifestTests"/>).</summary>
     private static readonly string[] Installers =
     [
         "https://chatgpt.com/codex/install.sh",
         "https://claude.ai/install.sh",
-        "https://antigravity.google/cli/install.sh",
     ];
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-install-cli-" + Guid.NewGuid().ToString("N"));
@@ -55,6 +56,14 @@ public sealed class TheImageChecksEachInstallerTests : IDisposable
         }
 
         dockerfile.Should().Contain("COPY src_server/install-cli.sh", "the image must carry the script it runs");
+
+        // agy: from its release manifest, checked and hashed — never the antigravity.google page, which answered HTML
+        // on GitHub's runners (release run 38075423539).
+        dockerfile.Should().Contain("COPY src_server/install-agy.sh", "the image must carry the script it runs");
+        dockerfile.Should().MatchRegex(@"RUN sh /tmp/install-agy\.sh\s*\\?\s*&&\s*""\$HOME/\.local/bin/agy"" --version",
+            "agy is installed from its manifest and must start in the build, like the other two");
+        dockerfile.Should().NotContain("https://antigravity.google",
+            "that page is what answered HTML on a GitHub runner; the manifest is the installer's own source");
     }
 
     [Fact]

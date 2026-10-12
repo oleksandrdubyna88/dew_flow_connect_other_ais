@@ -389,7 +389,9 @@ cost. No installer takes a version argument and two of the three publish no chec
 digest mismatch" is not implementable against them. A vendor that changes a flag between two builds
 passes every test in CI (which drives a fake CLI) and fails every real review. The server probes each
 CLI's version at startup and carries it in `/api/catalog` — that is **observability**, not a control.
-One pin exists if wanted: Antigravity publishes `manifests/linux_amd64.json` with a sha512.
+One pin exists if wanted: Antigravity publishes `manifests/linux_amd64.json` with a sha512. The image
+already installs agy from that manifest (`src_server/install-agy.sh`) and refuses a download whose
+sha512 differs — still the latest version, but never an unchecked one.
 
 ---
 
