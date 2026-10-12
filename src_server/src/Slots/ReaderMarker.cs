@@ -24,6 +24,13 @@ public static class ReaderPhases
 
     /// <summary>The child is registered — the marker's tree names it, and later its descendants.</summary>
     public const string Running = "running";
+
+    /// <summary>
+    /// The tree was ended, but a descendant could not be written down (epic 6's code round): the tree on disk is PARTIAL,
+    /// so reconciling what it names proves nothing about the rest. Unidentified by construction — the slot stays blocked
+    /// (<see cref="BlockedReasons.ReaderIdentityMissing"/>) until a person proves it safe.
+    /// </summary>
+    public const string Partial = "partial";
 }
 
 /// <summary>

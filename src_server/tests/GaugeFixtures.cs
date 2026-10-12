@@ -112,6 +112,30 @@ internal static class GaugeFixtures
             throw new IOException("the reader could not be started");
     }
 
+    /// <summary>
+    /// A launcher that records the root through the slot's REAL tracker — a pid that is no longer that process — and then
+    /// fails as the launcher does when a descendant would not record: the tree ended, the identity on disk partial
+    /// (epic 6's code round).
+    /// </summary>
+    public sealed class DescendantNotRecorded : IProcessLauncher
+    {
+        private IProcessTracker _tracker = NoProcessTracking.Instance;
+
+        public IProcessLauncher For(IProcessTracker tracker)
+        {
+            _tracker = tracker;
+
+            return this;
+        }
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            _tracker.Record(Environment.ProcessId, DateTime.UtcNow.AddHours(-5), request.TrackAs);
+
+            throw new ProcessTreeNotRecordedException([], new IOException("the slot's state file will not take the write"));
+        }
+    }
+
     /// <summary>A reviewer that answers a clean review — or, while told to, fails with a non-zero exit — recording each launch's environment.</summary>
     public sealed class Reviewer : IReviewLauncher
     {

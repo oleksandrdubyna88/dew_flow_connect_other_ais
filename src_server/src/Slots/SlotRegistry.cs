@@ -303,6 +303,21 @@ public sealed class SlotRegistry(
     public void MarkBlocked(AccountSlot slot, string code) =>
         Save(slot, s => s with { Blocked = code });
 
+    /// <summary>
+    /// The reader's tree was ended but a descendant was never written down (epic 6's code round): the marker becomes
+    /// <see cref="ReaderPhases.Partial"/> — unidentified, so no reconcile of the members it does name can clear it — and
+    /// the slot is blocked as a reader nobody can fully name. Kept until a person proves the account safe.
+    /// </summary>
+    public void MarkReaderPartial(AccountSlot slot) =>
+        Save(slot, s => s with
+        {
+            Reader = (s.Reader ?? new ReaderMarkerDto(ReaderPhases.Spawning, Environment.ProcessId, DateTime.UtcNow, DateTimeOffset.UtcNow)) with
+            {
+                Phase = ReaderPhases.Partial,
+            },
+            Blocked = BlockedReasons.ReaderIdentityMissing,
+        });
+
     /// <summary>A reading arrived: the one overwritten snapshot.</summary>
     public void SaveGauge(AccountSlot slot, GaugeReadingDto reading) =>
         Save(slot, s => s with { Gauge = reading with { Stale = false } });

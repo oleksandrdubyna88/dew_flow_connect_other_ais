@@ -84,6 +84,15 @@ public sealed class GaugeCapture(
 
             return outcome;
         }
+        catch (ProcessTreeNotRecordedException e)
+        {
+            // The launcher ended the tree and confirmed it, but a descendant never reached the marker: what is on disk
+            // names part of the tree, so reconciling it could clear a slot it cannot vouch for. Fail closed.
+            _note($"gauge {slot.Vendor}/{slot.Name}: a reader's descendant was not recorded ({e.InnerException?.GetType().Name ?? "unknown"}); slot blocked");
+            AfterAPartialRecord(slot);
+
+            return new GaugeCaptured.SlotBlocked(BlockedReasons.ReaderIdentityMissing);
+        }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             // Anything the infrastructure throws: the job this ran after is already final. The exception's type is a
@@ -114,6 +123,24 @@ public sealed class GaugeCapture(
         {
             // The state file would not take the write; the next holder reconciles whatever is on disk.
             _note($"gauge {slot.Vendor}/{slot.Name}: state not written ({e.GetType().Name})");
+        }
+    }
+
+    /// <summary>
+    /// After a reader's tree was ended with a descendant unrecorded: the marker is made partial and the slot blocked. When
+    /// the state file will not take even that, the running marker naming the root stays — the next holder reconciles it —
+    /// and the log says the block could not be written.
+    /// </summary>
+    private void AfterAPartialRecord(AccountSlot slot)
+    {
+        try
+        {
+            slots.MarkGaugeStale(slot);
+            slots.MarkReaderPartial(slot);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _note($"gauge {slot.Vendor}/{slot.Name}: the block could not be written ({e.GetType().Name})");
         }
     }
 

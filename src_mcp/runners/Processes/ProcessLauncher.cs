@@ -394,8 +394,8 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         var writing = WriteStdInAsync(process, request.StdIn, closeAfter: !request.EndsEarly, deadline.Token);
 
         var end = await UntilExitOrAnswerAsync(process, answered.Task, deadline.Token);
-        var survivors = end == WaitEnd.Exited
-            ? []
+        var ending = end == WaitEnd.Exited
+            ? Ending.None
             : await EndItAsync(process, request, tracked);
 
         // The child is gone, so the streams should end now. The grace is what bounds the case where
@@ -404,6 +404,12 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         // reading. (codex and gemini, code round, from three directions.)
         draining.CancelAfter(request.DrainGrace);
         await Task.WhenAll(SettledAsync(writing), SettledAsync(reading));
+
+        // Raised only now: the tree is ended and confirmed, and no read or write is left suspended (epic 6's code round).
+        if (ending.Unrecorded is { } failed)
+        {
+            throw new ProcessTreeNotRecordedException(ending.Survivors, failed);
+        }
 
         var timedOut = end == WaitEnd.Deadline;
 
@@ -419,7 +425,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             Cancelled: timedOut && ct.IsCancellationRequested,
             Truncated: stdout.Truncated || stderr.Truncated,
             Ended: end == WaitEnd.Answered,
-            Survivors: survivors);
+            Survivors: ending.Survivors);
     }
 
     /// <summary>Asks the request's predicate of the stdout so far, and marks the launch answered once it says yes.</summary>
@@ -497,17 +503,16 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// pid and start time, and the ones still there at the bound come back as survivors. A request without a
     /// predicate takes the old path exactly: kill the tree, wait for the root, list nothing.</para>
     /// </remarks>
-    /// <returns>The tree members still alive after the confirmation; empty for a request that lists none.</returns>
-    private async Task<IReadOnlyList<ProcessIdentity>> EndItAsync(Process process, ProcessRequest request, bool tracked)
+    /// <para><b>A record that fails does not stop the end</b> (epic 6's code round). A tracker that writes a slot's marker
+    /// can throw on a descendant — a state file that will not take the write — and the end used to stop right there: no
+    /// stdin closed, no kill, a descendant outliving the recorded root. The failure is now held, the tree is ended and
+    /// confirmed exactly as before (nothing forgotten — the identity on disk is partial, and the caller decides how to
+    /// stay fail-closed), and the caller raises it once the drain has settled.</para>
+    /// <returns>The tree members still alive after the confirmation — empty for a request that lists none — and the record failure, if any.</returns>
+    private async Task<Ending> EndItAsync(Process process, ProcessRequest request, bool tracked)
     {
         var members = request.EndsEarly ? ProcessTree.Descendants(process.Id) : [];
-        if (tracked)
-        {
-            foreach (var member in members)
-            {
-                _tracker.Record(member.Pid, member.StartedUtc, request.TrackAs);
-            }
-        }
+        var unrecorded = tracked ? RecordEach(members, request.TrackAs) : null;
 
         Close(process.StandardInput);
         try
@@ -523,7 +528,32 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         // return before the handle is free.
         await process.WaitForExitAsync(CancellationToken.None);
 
-        return await ConfirmedGoneAsync(members, tracked);
+        return new Ending(await ConfirmedGoneAsync(members, tracked && unrecorded is null), unrecorded);
+    }
+
+    /// <summary>How an end came out: the members still alive, and the tracker's failure when a descendant would not record.</summary>
+    private sealed record Ending(IReadOnlyList<ProcessIdentity> Survivors, Exception? Unrecorded)
+    {
+        /// <summary>A child that exited by itself: nothing ended, nothing to say.</summary>
+        public static readonly Ending None = new([], null);
+    }
+
+    /// <summary>Writes every descendant to the tracker — and answers its failure rather than throwing, so the end goes on.</summary>
+    private Exception? RecordEach(IReadOnlyList<ProcessIdentity> members, string label)
+    {
+        try
+        {
+            foreach (var member in members)
+            {
+                _tracker.Record(member.Pid, member.StartedUtc, label);
+            }
+
+            return null;
+        }
+        catch (Exception e)
+        {
+            return e;
+        }
     }
 
     /// <summary>The members still alive after the bound — each one confirmed gone is forgotten by the tracker.</summary>

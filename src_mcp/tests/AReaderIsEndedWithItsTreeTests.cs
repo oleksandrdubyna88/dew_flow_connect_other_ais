@@ -66,6 +66,44 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
         recorder.Recorded.Should().Contain(grandchild, "the grandchild was written down BEFORE the kill, so a crash mid-kill leaves it named");
     }
 
+    /// <summary>
+    /// Epic 6's code round: the tracker throws while persisting a DESCENDANT (a state file that will not take the write).
+    /// The tree is still ended — stdin closed, the whole tree killed, every member confirmed gone — and only THEN is the
+    /// failure surfaced, typed, so the caller keeps the slot fail-closed.
+    /// </summary>
+    [Fact]
+    public async Task ATrackerThatFailsOnADescendant_StillEndsTheWholeTree_ThenSaysSo()
+    {
+        Assert.SkipUnless(ProcessTree.Supported, "the tree discipline lists descendants on Linux and Windows only");
+        var pids = Path.Combine(_dir, "pids");
+        var launcher = new ProcessLauncher(new FailsOnSecondRecord());
+        Exception? thrown = null;
+
+        try
+        {
+            await launcher.RunAsync(Serve(pids, afterEofMs: -1, grandchild: true) with { EndsWhen = Answered });
+        }
+        catch (Exception e)
+        {
+            thrown = e;
+        }
+
+        var (root, grandchild) = PidsIn(pids);
+        try
+        {
+            Alive(grandchild).Should().BeFalse("a descendant whose record failed must not outlive the recorded root");
+            Alive(root).Should().BeFalse("the root is ended with its tree whatever the tracker said");
+            thrown.Should().BeOfType<ProcessTreeNotRecordedException>("the failure is surfaced AFTER the tree is gone, and typed")
+                .Which.Survivors.Should().BeEmpty("every member was confirmed gone before it was raised");
+            thrown!.InnerException.Should().BeOfType<IOException>("the tracker's own failure travels inside it");
+        }
+        finally
+        {
+            KillIfAlive(grandchild);
+            KillIfAlive(root);
+        }
+    }
+
     [Fact]
     public async Task AServerThatNeverAnswers_IsEndedAtTheDeadline_WithItsTree()
     {
@@ -182,6 +220,38 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
         }
 
         condition().Should().BeTrue("the server did not write its pids within 30 s");
+    }
+
+    /// <summary>A failed test's leftover, ended by its PID (never by image name) — only while it is still alive.</summary>
+    private static void KillIfAlive(int pid)
+    {
+        try
+        {
+            using var left = Process.GetProcessById(pid);
+            left.Kill(entireProcessTree: true);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Already gone — the expected case.
+        }
+    }
+
+    /// <summary>A tracker whose state file takes the root's record and refuses the next one — the descendant's.</summary>
+    private sealed class FailsOnSecondRecord : IProcessTracker
+    {
+        private int _records;
+
+        public void Record(int pid, DateTime startedUtc, string label)
+        {
+            if (++_records >= 2)
+            {
+                throw new IOException("the slot's state file will not take the write");
+            }
+        }
+
+        public void Forget(int pid)
+        {
+        }
     }
 
     /// <summary>A tracker that remembers every pid it was told about, and forgets nothing — what the marker on a slot does.</summary>

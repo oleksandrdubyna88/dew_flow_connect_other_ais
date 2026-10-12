@@ -205,6 +205,25 @@ public sealed class GaugeCaptureTests : IDisposable
         Lines()[1].GetProperty("gaugeObservedUtc").GetString().Should().BeEmpty("the second job's line carries no reading");
     }
 
+    /// <summary>
+    /// Epic 6's code round: the launcher ended the reader's tree but could not record a descendant, so the marker on disk
+    /// names the root alone. A marker like that must NOT be cleared by reconciling the root — the slot stays fail-closed
+    /// until a person proves it safe, and the job's result is untouched.
+    /// </summary>
+    [Fact]
+    public async Task ADescendantThatCouldNotBeRecorded_KeepsTheSlotFailClosed()
+    {
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.DescendantNotRecorded().For);
+        jobs.Submit(Job());
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        jobs.All().Single().Status.Should().Be(JobStatus.Done, "a capture failure never changes the finished job's result");
+        Slot().Blocked.Should().Be(BlockedReasons.ReaderIdentityMissing, "a partial identity is a reader nobody can fully name");
+        (await new SlotRegistry(_dir, new JsonFileStore()).AcquireAsync(Slot(), TimeSpan.Zero)).Should().BeOfType<Acquisition.Blocked>(
+            "reconciling the one recorded root would clear a marker that never named the descendant");
+    }
+
     [Fact]
     public async Task TheLog_CarriesNoRawMessage_NoAccountId_NoMachineName()
     {
