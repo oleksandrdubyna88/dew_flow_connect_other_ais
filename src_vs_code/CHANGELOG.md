@@ -1,5 +1,19 @@
 # Changelog
 
+## Server 0.52.1 — 2026-10-13
+
+**Fixed: a check or a consultation of a local thinking model answers instead of thinking to its ceiling.** A ✓ Check,
+a consultation and a question-consultant row on a `local` model now send the panel's local reasoning effort
+(`COAI_LOCAL_REASONING_EFFORT`, default `none`) and its token ceiling (`COAI_LOCAL_MAX_TOKENS`), exactly as a local
+reviewer always has; a row's own effort still wins. They used to send no effort at all, so a thinking model such as
+Gemma4 spent all 8 192 tokens reasoning and returned nothing — the card read `checked: no answer`.
+
+**Fixed: an answer cut at the token ceiling is named, never used.** When the local engine stops an answer at its
+ceiling (`finish_reason: length`), coai-mcp now refuses it — with content or without — and says so: the ceiling, the
+tokens generated, how much content arrived, and the reasoning effort the request carried, with what to change (set it
+to `none`, or raise the ceiling). A cut fragment used to be written as the answer and parsed as a review; its tokens
+are still counted.
+
 ## Server 0.52.0 — 2026-10-13
 
 **Changed: the *Split with the strongest model* order follows the subagent model tiers.** With the switch on, a first
