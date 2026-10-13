@@ -47,11 +47,21 @@ internal static class ConsultantLaunches
             throw new ArgumentException(
                 "a planned launch standing in Scratch needs a ScratchDir — an empty directory of its own; falling back to the checkout would hand the row the directory it must not see", nameof(launch));
         }
+
+        if (plan.Cwd == CwdKind.Snapshot && string.IsNullOrWhiteSpace(launch.Workdir))
+        {
+            throw new ArgumentException(
+                "a planned launch standing in Snapshot needs a Workdir — the coai-made copy of its roots; falling back to a root would hand the row the branch's own configuration (D6)", nameof(launch));
+        }
     }
 
-    /// <summary>Where a planned launch stands: the first granted root, or the caller's scratch directory.</summary>
-    public static string Cwd(ConsultantLaunch launch, Confinement.Planned plan) =>
-        plan.Cwd == CwdKind.Root ? plan.Grant.Roots[0] : launch.ScratchDir;
+    /// <summary>Where a planned launch stands: the first granted root, the copy of the roots, or the caller's scratch directory.</summary>
+    public static string Cwd(ConsultantLaunch launch, Confinement.Planned plan) => plan.Cwd switch
+    {
+        CwdKind.Root => plan.Grant.Roots[0],
+        CwdKind.Snapshot => launch.Workdir,
+        _ => launch.ScratchDir,
+    };
 
     /// <summary>The role a launch is filed under: the stuck consultant's, or a question row's.</summary>
     public static string RoleOf(ConsultantLaunch launch) =>

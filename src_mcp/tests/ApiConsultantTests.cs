@@ -107,7 +107,7 @@ public sealed class ApiConsultantTests : IAsyncLifetime
     [Fact]
     public void EveryRuntimeTheQuestionListAdvertises_Resolves_AndTheStuckConsultantsListIsUnchanged()
     {
-        QuestionResolution.Answering.Should().Equal("codex", "claude", "antigravity", "local", "api");
+        QuestionResolution.Answering.Should().Equal("codex", "claude", "antigravity", "local", "api", "vibe");
         foreach (var runtime in QuestionResolution.Answering)
         {
             var identity = runtime == "api"
@@ -119,7 +119,7 @@ public sealed class ApiConsultantTests : IAsyncLifetime
 
         // The stuck consultant's list was held narrower than this one until PLAN_one_model_catalog.md E2.3, which gave it
         // the api runtime: the two now name the same runtimes, read from shared/feature-availability.json.
-        ConsultantResolution.Consulting.Should().Equal("codex", "claude", "antigravity", "local", "api");
+        ConsultantResolution.Consulting.Should().Equal("codex", "claude", "antigravity", "local", "api", "vibe");
         ConsultantResolution.For(OpenRouterGrok).Should().BeOfType<ApiConsultant>("an api row consults since E2.3");
     }
 

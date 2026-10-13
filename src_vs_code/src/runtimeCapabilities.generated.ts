@@ -6,7 +6,7 @@
 // `generatedFilesAreCurrent.test.ts` fails if this file and the generator do.
 
 /** The runtimes the question consultant can launch, in the file's order. */
-export type QuestionRuntime = 'claude' | 'codex' | 'antigravity' | 'local' | 'api';
+export type QuestionRuntime = 'claude' | 'codex' | 'antigravity' | 'local' | 'api' | 'vibe';
 
 /** What a prompt needs of its runtime. */
 export type Capability = 'none' | 'disk' | 'web';
@@ -32,7 +32,7 @@ export interface RuntimeCapabilityRow {
   readonly measuredWith: MeasuredWith;
 }
 
-export const RUNTIMES: readonly QuestionRuntime[] = ['claude', 'codex', 'antigravity', 'local', 'api'];
+export const RUNTIMES: readonly QuestionRuntime[] = ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe'];
 
 export const CAPABILITIES: readonly Capability[] = ['none', 'disk', 'web'];
 
@@ -303,6 +303,53 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
       resultRef: "research/RESULTS_question_consultant_capabilities.md §6 — xAI direct web search (the agent-tools API) not measured: the bench has no sanctioned path to a vendor key and the product's api path sends no tools",
       cells: [],
       note: 'not measured; vendor-specific (a tails-plan item)',
+    },
+  },
+  {
+    runtime: 'vibe',
+    capability: 'none',
+    standing: 'confined',
+    measuredWith: {
+      cli: 'vibe',
+      version: '2.26.1',
+      date: '2026-10-12',
+      resultRef: 'research/RESULTS_vibe_confinement.md §1/§16 M-V11 — an EMPTY coai-owned working folder, `read_file` of a file outside it by absolute path tool_denied 6 of 6; §4 M-V1 — `--agent plan --enabled-tools read_file` wrote 0 of 9; §23 M-V15 — every write tool_denied under forced experiment variants, fresh and resumed, 3 of 3',
+      cells: [
+        'M-V11',
+        'M-V1',
+        'M-V15',
+      ],
+      note: 'mechanism: `--agent plan --enabled-tools read_file` (read_file is the only tool enabled - no shell, no web tool) in an EMPTY scratch folder, and Vibe bounds read_file to its working folder',
+    },
+  },
+  {
+    runtime: 'vibe',
+    capability: 'disk',
+    standing: 'confined',
+    measuredWith: {
+      cli: 'vibe',
+      version: '2.26.1',
+      date: '2026-10-12',
+      resultRef: "research/RESULTS_vibe_confinement.md §10 M-V6 — a file inside the working folder read 3 of 3, a sibling folder's file by absolute path tool_denied 3 of 3; §19 M-V14 — a junction out of a trusted copy tool_denied 3 of 3; §4 M-V1 — 0 of 9 writes",
+      cells: [
+        'M-V6',
+        'M-V14',
+        'M-V1',
+      ],
+      note: 'mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and Vibe reads its working folder only - so it reads the copy of the roots and nothing else, as far as M-V6 measured (a file symlink out of the copy is not measured; the snapshot refuses every link it meets); `--agent plan --enabled-tools read_file` denies every write',
+    },
+  },
+  {
+    runtime: 'vibe',
+    capability: 'web',
+    standing: 'unmeasured',
+    measuredWith: {
+      cli: 'vibe',
+      version: '2.26.1',
+      date: '2026-10-12',
+      resultRef: 'research/RESULTS_vibe_confinement.md §20 — no cell of the Vibe probe exercises a web tool, and the shipped flags enable read_file alone',
+      cells: [],
+      note: 'not measured: no Vibe cell fetches or searches the web',
     },
   },
 ];

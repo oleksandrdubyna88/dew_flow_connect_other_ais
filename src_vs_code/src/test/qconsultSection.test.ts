@@ -83,7 +83,7 @@ const VECTORS = (JSON.parse(fs.readFileSync(repo('shared', 'capability-matrix-ve
 }).vectors;
 
 /** The vendor a row of each runtime is, from the catalogue the row's picker offers. */
-const VENDOR_OF: Readonly<Record<string, string>> = { claude: 'claude', codex: 'codex', antigravity: 'antigravity', local: 'local', api: 'api' };
+const VENDOR_OF: Readonly<Record<string, string>> = { claude: 'claude', codex: 'codex', antigravity: 'antigravity', local: 'local', api: 'api', vibe: 'vibe' };
 
 /** The shipped prompt of each capability, read from the seed the server embeds. */
 const PROMPT_OF: Readonly<Record<string, string>> = Object.fromEntries(

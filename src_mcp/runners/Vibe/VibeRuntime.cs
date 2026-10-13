@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -128,11 +129,17 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
     /// <c>--trust</c>, never <c>--add-dir</c>, never the prompt.
     /// </summary>
     internal static IReadOnlyList<string> Arguments(string workdir, string exportFolder, TimeSpan timeout) =>
+        Arguments(workdir, exportFolder, timeout, ConfinementPlanner.VibeReadOnly);
+
+    /// <summary>
+    /// The same argv with the read-only pair a question row's PLAN gave (<see cref="ConfinementPlanner"/> — the one place a
+    /// row's sandbox is decided); every other launch passes <see cref="ConfinementPlanner.VibeReadOnly"/>, the same words.
+    /// </summary>
+    internal static IReadOnlyList<string> Arguments(string workdir, string exportFolder, TimeSpan timeout, IReadOnlyList<string> readOnly) =>
     [
         "-p",
         "--output", "json",
-        "--agent", "plan",
-        "--enabled-tools", "read_file",
+        .. readOnly,
         "--workdir", workdir,
         "--time-limit", TimeLimit(timeout).ToString(System.Globalization.CultureInfo.InvariantCulture),
         "--output-dir", exportFolder,
