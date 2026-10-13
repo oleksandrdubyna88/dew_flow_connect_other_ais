@@ -70,7 +70,8 @@ public sealed record VibeExport(bool Exists, string Outcome, string Error, strin
     private static string Message(JsonElement root) =>
         root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object ? Text(error, "message") : string.Empty;
 
-    private static string Text(JsonElement element, string name) =>
+    /// <summary>A string member of an object, or empty — also how <see cref="VibeStdout"/> reads a message part's text.</summary>
+    internal static string Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
 
     private static long Number(JsonElement element, string name) =>
@@ -118,7 +119,5 @@ public static class VibeStdout
     };
 
     private static string PartText(JsonElement part) =>
-        part.ValueKind == JsonValueKind.Object && part.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String
-            ? text.GetString() ?? string.Empty
-            : string.Empty;
+        part.ValueKind == JsonValueKind.Object ? VibeExport.Text(part, "text") : string.Empty;
 }

@@ -854,9 +854,20 @@ public sealed class ReviewerExecutor(
             : await LaunchTakenAsync(invocation, ct);
     }
 
+    /// <summary>The launch, once its turn is taken: started, then judged — killed, rate limited, failed, or read.</summary>
     private async Task<ReviewerLaunch> LaunchTakenAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
-        ProcessResult result;
+        var (result, never) = await StartAsync(invocation, ct);
+
+        return never ?? await KilledAsync(invocation, result) ?? Classified(invocation, result);
+    }
+
+    /// <summary>What a launch that never started is given in place of a result — never read.</summary>
+    private static readonly ProcessResult Unstarted = new(-1, string.Empty, string.Empty, TimedOut: false);
+
+    /// <summary>The process run to its end, redacted — or the launch that could not start it.</summary>
+    private async Task<(ProcessResult Result, ReviewerLaunch? Never)> StartAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
         try
         {
             // Labelled HERE rather than in each vendor adapter: every reviewer launch passes
@@ -868,7 +879,7 @@ public sealed class ReviewerExecutor(
                 TrackAs = $"{invocation.Provider}/{invocation.Role}",
             };
             // Redacted before anything below reads it: every tail, transcript and reason is cut from these two streams.
-            result = Redacted(await launcher.RunAsync(request, ct), invocation.Redact);
+            return (Redacted(await launcher.RunAsync(request, ct), invocation.Redact), null);
         }
         catch (OperationCanceledException)
         {
@@ -883,13 +894,17 @@ public sealed class ReviewerExecutor(
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
-            return new ReviewerLaunch(
+            return (Unstarted, new ReviewerLaunch(
                 new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"),
                 null,
                 Usage.None,
-                string.Empty);
+                string.Empty));
         }
+    }
 
+    /// <summary>A launch whose tree was killed — by the caller or on its own deadline — or null when it ran to its end.</summary>
+    private static async Task<ReviewerLaunch?> KilledAsync(ReviewerInvocation invocation, ProcessResult result)
+    {
         // `Cancelled` BEFORE `TimedOut` (story 3.2 of todo/PLAN_every_round_is_counted.md): a kill by the caller's
         // token sets both flags, a kill on the launch's own budget sets only the second, and reading the second alone
         // filed every withdrawal as the vendor's timeout. The courtesy DELETE is kept on this branch — it is what stops
@@ -911,6 +926,12 @@ public sealed class ReviewerExecutor(
             return new ReviewerLaunch(new ReviewerOutcome.TimedOut(), null, Usage.None, string.Empty, result);
         }
 
+        return null;
+    }
+
+    /// <summary>A launch that ran to its end, judged: rate limited, failed (or disowned), or answered.</summary>
+    private static ReviewerLaunch Classified(ReviewerInvocation invocation, ProcessResult result)
+    {
         if (RateLimit.Hit(result))
         {
             return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty, result);
@@ -922,7 +943,7 @@ public sealed class ReviewerExecutor(
         // was billed and then refused its own answer (the api shim on a reasoning-only completion or
         // a cut at the ceiling, 2026-09-26) reports its usage on stdout exactly like an answered one,
         // and answering `Usage.None` for every non-zero exit is what left that money at stdout.
-        var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
+        var usage = UsageOf(invocation, result);
 
         var reason = Failed(invocation, result);
         if (result.ExitCode != 0 || reason.Length > 0)
@@ -937,8 +958,15 @@ public sealed class ReviewerExecutor(
 
         var (answer, evidence) = Read(invocation, result);
 
-        return new ReviewerLaunch(null, answer, usage, evidence, result, invocation.Adapter?.NotApplied(invocation, result) ?? string.Empty);
+        return new ReviewerLaunch(null, answer, usage, evidence, result, NotAppliedOf(invocation, result));
     }
+
+    /// <summary>What the run consumed, as its own adapter reads it; the schema-less scan for a launch with none.</summary>
+    private static Usage UsageOf(ReviewerInvocation invocation, ProcessResult result) =>
+        invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
+
+    private static string NotAppliedOf(ReviewerInvocation invocation, ProcessResult result) =>
+        invocation.Adapter?.NotApplied(invocation, result) ?? string.Empty;
 
     /// <summary>
     /// Why this launch is not an answer, or empty: a non-zero exit, with whatever the adapter can say about it — or an exit
