@@ -1,0 +1,83 @@
+using System.Globalization;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// One arm of the security-lane effort measurement (epic 2 of todo/PLAN_local_effort_reaches_every_local_launch.md): the
+/// <c>reasoning_effort</c> and ceiling every local security reviewer of the arm is launched with, how many repeats, and
+/// which fixture — the planted regression, or its safe twin. Read from the environment, refused out of range.
+/// </summary>
+/// <remarks>
+/// The defaults are today's product (<c>none</c>, 8 192) on the unsafe fixture with three repeats, so a run that sets
+/// nothing reproduces the recorded calibration (research/RESULTS_security_lane_local_llm_windows.md).
+/// </remarks>
+internal sealed record SecurityLaneEffortArm(string Effort, int MaxTokens, int Repeats, bool Safe)
+{
+    /// <summary>The levels the local engine's OpenAI route accepts as <c>reasoning_effort</c>.</summary>
+    public static readonly IReadOnlyList<string> Efforts = ["none", "low", "medium", "high"];
+
+    private const int MostTokens = 131072;
+    private const int MostRepeats = 10;
+
+    /// <summary>The arm's directory-safe name: effort, ceiling, fixture.</summary>
+    public string Name => $"{Effort}-{MaxTokens.ToString(CultureInfo.InvariantCulture)}-{(Safe ? "safe" : "unsafe")}";
+
+    /// <exception cref="ArgumentException">An input outside its range, naming the variable and what is legal.</exception>
+    public static SecurityLaneEffortArm From(Func<string, string?> env) => new(
+        OneOf(env, "COAI_SECURITY_CALIBRATION_EFFORT", "none", Efforts),
+        Count(env, "COAI_SECURITY_CALIBRATION_MAX_TOKENS", 8192, MostTokens),
+        Count(env, "COAI_SECURITY_CALIBRATION_REPEATS", 3, MostRepeats),
+        OneOf(env, "COAI_SECURITY_CALIBRATION_FIXTURE", "unsafe", ["safe", "unsafe"]) == "safe");
+
+    /// <summary>
+    /// Each recorded <c>--ask-local</c> argv whose effort or ceiling is not this arm's, as a sentence — or none. No argv at
+    /// all is a mismatch too: an arm with no cell measured nothing.
+    /// </summary>
+    public IReadOnlyList<string> Mismatches(IReadOnlyList<IReadOnlyList<string>> argvs) =>
+        argvs.Count == 0
+            ? ["no --ask-local launch was recorded"]
+            : [.. argvs.SelectMany((argv, at) => CellMismatches(argv, at + 1))];
+
+    private IEnumerable<string> CellMismatches(IReadOnlyList<string> argv, int cell)
+    {
+        var effort = ValueAfter(argv, "--reasoning-effort");
+        if (effort != Effort)
+        {
+            yield return effort is null
+                ? $"cell {cell} sent no --reasoning-effort, the arm is {Effort}"
+                : $"cell {cell} sent --reasoning-effort {effort}, the arm is {Effort}";
+        }
+
+        var ceiling = ValueAfter(argv, "--max-tokens");
+        if (ceiling != MaxTokens.ToString(CultureInfo.InvariantCulture))
+        {
+            yield return $"cell {cell} sent --max-tokens {ceiling ?? "nothing"}, the arm is {MaxTokens}";
+        }
+    }
+
+    private static string? ValueAfter(IReadOnlyList<string> argv, string flag)
+    {
+        var at = argv.ToList().IndexOf(flag);
+
+        return at >= 0 && at + 1 < argv.Count ? argv[at + 1] : null;
+    }
+
+    private static string OneOf(Func<string, string?> env, string name, string fallback, IReadOnlyList<string> legal)
+    {
+        var value = env(name)?.Trim().ToLowerInvariant() is { Length: > 0 } set ? set : fallback;
+
+        return legal.Contains(value)
+            ? value
+            : throw new ArgumentException($"{name}={value} is not one of {string.Join(", ", legal)}");
+    }
+
+    private static int Count(Func<string, string?> env, string name, int fallback, int most)
+    {
+        var raw = env(name)?.Trim() ?? string.Empty;
+        var value = raw.Length == 0 ? fallback : int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0;
+
+        return value is >= 1 && value <= most
+            ? value
+            : throw new ArgumentException($"{name}={raw} is not a whole number from 1 to {most}");
+    }
+}
