@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.1...mcp-v0.52.2) (2026-10-13)
+
+
+### Bug Fixes
+
+* the local consultant test owns its answers directory ([b984f98](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b984f986d8b60296e0ae22b451d4cccadd7f4696))
+
 ## [0.52.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.0...mcp-v0.52.1) (2026-10-13)
 
 
