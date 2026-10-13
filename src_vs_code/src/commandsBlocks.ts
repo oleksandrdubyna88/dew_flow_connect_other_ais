@@ -29,8 +29,8 @@ export function commandsSkewNote(serverVersion: string): string {
   return compareVersions(COMMAND_MODELS_SINCE, serverVersion) > 0
     ? `The installed coai-mcp is ${serverVersion}: it ignores these texts and commands and gives the shipped orders. `
       + `Update it to ${COMMAND_MODELS_SINCE} or later.`
-    : `The installed coai-mcp is ${serverVersion}: it leaves {coder} unfilled in the model order and ships the two-model `
-      + `text. Update it to ${CODER_SLOT_SINCE} or later.`;
+    : `The installed coai-mcp is ${serverVersion}: it gives the shipped two-model order, and an edited model order that `
+      + `uses {coder} has it left unfilled. Update it to ${CODER_SLOT_SINCE} or later.`;
 }
 
 /**

@@ -11,7 +11,8 @@ import { createRequire } from 'node:module';
 import { flag, newServer, releasedServer, run } from './releasedHalves.mjs';
 
 const require = createRequire(import.meta.url);
-const { commandModelsEnv, commandModelsFrom } = require('../out/commandModels.js');
+const { CODER_SLOT_SINCE, commandModelsEnv, commandModelsFrom } = require('../out/commandModels.js');
+const { compareVersions } = require('../out/coaiInstall.js');
 const work = mkdtempSync(join(tmpdir(), 'coai-command-models-compat-'));
 const old = releasedServer(work, flag('tag', ''));
 const current = flag('new', newServer());
@@ -25,6 +26,12 @@ const versionReply = await run(old, ['--version'], work);
 assert.equal(versionReply.code, 0, versionReply.err);
 const version = versionReply.out.match(/\d+\.\d+\.\d+/)?.[0];
 assert.ok(version, 'released binary must identify its version');
+// The "old" half must be one that does NOT read coder, or the check below proves nothing: without --tag the
+// newest release is picked, which from CODER_SLOT_SINCE on reads it. Exit 2 is "no result", never a pass.
+if (compareVersions(CODER_SLOT_SINCE, version) <= 0) {
+  console.error(`The released server ${version} already reads coder (${CODER_SLOT_SINCE}+); pass --tag=mcp-v0.51.0 or older. No result.`);
+  process.exit(2);
+}
 
 const wire = commandModelsEnv(commandModelsFrom({
   claude: { coder: 'x-fast' },

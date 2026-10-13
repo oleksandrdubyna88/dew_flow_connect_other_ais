@@ -8143,7 +8143,8 @@ whose only explanation is its label is a switch people leave alone.
 The label is **Split with the strongest model** now; the stored key keeps its historical name,
 `coai.splitWithFable`, because renaming it is a migration of every settings file for a word nobody
 sees. Under the three switches sits one row per caller kind (Claude Code, Codex, Gemini, another
-client) with two pickers — *Strongest* and *Implementation* — stored in **`coai.commandModels`** and
+client) with two pickers — *Strongest* and *Implementation* (three since 2026-10-13: see *A third picker per caller*
+below) — stored in **`coai.commandModels`** and
 sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipped one.
 
 - **`commandModels.ts`** is the one reader: `commandModelsFrom` (key by key, junk reads as nothing),
@@ -8188,7 +8189,7 @@ nothing, as before.
   older than 0.33.0 with a changed picker, and otherwise says, for ANY known server below 0.52.0 — a
   pristine panel included, because the shipped order itself changed — that it still gives the two-model
   order and ignores *Code and search*. `commandsSkewNote` (the commands page) says a 0.33–0.51 server
-  leaves `{coder}` unfilled in an edited model order.
+  gives the shipped two-model order and leaves `{coder}` unfilled in an edited one.
 - The commands page lists `{coder}` among the model order's placeholders; the gate article's
   paragraph, the `splitWithFable` hint and both `package.json` descriptions describe the three tiers,
   in all five languages where the help is translated.
