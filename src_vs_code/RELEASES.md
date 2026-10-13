@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.73.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.72.1...extension-v0.73.0) (2026-10-13)
+
+
+### Features
+
+* Mistral Vibe as a coai reviewer — the owned home, the round's snapshot, one-press install per OS; Kimi measured and re-planned ([#803](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/803)) ([0312d06](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0312d0637991ff65a42096c97f9c490fe11b1c7d))
+
 ## [0.72.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.72.0...extension-v0.72.1) (2026-10-13)
 
 
