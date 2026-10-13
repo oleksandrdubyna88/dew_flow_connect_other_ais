@@ -1543,7 +1543,7 @@ moved the engine into `src_mcp/src/Server/Rounds/`, as proved moves with no beha
 |---|---|
 | `RoundEngine` | `RunStageAsync` — claim, human decision, deadline, Team-server role probe, sha, refusal-before-building (where the consultation cadence is prepared), the cadence plan and epic onto the session, lease, work, schedule, dedup, gate, verdict, the cadence note on the record and its facts in the orders, save, project, notify — plus the round deadline (`RoundDeadlineFor`, `ConfiguredReviewers`, `WhatEndedIt`), `AnswerFor`, `WhereTheDocumentWent`, `NoticeIfAPersonMustDecide` (the `call_human` notice, BUILT before the save so its id is recorded as the hold's question, WRITTEN after), `SpentPrompts`, `WhatTheCallerWasDoing` and its own `Error`, which reaches the one refusal boundary exactly as the service's does |
 | `RoundCommands` | the orders a round carries: `MayProceed`, `CallerFor`, the words a person wrote for the orders (`CommandTextsNow`), their own commands (`CustomOrdersFor`), `CommandStageOf`. A unit of its own so the engine stays under the 800-line ceiling. `PanelService` constructs it and hands it to the engine, because the consultation cadence's check before a code round (`CadenceBeforeTheCode`) reads the same order texts |
-| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor`; since 2026-09-26 it also gives each reviewer ONE conversation key (`ConversationKey.Of(provider, role, base prompt)` on `ReviewerSettings.Conversation`) that every launch of that reviewer — its turns and their repairs — carries, so a vendor that routes its prompt cache by a conversation id (xAI's `x-grok-conv-id`) serves turn 2 from turn 1's cache; and the row's `TokenPrice` rides on the invocation, for the parent to price each turn ([module_runners.md](module_runners.md), *An api turn is priced in the parent*) |
+| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor`; since 2026-09-26 it also gives each reviewer ONE conversation key (`ConversationKey.Of(provider, role, base prompt)` on `ReviewerSettings.Conversation`) that every launch of that reviewer — its turns and their repairs — carries, so a vendor that routes its prompt cache by a conversation id (xAI's `x-grok-conv-id`) serves turn 2 from turn 1's cache; and the row's `TokenPrice` rides on the invocation, for the parent to price each turn ([module_runners.md](module_runners.md), *An api turn is priced in the parent*); since 2026-10-13 `ScratchAsync` (the round's own scratch and, for a runtime that asks, its one sanitised snapshot) and `PlaceFor` (each runtime's launch directory: the snapshot, or the row left out) — the section *A runtime that must not start in the checkout* |
 | `ReviewerPrompt` | `ComposePrompt`, `WithoutTheStaleClaim` (the one `[GeneratedRegex]`, so `PanelService` is no longer `partial`), `WhatYouHave` |
 | `StageRun`, `RoundWork`, `ExcludedRole` | the records a stage hands the engine and the roster hands back |
 
@@ -6958,3 +6958,64 @@ flowchart TD
     sroot -->|Present / Unknown / default| full[logger, notices, run marker, StartingHost, sweeps, survey]
     classify -->|a reader / one-shot| reader[as before — never makes the folder]
 ```
+
+## A runtime that must not start in the checkout — the round's scratch and its snapshot (2026-10-13, S2 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+The server's half of the Vibe reviewer row ([module_runners.md](module_runners.md), *The Vibe reviewer*). Three seams:
+
+- **`RosterBuilder.ScratchAsync`** (called by every stage that builds a roster — plan, code, document, feature — right
+  before `BuildWork`, beside `CodexTiersAsync`, because `BuildWork` is synchronous): reserves the round's own scratch
+  path (`RoundScratch`, a `coai-answers-*` name in temp, made only when something is put in it) and, when the stage
+  mounts a checkout (`readsCheckout` and a workspace other than `none`) and a runnable row serving the stage runs on a
+  runtime that asks (`NeedsASanitisedSnapshot`), makes ONE sanitised snapshot of the round's pinned worktree inside it
+  (`SnapshotSource.Pinned`). A refusal is kept on the scratch (`RoundTree.Refused`) and logged.
+- **`BuildWork(…, scratch:)`** — optional; absent is `RoundScratch.None`. (Taken to cyclomatic complexity 4 the same
+  day: the round's fixed facts are a `RosterFrame`, what the deal collects a `RosterCollector`, both in
+  `Rounds/RosterAssembly.cs`; one dealt seat is `AddReviewer` → `PlaceOf` → `ReviewerFor`.) `PlaceFor(runtime, launchDir, hasCheckout,
+  scratch)` decides each runtime's launch directory: unchanged for every runtime that does not ask (its argv byte for
+  byte, `AVibeRowReviewsInTheRoundsSnapshotTests.EveryOtherRuntime_KeepsTheDirectoryItAlwaysHad`); the snapshot's root
+  for one that asks when there is a checkout, with `ReviewerInvocation.Citations` set to the snapshot so a finding's
+  absolute path inside it maps back; and — when the round has no snapshot to give, none made or refused — the row is
+  EXCLUDED for that role with the reason, never started in the checkout. Every row's settings carry
+  `OwnedScratch = scratch.Directory` (only `VibeRuntime` reads it: its homes), the security lane's included.
+- **`RoundEngine`** disposes `RoundWork.Scratch` with the round, however the round ends (`using`, right after
+  `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
+  it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
+  beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+
+```mermaid
+flowchart TD
+  stage["a stage's MakeWork"] --> tiers["CodexTiersAsync"]
+  stage --> scratch["ScratchAsync(launcher, stage, worktree, readsCheckout)"]
+  scratch -->|no checkout, or no runnable row asks| none["RoundScratch: a path, no folder"]
+  scratch -->|a row asks and a checkout is mounted| snap["ReviewSnapshots.MakeAsync(Pinned(worktree), scratch path)"]
+  snap -->|Made| made["RoundTree.Made(snapshot)"]
+  snap -->|Refused| refused["RoundTree.Refused(reason) — logged"]
+  none --> build["BuildWork(…, scratch)"]
+  made --> build
+  refused --> build
+  build --> place{"PlaceFor(runtime)"}
+  place -->|does not ask, or no checkout| dir["the stage's directory, as before"]
+  place -->|asks, snapshot made| root["the snapshot's root · Citations = the snapshot"]
+  place -->|asks, none to give| excluded["ExcludedRole(provider, role, reason)"]
+  build --> engine["RoundEngine: using RoundWork.Scratch — disposed when the round ends"]
+```
+
+## A launch the control WARNED about (2026-10-13, the owner's decision for Vibe: warn, not refuse)
+
+A launch control may allow a launch and still have something to say — today a Vibe version with no measured home manifest
+([module_runners.md](module_runners.md), *The Vibe reviewer*). One generic field carries it, `ReviewerOutcome.Warning`, and
+the server puts it in four places, each absent or empty for every reviewer nobody warned about, so nothing else reads
+differently:
+
+- **The round's reviewer line** — what the calling AI reads: `RoundWarnings.Clause(results)` appends
+  `; warned — vibe/PlanCritique, vibe/Architecture: <the warning>`, each distinct warning once after the reviewers it is
+  about (`RoundEngine`, beside the document-went and unreviewed clauses).
+- **The reviewer's state** — `ReviewerState.Warning`, written `reviewerStates[].warning` in the session file and in
+  `status` (`LiveRound.WarnedOf`), whatever the reviewer's status; null and not written otherwise.
+- **The round's log** — `RoundAudit.Warned`: one WARNING line per warned reviewer.
+- **The row's card, before any round** — `providers`: `ProviderStatus.warning` from `VendorHealth.Warning`, which the probe
+  asks the adapter for (`IReviewerRuntime.VersionWarning` of the version it printed); absent for every other row.
+
+The extension reads neither `reviewerStates[].warning` nor `providers[].warning` yet: the rounds view shows a note only
+for a failed, queued or stood-down reviewer, and the card shows `note` only when a row is unavailable.

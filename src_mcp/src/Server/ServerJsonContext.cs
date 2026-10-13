@@ -32,6 +32,14 @@ public sealed record ProviderStatus(
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Fast { get; init; }
+
+    /// <summary>
+    /// What the person should know about the INSTALLED CLI this row WILL run — today a Vibe version with no measured home
+    /// manifest (the owner's decision of 2026-10-13: warn, not refuse; <see cref="Runners.Reviewers.VendorHealth.Warning"/>).
+    /// Absent for every other row, so its JSON reads as it did; the card reads it beside the note.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Warning { get; init; }
 }
 
 /// <summary>An api row through its module's eyes (the operator's per-model settings, 2026-09-27).</summary>

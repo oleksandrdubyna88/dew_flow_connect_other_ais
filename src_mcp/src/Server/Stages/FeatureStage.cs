@@ -248,7 +248,9 @@ internal sealed class FeatureStage(
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
             stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
-            source: source, securityFiles: securityDiff, securitySources: securitySources, codexTiers: tiers);
+            source: source, securityFiles: securityDiff, securitySources: securitySources, codexTiers: tiers,
+            // The round's own scratch: no checkout here, so no snapshot — the folder its Vibe homes live in (D17).
+            scratch: await roster.ScratchAsync(launcher, Stage.FeatureReview, workingDir, readsCheckout: false, ct));
 
         // A retry asks ONLY the reviewers that failed in round 1 (D23); every other round is the work as built.
         // The RESOLVED base, as the code stage records it: what the outline was actually compared against.

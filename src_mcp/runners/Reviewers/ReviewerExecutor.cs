@@ -63,6 +63,17 @@ public abstract record ReviewerOutcome
     /// </remarks>
     public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
 
+    /// <summary>
+    /// What the launch control said the person should know about a launch it ALLOWED — empty for nearly every reviewer.
+    /// Runtime-neutral: a CLI version nobody measured is the first case (Vibe, the owner's decision of 2026-10-13: "warn,
+    /// not refuse"), and any adapter's launch control can say one (<see cref="LaunchTurn.Warning"/>).
+    /// </summary>
+    /// <remarks>
+    /// On the BASE, because it is about the launch and not about how it ended: a warned launch that then failed still ran
+    /// on a version nobody measured, and the person reading the failure is owed that too.
+    /// </remarks>
+    public string Warning { get; init; } = string.Empty;
+
     /// <summary>What the launch this outcome describes reported: an answer's, an unparseable one's; nothing for a run that never finished.</summary>
     protected virtual Usage OwnUsage => Usage.None;
 
@@ -536,6 +547,10 @@ public sealed class ReviewerExecutor(
         _ => null,
     };
 
+    /// <remarks>
+    /// The outcome carries the FIRST launch's warning (<see cref="ReviewerOutcome.Warning"/>), however the reviewer ended:
+    /// the launch control says it once per launch, and a repair or a follow-up runs on the same CLI.
+    /// </remarks>
     public async Task<ReviewerOutcome> RunAsync(
         ReviewerInvocation invocation,
         ReviewerInvocation? repair = null,
@@ -545,8 +560,17 @@ public sealed class ReviewerExecutor(
         // The clock starts here so the second one gets what the first left, exactly as the
         // rate-limit ladder already does — same helper, same arithmetic.
         var spent = System.Diagnostics.Stopwatch.StartNew();
+        var first = await RunOnceAsync(invocation, ct);
+
+        return (await ConcludedAsync(invocation, repair, first, spent, ct)) with { Warning = first.Warning };
+    }
+
+    /// <summary>The reviewer's outcome once its first launch has run: that launch's own, or after its one repair.</summary>
+    private async Task<ReviewerOutcome> ConcludedAsync(
+        ReviewerInvocation invocation, ReviewerInvocation? repair, OneLaunch first, System.Diagnostics.Stopwatch spent, CancellationToken ct)
+    {
         var budget = invocation.Request.Timeout;
-        var (outcome, review, usage, answer, evidence, notApplied) = await RunOnceAsync(invocation, ct);
+        var (outcome, review, usage, answer, evidence, notApplied, _) = first;
         if (outcome is not null)
         {
             return outcome;
@@ -619,7 +643,7 @@ public sealed class ReviewerExecutor(
     private ReviewerOutcome AfterTheRepair(
         ReviewerInvocation repair,
         (Usage Usage, string? Answer, string Evidence) first,
-        (ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied) second)
+        OneLaunch second)
     {
         if (second.Outcome is { } failed)
         {
@@ -774,14 +798,31 @@ public sealed class ReviewerExecutor(
     /// <summary>How long a courtesy cleanup may take before the round stops waiting for it.</summary>
     private static readonly TimeSpan AbandonBudget = TimeSpan.FromSeconds(10);
 
-    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    /// <summary>What one launch came to, read: a terminal outcome, or the parsed review with what the run said beside it.</summary>
+    private sealed record OneLaunch(
+        ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied, string Warning);
+
+    private async Task<OneLaunch> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         var launch = await LaunchAsync(invocation, ct);
 
         return launch.Terminal is not null
-            ? (launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty)
-            : (null, ParseAnswer(launch.Answer, invocation.Provider), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied);
+            ? new(launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty, launch.Warning)
+            : new(null, Cited(ParseAnswer(launch.Answer, invocation.Provider), invocation.Citations), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied, launch.Warning);
     }
+
+    /// <summary>
+    /// A review whose cited files are the repository's: an absolute path the launch's <see cref="ReviewerInvocation.Citations"/>
+    /// maps back (a file inside a sanitised snapshot that its manifest holds, D6) becomes that repository-relative path; any
+    /// other path stays as the reviewer wrote it.
+    /// </summary>
+    internal static NormalisedReview? Cited(NormalisedReview? review, ICitedPaths citations) =>
+        review is null || ReferenceEquals(citations, CitedAsWritten.Instance)
+            ? review
+            : review with { Findings = [.. review.Findings.Select(finding => finding with { File = MappedBack(finding.File, citations) })] };
+
+    private static string MappedBack(string file, ICitedPaths citations) =>
+        Path.IsPathRooted(file) && citations.MapBack(file) is { Length: > 0 } relative ? relative : file;
 
     /// <summary>
     /// One launch, as far as "what the process said" — and no further.
@@ -827,9 +868,34 @@ public sealed class ReviewerExecutor(
     public Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct) =>
         LaunchBuiltAsync(invocation.Adapter?.ForLaunch(invocation) ?? invocation, ct);
 
+    /// <summary>
+    /// The adapter's launch control first (<see cref="IReviewerRuntime.TakeTurnAsync"/>): a refusal is this launch's
+    /// <c>NotStarted</c> with the adapter's sentence, and a turn it holds is given back only after the launch has been
+    /// read — its answer, usage and reason — so a per-attempt file the adapter reads (Vibe's export, D7) is still there.
+    /// </summary>
     private async Task<ReviewerLaunch> LaunchBuiltAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
-        ProcessResult result;
+        using var turn = invocation.Adapter is { } adapter ? await adapter.TakeTurnAsync(invocation, launcher, ct) : LaunchTurn.Free;
+
+        return turn.Refusal.Length > 0
+            ? new ReviewerLaunch(new ReviewerOutcome.NotStarted(turn.Refusal), null, Usage.None, string.Empty)
+            : (await LaunchTakenAsync(invocation, ct)) with { Warning = turn.Warning };
+    }
+
+    /// <summary>The launch, once its turn is taken: started, then judged — killed, rate limited, failed, or read.</summary>
+    private async Task<ReviewerLaunch> LaunchTakenAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
+        var (result, never) = await StartAsync(invocation, ct);
+
+        return never ?? await KilledAsync(invocation, result) ?? Classified(invocation, result);
+    }
+
+    /// <summary>What a launch that never started is given in place of a result — never read.</summary>
+    private static readonly ProcessResult Unstarted = new(-1, string.Empty, string.Empty, TimedOut: false);
+
+    /// <summary>The process run to its end, redacted — or the launch that could not start it.</summary>
+    private async Task<(ProcessResult Result, ReviewerLaunch? Never)> StartAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
         try
         {
             // Labelled HERE rather than in each vendor adapter: every reviewer launch passes
@@ -841,7 +907,7 @@ public sealed class ReviewerExecutor(
                 TrackAs = $"{invocation.Provider}/{invocation.Role}",
             };
             // Redacted before anything below reads it: every tail, transcript and reason is cut from these two streams.
-            result = Redacted(await launcher.RunAsync(request, ct), invocation.Redact);
+            return (Redacted(await launcher.RunAsync(request, ct), invocation.Redact), null);
         }
         catch (OperationCanceledException)
         {
@@ -856,13 +922,17 @@ public sealed class ReviewerExecutor(
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
-            return new ReviewerLaunch(
+            return (Unstarted, new ReviewerLaunch(
                 new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"),
                 null,
                 Usage.None,
-                string.Empty);
+                string.Empty));
         }
+    }
 
+    /// <summary>A launch whose tree was killed — by the caller or on its own deadline — or null when it ran to its end.</summary>
+    private static async Task<ReviewerLaunch?> KilledAsync(ReviewerInvocation invocation, ProcessResult result)
+    {
         // `Cancelled` BEFORE `TimedOut` (story 3.2 of todo/PLAN_every_round_is_counted.md): a kill by the caller's
         // token sets both flags, a kill on the launch's own budget sets only the second, and reading the second alone
         // filed every withdrawal as the vendor's timeout. The courtesy DELETE is kept on this branch — it is what stops
@@ -884,6 +954,12 @@ public sealed class ReviewerExecutor(
             return new ReviewerLaunch(new ReviewerOutcome.TimedOut(), null, Usage.None, string.Empty, result);
         }
 
+        return null;
+    }
+
+    /// <summary>A launch that ran to its end, judged: rate limited, failed (or disowned), or answered.</summary>
+    private static ReviewerLaunch Classified(ReviewerInvocation invocation, ProcessResult result)
+    {
         if (RateLimit.Hit(result))
         {
             return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty, result);
@@ -895,15 +971,11 @@ public sealed class ReviewerExecutor(
         // was billed and then refused its own answer (the api shim on a reasoning-only completion or
         // a cut at the ceiling, 2026-09-26) reports its usage on stdout exactly like an answered one,
         // and answering `Usage.None` for every non-zero exit is what left that money at stdout.
-        var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
+        var usage = UsageOf(invocation, result);
 
-        if (result.ExitCode != 0)
+        var reason = Failed(invocation, result);
+        if (result.ExitCode != 0 || reason.Length > 0)
         {
-            // The adapter is asked where ITS reasons live, the same way it is asked where its answer
-            // and its usage live. codex writes its failure into the `--json` event stream on stdout
-            // and leaves stderr empty, so without this the summary can only report the emptiness.
-            var reason = invocation.Adapter?.WhyItFailed(invocation, result) ?? string.Empty;
-
             return new ReviewerLaunch(
                 new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr), reason) { Usage = usage },
                 null,
@@ -914,8 +986,29 @@ public sealed class ReviewerExecutor(
 
         var (answer, evidence) = Read(invocation, result);
 
-        return new ReviewerLaunch(null, answer, usage, evidence, result, invocation.Adapter?.NotApplied(invocation, result) ?? string.Empty);
+        return new ReviewerLaunch(null, answer, usage, evidence, result, NotAppliedOf(invocation, result));
     }
+
+    /// <summary>What the run consumed, as its own adapter reads it; the schema-less scan for a launch with none.</summary>
+    private static Usage UsageOf(ReviewerInvocation invocation, ProcessResult result) =>
+        invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
+
+    private static string NotAppliedOf(ReviewerInvocation invocation, ProcessResult result) =>
+        invocation.Adapter?.NotApplied(invocation, result) ?? string.Empty;
+
+    /// <summary>
+    /// Why this launch is not an answer, or empty: a non-zero exit, with whatever the adapter can say about it — or an exit
+    /// of zero the adapter DISOWNS (<see cref="IReviewerRuntime.Disowned"/>: Vibe ran on another model than it was asked).
+    /// </summary>
+    /// <remarks>
+    /// The adapter is asked where ITS reasons live, the same way it is asked where its answer and its usage live. codex
+    /// writes its failure into the <c>--json</c> event stream on stdout and leaves stderr empty, so without this the summary
+    /// can only report the emptiness. A non-zero exit with nothing to add is still a failure — its stderr tail says it.
+    /// </remarks>
+    private static string Failed(ReviewerInvocation invocation, ProcessResult result) =>
+        invocation.Adapter is not { } adapter ? string.Empty
+        : result.ExitCode != 0 ? adapter.WhyItFailed(invocation, result)
+        : adapter.Disowned(invocation, result);
 
     /// <summary>What the vendor said, and what is left to show when it said nothing.</summary>
     private static (string? Answer, string Evidence) Read(ReviewerInvocation invocation, ProcessResult result)
@@ -985,4 +1078,8 @@ public sealed record ReviewerLaunch(
     Usage Usage,
     string Evidence,
     ProcessResult? Process = null,
-    string NotApplied = "");
+    string NotApplied = "")
+{
+    /// <summary>What the adapter's launch control warned about this launch (<see cref="LaunchTurn.Warning"/>) — or empty.</summary>
+    public string Warning { get; init; } = string.Empty;
+}

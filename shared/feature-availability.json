@@ -20,7 +20,7 @@
     "(measured: research/RESULTS_codex_service_tier_versions_2026-10-07.md; the fix: research/PLAN_codex_tier_floor.md). An",
     "Off row on such a release is sent no tier at all; On still sends `fast`."
   ],
-  "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api"],
+  "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe"],
   "features": {
     "consultant": ["codex", "claude", "antigravity", "local", "api"],
     "chat": ["antigravity", "claude", "codex"]
@@ -74,6 +74,13 @@
       "levels": [],
       "measuredWith": "",
       "note": "The model's probe report (coai-mcp --probe-api, ApiCapabilities.EffortLevels), judged per model."
+    },
+    {
+      "runtime": "vibe",
+      "source": "unmeasured",
+      "levels": [],
+      "measuredWith": "",
+      "note": "Mistral Vibe 2.26.1 has no effort flag, and nothing has been shown setting one per launch (todo/PLAN_vibe_and_kimi_runtimes.md, S2)."
     }
   ],
   "thinking": [
@@ -111,6 +118,11 @@
       "runtime": "api",
       "source": "probe",
       "note": "The model’s probe report says whether its thinking can be switched off (thinkingSwitchable), per model."
+    },
+    {
+      "runtime": "vibe",
+      "source": "unmeasured",
+      "note": "Vibe’s models carry thinking levels in its own config, but no launch flag was shown taking effect (todo/PLAN_vibe_and_kimi_runtimes.md, S2)."
     }
   ],
   "fastMode": [
@@ -163,6 +175,13 @@
       "models": [],
       "measuredWith": "",
       "note": "Not until a dialect’s tier is measured on a real call (xai first); the generic openai dialect serves every unnamed endpoint and gets none."
+    },
+    {
+      "runtime": "vibe",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "Vibe has no service tier: the subscription answers at one speed."
     }
   ]
 }

@@ -426,3 +426,110 @@ environment arm is the measurement: with smart approval on by default, registry 
 `--enabled-tools read_file` leaves no skill tool to call. Not measured: an altered file under the home's
 `logs/session/plugins/` being reused on resume. §22 recorded names and sizes, not hashes; the owned-home validation of D17
 therefore needs a version-labelled hash manifest, which S1 generates — never "whatever is under `plugins/`".
+
+## 24. The owned home's hash manifest — what Vibe writes into an empty home (2026-10-13, the script)
+
+D17's last S1 step. Harness: `node scripts/vibe-home-manifest.mjs --write` (subject: branch `feat/vibe-kimi-runtimes`
+over `2c92e0c4`), `vibe` **2.26.1**, Windows 11, every launch in the BUILT environment coai gives Vibe —
+`ProcessEnvironment.MinimalWindows` plus exactly `VIBE_HOME` (a fresh empty folder under `%TEMP%\vhm-rsqQqY`),
+`VIBE_CLI=python` and `VIBE_ACTIVE_MODEL=mistral-medium-3.5`; nothing else of the parent's environment. One paid turn.
+The run's raw record is that scratch folder's `steps.json`; the manifest was written from it with `--from <scratch>`
+after the first pass refused to write (below), so the turn was not paid twice.
+
+**Predicted before the run:** a bare `vibe --version` writes nothing into the home; the turn writes §22's inventory;
+the plugin files keep their bytes across a later start.
+
+| Step | Exit | What the home held afterwards |
+|---|---|---|
+| home A: `vibe --version` | 0 (`… vibe 2.26.1`) | `vibehistory` (13 bytes, `Hello Vibe!\r\n`) — **the prediction was wrong**: a bare start writes one file |
+| home A: one turn, the shipped flags, `Reply with exactly: OK` on stdin | 0 (`outcome: finished`, export `vibe_version 2.26.1`, `active_model mistral-medium-3.5`, 6 911 / 38 tokens) | 36 files: 12 under `logs/session/plugins/`, 24 caches, logs and the session |
+| home A: `vibe --version` again | 0 | the same 36 files, **every hash unchanged** |
+| home B (fresh): `vibe --version` | 0 | `vibehistory` only — a bare start does NOT unpack the plugins; the turn does |
+
+What the turn wrote besides the plugins, every name already in §22: `.connector_bootstrap_cache.json.lock` (§22 wrote
+"`connector_bootstrap_cache.json` + lock"; the lock's real name has a LEADING DOT — the first pass of the script
+classified it as unknown and refused to write, which is what that refusal is for), `connector_bootstrap_cache.json`,
+`experiment_eval_cache.json`, `trusted_folders.toml` (exactly `trusted = []\nuntrusted = []\n`, 28 bytes),
+`vibehistory`, `whoami_cache.json`, `logs/vibe.log` (empty), `logs/session/active/.registry`, and the session under
+`logs/session/unified/<session id>/` (chunks, generations, journal, `meta.json`, `CURRENT`, `scheduled-loops.json`).
+No `config.toml`, `hooks.toml`, `agents/` or `tools/`.
+
+**The plugin files are content-addressed.** `blobs/<2>/<sha256>` is named by its own SHA-256 (checked: `600cc68f…`
+hashes to `600cc68f…`), `manifests/6b/6bb6380c…` lists every package file with its SHA-256 and carries no time, and
+`packages/6b/6bb6380c…/` holds `plugin.json` and the four built-in skills (`create-plugin`, `skill-creator`, `vibe`,
+`worktree`) whose bytes are those blobs. So the same Vibe version writes the same bytes in any home; the run checked it
+across a second start in the same home only, because the other home never received the plugins without a second paid turn.
+
+**What it gave the product:** `shared/vibe-home-manifest.json` — the 12 plugin paths with their SHA-256 for `2.26.1`,
+the `varying` names above (admitted by name), and `seen` (informational). `VibeHome` validates every owned home against
+it before every launch; a Vibe version with no entry is refused with a sentence naming the script.
+
+**Not measured here:** a second Vibe version (the requalification path is the same script); the plugin bytes in a second
+home after a turn (content addressing is the argument, not a run); WSL (D18 refuses it). **Also seen:** a bare
+`vibe --version` writes `vibehistory` into whatever `VIBE_HOME` it is given — with no `VIBE_HOME` that is the person's
+own `~/.vibe`, which the health probe (`providers`, `VendorProbe`) does today for every runtime by starting `--version`
+in the inherited environment. Changed in the same story: the probe now runs in the built environment on a home of
+coai's own, deleted after it (`IReviewerRuntime.ProbeVersionAsync`, `TheVibeProbeLeavesThePersonsHomeAloneTests`).
+
+## 25. A cached plugin package is not re-digested — code reading, then M-V16 (2026-10-13)
+
+Asked by the risk consultation of epic 2 (gpt-6-astra, consultation 6b4726a6): can a file planted in a cached plugin
+package of an owned home start something under the shipped flags? Read in Vibe **2.26.1**'s installed code
+(`%APPDATA%\uv\tools\mistral-vibe\Lib\site-packages\`); the reading came first, with nothing launched; the cell M-V16 below then confirmed it.
+
+| Step | Where | What it does |
+|---|---|---|
+| check-out | `mistralai_vibe_local_harness/vibe/plugins/_store.py:257-266` | `checkout(digest)`: `if final.is_dir(): return final` — an EXISTING `packages/<ab>/<digest>/` is returned as it is; only a rebuild (folder absent) re-digests against the manifest |
+| every session | `mistralai_vibe_local_harness/vibe/plugins/_session.py:359-368` | `_checkout_all` checks every pinned package out that way, on create AND on restore ("Shared verbatim by both paths") |
+| resolve | `vibe/app_server/_plugins.py:421-423`, `:541-560` | `bind` hands the checkouts to `PluginResolver(plugin_dirs=…)` as the plugin folders outright |
+| connect | `vibe/app_server/_plugins.py:204-213` | `_materialize`: "Before materialization, which is where the declared servers are connected" — `plugin_mcp.bind(resolution.mcp_servers)` |
+| what declares | `vibe/core/plugins/_native.py:1661` (`mcp.json`), `_claude.py:283` / `_codex.py:203` (`.mcp.json`), `_claude.py:59-62`, `_codex.py:45-47`, `_kimi.py:56-58` (manifest `mcpServers`, `hooks`, `lspServers`, `sessionStart`) | the server and hook declarations a package root carries |
+| hooks | `_native.py:1159` (`ai.mistral.vibe/hooks.toml`), `_claude.py:486` (`hooks/hooks.json`), `_codex.py:409` (`hooks.json`) | hook files read from a package root |
+
+**Conclusion (by reading):** the hypothesis holds as far as the code goes — a cached package whose `mcp.json` declares a
+server would have it connected at session start, and §6/§7 measured that a declared server starts before
+`--enabled-tools read_file` filters anything. Vibe 2.26.1's own built-in package (`packages/6b/6bb6380c…/`, §24) carries
+`plugin.json` and four skills, and no declaration or hook file.
+
+**What the product does about it:** the measured branch already refused it (every package file is admitted by its
+SHA-256 for the installed version, and no such file is pinned). The unmeasured branch admitted every file under the
+plugin prefix by place; since this date the shape check refuses a declaration that starts something and every hook file
+unless a measured version pins that exact path with those bytes (`VibePluginStarters`, module_runners.md *The Vibe
+reviewer*).
+
+**M-V16 — the cell, run 2026-10-13 (paid; the owner authorised probe turns on the Mistral subscription).** Harness:
+`node scripts/probe-vibe-confinement.mjs --cells M-V16 --repeats 3 --scratch %TEMP%\vcp16b`. Per run: a fresh short home
+under the scratch, a priming turn (a bare start does not unpack the plugins, §24), then `mcp.json` planted into the cached
+built-in package `logs/session/plugins/packages/6b/6bb6380c…/` — one stdio server, `command: "python"`, args
+`-c "import sys; open(sys.argv[1], 'w').write('x')" <canary path outside the home and the working folder>` — then the
+measured launch. Both launches used the shipped flags (`-p --output json --agent plan --enabled-tools read_file --workdir
+<empty untrusted folder> --time-limit 120 --output-dir <export>`), the prompt `Reply with exactly: OK` on stdin and the
+BUILT environment of D17 (`MinimalWindows` + `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL=mistral-medium-3.5`).
+8 turns in all; the measured launches took 17–19 s.
+
+| Arm | Runs | Exit | Canary (the planted server started) | Answer |
+|---|---|---|---|---|
+| `mcp.json` planted in the cached built-in package | 3 | 0, 0, 0 | **3 of 3** | `OK` ×3, no tool call |
+| control: primed home, nothing planted | 1 | 0 | **0 of 1** | `OK` |
+
+**It confirms the code reading.** The server a planted `mcp.json` declares STARTS on the next launch, under the shipped
+flags, in an untrusted folder, with `--enabled-tools read_file`; the turn still exits 0 and answers normally, so nothing
+in its result shows that it happened. Every session — the priming one and the measured one, planted or not — pins the
+package as `content_digest 6bb6380c…`, the folder's NAME, while the folder no longer hashes to it: Vibe did not
+re-digest the checkout. The derived snapshot stayed `600cc68f…` in every session (the canary exits at once, so it never
+became a connected server with tools), so the session record does not show it either. After the run the planted file was still in the
+package and the home held the same 6 blobs (checked on run 1's home). The fix's premise holds: a package file that declares a server must not be
+admitted by its place.
+
+**A first run tested nothing, and is kept as the record of why** (`%TEMP%\vcp16`, the same cell, 3 + 1 runs and 8 more turns, canary 0 of 3
+and 0 of 1): it planted the canary with Vibe's python as an ABSOLUTE path, and Vibe 2.26.1 rejects that before any start
+— its own resolver, run on the planted folder with no turn, said *"Failed to load MCP server 'probe-canary': stdio
+command must be a bare executable or start with './'"*. With the bare `python` the same resolver returned the server
+`('vibe', 'probe-canary')` with no issue, and the re-run above fired 3 of 3. So a plugin's stdio server is any bare
+command on PATH or a `./` path inside the package — the refusal in `VibePluginStarters` does not depend on the command's
+form (any non-empty `mcpServers` is refused).
+
+**Also fixed in the harness:** its first `vibe --version` ran in the inherited environment, which writes `vibehistory`
+into the person's `~/.vibe` (§24); it now runs in the built environment on a scratch home. The person's
+`~/.vibe/vibehistory` was unchanged by both runs (last written 2026-10-11 21:54). Not measured: `.mcp.json` and the
+foreign manifests (the adapters' reading only), a hook file in a package, a restore (`--resume`), WSL.

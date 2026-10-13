@@ -215,7 +215,7 @@ test('an api row on a server too old for api rows says why its card is switched 
   const state = stateWith([api], { server: { kind: 'known', version: '0.36.0', remembered: false, updateOffered: false } });
   const context = cardContextFor(state)(api);
 
-  assert.ok(context.apiNote.length > 0, 'the fixture: the current page has a note for this row');
-  assert.ok(skewSaid(api, { installed: true, features: [] }, context.apiNote).includes(context.apiNote), 'the card does not say why');
+  assert.ok(context.runtimeNote.length > 0, 'the fixture: the current page has a note for this row');
+  assert.ok(skewSaid(api, { installed: true, features: [] }, context.runtimeNote).includes(context.runtimeNote), 'the card does not say why');
   assert.deepEqual(skewSaid(api, { installed: true, features: [] }, ''), [], 'a server that takes api rows draws no note');
 });

@@ -60,6 +60,9 @@ public sealed class VendorCatalogTests : IDisposable
     // set minus the machine-only ones, so a runtime added on the client side is refused by name
     // until somebody decides otherwise — not admitted because a set grew.
     [InlineData("""[{ "id": "x", "runtime": "api", "models": ["m"], "slots": ["a"] }]""", "api")]
+    // `vibe` runs on the person's own Mistral sign-in in THIS machine's keyring (D12 of todo/PLAN_vibe_and_kimi_runtimes.md):
+    // machine-only, so refused here by name.
+    [InlineData("""[{ "id": "x", "runtime": "vibe", "models": ["m"], "slots": ["a"] }]""", "vibe")]
     // An id becomes a directory under <DataDir>/accounts, so an id that can climb out of it is the
     // same defect as a slot name that can — and only the slot name was checked at first.
     [InlineData("""[{ "id": "../shared", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""", "../shared")]

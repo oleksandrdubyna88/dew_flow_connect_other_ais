@@ -22,7 +22,7 @@ namespace CoaiMcp.Runners.Snapshots;
 /// of S1 found the opposite order deleting the root under the copy and disposing a semaphore the refresh still held. The
 /// turn itself is never disposed, so a refresh asked after the disposal is refused rather than thrown at.</para>
 /// </remarks>
-public sealed class ReviewSnapshot : IDisposable
+public sealed class ReviewSnapshot : IDisposable, Reviewers.ICitedPaths
 {
     private readonly ReviewSnapshots _maker;
     private readonly Action<string> _note;

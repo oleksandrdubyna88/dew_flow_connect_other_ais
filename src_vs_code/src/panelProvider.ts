@@ -1870,8 +1870,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    const { command, usageCommand, note } = vendorTerminal(vendor);
-    const terminal = vscode.window.createTerminal({ name: `coai · ${vendor.id}` });
+    // `env` is how a CLI with no model flag gets the row's model — Vibe reads it from VIBE_ACTIVE_MODEL (D10). Set on
+    // the terminal rather than typed, because the shell may be PowerShell, cmd or bash and each spells it differently.
+    const { command, usageCommand, note, env } = vendorTerminal(vendor);
+    const terminal = vscode.window.createTerminal({ name: `coai · ${vendor.id}`, env: { ...env } });
     terminal.show();
     if (note.length > 0) {
       void notify({

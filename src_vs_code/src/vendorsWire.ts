@@ -1,10 +1,10 @@
 import { FEATURES } from './binaryFeatures';
-import { apiRuntimeOnServer } from './apiRuntime';
 import { apiSettingsOnTheWire } from './apiSettings';
 import { featureOnServer, reviewsFeatures } from './featureGate';
 import { hostExecutableSide } from './hostSide';
 import { ModelPrice } from './modelPrices';
 import { pathForThisSide, type ExecutableSide } from './pathFamily';
+import { runtimeOnServer } from './runtimeSince';
 import { saidText } from './saidText';
 import { Vendor } from './vendors';
 
@@ -103,14 +103,15 @@ export function vendorsEnv(
 }
 
 /**
- * Whether a switched-on row crosses to this server at all. An `api` row is SUPPRESSED from the file for a server older
- * than `API_RUNTIME_SINCE`, not merely disabled in the card: the old server reads the settings file, not the panel, and
- * its `RuntimeOf` turns a runtime it does not know into codex WITH the base URL — a Grok review through the Codex CLI
- * against xAI's endpoint, under the row's own name (§4.13). Every other row still crosses, so a person's codex and
- * antigravity keep reviewing while the api row waits for the update. Unknown is not old — see `apiRuntimeOnServer`.
+ * Whether a switched-on row crosses to this server at all. A row of a runtime NEWER than the installed server — `api`
+ * below `API_RUNTIME_SINCE`, `vibe` below `VIBE_RUNTIME_SINCE` — is SUPPRESSED from the file, not merely disabled in
+ * the card: the old server reads the settings file, not the panel, and does not review with a runtime it does not know —
+ * before mcp 0.44.0 its `RuntimeOf` ran it as codex (a Grok review through the Codex CLI against xAI's endpoint,
+ * §4.13), since then it refuses the row by name (`runtimeSince.ts`). Every other row still crosses, so a person's codex
+ * and antigravity keep reviewing while that row waits for the update. Unknown is not old — see `runtimeOnServer`.
  */
 function crossesTo(v: Vendor, installedServerVersion: string): boolean {
-  return v.runtime !== 'api' || apiRuntimeOnServer(installedServerVersion);
+  return runtimeOnServer(v.runtime, installedServerVersion);
 }
 
 /**

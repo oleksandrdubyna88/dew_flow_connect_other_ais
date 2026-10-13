@@ -84,15 +84,44 @@ internal sealed class RosterBuilder(
     /// The security lane's roster for these settings — the one place its decisions are made, shared by
     /// the work it appends and the source reader that must not read for a pairing that will not run.
     /// </summary>
-    internal SecurityRoster Security() => Security(CodexTiers.None);
+    internal SecurityRoster Security() => Security(CodexTiers.None, RoundScratch.None);
 
     /// <summary>
     /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
     /// standard tier (research/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
     /// like every other row, so they read the same answers.
     /// </summary>
-    internal SecurityRoster Security(CodexTiers tiers) => new(_settings, _prompts, _canRun, _runtimeFor,
-        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers), log);
+    internal SecurityRoster Security(CodexTiers tiers, RoundScratch scratch) => new(_settings, _prompts, _canRun, _runtimeFor,
+        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers, scratch), log);
+
+    /// <summary>
+    /// The round's own scratch (<see cref="RoundScratch"/>), prepared before the roster is built because a snapshot is made
+    /// asynchronously and <see cref="BuildWork"/> is not: a path for the round's Vibe homes (D17), and — when this stage
+    /// mounts a checkout and a runnable row of it runs on a runtime that asks (<see cref="IReviewerRuntime.NeedsASanitisedSnapshot"/>,
+    /// D6) — ONE sanitised snapshot of the pinned tree, shared by every such reviewer. Never a vendor name: the adapter says.
+    /// </summary>
+    internal async Task<RoundScratch> ScratchAsync(
+        Runners.Processes.IProcessLauncher launcher, Stage stage, string worktreePath, bool readsCheckout, CancellationToken ct)
+    {
+        var scratch = RoundScratch.Reserve(note => log.Warning("{Note}", note));
+        if (!SnapshotWanted(stage, readsCheckout))
+        {
+            return scratch;
+        }
+
+        var made = await new Runners.Snapshots.ReviewSnapshots(launcher).MakeAsync(new Runners.Snapshots.SnapshotSource.Pinned(worktreePath), scratch.Directory, ct);
+        if (made is Runners.Snapshots.SnapshotOutcome.Refused refused)
+        {
+            log.Warning("the round's sanitised snapshot was refused: {Reason}", refused.Reason);
+        }
+
+        return scratch.With(made);
+    }
+
+    /// <summary>A checkout this stage mounts, and a runnable row serving it on a runtime that must not start in it.</summary>
+    private bool SnapshotWanted(Stage stage, bool readsCheckout) =>
+        readsCheckout && _settings.CodeWorkspace != "none"
+        && _settings.Providers.Where(p => p.Serves(stage)).Where(_canRun).Any(p => _runtimeFor(p)?.NeedsASanitisedSnapshot == true);
 
     /// <summary>
     /// Asks every runnable codex executable whose answer can change an argv whether it can be told the standard tier —
@@ -159,56 +188,12 @@ internal sealed class RosterBuilder(
         // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
         Runners.Feature.SourceTurns? source = null,
         IReadOnlyList<Core.Context.FileDiff>? securityFiles = null,
-        IReadOnlyDictionary<string, string>? securitySources = null)
+        IReadOnlyDictionary<string, string>? securitySources = null,
+        // The round's own scratch (ScratchAsync): its snapshot and the folder its Vibe homes live in. Absent, a runtime that
+        // must not start in the checkout is LEFT OUT of a stage that mounts one, with its reason — never started in it.
+        RoundScratch? scratch = null)
     {
-        var turns = source ?? Runners.Feature.SourceTurns.None;
-        var tiers = codexTiers;
-        // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
-        // with catalog ids, so this changes nothing today — it is the boundary the Team server has
-        // at its endpoint and the local path did not: a caller that schedules `architecture` would
-        // otherwise carry that spelling into the invocation, the live round, the usage rows, the
-        // evidence file and the session record, and a later `Architecture` run would be a second
-        // identity for one role. A role the catalog does not know keeps what it was given, which is
-        // what the refusals downstream quote back. (codex, this story's code round.)
-        roles = [.. roles.Select(r => _settings.Rounds.Catalog.ById(r)?.Id ?? r)];
-
-        // The schema THIS stage answers in, from its row: the feature review's offers `sourceRequests`,
-        // and a file of its own, so a code round launched beside it is never handed that field.
-        var stageRow = Stages.Of(stage);
-        var schemaFile = SchemaFile.Ensure(_settings.DataDir, stageRow.Answers);
-        var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
-        _pruneOldAnswerDirs();
-
-        // The REPAIR launch gets no workspace, whatever the stage. It is not asking for a better
-        // review — it already asked for that — it is asking for the answer in the schema, and an
-        // agentic CLI handed a checkout goes exploring instead. That is the same lesson the plan
-        // stage learned the hard way, applied to the one launch whose whole job is to be brief.
-        var repairDir = Directory.CreateTempSubdirectory("coai-repair-").FullName;
-
-        // And the REVIEW launch can be given the same treatment on request. The prompt is identical
-        // either way — the diff came from the repository and the rules from the worktree, both
-        // above — so `none` removes only the exploring. It exists because the exploring is what
-        // makes a hosted CLI cost 200k input tokens where a local reviewer costs 25k, which is a
-        // difference in the QUESTION rather than in the models being compared.
-        // The STAGE is told to this method, not guessed inside it. Two guesses were tried and both
-        // were wrong in a way tests did not see: `planPrompts is { Count: > 0 }` is empty on an
-        // ordinary plan round (the lenses are only dealt when asked for), and reading the ROLES
-        // works today only because no code round happens to carry PlanCritique — a coincidence, and
-        // the review gate said so. The caller knows which stage it is running; it passes it.
-        var fastCode = _settings.CodeWorkspace == "none" && readsCheckout;
-        var launchDir = fastCode
-            ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName
-            : worktreePath;
-
-        // What the reviewer is standing in, which is NOT the same question as which directory it
-        // was pointed at. A plan round's `worktreePath` is an empty scratch directory — the stage
-        // checks out nothing at all (RunStageAsync, `needsWorktree: false`) — so a flag derived
-        // from the launch directory alone would tell a plan reviewer a repository was there. That
-        // is the exact lie this change removed from the prompt files; only a mounted worktree is a
-        // checkout.
-        var hasCheckout = readsCheckout && !fastCode;
-        // What each reviewer is TOLD it holds is decided per reviewer below (ReviewerMaterial), where its runtime is known:
-        // a mounted checkout is something only a reviewer that can read one has.
+        var frame = FrameFor(stage, context, worktreePath, readsCheckout, codexTiers, source, scratch);
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -220,7 +205,7 @@ internal sealed class RosterBuilder(
         var eligible = _settings.Providers.Where(p => p.Serves(stage)).Where(_canRun).ToList();
         if (eligible.Count == 0)
         {
-            return new RoundWork([], []);
+            return new RoundWork([], []) { Scratch = frame.Scratch };
         }
 
         // The ORDER the vendors are offered in, which is not a detail once a Team server is in the
@@ -245,150 +230,186 @@ internal sealed class RosterBuilder(
         // .NET documents no order for it — so the tail is best-effort rather than a promise.
         var runnable = SeededShuffle.Of(eligible, seed);
 
-        var items = Items(roles, round, planPrompts);
-        var work = new List<ReviewerWork>();
-        var notAsked = new List<SkippedRole>();
-        var excluded = new List<ExcludedRole>();
-        // Sets beside the lists rather than a scan of them: one round can carry a role per vendor
-        // per lens, and the scan was the round's own quadratic. (codex, story B2's code round.)
-        var skipped = new HashSet<string>(StringComparer.Ordinal);
-        var refused = new HashSet<(string Provider, string Role)>();
-        Assemble(runnable, items, deal, seed, Add, CanCarry);
+        var ids = CatalogIds(roles);
+        var collector = new RosterCollector();
+        Assemble(runnable, Items(ids, round, planPrompts), deal, seed,
+            (provider, role, promptId) => AddReviewer(frame, collector, provider, role, promptId), CanCarry);
 
-        var ordinary = new RoundWork(LocalRowsFirst(work), notAsked, excluded) { OrdinaryDue = roles.Count > 0 };
-        return securityFiles is null ? ordinary : Security(tiers).Append(ordinary, securityFiles, stage, round, securitySources);
-
-        // One sentence per ROLE however many vendors would have carried it: a person reading a round
-        // needs to know the role did not run, not that four vendors each did not run it.
-        void Skip(string role, string reason)
-        {
-            if (!skipped.Add(role))
-            {
-                return;
-            }
-
-            notAsked.Add(new SkippedRole(role, reason));
-        }
-
-        // And one per (vendor, role), for the same reason one step down: this list is per vendor
-        // because the same Team server runs the shipped roles, but a role dealt four lenses was
-        // refused four times in identical words. (gemini, story B2's code round.)
-        void Exclude(string provider, string role, string reason)
-        {
-            if (!refused.Add((provider, role)))
-            {
-                return;
-            }
-
-            excluded.Add(new ExcludedRole(provider, role, reason));
-        }
-
-        void Add(ProviderSettings provider, string role, string promptId)
-        {
-            var catalog = _settings.Rounds.Catalog;
-            var choice = catalog.PromptById(promptId) ?? catalog.UniversalFor(role);
-            if (_runtimeFor(provider) is not { } runtime)
-            {
-                return;
-            }
-
-            // A prompt with no text at all: a role somebody added and never wrote the prompt for.
-            // The round runs without it and SAYS so, because a reviewer that silently does not run
-            // is a round that reviewed less than it reported. The shipped prompts cannot reach this
-            // — their text is embedded in the binary.
-            //
-            // FIRST, before the vendor question below it. A role with no text has nothing to say to
-            // any vendor, and asking the vendor question first meant a person whose only vendor was
-            // a Team server was told the server did not know their role — true, and not the thing
-            // they could fix. (codex, story B2's code round.)
-            if (!_prompts.Has(choice))
-            {
-                // BY NAME as well as by id (issue #338): a new role's id is minted before it has a name —
-                // `Role2` — so the id alone names nothing the person recognises.
-                Skip(role, $"{NamedAs(catalog, role)}its prompt '{choice.Id}' has no text — write it at {_prompts.FileToWrite(choice.Id)}");
-                return;
-            }
-
-            // A role a person defined cannot be sent to a Team server: that server validates the
-            // name against the catalog IT was compiled with, so the request comes back a 400 naming
-            // roles the person never asked for. Said here, before the launch, rather than read out
-            // of a refusal afterwards — and said per (vendor, role), because the same vendor runs
-            // the shipped roles perfectly well. Widening the server is plan 3 of this feature.
-            //
-            // The question is about the ROLE's provenance and is asked of the CATALOG. Asking the
-            // prompt — `!choice.BuiltIn` — answered the same today only because composition refuses
-            // a custom role a shipped prompt id, which is a second rule holding up the first.
-            // (codex and gemini, story B2's code round.)
-            // The server's OWN words where it gave any: "this Team server runs A, B — not C" is
-            // something a person can act on, and it is true of THAT server rather than of Team
-            // servers in general. The sentence used to say "it accepts the five this product ships"
-            // for every one of them, which stopped being true the day an operator could add a role.
-            if (WhyNotCarried(provider, role) is { } why)
-            {
-                Exclude(provider.Provider, role, why);
-                return;
-            }
-
-            // An api row through its module (ApiRowView): the settings it will run with — its own over the
-            // environment over the module's calibrated defaults — or the module's refusal of its own
-            // settings, said here before any request is sent to be answered 400 after a round trip.
-            var api = runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi;
-            if (api.Refusal.Length > 0)
-            {
-                Exclude(provider.Provider, role, api.Refusal);
-                return;
-            }
-
-            var launch = SettingsFor(provider, runtime, api, tiers);
-            var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
-            var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
-            // Once, for the body AND the redaction list below: two calls that must agree are one value.
-            var instruction = InstructionFor(provider, runtime);
-            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps, instruction);
-            // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
-            // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a
-            // conversation id (xAI's x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.
-            launch = launch with { Conversation = ConversationKey.Of(provider.Provider, role, prompt) };
-            // The repair is composed WITHOUT a checkout always — the stage's own no-checkout material —
-            // because the repair launch always runs in repairDir, an empty temp directory, whatever the
-            // review was given (see above).
-            // Composing it with the REVIEW's mode is what shipped on 2026-09-06: in worktree mode the
-            // repair opened by promising a read-only checkout and closed by saying there were no
-            // tools, in one prompt, to the reviewer that had already failed once. Found by codex at
-            // that change's own code round — which diagnosed it the other way round, as a repair that
-            // should promise the tree. The code says otherwise: the repair never has one.
-            //
-            // The paragraph itself (`RepairInstruction`) is built before anybody knows which way the
-            // first attempt failed, so it covers both.
-            var repairBase = _reviewerPrompt.ComposePrompt(choice, context, stageRow.Reads, stageRow.Answers, followUps);
-            // One composer for every turn (S3.2): turn 1 is the base with an empty tail, and a follow-up
-            // is the SAME base byte for byte with its tail appended — the launch and the repair alike, so
-            // the repair of turn N is composed from turn N's own prompt (plan §4.9).
-            // What the launch was given and must not echo back into a record: the row's system prompt (see Redact).
-            IReadOnlyList<string> redact = instruction.Length == 0 ? [] : [instruction];
-            // Each launch labelled with what it ran with, for its ledger line (story 3.4) — the repair as much as the first.
-            ReviewerInvocation Built(string text, string directory) =>
-                RowLaunchOptions.Labelled(runtime.Build(role, text, directory, schemaFile, outputDir, launch), provider, runtime, launch) with { Redact = redact };
-            ReviewerWork Turn(string tail) => new(
-                Built(prompt + tail, launchDir),
-                Built(repairBase + tail + RepairInstruction.Text, repairDir),
-                choice.Id,
-                System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
-            work.Add(Turn(string.Empty) with
-            {
-                Continue = turns is Runners.Feature.SourceTurns.On conversation && stage == Stage.FeatureReview
-                    ? new Runners.Feature.SourceConversation(conversation, Turn)
-                    : ReviewerContinuation.None,
-                // The whole-review limit (the operator's twenty minutes, 2026-09-27): an api reviewer's
-                // conversation on the feature stage, every turn of it — the row's own minutes, else the
-                // environment's, else the module's calibrated default. A CLI reviewer and every other stage
-                // keep the derived cap — null here — because the limit was measured on hosted models.
-                ConversationCap = stage == Stage.FeatureReview && runtime is ApiRuntime
-                    ? TimeSpan.FromMinutes(api.Effective.ReviewMinutes)
-                    : null,
-            });
-        }
+        var ordinary = collector.Work(ordinaryDue: ids.Count > 0, frame.Scratch);
+        return securityFiles is null ? ordinary : Security(frame.Tiers, frame.Scratch).Append(ordinary, securityFiles, stage, round, securitySources);
     }
+
+    /// <summary>
+    /// The round's fixed facts (<see cref="RosterFrame"/>): its stage row and schema, its three folders, its checkout, its
+    /// turns, its tiers and its scratch.
+    /// </summary>
+    /// <remarks>
+    /// <para>The schema THIS stage answers in, from its row: the feature review's offers `sourceRequests`, and a file of
+    /// its own, so a code round launched beside it is never handed that field.</para>
+    /// <para>The REPAIR launch gets no workspace, whatever the stage. It is not asking for a better review — it already
+    /// asked for that — it is asking for the answer in the schema, and an agentic CLI handed a checkout goes exploring
+    /// instead. That is the same lesson the plan stage learned the hard way, applied to the one launch whose whole job is
+    /// to be brief.</para>
+    /// <para>The STAGE is told to <see cref="BuildWork"/>, not guessed inside it. Two guesses were tried and both were
+    /// wrong in a way tests did not see: `planPrompts is { Count: > 0 }` is empty on an ordinary plan round, and reading
+    /// the ROLES works only because no code round happens to carry PlanCritique — a coincidence, and the review gate said
+    /// so. The caller knows which stage it is running; it passes it.</para>
+    /// </remarks>
+    private RosterFrame FrameFor(
+        Stage stage, string context, string worktreePath, bool readsCheckout, CodexTiers tiers,
+        Runners.Feature.SourceTurns? source, RoundScratch? scratch)
+    {
+        var row = Stages.Of(stage);
+        var schemaFile = SchemaFile.Ensure(_settings.DataDir, row.Answers);
+        var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
+        _pruneOldAnswerDirs();
+        var repairDir = Directory.CreateTempSubdirectory("coai-repair-").FullName;
+        var (launchDir, hasCheckout) = RosterFrame.Directories(_settings.CodeWorkspace, worktreePath, readsCheckout);
+
+        return new RosterFrame(stage, row, context, schemaFile, outputDir, repairDir, launchDir, hasCheckout,
+            source ?? Runners.Feature.SourceTurns.None, tiers, scratch ?? RoundScratch.None);
+    }
+
+    /// <summary>
+    /// The CATALOG's spelling of each role, and nothing else, from here on. `RolesForRound` already answers with catalog
+    /// ids, so this changes nothing today — it is the boundary the Team server has at its endpoint and the local path did
+    /// not: a caller that schedules `architecture` would otherwise carry that spelling into the invocation, the live round,
+    /// the usage rows, the evidence file and the session record, and a later `Architecture` run would be a second identity
+    /// for one role. A role the catalog does not know keeps what it was given, which is what the refusals downstream quote
+    /// back. (codex, this story's code round.)
+    /// </summary>
+    private List<string> CatalogIds(IReadOnlyList<string> roles) =>
+        [.. roles.Select(r => _settings.Rounds.Catalog.ById(r)?.Id ?? r)];
+
+    /// <summary>One (vendor, role, prompt) of the deal: a reviewer added, or the reason it is not.</summary>
+    /// <remarks>
+    /// <para>A prompt with no text at all — a role somebody added and never wrote the prompt for — is asked FIRST, before
+    /// the vendor question: a role with no text has nothing to say to any vendor, and asking the vendor question first
+    /// told a person whose only vendor was a Team server that the server did not know their role — true, and not the
+    /// thing they could fix. (codex, story B2's code round.) It is said BY NAME as well as by id (issue #338): a new role's
+    /// id is minted before it has a name — `Role2` — so the id alone names nothing the person recognises.</para>
+    /// </remarks>
+    private void AddReviewer(RosterFrame frame, RosterCollector collector, ProviderSettings provider, string role, string promptId)
+    {
+        if (_runtimeFor(provider) is not { } runtime)
+        {
+            return;
+        }
+
+        var choice = ChoiceOf(role, promptId);
+        if (!_prompts.Has(choice))
+        {
+            collector.Skip(role, $"{NamedAs(_settings.Rounds.Catalog, role)}its prompt '{choice.Id}' has no text — write it at {_prompts.FileToWrite(choice.Id)}");
+            return;
+        }
+
+        var api = ApiViewOf(provider, runtime);
+        var place = PlaceOf(frame, provider, role, runtime, api);
+        if (place is LaunchPlace.At at)
+        {
+            collector.Add(ReviewerFor(frame, new ReviewerSeat(provider, role, choice, runtime, api, at)));
+            return;
+        }
+
+        collector.Exclude(provider.Provider, role, ((LaunchPlace.Refused)place).Reason);
+    }
+
+    /// <summary>The prompt a dealt (role, prompt id) names — the role's universal prompt when the catalog has no such id.</summary>
+    private PromptChoice ChoiceOf(string role, string promptId) =>
+        _settings.Rounds.Catalog.PromptById(promptId) ?? _settings.Rounds.Catalog.UniversalFor(role);
+
+    /// <summary>An api row through its module (ApiRowView); every other row through none.</summary>
+    private ApiRowView ApiViewOf(ProviderSettings provider, IReviewerRuntime runtime) =>
+        runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi;
+
+    /// <summary>
+    /// Where this reviewer's launch starts — or why it does not start at all, said here before any launch rather than
+    /// read out of a refusal afterwards.
+    /// </summary>
+    /// <remarks>
+    /// <para>A role a person defined cannot be sent to a Team server: that server validates the name against the catalog
+    /// IT was compiled with, so the request comes back a 400 naming roles the person never asked for. Said per (vendor,
+    /// role), because the same vendor runs the shipped roles perfectly well, and in the server's OWN words where it gave
+    /// any. (codex and gemini, story B2's code round.)</para>
+    /// <para>An api row's module may refuse its own settings — said here before any request is sent to be answered 400
+    /// after a round trip.</para>
+    /// <para>Then the directory: the stage's, or — for a runtime that must not start in a checkout — the round's sanitised
+    /// snapshot, its citations mapped back through the snapshot's manifest (D6); left out, with the reason, when the round
+    /// has none to give it (<see cref="PlaceFor"/>).</para>
+    /// </remarks>
+    private LaunchPlace PlaceOf(RosterFrame frame, ProviderSettings provider, string role, IReviewerRuntime runtime, ApiRowView api) =>
+        WhyNotCarried(provider, role) is { } why ? new LaunchPlace.Refused(why)
+        : api.Refusal.Length > 0 ? new LaunchPlace.Refused(api.Refusal)
+        : PlaceFor(runtime, frame.LaunchDir, frame.HasCheckout, frame.Scratch);
+
+    /// <summary>One reviewer the deal reached: its row, its role, its prompt, its runtime, its module view and where it starts.</summary>
+    private sealed record ReviewerSeat(
+        ProviderSettings Provider, string Role, PromptChoice Choice, IReviewerRuntime Runtime, ApiRowView Api, LaunchPlace.At At);
+
+    /// <summary>
+    /// The reviewer's work: its first turn — the review launch and its repair — with the feature stage's conversation and
+    /// whole-review cap where they apply.
+    /// </summary>
+    /// <remarks>
+    /// <para>One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt every one of
+    /// them shares (ConversationKey): what a vendor that routes its prompt cache by a conversation id (xAI's
+    /// x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.</para>
+    /// <para>The repair is composed WITHOUT a checkout always — the stage's own no-checkout material — because the repair
+    /// launch always runs in the repair folder, an empty temp directory, whatever the review was given. Composing it with
+    /// the REVIEW's mode is what shipped on 2026-09-06: in worktree mode the repair opened by promising a read-only checkout
+    /// and closed by saying there were no tools, in one prompt, to the reviewer that had already failed once. The paragraph
+    /// itself (`RepairInstruction`) is built before anybody knows which way the first attempt failed, so it covers
+    /// both.</para>
+    /// <para>One composer for every turn (S3.2): turn 1 is the base with an empty tail, and a follow-up is the SAME base
+    /// byte for byte with its tail appended — the launch and the repair alike, so the repair of turn N is composed from
+    /// turn N's own prompt (plan §4.9).</para>
+    /// </remarks>
+    private ReviewerWork ReviewerFor(RosterFrame frame, ReviewerSeat seat)
+    {
+        var material = ReviewerMaterial.For(frame.HasCheckout, seat.Runtime, frame.Row.Reads);
+        // Once, for the body AND the redaction list below: two calls that must agree are one value.
+        var instruction = InstructionFor(seat.Provider, seat.Runtime);
+        var prompt = _reviewerPrompt.ComposePrompt(seat.Choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction);
+        var repairBase = _reviewerPrompt.ComposePrompt(seat.Choice, frame.Context, frame.Row.Reads, frame.Row.Answers, frame.FollowUps);
+        var launch = SettingsFor(seat.Provider, seat.Runtime, seat.Api, frame.Tiers, frame.Scratch)
+            with
+        { Conversation = ConversationKey.Of(seat.Provider.Provider, seat.Role, prompt) };
+        var redact = Redacting(instruction);
+
+        // Each launch labelled with what it ran with, for its ledger line (story 3.4) — the repair as much as the first.
+        ReviewerInvocation Built(string text, string directory) =>
+            RowLaunchOptions.Labelled(seat.Runtime.Build(seat.Role, text, directory, frame.SchemaFile, frame.OutputDir, launch), seat.Provider, seat.Runtime, launch)
+                with
+            { Redact = redact };
+        ReviewerWork Turn(string tail) => new(
+            Built(prompt + tail, seat.At.Directory) with { Citations = seat.At.Citations },
+            Built(repairBase + tail + RepairInstruction.Text, frame.RepairDir),
+            seat.Choice.Id,
+            System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
+
+        return Turn(string.Empty) with { Continue = frame.ContinueFor(Turn), ConversationCap = frame.CapFor(seat.Runtime, seat.Api) };
+    }
+
+    /// <summary>What the launch was given and must not echo back into a record: the row's system prompt (see Redact).</summary>
+    private static IReadOnlyList<string> Redacting(string instruction) => instruction.Length == 0 ? [] : [instruction];
+
+    /// <summary>
+    /// Where one runtime's review launch starts. A runtime that may start in the checkout starts where the stage says; one
+    /// that asks for a sanitised snapshot (D6) starts in the round's snapshot when the stage mounts a checkout — and is
+    /// refused, never started in the checkout, when the round has no snapshot to give it. Without a checkout (a plan
+    /// round's empty folder, the "none" workspace) there is nothing of the branch's to keep it from, and it starts there.
+    /// </summary>
+    internal static LaunchPlace PlaceFor(IReviewerRuntime runtime, string launchDir, bool hasCheckout, RoundScratch scratch) =>
+        runtime.NeedsASanitisedSnapshot && hasCheckout ? InTheSnapshot(scratch.Tree) : new LaunchPlace.At(launchDir, CitedAsWritten.Instance);
+
+    /// <summary>The round's snapshot as a launch directory — or why there is none to give.</summary>
+    private static LaunchPlace InTheSnapshot(RoundTree tree) => tree switch
+    {
+        RoundTree.Made made => new LaunchPlace.At(made.Snapshot.Root, made.Snapshot),
+        RoundTree.Refused refused => new LaunchPlace.Refused(refused.Reason),
+        _ => new LaunchPlace.Refused(
+            "no sanitised snapshot of the tree was made for this round, and this runtime is never started in the checkout itself (D6 of todo/PLAN_vibe_and_kimi_runtimes.md)"),
+    };
 
     /// <summary>A CLI row seen through no module: the generic defaults, which nothing below reads for it.</summary>
     private static readonly ApiRowView NotApi = new(
@@ -401,7 +422,7 @@ internal sealed class RosterBuilder(
     /// module's view (the row over the environment over the calibrated default); a CLI row's from the
     /// panel's local-engine settings, as they always have.
     /// </summary>
-    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers)
+    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers, RoundScratch scratch)
     {
         var settings = new ReviewerSettings(provider.Provider)
         {
@@ -426,6 +447,8 @@ internal sealed class RosterBuilder(
             // A reviewer starts no MCP server (issue #514); read per round, so a server added to
             // config.toml is switched off from the next round on.
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
+            // Only VibeRuntime reads it: the round's own folder, for one coai-owned home per reviewer (D17).
+            OwnedScratch = scratch.Directory,
         };
         var told = WithLocalEngine(settings, provider, _settings);
 

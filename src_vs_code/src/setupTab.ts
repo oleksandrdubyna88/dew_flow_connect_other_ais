@@ -1,7 +1,7 @@
 import { type CliStatus, UNKNOWN_CLI, updateAvailable } from './cliVersions';
 import { mayDeleteTheOldCopy, type MoveRecord } from './dataMove';
 import { escapeHtml } from './escapeHtml';
-import type { Runtime } from './models';
+import { CLI_RUNTIMES, type Runtime } from './models';
 import { hostFamily } from './hostSide';
 import { storedForThisSide, type PathFamily } from './pathFamily';
 import type { Vendor } from './vendors';
@@ -13,9 +13,6 @@ import type { Vendor } from './vendors';
  */
 
 // ---------------------------------------------------------------- the CLIs
-
-/** The runtimes that run a CLI on this machine. `local` and `api` call an endpoint; `remote` runs on a Team server. */
-const CLI_RUNTIMES: readonly Runtime[] = ['claude', 'codex', 'antigravity', 'gemini'];
 
 /** One CLI — a runtime at one executable — and the models that run on it. */
 export interface CliGroup {

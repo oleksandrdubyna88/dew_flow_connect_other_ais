@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { keyVariable, OFFICIAL_SOURCES, vendorInstall, vendorTerminal , executableForRuntime } from '../vendorTerminal';
+import { fromOfficialSources, keyVariable, vendorInstall, vendorTerminal , executableForRuntime } from '../vendorTerminal';
+import { CLI_RUNTIMES } from '../models';
 import { hostFamily } from '../hostSide';
 import { Vendor } from '../vendors';
 
@@ -113,15 +114,17 @@ test('an install command may only come from a source the vendor itself publishes
   // `antigravity-cli` snap at Google's own version, published by a third party, and it was briefly
   // offered here. A button that installs software gets pressed without reading, so it may only ever
   // offer what the vendor publishes.
-  const runtimes = ['codex', 'gemini', 'claude', 'antigravity'] as const;
-  for (const runtime of runtimes) {
+  // Every CLI runtime this build knows, read from the one list: a runtime added there is checked here without anyone
+  // remembering to. It was a hand-typed four, and Vibe would have been a fifth nobody checked.
+  assert.ok(CLI_RUNTIMES.length >= 5, 'the list this loop reads has shrunk — the check is asserting less than it says');
+  for (const runtime of CLI_RUNTIMES) {
     for (const p of ['win32', 'linux', 'darwin'] as const) {
       const command = vendorInstall({ id: runtime, runtime, model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, p).command;
       if (command.length === 0) {
         continue;
       }
       assert.ok(
-        OFFICIAL_SOURCES.some((prefix) => command.startsWith(prefix)),
+        fromOfficialSources(command),
         `${runtime} on ${p} would install with "${command}", which is not from a source the vendor publishes`,
       );
     }

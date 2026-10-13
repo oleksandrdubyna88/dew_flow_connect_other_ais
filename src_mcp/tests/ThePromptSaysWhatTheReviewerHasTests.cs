@@ -154,20 +154,28 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // assertions are the whole fix: the sentence is interpolated into every prompt the composer
         // builds, and the call site passes the REAL mode rather than a constant. A `true` wired in
         // here would pass every other test in this file and ship the original defect.
+        // Since the 2026-10-13 split of RosterBuilder.BuildWork (complexity 4): the round's frame — where it launches and
+        // whether that is a checkout — is RosterFrame.Directories in RosterAssembly.cs, and one reviewer's prompt is
+        // ReviewerFor's. The same properties are held; the two lines that carry the mode across the split are new asserts.
         var source = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "PanelService.cs"))
             + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
+            + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RosterAssembly.cs"))
             + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
 
         source.Should().Contain("{WhatYouHave(material, followUps)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
-        source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers, followUps, instruction)",
+        source.Should().Contain("ComposePrompt(seat.Choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
-        source.Should().Contain("var instruction = InstructionFor(provider, runtime);",
+        source.Should().Contain("var instruction = InstructionFor(seat.Provider, seat.Runtime);",
             "and the row's instruction is the runtime's decision, computed once for the body and the redaction list");
-        source.Should().Contain("var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads)",
+        source.Should().Contain("var material = ReviewerMaterial.For(frame.HasCheckout, seat.Runtime, frame.Row.Reads)",
             "and what a reviewer without a checkout — or that cannot read one — holds is the STAGE's answer, per reviewer");
         source.Should().Contain("var hasCheckout = readsCheckout && !fastCode",
             "the mode is TOLD, and a round that reads no checkout has none however it is configured");
+        source.Should().Contain("var (launchDir, hasCheckout) = RosterFrame.Directories(_settings.CodeWorkspace, worktreePath, readsCheckout);",
+            "the frame's mode is the one Directories derives from what the caller TOLD it");
+        source.Should().Contain("new RosterFrame(stage, row, context, schemaFile, outputDir, repairDir, launchDir, hasCheckout,",
+            "and that derived mode — not a constant — is the frame every reviewer's material is read from");
         source.Should().NotContain("!isPlan",
             "it was derived from the stage until plan 4, which made `isPlanStage: true` the only way "
             + "to ask for a document round's workspace — a claim about identity made to get a "

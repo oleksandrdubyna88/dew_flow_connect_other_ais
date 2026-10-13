@@ -90,6 +90,9 @@ two of its seventy code-stage findings were worth having.
 ![Reviewers: codex, gemini and a local model, each with its model, price and CLI path](assets/reviewers-three-vendors.png)
 
 - **Codex CLI**, **Antigravity** (Gemini / Claude / GPT-OSS) — signed in as themselves, no API key.
+- **Mistral Vibe** — Mistral's own CLI on your Mistral subscription, signed in as itself; added from
+  the panel's *Add a model*, whose ⤓ runs Mistral's own installer for the side it is on. coai-mcp
+  runs it on Windows only until Linux, WSL and macOS are measured, and needs coai-mcp 0.53.0.
 - **A model on your own machine** — Ollama, vLLM, or **any OpenAI-compatible endpoint (DeepSeek,
   vLLM, Ollama)**. Called directly with a strict `json_schema`, not through a vendor CLI that spends
   20k tokens on a system prompt before it reads your diff.

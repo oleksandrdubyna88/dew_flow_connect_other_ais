@@ -54,6 +54,14 @@ public sealed record ReviewerState(
 
     /// <summary>A local reviewer not launched because the cloud was quiet (issue #485) — the scheduler's word.</summary>
     public const string StoodDown = Runners.Reviewers.BoundedScheduler.StoodDownStatus;
+
+    /// <summary>
+    /// What the launch control warned about this reviewer's launch (<see cref="Runners.Reviewers.ReviewerOutcome.Warning"/>) —
+    /// a CLI version nobody measured — whatever the reviewer's status; absent (null, not written) for nearly every reviewer,
+    /// so a session file without one reads as it did. <c>reviewerStates[].warning</c> on the wire.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Warning { get; init; }
 }
 
 /// <summary>

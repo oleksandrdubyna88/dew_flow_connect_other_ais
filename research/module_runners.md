@@ -58,7 +58,7 @@ sequenceDiagram
 | `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
 | `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
-| `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code |
+| `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code; the `--version` is started BY THE ADAPTER (`IReviewerRuntime.ProbeVersionAsync`, 2026-10-13) — as it always was for every runtime but Vibe, which asks in its built environment on a home of coai's own (the section *The Vibe reviewer*) |
 | `RemoteRuntime` | `Reviewers/RemoteRuntime.cs` | the adapter for a vendor whose reviews run on a **Team server**: builds `--ask-remote` against THIS binary (the `LocalRuntime` shim shape), carries no `SharedResource` because the server owns the queue, and holds the cancel-an-abandoned-job half (`Claim` / `ReadClaimAsync` / `CancelAbandonedAsync`) |
 | `RemoteAsk`, `RemotePoll`, `RemoteState` | `Reviewers/RemoteAsk.cs` | the PURE half of the shim: the request body, the poll parse, every exit code and every sentence a person will see — so each failure path is tested without a server |
 | `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
@@ -87,7 +87,10 @@ sequenceDiagram
 | `SnapshotOptions`, `SnapshotExclusions`, `SnapshotManifest`, `SnapshotUnavailable` | `Snapshots/SnapshotOptions.cs`, `SnapshotManifest.cs` | the ceilings (512 MB, 50 000 files, 60 s — ten-plus times this repository's 38.8 MB, 2 737 files, 5.7 s), the names left out at every depth (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`, `agents.md` — one default set for both vendors, a parameter for more), and what a snapshot holds: copied paths, excluded paths, unavailable paths (an unpopulated submodule, an LFS pointer) and the destination's measured case rule |
 | `SnapshotBudget`, `SnapshotBudget.Hold` | `Snapshots/SnapshotBudget.cs` | the aggregate cap: a process-wide count of the bytes live snapshots hold, a new one refused with both numbers past a ceiling (2 GB) or when the volume's free space would fall under a floor (5 GB); the volume reader injectable; a refresh counts the refreshed size, not old plus new |
 | `SnapshotListing`, `SnapshotPlanner`, `SnapshotCopier`, `SnapshotPaths`, `DestinationCase` (internal) | `Snapshots/*.cs` | the four steps: git lists (`ls-files --stage`, descending into populated submodules; `--others --exclude-standard` for a live tree), the planner refuses everything D6 refuses before a byte moves, the copier notices a file that changed under it, and the path rules resolve a request lexically against the root and the manifest |
-| `IReviewerRuntime.NeedsASanitisedSnapshot`, `IConsultantRuntime.NeedsASanitisedSnapshot` | `Reviewers/ReviewerRuntime.cs`, `Consultation/IConsultantRuntime.cs` | the capability an adapter declares to be launched in a snapshot rather than in the tree — default false; nothing sets it true until the Vibe and Kimi adapters (S2/S4); never an `if` on a vendor name |
+| `IReviewerRuntime.NeedsASanitisedSnapshot`, `IConsultantRuntime.NeedsASanitisedSnapshot` | `Reviewers/ReviewerRuntime.cs`, `Consultation/IConsultantRuntime.cs` | the capability an adapter declares to be launched in a snapshot rather than in the tree — default false; `VibeRuntime` is the first to set it (S2, 2026-10-13; the Kimi adapter is S4's); never an `if` on a vendor name |
+| `IReviewerRuntime.TakeTurnAsync`, `LaunchTurn` (`Free` / `Refused` / `Holding`); `IReviewerRuntime.Disowned` | `Reviewers/ReviewerRuntime.cs`, `LaunchTurn.cs` | the ONE launch control (D8b, D17 of `todo/PLAN_vibe_and_kimi_runtimes.md`): `ReviewerExecutor.LaunchAsync` asks the adapter immediately before EVERY launch — review, retry, repair, follow-up, consultation turn, question row — with the executor's own launcher; a refusal is `NotStarted` with the adapter's sentence and nothing starts, a held turn is given back after the answer, usage and reason have been read. `Disowned`: an exit-0 run the adapter will not take as an answer (Vibe on another model than it was asked) becomes `NonZeroExit` keeping its usage. Defaults: free, nothing disowned — every other adapter launches as before |
+| `ICitedPaths`, `CitedAsWritten`, `ReviewerInvocation.Citations` | `Reviewers/LaunchTurn.cs`, `ReviewerRuntime.cs` | how a reviewer's cited file becomes the repository's: `ReviewSnapshot` maps an absolute path under its root back through its manifest; `ReviewerExecutor.Cited` applies it to every finding after the parse; set by the roster, never by an adapter |
+| `VibeRuntime`, `VibeLaunch`, `VibeModels`, `VibeHome`, `VibePluginStarters`, `VibeHomeManifest`, `VibeHomeTurns`, `VibeExport`, `VibeStdout` | `Vibe/*.cs` | Mistral Vibe as a reviewer (S2, 2026-10-13) — the section *The Vibe reviewer* below |
 
 ## The decisions a reader needs
 
@@ -2816,8 +2819,140 @@ flowchart TD
   50 000 files, 512 MB and 60 s; a refusal says the number it met.
 
 Tests: `ReviewSnapshotTests`, `ReviewSnapshotResolveTests`, `ReviewSnapshotRefreshTests`, `SnapshotBudgetTests`,
-`NoRuntimeAsksForASanitisedSnapshotYetTests`, `AScratchSweepRunsOnTheConsultationBeatTests` — listed in
-[module_tests.md](module_tests.md).
+`OnlyARuntimeThatAsksGetsASanitisedSnapshotTests` (S1's `NoRuntimeAsksForASanitisedSnapshotYetTests`, renamed when
+`VibeRuntime` became the first to ask), `AScratchSweepRunsOnTheConsultationBeatTests` — listed in
+[module_tests.md](module_tests.md). **Wired at the round's launch directory in S2** (the section *The Vibe reviewer*);
+the consultant's launch and the question row are S3's.
+
+## The Vibe reviewer — `VibeRuntime` (2026-10-13, S2 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+Mistral Vibe (`vibe`, the Python CLI, on the person's own Mistral subscription — its sign-in is in the OS keyring,
+research/RESULTS_vibe_confinement.md §12) reviews plans and code as a CLI row, runtime `vibe`. Every flag and every check
+cites the RESULTS cell it rests on — all Windows, 3 of 3, Vibe 2.26.1 — and nothing here claims anything for WSL or
+macOS: a launch on any host but Windows is refused (D18). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
+refuses a `vibe` row by name); not in any default vendor list (D11).
+
+```mermaid
+sequenceDiagram
+  participant R as RosterBuilder (round)
+  participant E as ReviewerExecutor
+  participant V as VibeRuntime / VibeLaunch
+  participant P as ProcessLauncher
+  participant C as vibe (Python CLI)
+  R->>R: ScratchAsync: the round's scratch path, and ONE snapshot of the pinned tree when a runnable row asks and the stage mounts a checkout
+  R->>V: Build(role, prompt, snapshot root, …, OwnedScratch) — argv, built env, home vh-HASH in the round's scratch
+  E->>V: ForLaunch: --time-limit from THIS launch's timeout, a fresh export folder vx-HASH
+  E->>V: TakeTurnAsync (before EVERY launch)
+  V->>V: host is Windows (D18) · env is the built one (D17) · model on the curated list (D10) · home made, not a link
+  V->>V: take the home's turn (serialised) · the home's SHAPE (no hooks.toml, config.toml, agents/, tools/, link, trust entry)
+  V->>P: vibe --version (same built env, same home)
+  V->>V: a measured version: its plugin files by SHA-256, a mismatch refused · an unmeasured version: run, with a warning
+  V-->>E: Refused(sentence) → NotStarted, nothing started  |  Holding(turn + export folder, warning)
+  E->>P: vibe -p --output json --agent plan --enabled-tools read_file --workdir SNAPSHOT --time-limit N --output-dir EXPORT, prompt on stdin
+  P->>C: MinimalWindows + VIBE_HOME, VIBE_CLI=python, VIBE_ACTIVE_MODEL — nothing inherited
+  C-->>E: stdout array · export.json · exit 0 / 1 / 2 / 3
+  E->>V: ReadUsage (export, unknown when null) · exit≠0: WhyItFailed (outcome, error) · exit 0: Disowned (active_model ≠ asked) · ReadAnswer (last assistant message)
+  E->>E: citations mapped back through the snapshot's manifest
+  E->>V: turn disposed — the export folder deleted, the home's turn given back
+  R->>R: the round ends — RoundScratch disposed: snapshot and homes deleted
+```
+
+- **The argv** (D2, D3, D7, D8; the same flag set `scripts/lib/vibe.mjs` measured): `-p --output json --agent plan
+  --enabled-tools read_file --workdir <dir> --time-limit <s> --output-dir <export>`, the prompt on stdin (a 33 KB prompt
+  arrived whole 3 of 3, §13), never `--trust` or `--add-dir` (a trusted folder's hook runs, §5; `--add-dir` trusts its
+  folder). Both read-only flags, always: together they denied 9 of 9 write attempts (§4) and every write under forced
+  remote experiment variants (§23); they share one failure mode — Vibe's own tool handling — so the independent second
+  block is the snapshot. `--time-limit` is `LimitMargin` (10 s) under the launch's own timeout, at least 1, and
+  `ForLaunch` sets it again from the timeout a retry or a repair actually has.
+- **The working folder** (D6): the round's sanitised snapshot when the stage mounts a checkout (the code round with
+  `COAI_CODE_WORKSPACE=worktree`); the stage's own empty folder otherwise (a plan round's scratch, the `none` workspace,
+  the repair's folder), where nothing of the branch's is to be kept away. `RosterBuilder.PlaceFor` decides from the
+  adapter's capability; without a snapshot — none was made, or it was refused — the row is LEFT OUT of the round with the
+  reason (`ExcludedRole`), never started in the checkout. The snapshot is made ONCE per round by `ScratchAsync` (the
+  roster's `BuildWork` is synchronous) and shared by every Vibe reviewer of it.
+- **The built environment and the owned home** (D17): `ProcessRequest.InheritsEnvironment = false`, `Passthrough =
+  ProcessEnvironment.Minimal` (what M-V12 measured Vibe signed in under, §17), plus exactly `VIBE_HOME`,
+  `VIBE_CLI=python` (§3: a remote flag switched this account to the Rust CLI between two launches; the Rust CLI refuses
+  `--time-limit` and is unmeasured) and `VIBE_ACTIVE_MODEL` (a row with no model gets the curated default,
+  `mistral-medium-3.5`, Vibe's own default in an empty home). No `VIBE_*` of this process reaches the child (§22 A: an MCP
+  server given only through `VIBE_MCP_SERVERS` starts under an empty home). The home is `vh-<10 hex of provider/role>` —
+  short, because a deep home broke on a >260-character path — inside `ReviewerSettings.OwnedScratch`, the round's own
+  scratch folder (`RoundScratch`), so one home per reviewer of the round, and a repair or a retry of that reviewer starts
+  on the home its first launch left. Without an owned scratch (a caller that set none) the home falls back to the
+  launch's own `coai-answers-*` folder, which the six-hour sweep removes.
+- **The launch control** (`VibeLaunch.TakeAsync`, through `IReviewerRuntime.TakeTurnAsync`), in this order: the host
+  (D18 — a non-Windows host, or a WSL bridge named as the executable, `wsl.exe` or `\\wsl$\…`); the environment is the
+  built one; the model is on `VibeModels.Curated` (`mistral-medium-3.5`, `glm-5-3` — the two seen as `active_model`,
+  §11/§17/§24 — because Vibe exits 0 on an alias it does not know, §11); the home is made when absent and is not a link;
+  the home's TURN is taken (`VibeHomeTurns`, in-process, keyed by the full path, dropped when its last holder leaves);
+  the home's SHAPE is checked (`VibeHome.Refusal(home, manifest)`) BEFORE anything of Vibe's starts on it; `vibe
+  --version` runs in the same environment on the same home (a bare start writes `vibehistory`, §24); the SHAPE is
+  checked AGAIN after it on both branches, because `--version` is Vibe's own process on that home and what it leaves
+  must not reach the review (the risk consultation 6b4726a6 of 2026-10-13 found the unmeasured branch launched without
+  this re-check); for a version WITH an entry in `shared/vibe-home-manifest.json` the home is then checked with the
+  plugin files' hashes — a mismatch is tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
+  home; the next launch starts from an empty one).
+- **A version nobody measured is RUN, with a warning** (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse —
+  set it up once and it must work if it can"; it replaced the refusal S2 first shipped). Its home's shape is still
+  checked before its `--version` starts, so a forbidden name, a link, a trust entry, a `config.toml`, `hooks.toml`,
+  `agents/` or `tools/` still refuse; only its plugin files are admitted by name — except a cached plugin package file
+  that would START something (below). The turn carries the warning
+  (`LaunchTurn.Holding(…, warning)` → `ReviewerLaunch.Warning` → `ReviewerOutcome.Warning`, the FIRST launch's, on the
+  base so a failed reviewer carries it too) — one generic, runtime-neutral field Kimi's control can set as well. It
+  names the running version, the measured one, that the confinement measurements and the plugin hashes are the measured
+  version's, and to re-run `scripts/vibe-home-manifest.mjs --write` and `scripts/probe-vibe-confinement.mjs`
+  (`VibeLaunch.VersionWarning`, one sentence for the launch and the card). Where it reaches: the round's reviewer line
+  (`; warned — vibe/PlanCritique: …`, `RoundWarnings.Clause`, what the calling AI reads), the reviewer's state
+  (`reviewerStates[].warning` in the session and `status`, `LiveRound`), the round's log (a WARNING line from
+  `RoundAudit`), and the row's card through `providers` (`IReviewerRuntime.VersionWarning` → `VendorHealth.Warning` →
+  `ProviderStatus.warning`, absent for every row without one). The extension does not read either new field yet.
+- **The home check** (`VibeHome`): files under the manifest's `pinnedPrefix` (`logs/session/plugins/`) only when their
+  path and SHA-256 are in the INSTALLED version's entry (12 content-addressed files for 2.26.1, §24); the manifest's
+  `varying` names by name (`vibehistory`, the caches, `.connector_bootstrap_cache.json.lock`, `logs/vibe.log`, the
+  session registry, `logs/session/unified/<id>/…`); `trusted_folders.toml` only when both lists are empty; a folder only
+  on the way to an admitted file; anything else — `hooks.toml`, ANY `config.toml` (Vibe writes none, §22/§24, so one
+  declaring hooks, MCP servers or agents is refused with every other one), `agents/`, `tools/`, `.env`, a link anywhere
+  (the walk never follows one; `SnapshotLinks.IsLink`, fails closed) — refuses, naming the first offending path.
+- **A cached plugin package that would start something** (`VibePluginStarters`, the shape check; risk consultation
+  6b4726a6, 2026-10-13, confirmed by reading Vibe 2.26.1's installed code and then by M-V16: a planted `mcp.json` server started 3 of 3 under the shipped flags, control 0 of 1 — RESULTS_vibe_confinement.md §25). Vibe's store hands back an
+  existing `packages/<ab>/<digest>/` folder without re-digesting it (`mistralai_vibe_local_harness/vibe/plugins/_store.py:265-266`),
+  every session checks every pinned package out that way (`_session.py:359-368`), the checkouts are resolved as the
+  plugin folders (`vibe/app_server/_plugins.py:421-423`, `:541-560`) and their declared MCP servers are connected before
+  the session runs (`_plugins.py:204-213`) — before `--enabled-tools` filters anything (RESULTS_vibe_confinement.md
+  §6, §7; this reading is §25). A measured version's package files are admitted by hash only, so this decides the UNMEASURED branch: a
+  declaration (`mcp.json` — `vibe/core/plugins/_native.py:1661` — `.mcp.json`, the Claude/Codex/Kimi manifests) with a
+  non-empty `mcpServers`, `hooks`, `lspServers` or `sessionStart`, or one that is not JSON, and every hook file
+  (`ai.mistral.vibe/hooks.toml`, `hooks/hooks.json`, `hooks.json`) refuse — names compared without case, since Windows
+  answers `MCP.json` to `mcp.json` — unless a measured version pins that exact path with those bytes. Not covered: a
+  package's `ai.mistral.vibe/agents/`, `connectors.json`, `libraries.json` and `knowledge/` (`_native.py:1334`, `:1559`,
+  `:1450`, `:1246`) — read by Vibe, not examined here for what they can start or override; Vibe 2.26.1's built-in
+  package carries none of them, and an unmeasured version's could.
+- **Reading the run** (D7, D8, D9, D10): the answer is the LAST `role: assistant` message of the stdout array; usage is
+  the export's `usage` — tokens as reported, cost NEVER carried (`cost_usd` is Vibe's list price even on a subscription),
+  `Usage.Unknown` when the block is null (§18: 2 of 3 deadline exports) or the export is missing; a non-zero exit is a
+  failure whose reason is the export's `outcome` and `error.message` (`deadline` said as Vibe's own time limit — exit 3 is
+  a failure even with an answer); an exit 0 whose export's `active_model` is absent, empty or not the alias asked is
+  DISOWNED (`NonZeroExit`, its usage kept). The per-attempt export folder is deleted when the launch's turn is given
+  back, after every read; a crash leaves it in the launch's `coai-answers-*` folder for the sweep.
+- **What it does not do.** No effort, no thinking switch, no fast mode is sent (`shared/feature-availability.json`:
+  `unmeasured`, `unmeasured`, `none`). The consultant and the question row are S3's.
+- **The `providers` probe leaves the person's home alone** (D17; follow-up of the same story). A bare `vibe --version`
+  writes `vibehistory` into whatever `VIBE_HOME` it is given — the person's own `~/.vibe` when it is given none (§24) — so
+  `VendorProbe` no longer starts the CLI itself: it asks the adapter (`IReviewerRuntime.ProbeVersionAsync`, by default the
+  `--version` every runtime always had, in this process's environment). `VibeRuntime` overrides it: the probe runs in the
+  launch control's BUILT environment (`VibeLaunch.Built` — the one builder `Build` uses too, so the two cannot drift) on a
+  fresh `coai-answers-*` folder as its home, deleted after the probe (a crash leaves it to the six-hour sweep). A
+  capability of the adapter, never an `if` on a vendor name in the probe.
+- **Diagnosis** (`VendorDiagnosis`): Vibe's not-signed-in sentence (`Missing MISTRAL_API_KEY environment variable`, §11
+  arm a2) → `vibe --setup`, kind `Refused`; the Rust CLI's `unexpected argument '--time-limit'` (§3) → named as the
+  unmeasured CLI, kind `UnknownOption`. The install cure is Mistral's own README's (D16): `uv tool install
+  mistral-vibe` (with uv's own installer when uv is missing) where `linux` is false, Mistral's script
+  `curl -LsSf https://mistral.ai/vibe/install.sh | bash` on Linux.
+
+Tests: `VibeRuntimeTests`, `VibeLaunchRulesTests`, `VibeHomeTests`, `VibeHomeManifestTests`, `VibeLaunchControlTests`,
+`AVibeRowReviewsInTheRoundsSnapshotTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `VibeIsDiagnosedInItsOwnWordsTests`,
+`TheVibeProbeLeavesThePersonsHomeAloneTests`
+— listed in [module_tests.md](module_tests.md).
 
 ## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)
 

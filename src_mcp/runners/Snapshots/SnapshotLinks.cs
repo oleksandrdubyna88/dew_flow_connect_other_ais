@@ -33,7 +33,8 @@ internal static class SnapshotLinks
     }
 
     /// <summary>Fails CLOSED: a component that cannot be inspected counts as a link, because it is not known to be anything else.</summary>
-    private static bool IsLink(string path)
+    /// <remarks>Also the Vibe home's link test (<c>VibeHome</c>, D17): one question, one answer to it.</remarks>
+    internal static bool IsLink(string path)
     {
         try
         {

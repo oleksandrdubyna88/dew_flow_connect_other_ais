@@ -1,5 +1,6 @@
 import { MAX_PROMPT_BYTES, MAX_ROWS } from './catalogRules';
 import { effortRefusal } from './featureAvailability';
+import { RUNTIMES } from './models';
 import type { Vendor } from './vendors';
 
 /**
@@ -46,8 +47,15 @@ function effortRefusalOf(row: Vendor, key: string, value: unknown, probed: reado
   return key === 'effort' && typeof value === 'string' && JUDGED_HERE.has(row.runtime) ? effortRefusal(row.runtime, value, probed) : '';
 }
 
-/** The runtimes whose effort this side judges: every one but `api` (its probe report) and `remote` (its server). */
-const JUDGED_HERE: ReadonlySet<Vendor['runtime']> = new Set(['codex', 'claude', 'antigravity', 'gemini', 'local']);
+/**
+ * The runtimes whose effort this side judges: every one but `api` (its probe report) and `remote` (its server).
+ *
+ * <p>Derived from `RUNTIMES` rather than listed, so a runtime added to the product is judged here without anybody
+ * remembering to — `vibe` was the first that would have been missed, and an effort on it would have been stored and
+ * silently not applied instead of refused as unmeasured.</p>
+ */
+const JUDGED_ELSEWHERE: ReadonlySet<string> = new Set(['api', 'remote']);
+const JUDGED_HERE: ReadonlySet<Vendor['runtime']> = new Set(RUNTIMES.filter((runtime) => !JUDGED_ELSEWHERE.has(runtime)));
 
 /** The two review stages a catalog may never be left without a model for. */
 const STAGES = ['plan', 'code'] as const;

@@ -41,18 +41,20 @@
 //   M-V12  the question row's minimal environment (ProcessEnvironment.MinimalWindows) + VIBE_ACTIVE_MODEL=glm-5-3
 //   M-V13  --time-limit 5 on a longer task → exit 3 and an export
 //   M-V14  a sanitised copy trusted on purpose: source + parent canaries, a junction and a file symlink pointing out
-import { spawnSync } from 'node:child_process';
+//   M-V16  an mcp.json canary planted in the cached BUILT-IN plugin package of a primed owned home, the BUILT environment
+//          (D17), the shipped flags; control: primed, nothing planted (RESULTS §25)
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { SYSTEM32, files, fwd, minimalWindowsEnv, run, vibeArgs } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
   const i = argv.indexOf(name);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
 };
-const ALL_CELLS = ['M-V1', 'M-V2', 'M-V3', 'M-V3b', 'M-V4', 'M-V5', 'M-V6', 'M-V7', 'M-V8', 'M-V9', 'M-V10', 'M-V11', 'M-V12', 'M-V13', 'M-V14'];
+const ALL_CELLS = ['M-V1', 'M-V2', 'M-V3', 'M-V3b', 'M-V4', 'M-V5', 'M-V6', 'M-V7', 'M-V8', 'M-V9', 'M-V10', 'M-V11', 'M-V12', 'M-V13', 'M-V14', 'M-V16'];
 const reparse = flag('--reparse', '');
 const exe = flag('--vibe', '') || (reparse ? '' : resolved('vibe'));
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
@@ -83,12 +85,6 @@ const REAL_HOME = join(homedir(), '.vibe');
 // Vibe's own interpreter: M-V4 persists trust through Vibe's OWN TrustedFoldersManager, so the file's format is Vibe's.
 const VIBE_PYTHON = join(process.env.APPDATA ?? '', 'uv', 'tools', 'mistral-vibe', 'Scripts', 'python.exe');
 
-// ProcessEnvironment.MinimalWindows (src_mcp/runners/Processes/ProcessEnvironment.cs) — the question row's child env.
-const MINIMAL_WINDOWS = ['PATH', 'PATHEXT', 'SystemRoot', 'windir', 'ComSpec', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
-  'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'USERNAME', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432',
-  'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'PROCESSOR_LEVEL', 'PROCESSOR_REVISION', 'OS', 'NUMBER_OF_PROCESSORS'];
-
-const fwd = (p) => p.replaceAll('\\', '/');
 const toml = (s) => JSON.stringify(s); // a JSON string of a plain path or command is a valid TOML basic string
 /** A fixed Python snippet: the path arrives as argv[1], so nothing about the path is ever Python source. */
 const CANARY_SNIPPET = "import sys; open(sys.argv[1], 'w').write('x')";
@@ -119,26 +115,7 @@ function shortHome({ copy }) {
   return home;
 }
 
-/**
- * Every child this probe starts goes through here: exe + argv (never a shell string, except mklink, which is a cmd builtin),
- * always a timeout, and a timeout kills the child's WHOLE tree by its PID before this returns — a stuck vibe leaves python
- * children behind otherwise (the code round, codex, 2026-10-12). Never by image name.
- */
-/** A Windows system tool by its absolute path, never looked up through PATH (SonarCloud S4036, the code round 2026-10-12). */
-const SYSTEM32 = (exe) => join(process.env.SystemRoot ?? String.raw`C:\Windows`, 'System32', exe);
-
-function run(file, args, options) {
-  const r = spawnSync(file, args, { ...options, timeout: options.timeout ?? 60_000 });
-  const timedOut = r.error?.code === 'ETIMEDOUT' || Boolean(r.signal);
-  if (timedOut && r.pid) {
-    if (process.platform === 'win32') {
-      spawnSync(SYSTEM32('taskkill.exe'), ['/PID', String(r.pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
-    } else {
-      try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
-    }
-  }
-  return r;
-}
+// Every child goes through lib/vibe.mjs's run(): argv, a timeout, and a tree kill by PID on the timeout.
 
 /** Persist trust for `paths` with Vibe's own TrustedFoldersManager under VIBE_HOME=home; returns the file it wrote. */
 function trustWithVibe(home, paths) {
@@ -149,6 +126,32 @@ function trustWithVibe(home, paths) {
     throw new Error(`Vibe's TrustedFoldersManager failed: ${r.stderr}`);
   }
   return readFileSync(join(home, 'trusted_folders.toml'), 'utf8');
+}
+
+/** The curated default model (D10) — what the built environment names when a row names none. */
+const BUILT_MODEL = 'mistral-medium-3.5';
+
+/** D17's BUILT environment for `home`: MinimalWindows plus exactly the three VIBE_* names coai sets. */
+const builtEnv = (home) => ({ ...minimalWindowsEnv(), VIBE_HOME: home, VIBE_CLI: 'python', VIBE_ACTIVE_MODEL: BUILT_MODEL });
+
+/** Every cached plugin package in `home` that carries a plugin.json — after one turn, Vibe's built-in package (§24). */
+function builtInPackages(home) {
+  const root = join(home, 'logs', 'session', 'plugins', 'packages');
+  if (!existsSync(root)) return [];
+  return readdirSync(root).flatMap((ab) => readdirSync(join(root, ab)).map((digest) => join(root, ab, digest)))
+    .filter((p) => existsSync(join(p, 'plugin.json')));
+}
+
+/**
+ * A native plugin mcp.json (the schema `_native.py` validates) whose one stdio server is the canary. The command is the
+ * BARE `python` (as M-V3's canary): Vibe 2.26.1 refuses an absolute path for a plugin's stdio command — "stdio command
+ * must be a bare executable or start with './'" — which is what the first run of this cell planted, and it tested nothing.
+ */
+function packageMcpJson(canary) {
+  return JSON.stringify({
+    $schema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
+    mcpServers: { 'probe-canary': { type: 'stdio', command: 'python', args: ['-c', CANARY_SNIPPET, fwd(canary)] } },
+  }, null, 2);
 }
 
 function junction(link, target) {
@@ -163,21 +166,6 @@ function fileSymlink(link, target) {
   } catch (e) {
     return `file symlink not creatable: ${e.code ?? e.message}`;
   }
-}
-
-/** Every file under `dir` (relative), not following links. */
-function files(dir) {
-  if (!existsSync(dir)) return [];
-  const out = [];
-  const walk = (d) => {
-    for (const e of readdirSync(d, { withFileTypes: true })) {
-      const p = join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else out.push(fwd(relative(dir, p)));
-    }
-  };
-  walk(dir);
-  return out.sort((a, b) => a.localeCompare(b));
 }
 
 // ---------------------------------------------------------------------------------------------------------------- arms
@@ -367,12 +355,7 @@ const ARMS = {
     setup(runDir) {
       const workdir = join(runDir, 'work');
       mkdirSync(workdir, { recursive: true });
-      const env = {};
-      for (const name of MINIMAL_WINDOWS) {
-        const key = Object.keys(process.env).find((k) => k.toLowerCase() === name.toLowerCase());
-        if (key !== undefined) env[name] = process.env[key];
-      }
-      env.VIBE_ACTIVE_MODEL = 'glm-5-3';
+      const env = { ...minimalWindowsEnv(), VIBE_ACTIVE_MODEL: 'glm-5-3' };
       return { workdir, prompt: 'Reply with exactly: OK', replaceEnv: env };
     },
   }],
@@ -418,15 +401,38 @@ const ARMS = {
       };
     },
   })),
+
+  // RESULTS §25: Vibe checks a cached plugin package out without re-digesting it (_store.py:265-266), so does an
+  // mcp.json planted into the BUILT-IN package of an owned home start its server under the shipped flags? A priming turn
+  // first (a bare start does not unpack the plugins, §24), then the plant, then the measured launch — both in the BUILT
+  // environment of D17. The control primes the same way and plants nothing.
+  'M-V16': [false, true].map((control) => ({
+    arm: control ? 'control: primed home, nothing planted' : 'mcp.json planted in the cached built-in package',
+    control,
+    setup(runDir) {
+      const workdir = join(runDir, 'work');
+      mkdirSync(workdir, { recursive: true });
+      const home = shortHome({ copy: false });
+      const env = builtEnv(home);
+      const canary = join(runDir, 'canary-package-mcp.txt');
+      console.error(`[probe] priming ${basename(runDir)} …`);
+      const prime = run(exe, vibeArgs({ workdir, exportDir: join(runDir, 'export-prime') }),
+        { cwd: workdir, input: 'Reply with exactly: OK', encoding: 'utf8', timeout: 210_000, env: childEnv({ replaceEnv: env }), maxBuffer: 64 * 1024 * 1024 });
+      const packages = builtInPackages(home);
+      if (!control) {
+        for (const p of packages) write(join(p, 'mcp.json'), packageMcpJson(canary));
+      }
+      return {
+        workdir, home, replaceEnv: env, prompt: 'Reply with exactly: OK', canaries: { packageMcp: canary },
+        notes: `prime exit ${prime.status}; packages: ${packages.map((p) => fwd(relative(home, p))).join(' ') || 'none'}${control ? '' : '; mcp.json planted'}`,
+      };
+    },
+  })),
 };
 
 // ------------------------------------------------------------------------------------------------------------ launching
 
-/** The shipped flag set, with the arm's deviations. */
-function vibeArgs({ workdir, exportDir, trust = false, timeLimit = 120, resume = '' }) {
-  return ['-p', '--output', 'json', '--agent', 'plan', '--enabled-tools', 'read_file', '--workdir', workdir,
-    '--time-limit', String(timeLimit), '--output-dir', exportDir, ...(trust ? ['--trust'] : []), ...(resume ? ['--resume', resume] : [])];
-}
+// The shipped flag set, with an arm's deviations, is lib/vibe.mjs's vibeArgs().
 
 function childEnv(spec) {
   const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli };
@@ -618,7 +624,9 @@ if (reparse) {
   process.exit(0);
 }
 
-const versionRun = run(exe, ['--version'], { encoding: 'utf8', timeout: 30_000 });
+// On a home of the probe's own, in the built environment: a bare `vibe --version` writes `vibehistory` into whatever
+// VIBE_HOME it gets, and with none that is the person's ~/.vibe (§24).
+const versionRun = run(exe, ['--version'], { encoding: 'utf8', timeout: 30_000, env: childEnv({ replaceEnv: builtEnv(shortHome({ copy: false })) }) });
 const resultsPath = join(scratch, 'results.json');
 let results = existsSync(resultsPath) ? JSON.parse(readFileSync(resultsPath, 'utf8'))
   : { vibe: exe, version: (versionRun.stdout ?? '').trim(), cli, platform: process.platform, scratch, started: new Date().toISOString(), byCell: {}, launches: 0 };

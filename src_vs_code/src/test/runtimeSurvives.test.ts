@@ -86,5 +86,6 @@ test('the runtime list and the runtime type are one declaration', () => {
 
   assert.ok(asType.includes('local'));
   // `api` since S1.2 of PLAN_feature_review.md: a hosted OpenAI-compatible endpoint reached directly.
-  assert.deepEqual([...RUNTIMES].sort(), ['antigravity', 'api', 'claude', 'codex', 'gemini', 'local', 'remote']);
+  // `vibe` since S2 of todo/PLAN_vibe_and_kimi_runtimes.md: Mistral's own CLI on the person's own subscription.
+  assert.deepEqual([...RUNTIMES].sort(), ['antigravity', 'api', 'claude', 'codex', 'gemini', 'local', 'remote', 'vibe']);
 });
