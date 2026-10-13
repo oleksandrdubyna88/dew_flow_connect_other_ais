@@ -462,6 +462,10 @@ against the code or a run before it went in here — the question consultant had
     (15 min + 60 s by default); a host killed mid-conversation leaves its homes until the next server start, when the start
     sweep removes them. What this does not do: run while no coai-mcp runs — a machine that never starts the server again
     keeps the leftovers, which is the bound the record store itself has.
+  - **As built (S3, hardened before its gate):** the window rules run only on folders this server's store stamped, and never
+    while the folder's last turn neither ended nor passed its own ceiling; an `asking` record past that ceiling counts as
+    over; a folder another store stamped, or nobody, is left until 7 days unwritten; the cross-process turn lock
+    (`coai-turn.lock`) is taken before anything is deleted — see S3's notes in §4.
   Tests (§5): an orphaned `coai-kimi/<id>` with no record, older than the window, whose junction points at a folder holding
   a file → the home and the junction gone, the file untouched; the same home younger than the window → kept; a live
   conversation's home (record open, written now) → kept; a closed record's home → gone on the beat; a home whose turn is held
@@ -623,6 +627,14 @@ question-consultant row, and a resumed turn reports its usage right.
   - **Help, five languages:** the question consultant article says what a Vibe row reads (none: an empty folder; disk: a
     copy of each folder), that its web prompt is disabled, that it runs on Windows only (D18) and that a folder outside a
     Git repository is refused. The consult article lists no runtimes, so it is unchanged.
+  - **Hardened before the S3 gate (2026-10-13; plan round P0/P1, risk consultation ee1eecf4 R1–R4).** Each conversation folder
+    carries a stamp (`coai-conversation.txt`: the owning store, the last turn's start, ceiling and end) and a cross-process
+    turn lock (`coai-turn.lock`); the sweep touches only its own store's folders (another's after 7 days unwritten), takes
+    every lock with no wait and asks its rules again under them, never removes a folder whose turn did not end inside its
+    ceiling (a killed server's Vibe child runs at most its `--time-limit` < the timeout < the ceiling), counts an `asking`
+    record past that ceiling as over, and refuses a homes or conversation folder that is a link (path checks: they narrow a
+    swap race, they do not close it). A question row refuses a granted root that is, or lies below, a link up to its work
+    tree's top. A refused snapshot swap says when the root is left EMPTY, and the next turn recovers the path.
 
 **S4 — Kimi measured, then a Kimi reviewer row over ACP.** The owner signed in on 2026-10-12, so S4 is no longer blocked.
 Decisions D1, D6 (the snapshot with Kimi's exclusions), D8b (the Kimi arm = D19), D9, D10 (the ACP model option, the curated

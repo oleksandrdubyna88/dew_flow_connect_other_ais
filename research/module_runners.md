@@ -3003,6 +3003,12 @@ consultant home sweep.
 or the refresh's two renames when a tree a previous server left is (the old aside, the new in, the old back if the second
 fails); a refusal leaves whatever was at the root as it was. That is what keeps ONE path across a server restart, when the
 object that refreshed it in place is gone.
+Hardened before the S3 gate (2026-10-13): `MakeAtAsync` refuses a parent that is a LINK (`Files.OwnedPaths.IsLinkIfThere`,
+failing closed; a check by path at one moment, which narrows a swap race and does not close it). Every rename that
+publishes, refreshes or replaces a snapshot goes through `TakePlace` (and an internal `Mover` seam): the old tree aside,
+the new one in, the old one back if that fails — and when even the rollback fails the refusal says **there is no snapshot
+at the root** and that nothing is launched against it (R3; it used to say "the previous snapshot stands", with an empty
+reason, over an empty root). The next `MakeAtAsync` at that path publishes a fresh copy.
 
 **`VibeHomeTurns.TryTake(home, out turn)`** — the home's turn with no wait: the home sweep's question (a live launch is
 judged by the lock, never by a stamp). Vendor-free, like the rest of the class.

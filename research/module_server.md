@@ -7099,3 +7099,40 @@ flowchart TD
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
+
+### The home sweep and the place, hardened before the S3 gate (2026-10-13 — the plan round and risk consultation ee1eecf4)
+
+- **Whose folder it is (R1 a).** Every conversation folder carries a stamp, `coai-conversation.txt`
+  (`ConversationFolder`): the store that made it (`ConversationFolder.StoreOf(DataDir)` — the full path, case folded on
+  Windows only), when its last turn started, its ceiling, and whether it ended. The homes root is SHARED by every server on
+  the machine, so a server judges only folders its OWN store stamped by its records; a folder another store made, or one
+  with no stamp, is left alone until it has not been written for `HomeSweepInputs.ForeignAge` — the record store's own
+  retention (7 days, after which no record of its owner can still be open), or twice `ConsultIdle` if that is longer.
+- **A cross-process turn lock (R1 b).** `coai-turn.lock` in the folder, held open exclusively (`HeldFile`) for the whole
+  turn by `ConsultantPlaces` (after this process's `VibeHomeTurns`, waiting at most 10 s, then refusing the turn by name);
+  the sweep takes it with no wait, then every in-process turn, and asks its rules AGAIN under them before it deletes a
+  thing. The lock file goes last, after its handle; the folder's last write ignores it, since taking it creates it.
+- **A turn's ceiling (R4, P0).** The stamp is begun once the copy is ready, with the turn's own deadline
+  (`ConsultationDeadline.For(TurnTimeout(row, COAI_REVIEWER_TIMEOUT_MINUTES))`, `ConsultationDeadline.cs` `For`;
+  `ConsultantTurnInputs.TurnTimeout`), and ended when the turn is read. A folder whose turn did not end and whose
+  ceiling has not passed is NEVER swept, whatever its record says: a server killed with a Vibe child alive leaves it to run
+  to its `--time-limit`, which is `VibeRuntime.TimeLimit(timeout)` = timeout − 10 s, under the timeout, under the
+  ceiling = timeout + max(timeout/4, the drain). Once the ceiling HAS passed and no lock is held, an `asking` record's
+  folder is due (P0 — a host that died mid-turn). Verified first: the record pass already settles such a record (a dead
+  pid or idle past the window, with its repository lock free → `interrupted` or `failed`), so the home went within the
+  window plus a beat or two; the stamp makes the sweep's own rule explicit and, more to the point, stops it deleting a home
+  whose child may still run when a row's timeout exceeds the idle window.
+- **Never through a link (R2).** A homes folder (`coai-vibe`) or a conversation folder that is a link is said and left
+  alone by the sweep; `ConsultantPlaces` refuses a turn whose homes folder or conversation folder is a link, before and
+  after making it; `ReviewSnapshots.MakeAtAsync` refuses a parent that is a link. These are path checks at one moment
+  (`OwnedPaths.IsLinkIfThere`, failing closed for a path it cannot inspect): a folder swapped for a link between the check and
+  the create or delete is not seen — they narrow that race and do not close it, since no deletion here is by handle. The
+  homes ROOT itself (the person's local application data) is not checked: a profile relocated through a junction is a
+  legitimate setup.
+- **A granted root reached through a link (P1).** A question row's copy refuses a root that is a link, or that lies below a
+  link up to its work tree's top (`ConsultantPlaces.LinkUpToTheWorkTree`); a link git lists inside it is refused by the
+  snapshot itself. Folders above the work tree are the machine's layout (a relocated profile, macOS `/var`) and are not
+  asked.
+- **A refusal that says what is there (R3).** See [module_runners.md](module_runners.md): when both the install rename and
+  the rollback fail, the refusal says there is no snapshot at the path, the turn is refused, and the next turn's
+  `MakeAtAsync` recovers the path.
