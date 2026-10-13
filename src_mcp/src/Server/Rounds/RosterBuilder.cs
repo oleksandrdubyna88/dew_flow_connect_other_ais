@@ -414,10 +414,8 @@ internal sealed class RosterBuilder(
             // Only ApiRuntime reads it too: the parent prices each turn from it (S3.7).
             Price = provider.Price,
             Timeout = TimeoutFor(provider, runtime, _settings.ReviewerTimeout),
-            ReasoningEffort = EffortFor(provider, _settings.LocalReasoningEffort),
             // Only RemoteRuntime reads it: the row's prompt as the field a Team server's operator can refuse (E2.5).
             SystemPrompt = FieldPromptFor(provider, runtime),
-            MaxTokens = _settings.LocalMaxTokens,
             // Every runtime with a tier reads it — codex and claude here; the others ignore it (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
             // Only CodexRuntime reads it: whether this row's installed codex can be told the standard tier, as the stage
@@ -429,8 +427,9 @@ internal sealed class RosterBuilder(
             // config.toml is switched off from the next round on.
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
         };
+        var told = WithLocalEngine(settings, provider, _settings);
 
-        return runtime is ApiRuntime ? settings.WithApi(api.Effective) : settings;
+        return runtime is ApiRuntime ? told.WithApi(api.Effective) : told;
     }
 
     /// <summary>
@@ -674,14 +673,29 @@ internal sealed class RosterBuilder(
     /// llama.cpp level (epic 2's code round). A codex row's effort is kept and not sent while codex is unmeasured. An
     /// api row's effort is its module's (see SettingsFor).
     /// </summary>
-    internal static string EffortFor(ProviderSettings provider, string localEffort) => RuntimeResolution.NameOf(provider.Identity()) switch
+    /// <remarks>
+    /// Takes the PANEL, never a loose default string: two of the three launch composers once passed <c>string.Empty</c>
+    /// here, so a thinking local model consulted or checked was told no effort and thought to its ceiling (2026-10-13 —
+    /// todo/PLAN_local_effort_reaches_every_local_launch.md). With the panel as the argument there is no empty default to
+    /// pass.
+    /// </remarks>
+    internal static string EffortFor(ProviderSettings provider, PanelSettings panel) => RuntimeResolution.NameOf(provider.Identity()) switch
     {
         "claude" => provider.CliEffort,
         // A Team server judges it per vendor and says what it did not apply (contract 2, E2.5).
         "remote" => provider.CliEffort,
-        "local" => provider.CliEffort.Length > 0 ? provider.CliEffort : localEffort,
+        "local" => provider.CliEffort.Length > 0 ? provider.CliEffort : panel.LocalReasoningEffort,
         _ => string.Empty,
     };
+
+    /// <summary>
+    /// What every launch of <paramref name="provider"/> is told about the local engine — its effort
+    /// (<see cref="EffortFor"/>) and the panel's ceiling — the ONE place the reviewer, consultant and question-consultant
+    /// composers take it from, so the three cannot drift apart again. An api row's module overrides both afterwards
+    /// (<c>WithApi</c>); only the local shim reads the ceiling.
+    /// </summary>
+    internal static ReviewerSettings WithLocalEngine(ReviewerSettings settings, ProviderSettings provider, PanelSettings panel) =>
+        settings with { ReasoningEffort = EffortFor(provider, panel), MaxTokens = panel.LocalMaxTokens };
 
     /// <summary>
     /// A row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2) — where its runtime takes one

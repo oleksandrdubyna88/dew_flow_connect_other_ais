@@ -24,11 +24,11 @@ public sealed class EpicTwoCodeRoundTests
     public void ARuntimeThatTakesNoLocalEffort_IsToldNone(string runtime) =>
         // The panel's local-engine setting was handed to every other runtime "because only a local engine reads it" — so
         // the first new runtime that does read ReasoningEffort would have been sent a llama.cpp level.
-        RosterBuilder.EffortFor(Row(runtime, runtime), localEffort: "low").Should().BeEmpty();
+        RosterBuilder.EffortFor(Row(runtime, runtime), new PanelSettings { LocalReasoningEffort = "low" }).Should().BeEmpty();
 
     [Fact]
     public void ALocalRow_StillFallsBackToThePanelsSetting() =>
-        RosterBuilder.EffortFor(Row("local", "local"), localEffort: "low").Should().Be("low");
+        RosterBuilder.EffortFor(Row("local", "local"), new PanelSettings { LocalReasoningEffort = "low" }).Should().Be("low");
 
     [Fact]
     public void WhetherARowsTimeoutApplies_IsTheRuntimesToSay()

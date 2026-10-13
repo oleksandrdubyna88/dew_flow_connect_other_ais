@@ -40,6 +40,24 @@ public static class CompletionReader
     public const string CutAtTheCeiling = "length";
 
     /// <summary>
+    /// The one sentence for an answer its ceiling cut — the api shim's and the local shim's
+    /// (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.2): where it came from, the ceiling the request carried,
+    /// what was generated and how much of it arrived as content, then the caller's own cure.
+    /// </summary>
+    /// <param name="source">What answered, as the caller names it — an endpoint, or "the local engine at …".</param>
+    /// <param name="dialect">The dialect the request was written in: the ceiling's field, and the ceiling it sent for <paramref name="maxTokens"/>.</param>
+    /// <param name="maxTokens">The configured ceiling, as the shim was given it.</param>
+    /// <param name="cure">What to do about it — each shim knows its own levers (the local one names the effort it sent).</param>
+    public static string CutSentence(string source, ChatAnswer answer, ApiDialect dialect, int maxTokens, string cure) =>
+        $"the answer from {source} was cut at the token limit ({dialect.MaxTokensField} {dialect.CeilingFor(maxTokens)}): "
+        + $"{answer.Usage.TokensOut} tokens generated{Thinking(answer)}, {answer.Content?.Length ?? 0} characters of content arrived — "
+        + $"{cure}; the fragment was not kept";
+
+    /// <summary>" (N reasoning tokens)" when the vendor reported any — the number a person needs to size the ceiling.</summary>
+    public static string Thinking(ChatAnswer answer) =>
+        answer.ReasoningTokens > 0 ? $" ({answer.ReasoningTokens} reasoning tokens)" : string.Empty;
+
+    /// <summary>
     /// The whole of what a completion said about itself, or <see cref="ChatAnswer.Nothing"/> for text
     /// that is not a completion.
     /// </summary>

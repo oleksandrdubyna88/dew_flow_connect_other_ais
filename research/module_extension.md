@@ -11708,6 +11708,11 @@ flowchart LR
   `model-<id>.check.json` the binary keeps: the watcher reads it beside the caller kinds' (`moreKinds`), the health
   is computed while the Models tab or the Consultant place shows, and the card says "checking…", "checked: it
   answered", "checked: no answer — …" or "not checked yet" through `checkStateOnThisDisk` — after a reload too.
+  **The "…" is filled (2026-10-13):** a failed check records its classification (`failureWhat`) and no `reason`,
+  so the badge used to read a bare "checked: no answer" while the record said why; `reasonOf` now falls back to
+  `failureWhat` when the record has no reason (a reason still wins) — e.g. "…did not answer: exit 70: the answer
+  from the local engine at … was cut at the token limit (max_tokens 8192)" (`modelCheck.test.ts`, over the real
+  record parser; todo/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
 - coai-mcp's verdict ("coai-mcp will run it", or the current card's "cannot review"), kept apart from the check.
 - The CLI: its version and a newer one (`cliStatusNote`), and the current card's ▶ ⤓ ⟳ / ⟳ ⇄ / ≡ (`headButtons`,
   `endpointButton` — the same commands, by name).

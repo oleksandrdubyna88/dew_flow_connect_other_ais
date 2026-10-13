@@ -18,7 +18,7 @@ public sealed class AConsultantIsHandedItsRowsKeyTests
         new Dictionary<string, string> { ["openrouter"] = "sk-or", ["qwen"] = "sk-qw", ["claude"] = "sk-ant", ["codex"] = "sk-oa" }, string.Empty);
 
     private static string KeyFor(ProviderSettings row) =>
-        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), "D:/data", Vault, Core.Api.ApiOverrides.None).ApiKey;
+        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = "D:/data" }, Vault).ApiKey;
 
     [Fact]
     public void AnEndpointRow_IsHandedItsKey()
@@ -50,7 +50,7 @@ public sealed class AnApiConsultantRunsWithItsModulesSettingsTests
         var row = PanelSettings.ParseVendors(
             """[{"id":"glm","runtime":"api","model":"glm-5.3","baseUrl":"https://open.bigmodel.example/api/paas/v4","dialect":"glm","effort":"high"}]""")[0];
 
-        var settings = ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), "D:/data", VaultKeys.None("t"), Core.Api.ApiOverrides.None);
+        var settings = ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = "D:/data" }, VaultKeys.None("t"));
         var expected = ApiRowView.Of(row, Core.Api.ApiOverrides.None).Effective;
 
         settings.ReasoningEffort.Should().Be("high").And.Be(expected.Effort);
