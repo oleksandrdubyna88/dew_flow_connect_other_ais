@@ -72,6 +72,8 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
         ("claude", new ClaudeRuntime(), new("claude") { Model = "claude-opus-5", ReasoningEffort = "high" }),
         ("antigravity", new AntigravityRuntime(), new("antigravity") { Model = "gemini-3.7-flash-high", ReasoningEffort = "high" }),
         ("deepseek", new DeepseekRuntime(), new("deepseek") { Model = "deepseek-reasoner", ApiKey = "sk-ds", ReasoningEffort = "high" }),
+        // The model rides VIBE_ACTIVE_MODEL, not the argv (D10), and no effort is sent: none is measured taking effect.
+        ("vibe", new Runners.Vibe.VibeRuntime(), new("vibe") { Model = "glm-5-3", ReasoningEffort = "high" }),
     ];
 
     private static TheoryData<string, IReviewerRuntime, ReviewerSettings> Table(Func<string, bool> keep)

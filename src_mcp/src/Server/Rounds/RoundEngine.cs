@@ -353,6 +353,9 @@ internal sealed class RoundEngine(
             var workingDir = lease?.Path ?? scratch!.Path;
             // Every launch the stage built — the round's reviewers, their repairs, the security lane — in this round.
             var roundWork = (await stage.MakeWork(session, workingDir, sha, roundClock.Token)).InRound(key);
+            // The round's own scratch — its sanitised snapshot and its Vibe homes — goes with the round, however it ends
+            // (D6 and D17 of todo/PLAN_vibe_and_kimi_runtimes.md); a crash leaves it to the six-hour scratch sweep.
+            using var scratchOfTheRound = roundWork.Scratch;
             var work = roundWork.Reviewers;
 
             // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round

@@ -82,6 +82,21 @@ public static class VendorDiagnosis
             "in a fresh worktree every round — accept it once interactively, or set this project's " +
             "trust flag in the CLI's own config.",
             DiagnosisKind.Refused),
+        // Measured 2026-10-12 (research/RESULTS_vibe_confinement.md §11, arm a2, 3 of 3): Vibe with no sign-in exits 1 with
+        // this sentence on stderr and in its export. Its sign-in lives in the OS keyring (§12), not in the home coai gives it,
+        // so the cure is Vibe's own setup, once, as the user coai runs as. Reached through Vibe's test switch, not a real
+        // signed-out machine, whose wording is not measured.
+        ("Missing MISTRAL_API_KEY environment variable",
+            "Vibe is installed but not signed in for this user — run `vibe --setup` once in a terminal (the sign-in is kept in " +
+            "the operating system's keyring, which every coai launch of Vibe reads).",
+            DiagnosisKind.Refused),
+        // Measured 2026-10-12 (§3): the `vibe` command is two CLIs, and the Rust one refuses the shipped flags with a clap
+        // usage error, exit 2. coai pins VIBE_CLI=python on every launch (D17), so this means the installed Vibe no longer
+        // starts its Python CLI for that pin — coai never falls through to a CLI nobody measured.
+        ("unexpected argument '--time-limit'",
+            "the installed Vibe started its Rust CLI, which coai has not measured and which takes no --time-limit — coai pins " +
+            "VIBE_CLI=python, so this Vibe may no longer ship the Python CLI: install a Vibe version coai has qualified.",
+            DiagnosisKind.UnknownOption),
         ("command not found",
             "the CLI is not on this machine's PATH — set an explicit executable path for this vendor.",
             DiagnosisKind.NotOnPath),
@@ -265,6 +280,11 @@ public static class VendorDiagnosis
             ("antigravity", false) =>
                 "install Google's own CLI: irm https://antigravity.google/cli/install.ps1 | iex",
             ("codex", _) => "install it with: npm install -g @openai/codex",
+            // Mistral's own instructions in the package README (mistral-vibe 2.26.1, D16): its script on Linux and macOS,
+            // uv on Windows — and uv first where it is missing.
+            ("vibe", true) => "install Mistral's own CLI: curl -LsSf https://mistral.ai/vibe/install.sh | bash",
+            ("vibe", false) =>
+                "install it with uv: uv tool install mistral-vibe (no uv yet: powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\")",
             ("claude", _) => "install it with: npm install -g @anthropic-ai/claude-code",
             _ => null,
         };

@@ -67,4 +67,11 @@ export const FAST_MODE: readonly FastModeRow[] = [
     measuredWith: '',
     note: 'Not until a dialect’s tier is measured on a real call (xai first); the generic openai dialect serves every unnamed endpoint and gets none.',
   },
+  {
+    runtime: 'vibe',
+    source: 'none',
+    models: [],
+    measuredWith: '',
+    note: 'Vibe has no service tier: the subscription answers at one speed.',
+  },
 ];

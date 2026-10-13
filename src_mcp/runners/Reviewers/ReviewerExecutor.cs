@@ -780,8 +780,21 @@ public sealed class ReviewerExecutor(
 
         return launch.Terminal is not null
             ? (launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty)
-            : (null, ParseAnswer(launch.Answer, invocation.Provider), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied);
+            : (null, Cited(ParseAnswer(launch.Answer, invocation.Provider), invocation.Citations), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied);
     }
+
+    /// <summary>
+    /// A review whose cited files are the repository's: an absolute path the launch's <see cref="ReviewerInvocation.Citations"/>
+    /// maps back (a file inside a sanitised snapshot that its manifest holds, D6) becomes that repository-relative path; any
+    /// other path stays as the reviewer wrote it.
+    /// </summary>
+    internal static NormalisedReview? Cited(NormalisedReview? review, ICitedPaths citations) =>
+        review is null || ReferenceEquals(citations, CitedAsWritten.Instance)
+            ? review
+            : review with { Findings = [.. review.Findings.Select(finding => finding with { File = MappedBack(finding.File, citations) })] };
+
+    private static string MappedBack(string file, ICitedPaths citations) =>
+        Path.IsPathRooted(file) && citations.MapBack(file) is { Length: > 0 } relative ? relative : file;
 
     /// <summary>
     /// One launch, as far as "what the process said" — and no further.
@@ -827,7 +840,21 @@ public sealed class ReviewerExecutor(
     public Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct) =>
         LaunchBuiltAsync(invocation.Adapter?.ForLaunch(invocation) ?? invocation, ct);
 
+    /// <summary>
+    /// The adapter's launch control first (<see cref="IReviewerRuntime.TakeTurnAsync"/>): a refusal is this launch's
+    /// <c>NotStarted</c> with the adapter's sentence, and a turn it holds is given back only after the launch has been
+    /// read — its answer, usage and reason — so a per-attempt file the adapter reads (Vibe's export, D7) is still there.
+    /// </summary>
     private async Task<ReviewerLaunch> LaunchBuiltAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
+        using var turn = invocation.Adapter is { } adapter ? await adapter.TakeTurnAsync(invocation, launcher, ct) : LaunchTurn.Free;
+
+        return turn.Refusal.Length > 0
+            ? new ReviewerLaunch(new ReviewerOutcome.NotStarted(turn.Refusal), null, Usage.None, string.Empty)
+            : await LaunchTakenAsync(invocation, ct);
+    }
+
+    private async Task<ReviewerLaunch> LaunchTakenAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;
         try
@@ -897,13 +924,9 @@ public sealed class ReviewerExecutor(
         // and answering `Usage.None` for every non-zero exit is what left that money at stdout.
         var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
 
-        if (result.ExitCode != 0)
+        var reason = Failed(invocation, result);
+        if (result.ExitCode != 0 || reason.Length > 0)
         {
-            // The adapter is asked where ITS reasons live, the same way it is asked where its answer
-            // and its usage live. codex writes its failure into the `--json` event stream on stdout
-            // and leaves stderr empty, so without this the summary can only report the emptiness.
-            var reason = invocation.Adapter?.WhyItFailed(invocation, result) ?? string.Empty;
-
             return new ReviewerLaunch(
                 new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr), reason) { Usage = usage },
                 null,
@@ -916,6 +939,20 @@ public sealed class ReviewerExecutor(
 
         return new ReviewerLaunch(null, answer, usage, evidence, result, invocation.Adapter?.NotApplied(invocation, result) ?? string.Empty);
     }
+
+    /// <summary>
+    /// Why this launch is not an answer, or empty: a non-zero exit, with whatever the adapter can say about it — or an exit
+    /// of zero the adapter DISOWNS (<see cref="IReviewerRuntime.Disowned"/>: Vibe ran on another model than it was asked).
+    /// </summary>
+    /// <remarks>
+    /// The adapter is asked where ITS reasons live, the same way it is asked where its answer and its usage live. codex
+    /// writes its failure into the <c>--json</c> event stream on stdout and leaves stderr empty, so without this the summary
+    /// can only report the emptiness. A non-zero exit with nothing to add is still a failure — its stderr tail says it.
+    /// </remarks>
+    private static string Failed(ReviewerInvocation invocation, ProcessResult result) =>
+        invocation.Adapter is not { } adapter ? string.Empty
+        : result.ExitCode != 0 ? adapter.WhyItFailed(invocation, result)
+        : adapter.Disowned(invocation, result);
 
     /// <summary>What the vendor said, and what is left to show when it said nothing.</summary>
     private static (string? Answer, string Evidence) Read(ReviewerInvocation invocation, ProcessResult result)

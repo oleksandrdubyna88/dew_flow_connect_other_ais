@@ -172,6 +172,18 @@ public sealed record ReviewerSettings(string Provider)
     /// site are what prove each site asks.</para>
     /// </remarks>
     public CodexTierSupport CodexTier { get; init; } = CodexTierSupport.Unprobed;
+
+    /// <summary>
+    /// A coai-owned folder the launch's OWNER deletes when it ends — the round, for a reviewer — where an adapter keeps
+    /// state it must not leave behind and must not share with another owner. Empty: the adapter keeps it in the launch's
+    /// own <c>outputDir</c>, a <c>coai-answers-*</c> directory the six-hour scratch sweep removes.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>VibeRuntime</c> reads it, for its coai-owned <c>VIBE_HOME</c> (D17 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>):
+    /// one home per reviewer of the round, inside the round's own scratch folder, so it goes with the round. Launch data
+    /// like <see cref="DataDir"/> — a directory, never anything in it.
+    /// </remarks>
+    public string OwnedScratch { get; init; } = string.Empty;
 }
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>
@@ -283,6 +295,13 @@ public sealed record ReviewerInvocation(
     /// ledger will say.
     /// </remarks>
     public string Attempt { get; init; } = LaunchAttempts.First;
+
+    /// <summary>
+    /// How this launch's cited file paths become the repository's — <see cref="CitedAsWritten"/> unless the launch ran in a
+    /// sanitised snapshot (D6), whose <c>ReviewSnapshot</c> maps an absolute path under its root back through its manifest.
+    /// </summary>
+    /// <remarks>Set by the caller that chose the launch directory (the round's roster), never by an adapter's <c>Build</c>.</remarks>
+    public ICitedPaths Citations { get; init; } = CitedAsWritten.Instance;
 }
 
 /// <summary>
@@ -363,6 +382,33 @@ public interface IReviewerRuntime
     /// runs where it always did, byte for byte.
     /// </remarks>
     bool NeedsASanitisedSnapshot => false;
+
+    /// <summary>
+    /// Asked by the executor immediately before EVERY launch of this adapter's — the first, a retry, a repair, a follow-up,
+    /// a consultation's turn, a question row: may it start now? <see cref="LaunchTurn.Free"/> by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>The one launch control D8b and D17 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c> ask for: a check that must
+    /// look at the disk or the installed CLI cannot live in the pure <see cref="Build"/>, and a check made when the work
+    /// was built is stale by the time a repair starts. <see cref="LaunchTurn.Refused"/> ends the launch as
+    /// <c>NotStarted</c> with its sentence; a held turn is given back after the launch's answer, usage and reason have been
+    /// read. It gets the executor's launcher, so a probe it runs is the same kind of child a test can script.</para>
+    /// <para>It must never throw for an expected failure (an unreadable folder, a CLI that will not start): those are
+    /// refusals. A cancellation still leaves as one.</para>
+    /// </remarks>
+    Task<LaunchTurn> TakeTurnAsync(ReviewerInvocation invocation, IProcessLauncher launcher, CancellationToken ct) =>
+        Task.FromResult(LaunchTurn.Free);
+
+    /// <summary>
+    /// Why a launch that EXITED ZERO must still not be taken as an answer — or empty. Read after the usage, so a disowned
+    /// run keeps what it was billed.
+    /// </summary>
+    /// <remarks>
+    /// Vibe is the first to need it (D10): an alias it does not know exits 0 and answers on its routed default
+    /// (research/RESULTS_vibe_confinement.md §11), so the model that answered is checked AFTER the run against the one
+    /// the launch asked for. A default, so no other adapter changes.
+    /// </remarks>
+    string Disowned(ReviewerInvocation invocation, ProcessResult result) => string.Empty;
 
     /// <summary>
     /// What this launch asked for and its runtime said it did NOT apply — one sentence for the reviewer's note, or empty.
@@ -767,7 +813,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         runtimes.ToDictionary(r => r.Provider, StringComparer.OrdinalIgnoreCase);
 
     public static ReviewerRuntimeSelector Default { get; } =
-        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new AntigravityRuntime(), new DeepseekRuntime()]);
+        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new AntigravityRuntime(), new DeepseekRuntime(), new Vibe.VibeRuntime()]);
 
     /// <summary>
     /// Every runtime NAME a configured vendor may name. The one list; nobody writes a second.
@@ -785,7 +831,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     public static readonly IReadOnlySet<string> RuntimeNames =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "codex", "gemini", "claude", "antigravity", "local", "remote", "api",
+            "codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe",
         };
 
     /// <summary>
@@ -798,9 +844,11 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     /// <see cref="RuntimeNames"/> minus this one, so a runtime added on the client side is refused there
     /// by name until somebody decides otherwise — it used to subtract the literal <c>"local"</c>, and
     /// the next machine-only runtime would have been admitted because a set grew.</para>
+    /// <para><c>vibe</c> runs on the person's own Mistral sign-in, kept in THIS machine's OS keyring (D12 of
+    /// <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>): a Team server has no such sign-in and no plan for one yet.</para>
     /// </remarks>
     public static readonly IReadOnlySet<string> MachineOnlyRuntimes =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "local", "api" };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "local", "api", "vibe" };
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
 
@@ -818,6 +866,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         "antigravity" => new AntigravityRuntime(vendorId),
         "codex" => new CodexRuntime(vendorId),
         "local" => new LocalRuntime(vendorId, string.Empty),
+        "vibe" => new Vibe.VibeRuntime(vendorId),
         // `remote` is absent DELIBERATELY, and this comment is the guard against somebody adding it
         // to match the set. A Team server vendor cannot be built from a name: it needs the server's
         // URL, which only the full identity carries, so `RuntimeResolution.For` constructs it before

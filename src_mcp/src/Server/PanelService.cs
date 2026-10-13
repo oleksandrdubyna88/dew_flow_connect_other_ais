@@ -676,7 +676,9 @@ public sealed class PanelService
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses,
-                        codexTiers: tiers));
+                        codexTiers: tiers,
+                        // The round's own scratch (D17's homes); a plan round mounts no checkout, so no snapshot.
+                        scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken)));
             })
         {
             RolesPerVendor = 1,
@@ -847,7 +849,10 @@ public sealed class PanelService
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources,
-                        codexTiers: tiers),
+                        codexTiers: tiers,
+                        // The round's own scratch: D17's homes, and D6's sanitised snapshot of the pinned tree for a runtime
+                        // that must not start in the checkout — made here, once, because BuildWork cannot await.
+                        scratch: await _roster.ScratchAsync(_launcher, Stage.CodeReview, workingDir, readsCheckout: true, roundToken)),
                     notAsked);
 
                 // The RESOLVED base, not `baseRef`: when the two differ the reviewers are told so a
@@ -1199,7 +1204,9 @@ public sealed class PanelService
                             roles, workingDir, DocumentContext(purposeText, document, rules), round,
                             stage: Stage.DocumentReview, readsCheckout: false,
                             seed: StableSeed(running.State.SessionId, round),
-                            codexTiers: tiers));
+                            codexTiers: tiers,
+                            // The round's own scratch (D17's homes); a document round mounts no checkout.
+                            scratch: await _roster.ScratchAsync(_launcher, Stage.DocumentReview, workingDir, readsCheckout: false, roundToken)));
                 })
             {
                 Document = session.State.Document,

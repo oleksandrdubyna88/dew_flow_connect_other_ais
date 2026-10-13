@@ -75,6 +75,13 @@ export const EFFORT: readonly EffortRow[] = [
     measuredWith: '',
     note: "The model's probe report (coai-mcp --probe-api, ApiCapabilities.EffortLevels), judged per model.",
   },
+  {
+    runtime: 'vibe',
+    source: 'unmeasured',
+    levels: [],
+    measuredWith: '',
+    note: 'Mistral Vibe 2.26.1 has no effort flag, and nothing has been shown setting one per launch (todo/PLAN_vibe_and_kimi_runtimes.md, S2).',
+  },
 ];
 
 /** Whether a runtime has a thinking switch (D12): `probe` asks the model's report, the others say why there is none. */
@@ -123,5 +130,10 @@ export const THINKING: readonly ThinkingRow[] = [
     runtime: 'api',
     source: 'probe',
     note: 'The model’s probe report says whether its thinking can be switched off (thinkingSwitchable), per model.',
+  },
+  {
+    runtime: 'vibe',
+    source: 'unmeasured',
+    note: 'Vibe’s models carry thinking levels in its own config, but no launch flag was shown taking effect (todo/PLAN_vibe_and_kimi_runtimes.md, S2).',
   },
 ];

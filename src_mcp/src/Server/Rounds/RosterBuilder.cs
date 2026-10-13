@@ -84,15 +84,44 @@ internal sealed class RosterBuilder(
     /// The security lane's roster for these settings — the one place its decisions are made, shared by
     /// the work it appends and the source reader that must not read for a pairing that will not run.
     /// </summary>
-    internal SecurityRoster Security() => Security(CodexTiers.None);
+    internal SecurityRoster Security() => Security(CodexTiers.None, RoundScratch.None);
 
     /// <summary>
     /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
     /// standard tier (research/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
     /// like every other row, so they read the same answers.
     /// </summary>
-    internal SecurityRoster Security(CodexTiers tiers) => new(_settings, _prompts, _canRun, _runtimeFor,
-        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers), log);
+    internal SecurityRoster Security(CodexTiers tiers, RoundScratch scratch) => new(_settings, _prompts, _canRun, _runtimeFor,
+        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers, scratch), log);
+
+    /// <summary>
+    /// The round's own scratch (<see cref="RoundScratch"/>), prepared before the roster is built because a snapshot is made
+    /// asynchronously and <see cref="BuildWork"/> is not: a path for the round's Vibe homes (D17), and — when this stage
+    /// mounts a checkout and a runnable row of it runs on a runtime that asks (<see cref="IReviewerRuntime.NeedsASanitisedSnapshot"/>,
+    /// D6) — ONE sanitised snapshot of the pinned tree, shared by every such reviewer. Never a vendor name: the adapter says.
+    /// </summary>
+    internal async Task<RoundScratch> ScratchAsync(
+        Runners.Processes.IProcessLauncher launcher, Stage stage, string worktreePath, bool readsCheckout, CancellationToken ct)
+    {
+        var scratch = RoundScratch.Reserve(note => log.Warning("{Note}", note));
+        if (!SnapshotWanted(stage, readsCheckout))
+        {
+            return scratch;
+        }
+
+        var made = await new Runners.Snapshots.ReviewSnapshots(launcher).MakeAsync(new Runners.Snapshots.SnapshotSource.Pinned(worktreePath), scratch.Directory, ct);
+        if (made is Runners.Snapshots.SnapshotOutcome.Refused refused)
+        {
+            log.Warning("the round's sanitised snapshot was refused: {Reason}", refused.Reason);
+        }
+
+        return scratch.With(made);
+    }
+
+    /// <summary>A checkout this stage mounts, and a runnable row serving it on a runtime that must not start in it.</summary>
+    private bool SnapshotWanted(Stage stage, bool readsCheckout) =>
+        readsCheckout && _settings.CodeWorkspace != "none"
+        && _settings.Providers.Where(p => p.Serves(stage)).Where(_canRun).Any(p => _runtimeFor(p)?.NeedsASanitisedSnapshot == true);
 
     /// <summary>
     /// Asks every runnable codex executable whose answer can change an argv whether it can be told the standard tier —
@@ -159,8 +188,12 @@ internal sealed class RosterBuilder(
         // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
         Runners.Feature.SourceTurns? source = null,
         IReadOnlyList<Core.Context.FileDiff>? securityFiles = null,
-        IReadOnlyDictionary<string, string>? securitySources = null)
+        IReadOnlyDictionary<string, string>? securitySources = null,
+        // The round's own scratch (ScratchAsync): its snapshot and the folder its Vibe homes live in. Absent, a runtime that
+        // must not start in the checkout is LEFT OUT of a stage that mounts one, with its reason — never started in it.
+        RoundScratch? scratch = null)
     {
+        var owned = scratch ?? RoundScratch.None;
         var turns = source ?? Runners.Feature.SourceTurns.None;
         var tiers = codexTiers;
         // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
@@ -220,7 +253,7 @@ internal sealed class RosterBuilder(
         var eligible = _settings.Providers.Where(p => p.Serves(stage)).Where(_canRun).ToList();
         if (eligible.Count == 0)
         {
-            return new RoundWork([], []);
+            return new RoundWork([], []) { Scratch = owned };
         }
 
         // The ORDER the vendors are offered in, which is not a detail once a Team server is in the
@@ -255,8 +288,8 @@ internal sealed class RosterBuilder(
         var refused = new HashSet<(string Provider, string Role)>();
         Assemble(runnable, items, deal, seed, Add, CanCarry);
 
-        var ordinary = new RoundWork(LocalRowsFirst(work), notAsked, excluded) { OrdinaryDue = roles.Count > 0 };
-        return securityFiles is null ? ordinary : Security(tiers).Append(ordinary, securityFiles, stage, round, securitySources);
+        var ordinary = new RoundWork(LocalRowsFirst(work), notAsked, excluded) { OrdinaryDue = roles.Count > 0, Scratch = owned };
+        return securityFiles is null ? ordinary : Security(tiers, owned).Append(ordinary, securityFiles, stage, round, securitySources);
 
         // One sentence per ROLE however many vendors would have carried it: a person reading a round
         // needs to know the role did not run, not that four vendors each did not run it.
@@ -339,7 +372,18 @@ internal sealed class RosterBuilder(
                 return;
             }
 
-            var launch = SettingsFor(provider, runtime, api, tiers);
+            // Where THIS runtime starts: the stage's directory, or — for one that must not start in a checkout — the round's
+            // sanitised snapshot, its citations mapped back through the snapshot's manifest (D6). Left out, with the reason,
+            // when the round has none to give it.
+            var place = PlaceFor(runtime, launchDir, hasCheckout, owned);
+            if (place is LaunchPlace.Refused nowhere)
+            {
+                Exclude(provider.Provider, role, nowhere.Reason);
+                return;
+            }
+
+            var at = (LaunchPlace.At)place;
+            var launch = SettingsFor(provider, runtime, api, tiers, owned);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
             var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
             // Once, for the body AND the redaction list below: two calls that must agree are one value.
@@ -370,7 +414,7 @@ internal sealed class RosterBuilder(
             ReviewerInvocation Built(string text, string directory) =>
                 RowLaunchOptions.Labelled(runtime.Build(role, text, directory, schemaFile, outputDir, launch), provider, runtime, launch) with { Redact = redact };
             ReviewerWork Turn(string tail) => new(
-                Built(prompt + tail, launchDir),
+                Built(prompt + tail, at.Directory) with { Citations = at.Citations },
                 Built(repairBase + tail + RepairInstruction.Text, repairDir),
                 choice.Id,
                 System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
@@ -390,6 +434,23 @@ internal sealed class RosterBuilder(
         }
     }
 
+    /// <summary>
+    /// Where one runtime's review launch starts. A runtime that may start in the checkout starts where the stage says; one
+    /// that asks for a sanitised snapshot (D6) starts in the round's snapshot when the stage mounts a checkout — and is
+    /// refused, never started in the checkout, when the round has no snapshot to give it. Without a checkout (a plan
+    /// round's empty folder, the "none" workspace) there is nothing of the branch's to keep it from, and it starts there.
+    /// </summary>
+    internal static LaunchPlace PlaceFor(IReviewerRuntime runtime, string launchDir, bool hasCheckout, RoundScratch scratch) =>
+        !runtime.NeedsASanitisedSnapshot || !hasCheckout
+            ? new LaunchPlace.At(launchDir, CitedAsWritten.Instance)
+            : scratch.Tree switch
+            {
+                RoundTree.Made made => new LaunchPlace.At(made.Snapshot.Root, made.Snapshot),
+                RoundTree.Refused refused => new LaunchPlace.Refused(refused.Reason),
+                _ => new LaunchPlace.Refused(
+                    "no sanitised snapshot of the tree was made for this round, and this runtime is never started in the checkout itself (D6 of todo/PLAN_vibe_and_kimi_runtimes.md)"),
+            };
+
     /// <summary>A CLI row seen through no module: the generic defaults, which nothing below reads for it.</summary>
     private static readonly ApiRowView NotApi = new(
         Core.Api.OpenAiCompatibleVendor.Generic,
@@ -401,7 +462,7 @@ internal sealed class RosterBuilder(
     /// module's view (the row over the environment over the calibrated default); a CLI row's from the
     /// panel's local-engine settings, as they always have.
     /// </summary>
-    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers)
+    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers, RoundScratch scratch)
     {
         var settings = new ReviewerSettings(provider.Provider)
         {
@@ -426,6 +487,8 @@ internal sealed class RosterBuilder(
             // A reviewer starts no MCP server (issue #514); read per round, so a server added to
             // config.toml is switched off from the next round on.
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
+            // Only VibeRuntime reads it: the round's own folder, for one coai-owned home per reviewer (D17).
+            OwnedScratch = scratch.Directory,
         };
         var told = WithLocalEngine(settings, provider, _settings);
 
