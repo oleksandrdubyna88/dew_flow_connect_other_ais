@@ -282,10 +282,21 @@ against the code or a run before it went in here — the question consultant had
   forced on, every write `tool_denied`, fresh and resumed, 3 of 3 (M-V15, RESULTS §23). The home's validation allows Vibe's
   bundled plugin artifacts only through a **version-labelled hash manifest** — never "any file under `logs/session/plugins/`".
   §22 recorded names and sizes, NOT hashes (cadence consultation `4e79f70e`), so S1 adds a reproducible step that starts
-  `vibe` once on an empty home and writes `shared/vibe-home-manifest.json` (Vibe version → path → SHA-256). A Vibe version
-  with no manifest is REFUSED with a sentence naming the version and the step that qualifies it; requalification is the
-  cost of every Vibe update that changes those bytes. Tests: an upgraded CLI on a fresh home and on a resumed home — a
-  manifest present admits both, an absent one refuses both.
+  `vibe` once on an empty home and writes `shared/vibe-home-manifest.json` (Vibe version → path → SHA-256). **The version
+  rule is WARN AND RUN — the owner's decision of 2026-10-13 ("set it up once and it must work if it can"), replacing the
+  refusal S1 shipped (`VibeLaunch.HomeRefusal`, `VibeLaunch.cs:242-248`):** a Vibe version with NO entry in the manifest
+  LAUNCHES. Its home's SHAPE is still validated in full — the forbidden names (a `hooks.toml`, any `config.toml`, an
+  `agents/` or `tools/` folder), a link anywhere, a trust list that trusts anything — which is exactly the shape check that
+  already runs before the version is known (`VibeHome.Refusal(home, manifest)`, `VibeHome.cs:44-45`); the files under the
+  pinned prefix are admitted by NAME for that unknown version; and the launch's result carries the SHARED version warning
+  (one shape for both runtimes, D19: the running version, the measured one(s), that every confinement number AND the
+  home's plugin hashes are the measured version's, and that re-running `scripts/vibe-home-manifest.mjs --write` and the
+  probe is advised) — the reviewer line shows it, the row's card shows it. A version WITH an entry keeps its plugin hashes
+  ENFORCED: a file under the pinned prefix whose bytes differ from the entry's is the tampered bytes of a KNOWN version —
+  the one place nothing can be made safe — and is still a refusal with the path (`VibeHome.cs:153-158`). Tests: an
+  upgraded CLI with no entry, on a fresh home and on a resumed home — both launch, both carry the warning, both still
+  refuse a `hooks.toml` and a link; a known version with one changed plugin byte refuses with the path; a known version
+  with its bytes carries no warning.
 - **D18 — Vibe and Kimi on Linux and WSL are refused until measured.** Every number above is Windows. On Linux Vibe's keyring may
   fall back to a file inside `VIBE_HOME`, which would break D17, and nothing was measured there. A launch whose CHILD runs on
   Linux (including WSL launched from Windows) is refused with a sentence naming this plan, for both runtimes (Kimi's WSL
@@ -377,8 +388,12 @@ against the code or a run before it went in here — the question consultant had
     list STILL LAUNCHES; the launch's result carries a visible WARNING naming the running version, the measured one(s), and
     that every confinement number coai has is the measured version's; the reviewer line shows it, and the panel shows it on
     the row's card; re-running `scripts/probe-kimi-confinement.mjs` on the new version is ADVISED by the sentence, never
-    required. This is NOT the D17 refusal, and Vibe's manifest refusal stays as it is — it guards the owned home's CONTENTS
-    (the plugin bytes), not only the version — unless the owner decides otherwise. `KIMI_CODE_NO_AUTO_UPDATE=1` stays in the
+    required. The owner decided the same for Vibe on 2026-10-13 (D17): **one shared version warning for both runtimes — one
+    shape, never two** — a record on the launch result built by one builder (the runtime, the running version, the measured
+    versions, what the numbers cover, the advised step), carried by `LaunchTurn` (`LaunchTurn.cs:17-50`, today a refusal
+    only) onto `ReviewerLaunch` (`ReviewerExecutor.cs:1047-1053`) and from there to the reviewer line and the card; Vibe
+    keeps the one refusal that cannot be made safe, a KNOWN version's plugin bytes that differ from its entry (D17).
+    `KIMI_CODE_NO_AUTO_UPDATE=1` stays in the
     built environment and M-K13 stays an informational cell, not a gate: the pin only makes the warning rarer, and whether
     it works is worth one measured row, not a blocked story.
   - **`~/.agents/skills` and `~/.agents/AGENTS.md` — a stated limit, not a refusal.** Kimi documents reading them from the
@@ -415,6 +430,40 @@ against the code or a run before it went in here — the question consultant had
     the remaining race.
   This replaces, for Kimi, what D17 is for Vibe, and D8b's Kimi arm. It does NOT bound Kimi's reads (`Grep`/`Glob`, D15) and
   does not close `~/.agents/*` until M-K12 says it can.
+- **D20 — a persistent consultant home has a BOUNDED life** (2026-10-13; the plan gate's finding, codex, accepted). A
+  `consult` conversation's home — `LocalApplicationData/coai-vibe/<id>` (D17) or `coai-kimi/<id>` with its junction (D19),
+  named by the consultation's id — is deleted when the conversation closes or lapses. That is the only cleanup the plan had,
+  and it runs INSIDE the closing: a host killed before the conversation closes leaves the home — junction and all — for ever,
+  and nothing reads `coai-vibe/` or `coai-kimi/` again. So a third pass joins the sweep that already runs on every beat and
+  at server start: `ConsultationService.Sweep` (`ConsultationService.cs:263-264`) sweeps the records first and then runs
+  `ConsultationRetention.Sweep` (`ConsultationRetention.cs:31-34`), on the `ConsultationSweeper` beat
+  (`ConsultationSweeper.cs:76-110`, every `ServerPace.SweepEvery` — `COAI_SWEEP_SECONDS`, 60 s unless set, clamped 10–3 600,
+  `ServerPace.cs:8,32`) and once in the `PanelService` constructor at start (`ConsultationSweeper.cs:7-10`). The home sweep
+  runs AFTER the records (the retention pass's order), over every folder of both roots:
+  - **Removed** when (a) the store has no record for the folder's id (`ConsultationStore.cs:17,32`: `consultations/<id>.json`)
+    AND the home's last write is older than the window — never a just-made home whose record write is in flight; (b) the
+    record is over — closed, failed, lapsed (`ConsultationStore.cs:160-170`, the record's `IsOver`); (c) the record is still
+    open but the home's last write is older than the window — in which case the record pass of the same beat has already
+    lapsed it (`ConsultationStore.cs:176`), so (b) catches it next beat at the latest.
+  - **The window is the conversation's own idle budget**, not a new number: `settings.ConsultIdle`
+    (`PanelSettings.cs:606`, `COAI_CONSULT_IDLE_MINUTES`, `:941`, 15 minutes unless set) — the same window after which the
+    record sweep closes a conversation as lapsed and a follow-up is refused (`ConsultationRules.cs:36`). A home that sat idle
+    longer than its conversation may belongs to a conversation that is closed or about to be.
+  - **Kept** when the record is open and the home was written inside the window; and SKIPPED this beat when the home's turn
+    is held (a zero-wait take on `VibeHomeTurns` / Kimi's twin, `VibeHomeTurns.cs:21`) — a live launch, judged by the lock
+    and never by a stamp, the store's own rule for a running turn (`ConsultationStore.cs:181-199`).
+  - **Junction-first for Kimi** (D19's disposal order): the `credentials` link removed by its own name and verified before
+    the recursive delete, which never enters a reparse point. **Never the reason a sweep fails** (`ConsultationRetention.cs:20-24`):
+    a folder that cannot be listed or removed is logged and skipped, and the next beat tries again.
+  - **The bound, stated.** While a server runs, no home outlives its conversation by more than `ConsultIdle` plus one beat
+    (15 min + 60 s by default); a host killed mid-conversation leaves its homes until the next server start, when the start
+    sweep removes them. What this does not do: run while no coai-mcp runs — a machine that never starts the server again
+    keeps the leftovers, which is the bound the record store itself has.
+  Tests (§5): an orphaned `coai-kimi/<id>` with no record, older than the window, whose junction points at a folder holding
+  a file → the home and the junction gone, the file untouched; the same home younger than the window → kept; a live
+  conversation's home (record open, written now) → kept; a closed record's home → gone on the beat; a home whose turn is held
+  → skipped, then gone once the turn is given back; a service built with a stale home present → gone at start; a Vibe home
+  the same without the junction; an unreadable folder → logged, the pass goes on. The disk projection is §7's.
 - **D16 — official installers only.** Vibe: `uv tool install mistral-vibe` (what is installed here) or Mistral's own
   script; Kimi: Moonshot's own installer. Both go into `OFFICIAL_SOURCES` (`vendorTerminal.ts:346`), which a test pins.
   Neither is on npm, so the update light needs a version source other than npm (`cliVersions.ts:25` has npm and manifest
@@ -490,19 +539,26 @@ sign-in.
   registered in `Default`, `RuntimeNames`, `Named`, and in `MachineOnlyRuntimes` (D12).
 - The owned home and the built environment (D17): creation, validation before every launch (a refusal with the path and its
   cure), serialised turns, disposal with the round; the Linux/WSL refusal (D18); the model checked before and after
-  (D10).
+  (D10). **The version rule, re-planned 2026-10-13 (owner: warn and run):** `VibeLaunch.HomeRefusal`'s no-entry refusal
+  (`VibeLaunch.cs:242-248`) becomes the SHARED version warning on the launch turn — for a version with no manifest entry the
+  shape check (`VibeHome.cs:44-45`) stands alone, the pinned-prefix files are admitted by name, and `LaunchTurn` carries the
+  warning (`LaunchTurn.cs:17-50`) onto `ReviewerLaunch` (`ReviewerExecutor.cs:1047-1053`), the reviewer line and the card;
+  a known version's plugin hashes stay enforced (`VibeHome.cs:153-158`, a mismatch still refuses). One builder for the
+  warning's text and fields, used by Vibe here and by Kimi in S4 (D19) — one shape, never two.
 - `VendorDiagnosis`: Vibe's install cure per OS and the failure sentences M-V7 captured (not signed in, quota).
 - Seeds: `feature-availability.json` (`runtimes`; `effort` `unmeasured` — no flag sets it; `thinking` `unmeasured` —
   the models carry levels in Vibe's own config but no launch flag was shown taking effect; `fastMode` `none`), regenerate.
 - Extension: `RUNTIMES`, both `package.json` enums, `modelsFor` + `modelsProvenance` (curated list, D10), the preset
   (D11), `vendorTerminal` maps + `vibeInstall` + `OFFICIAL_SOURCES` (D16), `JUDGED_HERE`, both `CLI_RUNTIMES`,
-  `KNOWS_ITS_OWN_ENDPOINT`, a colour slot, the `crossesTo` gate (D13). The model card is the catalog's (new UI only).
+  `KNOWS_ITS_OWN_ENDPOINT`, a colour slot, the `crossesTo` gate (D13). The model card is the catalog's (new UI only); the
+  row's card shows the shared version warning whenever a launch's result carries one (owner, 2026-10-13).
 - Docs: `module_runners.md`, `module_extension.md`, `architecture.md` runtime list, README, help in five languages,
   `.agents/rules/common/vendor-routing.md` (Mistral models → `vibe`), CHANGELOG entries under `## Unreleased`.
 
 **S3 — Vibe as a consultant and a question-consultant row.** Decisions D1, D6 (one stable snapshot path per conversation,
 refreshed in place; cwd per capability), D7 (`sessionId`, resume), D10, D17 (one home per conversation, kept across its turns;
-the built environment on the question-row path), D18.
+the built environment on the question-row path), D18, D20 (the conversation's home swept on the beat and at start when its
+conversation is closed, unknown to the store, or idle past `ConsultIdle`).
 Cells: builds on M-V5 (per-turn or cumulative), M-V6 and M-V12, all recorded by S1. Depends on S1 AND S2 — it uses S2's
 reviewer adapter (a consultant reads answer and usage through it, `IConsultantRuntime.cs:107`) and S2's owned-home and
 environment controls (cadence consultation `4e79f70e`). Complete on its own: a Vibe row answers `consult` and a
@@ -637,8 +693,9 @@ every refusal.
 - The conversation's owned home (D19) under `LocalApplicationData/coai-kimi/`: made with its junction at the first turn,
   validated before every turn (the junction's target still the person's folder — a sign-out and sign-in between turns
   replaces the files, not the folder, and is Kimi's to notice), deleted — junction first — when the conversation closes or
-  lapses (§7). The conversation's turns on one home are serialised; its launches share the per-credentials gate with the
-  reviewers (D19) until M-K14.
+  lapses, and by D20's home sweep on the beat and at server start when its conversation is closed, unknown to the store or
+  idle past `ConsultIdle` (§7). The conversation's turns on one home are serialised; its launches share the per-credentials
+  gate with the reviewers (D19) until M-K14.
 - `consultant-limitations.json` rows per side.
 - Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `kimi` (snapshot for `disk`, empty
   folder for `none`; `Read` bounded by the shim, `Grep`/`Glob` not — so `disk` is written `unconfined`, D15; the `~/.agents/*`
@@ -757,6 +814,13 @@ Unit tests (red first where they guard a defect):
   the platform's minimal set plus `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL` — a parent `VIBE_MCP_SERVERS` never
   reaches it (a test sets one in the parent and inspects the request). Linux/WSL child → refused (D18). Model: an alias outside
   the curated list refused before launch; an export whose `active_model` is absent or different → failure with usage kept.
+  Version (owner, 2026-10-13: warn and run): a `vibe --version` with NO manifest entry LAUNCHES — the shape check still
+  refuses a `hooks.toml`, a link and a trust entry on that home, the pinned-prefix files are admitted by name, and the launch
+  turn carries the SHARED version warning (the running version, the measured one(s), that the numbers and the plugin hashes
+  are the measured version's, the advised `vibe-home-manifest.mjs --write` and probe) to the reviewer line (C#) and the row's
+  card (TS); a known version with one changed plugin byte → refused with the path; a known version with its bytes → no
+  warning. The warning's shape: Vibe's and Kimi's are ONE record type with the same fields from one builder — a test
+  constructs both and compares their shape, so a second shape cannot appear.
 - Owned Kimi home (D19, `KimiHomeTests` / `KimiLaunchControlTests`, against a FAKE person's home in a temp folder — never the
   developer's `~/.kimi-code`): the person's `credentials/` absent → refused *not signed in* before any process; the person's
   `credentials/` itself a link → refused; made: `credentials` is a reparse point whose read-back target is the fake folder,
@@ -785,6 +849,14 @@ Unit tests (red first where they guard a defect):
   `DeleteEvenIfReadOnly`: the attribute cleared through the junction (`GitScratch.cs:21-27`), or the file deleted. A second
   test: the disposal of a home whose junction was already removed, and of one whose `credentials` is a real folder (a
   tampered home), each ends with the home gone and nothing outside it touched.
+- **Consultant home sweep (D20)**, against fake `coai-vibe/` and `coai-kimi/` roots and a fake record store in a temp
+  folder: an orphaned `coai-kimi/<id>` with no record, written longer ago than `ConsultIdle`, whose `credentials` junction
+  points at a folder holding a file → the home and the junction gone, the target folder and its file untouched; the same
+  home written inside the window → kept; a live conversation's home (record open, written now) → kept; a closed, failed or
+  lapsed record's home → gone on the beat; a home whose turn is held → skipped this beat, gone on the next once the turn is
+  given back; the start sweep on a service built with a stale home present → gone; a Vibe home the same, no junction; an
+  unreadable folder → logged, the rest of the pass still runs; the records are swept BEFORE the homes on one beat (an open
+  record idle past the window is lapsed, and its home goes by rule (b)).
 - `crossesTo`: a `vibe` / `kimi` row is not sent to a server older than its constant; a test that a host whose `RUNTIMES`
   lacks `vibe` does not overwrite a `vibe` row in the server's settings file (D13). **And one live compatibility check**
   (plan gate, codex, 2026-10-12): the extension's REAL send path (the settings mirror the server reads) against the last
@@ -856,10 +928,17 @@ Unit tests (red first where they guard a defect):
 - **Vibe's session store** (`logs/session/unified/<id>`, ~130 KB for two short turns, estimated ~300 KB for a review):
   under D17 it lives in coai's OWN home, never the person's `~/.vibe`, so it goes when that home goes (next bullet). The
   person's `~/.vibe` gains nothing from coai.
-- **Owned homes** (D17): ~85 KB of Vibe's own unpacked plugins per home plus its sessions (~130 KB for two short turns). A
-  round's home lives in the round's `coai-answers-*` directory and goes with it (and with the 6-hour sweep after a crash);
-  a conversation's home under `LocalApplicationData/coai-vibe/` is deleted when the conversation closes or lapses, by the
-  consultation sweep that already closes it (`ConsultationSweeper`), with a test that a closed conversation's home is gone.
+- **Owned homes** (D17): ~85 KB of Vibe's own unpacked plugins per home plus its sessions (~130 KB for two short turns —
+  call a conversation's home ~300 KB). A round's home lives in the round's `coai-answers-*` directory and goes with it
+  (and with the 6-hour sweep after a crash); a conversation's home under `LocalApplicationData/coai-vibe/` is deleted when
+  the conversation closes or lapses, by the consultation sweep that already closes it (`ConsultationSweeper`), with a test
+  that a closed conversation's home is gone — **and by D20's home sweep** on the same beat and at server start, for a home
+  whose conversation was closed while the host was down, is unknown to the store, or sat idle past `ConsultIdle`. So while a
+  server runs a home outlives its conversation by at most `ConsultIdle` + one beat (15 min + 60 s by default), and a killed
+  host's homes go at the next start. **Projected:** resident at once = the open conversations' homes plus those of the last
+  ~16 minutes — a handful, a few MB; passing through at 50 Vibe conversations a day ≈ 50 × 300 KB = 15 MB a day, none of it
+  kept past the window. A home is removed with its snapshot (next bullet), so the snapshot's size, not the home's, is the
+  number that matters there.
 - **Snapshots** (D6): one per code round per runtime-that-asks (≈ the tree's size — 38.8 MB for this repository), inside
   the round's `coai-answers-*` scratch directory and gone with the round; and one per `consult` conversation, refreshed in
   place, deleted with the conversation's home when it closes or lapses. Both are covered by the 6-hour sweep after a crash. At 50 Vibe launches a day on a repository this size, worst case
@@ -880,7 +959,12 @@ Unit tests (red first where they guard a defect):
   unmeasured until M-K11 (b): that an owned-home launch leaves the person's `~/.kimi-code` byte-identical but for
   `credentials/` — Kimi's `workspaces.json`, `user-history/` and `updates/` are home-relative in the probe's hashing (§3),
   not yet shown home-relative under `KIMI_CODE_HOME` arm by arm. At 50 Kimi launches a day: ~5 MB of sessions a day inside
-  homes that are gone within the day. The person's `~/.kimi-code` gains nothing from coai but its own token refreshes.
+  homes that are gone within the day. **A conversation's `coai-kimi/<id>` home is also D20's:** swept junction-first on the
+  beat and at start when its conversation is closed, unknown to the store, or idle past `ConsultIdle` — so, as for Vibe, a
+  home outlives its conversation by at most 15 min + 60 s while a server runs, a killed host's homes go at the next start,
+  and the junction (0 bytes, the person's folder by reference) never outlives the home. Projected: resident = the open
+  conversations' homes plus the last ~16 minutes' (~100 KB each — under a MB); passing through at 50 Kimi conversations a
+  day ≈ 5 MB. The person's `~/.kimi-code` gains nothing from coai but its own token refreshes.
 - No new table, cache or long-lived process.
 
 ## 8. Not this plan's
@@ -902,7 +986,14 @@ Unit tests (red first where they guard a defect):
 - [ ] No launch of either CLI carries `--trust`, `--add-dir` or the prompt in argv, and no Vibe launch starts in the checkout —
       pinned by tests on every launch path; every Vibe launch granted the tree starts in a sanitised snapshot.
 - [ ] Every Vibe launch runs on a coai-owned, validated home with a built environment and `VIBE_CLI=python` (D17); a Linux/WSL
-      child is refused (D18); the model is checked before and after (D10).
+      child is refused (D18); the model is checked before and after (D10); a Vibe with no manifest entry launches WITH the
+      shared version warning on the result and the card, its home's shape still validated, while a known version's tampered
+      plugin bytes still refuse (owner, 2026-10-13).
+- [ ] The version warning is ONE shape for Vibe and Kimi, built by one builder and carried on the launch turn to the reviewer
+      line and the card — pinned by a test that constructs both.
+- [ ] A persistent consultant home (`coai-vibe/<id>`, `coai-kimi/<id>`) never outlives its conversation by more than
+      `ConsultIdle` plus one beat while a server runs, and a killed host's leftovers go at the next start — junction-first,
+      the target untouched (D20); pinned by the sweep tests of §5, and the projection is in §7.
 - [ ] A billing refusal is not retried.
 - [ ] Every Kimi launch runs on a coai-owned, validated `KIMI_CODE_HOME` whose `credentials/` is a junction to the person's
       folder, in a built environment, through one launch control on every path (D19); the person's `credentials/` is never
