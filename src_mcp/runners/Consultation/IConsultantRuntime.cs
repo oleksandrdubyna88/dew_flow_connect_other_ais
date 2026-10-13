@@ -186,6 +186,19 @@ public interface IConsultantRuntime : IAnsweringRuntime
     bool UsageIsCumulative => false;
 
     /// <summary>
+    /// Whether this consultant must run in a coai-owned SANITISED SNAPSHOT of the live tree rather than in the checkout
+    /// (D6 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>; the unit is <c>Snapshots/ReviewSnapshots</c>).
+    /// </summary>
+    /// <remarks>
+    /// The consultant's twin of <c>IReviewerRuntime.NeedsASanitisedSnapshot</c>: a CLI that reads only its working folder
+    /// and loads its configuration from it is given a copy of the live tree with the configuration paths left out — one
+    /// stable path per conversation, refreshed in place before each turn (D6 as amended 2026-10-12, since a resumed
+    /// session is bound to the folder it was created in). Declared by the adapter, never decided by a vendor name in
+    /// the service. False by default, so every consultant shipped before Vibe and Kimi keeps the checkout as its cwd.
+    /// </remarks>
+    bool NeedsASanitisedSnapshot => false;
+
+    /// <summary>
     /// A second launch that CONTINUES this turn's first, when the first answered nothing in a way only
     /// continuing can cure — or null, and the turn ends on what the first said.
     /// </summary>

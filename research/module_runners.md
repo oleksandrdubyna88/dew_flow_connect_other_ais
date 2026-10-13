@@ -83,6 +83,11 @@ sequenceDiagram
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
 | `HostKind`, `HostKinds` | `Platform/HostKind.cs` | `Windows / Linux / Wsl / MacOs / Other` from `OperatingSystem` + `VendorDiagnosis.OnWsl`; the one answer to "which platform" for the limitations and the health files' `side` |
 | `ConsultantLimitations`, `ConsultantLimitation`, `LimitationEvidence` | `Consultation/ConsultantLimitations.cs` | `shared/consultant-limitations.json`, embedded and read through a source-generated context; fails closed on a row without exactly one kind of evidence; `Lookup(host, runtime, capability = "")` takes a qualifier WORD (a claude overload passes `ClaudeCapability.Qualifier`) and never answers with another platform's row |
+| `ReviewSnapshots`, `ReviewSnapshot`, `SnapshotSource` (`Pinned` / `Live`), `SnapshotOutcome`, `SnapshotRefresh`, `SnapshotPath`, `SnapshotRead` | `Snapshots/ReviewSnapshots.cs`, `ReviewSnapshot.cs`, `SnapshotSource.cs` | the sanitised snapshot (D6 of `todo/PLAN_vibe_and_kimi_runtimes.md`, S1, 2026-10-12): a fresh coai-owned copy of a pinned worktree or of the live tree with every project-configuration path left out, made whole-or-not inside the caller's `coai-answers-*` scratch directory; `MapBack` / `Resolve` / `Read` answer only from the manifest; `RefreshAsync` re-fills the SAME root from the live tree (a resumed Vibe session is bound to its folder); disposal deletes it and gives its bytes back — the section *The sanitised snapshot* below |
+| `SnapshotOptions`, `SnapshotExclusions`, `SnapshotManifest`, `SnapshotUnavailable` | `Snapshots/SnapshotOptions.cs`, `SnapshotManifest.cs` | the ceilings (512 MB, 50 000 files, 60 s — ten-plus times this repository's 38.8 MB, 2 737 files, 5.7 s), the names left out at every depth (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`, `agents.md` — one default set for both vendors, a parameter for more), and what a snapshot holds: copied paths, excluded paths, unavailable paths (an unpopulated submodule, an LFS pointer) and the destination's measured case rule |
+| `SnapshotBudget`, `SnapshotBudget.Hold` | `Snapshots/SnapshotBudget.cs` | the aggregate cap: a process-wide count of the bytes live snapshots hold, a new one refused with both numbers past a ceiling (2 GB) or when the volume's free space would fall under a floor (5 GB); the volume reader injectable; a refresh counts the refreshed size, not old plus new |
+| `SnapshotListing`, `SnapshotPlanner`, `SnapshotCopier`, `SnapshotPaths`, `DestinationCase` (internal) | `Snapshots/*.cs` | the four steps: git lists (`ls-files --stage`, descending into populated submodules; `--others --exclude-standard` for a live tree), the planner refuses everything D6 refuses before a byte moves, the copier notices a file that changed under it, and the path rules resolve a request lexically against the root and the manifest |
+| `IReviewerRuntime.NeedsASanitisedSnapshot`, `IConsultantRuntime.NeedsASanitisedSnapshot` | `Reviewers/ReviewerRuntime.cs`, `Consultation/IConsultantRuntime.cs` | the capability an adapter declares to be launched in a snapshot rather than in the tree — default false; nothing sets it true until the Vibe and Kimi adapters (S2/S4); never an `if` on a vendor name |
 
 ## The decisions a reader needs
 
@@ -2667,3 +2672,295 @@ sequenceDiagram
 ```
 
 Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
+
+## The sanitised snapshot — a CLI that reads only its working folder is given a copy without the branch's configuration (2026-10-12, S1 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+Vibe's reads are bounded to its working folder (M-V11: a `read_file` outside it, `tool_denied` 3 of 3), and the checkout
+carries whatever `.vibe/`, `.agents/skills/` and `AGENTS.md` the reviewed branch wrote — which Vibe loads from its
+working folder. So the working folder is neither the checkout nor an empty directory: it is a fresh coai-owned COPY of
+the tree with every project-configuration path left out (M-V14: a copy deliberately trusted still fired no hook from the
+source tree or the copy's parent, 3 of 3; research/RESULTS_vibe_confinement.md §1–§2). Kimi gets the same copy with its
+own names added (D15). The snapshot closes the path by which the reviewed BRANCH supplies configuration; the person's
+own configuration is closed by the owned home of D17, which is a different block and not this unit's. S1 builds the unit
+and its seams; S2–S5 wire it into the round's launch directory, the consultant's launch and the question row. The
+capability is the adapter's (`NeedsASanitisedSnapshot`, default false on both interfaces), never a vendor name at the
+seam.
+
+```mermaid
+flowchart TD
+  A["MakeAsync(source, scratch)"] --> B["probe the destination's case rule"]
+  B --> C["git ls-files --stage, into each populated submodule; a live tree adds --others --exclude-standard"]
+  C --> D{"plan, before a byte moves"}
+  D -->|excluded at any depth| D1["named in the manifest"]
+  D -->|a 120000 entry, a reparse point on the file or on a directory on the way, a path leaving the root, two names one under the case rule| R["refused, nothing published"]
+  D -->|unpopulated gitlink, LFS pointer header| D2["listed unavailable"]
+  D -->|over 50 000 files or 512 MB| R
+  D --> E["reserve the bytes: the sum over 2 GB or free space under 5 GB refuses with both numbers"]
+  E --> F["copy file by file into snapshot-id.partial; a stamp before and after; a change retries once over a fresh listing, then refuses; 60 s or a long path refuses"]
+  F --> G["rename .partial to snapshot-id"]
+  G --> H["ReviewSnapshot: Root, Manifest, MapBack, Resolve, Read, RefreshAsync, Dispose"]
+  H -->|RefreshAsync of the live tree| F2["the same build beside the root, then two renames under the SAME path; a refusal leaves the previous copy and manifest whole"]
+  H -->|Dispose| X["the directory deleted, the bytes given back"]
+```
+
+- **Two sources, one copy.** `SnapshotSource.Pinned(worktree)` copies what `git ls-files --stage` lists in the round's
+  pinned tree, descending into every populated submodule (the populator's own `HasGit` answers "populated"); never
+  `git archive`, whose `export-ignore` / `export-subst` attributes would drop or rewrite reviewed bytes
+  (`AnExportIgnoredOrSubstitutedFile_KeepsItsReviewedBytes`). `SnapshotSource.Live(checkout)` adds the untracked-not-
+  ignored files, copies the bytes as they are now, and leaves a deleted path absent; an untracked NESTED REPOSITORY,
+  which git lists as `dir/` and nothing beneath, is named unavailable ("add it as a submodule") rather than copied or
+  refused; a file that changes between its stamp and its copy (size, last write, copied length) — or between the PLAN
+  and its stamp (finding A of the risk consultations, 2026-10-12: a later file grown from an earlier file's copy was
+  copied whole while the reservation and the manifest carried the size the plan saw, so the budget understated; the
+  pre-copy stamp must now equal the planned one) — makes the whole copy retry once over a fresh listing, then refuse: a
+  snapshot of a moving tree is a snapshot of nothing. The detection is by length and last-write time — best effort
+  against an editor at work, not a guarantee against a deliberate writer who restores both. **And the whole
+  inventory is checked, not only each file** (D6 as amended by the plan gate, codex, 2026-10-12): per-file stamps let a
+  copy publish a MIX of times — a file copied early stays unchanged while a later one changes before its own copy, or a
+  file is added or removed while the copy runs — so after the last file the live tree is listed and planned AGAIN and
+  compared whole with what was copied (`SnapshotCopier.Settled`): every copied file's stamp at its own copy against its
+  stamp now, every path that appeared or went, the excluded and the unavailable included; any movement retries the whole
+  copy once, then refuses (`a.txt changed / added-2.txt was added / b.txt was removed while the tree was being copied,
+  on the retry as well`). Only a tree that CAN move pays the second listing — `SnapshotSource.MovesUnderTheCopy`, true
+  for a live checkout and false for a round's pinned worktree, which is coai's own detached checkout under its own root,
+  populated before the lease is handed out and read by nobody but read-only reviewers; its per-file stamp still stands,
+  and a second git listing plus a stat per file of a tree that cannot move would be paid for nothing on every round.
+  **The link walk
+  runs again immediately before each copy** (`SnapshotLinks`, shared with `Resolve` and `Read`): a directory that became
+  a junction between the plan and the copy would hand `File.Copy` its target's bytes under the planned name with the
+  same length and time, which the stamp cannot see; the walk fails CLOSED — a component that cannot be inspected counts
+  as a link — and asks about the ROOT itself first (finding D: a snapshot root renamed aside and replaced by a junction
+  served the junction's target under every manifest name; `ARootSwappedForALink_RefusesResolveAndRead`). **Only the
+  unnamed stream is copied** (finding B): `File.Copy` is `CopyFileEx`, which copies every NTFS alternate data stream, so
+  a one-byte file with a large `:payload` stream passed the ceilings — which count the unnamed stream — and landed whole;
+  the bytes now go through a stream opened on the source into a NEW destination file, the last-write time carried over
+  (`AnAlternateDataStream_IsNotCopied_AndCannotPassTheByteCeiling`, Windows only).
+- **Nothing partial is ever visible.** The copy goes into `snapshot-<id>.partial` inside the caller's scratch directory
+  and is renamed over at the end; every refusal deletes the partial directory. The scratch directory is the launch's own
+  `coai-answers-*`, so the snapshot goes with it when the launch ends and with the six-hour scratch sweep after a crash —
+  which now also runs on the consultation beat ([module_server.md](module_server.md), *The beat is the scratch sweep's
+  second caller*).
+- **What is refused, before a byte moves.** A name Windows would open as ANOTHER name — a component ending in a dot
+  or a space (`.vibe./config.toml` is `.vibe/config.toml` on the way to the disk, under the excluded name; the
+  review of S1 found this, and git admits such an index entry with `core.protectNTFS=false`) or a device name (`nul`,
+  `CON.txt`, `com1`, `LPT9.log`, `aux` with any extension) — refused on every platform, before the exclusions are even
+  asked, so it is never quietly excluded either; the exclusions themselves match each component as Windows opens it.
+  A symbolic link declared by the index (mode `120000`, on every platform,
+  even one whose git checked it out as a plain file), a reparse point on the file or on any directory between it and
+  the root (git on Windows lists the files under a junction as ordinary files; each directory is asked once), a path
+  that would leave the root, two names that are one under the destination's case rule (probed on the destination, not
+  assumed from the OS: `DestinationCase`), and the three ceilings — with the number. A link git lists nothing under is
+  not copied through and is not refused: what is refused is a byte from outside, not a name. A link git lists AS an
+  entry is judged a link BEFORE its existence is asked, on every platform (CI on Linux and macOS, 2026-10-12): on Unix
+  `git ls-files --others` lists a symlink to a directory as one path, `FileInfo.Exists` is false for it, and the live
+  planner had skipped it as a deleted file — the snapshot was made where Windows refused. The entry's own link target or
+  reparse bit decides, so a dangling link is refused too; an entry that cannot be inspected counts as a link.
+- **What is named, not copied.** An excluded path goes into `Manifest.Excluded`; an unpopulated submodule and a file
+  whose first bytes are the git-LFS pointer header (`version https://git-lfs.github.com/spec/v1`, read only for files
+  of 1024 bytes or less, the spec's cap) go into `Manifest.Unavailable` with a sentence the prompt can show.
+- **The aggregate cap** (`SnapshotBudget`, plan gate 2026-10-12). Before a copy, the bytes it will take — known from the
+  listing — are reserved against a ceiling on what the process's live snapshots hold (2 GB) and a floor the temp volume's
+  free space may not fall under (5 GB); a refusal names both numbers; disposal gives the bytes back exactly once. The
+  volume reader is injected (`Func<string, long>`; the real one asks `DriveInfo` for the drive on Windows and the path on
+  Unix), and a reader that cannot answer refuses rather than guessing. "Live" means not yet disposed, whichever source
+  made the snapshot — a pinned copy holds disk the same way.
+- **The manifest decides, not the disk.** Every path is snapshot-relative with forward slashes, and therefore also the
+  repository-relative path. `MapBack(absolute)` answers that path only when the manifest holds it, else empty.
+  `Resolve(requested)` — what S4's ACP shim serves `fs/read_text_file` through — normalises lexically (components, `.`
+  and `..` by hand; the filesystem is asked nothing), requires the root's components as a prefix (the destination's
+  case rule for the root, ordinal for the rest) and a manifest entry, and answers the manifest's STORED path, never the
+  supplied spelling. Refused outright: an empty or relative path, a drive-relative `C:foo`, a root-relative `\foo`, a UNC
+  or device prefix (`\\?\`, `\\.\`, `\\server\`), a `:` in a component (an alternate data stream — refused on every
+  platform, so a Unix file so named is unservable, said plainly), a component ending in a dot or a space (Windows strips
+  them), and anything not in the manifest — which also refuses an unmatched 8.3 short name and a case variant.
+  `Resolve` also refuses when any component from the root down is a reparse point, or cannot be inspected, at that
+  moment — and its doc says a caller that will read must still read through `Read`, which asks again at the open
+  (`Resolve_RefusesAPathUnderALinkSwappedInAfterTheSnapshot`, `ALinkSwappedInAfterTheSnapshot_IsNotFollowedByRead`).
+  `Manifest.Holds` is an ordinal set, and a manifest compares by value. **The read is by handle, not by path**
+  (finding F, the one shared helper `Files/HandleRead` both confined readers use — this one and the ACP boundary): the
+  walk and the open were two operations, and a link swapped in between them was followed. Now the file is opened
+  first; the OPENED handle is asked what it names (Windows `GetFinalPathNameByHandleW`, the root's own canonical form by
+  the same call on a directory handle so a CI runner's `RUNNER~1` temp spelling compares equal; Linux
+  `readlink /proc/self/fd/N`) and that must be the manifest entry under the root's real path, component by component;
+  and the bytes are read FROM THAT HANDLE against a 4 MiB cap — at most one byte over is ever read, and it is a
+  refusal, so there is no size check a growing file can outrun. **macOS cannot name a handle** (`F_GETPATH` is a
+  variadic `fcntl`, unsafe to P/Invoke on arm64; `/dev/fd/N` is not a readable link), so there the path is walked for
+  links once more AFTER the open, the root included, and then the opened file's IDENTITY is compared with the path's —
+  device and inode, `fstat` of the handle against `lstat` of the path (`Files/MacFileIdentity`): a link swapped in for
+  the open and removed again before the walk names a different inode and is refused (the cadence consultation of
+  epics 4-5, 2026-10-12, found the walk alone passed it). **The root is fixed when the reader is made**
+  (`ReadRoot`, from `HandleRead.Trust` in the snapshot's constructor and the ACP boundary's): its canonical path used
+  to be asked for AFTER the open, so a root renamed aside and replaced by a link in between named the outside folder
+  too, the outside handle matched it, and its bytes were served — red on Windows before the fix
+  (`ALinkSwappedInBetweenTheWalkAndTheOpen_IsNotFollowedByRead`, `ARootSwappedForALink_BetweenTheWalkAndTheOpen_IsNotFollowedByRead`,
+  `AFileThatGrowsPastTheCap_BeforeTheOpen_IsRefused`).
+- **One stable path per conversation** (D6 as amended the same day; §22 of the RESULTS file). A resumed Vibe session is
+  bound to the folder it was created in — a read in a new `--workdir` was `tool_denied`, and the model re-asked turn 1's
+  absolute path — while the same path re-filled in place was read afresh 3 of 3. So `ReviewSnapshot.RefreshAsync(live)`
+  builds the new tree beside the root exactly as a first copy is built (exclusions, links, ceilings, the retry, the
+  budget with the replaced bytes counted once), then swaps it under the SAME root by two renames — the old copy aside,
+  the new one in, the old one back if the second rename fails — and replaces the manifest and the hold. A refused refresh
+  leaves the previous copy readable and its manifest the same object. A disposed or swept snapshot refuses a refresh; a
+  second refresh while one runs is refused rather than queued. **A disposal arriving during a refresh waits for it**
+  (the two take the same turn; the review of S1 found the other order deleting the root under the copy and disposing a
+  semaphore the refresh still held) and then deletes whatever landed; the turn is never disposed, so a later refresh is
+  refused, never thrown at. The budget's `Held` transiently counts old + new during a refresh — the truth about the
+  disk — and settles to the refreshed size at the swap; the ceiling check counts the replaced bytes once.
+- **Known limits, said plainly.** A HARD LINK in a live tree imports an outside file's bytes: git records no hard
+  links, the walk sees an ordinary file, and the copy reads it — it needs a locally prepared tree (nothing a branch can
+  commit), and no check here sees it. Mixed-time detection — per file and across the inventory — is by length and
+  last-write time, which an editor at work changes and a deliberate writer can restore; it is best effort, not a
+  guarantee. On macOS the handle is not named but its identity is checked against the path's (above); a hard link is
+  the same inode by definition, so this check does not see one either.
+- **Measured on this repository** (the defaults' origin): 2 737 files, a 38.8 MB tar, 5.7 s to copy. The ceilings are
+  50 000 files, 512 MB and 60 s; a refusal says the number it met.
+
+Tests: `ReviewSnapshotTests`, `ReviewSnapshotResolveTests`, `ReviewSnapshotRefreshTests`, `SnapshotBudgetTests`,
+`NoRuntimeAsksForASanitisedSnapshotYetTests`, `AScratchSweepRunsOnTheConsultationBeatTests` — listed in
+[module_tests.md](module_tests.md).
+
+## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)
+
+Kimi Code is driven over `kimi acp` — the Agent Client Protocol, JSON-RPC 2.0 over newline-delimited stdio — because
+prompt mode cannot carry a review prompt (`-p` takes it only as an argument, over Windows' command line;
+[RESULTS_kimi_confinement.md](RESULTS_kimi_confinement.md) §1). Over ACP the prompt rides on stdin and coai is the
+CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runners/Acp/` behind one profile interface
+(`IAcpProfile`, one module per vendor; `KimiAcpProfile` the only one today); the process half is the one-shot mode
+`coai-mcp --ask-acp` (`src_mcp/src/Acp/AskAcpMode.cs`), the third self-invocation shim after `--ask-local` and
+`--ask-api`. `KimiRuntime` above it, its registration, the seeds and the extension are the next step of S4.
+
+**The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
+`ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
+arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.git`; the known sentences: the subscription `401`
+(`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
+D14 `insufficient balance` (`balance_spent`).
+
+**The three blocks the shim owns** (each measured in RESULTS §2 before it was written):
+
+- **Permission requests.** Every `session/request_permission` is answered with the option whose kind is
+  `reject_once`, else any `reject_*`, else `outcome: cancelled` — the client never looks at which tool asked. A kind
+  that is not a non-empty string is no option; and the reject option is selected ONLY when its id is non-empty and no
+  other option shares it — an agent resolving a shared id may land on the allow, so a duplicate ends `cancelled`
+  (finding 1 of the 2026-10-12 security review). Each is recorded for the trace (tool title, kind, the kind of the
+  option actually chosen or `cancelled`).
+- **`fs/read_text_file`.** `initialize` offers exactly `fs.readTextFile: true`, `fs.writeTextFile: false`,
+  `terminal: false` — the offer is what routes every `Read`, Kimi's own instruction-file search included, through the
+  client (§2.2). `IAcpReadBoundary` is the seam; `FolderReadBoundary` serves only an absolute path lexically inside the
+  working folder by components and never an excluded name, declining by SHAPE before normalisation can tidy them (UNC
+  and device prefixes, drive-relative, root-relative, relative, a `:` beyond the drive letter, a component ending in a
+  dot or a space, and on Windows any component with a `~` followed by a digit — the shape of every 8.3 alias such as
+  `VIBE~1`, which the long-name exclusions would never match; finding 2 of the review) and declining any step from
+  the root down that is a reparse point. The agent sees JSON-RPC `-32602` with a sentence that quotes nothing; a path
+  the filesystem cannot even normalise (40 000 characters, a refused character) is declined the same way, never
+  thrown (finding 3). The read itself goes through `Files/HandleRead`, shared with the snapshot (finding F of the
+  risk consultations, 2026-10-12): the file is opened FIRST, the opened handle is asked what it names and that must be
+  the entry under the root's canonical path, and the bytes come from that handle against the 4 MiB ceiling — a link
+  swapped in between the check and the open is not followed, and a file that grows after its size would have been
+  looked at is refused at the read (`ALinkSwappedInBetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted`,
+  `AFileThatGrowsPastTheCeiling_AfterItsSizeWasChecked_IsRefused`; on macOS a walk after the open plus the opened
+  file's device and inode against the path's, `ALinkSwappedInForTheOpen_AndRemovedBeforeTheCheck_IsRefused`). The
+  working folder's canonical path is fixed when the boundary is made, so a root swapped for a link between the check
+  and the open is refused (`ARootSwappedForALink_BetweenTheCheckAndTheOpen_IsRefused_AndNeverQuoted`; the cadence
+  consultation of epics 4-5 found it served). The snapshot's manifest-based resolve (D6) replaces this class behind
+  the same interface.
+- **Everything else.** `fs/write_text_file`, `terminal/*` and any unknown request are answered `-32601`. A handler
+  that throws what it did not foresee answers THAT request with an error (`-32602` for a read, `-32603` otherwise)
+  and the pump reads on — it used to fault and leave the agent waiting until the deadline (finding 3).
+  `session/new` sends `cwd` and `mcpServers: []` (the #514 rule, D8b); an answer without a `sessionId` is a protocol
+  end and nothing more is sent (finding 6); `session/set_config_option {configId: "model"}` goes BEFORE
+  `session/prompt` — a session comes up on Kimi's own default, which on this plan was a model the plan lacks, and the
+  prompt failed `401` (§2).
+
+**Not covered, and said so (RESULTS §2.3).** `Grep` and `Glob` do not go through the client, so a Kimi read in general
+has the codex standing; the boundary covers `Read` and the instruction-file search, the sanitised snapshot (D6) covers
+what the branch could supply, and the question-consultant `disk` standing for `kimi` will be `unconfined` (S5). ACP
+`mode: plan` changes nothing here (§2.4). Kimi's session store under `~/.kimi-code/sessions` is a permitted vendor write.
+
+**Lifecycle.** The shim reads its stdin to EOF — `ProcessLauncher` closes stdin after writing the prompt, so EOF means
+"complete", never cancel — and only then starts the agent, whose own stdin stays open for the replies; stdout and
+stderr are drained concurrently. The client has its own deadline (`--deadline-seconds`, under the row's timeout).
+Everything after the agent's start — the clock, the pump, the four requests — runs inside the one `try` whose
+`finally` ends it, and a deadline the clock cannot hold is refused BEFORE the start (the client's ceiling is a day,
+`AcpClient.MaxDeadline`; the shim refuses `--deadline-seconds` outside 1..86400 with 65) — it used to throw past a
+running child (finding 4). **Every exit path ends the same way** — normal end, deadline, a protocol failure, the
+agent's early EOF, the caller's cancellation: `session/cancel` when a session exists and at most 1.5 s for the agent
+to answer what is still pending, then the tree kill by this process's own handle through
+`ProcessLauncher.EndTreeFirstAsync` (the launcher's parts in the other order, never copied) WHILE THE AGENT IS STILL
+ALIVE, then stdin closed, then the wait. The kill comes BEFORE the close (finding G of the risk consultations,
+2026-10-12 — `EndItAsync` closed stdin first, the launcher's right order for a child handed one prompt): closing stdin
+is the EOF a well-behaved agent exits on, and a process that has exited can no longer name its children — on Linux
+they are reparented to init the moment it goes, and the kill that follows finds an empty tree. **Not observable on
+Windows, and said so:** the `Process` object keeps the exited parent's handle and .NET's tree kill still finds the
+children by their stale parent pid, so `APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo` — the parent definitely
+gone before the cleanup, the grandchild's pid recorded at its spawn — passed under the old order too; the fix is by
+the finding's reasoning. **Known limit:** a parent that exits BEFORE the kill (its own early EOF, a crash) loses its
+tree on Linux and macOS — shown by CI on both on 2026-10-12, where the test now reports itself skipped with the limit named; the follow-up is a Windows Job Object / a Unix process group owned by the transport, proposed and not
+built here — recorded in `todo/PLAN_vibe_and_kimi_runtimes.md` §4 as a condition before the shim launches Kimi on any
+host but Windows (the code gate of epic 4, 2026-10-12). The agent is STARTED by `ProcessLauncher.Started`, the one
+place a child is built (the same gate: the transport's own copy had the resolver and the encodings but not the
+environment rule; `OnlyTheLauncherStartsAProcessTests` scans `src_mcp/runners` and `src_mcp/src` and keeps it the
+only one). The agent's optional `line`/`limit` window on a read is cut by scanning for its newlines, never by
+splitting the file (`AcpSessionWindowTests`: a two-line window of two million lines allocated 80 MB before). Earlier: green on the first run only by the order of two timers (finding 8; `AnAnsweredTurnsGrandchild_IsGoneToo`). The agent's EXIT is watched beside its output: a grandchild inherits the
+stdout pipe's write end, so an agent that exits mid-turn leaving one behind never delivers EOF — the fake agent's
+heartbeat grandchild held the pipe until the deadline on the first run
+(`APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo`, red: *Expected Protocol … but found Deadline*). Memory is
+bounded on every path: a line past 16 Mi characters is not read further (a protocol end, the agent killed), the
+answer past 8 Mi characters likewise, and the three trace lists keep at most 1000 entries each with the rest COUNTED
+(`droppedTraceEntries`), tool calls found by id rather than by a scan (finding 5). **And the trace is bounded in
+SIZE, not only in count** (the code round, two reviewers, 2026-10-12): a thousand entries each carrying fields near the
+line cap — a read path, a permission title, a tool-call id — would have had the session retain gigabytes, so every
+string a trace entry keeps is cut to 512 characters with an ellipsis (`AcpSession.MaxTraceFieldChars`;
+`truncatedTraceFields` counts the cuts), and all three lists share a 1 Mi-character budget
+(`AcpSession.MaxTraceChars`) past which an entry is dropped and counted with the ones the entry cap drops; a tool-call
+update that would pass the budget leaves the kept entry standing, and the tool-call index is keyed by the bounded id.
+The report on stdout carries the same bounded lists and both counts; the answer keeps its own 8 Mi cap
+(`AReadPathOfAMillionCharacters_IsRetainedTruncated`, `AThousandPermissionRequestsWithHugeTitles_StayUnderTheTraceBudget`,
+`TheAggregateTraceBudget_DropsEntriesPastIt_AndCountsThem`, `ANormalShortTrace_IsRetainedWhole`).
+
+**Exit codes** (never 64 — `.agents/PROJECT.md`): **0** answered (`stopReason: end_turn`); **65** declined before the
+agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, a `--deadline-seconds` outside 1..86400,
+an empty prompt); **69** ended before an
+answer — not started, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
+failure — a JSON-RPC error to a client request, or a `stopReason` other than `end_turn`; **75** a known spent sentence;
+**76** (EX_PROTOCOL) the stream broke — output closed or the process gone before answering, not listening, over the
+answer ceiling; **77** a known sign-in or plan sentence.
+
+**The stdout shape**, one JSON object on EVERY exit (the future `KimiRuntime.ReadAnswer`/`ReadUsage` read it as
+`ApiRuntime` reads the api shim's line): `answer`, `end` (`answered` | `not_started` | `agent_failed` | `deadline` |
+`protocol` | `cancelled`), `stopReason`, `reason`, `sessionId`, `failure` (only when a known sentence matched), `usage`
+in the api shim's field names — `tokensIn`/`tokensOut` 0 with `notCaptured: true`, because ACP reports context tokens
+with no split (D15; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
+the trace: `refusals` (`tool`, `kind`, `option`), `toolCalls` (`id`, `title`, `kind`, `status`), `reads` (`path`,
+`served`, `reason`), and `droppedTraceEntries` — how many entries the three caps dropped, 0 when none.
+
+```mermaid
+sequenceDiagram
+  participant P as ReviewerExecutor (later: KimiRuntime)
+  participant S as coai-mcp --ask-acp
+  participant A as kimi acp
+  P->>S: prompt on stdin, then EOF (= complete)
+  S->>A: initialize {fs.readTextFile:true, writeTextFile:false, terminal:false}
+  A-->>S: agentInfo, authMethods
+  S->>A: session/new {cwd, mcpServers: []}
+  A-->>S: sessionId, configOptions
+  S->>A: session/set_config_option {configId: model, value}
+  A-->>S: ok (an error here: 70/77, no prompt spent)
+  S->>A: session/prompt [{type: text, text}]
+  loop while the prompt is awaited
+    A-->>S: session/update agent_message_chunk · tool_call · usage_update
+    A->>S: session/request_permission
+    S-->>A: outcome selected reject_once (else any reject_*, else cancelled)
+    A->>S: fs/read_text_file {path}
+    S-->>A: content, or -32602 from the boundary
+    A->>S: any other request
+    S-->>A: -32601 not offered by this client
+  end
+  A-->>S: stopReason
+  Note over S,A: every way out: session/cancel → ≤1.5 s for its answer → tree kill by pid, the agent still alive → wait
+  S-->>P: one JSON object on stdout; exit 0 / 65 / 69 / 70 / 75 / 76 / 77 — never 64
+```
+
+Tests: `AcpClientTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpShimScenarioTests`
+(the REAL binary through the real launcher) — listed in [module_tests.md](module_tests.md). The scripted agent is the
+fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).

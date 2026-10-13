@@ -204,6 +204,11 @@ public sealed class GateReportingTests
             ["daily"] = "TerminalQuotaError: You have exhausted your daily quota on this model.",
             ["exhausted"] = "TerminalQuotaError: You have exhausted your daily quota on this model.",
             ["hit your usage limit"] = SpentAllowance,
+            // Kimi Code 0.41.0 on a spent API-key account, 2026-10-11 (research/RESULTS_vibe_and_kimi_first_probe.md §5),
+            // the account ids redacted.
+            ["insufficient balance"] = "error: failed to run prompt: provider.api_error: 429 Your account org-REDACTED "
+                + "<ak-REDACTED> is suspended due to insufficient balance, please recharge your account or check your plan "
+                + "and billing details",
         };
 
         RateLimit.Spent.Should().OnlyContain(

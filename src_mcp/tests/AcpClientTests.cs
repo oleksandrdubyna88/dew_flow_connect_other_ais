@@ -1,0 +1,614 @@
+using System.Text.Json;
+using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Processes;
+using FluentAssertions;
+using Xunit;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// The ACP client against a scripted agent in a real second process (S4 of <c>PLAN_vibe_and_kimi_runtimes.md</c>,
+/// the <c>AcpClientTests</c> bullet of §5): what it offers, the order it asks in, what it refuses, what it serves,
+/// what it reads back — and that its child's tree is gone on every way out.
+/// </summary>
+/// <remarks>
+/// Every assertion about the wire reads the agent's LOG of the lines that crossed the pipe (<see cref="FakeAcpAgent"/>),
+/// never the client's own record of what it meant to send. The liveness checks ask the operating system by pid
+/// (<see cref="ProcessTracking.StartedAt"/>): a pid that answers no start time is gone.
+/// </remarks>
+public sealed class AcpClientTests
+{
+    private static Task<AcpOutcome> RunAsync(FakeAcpAgent agent, AcpAsk? ask = null, CancellationToken ct = default) =>
+        new AcpClient(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions)).AskAsync(ask ?? agent.Ask(), ct);
+
+    /// <summary>Whether the pid names no live process — polled briefly, since a terminated process can still be listed for a moment.</summary>
+    private static bool Gone(int pid)
+    {
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (ProcessTracking.StartedAt(pid) is not null && DateTime.UtcNow < until)
+        {
+            Thread.Sleep(50);
+        }
+
+        return ProcessTracking.StartedAt(pid) is null;
+    }
+
+    [Fact]
+    public async Task TheAnswerIsTheChunksJoined_AndTheUsageIsTheLastUpdate()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("Hel"), FakeAcpAgent.Usage(10, 100), FakeAcpAgent.Chunk("lo"), FakeAcpAgent.Usage(20553, 262144)]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.Answer.Should().Be("Hello");
+        outcome.StopReason.Should().Be("end_turn");
+        outcome.SessionId.Should().Be("fake-session");
+        outcome.Usage.Should().Be(new AcpUsage(20553, 262144, true), "the last usage_update is the session's context, no split (D15)");
+    }
+
+    [Fact]
+    public async Task WithoutAUsageUpdate_TheUsageIsUnknown_NeverZero()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.Usage.Captured.Should().BeFalse();
+        outcome.Usage.Should().Be(AcpUsage.Unknown);
+    }
+
+    [Fact]
+    public async Task InitializeOffersRead_AndNeverWriteOrTerminal()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        await RunAsync(agent);
+
+        var initialize = agent.Received("initialize").Should().ContainSingle().Subject.GetProperty("params");
+        initialize.GetProperty("protocolVersion").GetInt32().Should().Be(1);
+        initialize.GetProperty("clientCapabilities").GetRawText().Should().Be(
+            """{"fs":{"readTextFile":true,"writeTextFile":false},"terminal":false}""",
+            "the read offer is mandatory (without it Kimi read an outside file itself, RESULTS §2.2) and nothing else is offered");
+    }
+
+    [Fact]
+    public async Task TheModelIsSetBeforeThePrompt_AndNewSendsTheCwdAndNoMcpServer()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        await RunAsync(agent, agent.Ask(model: "kimi-code/k3-256k"));
+
+        agent.ReceivedMethods().Should().StartWith(["initialize", "session/new", "session/set_config_option", "session/prompt"],
+            "a session comes up on the vendor's default model, which failed 401 on this plan — the model is set first (RESULTS §2)");
+        agent.ReceivedMethods().Should().EndWith("session/cancel", "the teardown's graceful step runs on the normal path too");
+        var created = agent.Received("session/new").Single().GetProperty("params");
+        created.GetProperty("cwd").GetString().Should().Be(agent.Cwd);
+        created.GetProperty("mcpServers").GetArrayLength().Should().Be(0, "no MCP server starts (the #514 rule, D8b)");
+        var option = agent.Received("session/set_config_option").Single().GetProperty("params");
+        option.GetProperty("sessionId").GetString().Should().Be("fake-session");
+        option.GetProperty("configId").GetString().Should().Be("model");
+        option.GetProperty("value").GetString().Should().Be("kimi-code/k3-256k");
+        var prompt = agent.Received("session/prompt").Single().GetProperty("params").GetProperty("prompt");
+        prompt[0].GetProperty("type").GetString().Should().Be("text");
+        prompt[0].GetProperty("text").GetString().Should().Be("say hello");
+    }
+
+    [Fact]
+    public async Task EveryPermissionRequestIsRefused_WhateverTheOptions_AndWhicheverToolAsked()
+    {
+        using var agent = new FakeAcpAgent(
+        [
+            FakeAcpAgent.Permission("Write pwned.txt", "edit", ("a", "allow_always"), ("b", "allow_once"), ("c", "reject_once"), ("d", "reject_always")),
+            FakeAcpAgent.Permission("Bash echo hi > shell.txt", "execute", ("a", "allow_once"), ("d", "reject_always")),
+            FakeAcpAgent.Permission("AskUserQuestion", "other", ("a", "allow_once")),
+            FakeAcpAgent.Chunk("done"),
+        ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var replies = agent.RepliesTo("session/request_permission");
+        replies.Should().HaveCount(3);
+        replies[0].GetProperty("result").GetProperty("outcome").GetRawText().Should().Be("""{"outcome":"selected","optionId":"c"}""",
+            "reject_once is chosen over every allow, wherever it sits in the list");
+        replies[1].GetProperty("result").GetProperty("outcome").GetRawText().Should().Be("""{"outcome":"selected","optionId":"d"}""",
+            "any reject_* option when there is no reject_once");
+        replies[2].GetProperty("result").GetProperty("outcome").GetRawText().Should().Be("""{"outcome":"cancelled"}""",
+            "with no reject option at all the request is cancelled — never an allow");
+        outcome.Refusals.Should().Equal(
+            new AcpRefusal("Write pwned.txt", "edit", "reject_once"),
+            new AcpRefusal("Bash echo hi > shell.txt", "execute", "reject_always"),
+            new AcpRefusal("AskUserQuestion", "other", "cancelled"));
+    }
+
+    [Fact]
+    public async Task AReadInsideTheFolderIsServed_OutsideAndExcludedNamesAreRefused()
+    {
+        using var agent = new FakeAcpAgent([]);
+        File.WriteAllText(agent.Inside("marker.txt"), "EGRET-5");
+        Directory.CreateDirectory(agent.Inside("deep", ".kimi-code"));
+        File.WriteAllText(agent.Inside("deep", ".kimi-code", "config.toml"), "secret config");
+        File.WriteAllText(agent.Inside("AGENTS.md"), "instructions");
+        File.WriteAllText(agent.Outside("secret.txt"), "LYNX-404");
+        using var scripted = new FakeAcpAgent(
+        [
+            FakeAcpAgent.Read(agent.Inside("marker.txt")),
+            FakeAcpAgent.Read(agent.Outside("secret.txt")),
+            FakeAcpAgent.Read(agent.Inside("AGENTS.md")),
+            FakeAcpAgent.Read(agent.Inside("deep", ".kimi-code", "config.toml")),
+            FakeAcpAgent.Chunk("read"),
+        ]);
+
+        var outcome = await new AcpClient(scripted.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions))
+            .AskAsync(scripted.Ask() with { Cwd = agent.Cwd });
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var replies = scripted.RepliesTo("fs/read_text_file");
+        replies.Should().HaveCount(4);
+        replies[0].GetProperty("result").GetProperty("content").GetString().Should().Be("EGRET-5");
+        replies[1].GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+        replies[1].GetProperty("error").GetProperty("message").GetString().Should().Contain("outside the working folder").And.NotContain("LYNX-404");
+        replies[2].GetProperty("error").GetProperty("message").GetString().Should().Contain("AGENTS.md");
+        replies[3].GetProperty("error").GetProperty("message").GetString().Should().Contain(".kimi-code", "an excluded name is refused at any depth");
+        outcome.Reads.Select(r => r.Served).Should().Equal(true, false, false, false);
+    }
+
+    [Fact]
+    public async Task AReadWindowIsServedByLineAndLimit()
+    {
+        using var agent = new FakeAcpAgent([]);
+        File.WriteAllText(agent.Inside("lines.txt"), "a\nb\nc\nd");
+        using var scripted = new FakeAcpAgent([FakeAcpAgent.Read(agent.Inside("lines.txt"), 2, 2), FakeAcpAgent.Chunk("x")]);
+
+        await new AcpClient(scripted.Profile(), new FolderReadBoundary(agent.Cwd, [])).AskAsync(scripted.Ask() with { Cwd = agent.Cwd });
+
+        scripted.RepliesTo("fs/read_text_file").Single().GetProperty("result").GetProperty("content").GetString().Should().Be("b\nc");
+    }
+
+    [Fact]
+    public async Task AnyOtherClientRequestIsAnsweredWithAnError_AndNothingIsWritten()
+    {
+        using var agent = new FakeAcpAgent(
+        [
+            FakeAcpAgent.Request("fs/write_text_file", $$"""{"sessionId":"fake-session","path":{{FakeAcpAgent.Quote(Path.Combine(Path.GetTempPath(), "coai-acp-should-not-exist.txt"))}},"content":"x"}"""),
+            FakeAcpAgent.Request("terminal/create", """{"sessionId":"fake-session","command":"echo"}"""),
+            FakeAcpAgent.Chunk("x"),
+        ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        foreach (var method in new[] { "fs/write_text_file", "terminal/create" })
+        {
+            var reply = agent.RepliesTo(method).Should().ContainSingle().Subject;
+            reply.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32601, $"{method} was not offered in initialize");
+        }
+
+        File.Exists(Path.Combine(Path.GetTempPath(), "coai-acp-should-not-exist.txt")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ToolCallsAreTraced_WithTheirLastStatus()
+    {
+        using var agent = new FakeAcpAgent(
+        [
+            FakeAcpAgent.ToolCall("t1", "Read marker.txt", "read", "pending"),
+            FakeAcpAgent.ToolCallUpdate("t1", "completed"),
+            FakeAcpAgent.ToolCall("t2", "Grep", "search", "in_progress"),
+            FakeAcpAgent.Chunk("x"),
+        ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.ToolCalls.Should().Equal(new AcpToolCall("t1", "Read marker.txt", "read", "completed"), new AcpToolCall("t2", "Grep", "search", "in_progress"));
+    }
+
+    [Fact]
+    public async Task AStrayLineOnStdoutIsIgnored()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Stray("Kimi Code CLI starting…"), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+    }
+
+    [Fact]
+    public async Task AnErrorToARequestOfOurs_IsTheAgentsFailure_AndThePromptIsNeverSent()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")],
+            ""","refuseModel":"Authentication required: 401 Your current subscription does not have access to kimi-for-coding-highspeed. Upgrade to higher-tier Kimi Code plans." """);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.AgentFailed);
+        outcome.Reason.Should().Contain("does not have access to").And.Contain("-32000");
+        agent.Received("session/prompt").Should().BeEmpty("a model the plan lacks is found out before any prompt is spent");
+        Gone(outcome.AgentPid).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("refusal")]
+    [InlineData("max_tokens")]
+    [InlineData("")]
+    public async Task AStopReasonOtherThanEndTurn_IsNotAnAnswer(string stopReason)
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("partial")],
+            stopReason.Length > 0 ? $$""","stopReason":{{FakeAcpAgent.Quote(stopReason)}}""" : ""","omitStopReason":true""");
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.AgentFailed);
+        outcome.Answer.Should().Be("partial", "what arrived is kept for the record even though it is not the answer");
+        outcome.Reason.Should().Contain(stopReason.Length > 0 ? stopReason : "no stopReason");
+    }
+
+    [Fact]
+    public async Task AnExecutableThatIsNotThere_IsNotStarted()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent, agent.Ask(executable: Path.Combine(agent.Cwd, "no-such-cli")));
+
+        outcome.End.Should().Be(AcpEnd.NotStarted);
+        outcome.Reason.Should().Contain("no-such-cli");
+        outcome.AgentPid.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ANormalEndLeavesNoChild()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.AgentPid.Should().BePositive();
+        Gone(outcome.AgentPid).Should().BeTrue("the agent is ended on the way out of an answered turn too");
+    }
+
+    [Fact]
+    public async Task TheDeadlineEndsAHungAgent_AndItsGrandchild()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Hang);
+
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(3)));
+        var grandchild = agent.GrandchildPid();
+
+        outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
+        outcome.Reason.Should().Contain("3s");
+        Gone(outcome.AgentPid).Should().BeTrue("the agent was killed by its pid");
+        Gone(grandchild).Should().BeTrue("the tree kill reaches the heartbeat the agent spawned");
+    }
+
+    /// <summary>
+    /// The parent has DEFINITELY exited before the cleanup begins: the agent leaves by its own <c>exit</c> step after
+    /// spawning the grandchild, and the client observes that exit before it tears down — as the process's exit
+    /// (Windows) or as the pipe's EOF the kernel delivers as the process goes (Linux, macOS: CI on 2026-10-12 read
+    /// "the agent closed its output before answering" where Windows reads "exited with code 0"). Either sentence is
+    /// the same exit seen from one of its two sides; the pid being gone is what says the parent is not there, and the
+    /// grandchild's pid was recorded at its spawn, in the pid file, so what is asserted gone is the real process.
+    /// </summary>
+    /// <remarks>
+    /// Finding G of the risk consultations (2026-10-12): the transport used to close stdin BEFORE the tree kill, and an
+    /// agent that exits on EOF could leave the kill an empty tree. On Windows this test passed under the old order too —
+    /// the <c>Process</c> object keeps the exited parent's handle, and .NET's tree kill still finds the children by their
+    /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning, and the
+    /// case this test pins is the one that would lose on Linux, where an orphan is reparented to init the moment its
+    /// parent goes. That case, a parent gone BEFORE the kill, is a known limit on Linux and macOS — CI showed it on
+    /// 2026-10-12 (*Expected Gone(grandchild) to be True … but found False*, both platforms). So the grandchild is asserted
+    /// gone on Windows only; elsewhere it is ended here by its recorded pid, and the test reports itself SKIPPED with the
+    /// limit named, never green: owning the tree (a process group on Unix) is a condition in
+    /// <c>todo/PLAN_vibe_and_kimi_runtimes.md</c> §4 before Kimi is launched on any host but Windows.
+    /// </remarks>
+    [Fact]
+    public async Task APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, _ => FakeAcpAgent.Chunk("half"), a => a.Grandchild(), _ => FakeAcpAgent.Exit(0));
+
+        var outcome = await RunAsync(agent);
+        var grandchild = agent.GrandchildPid();
+
+        outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
+        // The exit itself is what ends the turn — seen as the process's exit, or as the EOF its exit delivers; which one the
+        // client sees first is the platform's, not the client's (the grandchild holds the pipe, so on Windows the exit wins).
+        outcome.Reason.Should().Contain("before answering");
+        outcome.Reason.Should().Match(
+            reason => reason.Contains("exited with code 0") || reason.Contains("closed its output"),
+            "the agent's own exit, from one of its two sides, is what ended the turn: {0}", outcome.Reason);
+        outcome.Answer.Should().Be("half");
+        grandchild.Should().NotBe(outcome.AgentPid, "the pid file names the grandchild, not the agent");
+        Gone(outcome.AgentPid).Should().BeTrue();
+        if (!OperatingSystem.IsWindows())
+        {
+            EndLeftover(grandchild);
+            Assert.Skip("known limit on Linux and macOS: an agent that exits before the teardown loses its children to "
+                + "reparenting, and the tree kill finds none — owning the tree is a condition in "
+                + "todo/PLAN_vibe_and_kimi_runtimes.md §4 before Kimi is launched on any host but Windows");
+        }
+
+        Gone(grandchild).Should().BeTrue("a grandchild orphaned by the agent's own exit is still the client's to end");
+    }
+
+    /// <summary>Ends a process this test made, by its recorded pid — never by image name — so a known limit leaks nothing into the run.</summary>
+    private static void EndLeftover(int pid)
+    {
+        try
+        {
+            using var leftover = System.Diagnostics.Process.GetProcessById(pid);
+            leftover.Kill();
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Already gone: nothing was left to end.
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The trace's SIZE is bounded, not only its count (the code round, two reviewers, 2026-10-12)
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>A read path near the line cap was retained whole in the trace: a thousand of them is gigabytes.</summary>
+    [Fact]
+    public async Task AReadPathOfAMillionCharacters_IsRetainedTruncated()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(FakeAcpAgent.FakeCliExe, new string('p', 1024 * 1024))), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var read = outcome.Reads.Should().ContainSingle().Which;
+        read.Served.Should().BeFalse();
+        read.Path.Length.Should().BeLessThanOrEqualTo(AcpSession.MaxTraceFieldChars, "the trace keeps a prefix of the path, never a megabyte of it");
+        read.Path.Should().EndWith("…", "a cut field says it was cut");
+        outcome.TruncatedTraceFields.Should().BeGreaterThanOrEqualTo(1);
+    }
+
+    /// <summary>A thousand permission requests with 64 Ki-character titles: what the trace retains stays under its budget.</summary>
+    [Fact]
+    public async Task AThousandPermissionRequestsWithHugeTitles_StayUnderTheTraceBudget()
+    {
+        var title = new string('t', 64 * 1024);
+        using var agent = new FakeAcpAgent(
+            [.. Enumerable.Range(0, 1000).Select(_ => FakeAcpAgent.Permission(title, "edit", ("r", "reject_once"))), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.Refusals.Sum(r => r.Tool.Length + r.Kind.Length + r.Option.Length).Should().BeLessThanOrEqualTo(AcpSession.MaxTraceChars);
+        outcome.Refusals.Should().OnlyContain(r => r.Tool.Length <= AcpSession.MaxTraceFieldChars);
+        (outcome.Refusals.Count + outcome.DroppedTraceEntries).Should().Be(1000, "every request is either retained or counted dropped");
+        agent.RepliesTo("session/request_permission").Should().HaveCount(1000, "every request was still answered — the trace is what is bounded, not the protocol");
+    }
+
+    /// <summary>The aggregate budget across all three lists: past it, entries are dropped and counted, whatever the per-list count.</summary>
+    [Fact]
+    public async Task TheAggregateTraceBudget_DropsEntriesPastIt_AndCountsThem()
+    {
+        var big = new string('b', 8 * 1024);
+        using var agent = new FakeAcpAgent(
+            [
+                .. Enumerable.Range(0, 1000).Select(_ => FakeAcpAgent.Permission(big, "edit", ("r", "reject_once"))),
+                // The index FIRST: ids that share their first 511 characters are one bounded id, and so one entry.
+                .. Enumerable.Range(0, 1000).Select(i => FakeAcpAgent.ToolCall(i + big, big, "search", "completed")),
+                FakeAcpAgent.Chunk("x"),
+            ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var retained = outcome.Refusals.Sum(r => r.Tool.Length + r.Kind.Length + r.Option.Length)
+            + outcome.ToolCalls.Sum(t => t.Id.Length + t.Title.Length + t.Kind.Length + t.Status.Length);
+        retained.Should().BeLessThanOrEqualTo(AcpSession.MaxTraceChars, "the budget is over every list together");
+        outcome.DroppedTraceEntries.Should().BePositive("two thousand entries of half a kilobyte and more each do not fit the budget");
+        (outcome.Refusals.Count + outcome.ToolCalls.Count + outcome.DroppedTraceEntries).Should().Be(2000);
+    }
+
+    /// <summary>A trace of ordinary size is retained exactly as it was — nothing cut, nothing counted.</summary>
+    [Fact]
+    public async Task ANormalShortTrace_IsRetainedWhole()
+    {
+        var asked = Path.Combine(FakeAcpAgent.FakeCliExe, "nowhere.txt");
+        using var agent = new FakeAcpAgent(
+            [FakeAcpAgent.Permission("Write pwned.txt", "edit", ("r", "reject_once")), FakeAcpAgent.ToolCall("t1", "Grep", "search", "completed"), FakeAcpAgent.Read(asked), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.Refusals.Should().ContainSingle().Which.Should().Be(new AcpRefusal("Write pwned.txt", "edit", "reject_once"));
+        outcome.ToolCalls.Should().ContainSingle().Which.Should().Be(new AcpToolCall("t1", "Grep", "search", "completed"));
+        outcome.Reads.Should().ContainSingle().Which.Path.Should().Be(asked);
+        outcome.TruncatedTraceFields.Should().Be(0);
+        outcome.DroppedTraceEntries.Should().Be(0);
+    }
+
+    /// <remarks>
+    /// The caller cancels once the grandchild's pid file exists — the turn is under way and the agent is about to hang —
+    /// never on a fixed clock: a 1.5 s timer counted the agent's own start, and a loaded machine (a 48-minute full run,
+    /// 2026-10-12) spent it before the grandchild existed.
+    /// </remarks>
+    [Fact]
+    public async Task TheCallersCancellationEndsTheTurn_AndLeavesNoChild()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Hang);
+        using var caller = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        var cancelling = CancelWhenAsync(() => File.Exists(agent.PidFile), caller);
+
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromMinutes(5)), caller.Token);
+        await cancelling;
+        var grandchild = agent.GrandchildPid();
+
+        outcome.End.Should().Be(AcpEnd.Cancelled, "the caller's token fired, not the deadline — the two lead to opposite conclusions above");
+        Gone(outcome.AgentPid).Should().BeTrue();
+        Gone(grandchild).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("""[{"optionId":"a","kind":"allow_once"},{"optionId":"r","kind":"reject_once"}]""", "r")]
+    [InlineData("""[{"optionId":"ra","kind":"reject_always"},{"optionId":"r","kind":"reject_once"}]""", "r")]
+    [InlineData("""[{"optionId":"a","kind":"allow_once"},{"optionId":"ra","kind":"reject_always"}]""", "ra")]
+    [InlineData("""[{"optionId":"a","kind":"allow_once"},{"optionId":"aa","kind":"allow_always"}]""", "")]
+    [InlineData("""[]""", "")]
+    // A duplicate id: the agent may resolve "x" to the allow, so nothing is selected.
+    [InlineData("""[{"optionId":"x","kind":"allow_once"},{"optionId":"x","kind":"reject_once"}]""", "")]
+    [InlineData("""[{"optionId":"x","kind":"reject_once"},{"optionId":"x","kind":"allow_once"}]""", "")]
+    // An empty id cannot be selected; a kind that is not a non-empty string is no reject option.
+    [InlineData("""[{"optionId":"","kind":"reject_once"}]""", "")]
+    [InlineData("""[{"optionId":"r","kind":5},{"optionId":"a","kind":"allow_once"}]""", "")]
+    [InlineData("""[{"optionId":"r"},{"optionId":"a","kind":"allow_once"}]""", "")]
+    public void ThePermissionChoice_IsRejectOnce_ThenAnyReject_ThenNone(string options, string chosen)
+    {
+        using var parsed = JsonDocument.Parse(options);
+
+        AcpSession.Permission(parsed.RootElement).Should().Be(chosen);
+    }
+
+    /// <summary>Finding 1 of the security review: a duplicate optionId must end in `cancelled`, and the trace must say so.</summary>
+    [Fact]
+    public async Task ADuplicateOptionId_IsCancelled_NeverSelected_AndTheTraceSaysCancelled()
+    {
+        using var agent = new FakeAcpAgent(
+        [
+            FakeAcpAgent.Permission("Write x", "edit", ("x", "allow_once"), ("x", "reject_once")),
+            FakeAcpAgent.Chunk("done"),
+        ]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        agent.RepliesTo("session/request_permission").Single().GetProperty("result").GetProperty("outcome").GetRawText()
+            .Should().Be("""{"outcome":"cancelled"}""", "an id two options share may be resolved to the allow by the agent");
+        outcome.Refusals.Should().Equal(new AcpRefusal("Write x", "edit", "cancelled"));
+    }
+
+    /// <summary>Finding 3: a path the filesystem cannot even normalise must be refused at once, not left unanswered until the deadline.</summary>
+    [Fact]
+    public async Task AReadPathTooLongToNormalise_IsRefusedPromptly_AndTheTurnGoesOn()
+    {
+        using var agent = new FakeAcpAgent([]);
+        using var scripted = new FakeAcpAgent([FakeAcpAgent.Read(agent.Inside(new string('a', 40_000))), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await new AcpClient(scripted.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions))
+            .AskAsync(scripted.Ask(deadline: TimeSpan.FromSeconds(5)) with { Cwd = agent.Cwd });
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        var reply = scripted.RepliesTo("fs/read_text_file").Should().ContainSingle().Subject;
+        reply.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+    }
+
+    /// <summary>Finding 3: an exception a handler did not foresee answers THAT request with an error; the pump keeps reading.</summary>
+    [Fact]
+    public async Task AHandlerThatThrows_AnswersTheRequestWithAnError_AndThePumpGoesOn()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(Path.GetTempPath(), "any.txt")), FakeAcpAgent.Chunk("after")]);
+
+        var outcome = await new AcpClient(agent.Profile(), new ThrowingBoundary()).AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(5)));
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.Answer.Should().Be("after");
+        var reply = agent.RepliesTo("fs/read_text_file").Should().ContainSingle().Subject;
+        reply.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+        reply.GetProperty("error").GetProperty("message").GetString().Should().NotContain("boom", "the agent is not told what broke");
+    }
+
+    /// <summary>Finding 4: a deadline the clock cannot hold must not throw past the child — it is refused before any start.</summary>
+    [Fact]
+    public async Task ADeadlineBeyondADay_IsRefusedBeforeTheAgentStarts()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(2_000_000_000)));
+
+        outcome.End.Should().Be(AcpEnd.NotStarted);
+        outcome.Reason.Should().Contain("86400");
+        outcome.AgentPid.Should().Be(0);
+        agent.Entries().Should().BeEmpty("nothing was launched");
+    }
+
+    /// <summary>Finding 5: a line past the cap is not read into memory — the stream is judged broken and the agent ended.</summary>
+    [Fact]
+    public async Task ALineLongerThanTheCap_IsAProtocolEnd()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Spew(AcpTransport.MaxLineChars + 1), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
+        outcome.Reason.Should().Contain("longer than");
+        Gone(outcome.AgentPid).Should().BeTrue();
+    }
+
+    /// <summary>Finding 5: the trace lists are bounded; what is dropped is counted, not silently lost.</summary>
+    [Fact]
+    public async Task TheTraceIsCapped_AndTheRestIsCounted()
+    {
+        using var agent = new FakeAcpAgent(
+            [.. Enumerable.Range(0, 1005).Select(i => FakeAcpAgent.ToolCall($"t{i}", "Grep", "search", "completed")), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.ToolCalls.Should().HaveCount(AcpSession.MaxTraceEntries, "the trace is bounded at 1000 entries per list");
+        outcome.DroppedTraceEntries.Should().Be(5, "what the cap dropped is counted, not silently lost");
+    }
+
+    /// <summary>Finding 6: without a session id there is no session to configure or prompt — a protocol end, nothing more sent.</summary>
+    [Fact]
+    public async Task ANewSessionWithoutAnId_IsAProtocolEnd_AndNothingMoreIsSent()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], ""","omitSessionId":true""");
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Protocol, outcome.Reason);
+        outcome.Reason.Should().Contain("sessionId");
+        agent.Received("session/set_config_option").Should().BeEmpty();
+        agent.Received("session/prompt").Should().BeEmpty();
+    }
+
+    /// <summary>Finding 8: an agent that leaves on its own after an answered turn must not take its grandchild out of the tree kill's reach.</summary>
+    [Fact]
+    public async Task AnAnsweredTurnsGrandchild_IsGoneToo()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Chunk("x"));
+
+        var outcome = await RunAsync(agent);
+        var grandchild = agent.GrandchildPid();
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        Gone(outcome.AgentPid).Should().BeTrue();
+        Gone(grandchild).Should().BeTrue("the tree must be killed while the agent is still alive to name its children");
+    }
+
+    /// <summary>The graceful step is real: an agent still reading its stdin sees `session/cancel` before the kill.</summary>
+    [Fact]
+    public async Task TheCancelReachesAnAgentThatIsStillListening()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.AwaitCancel, FakeAcpAgent.Chunk("late")]);
+
+        // Five seconds, not one: the deadline counts the agent's own start too, and a loaded machine spent one second
+        // before the prompt was even sent (2026-10-12) — the cancel then had no session to reach.
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(5)));
+
+        outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
+        agent.Received("session/cancel").Should().ContainSingle();
+        Gone(outcome.AgentPid).Should().BeTrue();
+    }
+
+    /// <summary>Cancels <paramref name="caller"/> once <paramref name="ready"/> holds — an event, not a clock.</summary>
+    private static async Task CancelWhenAsync(Func<bool> ready, CancellationTokenSource caller)
+    {
+        while (!ready() && !caller.IsCancellationRequested)
+        {
+            await Task.Delay(25);
+        }
+
+        await caller.CancelAsync();
+    }
+
+    /// <summary>A boundary that throws what no boundary should — the pump's defence, not the boundary's.</summary>
+    private sealed class ThrowingBoundary : IAcpReadBoundary
+    {
+        public AcpReadAnswer Read(string requestedPath) => throw new InvalidOperationException("boom");
+    }
+}

@@ -6,6 +6,12 @@
          carries data to and from CoaiMcp.Core and adds no rules of its own. -->
     <IsAotCompatible>true</IsAotCompatible>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- `[LibraryImport]` in `Files/HandleRead`, which the source generator requires — the same reason
+         ServiceDefaults has it: the generated marshalling is AOT-friendly where `[DllImport]` is not.
+         Nothing else here is unsafe, and the one file that needs it says why: .NET has no managed way
+         to ask a kernel what an OPEN handle names, and a read that re-opens by path follows a link
+         swapped in after the check. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

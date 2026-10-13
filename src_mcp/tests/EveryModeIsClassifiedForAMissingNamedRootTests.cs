@@ -24,6 +24,9 @@ public sealed class EveryModeIsClassifiedForAMissingNamedRootTests
         [Program.Startup.AskLocal] = "a reviewer shim the server launches: reads --prompt-file, writes --out (Program.AskLocalAsync)",
         [Program.Startup.AskRemote] = "a reviewer shim the server launches: talks to a Team server, writes --out (AskRemote.cs)",
         [Program.Startup.AskApi] = "a reviewer shim the server launches: calls an endpoint, writes --out (AskApiMode.cs)",
+        // When the Kimi session ownership record of PLAN_vibe_and_kimi_runtimes.md §7 lands, this shim WRITES under the data
+        // directory (kimi-sessions.jsonl) and moves to Program.WriterModes.
+        [Program.Startup.AskAcp] = "the Kimi ACP shim: prompt on stdin, its child runs in --cwd, the report on stdout (AskAcpMode.cs)",
         [Program.Startup.AgyHook] = "the Antigravity tool-use hook: stdin to a decision on stdout (AntigravityReadOnly)",
         [Program.Startup.Normalize] = "reads --in, writes --out (NormalizeMode.cs)",
         [Program.Startup.Outline] = "reads one source file, prints its outline (OutlineMode.cs)",

@@ -92,6 +92,19 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 // sees no FAKECLI_* variable at all — TEMP is on the list and nothing of a test's is — so the vendor mode
 // can also be steered by a FILE in the temp directory, read only when the environment says nothing and the
 // argv is a vendor's shape. The same names as the variables, so one test scripts both roads alike.
+// The ACP stand-in (AcpAgent.cs): by verb, or spelled the way the real profile spells `kimi acp` with the
+// script named in the environment. BEFORE the vendor mode, so a FAKECLI_MODE another test left in the
+// process environment cannot turn an ACP launch into a reviewer answering on stdout.
+if (args is ["acp-agent", var acpScript])
+{
+    return CoaiMcp.FakeCli.AcpAgent.Run(acpScript);
+}
+
+if (args is ["acp"] && Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT") is { Length: > 0 } acpScriptFromEnv)
+{
+    return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)

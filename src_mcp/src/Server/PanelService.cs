@@ -1735,6 +1735,18 @@ public sealed class PanelService
     public int SweepConsultations() => _consultations.Sweep(ProcessLiveness.IsAlive);
 
     /// <summary>
+    /// The product's scratch sweep (<see cref="PruneOldAnswerDirs"/>: the <c>coai-answers-*</c> and sibling directories in
+    /// temp older than six hours, at most once every ten minutes per process), for <see cref="ConsultationSweeper"/>'s beat.
+    /// </summary>
+    /// <remarks>
+    /// The round's build path was the only caller, so a crashed <c>consult</c> followed by no round left its scratch
+    /// directory — and the sanitised snapshot inside it (D6 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>, §7) — in temp
+    /// for ever (plan gate, codex, 2026-10-12). One sweep, two callers; the throttle is the same static clock, so a beat a
+    /// minute after a round's build walks nothing.
+    /// </remarks>
+    public void SweepScratch() => PruneOldAnswerDirs();
+
+    /// <summary>
     /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers
     /// in parallel before the person is asked. A delegation, like `consult`; what this service adds is which
     /// SESSION the question is filed under, which only it can resolve.

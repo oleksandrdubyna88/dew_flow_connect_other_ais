@@ -113,7 +113,13 @@ against the code or a run before it went in here — the question consultant had
   inventory is checked, not only each file** (plan gate, codex, 2026-10-12: a file copied early can stay unchanged while a
   later one changes before its own copy, so per-file stamps alone can publish a mix of times): the live listing and every
   copied file's stamp are taken again AFTER the last file is copied; any path added, removed or changed anywhere in the
-  inventory since the copy began retries the whole copy once, then refuses. Tests: a refused refresh (ceiling, link, a tree
+  inventory since the copy began retries the whole copy once, then refuses. This is detection by length and write time —
+  **best effort**: a writer that keeps both unchanged is not seen, and a live tree is not frozen while it is copied (risk
+  consultation `f1ec5d9a`). A hard link in a locally prepared live tree imports the linked file's bytes (git records no
+  hard links), stated as a known limit. **Reads are contained by the opened handle** (risk consultation `f1ec5d9a`): a
+  served file is opened first, its handle's final path checked inside the root, and read from that handle under a cap —
+  never checked and then re-opened by path; the root itself is part of the link walk; only a file's unnamed stream is
+  copied (Windows alternate data streams are not). Tests: a refused refresh (ceiling, link, a tree
   that keeps changing) leaves the old snapshot readable with its manifest unchanged; a file changed after its own copy but
   before the copy ends, and a file added during the copy, each make the copy retry, then refuse.
 - **D7 — the prompt on stdin, the answer from `--output json`, usage from `--output-dir`.** Answer = the last
@@ -371,7 +377,22 @@ runtime, the preset and installer maps); not on S3. Complete on its own: a Kimi 
   refused; `fs/read_text_file` served only inside the working folder and never for an excluded name; every other client
   request answered with an error; a deadline of its own under the row's timeout.
 - `coai-mcp --ask-acp` (D15): stdin prompt in, answer and usage out, exit codes of its own (never 64), named in
-  `.agents/PROJECT.md`'s one-shot list.
+  `.agents/PROJECT.md`'s one-shot list. **The shim is infrastructure until M-K4, M-K9 and M-K10 pass THROUGH it** (risk
+  consultation `ba5f661a`): ACP makes `session/request_permission` optional for the agent, so refusing every request does
+  not prove every write asks — a sub-agent, a hook or a user MCP server must be measured with canaries and positive
+  controls before `KimiRuntime` ships.
+- **Before the shim launches Kimi on any host but Windows** (the code gate of epic 4, 2026-10-12, codex): an agent that
+  exits before the teardown loses its children on Linux and macOS — they are reparented and the tree kill finds none
+  (`research/module_runners.md`, the ACP teardown's known limit). The transport must own the tree independently of the
+  agent — a Unix process group (or session) killed as a group after the leader is gone — with a test that the grandchild
+  of an agent that crashed first is gone. Windows keeps the exited parent's handle and finds the children; a Job Object
+  there is the stronger form. Today `KimiAcpProfile` names an install only for Windows, so nothing launches Kimi
+  elsewhere yet.
+- `KimiRuntime` classifies the shim's outcome from its STRUCTURED report (`end`, `failure`, the exit code), never by
+  scanning its stdout text through `RateLimit` — a read trace naming `quota.cs` would otherwise turn a sign-in refusal
+  (77) into a retryable rate limit (risk consultation `ba5f661a`); and the report's `notCaptured` usage survives a failure
+  (the executor's rate-limit branch drops usage today). Tests through the executor AND the scheduler: a spent balance, a
+  clean sign-in refusal, and a sign-in refusal whose trace carries quota text — each launched once, usage kept unknown.
 - `KimiRuntime` (the shim's `ProcessRequest`, the snapshot capability, answer and usage from the shim, cost `null`, D9),
   registered in `Default`, `RuntimeNames`, `Named`, and in `MachineOnlyRuntimes` (D12).
 - Kimi session retirement (§7): the ownership record written by the shim, the round's and conversation's recorded folders
