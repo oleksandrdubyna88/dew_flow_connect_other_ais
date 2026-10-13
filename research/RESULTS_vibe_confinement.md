@@ -426,3 +426,46 @@ environment arm is the measurement: with smart approval on by default, registry 
 `--enabled-tools read_file` leaves no skill tool to call. Not measured: an altered file under the home's
 `logs/session/plugins/` being reused on resume. §22 recorded names and sizes, not hashes; the owned-home validation of D17
 therefore needs a version-labelled hash manifest, which S1 generates — never "whatever is under `plugins/`".
+
+## 24. The owned home's hash manifest — what Vibe writes into an empty home (2026-10-13, the script)
+
+D17's last S1 step. Harness: `node scripts/vibe-home-manifest.mjs --write` (subject: branch `feat/vibe-kimi-runtimes`
+over `2c92e0c4`), `vibe` **2.26.1**, Windows 11, every launch in the BUILT environment coai gives Vibe —
+`ProcessEnvironment.MinimalWindows` plus exactly `VIBE_HOME` (a fresh empty folder under `%TEMP%\vhm-rsqQqY`),
+`VIBE_CLI=python` and `VIBE_ACTIVE_MODEL=mistral-medium-3.5`; nothing else of the parent's environment. One paid turn.
+The run's raw record is that scratch folder's `steps.json`; the manifest was written from it with `--from <scratch>`
+after the first pass refused to write (below), so the turn was not paid twice.
+
+**Predicted before the run:** a bare `vibe --version` writes nothing into the home; the turn writes §22's inventory;
+the plugin files keep their bytes across a later start.
+
+| Step | Exit | What the home held afterwards |
+|---|---|---|
+| home A: `vibe --version` | 0 (`… vibe 2.26.1`) | `vibehistory` (13 bytes, `Hello Vibe!\r\n`) — **the prediction was wrong**: a bare start writes one file |
+| home A: one turn, the shipped flags, `Reply with exactly: OK` on stdin | 0 (`outcome: finished`, export `vibe_version 2.26.1`, `active_model mistral-medium-3.5`, 6 911 / 38 tokens) | 36 files: 12 under `logs/session/plugins/`, 24 caches, logs and the session |
+| home A: `vibe --version` again | 0 | the same 36 files, **every hash unchanged** |
+| home B (fresh): `vibe --version` | 0 | `vibehistory` only — a bare start does NOT unpack the plugins; the turn does |
+
+What the turn wrote besides the plugins, every name already in §22: `.connector_bootstrap_cache.json.lock` (§22 wrote
+"`connector_bootstrap_cache.json` + lock"; the lock's real name has a LEADING DOT — the first pass of the script
+classified it as unknown and refused to write, which is what that refusal is for), `connector_bootstrap_cache.json`,
+`experiment_eval_cache.json`, `trusted_folders.toml` (exactly `trusted = []\nuntrusted = []\n`, 28 bytes),
+`vibehistory`, `whoami_cache.json`, `logs/vibe.log` (empty), `logs/session/active/.registry`, and the session under
+`logs/session/unified/<session id>/` (chunks, generations, journal, `meta.json`, `CURRENT`, `scheduled-loops.json`).
+No `config.toml`, `hooks.toml`, `agents/` or `tools/`.
+
+**The plugin files are content-addressed.** `blobs/<2>/<sha256>` is named by its own SHA-256 (checked: `600cc68f…`
+hashes to `600cc68f…`), `manifests/6b/6bb6380c…` lists every package file with its SHA-256 and carries no time, and
+`packages/6b/6bb6380c…/` holds `plugin.json` and the four built-in skills (`create-plugin`, `skill-creator`, `vibe`,
+`worktree`) whose bytes are those blobs. So the same Vibe version writes the same bytes in any home; the run checked it
+across a second start in the same home only, because the other home never received the plugins without a second paid turn.
+
+**What it gave the product:** `shared/vibe-home-manifest.json` — the 12 plugin paths with their SHA-256 for `2.26.1`,
+the `varying` names above (admitted by name), and `seen` (informational). `VibeHome` validates every owned home against
+it before every launch; a Vibe version with no entry is refused with a sentence naming the script.
+
+**Not measured here:** a second Vibe version (the requalification path is the same script); the plugin bytes in a second
+home after a turn (content addressing is the argument, not a run); WSL (D18 refuses it). **Also seen:** a bare
+`vibe --version` writes `vibehistory` into whatever `VIBE_HOME` it is given — with no `VIBE_HOME` that is the person's
+own `~/.vibe`, which the health probe (`providers`, `VendorProbe`) does today for every runtime by starting `--version`
+in the inherited environment. Not changed by this story; named in the S2 report.

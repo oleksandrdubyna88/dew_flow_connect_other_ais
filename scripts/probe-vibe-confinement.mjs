@@ -41,11 +41,11 @@
 //   M-V12  the question row's minimal environment (ProcessEnvironment.MinimalWindows) + VIBE_ACTIVE_MODEL=glm-5-3
 //   M-V13  --time-limit 5 on a longer task → exit 3 and an export
 //   M-V14  a sanitised copy trusted on purpose: source + parent canaries, a junction and a file symlink pointing out
-import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { SYSTEM32, files, fwd, minimalWindowsEnv, run, vibeArgs } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -83,12 +83,6 @@ const REAL_HOME = join(homedir(), '.vibe');
 // Vibe's own interpreter: M-V4 persists trust through Vibe's OWN TrustedFoldersManager, so the file's format is Vibe's.
 const VIBE_PYTHON = join(process.env.APPDATA ?? '', 'uv', 'tools', 'mistral-vibe', 'Scripts', 'python.exe');
 
-// ProcessEnvironment.MinimalWindows (src_mcp/runners/Processes/ProcessEnvironment.cs) — the question row's child env.
-const MINIMAL_WINDOWS = ['PATH', 'PATHEXT', 'SystemRoot', 'windir', 'ComSpec', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
-  'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'USERNAME', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432',
-  'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'PROCESSOR_LEVEL', 'PROCESSOR_REVISION', 'OS', 'NUMBER_OF_PROCESSORS'];
-
-const fwd = (p) => p.replaceAll('\\', '/');
 const toml = (s) => JSON.stringify(s); // a JSON string of a plain path or command is a valid TOML basic string
 /** A fixed Python snippet: the path arrives as argv[1], so nothing about the path is ever Python source. */
 const CANARY_SNIPPET = "import sys; open(sys.argv[1], 'w').write('x')";
@@ -119,26 +113,7 @@ function shortHome({ copy }) {
   return home;
 }
 
-/**
- * Every child this probe starts goes through here: exe + argv (never a shell string, except mklink, which is a cmd builtin),
- * always a timeout, and a timeout kills the child's WHOLE tree by its PID before this returns — a stuck vibe leaves python
- * children behind otherwise (the code round, codex, 2026-10-12). Never by image name.
- */
-/** A Windows system tool by its absolute path, never looked up through PATH (SonarCloud S4036, the code round 2026-10-12). */
-const SYSTEM32 = (exe) => join(process.env.SystemRoot ?? String.raw`C:\Windows`, 'System32', exe);
-
-function run(file, args, options) {
-  const r = spawnSync(file, args, { ...options, timeout: options.timeout ?? 60_000 });
-  const timedOut = r.error?.code === 'ETIMEDOUT' || Boolean(r.signal);
-  if (timedOut && r.pid) {
-    if (process.platform === 'win32') {
-      spawnSync(SYSTEM32('taskkill.exe'), ['/PID', String(r.pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
-    } else {
-      try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
-    }
-  }
-  return r;
-}
+// Every child goes through lib/vibe.mjs's run(): argv, a timeout, and a tree kill by PID on the timeout.
 
 /** Persist trust for `paths` with Vibe's own TrustedFoldersManager under VIBE_HOME=home; returns the file it wrote. */
 function trustWithVibe(home, paths) {
@@ -163,21 +138,6 @@ function fileSymlink(link, target) {
   } catch (e) {
     return `file symlink not creatable: ${e.code ?? e.message}`;
   }
-}
-
-/** Every file under `dir` (relative), not following links. */
-function files(dir) {
-  if (!existsSync(dir)) return [];
-  const out = [];
-  const walk = (d) => {
-    for (const e of readdirSync(d, { withFileTypes: true })) {
-      const p = join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else out.push(fwd(relative(dir, p)));
-    }
-  };
-  walk(dir);
-  return out.sort((a, b) => a.localeCompare(b));
 }
 
 // ---------------------------------------------------------------------------------------------------------------- arms
@@ -367,12 +327,7 @@ const ARMS = {
     setup(runDir) {
       const workdir = join(runDir, 'work');
       mkdirSync(workdir, { recursive: true });
-      const env = {};
-      for (const name of MINIMAL_WINDOWS) {
-        const key = Object.keys(process.env).find((k) => k.toLowerCase() === name.toLowerCase());
-        if (key !== undefined) env[name] = process.env[key];
-      }
-      env.VIBE_ACTIVE_MODEL = 'glm-5-3';
+      const env = { ...minimalWindowsEnv(), VIBE_ACTIVE_MODEL: 'glm-5-3' };
       return { workdir, prompt: 'Reply with exactly: OK', replaceEnv: env };
     },
   }],
@@ -422,11 +377,7 @@ const ARMS = {
 
 // ------------------------------------------------------------------------------------------------------------ launching
 
-/** The shipped flag set, with the arm's deviations. */
-function vibeArgs({ workdir, exportDir, trust = false, timeLimit = 120, resume = '' }) {
-  return ['-p', '--output', 'json', '--agent', 'plan', '--enabled-tools', 'read_file', '--workdir', workdir,
-    '--time-limit', String(timeLimit), '--output-dir', exportDir, ...(trust ? ['--trust'] : []), ...(resume ? ['--resume', resume] : [])];
-}
+// The shipped flag set, with an arm's deviations, is lib/vibe.mjs's vibeArgs().
 
 function childEnv(spec) {
   const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli };
