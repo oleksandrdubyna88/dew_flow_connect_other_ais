@@ -1,11 +1,19 @@
 # Changelog
 
+## Server 0.52.2 — 2026-10-13
+
+**The release of 0.52.1's fixes.** coai-mcp 0.52.1 was tagged but never published: one of its own tests gave the local
+consultant a fixed `D:/answers` directory, so its Windows-on-ARM build failed and the release stayed an unpublished
+draft. 0.52.2 carries everything listed under 0.52.1 below — a check or a consultation of a local thinking model told
+the panel's reasoning effort and ceiling, and an answer cut at the token ceiling named rather than used — with that test
+fixed. Nothing else changes. Extension 0.72.1 pairs with this release.
+
 ## Extension 0.72.1 — 2026-10-13
 
 **Fixed: a failed ✓ Check says why.** When a model card's check failed, its badge read only `checked: no answer`,
 though coai-mcp had recorded what went wrong. It now shows that reason — for a local thinking model, for example, that
-its answer was cut at the token limit and which reasoning effort was sent. Pairs with coai-mcp 0.52.1, which stops a
-local thinking model from spending a check on reasoning alone.
+its answer was cut at the token limit and which reasoning effort was sent. Pairs with coai-mcp 0.52.2 (0.52.1's fixes),
+which stops a local thinking model from spending a check on reasoning alone.
 
 ## Server 0.52.1 — 2026-10-13
 
