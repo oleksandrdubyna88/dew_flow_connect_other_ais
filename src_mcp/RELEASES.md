@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.51.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.50.0...mcp-v0.51.0) (2026-10-13)
+
+
+### Features
+
+* **server:** the ground for Vibe and Kimi — a sanitised review snapshot, the Kimi ACP bridge, a spent balance named ([#785](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/785)) ([289fdfe](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/289fdfe58343ddeb01669065d950bcfd26b16513))
+
 ## [0.50.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.49.0...mcp-v0.50.0) (2026-10-12)
 
 
