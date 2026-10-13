@@ -88,14 +88,39 @@ public static class ConversationFolder
             $"ceilingSeconds={stamp.Ceiling.TotalSeconds.ToString(CultureInfo.InvariantCulture)}",
             $"ended={(stamp.Ended ? "true" : "false")}") + "\n");
 
-    private static ConversationStamp Parsed(IEnumerable<string> lines)
+    /// <remarks>
+    /// Defensive, because the sweep reads every folder of a SHARED root (the epic-3 code round): a key written twice, or a
+    /// ceiling no <see cref="TimeSpan"/> holds (past its range, not a number, negative), is a stamp nobody can read — the
+    /// folder is <see cref="ConversationStamp.Unowned"/> and the foreign-age rule applies — never an exception that stops a
+    /// sweep, or a start.
+    /// </remarks>
+    private static ConversationStamp Parsed(IReadOnlyList<string> lines)
     {
-        var values = lines.Select(line => line.Split('=', 2)).Where(pair => pair.Length == 2).ToDictionary(pair => pair[0], pair => pair[1], StringComparer.Ordinal);
-        var started = DateTime.TryParse(values.GetValueOrDefault("started"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var when);
-        var ceiling = double.TryParse(values.GetValueOrDefault("ceilingSeconds"), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds);
+        var pairs = lines.Select(line => line.Split('=', 2)).Where(pair => pair.Length == 2).ToList();
 
-        return started && ceiling && values.GetValueOrDefault("store") is { Length: > 0 } store
-            ? new ConversationStamp(store, when.ToUniversalTime(), TimeSpan.FromSeconds(seconds), values.GetValueOrDefault("ended") == "true")
+        return pairs.Select(pair => pair[0]).Distinct(StringComparer.Ordinal).Count() == pairs.Count
+            ? FromValues(pairs.ToDictionary(pair => pair[0], pair => pair[1], StringComparer.Ordinal))
             : ConversationStamp.Unowned;
     }
+
+    private static ConversationStamp FromValues(Dictionary<string, string> values)
+    {
+        var started = DateTime.TryParse(values.GetValueOrDefault("started"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var when);
+
+        return started && TryCeiling(values.GetValueOrDefault("ceilingSeconds"), out var ceiling) && values.GetValueOrDefault("store") is { Length: > 0 } store
+            ? new ConversationStamp(store, when.ToUniversalTime(), ceiling, values.GetValueOrDefault("ended") == "true")
+            : ConversationStamp.Unowned;
+    }
+
+    /// <summary>A ceiling a <see cref="TimeSpan"/> holds: a finite, non-negative number of seconds inside its range.</summary>
+    private static bool TryCeiling(string? text, out TimeSpan ceiling)
+    {
+        var parsed = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && Holdable(seconds);
+        ceiling = parsed ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
+
+        return parsed;
+    }
+
+    private static bool Holdable(double seconds) =>
+        double.IsFinite(seconds) && seconds >= 0 && seconds < TimeSpan.MaxValue.TotalSeconds - 1;
 }

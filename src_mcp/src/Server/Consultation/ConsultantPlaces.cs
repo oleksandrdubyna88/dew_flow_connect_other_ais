@@ -95,6 +95,10 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// <summary>How long a turn waits for its folder's cross-process lock — only the home sweep holds it otherwise, and briefly.</summary>
     public static readonly TimeSpan LockWait = TimeSpan.FromSeconds(10);
 
+    /// <summary>How the folder's turn lock is waited for — off the calling thread, at most <see cref="LockWait"/>; a test's seam for a cancellation there.</summary>
+    internal Func<string, CancellationToken, Task<Hold>> TakingTheLock { get; set; } =
+        static (path, ct) => Task.Run(() => HeldFile.TakeWithin(path, LockWait), ct);
+
     /// <summary>The cure a refused place carries: the copy is coai's, so the cause is in the tree or this machine.</summary>
     public const string Cure =
         "this consultant reads a copy coai makes of the live tree (D6 of todo/PLAN_vibe_and_kimi_runtimes.md) and the copy was refused — "
@@ -112,25 +116,41 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// timeout). Stamped on the folder when the copy is ready, so the home sweep never takes a home a killed server's child
     /// may still be running in (R4).
     /// </param>
+    /// <remarks>
+    /// A home and a copy are two declarations (the epic-3 code round): a runtime that names a
+    /// <see cref="IConsultantRuntime.HomesFolder"/> is given its owned, stamped, locked conversation folder whether or not it
+    /// asks for a copy — the copy is optional inside that place — and one that asks for a copy needs a homes folder to keep
+    /// it in. Only a runtime that declares neither stands in the checkout with nothing held.
+    /// </remarks>
     public async Task<ConsultantPlace> ForConversationAsync(IConsultantRuntime runtime, string consultationId, string repo, TimeSpan ceiling, CancellationToken ct)
     {
-        if (!runtime.NeedsASanitisedSnapshot)
+        if (KeepsNothing(runtime))
         {
             return ConsultantPlace.Checkout;
         }
 
-        if (Unconfigured(runtime) is { Length: > 0 } why)
-        {
-            return new ConsultantPlace.Refused(why);
-        }
+        return Unconfigured(runtime) is { Length: > 0 } why
+            ? new ConsultantPlace.Refused(why)
+            : await OwnedAsync(runtime, consultationId, repo, ceiling, ct);
+    }
 
+    /// <summary>A runtime that declares neither a home nor a copy: it stands in the checkout, as every consultant before Vibe.</summary>
+    private static bool KeepsNothing(IConsultantRuntime runtime) =>
+        !runtime.NeedsASanitisedSnapshot && runtime.HomesFolder.Length == 0;
+
+    /// <summary>The conversation's own folder — never through a link — held, stamped and, when asked, holding the copy.</summary>
+    private async Task<ConsultantPlace> OwnedAsync(IConsultantRuntime runtime, string consultationId, string repo, TimeSpan ceiling, CancellationToken ct)
+    {
         var homes = Path.Combine(homesRoot, runtime.HomesFolder);
         var folder = ConsultantHomes.ConversationFolder(homesRoot, runtime.HomesFolder, consultationId);
 
         return MadeThrough(homes, folder) is { Length: > 0 } link
             ? new ConsultantPlace.Refused($"{link} is a link, and a conversation's folder is never made or used through one")
-            : await HeldAsync(folder, repo, ceiling, ct);
+            : await HeldAsync(new Turned(folder, runtime.NeedsASanitisedSnapshot ? repo : string.Empty, ceiling), ct);
     }
+
+    /// <summary>One turn's folder, the live tree to copy into it (empty: no copy), and the turn's ceiling.</summary>
+    private sealed record Turned(string Folder, string CopyOf, TimeSpan Ceiling);
 
     /// <summary>Why a runtime that keeps a conversation folder has none here — no homes root, or no homes folder named — or empty.</summary>
     private string Unconfigured(IConsultantRuntime runtime) =>
@@ -151,28 +171,60 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         return OwnedPaths.FirstLink(homes, folder);
     }
 
-    /// <summary>The folder held — this process's turn, then the cross-process lock — and its snapshot made fresh in it.</summary>
-    private async Task<ConsultantPlace> HeldAsync(string folder, string repo, TimeSpan ceiling, CancellationToken ct)
+    /// <summary>
+    /// The folder held — this process's turn, then the cross-process lock — and, when asked, its snapshot made fresh in it.
+    /// The in-process turn is given back on EVERY way out but one: a place that took it (the epic-3 code round found a
+    /// cancellation while the lock was awaited leaving it held until a restart).
+    /// </summary>
+    private async Task<ConsultantPlace> HeldAsync(Turned turned, CancellationToken ct)
     {
-        var turn = await VibeHomeTurns.TakeAsync(folder, ct);
-        var locked = await Task.Run(() => HeldFile.TakeWithin(Path.Combine(folder, ConversationFolder.LockName), LockWait), ct);
-        if (locked is not Hold.Taken taken)
+        var turn = await VibeHomeTurns.TakeAsync(turned.Folder, ct);
+        var moved = false;
+        try
         {
-            turn.Dispose();
+            var place = await LockedAsync(turned, turn, ct);
+            moved = place is ConsultantPlace.Owned;
 
-            return new ConsultantPlace.Refused($"{folder} is held by another process (its turn lock), so this turn is not started — try again in a moment");
+            return place;
+        }
+        finally
+        {
+            if (!moved)
+            {
+                turn.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Under this process's turn: the folder's cross-process lock, then the place — the lock given back unless the place holds it.</summary>
+    private async Task<ConsultantPlace> LockedAsync(Turned turned, IDisposable turn, CancellationToken ct)
+    {
+        if (await TakingTheLock(Path.Combine(turned.Folder, ConversationFolder.LockName), ct) is not Hold.Taken taken)
+        {
+            return new ConsultantPlace.Refused($"{turned.Folder} is held by another process (its turn lock), so this turn is not started — try again in a moment");
         }
 
         try
         {
-            return Placed(await ConversationSnapshots.FreshAsync(_maker, folder, repo, ct), new Stamping(folder, store, ceiling), [taken.Stream, turn]);
+            var stamping = new Stamping(turned.Folder, store, turned.Ceiling);
+
+            return turned.CopyOf.Length == 0
+                ? HomeOnly(turned.Folder, stamping, [taken.Stream, turn])
+                : Placed(await ConversationSnapshots.FreshAsync(_maker, turned.Folder, turned.CopyOf, ct), stamping, [taken.Stream, turn]);
         }
         catch
         {
             taken.Stream.Dispose();
-            turn.Dispose();
             throw;
         }
+    }
+
+    /// <summary>The conversation's home and nothing to stand in: the launch keeps its own cwd, the folder is owned and held.</summary>
+    private static ConsultantPlace HomeOnly(string folder, Stamping stamping, IReadOnlyList<IDisposable> held)
+    {
+        stamping.Begin();
+
+        return new ConsultantPlace.Owned(folder, string.Empty, [], [stamping, .. held]);
     }
 
     /// <summary>The stamp a conversation's folder carries for a turn: begun when the copy is ready, ended when it is given back.</summary>
