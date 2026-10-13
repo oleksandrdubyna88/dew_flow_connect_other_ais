@@ -237,7 +237,7 @@ against the code or a run before it went in here — the question consultant had
     DISK, untrusted, with or without `.git`, with no client call at all.** D6's snapshot exclusions are the block; the shim's
     list is the second check on the same names and is kept, never claimed as the first.
   Writes stay the hard requirement, and they are version-specific evidence, not a sandbox: Kimi decides which operations
-  ask — Kimi 2.1.1 is what §6–§7 measured, and D19 pins that version until a new one is re-measured. Kimi's own session
+  ask — Kimi 2.1.1 is what §6–§7 measured, and D19 WARNS, visibly, when another version runs (owner, 2026-10-13). Kimi's own session
   store (`sessions/`, `session_index.jsonl`) is a permitted vendor write — and under D19 it lands in coai's OWN home
   (M-K8, §11: the session landed in the copy's `session_index.jsonl`, the person's index unchanged, 6 of 6). The working
   folder is the same sanitised snapshot as Vibe's (D6, with `.kimi-code/`, both spellings of `AGENTS.md` and
@@ -362,28 +362,32 @@ against the code or a run before it went in here — the question consultant had
     (D17, RESULTS_vibe §24); data is admitted by name. Every refusal names the path and the cure (delete the home).
     Turns sharing a home are serialised (`VibeHomeTurns.cs:21`, whose logic is vendor-free — shared, not copied).
   - **The environment.** Built, never inherited: `ProcessEnvironment.Minimal` (`ProcessEnvironment.cs:94`) plus exactly
-    `KIMI_CODE_HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1` (set from the first launch; CLAIMED only after M-K13). Today the shim
+    `KIMI_CODE_HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1` (set from the first launch; its effect CLAIMED only after M-K13, which
+    gates nothing). Today the shim
     starts `kimi acp` with the launcher's default, which inherits (`AcpTransport.cs:87-88`, `ProcessLauncher.cs:100`) —
     the probe reached Kimi by inheritance from the shim's own environment (`scripts/probe-kimi-confinement.mjs:366`). The
     product does not rely on two hops of inheritance: the shim takes `--home <path>` and REBUILDS the agent's environment
     from it through the one builder `KimiLaunch.Built` that the runtime also uses for the shim's own request; an
     `EnvironmentRefusal` (the `VibeLaunch.cs:91-94` shape) stands on both hops, and a test inspects each. `USERPROFILE`
     stays in the minimal set (`ProcessEnvironment.cs:81-83`), which is why the `~/.agents/*` standing below exists.
-  - **The version pin.** Every Kimi number is 2.1.1, and Kimi updates itself: `tui.toml [upgrade] auto_install = true`,
-    and `updates/` was rewritten during the probe (§3, §14). An update under coai's launch would move the measured surface
-    without a measurement. So: `kimi --version` is asked before every launch in the built environment on the owned home
-    (the Vibe shape) and a version the RESULTS file has not measured is REFUSED with a sentence naming the version and the
-    probe script that requalifies it — the D17 rule for Vibe's manifest, applied to Kimi's evidence
-    (`KimiAcpProfile.MeasuredVersions`, `["2.1.1"]` today). The cost is the same as Vibe's: every Kimi update is a probe
-    run before the row works again. M-K13 measures the pin itself (`KIMI_CODE_NO_AUTO_UPDATE=1`, and no `tui.toml` in the
-    home): `updates/` absent in the owned home, `kimi.exe`'s hash unchanged across launches, the person's `updates/`
-    untouched; until it is recorded the help says the auto-update is not pinned, and the version refusal is the net.
+  - **The version: WARN AND RUN — the owner's decision, 2026-10-13.** Every Kimi number is 2.1.1, and Kimi updates itself:
+    `tui.toml [upgrade] auto_install = true`, and `updates/` was rewritten during the probe (§3, §14). `kimi --version` is
+    asked before every launch in the built environment on the owned home (the Vibe shape) and compared with
+    `KimiAcpProfile.MeasuredVersions` (`["2.1.1"]` today — the versions the whole probe has run on). A version outside the
+    list STILL LAUNCHES; the launch's result carries a visible WARNING naming the running version, the measured one(s), and
+    that every confinement number coai has is the measured version's; the reviewer line shows it, and the panel shows it on
+    the row's card; re-running `scripts/probe-kimi-confinement.mjs` on the new version is ADVISED by the sentence, never
+    required. This is NOT the D17 refusal, and Vibe's manifest refusal stays as it is — it guards the owned home's CONTENTS
+    (the plugin bytes), not only the version — unless the owner decides otherwise. `KIMI_CODE_NO_AUTO_UPDATE=1` stays in the
+    built environment and M-K13 stays an informational cell, not a gate: the pin only makes the warning rarer, and whether
+    it works is worth one measured row, not a blocked story.
   - **`~/.agents/skills` and `~/.agents/AGENTS.md` — a stated limit, not a refusal.** Kimi documents reading them from the
     OS home whatever `KIMI_CODE_HOME` says (unmeasured, §14). They are the PERSON's own prompts, not the branch's; every
     write still asks (M-K4), and Kimi's reads are `unconfined` already (D15, the codex standing) — so a refusal while they
     exist would bar every person who uses Kimi skills interactively, for no write it would stop. M-K12 measures (a) that
-    they load under an owned home at all (a canary skill in the real `~/.agents/skills/`, written only with the owner's go
-    and removed in a `finally`), and (b) whether redirecting `USERPROFILE`/`HOME` in the built environment closes them
+    they load under an owned home at all (a canary skill in the real `~/.agents/skills/` — the owner allowed that write on
+    2026-10-13; the probe still takes `--allow-agents-canary` so it never happens by accident — removed in a `finally`,
+    verified absent), and (b) whether redirecting `USERPROFILE`/`HOME` in the built environment closes them
     without breaking the launch (the `kimi.exe` path and the junction target are absolute, so it may). If (b) is clean 3 of
     3, the built environment takes it and the limit goes; else the standing is written into `runtime-capabilities.json`'s
     Kimi rows, the help, and the question consultant's `disk` row — exactly as codex's is.
@@ -405,9 +409,10 @@ against the code or a run before it went in here — the question consultant had
     `IReviewerRuntime` like `NeedsASanitisedSnapshot` (`VibeRuntime.cs:61`), never an `if` on a vendor name — so the wait
     is the scheduler's, outside the row's timeout. Cross-process (two editor windows, two servers): a named mutex keyed by
     the hash of the credentials target, taken in `KimiLaunch.TakeAsync` — inside the row's timeout, stated. The cost: a
-    round's three Kimi reviewers run one after another, up to three times the wall time. M-K14 measures the race; a server
-    with a grace window lifts the cap to the default and drops the mutex, a server that revokes on reuse keeps both and
-    writes the person's own interactive `kimi` into the help as the remaining race.
+    round's three Kimi reviewers run one after another, up to three times the wall time — accepted by the owner on
+    2026-10-13, with M-K14 to run LATER. When it does: a server with a grace window lifts the cap to the default and drops
+    the mutex, a server that revokes on reuse keeps both and writes the person's own interactive `kimi` into the help as
+    the remaining race.
   This replaces, for Kimi, what D17 is for Vibe, and D8b's Kimi arm. It does NOT bound Kimi's reads (`Grep`/`Glob`, D15) and
   does not close `~/.agents/*` until M-K12 says it can.
 - **D16 — official installers only.** Vibe: `uv tool install mistral-vibe` (what is installed here) or Mistral's own
@@ -550,20 +555,22 @@ channel.
 
 *The code half — re-planned 2026-10-13, and gated.* The plan's rule holds: no code below is written before the cell it
 cites is recorded. **Cells before code, in this order** (all in `scripts/probe-kimi-confinement.mjs`, 3 of 3, Windows, through
-the shipped shim; §5 defines each): **M-K11** (what the owned home must hold; its inventory) and **M-K13** (the auto-update
-pin) come first — nothing of `KimiHome` is coded before them; **M-K9 (e)** (the exclusion list is complete) before the
-snapshot's and the shim's lists are called complete; **M-K7b** (one answered turn per curated id) before an id joins the
-list; **M-K12** (`~/.agents/*`) before the `runtime-capabilities.json` rows and the help are written; **M-K14** (the
-refresh race) may run LAST — its absence costs serialisation, not correctness — and lifts the cap when it is recorded.
-A new Kimi version re-runs the whole script before `MeasuredVersions` gains it.
+the shipped shim; §5 defines each): **M-K11** (what the owned home must hold; its inventory) comes first — nothing of
+`KimiHome` is coded before it; **M-K9 (e)** (the exclusion list is complete) before the snapshot's and the shim's lists are
+called complete; **M-K7b** (one answered turn per curated id) before an id joins the list; **M-K12** (`~/.agents/*`) before
+the `runtime-capabilities.json` rows and the help are written; **M-K14** (the refresh race) runs LATER — the owner accepted
+the serialised rows on 2026-10-13; its absence costs wall time, not correctness — and lifts the cap when it is recorded;
+**M-K13** (the auto-update pin) is informational and gates nothing. A new Kimi version launches with the version warning;
+re-running the whole script on it is what makes it a measured one (owner, 2026-10-13: warn and run, never refuse).
 - `KimiHome` + `KimiLaunch` (D19), the Vibe shapes with the inversions D19 names: the home made in the round's scratch (or the
   conversation's folder) with its `credentials` junction, the person's folder located and checked first (exists, not a
   link, local), the junction read back; the validation before every launch (the junction's target, no other link, no
   `mcp.json`, an empty `workspace-trust/`, no `config.toml` but coai's own, no `tui.toml`/`skills/`/`agents/`/`AGENTS.md`/
   `hooks*`, the rest by M-K11 (c)'s names — and a hash manifest ONLY if M-K11 (c) finds configuration or code written);
   the home's turn; the host (D18); the model pre-check against the curated `kimi-code/*` list (D10); `kimi --version` in the
-  built environment on the owned home against `MeasuredVersions` (the version pin); the built environment (`Minimal` +
-  `KIMI_CODE_HOME` + `KIMI_CODE_NO_AUTO_UPDATE=1`) with `EnvironmentRefusal` on the shim's request. The `providers` probe's
+  built environment on the owned home against `MeasuredVersions` — a version outside it launches, and the warning rides on
+  the launch's result to the reviewer line and the card, never a refusal (owner, 2026-10-13); the built environment
+  (`Minimal` + `KIMI_CODE_HOME` + `KIMI_CODE_NO_AUTO_UPDATE=1`) with `EnvironmentRefusal` on the shim's request. The `providers` probe's
   `--version` runs the same way on a throwaway home, never in the inherited environment against the person's home (the
   Vibe precedent, `VibeRuntime.cs:99-111`).
 - The disposal (D19): the junction unlinked first by its own name and verified, then the home; `DeleteEvenIfReadOnly`
@@ -601,14 +608,15 @@ A new Kimi version re-runs the whole script before `MeasuredVersions` gains it.
 - `VendorDiagnosis`: Kimi's install cure per OS (Moonshot's own installer, D16) and the failure sentences M-K7 captured —
   the subscription-model `401` of D15, `Authentication required` (exit 77), the billing `429` of D14 — plus coai's own
   pre-launch sentences: not signed in (no `credentials/` to junction), a junction that could not be made or reads back
-  wrong, an unmeasured Kimi version, an id outside `kimi-code/`.
+  wrong, an id outside `kimi-code/` — and the version WARNING (a sentence on the result, not a refusal) for a Kimi outside
+  `MeasuredVersions`, which the extension shows on the row's card (owner, 2026-10-13).
 - Seeds: `feature-availability.json` rows for `kimi` (`effort` — `thinking` has `low`/`high`/`max` on the k3 models (M-K7)
   but nothing measured it taking effect, so `unmeasured`; `thinking` `unmeasured` for the same reason; `fastMode` `none`),
   regenerate.
 - Extension: `RUNTIMES`, both `package.json` enums, `modelsFor` + `modelsProvenance` (the M-K7 list, D10), the preset
   (D11), `vendorTerminal` maps + `kimiInstall` + `OFFICIAL_SOURCES` (D16), `JUDGED_HERE`, both `CLI_RUNTIMES`,
   `KNOWS_ITS_OWN_ENDPOINT`, a colour slot, the `crossesTo` gate (D13). The ▶ terminal runs plain `kimi` (interactive), never
-  `acp`.
+  `acp`. The row's card shows D19's version warning whenever a launch's result carries one (owner, 2026-10-13).
 - Docs: the S2 set, for Kimi — `module_runners.md` (the ACP shim), `module_extension.md`, `architecture.md`, README, help in
   five languages, `vendor-routing.md`, CHANGELOG, and `.agents/PROJECT.md`.
 
@@ -693,16 +701,19 @@ can write):
   caches, logs); whether any file's bytes change between starts. A configuration-or-code file → `shared/kimi-home-manifest.json`
   and the Vibe step's twin; none → admission by name.
   **M-K12 `~/.agents/*`** — gates the `runtime-capabilities.json` Kimi rows and the help: (a) a canary skill in the real
-  `~/.agents/skills/<unique>/` and a canary line in `~/.agents/AGENTS.md` (written only with the owner's go, removed in a
-  `finally`, verified absent) — are they in the session's wire under an owned `KIMI_CODE_HOME`? (b) the same with
+  `~/.agents/skills/<unique>/` and a canary line in `~/.agents/AGENTS.md` (the owner allowed that write on 2026-10-13; the
+  probe still takes `--allow-agents-canary` so it never happens by accident; removed in a `finally`, verified absent) —
+  are they in the session's wire under an owned `KIMI_CODE_HOME`? (b) the same with
   `USERPROFILE`/`HOME` redirected to an empty folder in the built environment — do they stop loading, and does the launch
   still sign in and answer (the `kimi.exe` path and the junction target are absolute)? Clean 3 of 3 → the built environment
   takes the redirect; else the stated limit.
-  **M-K13 the auto-update pin** — gates the claim, not the setting: with `KIMI_CODE_NO_AUTO_UPDATE=1` in the built
-  environment and no `tui.toml` in the owned home, across three launches: `updates/` absent in the owned home, the
-  person's `updates/` and `bin/kimi.exe` hashes unchanged, `kimi --version` the same before and after. A control run
-  without the variable, if `updates/` appears with it: the variable does nothing and the version refusal is the only net.
-  **M-K14 the refresh race** — gates the lifting of D19's serialisation, and may run last: with the person's access token
+  **M-K13 the auto-update pin** — informational, gates nothing (owner, 2026-10-13: the version is warn-and-run): with
+  `KIMI_CODE_NO_AUTO_UPDATE=1` in the built environment and no `tui.toml` in the owned home, across three launches:
+  `updates/` absent in the owned home, the person's `updates/` and `bin/kimi.exe` hashes unchanged, `kimi --version` the
+  same before and after. A control run without the variable, if `updates/` appears with it: the variable does nothing and
+  the version warning is the only net.
+  **M-K14 the refresh race** — gates only the LIFTING of D19's serialisation; runs LATER (owner, 2026-10-13: the serialised
+  rows are accepted until then): with the person's access token
   past its 900 s (the probe waits; it reads the credential file's expiry, never holds a token — the guard's existing rule,
   §11), three shims on three owned homes junctioned to the ONE credentials folder, started within the same second: all three
   answered? any `Authentication required`? how many rotations did the guard see? and the person's own `kimi -p` afterwards
@@ -758,8 +769,11 @@ Unit tests (red first where they guard a defect):
   `KIMI_CODE_NO_AUTO_UPDATE=1`, and a `KIMI_CODE_HOME` set in the parent never reaches the agent by inheritance (a test sets
   one in the parent and inspects the agent's request). Linux/WSL child → refused (D18). Model: an id outside `kimi-code/`
   refused with the billing sentence; one on the list but not among the session's announced options → the shim exits 65
-  with the list (fake agent); `--model nope` never reaches `set_config_option`. Version: a `kimi --version` outside
-  `MeasuredVersions` → refused naming the version and the probe script. Usage: `/usage` sent only after `end_turn`; the
+  with the list (fake agent); `--model nope` never reaches `set_config_option`. Version (owner, 2026-10-13: warn and run):
+  a `kimi --version` outside `MeasuredVersions` LAUNCHES, and the launch's result carries the warning naming the running
+  version, the measured one(s), and that every confinement number is the measured version's; the warning reaches the
+  reviewer line through the executor (C#), and a TS test shows it on the row's card; a measured version carries no
+  warning; the probe re-run is advice in the sentence, never a refusal. Usage: `/usage` sent only after `end_turn`; the
   `Session total` line parsed; an unparseable answer → `notCaptured`, tokens 0, never a number. Serialisation: two Kimi
   launches in one round never overlap (the scheduler's per-provider cap at 1 for `LaunchesOneAtATime`); two servers'
   `KimiLaunch.TakeAsync` on one credentials target wait on each other (the named mutex); a Vibe row's cap unchanged.
@@ -771,6 +785,7 @@ Unit tests (red first where they guard a defect):
   `DeleteEvenIfReadOnly`: the attribute cleared through the junction (`GitScratch.cs:21-27`), or the file deleted. A second
   test: the disposal of a home whose junction was already removed, and of one whose `credentials` is a real folder (a
   tampered home), each ends with the home gone and nothing outside it touched.
+- `crossesTo`: a `vibe` / `kimi` row is not sent to a server older than its constant; a test that a host whose `RUNTIMES`
   lacks `vibe` does not overwrite a `vibe` row in the server's settings file (D13). **And one live compatibility check**
   (plan gate, codex, 2026-10-12): the extension's REAL send path (the settings mirror the server reads) against the last
   RELEASED `coai-mcp` binary, asserting the rows are withheld and the older server serves its other rows unchanged. The
@@ -812,15 +827,14 @@ Unit tests (red first where they guard a defect):
   the owner's is the SIGN-IN, which only a person can do: the button opens the vendor's own terminal for it afterwards.
 - **Kimi sign-in** — done on Windows 2026-10-12 (`kimi login`, managed `kimi-code` OAuth); WSL needs it once `kimi` is
   installed there by the button, for S4's WSL cells.
-- **D19's cells need three things only the owner can give** (2026-10-13): (1) M-K12 writes a canary skill and a canary line
-  into the owner's REAL `~/.agents/` for the length of the arm (removed in a `finally`, verified absent) — the probe refuses
-  that arm without `--allow-agents-canary`; (2) M-K14 needs the access token EXPIRED before each of its three runs — the
-  probe waits out the 900 s itself, so the cell is ~45 minutes of wall time in which the owner's own `kimi` must stay
-  idle except for the person-race arm, which asks the owner to start `kimi -p` on cue (or the probe starts it); (3) a
-  decision on the version pin — D19 REFUSES a Kimi version the RESULTS have not measured (the D17 rule for Vibe); the
-  alternative is to WARN and run, which the plan does not recommend because every write number is 2.1.1's. Kimi
-  auto-updates by default (M-K13 measures the pin), so under the refusal a Kimi update means a probe run before the row works
-  again — the owner should say that is acceptable before `MeasuredVersions` is coded.
+- **The owner's answers to D19's three questions, 2026-10-13** — nothing of D19 is open to the owner any more: (1) the
+  version is WARN AND RUN — a Kimi outside `MeasuredVersions` launches with the visible warning (D19), never a refusal; the
+  probe re-run is advised in the sentence, not required; (2) M-K12 MAY write its canary into the owner's real `~/.agents/`
+  — removed in a `finally`, verified absent, and still behind the probe's explicit `--allow-agents-canary` so it never
+  happens by accident; (3) M-K14 runs LATER, and a Kimi row's launches stay serialised until it is recorded (D19) —
+  accepted. What M-K14 will need when it runs: the access token expired before each of its three runs (the probe waits out
+  the 900 s itself, ~45 minutes of wall time with the owner's own `kimi` idle) and, for the person-race arm, a `kimi -p`
+  started on cue.
 - **Vibe in WSL.** Only the Windows side is installed and signed in; until `vibe` is installed (by the button) and signed in
   there and the probe has run, D18 refuses Vibe on a Linux/WSL child.
 - Releases after each story follow the repository's release process with the owner's go.
@@ -894,8 +908,9 @@ Unit tests (red first where they guard a defect):
       folder, in a built environment, through one launch control on every path (D19); the person's `credentials/` is never
       copied, and every disposal and sweep removes the junction by its own name first — pinned by the red-first junction
       test of §5; the person's `~/.kimi-code` is byte-identical after a launch but for its own token refresh (M-K11 (b)).
-- [ ] D19's cells are recorded before the code they gate (M-K11, M-K13, M-K9 (e), M-K7b, M-K12, M-K5b; M-K14 before the
-      serialisation is lifted), and `MeasuredVersions` names only versions the whole probe has run on.
+- [ ] D19's cells are recorded before the code they gate (M-K11, M-K9 (e), M-K7b, M-K12, M-K5b; M-K14 before the
+      serialisation is lifted; M-K13 informational), `MeasuredVersions` names only versions the whole probe has run on, and
+      a Kimi outside it launches WITH the visible warning on the result and the card — never a refusal (owner, 2026-10-13).
 - [ ] The Kimi model id is checked before the launch (the curated `kimi-code/*` list) and inside the shim (the announced
       options); an id outside `kimi-code/` never reaches Kimi (D10).
 - [ ] Both runtimes are machine-only; an older server never receives the rows.
