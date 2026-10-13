@@ -1,5 +1,19 @@
 # Changelog
 
+## Server 0.52.0 — 2026-10-13
+
+**Changed: the *Split with the strongest model* order follows the subagent model tiers.** With the switch on, a first
+plan round now orders three tiers instead of "Fable splits, Opus implements": the strongest model splits the plan into
+epics after asking the question consultant what matters and where (a plan split straight into stories is covered too)
+and writes the spec of the cornerstone stories — at most 2·E/5 rounded up — and of any security work; the
+implementation model splits each epic into stories, one stories document per epic, writes the test scenarios and the
+briefs, and runs every review; a new third model, the coder, writes the code, the fixes and the tests and runs the
+search scouts (1.5·N rounded up). The caller writes code itself only for one file and at most 50 changed lines, passes
+models by alias, falls back from the strongest to the implementation model on a spend limit and says so, and names
+models and counts in its summary. Claude Code is told Fable, Opus and Sonnet; Codex, Gemini and other clients are told
+generic words and never another vendor's model. `COAI_COMMAND_MODELS` rows may carry `coder`; a row without it keeps
+the shipped one. The opening words the bench reads are unchanged.
+
 ## Unreleased
 
 **Changed: *Split with the strongest model* follows the subagent model tiers.** The order now names THREE of the
