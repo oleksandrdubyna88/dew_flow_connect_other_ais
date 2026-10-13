@@ -376,6 +376,15 @@ runtime, the preset and installer maps); not on S3. Complete on its own: a Kimi 
   (Kimi on a Linux/WSL child is refused like Vibe until the same later change measures it),
   driving `kimi acp` through the SAME client unit the shim uses (so the probe measures the shipped code, not a copy). The
   code half of S4, and S5, are re-planned from its results if any cell contradicts D15.
+  **Measured 2026-10-13 (RESULTS §3–§15, 74 launches): two cells contradict the plan, so the code half of S4 and S5 are
+  re-planned before `KimiRuntime` is written** — M-K10: a server in the person's own `~/.kimi-code/mcp.json` starts 3 of 3
+  under `mcpServers: []` (D8b's Kimi arm fails); M-K9 (d): a `[[hooks]]` entry in the person's `config.toml` fires 3 of 3.
+  The block is a coai-owned `KIMI_CODE_HOME` (honoured 6 of 6) whose `credentials/` is a JUNCTION to the person's (M-K8b,
+  3 of 3) — never a copy: the OAuth refresh token rotates on every refresh, so a copied home signs the person out. Writes
+  held everywhere (0 of 30 landed, every one asked, sub-agent and background shell included; controls 7 of 7); the branch's
+  `AGENTS.md`/skills/sub-agents load from disk untrusted with no client call (D6's exclusions are the block, not the shim's
+  list); `session/load` keeps the refusals, its `cwd` does not rebind (S5 keeps one snapshot path); `/usage` gives an
+  input/output split after a turn.
 - The ACP client unit and `IAcpProfile` (`KimiAcpProfile`): `initialize` with `fs.readTextFile: true`, `writeTextFile: false`,
   `terminal: false`; `session/new` with `mcpServers: []`; `set_config_option` for the model; every permission request
   refused; `fs/read_text_file` served only inside the working folder and never for an excluded name; every other client
