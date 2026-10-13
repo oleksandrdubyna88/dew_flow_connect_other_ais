@@ -58,7 +58,7 @@ sequenceDiagram
 | `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
 | `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
-| `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code |
+| `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code; the `--version` is started BY THE ADAPTER (`IReviewerRuntime.ProbeVersionAsync`, 2026-10-13) — as it always was for every runtime but Vibe, which asks in its built environment on a home of coai's own (the section *The Vibe reviewer*) |
 | `RemoteRuntime` | `Reviewers/RemoteRuntime.cs` | the adapter for a vendor whose reviews run on a **Team server**: builds `--ask-remote` against THIS binary (the `LocalRuntime` shim shape), carries no `SharedResource` because the server owns the queue, and holds the cancel-an-abandoned-job half (`Claim` / `ReadClaimAsync` / `CancelAbandonedAsync`) |
 | `RemoteAsk`, `RemotePoll`, `RemoteState` | `Reviewers/RemoteAsk.cs` | the PURE half of the shim: the request body, the poll parse, every exit code and every sentence a person will see — so each failure path is tested without a server |
 | `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
@@ -2905,9 +2905,14 @@ sequenceDiagram
   DISOWNED (`NonZeroExit`, its usage kept). The per-attempt export folder is deleted when the launch's turn is given
   back, after every read; a crash leaves it in the launch's `coai-answers-*` folder for the sweep.
 - **What it does not do.** No effort, no thinking switch, no fast mode is sent (`shared/feature-availability.json`:
-  `unmeasured`, `unmeasured`, `none`). The `providers` health probe still starts `vibe --version` in the INHERITED
-  environment (`VendorProbe`, every runtime alike), which writes `vibehistory` into the person's own `~/.vibe` (§24) —
-  named, not changed here. The consultant and the question row are S3's.
+  `unmeasured`, `unmeasured`, `none`). The consultant and the question row are S3's.
+- **The `providers` probe leaves the person's home alone** (D17; follow-up of the same story). A bare `vibe --version`
+  writes `vibehistory` into whatever `VIBE_HOME` it is given — the person's own `~/.vibe` when it is given none (§24) — so
+  `VendorProbe` no longer starts the CLI itself: it asks the adapter (`IReviewerRuntime.ProbeVersionAsync`, by default the
+  `--version` every runtime always had, in this process's environment). `VibeRuntime` overrides it: the probe runs in the
+  launch control's BUILT environment (`VibeLaunch.Built` — the one builder `Build` uses too, so the two cannot drift) on a
+  fresh `coai-answers-*` folder as its home, deleted after the probe (a crash leaves it to the six-hour sweep). A
+  capability of the adapter, never an `if` on a vendor name in the probe.
 - **Diagnosis** (`VendorDiagnosis`): Vibe's not-signed-in sentence (`Missing MISTRAL_API_KEY environment variable`, §11
   arm a2) → `vibe --setup`, kind `Refused`; the Rust CLI's `unexpected argument '--time-limit'` (§3) → named as the
   unmeasured CLI, kind `UnknownOption`. The install cure is Mistral's own README's (D16): `uv tool install
@@ -2915,7 +2920,8 @@ sequenceDiagram
   `curl -LsSf https://mistral.ai/vibe/install.sh | bash` on Linux.
 
 Tests: `VibeRuntimeTests`, `VibeLaunchRulesTests`, `VibeHomeTests`, `VibeHomeManifestTests`, `VibeLaunchControlTests`,
-`AVibeRowReviewsInTheRoundsSnapshotTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `VibeIsDiagnosedInItsOwnWordsTests`
+`AVibeRowReviewsInTheRoundsSnapshotTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `VibeIsDiagnosedInItsOwnWordsTests`,
+`TheVibeProbeLeavesThePersonsHomeAloneTests`
 — listed in [module_tests.md](module_tests.md).
 
 ## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)

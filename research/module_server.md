@@ -6969,7 +6969,9 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   mounts a checkout (`readsCheckout` and a workspace other than `none`) and a runnable row serving the stage runs on a
   runtime that asks (`NeedsASanitisedSnapshot`), makes ONE sanitised snapshot of the round's pinned worktree inside it
   (`SnapshotSource.Pinned`). A refusal is kept on the scratch (`RoundTree.Refused`) and logged.
-- **`BuildWork(…, scratch:)`** — optional; absent is `RoundScratch.None`. `PlaceFor(runtime, launchDir, hasCheckout,
+- **`BuildWork(…, scratch:)`** — optional; absent is `RoundScratch.None`. (Taken to cyclomatic complexity 4 the same
+  day: the round's fixed facts are a `RosterFrame`, what the deal collects a `RosterCollector`, both in
+  `Rounds/RosterAssembly.cs`; one dealt seat is `AddReviewer` → `PlaceOf` → `ReviewerFor`.) `PlaceFor(runtime, launchDir, hasCheckout,
   scratch)` decides each runtime's launch directory: unchanged for every runtime that does not ask (its argv byte for
   byte, `AVibeRowReviewsInTheRoundsSnapshotTests.EveryOtherRuntime_KeepsTheDirectoryItAlwaysHad`); the snapshot's root
   for one that asks when there is a checkout, with `ReviewerInvocation.Citations` set to the snapshot so a finding's

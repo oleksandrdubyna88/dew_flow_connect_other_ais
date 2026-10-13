@@ -3740,11 +3740,25 @@ engine's disposal of the round's scratch alone. The messages below are those run
 | `VibeIsDiagnosedInItsOwnWordsTests` | the not-signed-in stderr of §11 arm a2 → `Refused`, cured by `vibe --setup` and naming the keyring; the Rust CLI's clap error of §3 → `UnknownOption`, naming the unmeasured CLI and the pin; the install cure per OS from Mistral's README | *Expected diagnosis not to be <null>* (twice); *Expected VendorDiagnosis.InstallCure("vibe", linux: false) <null> to contain "uv tool install mistral-vibe"* |
 | `EveryAdapterRecordsWhatItLaunchedTests` (+ a `vibe` row) | Vibe records the model it launched and no effort | — (an added row of an existing theory, green with the code) |
 | `ApiRuntimeTests.TheSelectorKnowsTheName_AndTheMachineOnlySetHoldsIt` (changed) | `MachineOnlyRuntimes` CONTAINS `local` and `api` — it asserted the whole set, a second copy that went red the day `vibe` joined it | *Expected ReviewerRuntimeSelector.MachineOnlyRuntimes to be a collection with 2 item(s), but {"local", "api", "vibe"} contains 1 item(s) more than {"local", "api"}* — the reason for the change |
+| `TheVibeProbeLeavesThePersonsHomeAloneTests` (the coordinator's follow-up, 2026-10-13) | the `providers` probe of a `vibe` row: ONE `--version` request, not inheriting the environment, passing the launch control's own `EnvironmentRefusal` (the built environment), on a home that is not the person's `~/.vibe`, that exists while the probe runs and is gone after it; a codex row is probed as before (inherited environment, nothing added) | RED FIRST, before the fix: *Expected asked.InheritsEnvironment to be False because an inherited environment gives Vibe the person's own home, but found True*; *KeyNotFoundException : The given key 'VIBE_HOME' was not present in the dictionary* (the probe named no home, so Vibe used the person's own); the codex row green before and after |
 | `VendorCatalogTests.EachBadEntryIsRefusedByName` (Team server, + a `vibe` row) | a `vibe` vendor in the Team server's catalog is refused by name (D12) | — (green with the code: `KnownRuntimes` is derived from `MachineOnlyRuntimes`) |
 
 **The flow:** a Vibe row in a real code round is the `AVibeReviewerRunsThroughAFakeVibeTests` round test above (fake CLI,
 Windows only). **NOT covered:** the real `vibe` through the product (a live plan and code round are S2's open tail, owed
 before the plan's DoD); Vibe on a Linux or WSL host (refused, D18 — the refusal is covered, a run is not); a second Vibe
 version's manifest (the requalification path is the script); concurrent Vibe processes on ONE home (serialised by
-design, so never exercised); the `providers` probe writing `vibehistory` into the person's `~/.vibe` (§24 — named, not
-changed).
+design, so never exercised).
+
+**Taken to complexity 4 (pure refactor, 2026-10-13):** `RosterBuilder.BuildWork` (25, its `Add` local function among it) became
+`FrameFor` / `CatalogIds` / `AddReviewer` / `ChoiceOf` / `ApiViewOf` / `PlaceOf` / `ReviewerFor` with `RosterFrame` and
+`RosterCollector` (`Rounds/RosterAssembly.cs`); `ReviewerExecutor.LaunchTakenAsync` (10) became `StartAsync` /
+`KilledAsync` / `Classified`; `VendorProbe.AskItsVersionAsync` (6) became `Answered` / `Refused` / `NotFound`;
+`VibeStdout.PartText` (5) reads through `VibeExport.Text`. Measured with CA1502 at the repository's threshold
+(`src_mcp/CodeMetricsConfig.txt`, `CA1502: 4`), switched on in `.editorconfig` for every file this story changed and
+switched off again; held by the classes behind them (`*Executor*`, `*Roster*`, `*Workspace*`, `*Submission*`,
+`*Repair*`, `*Custom*`, `*Launch*`, `*Turn*`, `*Round*`, `*Feature*`, `*Document*`, `*SecurityRoster*`,
+`*SecurityLane*`, `*Usage*`, `*Ledger*`), green before and after. Still above 4 in those files and NOT touched by
+this story: `RoundEngine.RunStageAsync` (38), `PanelService.ResolveUnderClaim` (12), `Finish` (10), `ReviewCodeAsync`
+(10), `OpenDocumentSession`, `PruneOldScratchDirs`, `StatusAsync` (6), the constructor (5),
+`ReviewerExecutor.Complaint` and `Longer` (6), `CodexRuntime.ReasonIn` (9) and `Said` (5), `VendorDiagnosis.Classify`,
+`RosterBuilder.NamedAs` and `WhyNotCarried`, `RoundEngine.ApplyAnyHumanDecision` and `WhatTheCallerWasDoing` (5).

@@ -468,4 +468,5 @@ it before every launch; a Vibe version with no entry is refused with a sentence 
 home after a turn (content addressing is the argument, not a run); WSL (D18 refuses it). **Also seen:** a bare
 `vibe --version` writes `vibehistory` into whatever `VIBE_HOME` it is given — with no `VIBE_HOME` that is the person's
 own `~/.vibe`, which the health probe (`providers`, `VendorProbe`) does today for every runtime by starting `--version`
-in the inherited environment. Not changed by this story; named in the S2 report.
+in the inherited environment. Changed in the same story: the probe now runs in the built environment on a home of
+coai's own, deleted after it (`IReviewerRuntime.ProbeVersionAsync`, `TheVibeProbeLeavesThePersonsHomeAloneTests`).
