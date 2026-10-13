@@ -61,9 +61,13 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
     public bool NeedsASanitisedSnapshot => true;
 
     /// <summary><see cref="DefaultExecutable"/> for a given host, profile and file test — pure.</summary>
+    /// <remarks>
+    /// The Windows path is spelled with backslashes whatever OS runs the code, never <c>Path.Combine</c> — the Kimi profile's
+    /// test went red on Linux and macOS CI for exactly that (research/module_tests.md, 2026-10-12).
+    /// </remarks>
     public static string InstalledExecutableFor(HostKind host, string userProfile, Func<string, bool> exists)
     {
-        var installed = Path.Combine(userProfile, ".local", "bin", "vibe.exe");
+        var installed = $@"{userProfile.TrimEnd('\\', '/')}\.local\bin\vibe.exe";
 
         return host == HostKind.Windows && userProfile.Length > 0 && exists(installed) ? installed : "vibe";
     }

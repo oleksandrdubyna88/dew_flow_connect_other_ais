@@ -71,9 +71,11 @@ public static class VibeLaunch
                 ? $"'{executable}' would start Vibe on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows vibe"
                 : string.Empty;
 
+    /// <remarks>The file name is cut at EITHER separator, not by <c>Path.GetFileName</c>: a Windows path is judged the same on a Linux test host.</remarks>
     private static bool RunsInWsl(string executable)
     {
-        var name = Path.GetFileName(executable.Trim());
+        var trimmed = executable.Trim();
+        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
 
         return name.Equals("wsl", StringComparison.OrdinalIgnoreCase)
             || name.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
