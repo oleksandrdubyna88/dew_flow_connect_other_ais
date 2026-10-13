@@ -1333,6 +1333,7 @@
     "test:api-settings-compat": "npm run compile && node scripts/live-api-settings-compat.mjs",
     "test:paths-per-side-compat": "npm run compile && node scripts/live-paths-per-side-compat.mjs",
     "test:command-models-compat": "npm run compile && node scripts/live-command-models-compat.mjs",
+    "test:vibe-runtime-compat": "npm run compile && node scripts/live-vibe-runtime-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
     "measure:append": "node scripts/measure-append.mjs",

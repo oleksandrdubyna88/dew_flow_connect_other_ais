@@ -28,8 +28,8 @@ import { pageTree } from './pageTree';
  *
  * <p>Two ways it goes wrong silently, and both are older than this runtime: a runtime the parser does not know comes
  * back as `codex` under its own name (a Mistral row reviewing through the Codex CLI), and an older `coai-mcp` that does
- * not know it turns it into `codex` the same way on its side (D13). Everything below is one of those two, or a button
- * that would install or run the wrong software.</p>
+ * not know it does not review with it — it refuses it by name since 0.44.0, and ran it as codex before (D13). Everything
+ * below is one of those two, or a button that would install or run the wrong software.</p>
  */
 
 const VIBE: Vendor = {
@@ -39,7 +39,7 @@ const VIBE: Vendor = {
 
 /**
  * The newest `coai-mcp` released WITHOUT the runtime — mcp 0.52.0, published 2026-10-13 from main while this branch was
- * open (0.51.0, #785, shipped the Vibe ground and not the runtime either). It would read a vibe row as codex.
+ * open (0.51.0, #785, shipped the Vibe ground and not the runtime either). It refuses a vibe row by name.
  */
 const OLDER = '0.52.0';
 const KNOWN = (version: string) => ({ kind: 'known' as const, version, remembered: false, updateOffered: false });
@@ -224,7 +224,7 @@ test('a vibe row is kept OUT of the settings file of a server older than the rel
 
   const older = rowsOf(vendorsEnv([...DEFAULT_VENDORS, VIBE], OLDER));
   assert.deepEqual(older.map((row) => row.id), ['codex', 'antigravity'],
-    'an older server would run the vibe row as codex; every other row still crosses');
+    'an older server cannot review with the vibe row; every other row still crosses');
 
   for (const version of [VIBE_RUNTIME_SINCE, '0.53.1', '1.0.0', '']) {
     const vibe = rowsOf(vendorsEnv([...DEFAULT_VENDORS, VIBE], version)).find((row) => row.id === 'vibe');
@@ -254,6 +254,9 @@ test('the card’s note names the row and the release, and is silent when the ro
   assert.match(runtimeSkewNote(OLDER, [VIBE]), /vibe/u);
   assert.ok(runtimeSkewNote(OLDER, [VIBE]).includes(VIBE_RUNTIME_SINCE));
   assert.ok(runtimeSkewNote(OLDER, [VIBE]).includes(OLDER));
+  // Measured 2026-10-13 (scripts/live-vibe-runtime-compat.mjs): the released 0.52.0 REFUSES the row by name — it does
+  // not run it as codex, which only a server older than 0.44.0 did. The note claims only what is true of both.
+  assert.doesNotMatch(runtimeSkewNote(OLDER, [VIBE]), /Codex CLI/u);
   assert.equal(runtimeSkewNote(VIBE_RUNTIME_SINCE, [VIBE]), '');
   assert.equal(runtimeSkewNote('', [VIBE]), '', 'an unknown server is not called old');
   assert.equal(runtimeSkewNote(OLDER, [{ ...VIBE, enabled: false }]), '', 'a switched-off row does not cross anyway');
