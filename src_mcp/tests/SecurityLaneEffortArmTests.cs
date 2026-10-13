@@ -4,7 +4,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The pure half of the security-lane effort measurement (epic 2 of todo/PLAN_local_effort_reaches_every_local_launch.md,
+/// The pure half of the security-lane effort measurement (epic 2 of research/PLAN_local_effort_reaches_every_local_launch.md,
 /// S2.1): reading an arm from the environment, the safe twin of the planted fixture, and the check that every cell's
 /// launch carried its arm's effort and ceiling — so a cell that did not differ can never join the arm it claims.
 /// </summary>
@@ -75,6 +75,41 @@ public sealed class SecurityLaneEffortArmTests
     public void NoCellAtAll_IsAMismatch_NotAnEmptyPass()
     {
         new SecurityLaneEffortArm("none", 8192, 1, Safe: false).Mismatches([]).Should().Equal("no --ask-local launch was recorded");
+    }
+
+    [Fact]
+    public void OnlyACutAtTheCeiling_IsAnObservation_EveryOtherFailedLaunchFailsTheCell()
+    {
+        // The code round's finding: the non-strict mode let ANY failed reviewer through, so an unreachable engine or a
+        // timeout would have been counted as an effort-related cut.
+        const string cut = "[coai-mcp] the answer from the local engine at http://localhost:11434/v1 was cut at the token limit (max_tokens 8192): 8192 tokens generated";
+        var launches = new[]
+        {
+            new Runners.Processes.ProcessResult(0, "{}", string.Empty, TimedOut: false),
+            new Runners.Processes.ProcessResult(70, "{}", cut, TimedOut: false),
+            new Runners.Processes.ProcessResult(69, string.Empty, "[coai-mcp] the local engine at http://localhost:11434/v1 did not answer: connection refused", TimedOut: false),
+            new Runners.Processes.ProcessResult(-1, string.Empty, string.Empty, TimedOut: true),
+            new Runners.Processes.ProcessResult(70, string.Empty, "[coai-mcp] the local engine returned no message content: {}", TimedOut: false),
+        };
+
+        SecurityLaneEffortArm.UnexpectedFailures(launches).Should().Equal(
+            "cell 3 exited 69: [coai-mcp] the local engine at http://localhost:11434/v1 did not answer: connection refused",
+            "cell 4 timed out",
+            "cell 5 exited 70: [coai-mcp] the local engine returned no message content: {}");
+    }
+
+    [Theory]
+    [InlineData("all 6 reviewers answered", 0)]
+    [InlineData("5 of 6 reviewers answered; failed: local-security/redteam-sql: exit 70: …", 1)]
+    [InlineData("4 of 6 reviewers answered; failed: local-security/redteam-authz: …", 2)]
+    [InlineData("a sentence this harness has never seen", -1)]
+    // CodeRabbit on #800: a round that never ASKED one of the six — "all 5 answered" — is not a clean cell.
+    [InlineData("all 5 reviewers answered", -1)]
+    [InlineData("4 of 5 reviewers answered; failed: local-security/redteam-sql: …", -1)]
+    public void TheRoundsReviewerLine_SaysHowManyDidNotAnswer_OfTheReviewersConfigured(string line, int notAnswered)
+    {
+        SecurityLaneEffortArm.NotAnswered(line, asked: 6).Should().Be(notAnswered,
+            "-1 means the line could not be read, or names a different number of reviewers than were configured — either fails the cell");
     }
 
     [Fact]

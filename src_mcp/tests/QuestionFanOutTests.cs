@@ -106,7 +106,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         : launch.Request.Executable.Contains("codex", StringComparison.OrdinalIgnoreCase) ? ScriptedAnswer.Codex("A ladder, and give up after four.")
         : null);
 
-    // ---------- a local row is told what a local reviewer is told (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.1) ----------
+    // ---------- a local row is told what a local reviewer is told (research/PLAN_local_effort_reaches_every_local_launch.md, S1.1) ----------
 
     [Fact]
     public async Task ALocalQuestionRow_IsLaunchedWithThePanelsLocalEffortAndCeiling()

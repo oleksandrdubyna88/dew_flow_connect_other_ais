@@ -53,20 +53,26 @@ configured by the operator, not measured. Their manifests record the selected mo
 and the reviewer vendor ID is `local-security` independently of the model family.
 The calibration fixture includes written repository rules so its Conventions reviewer participates.
 `SecurityLaneEffortMeasurementTests` (explicit, 2026-10-13, epic 2 of
-[PLAN_local_effort_reaches_every_local_launch.md](../todo/PLAN_local_effort_reaches_every_local_launch.md)) runs ONE
+[PLAN_local_effort_reaches_every_local_launch.md](PLAN_local_effort_reaches_every_local_launch.md)) runs ONE
 effort arm through the same `RunCell` — `COAI_SECURITY_CALIBRATION_EFFORT` (`none`/`low`/`medium`/`high`, default
 `none`), `COAI_SECURITY_CALIBRATION_MAX_TOKENS` (default 8192), `COAI_SECURITY_CALIBRATION_REPEATS` (1–10, default 3)
 and `COAI_SECURITY_CALIBRATION_FIXTURE` (`unsafe`, the default, or `safe`: the safe controller with `ORDER BY Id` added,
 whose correct answer is empty) — into `<out>/<effort>-<ceiling>-<fixture>-<utc>/`. Unlike the qualification test, a
 reviewer cut at its ceiling does not fail it (`RunCell(…, strict: false)`): the cut is the observation. It still fails on
-an error reply, a prompt that never reached the shim, or any cell whose recorded argv (`turn-N.argv.json`, written by the
+an error reply, a prompt that never reached the shim, or any cell whose recorded argv (`turn-N.arguments.json`, written by the
 recording launcher for every `--ask-local`) did not carry the arm's effort and ceiling. Results:
 [RESULTS_security_lane_effort_2026-10-13.md](RESULTS_security_lane_effort_2026-10-13.md). Its pure half is in CI:
-`SecurityLaneEffortArmTests` (11) — the defaults reproduce today's product, every input read, each out-of-range input
+`SecurityLaneEffortArmTests` (18) — the defaults reproduce today's product, every input read, each out-of-range input
 refused naming what is legal, a cell that did not differ named, no cell at all a mismatch, the safe twin keeping the
 guard and the parameters and changing only the ordering. Green on first run; four mutations built and run at once —
 the ceiling check disabled, an empty cell list passing, the safe twin equal to its base, `0` accepted as a count — turned
-five tests red, each its own.
+five tests red, each its own. **The code round added** (RED first against stubs that passed everything): only a cut at
+the ceiling is an observation — an unreachable engine, a timeout or an empty answer fails the cell
+(`UnexpectedFailures`; RED: *found empty collection*), and the round's own "A of N reviewers answered" line is read
+(`NotAnswered`; RED: *found 0*) so the non-strict `RunCell` also fails unless every reviewer that did not answer is one
+of those cuts — the four ordinary reviewers answered — and unless the line names exactly the reviewers configured
+(CodeRabbit on #800: "all 5 reviewers answered" of six configured is -1; RED first: *found 0*). Both applied to the recorded pilot cells: 5 answered, 5 cut, 0
+other, and not-answered equals cuts in every arm.
 Passing these hardware tests establishes usable replies and wiring; semantic accuracy of each
 finding and reproduction is inspected separately in the [Windows results](RESULTS_security_lane_qwen_windows.md).
 `SecurityPresetTests` also covers the historical-PR routing regressions: prose-only changes do not
@@ -3688,7 +3694,7 @@ by another process during a refresh) — exercised only by code reading; the mac
 the open plus the device-and-inode check of `MacFileIdentity`) — no macOS run here, the macOS CI job is its only run; a hard link in a live tree (a known limit, not a test); the ACP teardown
 order losing a grandchild — not observable on Windows, where the test would pass under either order.
 
-## Every local launch is told the panel's effort, and a cut answer is named (2026-10-13, epic 1 of `todo/PLAN_local_effort_reaches_every_local_launch.md`)
+## Every local launch is told the panel's effort, and a cut answer is named (2026-10-13, epic 1 of `research/PLAN_local_effort_reaches_every_local_launch.md`)
 
 Every RED below was observed against the unfixed code; every break-it reverted the one line the behaviour depends on,
 rebuilt (C# build 0 errors, `tsc` exit 0), saw red, and restored.

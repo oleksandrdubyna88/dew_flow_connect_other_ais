@@ -41,7 +41,7 @@ public static class CompletionReader
 
     /// <summary>
     /// The one sentence for an answer its ceiling cut — the api shim's and the local shim's
-    /// (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.2): where it came from, the ceiling the request carried,
+    /// (research/PLAN_local_effort_reaches_every_local_launch.md, S1.2): where it came from, the ceiling the request carried,
     /// what was generated and how much of it arrived as content, then the caller's own cure.
     /// </summary>
     /// <param name="source">What answered, as the caller names it — an endpoint, or "the local engine at …".</param>

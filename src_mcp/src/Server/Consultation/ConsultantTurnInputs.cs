@@ -25,7 +25,7 @@ internal static class ConsultantTurnInputs
     /// <param name="panel">
     /// The panel this launch runs under — its data directory, its api overrides (an api row runs with its module's view of
     /// them, as a reviewer does), and the local engine's effort and ceiling, which a local row is told exactly as a local
-    /// reviewer is (todo/PLAN_local_effort_reaches_every_local_launch.md).
+    /// reviewer is (research/PLAN_local_effort_reaches_every_local_launch.md).
     /// </param>
     public static ReviewerSettings Settings(ProviderSettings row, string model, TimeSpan timeout, PanelSettings panel, VaultKeys keys) =>
         RuntimeResolution.NameOf(row.Identity()) == "api" ? WithModule(Plain(row, model, timeout, panel, keys), row, panel.ApiOverrides) : Plain(row, model, timeout, panel, keys);

@@ -103,7 +103,7 @@ test('the card reads the check from its durable record — and says "checking…
   assert.equal(checkFactsOf(undefined, 'codex').said, '', 'no badge while the health is not being read');
 });
 
-// todo/PLAN_local_effort_reaches_every_local_launch.md, S1.3 — measured 2026-10-13: two checks of a local row failed
+// research/PLAN_local_effort_reaches_every_local_launch.md, S1.3 — measured 2026-10-13: two checks of a local row failed
 // with a classified reason on record, and the card said only "checked: no answer", because a failed check carries
 // `failureWhat` and no `reason`.
 test('a failed check says WHY on the card — the classified failure when the record has no reason, the reason when it has one', () => {

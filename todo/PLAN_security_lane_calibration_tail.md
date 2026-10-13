@@ -41,7 +41,7 @@ model may be described as qualified for it.
 > `COAI_SECURITY_AUDIT_PROMPTS` now runs it as the first of thirteen modules — set the variable to keep runs comparable
 > with the recorded ones.
 
-> **Boundary, 2026-10-13.** [PLAN_local_effort_reaches_every_local_launch.md](PLAN_local_effort_reaches_every_local_launch.md)
+> **Boundary, 2026-10-13.** [PLAN_local_effort_reaches_every_local_launch.md](../research/PLAN_local_effort_reaches_every_local_launch.md)
 > measures `reasoning_effort` as the variable — one model, this plan's existing invoice fixture — and adds three
 > harness inputs (`COAI_SECURITY_CALIBRATION_EFFORT`, `…_MAX_TOKENS`, `…_FIXTURE`) whose defaults reproduce the
 > recorded runs:

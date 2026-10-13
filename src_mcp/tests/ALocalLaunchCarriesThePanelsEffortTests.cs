@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A ✓ Check of a <c>local</c> row is launched with the panel's local effort and ceiling — exactly what a local REVIEWER
-/// is launched with (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.1).
+/// is launched with (research/PLAN_local_effort_reaches_every_local_launch.md, S1.1).
 /// </summary>
 /// <remarks>
 /// Found 2026-10-13 on the owner's machine: two checks of a Gemma4 row each generated exactly 8 192 tokens of thinking

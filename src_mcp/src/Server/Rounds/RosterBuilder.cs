@@ -676,7 +676,7 @@ internal sealed class RosterBuilder(
     /// <remarks>
     /// Takes the PANEL, never a loose default string: two of the three launch composers once passed <c>string.Empty</c>
     /// here, so a thinking local model consulted or checked was told no effort and thought to its ceiling (2026-10-13 —
-    /// todo/PLAN_local_effort_reaches_every_local_launch.md). With the panel as the argument there is no empty default to
+    /// research/PLAN_local_effort_reaches_every_local_launch.md). With the panel as the argument there is no empty default to
     /// pass.
     /// </remarks>
     internal static string EffortFor(ProviderSettings provider, PanelSettings panel) => RuntimeResolution.NameOf(provider.Identity()) switch
