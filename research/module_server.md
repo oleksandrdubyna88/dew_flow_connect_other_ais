@@ -7000,3 +7000,22 @@ flowchart TD
   place -->|asks, none to give| excluded["ExcludedRole(provider, role, reason)"]
   build --> engine["RoundEngine: using RoundWork.Scratch — disposed when the round ends"]
 ```
+
+## A launch the control WARNED about (2026-10-13, the owner's decision for Vibe: warn, not refuse)
+
+A launch control may allow a launch and still have something to say — today a Vibe version with no measured home manifest
+([module_runners.md](module_runners.md), *The Vibe reviewer*). One generic field carries it, `ReviewerOutcome.Warning`, and
+the server puts it in four places, each absent or empty for every reviewer nobody warned about, so nothing else reads
+differently:
+
+- **The round's reviewer line** — what the calling AI reads: `RoundWarnings.Clause(results)` appends
+  `; warned — vibe/PlanCritique, vibe/Architecture: <the warning>`, each distinct warning once after the reviewers it is
+  about (`RoundEngine`, beside the document-went and unreviewed clauses).
+- **The reviewer's state** — `ReviewerState.Warning`, written `reviewerStates[].warning` in the session file and in
+  `status` (`LiveRound.WarnedOf`), whatever the reviewer's status; null and not written otherwise.
+- **The round's log** — `RoundAudit.Warned`: one WARNING line per warned reviewer.
+- **The row's card, before any round** — `providers`: `ProviderStatus.warning` from `VendorHealth.Warning`, which the probe
+  asks the adapter for (`IReviewerRuntime.VersionWarning` of the version it printed); absent for every other row.
+
+The extension reads neither `reviewerStates[].warning` nor `providers[].warning` yet: the rounds view shows a note only
+for a failed, queued or stood-down reviewer, and the card shows `note` only when a row is unavailable.

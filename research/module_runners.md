@@ -2846,8 +2846,8 @@ sequenceDiagram
   V->>V: host is Windows (D18) · env is the built one (D17) · model on the curated list (D10) · home made, not a link
   V->>V: take the home's turn (serialised) · the home's SHAPE (no hooks.toml, config.toml, agents/, tools/, link, trust entry)
   V->>P: vibe --version (same built env, same home)
-  V->>V: manifest entry for that version (else refused, naming the script) · the plugin files by SHA-256
-  V-->>E: Refused(sentence) → NotStarted, nothing started  |  Holding(turn + export folder)
+  V->>V: a measured version: its plugin files by SHA-256, a mismatch refused · an unmeasured version: run, with a warning
+  V-->>E: Refused(sentence) → NotStarted, nothing started  |  Holding(turn + export folder, warning)
   E->>P: vibe -p --output json --agent plan --enabled-tools read_file --workdir SNAPSHOT --time-limit N --output-dir EXPORT, prompt on stdin
   P->>C: MinimalWindows + VIBE_HOME, VIBE_CLI=python, VIBE_ACTIVE_MODEL — nothing inherited
   C-->>E: stdout array · export.json · exit 0 / 1 / 2 / 3
@@ -2886,10 +2886,23 @@ sequenceDiagram
   §11/§17/§24 — because Vibe exits 0 on an alias it does not know, §11); the home is made when absent and is not a link;
   the home's TURN is taken (`VibeHomeTurns`, in-process, keyed by the full path, dropped when its last holder leaves);
   the home's SHAPE is checked (`VibeHome.Refusal(home, manifest)`) BEFORE anything of Vibe's starts on it; `vibe
-  --version` runs in the same environment on the same home (a bare start writes `vibehistory`, §24); the version must
-  have an entry in `shared/vibe-home-manifest.json` (else refused, naming the version, the versions known and
-  `node scripts/vibe-home-manifest.mjs --write`); and the home is checked again with the plugin files' hashes. Every
-  refusal is `NotStarted` with the path and its cure (delete the home; the next launch starts from an empty one).
+  --version` runs in the same environment on the same home (a bare start writes `vibehistory`, §24); for a version WITH
+  an entry in `shared/vibe-home-manifest.json` the home is checked again with the plugin files' hashes — a mismatch is
+  tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
+  home; the next launch starts from an empty one).
+- **A version nobody measured is RUN, with a warning** (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse —
+  set it up once and it must work if it can"; it replaced the refusal S2 first shipped). Its home's shape is still
+  checked before its `--version` starts, so a forbidden name, a link, a trust entry, a `config.toml`, `hooks.toml`,
+  `agents/` or `tools/` still refuse; only its plugin files are admitted by name. The turn carries the warning
+  (`LaunchTurn.Holding(…, warning)` → `ReviewerLaunch.Warning` → `ReviewerOutcome.Warning`, the FIRST launch's, on the
+  base so a failed reviewer carries it too) — one generic, runtime-neutral field Kimi's control can set as well. It
+  names the running version, the measured one, that the confinement measurements and the plugin hashes are the measured
+  version's, and to re-run `scripts/vibe-home-manifest.mjs --write` and `scripts/probe-vibe-confinement.mjs`
+  (`VibeLaunch.VersionWarning`, one sentence for the launch and the card). Where it reaches: the round's reviewer line
+  (`; warned — vibe/PlanCritique: …`, `RoundWarnings.Clause`, what the calling AI reads), the reviewer's state
+  (`reviewerStates[].warning` in the session and `status`, `LiveRound`), the round's log (a WARNING line from
+  `RoundAudit`), and the row's card through `providers` (`IReviewerRuntime.VersionWarning` → `VendorHealth.Warning` →
+  `ProviderStatus.warning`, absent for every row without one). The extension does not read either new field yet.
 - **The home check** (`VibeHome`): files under the manifest's `pinnedPrefix` (`logs/session/plugins/`) only when their
   path and SHA-256 are in the INSTALLED version's entry (12 content-addressed files for 2.26.1, §24); the manifest's
   `varying` names by name (`vibehistory`, the caches, `.connector_bootstrap_cache.json.lock`, `logs/vibe.log`, the
