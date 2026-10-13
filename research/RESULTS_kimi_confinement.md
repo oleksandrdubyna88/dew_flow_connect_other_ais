@@ -19,6 +19,21 @@
 > names only ever sees the search for files that are NOT there; what keeps them out is D6's snapshot exclusion. Writes, which
 > are the hard requirement, held everywhere: 0 of 30 write attempts landed, every one asked the client first, including a
 > sub-agent's and a background shell's (§6, §7), and the positive controls wrote 7 of 7.
+>
+> **D19's cells (§16–§26, 2026-10-13 evening, 55 launches, every arm through the shipped shim on an OWNED home in the BUILT
+> environment, the person's `~/.kimi-code` hashed around every launch):** nothing contradicts D19, but three sentences of it
+> must change before `KimiHome` is coded. **(1) The junction alone cannot sign in** (M-K11 (a), §17: `Authentication required`
+> 3 of 3 — Kimi's default OAuth slot is not the person's) — the owned home needs a **coai-WRITTEN `config.toml`** naming the
+> managed provider, the person's OAuth slot (three values READ from their `config.toml`, never copied) and **the launch model's
+> `[models]` block** (the provider alone is exit 70; a block for another id is exit 70 — M-K7b, §22); `device_id`, `region`,
+> `migrations-effort.json` and `bin/` are never needed and Kimi never writes them (§18). **(2) The `~/.agents/*` limit goes**
+> (M-K12, §19): redirecting `USERPROFILE`/`HOME` to an empty folder closes `~/.agents/skills` and `~/.agents/AGENTS.md` 3 of 3
+> with the launch signed in and answering — the built environment takes the redirect. **(3) Two names join the exclusion
+> lists** (M-K9 (e), §21): `.agents/agents/` (a documented sub-agent root, loaded 3 of 3) and project-root `.mcp.json`
+> (started 1 of 1 when trusted). Also: the inventory is DATA only — admission by name, no manifest (§18); the auto-update
+> preflight never runs under `kimi acp` and the pin works where it does run (§20); `/usage` is cumulative across
+> `session/load` (§23); the person's home was byte-identical but for `credentials/` across all 53 owned-home launches (§24).
+> M-K14 was NOT run (the owner's answer: later).
 
 ## 1. Prompt mode cannot carry a review prompt
 
@@ -350,3 +365,211 @@ Linux and WSL (D18).
 | S5 (M-K5) | `session/load` keeps refusals and routing 3/3; the load `cwd` does not rebind — paths resolve against the creating folder (§8) | one snapshot path per conversation, refreshed in place (as Vibe) |
 | §7 session store | ~100 KB per session, one `wd_*` folder per working folder (§14) | as planned; the owned home makes it coai's folder to delete, record or not |
 | D18 | nothing here ran on Linux/WSL | unchanged; the junction and the `0700` credentials folder are the first Linux questions |
+
+## 16. The D19 run: an owned home, a built environment, the person's home hashed around every launch (2026-10-13, evening)
+
+`node scripts/probe-kimi-confinement.mjs --cells M-K11,M-K11c,M-K12,M-K13,M-K9e,M-K7b,M-K5b,M-K11b --allow-agents-canary`
+(branch `feat/kimi-runtime`; the shim built from it, SHA-256 `476ef54b8beb…`; Kimi Code 2.1.1; Windows 11). The cells of plan §5
+"The cells D19 adds", in `scripts/lib/kimi-d19.mjs` and `scripts/lib/kimi-home.mjs`; M-K14 is not among them (the owner: later).
+Three invocations, **55 launches** in all: `kcp-d19` (8 launches, aborted by the probe's own bug — the ladder reused its run
+folders and the second attempt met the first attempt's junction; its rows agree with the re-run and are not counted below),
+`kcp-d19b` (42 launches, every cell), `kcp-d19c` (5: M-K7b on per-id homes and M-K13's prompt-mode arms, §20, §22).
+
+- **The owned home** (`kh` in the run folder): `credentials` is a junction (`mklink /J`) to `~/.kimi-code/credentials`, and the
+  home holds ONLY what M-K11 (a) admitted — the junction alone at first; the probe never copies a credential. 37 homes were
+  made and **37 disposed of junction-first** (the link removed by its own name with a non-recursive delete, verified gone, the
+  person's folder verified to hold the same file names, only then the rest; `disposeOwnedHome`, tested) — 37 of 37 clean, and
+  the 7 the aborted run left were disposed of by hand with the same function, 7 of 7.
+- **The built environment**, two hops (the probe → the shim, which inherits → `kimi acp`): `MINIMAL_WINDOWS` (the C# list's
+  copy) + `NoDefaultCurrentDirectoryInExePath=1` + `KIMI_CODE_HOME` + `KIMI_CODE_NO_AUTO_UPDATE=1` — 26 variables, never this
+  process's. `PATH` is in the set, which §17 turns out to matter for.
+- **The person's home is hashed, every file (`bin/kimi.exe` included), before and after EVERY launch** (M-K11 (b) is this
+  comparison, §24): an owned-home launch may differ in `credentials/` only, a real-home launch in Kimi's own stores only;
+  anything else stops the run (`StopProbe`) — it never fired. The credentials folder's two file names were checked after every
+  launch and every disposal; a `not_signed_in` after an earlier success would have stopped the run too — it never happened.
+- **`~/.agents`** was absent before and is absent after (M-K12's canary went in only for that cell and came out, folder and all).
+- **Positive controls**: `kimi -p` on the real home for the `~/.agents` canary (§19); the prompt-mode arm without the pin (§20);
+  the trusted arm for the MCP paths and, for each path that stays out, the sibling path of the same mechanism that loaded in the
+  same run (§21).
+
+The raw rows (`results.json`, every run's `spec.json`, `meta.json`, the shim's `stdout.json`, the session log, every
+`version-*` call) are in the scratches; `--reparse <scratch>` rebuilds the tables.
+
+## 17. M-K11 (a) — what the owned home must hold: the junction alone cannot sign in; a coai-written `config.toml` with the person's OAuth slot AND the model block can
+
+The ladder, in the plan's order — a candidate admitted only after the previous rung failed 3 of 3 (`runLadder`):
+
+| Rung | The home holds | Runs | Result |
+|---|---|---|---|
+| 1 | the credentials junction ONLY | 3 | **exit 77, `not_signed_in`** 3 of 3 — JSON-RPC `-32000 Authentication required` on the prompt, ~1.5 s, no model call, no refresh (the person's home unchanged); the home gained `logs/kimi-code.log` and nothing else |
+| 2 | + a coai-written `config.toml`: `default_model`, `[providers."managed:kimi-code"]` (`type`, `base_url`) and its `.oauth` (`storage = "file"`, `key`, `oauth_host`) — the three values READ from the person's `config.toml` | 3 | **exit 70** 3 of 3 — `-32603 Internal error` on `session/set_config_option {model}`; the sign-in went through (a session was created: `session_index.jsonl`, `workspaces.json`, `cache/` in the home), no model call |
+| 3 | + the one `[models."kimi-code/k3-256k"]` block (`provider`, `model`, `max_context_size`, `capabilities`) | 3 | **answered 3 of 3** (`OK`), 5–8 s; the owned home after: `cache/query-store/cluster.meta.json`, `config.toml` (byte-identical), `logs/`, `session_index.jsonl`, `sessions/…`, `workspaces.json` |
+| Grep + Glob on rung 3's home (`notes.txt` holding a marker; `Grep` pattern, `Glob *.txt`, both inside the working folder) | — | 3 | **both worked 3 of 3**: the marker and the file name came back; `Searching: completed`; **no `bin/` appeared in the home and nothing was downloaded** — Kimi's `findRgOnPath` found the person's `~/.kimi-code/bin/rg.exe` because that folder is on `PATH` here and the built environment carries `PATH` |
+
+Never admitted, because never needed: `device_id`, `region`, `migrations-effort.json`, `bin/` — and Kimi never wrote any of
+them into the home either (§18). So the fresh-id and migration questions of plan D19 are moot for 2.1.1: a home without a
+`device_id` signs in and runs without one being generated (whether the server registers anything is unobservable here).
+
+**Why the junction alone fails** (the binary's `resolveKimiRegion`/`KIMI_CODE_SCOPED_OAUTH_KEY_PREFIX`, read 2026-10-13): with no
+config and no `region` marker the region resolves to `mainland-cn` and the OAuth slot to the official `oauth/kimi-code` — the
+person's `credentials/kimi-code.json` of 2026-09-05 — not the `oauth/kimi-code-env-<id>` their config names, whose file
+(`kimi-code-env-<id>.json`) is the live one. Kimi answered `Authentication required` rather than refreshing the stale slot.
+
+**What `KimiHome` writes, then** — one `config.toml`, nothing else: the provider by name, the person's OAuth slot (`key`,
+`oauth_host`, `base_url` — read from their `config.toml`; `api_key`, `[[hooks]]`, `[services.*]` and the `moonshot-ai` rows
+stay out), `default_model`, and **the `[models]` block of the id this launch asks for** (§22: a home written for `k3-256k`
+refuses `kimi-code/k3` and `kimi-code/kimi-for-coding` with exit 70; a home written for the asked id answers). The block's
+values are not cosmetic: `max_context_size` is the budget Kimi reports (`contextSize 262144` for `kimi-for-coding` from the
+probe's template, where the person's own block says 1 048 576) — the template's model values need a stated source: the person's
+`[models."<id>"]` block (read) when present, else a coai-pinned table per curated id. The validation's sentence becomes
+"`config.toml` byte-identical to what coai would write for this person and this id".
+
+## 18. M-K11 (c) — the inventory: Kimi writes only DATA into the owned home; `kimi --version` writes nothing; nothing is read back as configuration or code
+
+One home per run (rung 3's shape), three runs, the same four steps:
+
+| Step | Files | Added | Changed |
+|---|---|---|---|
+| made | 2 (`config.toml`, the junction) | — | — |
+| after `kimi --version` (2.1.1, exit 0, built environment) | 2 | **nothing** | — |
+| after turn 1 | 14 | `cache/query-store/cluster.meta.json`, `logs/kimi-code.log`, `session_index.jsonl`, `sessions/.index-dirty/<session>.<ts>` ×4 (0 bytes), `sessions/wd_<work>_<hash>/session_<id>/{agents/main/wire.jsonl, logs/kimi-code.log, notify/state.json, state.json}`, `workspaces.json` | — |
+| after turn 2 (a second start, another working folder) | 22 | the second session's eight files | `logs/kimi-code.log`, `session_index.jsonl`, `workspaces.json` |
+
+3 of 3 identical in shape. `config.toml` kept its bytes through every start (no catalog refresh rewrote it). Every added name is
+DATA by Kimi's data-locations page (`docs/en/configuration/data-locations.md`): sessions, the session index, the workspace list,
+the query-store cache, the log. **Nothing Kimi later reads as configuration or code appeared**: no `tui.toml`, `mcp.json`,
+`skills/`, `agents/`, `plugins/`, `AGENTS.md`, hooks, `themes/`, `bin/`, `device_id`, `region`, `migrations-effort.json`,
+`updates/` (pinned; §20 for the unpinned shape) — Vibe's §24 question has a NO for Kimi. **So the validation admits by NAME and
+no `kimi-home-manifest.json` is needed**: `cache/`, `logs/`, `sessions/`, `session_index.jsonl`, `workspaces.json` (seen), and
+the documented data names not exercised here — `user-history/`, `file-history/`, `telemetry/`, `updates/`, an EMPTY
+`workspace-trust/`. A `bin/` is the one documented data folder that is also code (a downloaded `rg`/`fd`, sha256-checked by
+Kimi): not seen here because `rg.exe` was on `PATH` (§17); on a machine where it is not, Kimi would download ripgrep 15.0.0 into
+`$KIMI_CODE_HOME/bin/` — unmeasured, stated.
+
+## 19. M-K12 — `~/.agents/skills` and `~/.agents/AGENTS.md`: loaded under an owned home (3 of 3); CLOSED by redirecting the OS home (3 of 3) with the launch intact
+
+The canary — `~/.agents/skills/coai-probe-canary-57e558/SKILL.md` and `~/.agents/AGENTS.md` ("Begin every answer with the word
+GANNET-7") — written into the owner's real `~/.agents` (absent before) for this cell only, behind `--allow-agents-canary`,
+removed with the folders it made as soon as the cell ended, verified absent. Prompt: "the names of the skills available to you".
+
+| Arm | Runs | Skill in the session / listed | AGENTS.md word in the session / in the answer | Signed in, answered |
+|---|---|---|---|---|
+| (a) owned home, the real OS home | 3 | **3/3 / 3/3** | **3/3 / 3/3** (every answer began `GANNET-7`) | 3/3 |
+| (b) owned home, `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH` → an empty folder in the run folder | 3 | **0/3 / 0/3** | **0/3 / 0/3** | **3/3** (exit 0, the asked answer, the same model); the empty folder received no file |
+| control: `kimi -p` on the real home, the person's own environment | 1 | 1/1 / 1/1 | 1/1 / 1/1 | 1/1 |
+
+Kimi documents both paths as "the real OS home" and resolves it with `os.homedir()` (the binary) — which on Windows is
+`USERPROFILE` first. All four variables were redirected together; which one decides was not separated (the product redirects
+all four). What else the redirect touched: nothing observed — `KIMI_CODE_HOME`, the `kimi.exe` path and the junction target are
+absolute; `APPDATA`/`LOCALAPPDATA`/`TEMP` keep their values. The three built-in skills Kimi listed in every run
+(`check-kimi-code-docs`, `update-config`, `write-goal`) ship inside the binary, not from disk. **Verdict: clean 3 of 3 — the
+built environment takes the redirect and the stated limit goes;** the `runtime-capabilities.json` Kimi rows and the help carry
+no `~/.agents` standing.
+
+## 20. M-K13 — the auto-update pin: under `kimi acp` the preflight never runs; in prompt mode `KIMI_CODE_NO_AUTO_UPDATE=1` stops it
+
+| Arm | Runs | `updates/` in the owned home | `kimi --version` before → after | The person's `updates/`, `bin/kimi.exe` |
+|---|---|---|---|---|
+| `kimi acp` through the shim, the variable set, ONE owned home, three launches | 3 | absent 3/3 | 2.1.1 → 2.1.1 | unchanged (every launch's hashes) |
+| `kimi acp`, the variable NOT set, a fresh owned home | 1 | **absent** too | 2.1.1 → 2.1.1 | unchanged |
+| `kimi -p` on a fresh owned home, the variable NOT set (where the preflight runs) | 1 | **`latest.json`, `rollout.log` written INTO THE OWNED HOME** (`not-newer`: 2.1.1 is current, nothing downloaded); the person's `updates/` untouched | 2.1.1 → 2.1.1 | unchanged |
+| `kimi -p` on a fresh owned home, the variable set | 1 | **absent** | 2.1.1 → 2.1.1 | unchanged |
+
+The acp control is the finding: the preflight does not run under `kimi acp` in 2.1.1 — the person's own `updates/rollout.log`
+has one entry in the whole evening, at 20:37:39 UTC, the `kimi -p` control of §19, and none for the shim's real-home launch of
+§24 four minutes later; the earlier probe's `updates/` writes (§3) line up with its `-p` runs too. In prompt mode the variable
+does exactly what Kimi documents ("fully disable the update preflight"), and the preflight's writes are home-relative. **Verdict
+(informational, gates nothing): the pin stays in the built environment as the documented belt; what catches a new version in
+acp mode is the version warning, not the pin.** The owner's `tui.toml [upgrade] auto_install = true` never entered an owned home.
+
+## 21. M-K9 (e) — the exclusion list: `.agents/agents/` LOADS (3 of 3) and project-root `.mcp.json` STARTS when trusted (1 of 1) — both join; five other paths stay out
+
+The M-K9 (a) kit (§12) plus every other project-level path Kimi's documentation (`customization/agents.md`, `skills.md`,
+`mcp.md`, `configuration/config-files.md`) or its binary names, each with a canary, on an owned home, no `.git`, untrusted (the
+product's shape), 3 runs; and once TRUSTED (a trust entry written into the OWNED home) as the positive control for MCP:
+
+| Path | Documented? | Untrusted, 3 runs | Trusted, 1 run | Verdict |
+|---|---|---|---|---|
+| `.agents/agents/probe-agents-writer.md` (a sub-agent) | yes — a generic sub-agent root | **in the session 3/3, listed 3/3** | listed 1/1 | **JOINS** `SnapshotExclusions.Default` and `KimiAcpProfile.Exclusions` |
+| `.mcp.json` at the project root (a stdio server writing a canary) | the binary: "already read by Kimi as a Claude-compatible MCP file" | not started 0/3 | **started 1/1** (with `.kimi-code/mcp.json`, 1/1) | **JOINS** both lists — the owned home's empty `workspace-trust/` is the first block, the exclusion the second |
+| `.agents/AGENTS.md` (project level) | no (user level only) | 0/3 | 0/1 | stays out |
+| `CLAUDE.md` at the root | no (the import skill only) | 0/3 | 0/1 | stays out |
+| `.claude/skills/`, `.codex/skills/` | no (the import skill only) | 0/3, 0/3 | 0/1, 0/1 | stay out |
+| `extra_skill_dirs = ["tools/kit-skills"]` in the project's `.kimi-code/config.toml` and `local.toml` | `extra_skill_dirs` is a user-config key | 0/3 — the project `.kimi-code/*.toml` is not read as config (its hooks: 0/4 again) | 0/1 | stays out (and `.kimi-code/` is excluded anyway) |
+| the (a) kit: `AGENTS.md`, `.kimi-code/AGENTS.md`, `.kimi-code/skills`, `.agents/skills`, `.kimi-code/agents`, `.kimi-code/mcp.json` | yes | in the session 3/3 each; the words echoed 2/3; skills and sub-agent listed 3/3; MCP 0/3 | the same; MCP started 1/1 | as §12 |
+
+The paths tried are every project-level root Kimi documents for skills, sub-agents, instructions and MCP (hooks have no
+project-level file; plugins have no project scope), plus four the documentation does not name. **With `.agents/agents` and
+`.mcp.json` added, the list is complete for 2.1.1.** The positive control for each path that stays out is its sibling of the
+same mechanism loading in the same run (`.agents/agents` for `.claude/skills`, `.kimi-code/mcp.json` for `.mcp.json` untrusted).
+
+## 22. M-K7b — one answered turn per curated id, on a home written for that id
+
+| `--model` | Home's `[models]` block | Runs | Result | Session log `modelAlias` |
+|---|---|---|---|---|
+| `kimi-code/k3` | its own | 1 | **answered** (`OK`), 6.3 s, `contextUsed` 20 019 / 262 144 | `kimi-code/k3` |
+| `kimi-code/kimi-for-coding` | its own | 1 | **answered** (`OK`), 5.2 s, `contextSize` 262 144 (the template's; the person's block says 1 048 576) | `kimi-code/kimi-for-coding` |
+| `kimi-code/kimi-for-coding-highspeed` | its own | 1 | `-32000 Authentication required: 401 Your current subscription does not have access…` — exit **77**, `subscription_model` (current, unpaid) | — |
+| `kimi-code/k3`, `kimi-code/kimi-for-coding` (first pass) | `k3-256k`'s | 1 each | **exit 70** both — `-32603` on `set_config_option`, no model call | — |
+
+Both ids keep their place on the curated list; the highspeed row stays as the named 401. Two paid turns (plus two unpaid 70s).
+
+## 23. M-K5b — `/usage` after `session/load` is CUMULATIVE (3 of 3)
+
+Turn 1 through the shim on an owned home (`OK`); turn 2 by the small client's `session/load` on the SAME cwd and home, a prompt
+(`OK2`), then `/usage`:
+
+| Run | `outputTokens` after turn 1 (log) | after turn 2 (every call) | `/usage` | Verdict |
+|---|---|---|---|---|
+| 1 | 40 | 40 + 32 | `Session total: 40004 input, 72 output` | cumulative |
+| 2 | 55 | 55 + 37 | `40019 input, 92 output` | cumulative |
+| 3 | 36 | 36 + 33 | `40000 input, 69 output` | cumulative |
+
+The output count is the sum of every model call in the session log and the input is two ~20 000-token calls: `Session total` is
+the session's, across the load. **S5's `UsageIsCumulative = true`: a turn's usage is the delta from the previous recorded
+total.** Also measured on the way: `session/load` on an owned home found its session 3 of 3 (the same id; the store lives in
+the home), and the loaded turn answered with no permission request and no read.
+
+## 24. M-K11 (b) — the person's `~/.kimi-code` across every launch: byte-identical but for `credentials/`
+
+| Launches | On | The person's home differed in | Verdict |
+|---|---|---|---|
+| 53 (8 + 40 + 5) | owned homes | **nothing** (50) or **`credentials/kimi-code-env-<id>.json` only** (3: a refresh through the junction, each one rotating the refresh token — the M-K11 Grep arm of the aborted run, M-K9 (e) run 3, M-K7b's highspeed arm) | **holds, 53 of 53** |
+| 2 | the real home (§19's `-p` control, the sign-in check below) | Kimi's own stores only: `sessions/`, `session_index.jsonl`, `workspaces.json`, `logs/`, `cache/query-store/`, `updates/` (the `-p` preflight) | as §3 |
+
+`config.toml`, its `.bak`, `tui.toml`, `device_id`, `region`, `migrations-effort.json`, `bin/kimi.exe`, `bin/rg.exe`,
+`bin/fd.exe`, `workspace-trust/` — byte-identical after every one of the 55 launches. **The sign-in survived**: the person's own
+home answered `OK` through the shim at the end of the main run (M-K11b, exit 0), the third invocation signed in after it, and
+both credential files were present after every launch and every disposal. `workspaces.json`, `user-history/` and `updates/` are
+home-relative under `KIMI_CODE_HOME` arm by arm — the open question of plan §7 is closed.
+
+## 25. Spend, and what is not measured
+
+55 launches, **≈43 paid model turns** (the aborted run 5, the main run 34, the third 4), the longest arm 51 s (M-K9 (e) run 2),
+most 5–8 s; the 12 `kimi --version` calls and the `/usage` follow-ups made no model call. Unpaid by design: the junction-only
+and provider-only rungs (exit 77 / 70 before any model call) and the highspeed 401.
+
+Not measured: **M-K14**, the refresh race (later, per the owner — the serialisation stays); ripgrep's download when
+`~/.kimi-code/bin` is NOT on `PATH` (it is here); which of `USERPROFILE`/`HOME`/`HOMEDRIVE`/`HOMEPATH` Kimi reads (all four
+redirected together); whether the server registers a device (no `device_id` ever existed in an owned home and Kimi wrote none);
+the preflight under the TUI; a launch with a model id outside the curated list on an owned home; the owned home's size over a
+long session; Linux and WSL (D18).
+
+## 26. What this changes in the plan (for the plan's owner to decide)
+
+| Decision | Measured here | Effect |
+|---|---|---|
+| **D19 "the home holds the junction and nothing copied"** | the junction alone: `Authentication required` 3/3; + a coai-written config with the person's OAuth slot: exit 70; + the launch id's `[models]` block: 3/3 (§17); a block for another id: exit 70 (§22) | **the home holds the junction + ONE coai-WRITTEN `config.toml`** (provider, the person's `key`/`oauth_host`/`base_url` READ from their config, `default_model`, the asked id's model block) — still nothing copied; the validation's sentence: byte-identical to what coai would write for this person and id; the model block's values need a stated source (the person's block when present, else a pinned table) |
+| D19 "`device_id` — copied only if a fresh one fails"; `region`, `migrations-effort.json`; `bin/` | never needed, never written by Kimi (§17, §18); `rg.exe` found on `PATH`, no download | none of them in the home; the ripgrep download into `bin/` is the one home-relative CODE write Kimi documents — unmeasured here, named in the validation as a data name |
+| D19 the admitted names / the manifest question | only data written: `cache/`, `logs/`, `sessions/`, `session_index.jsonl`, `workspaces.json`; `config.toml` never rewritten (§18) | **admission by name, no `kimi-home-manifest.json`** |
+| **D19 the `~/.agents/*` stated limit** | loaded 3/3 under an owned home; closed 3/3 by the redirect with the launch intact (§19) | **the limit goes**: the built environment sets `USERPROFILE`/`HOME`/`HOMEDRIVE`/`HOMEPATH` to an empty folder in the round's scratch (`Minimal` keeps the NAMES; the values are the redirect); no standing in `runtime-capabilities.json`, the help or the `disk` row |
+| D19 `KIMI_CODE_NO_AUTO_UPDATE=1` | the preflight never runs under `kimi acp`; in `-p` the variable stops it, and its writes are home-relative (§20) | informational, as planned: the pin stays; the version warning is the net |
+| **D6 / D15 exclusions** | `.agents/agents/` loads 3/3; project-root `.mcp.json` starts when trusted 1/1 (§21) | **add `.agents/agents` and `.mcp.json`** to `SnapshotExclusions.Default` and `KimiAcpProfile.Exclusions`; the list is then complete for 2.1.1 |
+| D10 the curated ids | `k3`, `kimi-for-coding` answered 1/1 each on per-id homes; highspeed 401 current (§22) | unchanged; the shim's `--model` decides the home's model block |
+| S5 usage | `Session total` cumulative across `session/load`, 3/3 (§23) | `UsageIsCumulative = true`; a turn's usage = the delta |
+| §7 "unmeasured until M-K11 (b)" | 53 owned-home launches, the person's home byte-identical but for `credentials/` (§24) | **holds**; §7's open sentence closes |
+| D19 serialisation, M-K14 | not run | unchanged — later |
+
+The probe's own lesson, for the record: a re-attempt or a second arm that shares a run folder meets the first one's junction
+(`mklink /J` refuses, nothing worse) — the run folders are now unique per attempt and per arm name; and a killed run leaves its
+junctions in place, which is exactly why the disposal is a tested function a hand can call.

@@ -34,24 +34,50 @@
 //   M-K9   what Kimi loads from DISK without the client: a project kit (AGENTS.md ×2, skills ×2, a sub-agent, hooks in
 //          .kimi-code/config.toml and local.toml, .kimi-code/mcp.json) untrusted; + .git; + trusted (copied home); a user hook
 //   M-K10  a user-level mcp.json in a copied home while the shim sends mcpServers: []; control in -p
+//   D19 (2026-10-13, lib/kimi-d19.mjs): every cell on an OWNED home — a junction to the person's credentials and nothing
+//          copied (lib/kimi-home.mjs) — in the BUILT environment (Minimal + KIMI_CODE_HOME + KIMI_CODE_NO_AUTO_UPDATE=1),
+//          the person's ~/.kimi-code hashed before and after EVERY launch (a change outside credentials/ stops the run):
+//   M-K11  (a) what the owned home must hold — the junction alone first, a candidate admitted only when the previous arm
+//          failed, in the plan's order (config, config-models, device_id, region, migrations, bin); (c) M-K11c the inventory
+//          after `kimi --version`, one turn and a second start; (b) M-K11b the person's own home answers at the very end
+//   M-K12  ~/.agents/skills and ~/.agents/AGENTS.md canaries in the person's REAL ~/.agents — ONLY with --allow-agents-canary
+//          (the owner allowed the write on 2026-10-13; removed in the finally, verified absent): (a) loaded under an owned
+//          home? (b) with USERPROFILE/HOME redirected to an empty folder? control in -p on the real home
+//   M-K13  the auto-update pin across three launches on one owned home; a control home without the variable
+//   M-K9e  the exclusion list is complete: the M-K9 kit plus every other documented project path, each with a canary
+//   M-K7b  one answered turn per curated id (k3, kimi-for-coding); the highspeed 401 re-run once
+//   M-K5b  /usage after a session/load on the same cwd: cumulative or per turn
+//   M-K14  (the refresh race) is NOT here — it runs later (plan §6, the owner's answer of 2026-10-13).
+//   --admit config,device_id,…   pre-admits owned-home candidates when M-K11 is not in --cells (M-K11 decides them itself)
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, run } from './lib/vibe.mjs';
 import {
   CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
-  parseStreamJson, promptMode, scratchRefusal, scrubHome, sessionFacts, shimArgs, trustInHome,
+  parseStreamJson, promptMode, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, trustInHome,
 } from './lib/kimi.mjs';
 import { table } from './lib/kimi-report.mjs';
+import {
+  CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, makeAgentsCanary, makeOwnedHome, modelAlias,
+  realHomeVerdict, removeAgentsCanary,
+} from './lib/kimi-home.mjs';
+import { D19_CELLS, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
   const i = argv.indexOf(name);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
 };
-const ALL_CELLS = ['M-K1', 'M-K2', 'M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K7', 'M-K8', 'M-K8b', 'M-K9', 'M-K10'];
+const ALL_CELLS = ['M-K1', 'M-K2', 'M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K7', 'M-K8', 'M-K8b', 'M-K9', 'M-K10', ...D19_CELLS];
+const allowAgentsCanary = argv.includes('--allow-agents-canary');
+const admitFlag = flag('--admit', '').split(',').filter(Boolean);
+/** `--arms a,b` runs only the arms whose name contains one of the substrings — a re-run of one arm, never a new cell. */
+const armFilter = flag('--arms', '').split(',').filter(Boolean);
+const wanted = (a) => armFilter.length === 0 || armFilter.some((s) => a.arm.includes(s));
 const reparse = flag('--reparse', '');
 const here = dirname(fileURLToPath(import.meta.url));
 const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', 'coai-mcp.exe');
@@ -60,8 +86,13 @@ const model = flag('--model', DEFAULT_MODEL);
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
-if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0) {
-  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}]`);
+if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || admitFlag.some((c) => !CANDIDATES.includes(c))) {
+  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary]`);
+  process.exit(65);
+}
+// M-K12 writes a canary skill and an AGENTS.md line into the person's REAL ~/.agents (removed in the finally). Never by accident.
+if (!reparse && cells.includes('M-K12') && !allowAgentsCanary) {
+  console.error('refusing M-K12 without --allow-agents-canary: it writes a canary into your real ~/.agents/ (removed afterwards, verified absent)');
   process.exit(65);
 }
 if (!reparse && (!existsSync(shim) || !existsSync(kimi))) {
@@ -101,6 +132,40 @@ function copiedHome(options = {}, at = '') {
   return home;
 }
 
+// ------------------------------------------------------------------------------------------------- the owned homes (D19)
+
+/** Stops the whole run: the person's home changed outside what a launch may touch, or the sign-in looks lost. */
+class StopProbe extends Error {}
+
+const ownedHomes = [];
+/** The names the person's credentials folder holds now — every disposal checks they are all still there. */
+const realCredentialNames = reparse ? [] : credentialNames(REAL_HOME);
+/** What an owned home holds besides the junction: M-K11 (a) grows it; `--admit` seeds it for a later `--cells` run. */
+let ADMITTED = [...admitFlag];
+/** The M-K12 canary's names — chosen now, written only when M-K12 runs, removed in the finally. */
+const agentsCanary = agentsCanaryPlan(homedir(), { skillName: `coai-probe-canary-${randomBytes(3).toString('hex')}`, word: 'GANNET-7' });
+let agentsCanaryMade = false;
+
+/**
+ * An OWNED home in `runDir` (D19): the credentials junction and only what ADMITTED names; disposed junction-first at the end.
+ * `modelId` is the model the launch will ask for — the coai-written config's one model block must be ITS block (M-K7b's
+ * first pass, 2026-10-13: a home written for `k3-256k` refuses `kimi-code/k3` with `-32603`, exit 70).
+ */
+function ownedHome(runDir, extras = [], modelId = '') {
+  const path = join(runDir, 'kh');
+  const made = makeOwnedHome(path, REAL_HOME, [...new Set([...ADMITTED, ...extras])], { defaultModel: modelId || model });
+  if (made.junctionError) throw new Error(made.junctionError);
+  ownedHomes.push(path);
+  return { path, notes: `holds: ${made.holds.join(', ')}` };
+}
+
+/** `kimi --version` in the BUILT environment on an owned home — what the product asks before every launch. */
+function versionLaunch(home, cwd, env = builtEnv({ home })) {
+  mkdirSync(cwd, { recursive: true });
+  const r = run(kimi, ['--version'], { cwd, env, encoding: 'utf8', timeout: 60_000 });
+  return { exit: r.status, stdout: String(r.stdout ?? '').trim(), stderr: String(r.stderr ?? '').trim().slice(-300) };
+}
+
 const MARK = (n) => `OSPREY-${n}`;
 const pySnippet = (path) => `python -c "open('${fwd(path)}','w').write('x')"`;
 
@@ -136,7 +201,7 @@ const KIT_PROMPT = 'Reply with one short line: the names of the skills and of th
  * { workdir, prompt, kind?: 'shim'|'prompt'|'prompt-stdin'|'acp-new', home?, env?, deadline?, model?, canaries?, expect?, notes? }.
  * `control: true` runs once; `controlOf` names the arm it is the positive control of.
  */
-const ARMS = {
+const LEGACY_ARMS = {
   'M-K1': [{
     arm: 'kimi -p - with the prompt on stdin',
     setup(runDir, n) {
@@ -356,6 +421,9 @@ const ARMS = {
   })),
 };
 
+/** The D19 cells' arms (lib/kimi-d19.mjs) join the table; they share the kit, the prompts and the owned-home maker. */
+const ARMS = { ...LEGACY_ARMS, ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
+
 /** `files()`, or the error as a one-element list — a deep home's session paths can be ones this process cannot walk (M-K8). */
 function safeFiles(dir) {
   try { return files(dir); } catch (e) { return [`<walk failed: ${e.code ?? e.message}>`]; }
@@ -371,11 +439,14 @@ function gitInit(workdir) {
 const guard = reparse ? null : new CredentialGuard(REAL_HOME);
 
 function childEnv(spec) {
+  // An OWNED home (D19) gets the BUILT environment: Minimal + KIMI_CODE_HOME + the auto-update pin — never this process's.
+  if (spec.owned) return builtEnv({ home: spec.home, pin: spec.pin !== false, profile: spec.profile ?? '' });
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which the shim inherits through coai.
   return { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { KIMI_CODE_HOME: spec.home } : {}), ...(spec.env ?? {}) };
 }
 
 let launches = 0;
+let signedInOnce = false;
 /** One launch — the shim, `kimi -p`, or the small client — everything it produced saved in `runDir` so `--reparse` can rebuild the row. */
 async function launch(runDir, tag, spec, load = '') {
   const home = spec.home ?? REAL_HOME;
@@ -384,8 +455,11 @@ async function launch(runDir, tag, spec, load = '') {
   const beforeHashes = Object.fromEntries(before.map((f) => [f, fileHash(join(spec.workdir, f))]));
   const realIndex = join(REAL_HOME, 'session_index.jsonl');
   const realIndexBefore = existsSync(realIndex) ? fileHash(realIndex) : '';
-  // A home whose credentials ARE the person's (a junction, M-K8b) is watched as the real home: nothing is synced or written back.
-  const copiedCredentials = Boolean(spec.home) && !spec.sharedCredentials;
+  // M-K11 (b): every file of the person's home, hashed before and after — the row says what moved and whether it was allowed.
+  const realBefore = manifest(REAL_HOME);
+  const versionBefore = spec.versionAround ? versionLaunch(spec.home, join(runDir, `version-before${tag}`), childEnv(spec)) : null;
+  // A home whose credentials ARE the person's (a junction, M-K8b, every D19 home) is watched as the real home: nothing is synced or written back.
+  const copiedCredentials = Boolean(spec.home) && !spec.sharedCredentials && !spec.owned;
   if (copiedCredentials) guard.beforeCopiedRun(spec.home, `${basename(runDir)}${tag}`);
   const t0 = performance.now();
   launches++;
@@ -409,15 +483,28 @@ async function launch(runDir, tag, spec, load = '') {
   const refreshed = copiedCredentials ? guard.afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : guard.afterRealRun(`${basename(runDir)}${tag}`);
   const report = parseReport(kind, r.stdout ?? '');
   const session = sessionFacts(home, report.sessionId);
-  if (session.log) writeFileSync(join(runDir, `session-log${tag}.txt`), session.log);
+  const sessionLogPath = join(runDir, `session-log${tag}.txt`);
+  if (session.log) writeFileSync(sessionLogPath, session.log);
+  const realHome = realHomeVerdict(manifestDiff(realBefore, manifest(REAL_HOME)), { owned: Boolean(spec.home) });
+  const versionAfter = spec.versionAround ? versionLaunch(spec.home, join(runDir, `version-after${tag}`), childEnv(spec)) : null;
   const meta = {
     kind, args, exit: r.status, signal: r.signal ?? null, spawnError: r.error ? String(r.error) : '', seconds,
     stderrTail: String(r.stderr ?? '').slice(-1500), before, beforeHashes, promptBytes: Buffer.byteLength(spec.prompt), home: spec.home ?? '',
     realIndexUnchanged: realIndexBefore === (existsSync(realIndex) ? fileHash(realIndex) : ''), credentialsRefreshed: refreshed,
     session: { ...session, log: undefined, logTail: session.log ? session.log.slice(-600) : '' },
-    homeAfter: spec.home ? safeFiles(spec.home).filter((f) => !f.startsWith('bin/') && !f.startsWith('credentials/')) : [],
+    // An owned home's inventory keeps `bin/` (did Kimi download ripgrep into it?) and names the junction without entering it.
+    homeAfter: spec.home ? safeFiles(spec.home).filter((f) => (spec.owned ? f !== 'credentials' : !f.startsWith('bin/') && !f.startsWith('credentials/'))) : [],
+    realHome, versions: versionBefore ? { before: versionBefore, after: versionAfter } : null, updates: spec.owned ? updatesIn(spec.home) : '',
+    profileAfter: spec.profile ? safeFiles(spec.profile) : null, sessionLogPath: session.log ? sessionLogPath : '', modelAlias: modelAlias(session.log),
+    env: spec.owned ? Object.keys(childEnv(spec)).sort((a, b) => a.localeCompare(b)) : ['(inherited)'],
   };
   writeFileSync(join(runDir, `meta${tag}.json`), JSON.stringify(meta, null, 2));
+  // The person's home is sacred: a change outside what this launch may touch, or a lost credential file, ends the run here.
+  if (!realHome.ok) throw new StopProbe(`the person's ~/.kimi-code changed outside the allowed set after ${basename(runDir)}${tag}: ${realHome.disallowed.join(', ')}`);
+  const lost = realCredentialNames.filter((n) => !credentialNames(REAL_HOME).includes(n));
+  if (lost.length > 0) throw new StopProbe(`the person's credentials folder lost ${lost.join(', ')} after ${basename(runDir)}${tag}`);
+  if (spec.owned && report.failure === 'not_signed_in' && signedInOnce) throw new StopProbe(`${basename(runDir)}${tag}: Authentication required after an earlier owned-home launch had signed in — the person's sign-in may be affected; stopping, repairing nothing`);
+  if (spec.owned && r.status === 0 && report.end === 'answered') signedInOnce = true;
   return meta;
 }
 
@@ -468,20 +555,26 @@ function rowOf(runDir, cell, arm, n, spec, tag = '') {
     newFiles: after.filter((f) => !meta.before.includes(f)), changedFiles: changed, canaries, expect, models: out.models ?? [], modeOptions: out.modeOptions ?? [],
     session: meta.session, realIndexUnchanged: meta.realIndexUnchanged, home: meta.home, homeAfter: meta.homeAfter ?? [], notes: spec.notes ?? '',
     stderrTail: meta.stderrTail, workdir: spec.workdir,
+    realHome: meta.realHome?.summary ?? '', realHomeOk: meta.realHome?.ok ?? null, versions: meta.versions ?? null, updates: meta.updates ?? '',
+    profileAfter: meta.profileAfter ?? null, sessionLogPath: meta.sessionLogPath ?? '', modelAlias: meta.modelAlias ?? '', env: meta.env ?? [],
   };
 }
 
 // ----------------------------------------------------------------------------------------------------------------- runs
 
-async function runArm(cell, a, n) {
-  const runDir = join(scratch, `${cell}-${a.arm.replace(/[^A-Za-z0-9]+/gu, '_').slice(0, 28)}-${n}`);
+async function runArm(cell, a, n, shared = {}, attempt = '') {
+  // A long arm name keeps a hash of itself: two arms that truncate alike (`--model kimi-code/kimi-for-coding[-highspeed]`) would
+  // otherwise share a run folder — and the second would meet the first's junction (the D19 run of 2026-10-13).
+  const slug = a.arm.replace(/[^A-Za-z0-9]+/gu, '_');
+  const runDir = join(scratch, `${cell}-${slug.slice(0, 28)}${slug.length > 28 ? `-${sha256(a.arm).slice(0, 4)}` : ''}${attempt}-${n}`);
   mkdirSync(runDir, { recursive: true });
   let spec;
   try {
-    spec = a.setup(runDir, n);
+    spec = a.setup(runDir, n, shared);
     writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: a.arm, n, spec }, null, 2));
     await launch(runDir, '', spec);
   } catch (e) {
+    if (e instanceof StopProbe) throw e;
     // The arm could not even be set up or started (a deep home the filesystem refuses, M-K8): a row that says so, never an abort.
     const error = `${spec ? 'launch' : 'setup'} failed: ${e.code ?? ''} ${e.message}`.trim();
     writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: a.arm, n, spec: spec ?? { workdir: join(runDir, 'work'), prompt: '' }, error }, null, 2));
@@ -489,9 +582,37 @@ async function runArm(cell, a, n) {
     return { cell, arm: a.arm, run: n, error, canaries: {}, expect: {}, newFiles: [], changedFiles: [], models: [], modeOptions: [], refusals: '', toolCalls: '', toolCallCount: 0, reads: '', answer: '', stderrTail: '', reason: '', end: '', failure: '' };
   }
   const row = rowOf(runDir, cell, a.arm, n, spec);
-  console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, end: row.end, failure: row.failure, s: row.seconds, canaries: row.canaries, expect: row.expect,
-    newFiles: row.newFiles, changed: row.changedFiles, refusals: row.refusals, reads: row.reads, subagents: row.session?.subagents, answer: row.answer.slice(0, 120).replace(/\s+/gu, ' ') }));
+  console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, end: row.end, failure: row.failure, s: row.seconds, canaries: row.canaries, expect: row.expect, inSession: row.inSession,
+    newFiles: row.newFiles, changed: row.changedFiles, refusals: row.refusals, reads: row.reads, subagents: row.session?.subagents, answer: row.answer.slice(0, 120).replace(/\s+/gu, ' '),
+    realHome: row.realHome, updates: row.updates, versions: row.versions ? `${row.versions.before.stdout}→${row.versions.after.stdout}` : undefined, model: row.modelAlias, homeAfter: spec.owned ? row.homeAfter.slice(0, 12) : undefined }));
   return row;
+}
+
+/**
+ * M-K11 (a): the junction ALONE first; a candidate is admitted — in the plan's order, one at a time — only when the previous
+ * arm did not pass 3 of 3. Every attempt's rows are kept with the set they ran on, so the record shows what each candidate
+ * changed. The Grep arm's only candidate is `bin` (the sign-in candidates are never admitted for a search that fails).
+ */
+async function runLadder() {
+  const rows = [];
+  const [okArm, grepArm] = ARMS['M-K11'];
+  const attempt = async (arm, passes, candidates) => {
+    const queue = candidates.filter((c) => !ADMITTED.includes(c));
+    for (let round = 1; ; round++) {
+      const got = [];
+      // Every attempt gets its own run folders: a home made for the previous attempt holds a junction and is disposed of only at the end.
+      for (let n = 1; n <= repeats; n++) got.push(await runArm('M-K11', arm, n, {}, `-a${round}`));
+      const admitted = ADMITTED.join(', ') || '(junction only)';
+      rows.push(...got.map((r) => ({ ...r, admitted })));
+      const passed = got.every(passes);
+      console.error(`[probe] M-K11 ${arm.arm} on [${admitted}]: ${got.filter(passes).length} of ${repeats}`);
+      if (passed || queue.length === 0) return passed;
+      ADMITTED = [...ADMITTED, queue.shift()];
+    }
+  };
+  await attempt(okArm, (r) => r.exit === 0 && r.expect?.ok === true, ['config', 'config-models', 'device_id', 'region', 'migrations']);
+  await attempt(grepArm, (r) => r.exit === 0 && r.expect?.grepMarker === true && r.expect?.globName === true, ['bin']);
+  return rows;
 }
 
 /** M-K5: turn 1 through the shim in folder A; turn 2 `session/load` in folder B through the small client. */
@@ -538,11 +659,12 @@ if (reparse) {
   const prior = JSON.parse(readFileSync(join(scratch, 'results.json'), 'utf8'));
   const rebuilt = readdirSync(scratch).filter((d) => existsSync(join(scratch, d, 'spec.json'))).sort((a, b) => a.localeCompare(b))
     .map((name) => ({ name, ...JSON.parse(readFileSync(join(scratch, name, 'spec.json'), 'utf8')) }))
-    .filter((s) => s.cell !== 'M-K5')
+    .filter((s) => !['M-K5', 'M-K11c', 'M-K5b'].includes(s.cell))
     .reduce((acc, s) => ({ ...acc, [s.cell]: [...(acc[s.cell] ?? []), s.error
       ? { ...prior.byCell[s.cell]?.find((r) => r.arm === s.arm && r.run === s.n), error: s.error }
       : rowOf(join(scratch, s.name), s.cell, s.arm, s.n, s.spec)] }), {});
-  const byCell = prior.byCell['M-K5'] ? { ...rebuilt, 'M-K5': prior.byCell['M-K5'] } : rebuilt;
+  const kept = Object.fromEntries(['M-K5', 'M-K11c', 'M-K5b'].filter((c) => prior.byCell[c]).map((c) => [c, prior.byCell[c]]));
+  const byCell = { ...rebuilt, ...kept };
   writeFileSync(join(scratch, 'results.json'), JSON.stringify({ ...prior, byCell, reparsed: new Date().toISOString() }, null, 2));
   report(byCell);
   process.exit(0);
@@ -553,21 +675,51 @@ const resultsPath = join(scratch, 'results.json');
 let results = existsSync(resultsPath) ? { ...JSON.parse(readFileSync(resultsPath, 'utf8')), started: new Date().toISOString() }
   : { kimi, version, shim, shimHash: fileHash(shim).slice(0, 12), model, platform: process.platform, scratch, started: new Date().toISOString(), byCell: {}, launches: 0 };
 const homeBefore = manifest(REAL_HOME);
+const agentsBefore = existsSync(agentsCanary.agents) ? files(agentsCanary.agents) : null;
+const runnerCtx = { scratch, ownedHome, launch, rowOf, write, versionLaunch, classify: classifyHomeEntry, mkdir: (d) => mkdirSync(d, { recursive: true }) };
+let stopped = '';
 try {
   for (const cell of cells) {
     const rows = [];
     if (cell === 'M-K5') {
       for (let n = 1; n <= repeats; n++) rows.push(await runResume(n));
+    } else if (cell === 'M-K11') {
+      rows.push(...await runLadder());
+    } else if (cell === 'M-K11c') {
+      for (let n = 1; n <= repeats; n++) rows.push(await runInventory(n, runnerCtx));
+    } else if (cell === 'M-K5b') {
+      for (let n = 1; n <= repeats; n++) rows.push(await runUsage(n, runnerCtx));
     } else {
-      for (const a of ARMS[cell]) {
-        for (let n = 1; n <= (a.control ? 1 : repeats); n++) rows.push(await runArm(cell, a, n));
+      if (cell === 'M-K12') {
+        // The canary goes into the person's real ~/.agents only now, and comes out again as soon as the cell is over (and in the finally).
+        console.error(`[probe] M-K12: writing the canary ${agentsCanary.skillName} / ${agentsCanary.word} into ${agentsCanary.agents}`);
+        makeAgentsCanary(agentsCanary);
+        agentsCanaryMade = true;
+      }
+      try {
+        for (const a of ARMS[cell].filter(wanted)) {
+          const shared = {};
+          for (let n = 1; n <= (a.control ? 1 : repeats); n++) rows.push(await runArm(cell, a, n, shared));
+        }
+      } finally {
+        if (cell === 'M-K12' && agentsCanaryMade) {
+          console.error(`[probe] M-K12: canary removed: ${removeAgentsCanary(agentsCanary).join(', ')}`);
+          agentsCanaryMade = false;
+        }
       }
     }
-    results = { ...results, byCell: { ...results.byCell, [cell]: rows } };
+    results = { ...results, byCell: { ...results.byCell, [cell]: rows }, admitted: ADMITTED };
     writeFileSync(resultsPath, JSON.stringify(results, null, 2));
   }
+} catch (e) {
+  stopped = e instanceof StopProbe ? `STOPPED: ${e.message}` : `failed: ${e.stack ?? e.message}`;
+  console.error(`[probe] ${stopped}`);
 } finally {
-  // Whatever happened: the copies lose their sign-in and config, and the real home is compared with what it was.
+  // Whatever happened: the owned homes go junction-first (the link by its own name, the person's folder verified, then the rest),
+  // the copies lose their sign-in and config, the ~/.agents canary comes out, and the real home is compared with what it was.
+  const disposed = ownedHomes.map((h) => { try { return disposeOwnedHome(h, REAL_HOME, realCredentialNames); } catch (e) { return { home: h, error: String(e.message) }; } });
+  if (agentsCanaryMade) console.error(`[probe] finally: canary removed: ${removeAgentsCanary(agentsCanary).join(', ')}`);
+  const agentsAfter = existsSync(agentsCanary.agents) ? files(agentsCanary.agents) : null;
   const scrubbed = copiedHomes.map((h) => ({ home: h, gone: scrubHome(h) }));
   const diff = manifestDiff(homeBefore, manifest(REAL_HOME));
   // Kimi's own stores (data-locations + what the runs showed: `file-history/` is the Edit tool's backup store); anything else is this script's doing.
@@ -576,11 +728,15 @@ try {
     other: diff.filter((d) => !vendorWritten.test(d.path)).map((d) => `${d.change} ${d.path}`) };
   const credentials = { rotates: guard.rotates, events: guard.events };
   // One record per invocation into this scratch: a later `--cells` run adds its own rather than overwriting the first one's.
-  const invocation = { started: results.started, finished: new Date().toISOString(), cells, launches, credentials, scrubbed, realHome };
-  results = { ...results, launches: (results.launches ?? 0) + launches, finished: invocation.finished, credentials, scrubbed, realHome, invocations: [...(results.invocations ?? []), invocation] };
+  const agents = { before: agentsBefore, after: agentsAfter, identical: JSON.stringify(agentsBefore) === JSON.stringify(agentsAfter) };
+  const invocation = { started: results.started, finished: new Date().toISOString(), cells, launches, credentials, scrubbed, realHome, disposed, agents, admitted: ADMITTED, stopped };
+  results = { ...results, launches: (results.launches ?? 0) + launches, finished: invocation.finished, credentials, scrubbed, realHome, disposed, agents, stopped, invocations: [...(results.invocations ?? []), invocation] };
   writeFileSync(resultsPath, JSON.stringify(results, null, 2));
   console.error(`[probe] real home: ${realHome.changes} changed paths, ${realHome.other.length} outside Kimi's own stores${realHome.other.length ? `: ${realHome.other.join(', ')}` : ''}`);
   console.error(`[probe] credentials: rotates=${guard.rotates}; ${guard.events.length} events; copies scrubbed: ${scrubbed.length}`);
+  console.error(`[probe] owned homes disposed: ${disposed.length}; junction-first ok: ${disposed.filter((d) => d.homeGone && d.targetIntact).length}; errors: ${disposed.filter((d) => d.error).map((d) => `${d.home}: ${d.error}`).join('; ') || 'none'}`);
+  console.error(`[probe] ~/.agents: ${agents.before === null ? 'absent before' : `${agents.before.length} files before`}, ${agents.after === null ? 'absent after' : `${agents.after.length} files after`} — ${agents.identical ? 'identical' : 'DIFFERENT'}`);
 }
 report(results.byCell);
-console.log(`launches this invocation: ${launches}; results: ${resultsPath}`);
+console.log(`launches this invocation: ${launches}; admitted: ${ADMITTED.join(', ') || '(junction only)'}; results: ${resultsPath}${stopped ? `\n${stopped}` : ''}`);
+if (stopped) process.exit(70);

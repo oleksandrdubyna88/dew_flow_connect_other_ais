@@ -688,6 +688,12 @@ the `runtime-capabilities.json` rows and the help are written; **M-K14** (the re
 the serialised rows on 2026-10-13; its absence costs wall time, not correctness — and lifts the cap when it is recorded;
 **M-K13** (the auto-update pin) is informational and gates nothing. A new Kimi version launches with the version warning;
 re-running the whole script on it is what makes it a measured one (owner, 2026-10-13: warn and run, never refuse).
+**Status, 2026-10-13 evening: every gating cell above is RECORDED** (RESULTS_kimi_confinement.md §16–§26, 55 launches on
+Windows through the shipped shim, every owned-home launch leaving the person's `~/.kimi-code` byte-identical but for
+`credentials/`; M-K14 not run, as the owner answered). Three sentences of D19 must change before `KimiHome` is coded — see
+the status note under §5's "cells D19 adds": the owned home needs a coai-WRITTEN `config.toml` (the person's OAuth slot and
+the launch id's model block), the `~/.agents/*` limit goes (the built environment redirects the OS home), and `.agents/agents`
++ `.mcp.json` join both exclusion lists. The code half is now unblocked.
 - `KimiHome` + `KimiLaunch` (D19), the Vibe shapes with the inversions D19 names: the home made in the round's scratch (or the
   conversation's folder) with its `credentials` junction, the person's folder located and checked first (exists, not a
   link, local), the junction read back; the validation before every launch (the junction's target, no other link, no
@@ -819,6 +825,24 @@ can write):
   (D19). **M-K10** a user `mcp.json` server starts under `mcpServers: []` (D8b → D19).
 - **The cells D19 adds (2026-10-13), each in `scripts/probe-kimi-confinement.mjs`, 3 of 3 on Windows through the shipped shim
   unless the row says why not — and the code each one gates (§4 S4):**
+  > **Status, 2026-10-13 evening — RECORDED** (`scripts/lib/kimi-d19.mjs`, `scripts/lib/kimi-home.mjs`; RESULTS_kimi_confinement.md
+  > §16–§26). The verdicts, against the sentences below: **M-K11 (a)** the junction ALONE is `Authentication required` 3 of 3
+  > (Kimi's default OAuth slot is not the person's); a coai-written `config.toml` with the managed provider and the person's
+  > `key`/`oauth_host`/`base_url` (READ from their config, never copied) is exit 70 until it also carries **the launch id's
+  > `[models]` block** — then 3 of 3; `Grep`/`Glob` work with no `bin/` (ripgrep found on `PATH`, nothing downloaded);
+  > `device_id`, `region`, `migrations-effort.json` never needed. **(b)** 53 owned-home launches: the person's home
+  > byte-identical but for `credentials/` (3 refreshes through the junction, each rotating), the sign-in intact. **(c)** Kimi
+  > writes only data (`cache/`, `logs/`, `sessions/`, `session_index.jsonl`, `workspaces.json`), `kimi --version` writes nothing,
+  > `config.toml` is never rewritten → admission by name, **no manifest**. **M-K12** (a) loaded 3 of 3; (b) redirecting
+  > `USERPROFILE`/`HOME`/`HOMEDRIVE`/`HOMEPATH` closed both 3 of 3 with the launch signed in and answering → **the built
+  > environment takes the redirect; the limit goes**. **M-K13** the preflight never runs under `kimi acp` (pin or no pin);
+  > in `-p` the variable stops it and its writes are home-relative — informational, the pin stays. **M-K9 (e)** `.agents/agents/`
+  > loads 3 of 3 and project-root `.mcp.json` starts when trusted 1 of 1 → **both join** `SnapshotExclusions.Default` and
+  > `KimiAcpProfile.Exclusions`; `.agents/AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.codex/skills`, `extra_skill_dirs` in the
+  > project's `.kimi-code/*.toml` stay out. **M-K7b** `k3` and `kimi-for-coding` answered 1 of 1 each on per-id homes (the
+  > model block decides: a home written for another id is exit 70); the highspeed 401 current. **M-K5b** `Session total` is
+  > cumulative across `session/load`, 3 of 3 → `UsageIsCumulative = true`. **M-K14** not run (later). D19's text is left as
+  > written; the three changes it must take are §26's first, fourth and sixth rows.
   **M-K11 (a) the owned home's contents** — gates `KimiHome`: starting from a home holding ONLY the credentials junction, is
   the launch signed in (`Reply with exactly: OK`), and do `Grep`/`Glob` work? Add one candidate at a time only when the
   previous arm fails, in this order, and record each arm's own result: a coai-written minimal `config.toml` naming
