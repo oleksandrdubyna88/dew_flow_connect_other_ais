@@ -744,6 +744,10 @@ every refusal.
   lapses, and by D20's home sweep on the beat and at server start when its conversation is closed, unknown to the store or
   idle past `ConsultIdle` (§7). The conversation's turns on one home are serialised; its launches share the per-credentials
   gate with the reviewers (D19) until M-K14.
+- **The consultant check (`--check-consultant`) for Kimi** (found while building S3, 2026-10-13): `ConsultantCheckTurn` gives
+  a place only to a runtime that asks for a snapshot, and Kimi declares a home (`HomesFolder`) with its own snapshot need —
+  give the check a ONE-SHOT owned home (junction and all, D19) inside its scratch, disposed junction-first, with its own test;
+  `ConsultantPlaces` already allocates a home for a runtime that declares one without a snapshot (S3, `0003e207`).
 - `consultant-limitations.json` rows per side.
 - Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `kimi` (snapshot for `disk`, empty
   folder for `none`; `Read` bounded by the shim, `Grep`/`Glob` not — so `disk` is written `unconfined`, D15; the `~/.agents/*`
