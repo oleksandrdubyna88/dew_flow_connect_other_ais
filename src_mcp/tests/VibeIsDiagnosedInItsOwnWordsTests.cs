@@ -38,6 +38,23 @@ public sealed class VibeIsDiagnosedInItsOwnWordsTests
         diagnosis.Cure.Should().Contain("Rust CLI").And.Contain("VIBE_CLI=python");
     }
 
+    /// <summary>
+    /// The encoding crash of research/RESULTS_vibe_confinement.md §26, named rather than left as a bare exit 2: Vibe's Python
+    /// wrote a pipe in the console's code page and died on a character outside it. coai launches Vibe with UTF-8 mode on, so
+    /// meeting this means the launch did not — the sentence says what fixes it. Never read as a review (see VibeRuntime).
+    /// </summary>
+    [Fact]
+    public void ThePythonEncodingCrash_IsNamedAsSuch()
+    {
+        const string said = "Error: 'charmap' codec can't encode character '\u2192' in position 710: character maps to <undefined>";
+
+        var diagnosis = VendorDiagnosis.Classify(said, wsl: false);
+
+        diagnosis.Should().NotBeNull("§26: a bare exit 2 tells nobody what to do");
+        diagnosis!.Kind.Should().Be(DiagnosisKind.BrokenInstall);
+        diagnosis.Cure.Should().Contain("PYTHONUTF8=1");
+    }
+
     [Fact]
     public void TheInstallCure_IsMistralsOwn_PerOperatingSystem()
     {
