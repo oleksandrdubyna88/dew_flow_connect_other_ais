@@ -268,16 +268,20 @@ public sealed class AcpClientTests
         Gone(outcome.AgentPid).Should().BeTrue("the agent is ended on the way out of an answered turn too");
     }
 
+    /// <remarks>
+    /// Ten seconds, not three: the deadline counts the fake agent's own start, and a loaded release runner (win-x64,
+    /// mcp-v0.51.0, 2026-10-13) spent three before the agent reached its grandchild — the pid file was never written.
+    /// </remarks>
     [Fact]
     public async Task TheDeadlineEndsAHungAgent_AndItsGrandchild()
     {
         using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Hang);
 
-        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(3)));
+        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(10)));
         var grandchild = agent.GrandchildPid();
 
         outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
-        outcome.Reason.Should().Contain("3s");
+        outcome.Reason.Should().Contain("10s");
         Gone(outcome.AgentPid).Should().BeTrue("the agent was killed by its pid");
         Gone(grandchild).Should().BeTrue("the tree kill reaches the heartbeat the agent spawned");
     }
@@ -489,7 +493,7 @@ public sealed class AcpClientTests
         using var scripted = new FakeAcpAgent([FakeAcpAgent.Read(agent.Inside(new string('a', 40_000))), FakeAcpAgent.Chunk("x")]);
 
         var outcome = await new AcpClient(scripted.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions))
-            .AskAsync(scripted.Ask(deadline: TimeSpan.FromSeconds(5)) with { Cwd = agent.Cwd });
+            .AskAsync(scripted.Ask(deadline: TimeSpan.FromSeconds(30)) with { Cwd = agent.Cwd });
 
         outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
         var reply = scripted.RepliesTo("fs/read_text_file").Should().ContainSingle().Subject;
@@ -502,7 +506,7 @@ public sealed class AcpClientTests
     {
         using var agent = new FakeAcpAgent([FakeAcpAgent.Read(Path.Combine(Path.GetTempPath(), "any.txt")), FakeAcpAgent.Chunk("after")]);
 
-        var outcome = await new AcpClient(agent.Profile(), new ThrowingBoundary()).AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(5)));
+        var outcome = await new AcpClient(agent.Profile(), new ThrowingBoundary()).AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(30)));
 
         outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
         outcome.Answer.Should().Be("after");
