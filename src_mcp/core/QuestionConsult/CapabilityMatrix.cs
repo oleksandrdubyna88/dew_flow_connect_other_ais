@@ -103,5 +103,22 @@ public static class CapabilityMatrix
         $"'{row.Runtime}' cannot do '{row.Capability.Spelled()}': {row.MeasuredWith.Note} — give this row a prompt of another capability, or this prompt another runtime";
 
     private static string Unmeasured(RuntimeCapabilityRow row) =>
-        $"'{row.Runtime}' has not been measured for '{row.Capability.Spelled()}' ({row.MeasuredWith.Note}) — a measured cell in research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability";
+        $"'{row.Runtime}' has not been measured for '{row.Capability.Spelled()}' ({row.MeasuredWith.Note}) — a measured cell in {RecordOf(row)} is what admits it; until then give this row a prompt of another capability";
+
+    /// <summary>The record a pair's measurement belongs in when nothing else is cited — the first run's.</summary>
+    private const string FirstRunRecord = "research/RESULTS_question_consultant_capabilities.md";
+
+    /// <summary>
+    /// The record a row's <c>resultRef</c> cites — the file a measurement of that pair would land in (the Vibe rows cite
+    /// research/RESULTS_vibe_confinement.md, S3 of todo/PLAN_vibe_and_kimi_runtimes.md) — read off the row, never a
+    /// second sentence per runtime; the first run's record when the row names none.
+    /// </summary>
+    internal static string RecordOf(RuntimeCapabilityRow row)
+    {
+        var cited = row.MeasuredWith.ResultRef;
+        var at = cited.IndexOf("research/RESULTS_", StringComparison.Ordinal);
+        var end = at < 0 ? -1 : cited.IndexOf(".md", at, StringComparison.Ordinal);
+
+        return end < 0 ? FirstRunRecord : cited[at..(end + 3)];
+    }
 }

@@ -150,6 +150,15 @@ test('the words are the file’s words, and a word outside them is refused rathe
   }
 });
 
+test('an unmeasured pair names the record its row cites: the Vibe probe for vibe, the first run for the rest, unchanged', () => {
+  const vibe = admit('vibe', 'web').reason;
+  assert.ok(vibe.includes('a measured cell in research/RESULTS_vibe_confinement.md is what admits it'), vibe);
+  assert.ok(!vibe.includes('RESULTS_question_consultant_capabilities.md'), 'no cell of that run could admit a Vibe pair');
+  assert.equal(admit('api', 'web').reason,
+    "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
+    + 'research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability');
+});
+
 test('a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one', () => {
   assert.match(admit('api', 'web').reason, /not been measured/u);
   assert.match(admit('api', 'web').reason, /RESULTS_question_consultant_capabilities\.md/u);

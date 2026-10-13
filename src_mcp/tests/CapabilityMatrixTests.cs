@@ -227,6 +227,23 @@ public sealed class CapabilityMatrixTests
             "the cure for an unmeasured pair is a measurement, and the sentence says where it goes");
     }
 
+    /// <summary>
+    /// An unmeasured pair names the record ITS row cites — the record a measurement would land in — so an unmeasured Vibe
+    /// pair names the Vibe probe's record (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), and the first five runtimes' sentences
+    /// stay exactly what they were.
+    /// </summary>
+    [Fact]
+    public void AnUnmeasuredVibePair_NamesTheVibeRecord_AndTheApiSentenceIsUnchanged()
+    {
+        var vibe = CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason;
+
+        vibe.Should().Contain("a measured cell in research/RESULTS_vibe_confinement.md is what admits it")
+            .And.NotContain("RESULTS_question_consultant_capabilities.md", "no cell of that run could admit a Vibe pair");
+        CapabilityMatrix.Admit("api", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason.Should().Be(
+            "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
+            + "research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability");
+    }
+
     [Fact]
     public void AnUnsupportedPair_IsRefused_WithTheRowsOwnReason()
     {
