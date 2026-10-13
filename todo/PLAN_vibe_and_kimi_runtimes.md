@@ -1,7 +1,9 @@
 # PLAN — Mistral Vibe and Kimi Code as coai runtimes, on the person's own subscription
 
-> Status: **plan only, nothing implemented yet, 2026-10-12** — re-planned that day after M-V11 (D6: a sanitised snapshot
-> of the tree replaces the empty working folder). Scope: `src_mcp` (two new reviewer runtimes and two
+> Status: **in progress, 2026-10-13 — S1 and the first part of S4 shipped in coai-mcp 0.51.0 (#785): the billing refusal
+> (D14), the sanitised snapshot (D6) and the `--ask-acp` Kimi shim, nothing switched on yet.** Open: S1's Vibe home
+> manifest (D17), S2, S3, the rest of S4 (the probe through the shim, `KimiRuntime`) and S5. Re-planned 2026-10-12 after
+> M-V11 (D6: a sanitised snapshot of the tree replaces the empty working folder). Scope: `src_mcp` (two new reviewer runtimes and two
 > consultants), `shared/*.json` seeds and their generated TypeScript, `src_vs_code` (runtime lists, presets, install,
 > the catalog model card), docs. Chat, the Team server and the bench are out (§8). Kimi runs over ACP behind a coai shim (D15,
 > re-planned 2026-10-12 after the owner signed in). Every probe number below is n=1 on Windows; nothing is claimed for WSL
@@ -517,10 +519,14 @@ Unit tests (red first where they guard a defect):
 
 ## 6. Owner-only prerequisites
 
-- **Kimi sign-in** — done on Windows 2026-10-12 (`kimi login`, managed `kimi-code` OAuth). WSL still needs `kimi` installed and
-  signed in for S4's WSL cells.
-- **Vibe in WSL.** Only the Windows side is installed and signed in; until `vibe` is installed and signed in there and the probe
-  has run, D18 refuses Vibe on a Linux/WSL child.
+- **Installing is the product's job, not the owner's** (owner, 2026-10-13: "the install buttons must work, per OS"). The
+  extension's Install / Update button for `vibe` and `kimi` runs the vendor's official installer for the side it acts on
+  (D16) — Windows, Linux/WSL and macOS — so a missing CLI in WSL is cured by that button, never by a hand install. What stays
+  the owner's is the SIGN-IN, which only a person can do: the button opens the vendor's own terminal for it afterwards.
+- **Kimi sign-in** — done on Windows 2026-10-12 (`kimi login`, managed `kimi-code` OAuth); WSL needs it once `kimi` is
+  installed there by the button, for S4's WSL cells.
+- **Vibe in WSL.** Only the Windows side is installed and signed in; until `vibe` is installed (by the button) and signed in
+  there and the probe has run, D18 refuses Vibe on a Linux/WSL child.
 - Releases after each story follow the repository's release process with the owner's go.
 
 ## 7. Budget — what grows
