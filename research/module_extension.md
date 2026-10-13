@@ -12638,12 +12638,34 @@ flowchart LR
   Astral's documented way to put the tool executable directory on the PATH (docs.astral.sh/uv/concepts/tools). The
   line also prepends `uv tool dir --bin` to the session's `$env:Path`, so `vibe --setup` runs in the same terminal;
   every OTHER terminal of VS Code inherits the PATH VS Code started with, so the note says to restart VS Code before ▶
-  finds `vibe` (or to set the row's CLI path to that folder's `vibe.exe`). The line is never run by a test — it
-  installs software. `vibeWindowsInstall.test.ts` holds it to PowerShell's own parser (`Parser.ParseInput`, which runs
-  nothing): no parse error, `Get-Command uv` before the installer, the installer before `& $uv tool install
-  mistral-vibe`, `& $uv tool update-shell` after it, the installer's folder order, and the same for ⟳. RED first: 6 of
-  6 failed against the two-step line (the prerequisite was the installer line; no `Get-Command uv`; no folder order;
-  no session PATH; ⟳ the same; the prefix check passed a line with an unofficial URL appended); green after.
+  finds `vibe` (or to set the row's CLI path to that folder's `vibe.exe`). `vibeWindowsInstall.test.ts` holds it to
+  PowerShell's own parser (`Parser.ParseInput`, which runs nothing): no parse error, `Get-Command uv` before the
+  installer, the installer before `& $uv tool install mistral-vibe`, `& $uv tool update-shell` after it, the installer's
+  folder order, and the same for ⟳. RED first: 6 of 6 failed against the two-step line (the prerequisite was the
+  installer line; no `Get-Command uv`; no folder order; no session PATH; ⟳ the same; the prefix check passed a line with
+  an unofficial URL appended); green after.
+
+  **Each step STOPS the line when it fails, and that is measured by RUNNING it** (the epic 2 risk consultation,
+  2026-10-13: a parse says the line is well-formed, not that it works). After the installer step,
+  `if (-not (Test-Path -LiteralPath $uv)) { throw "no uv at …" }`; after each uv step,
+  `if ($LASTEXITCODE) { throw 'uv stopped with an error; nothing after it was run' }` — a `throw` ends the rest of a
+  typed line in Windows PowerShell 5.1 and pwsh 7 alike. `vibeWindowsInstallRuns.test.ts` (Windows only) runs the real
+  line in BOTH shells against harmless substitutes: a temporary folder whose path has spaces (`coai uv run …\run N\my
+  home`), a cleared environment with a PATH of `System32` alone, the installer step replaced by a `powershell` FUNCTION
+  that records its arguments and copies a fake uv where Astral's installer would put it (the harness refuses to run unless
+  `powershell` resolves to that function), and a fake `uv.exe` compiled by Windows PowerShell's `Add-Type` from twelve
+  lines of C# that logs its arguments and exits with the code a scenario asks for. Never Astral's installer, never a real
+  uv, never an install. Confirmed: (a) paths with spaces work — the default `$HOME\.local\bin` and a `UV_INSTALL_DIR`
+  with spaces — and the session's PATH gets the tool folder; (b) an installer failure stops the line before any uv is
+  called, saying `no uv at …\uv.exe`, and a failing `uv tool install` (⟳: `tool upgrade`) stops it before
+  `update-shell` and the PATH step; (c) a uv already on PATH is used as it is and Astral's step does not run. RED first
+  against the line without the stops: (b) went red three times — the old line went on, `& $uv` not recognised three
+  times over, and after a failed `tool install` it ran `update-shell` and the PATH step. The harness runs the line as a
+  script of its own, not inside a `try`: a `try` catches a statement-ending error the way it catches a `throw`, and its
+  first draft reported a stop a typed line would not have made. **Limit, named in `withUv`**: a uv on PATH is used
+  WHOEVER installed it (winget, scoop, pip) and its version is not checked — one too old for `tool update-shell` fails
+  that step and stops the line; a `uv.ps1` or `uv.cmd` found first would leave `$LASTEXITCODE` unreliable, which is not
+  handled.
 
   The side is the extension host's (`hostPlatform()`): a WSL window gets the script. The sign-in stays the person's —
   the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). On Linux,
@@ -12653,8 +12675,21 @@ flowchart LR
   (`https://antigravity.google/`, `https://mistral.ai/vibe/`, and `https://astral.sh/uv/` — the uv installer Mistral's
   README gives for Windows and Mistral's own script runs elsewhere) and the packages `npm install -g`, `uv tool
   install` and `uv tool upgrade` may be handed (`@openai/codex`, `@google/gemini-cli`, `@anthropic-ai/claude-code`,
-  `mistral-vibe`, by full name, a `@version` suffix allowed). `fromOfficialSources(command)` admits a command only when
-  it names at least one source and EVERY URL and EVERY installed package is admitted. The steps are the ones
+  `mistral-vibe`, by full name). `fromOfficialSources(command)` (`officialSources.ts`, re-exported by `vendorTerminal.ts`)
+  admits a command only when it names at least one source, EVERY URL is admitted, and in EVERY step (split on `;`,
+  `&&`, `||`, `|`, braces and newlines) the install verb is one it reads — `npm install`, `uv tool install`, `uv tool
+  upgrade` — whose every argument is an admitted flag (`-g`/`--global` for npm; none for uv) or an admitted package with
+  at most a plain version (`@latest`, `@1.2.3`; `==1.2.3`). No alias (`@npm:other`, `@file:…`), no second package, no
+  `--from`/`--with`/`--index-url`, no path or `git+` spec; a step that says install through anything else (pip, `npm i`)
+  refuses the whole command. The first matcher read only each step's FIRST package and took any `@…` for a version: the
+  epic 2 risk consultation (gpt-6-astra, 2026-10-13) found `npm install -g @openai/codex left-pad` and
+  `…@openai/codex@npm:left-pad` admitted, and so were `@file:../evil`, `uv tool install mistral-vibe other-pkg`, `npm
+  install -g @openai/codex; pip install evil` and `… | npm i left-pad` — verified, all red in the new test, green after
+  (and `uv tool install mistral-vibe==2.26.1`, wrongly refused before, is admitted). **The RENDERED text is checked, not
+  a recipe** — the consultant preferred validating a structured recipe before rendering; what a person runs is the
+  text, it comes from four builders, and a recipe check would vouch for the recipe and stay silent about a renderer that
+  wrote something else. The throw messages in the Windows line avoid the word "install" for that reason: the check
+  reads every step. The steps are the ones
   `VendorDiagnosis.InstallCure` names when a round finds no Vibe, word for word (one asymmetry: on macOS the server's
   cure says uv and the button says the script; both are Mistral's, and coai-mcp refuses a macOS host anyway).
 - **The update light** (`cliVersions.ts`): a third version source, `{ kind: 'pypi', package: 'mistral-vibe' }` →
