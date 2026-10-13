@@ -1,5 +1,12 @@
 # Changelog
 
+## Extension 0.72.1 — 2026-10-13
+
+**Fixed: a failed ✓ Check says why.** When a model card's check failed, its badge read only `checked: no answer`,
+though coai-mcp had recorded what went wrong. It now shows that reason — for a local thinking model, for example, that
+its answer was cut at the token limit and which reasoning effort was sent. Pairs with coai-mcp 0.52.1, which stops a
+local thinking model from spending a check on reasoning alone.
+
 ## Server 0.52.1 — 2026-10-13
 
 **Fixed: a check or a consultation of a local thinking model answers instead of thinking to its ceiling.** A ✓ Check,
