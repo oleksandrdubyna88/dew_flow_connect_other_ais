@@ -1,8 +1,10 @@
 # PLAN — Mistral Vibe and Kimi Code as coai runtimes, on the person's own subscription
 
-> Status: **in progress, 2026-10-13 — S1 and the first part of S4 shipped in coai-mcp 0.51.0 (#785): the billing refusal
-> (D14), the sanitised snapshot (D6) and the `--ask-acp` Kimi shim, nothing switched on yet.** Open: S1's Vibe home
-> manifest (D17), S2, S3, the rest of S4 (the probe through the shim, `KimiRuntime`) and S5. Re-planned 2026-10-12 after
+> Status: **in progress, 2026-10-13 — S1 complete: the billing refusal (D14), the sanitised snapshot (D6) and the
+> `--ask-acp` Kimi shim shipped in coai-mcp 0.51.0 (#785), and the Vibe home manifest (D17) on branch
+> `feat/vibe-kimi-runtimes` (`shared/vibe-home-manifest.json`, RESULTS_vibe_confinement.md §24). S2's server side is
+> built on the same branch (`VibeRuntime`, the launch control, the round's snapshot), unreleased.** Open: S2's extension
+> side and its live rounds, S3, the rest of S4 (the probe through the shim, `KimiRuntime`) and S5. Re-planned 2026-10-12 after
 > M-V11 (D6: a sanitised snapshot of the tree replaces the empty working folder). Scope: `src_mcp` (two new reviewer runtimes and two
 > consultants), `shared/*.json` seeds and their generated TypeScript, `src_vs_code` (runtime lists, presets, install,
 > the catalog model card), docs. Chat, the Team server and the bench are out (§8). Kimi runs over ACP behind a coai shim (D15,
