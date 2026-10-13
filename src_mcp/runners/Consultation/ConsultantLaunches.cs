@@ -42,18 +42,21 @@ internal static class ConsultantLaunches
                 "a question launch is one-shot: it carries no handle to resume, and a resumed turn would stand in the directory the thread began in", nameof(launch));
         }
 
-        if (plan.Cwd == CwdKind.Scratch && string.IsNullOrWhiteSpace(launch.ScratchDir))
+        if (NoPlaceToStand(launch, plan.Cwd) is { Length: > 0 } why)
         {
-            throw new ArgumentException(
-                "a planned launch standing in Scratch needs a ScratchDir — an empty directory of its own; falling back to the checkout would hand the row the directory it must not see", nameof(launch));
-        }
-
-        if (plan.Cwd == CwdKind.Snapshot && string.IsNullOrWhiteSpace(launch.Workdir))
-        {
-            throw new ArgumentException(
-                "a planned launch standing in Snapshot needs a Workdir — the coai-made copy of its roots; falling back to a root would hand the row the branch's own configuration (D6)", nameof(launch));
+            throw new ArgumentException(why, nameof(launch));
         }
     }
+
+    /// <summary>Why a planned launch has nowhere to stand — its cwd kind's folder was not made by the caller — or empty.</summary>
+    private static string NoPlaceToStand(ConsultantLaunch launch, CwdKind cwd) => cwd switch
+    {
+        CwdKind.Scratch when string.IsNullOrWhiteSpace(launch.ScratchDir) =>
+            "a planned launch standing in Scratch needs a ScratchDir — an empty directory of its own; falling back to the checkout would hand the row the directory it must not see",
+        CwdKind.Snapshot when string.IsNullOrWhiteSpace(launch.Workdir) =>
+            "a planned launch standing in Snapshot needs a Workdir — the coai-made copy of its roots; falling back to a root would hand the row the branch's own configuration (D6)",
+        _ => string.Empty,
+    };
 
     /// <summary>Where a planned launch stands: the first granted root, the copy of the roots, or the caller's scratch directory.</summary>
     public static string Cwd(ConsultantLaunch launch, Confinement.Planned plan) => plan.Cwd switch

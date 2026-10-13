@@ -487,6 +487,37 @@ public sealed class ConsultantCheckTests : IDisposable
         ended.Reason.Should().NotBeEmpty();
     }
 
+    /// <summary>
+    /// A Vibe check (S3 of todo/PLAN_vibe_and_kimi_runtimes.md) runs as a Vibe consultation's turn does: in a COPY of the
+    /// scratch repository, never in it (D6), on a home of its own in the check's scratch (D17) — and reads its marker there.
+    /// </summary>
+    [Fact]
+    public async Task AVibeCheck_ReadsTheMarkerInACopyOfTheScratch_NeverTheScratchItself()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        var vibe = new PlayedVibe(new ProcessLauncher(), string.Empty)
+        {
+            AnswerFor = seen => $"marker: {seen.Files["CHECK.md"].Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT",
+        };
+        var settings = Settings() with
+        {
+            Consultants = new Dictionary<string, ConsultantChoice>
+            {
+                [CallerIdentity.Claude] = new("mistral", Model: "glm-5-3", Runtime: "vibe", ExecutablePath: PlayedVibe.Exe),
+            },
+        };
+
+        var (code, said, _) = await Check(settings, vibe, TestContext.Current.CancellationToken, "--caller", "claude");
+
+        code.Should().Be(0);
+        Text(said, "state").Should().Be("answered", said.ToString());
+        said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        var turn = vibe.Turns.Should().ContainSingle().Subject;
+        turn.Request.WorkingDirectory.Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
+        turn.Request.Environment[Runners.Vibe.VibeLaunch.HomeVariable].Should().Contain($"{Path.DirectorySeparatorChar}own{Path.DirectorySeparatorChar}");
+        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy and the home go with the check's scratch");
+    }
+
     /// <summary>The real launcher, recording the consultant's prompt and the two words its scratch held at that moment.</summary>
     private sealed class Seen(IProcessLauncher inner) : IProcessLauncher
     {

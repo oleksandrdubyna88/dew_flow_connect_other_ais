@@ -53,6 +53,9 @@ public sealed class ConsultationService(
     private readonly ConsultHealthStore _health = new(settings.DataDir, problem => log.Warning("{Problem}", problem));
     private readonly ConsultCheckSweeper _checks = new(settings.DataDir, Path.GetTempPath(), DateTime.UtcNow);
 
+    /// <summary>Where a consultant that must not stand in the checkout stands — a conversation's folder and its one snapshot (D6, D17).</summary>
+    private readonly ConsultantPlaces _places = new(settings.ConsultantHomesRoot, launcher, note => log.Information("consultations: {Note}", note));
+
     /// <summary>
     /// A failed turn, applied (<see cref="ConsultationFailedTurns"/>) — built on first use, since a primary
     /// constructor's field initialisers cannot reach the store and counter above; its answer leaves through
@@ -240,6 +243,9 @@ public sealed class ConsultationService(
             UpdatedUtc = nowUtc,
         });
 
+        // Its coai-owned home goes as it closes (D17, D20) — under the lock, so no turn of it is running.
+        ConsultantHomeSweep.RemoveNow(settings.ConsultantHomesRoot, id, problem => log.Warning("{Problem}", problem));
+
         return Json(
             new CloseAnswer(id, word, Recorded: true, $"consultation {id} is recorded as '{word}'"),
             ServerJsonContext.Default.CloseAnswer);
@@ -265,6 +271,14 @@ public sealed class ConsultationService(
         if (expired > 0)
         {
             log.Information("consultations: removed {Count} file(s) past their retention", expired);
+        }
+
+        // A conversation's coai-owned home (D20 of todo/PLAN_vibe_and_kimi_runtimes.md): after the records, so a record the
+        // pass above just lapsed takes its home with it on this same beat.
+        var homes = ConsultantHomeSweep.Sweep(settings.ConsultantHomesRoot, _store.Read, DateTime.UtcNow, settings.ConsultIdle, problem => log.Warning("{Problem}", problem));
+        if (homes > 0)
+        {
+            log.Information("consultations: removed {Count} consultant home(s) whose conversation is over, unknown or idle", homes);
         }
 
         // The consultant check's share (E4.4), last and unable to stop the rest: abandoned states, stale scratch.
@@ -643,15 +657,13 @@ public sealed class ConsultationService(
         // checkout (research/PLAN_agy_searches_through_coai.md, S3) — the prompt then teaches the block, the turn serves it.
         consultant = consultant.Runtime is AntigravityConsultant agy ? consultant with { Runtime = agy.With(new WorkspaceLookup([repo])) } : consultant;
         var before = await _invariant.SnapshotAsync(repo, ct);
+        // A consultant that must not stand in the checkout (Vibe, D6) stands in the conversation's ONE snapshot of the live
+        // tree, refreshed now, on its own coai-owned home (D17) — held until the turn is read; every other one: the checkout.
+        using var place = await _places.ForConversationAsync(consultant.Runtime, record.Id, repo, ct);
         // Prepared before it is built: the adapter learns what the INSTALLED CLI accepts (claude: --restricted or
         // not), every turn, so Build stays pure — and may REFUSE when it could not learn it (IConsultantRuntime.PrepareAsync).
-        var prepared = await consultant.Runtime.PrepareAsync(new ConsultantLaunch(
-            repo,
-            await PromptAsync(record, consultant.Runtime.Toolbox, problem, files, nonce, repo, ct),
-            record.Handle,
-            AnswersDir,
-            Settings(consultant),
-            AnswerSchema.Path), launcher, ct);
+        // A place that was refused is that refusal, before anything is asked of the CLI.
+        var prepared = await PreparedAsync(consultant, place, new PromptParts(record, problem, files, nonce, repo), ct);
         if (prepared is ConsultantPreparation.Refused refused)
         {
             return FailedTurns.RefusedBeforeTheLaunch(record, consultant, refused.Failure);
@@ -735,14 +747,15 @@ public sealed class ConsultationService(
     /// absence is now the statement: nothing about the vendor as it is configured TODAY may
     /// reach a conversation that was opened yesterday. (SonarCloud, Major, on the pull request.)
     /// </remarks>
-    /// <param name="toolbox">
+    /// <param name="shows">
     /// What the adapter says its launch can read with (<see cref="IConsultantRuntime.Toolbox"/>) — the one
     /// fact about the vendor this method is handed, and it is the FROZEN runtime's: on a follow-up the
     /// consultant was resolved by <c>ConsultantResolver.Resumed</c>, which refuses unless today's
     /// definition runs on the runtime the record froze, so the adapter asked here is the one the
-    /// conversation was opened on — never whatever the panel now names.
+    /// conversation was opened on — never whatever the panel now names. And WHERE it reads: the checkout, or the
+    /// conversation's snapshot of it for a consultant that stands in one (D6) — the path the prompt names.
     /// </param>
-    private async Task<string> PromptAsync(ConsultationRecord record, string toolbox, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
+    private async Task<string> PromptAsync(ConsultationRecord record, PromptShows shows, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
     {
         var resuming = record.Turns.Count > 0 || record.Status == ConsultationStatuses.Interrupted;
         // The RECORD's frozen mode, not the runtime's current one. An upgrade that changed an
@@ -769,11 +782,44 @@ public sealed class ConsultationService(
                 ? ConsultantPrompt.Transcript([.. record.Turns.Select(t => (t.Problem, t.Advice))], record.CarryBudget)
                 : string.Empty,
             PreviousAnswerLost: record.Status == ConsultationStatuses.Interrupted,
-            Toolbox: toolbox,
+            Toolbox: shows.Toolbox,
             // The consultant's row's own instruction, FROZEN when the consultation opened (C2) — from the record, like the rest.
             RowInstruction: record.RowInstruction,
-            // By its path: an antigravity consultant does not run from the checkout (research/PLAN_agy_cannot_write_its_roots.md).
-            Checkout: repo));
+            // By its path: an antigravity consultant does not run from the checkout (research/PLAN_agy_cannot_write_its_roots.md),
+            // and a Vibe one reads the conversation's snapshot, never the checkout it cannot reach (M-V11).
+            Checkout: shows.Checkout));
+    }
+
+    /// <summary>What a turn's prompt says the consultant has: its tools, and the path it reads.</summary>
+    private sealed record PromptShows(string Toolbox, string Checkout);
+
+    /// <summary>What a turn's prompt is composed from, beside the consultant and its place.</summary>
+    private sealed record PromptParts(ConsultationRecord Record, string Problem, IReadOnlyList<string> Files, string Nonce, string Repo);
+
+    /// <summary>
+    /// The turn's launch, prepared by its adapter — or the refusal of its place: a consultant that must not stand in the
+    /// checkout and has no copy to stand in is refused before anything is asked of its CLI (D6).
+    /// </summary>
+    private async Task<ConsultantPreparation> PreparedAsync(TurnConsultant consultant, ConsultantPlace place, PromptParts parts, CancellationToken ct)
+    {
+        if (place.Refusal.Length > 0)
+        {
+            return new ConsultantPreparation.Refused(new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure));
+        }
+
+        var shows = new PromptShows(consultant.Runtime.Toolbox, place.Workdir.Length > 0 ? place.Workdir : parts.Repo);
+        var launch = new ConsultantLaunch(
+            parts.Repo,
+            await PromptAsync(parts.Record, shows, parts.Problem, parts.Files, parts.Nonce, parts.Repo, ct),
+            parts.Record.Handle,
+            AnswersDir,
+            Settings(consultant) with { OwnedScratch = place.Folder },
+            AnswerSchema.Path)
+        {
+            Workdir = place.Workdir,
+        };
+
+        return await consultant.Runtime.PrepareAsync(launch, launcher, ct);
     }
 
     private string Settle(ConsultationRecord record, TurnConsultant consultant, ConsultationLookups.Looked looked, string problem, string nonce, TimeSpan elapsed)

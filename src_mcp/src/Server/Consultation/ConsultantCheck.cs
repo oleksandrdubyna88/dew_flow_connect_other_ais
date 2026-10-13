@@ -151,6 +151,9 @@ internal sealed class ConsultantCheckTurn(
 {
     private readonly FilesystemInvariant _invariant = new(launcher);
 
+    /// <summary>A copy of the scratch repository for a consultant that must not stand in it (Vibe, D6) — one-shot, in the check's own scratch.</summary>
+    private readonly ConsultantPlaces _places = new(string.Empty, launcher, warn);
+
     /// <summary>The check's outcome, as the record it ends in — answered, failed with its classification, or unavailable.</summary>
     /// <param name="checking">The record the check started with; its vendor, model and times are kept.</param>
     /// <param name="turn">The check's whole deadline, linked to <paramref name="caller"/>.</param>
@@ -194,10 +197,26 @@ internal sealed class ConsultantCheckTurn(
 
     private async Task<ConsultCheckRecord> TurnAsync(Turn turn, Func<ConsultFailure> killedAs, CancellationToken ct)
     {
+        // What a consultation's turn stands in, one-shot: the checkout itself, or a copy of it in the check's own scratch,
+        // with the consultant's home beside it (D6, D17) — gone with the scratch.
+        using var place = await PlaceAsync(turn, ct);
+
+        return place.Refusal.Length > 0
+            ? Failed(turn.Checking, turn.Row, new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure), Usage.None, turn.Clock.Elapsed)
+            : await InPlaceAsync(turn, place, killedAs, ct);
+    }
+
+    private async Task<ConsultantPlace> PlaceAsync(Turn turn, CancellationToken ct) =>
+        turn.Runtime.NeedsASanitisedSnapshot
+            ? await _places.OneShotAsync(Path.Combine(turn.Scratch.Root, OwnName), [turn.Scratch.Repo], ct)
+            : ConsultantPlace.Checkout;
+
+    private async Task<ConsultCheckRecord> InPlaceAsync(Turn turn, ConsultantPlace place, Func<ConsultFailure> killedAs, CancellationToken ct)
+    {
         // BEFORE the preparation, as a consultation takes it: whatever the preparation does is inside the comparison.
         var before = await _invariant.SnapshotAsync(turn.Scratch.Repo, ct);
         var canary = Fingerprint(turn.Scratch.CanaryPath);
-        var prepared = await turn.Runtime.PrepareAsync(await LaunchAsync(turn, ct), launcher, ct);
+        var prepared = await turn.Runtime.PrepareAsync(await LaunchAsync(turn, place, ct), launcher, ct);
         if (prepared is ConsultantPreparation.Refused refused)
         {
             warn($"consultant check: {turn.Row.Provider} was not launched — {refused.Failure.What(turn.Row.Provider)}");
@@ -214,9 +233,13 @@ internal sealed class ConsultantCheckTurn(
         return Judged(turn with { Checking = turn.Checking with { Confinement = ready.Confinement } }, turned, broken, killedAs());
     }
 
-    /// <summary>The launch a consultation's first turn would get, in the scratch repository.</summary>
-    private async Task<ConsultantLaunch> LaunchAsync(Turn turn, CancellationToken ct)
+    /// <summary>The folder, in the check's scratch, a consultant that keeps a home and reads a copy is given.</summary>
+    private const string OwnName = "own";
+
+    /// <summary>The launch a consultation's first turn would get, in the scratch repository — or in its copy (D6).</summary>
+    private async Task<ConsultantLaunch> LaunchAsync(Turn turn, ConsultantPlace place, CancellationToken ct)
     {
+        var copy = place.Roots is [var only] ? only : string.Empty;
         var (sha, branch) = await context.HeadAsync(turn.Scratch.Repo, ct);
         var prompt = ConsultantPrompt.Compose(new ConsultantPromptInput(
             prompts.For(ConsultKinds.PromptId(ConsultKinds.Stuck)),
@@ -228,13 +251,16 @@ internal sealed class ConsultantCheckTurn(
             sha,
             WorkingTree: await ConsultantTurnInputs.ShapedTreeAsync(context, turn.Scratch.Repo, ct),
             Toolbox: turn.Runtime.Toolbox,
-            Checkout: turn.Scratch.Repo));
+            Checkout: copy.Length > 0 ? copy : turn.Scratch.Repo));
         var answers = ConsultHealthPaths.AnswersDirectory(settings.DataDir);
         Directory.CreateDirectory(answers);
         var schema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
 
         return new ConsultantLaunch(turn.Scratch.Repo, prompt, string.Empty, answers,
-            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings, keys), schema.Path);
+            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings, keys) with { OwnedScratch = place.Folder }, schema.Path)
+        {
+            Workdir = copy,
+        };
     }
 
     /// <summary>The sentence a breach is — the repository's changes, the canary's, or both — or empty when nothing broke.</summary>

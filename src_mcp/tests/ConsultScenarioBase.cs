@@ -135,6 +135,10 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
     /// </param>
     /// <param name="reviewerTimeout">The launch's own deadline, which the turn's is derived from.</param>
     /// <param name="noticing">Where the refusals' notices go — by default nowhere.</param>
+    /// <param name="homes">
+    /// Where a consultant's coai-owned conversation homes live (<c>PanelSettings.ConsultantHomesRoot</c>) — by default
+    /// none, so no test makes or sweeps a home in the machine's own local data.
+    /// </param>
     protected PanelService Service(
         int turns = 5,
         int callsPerSession = 10,
@@ -144,9 +148,11 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         Serilog.ILogger? log = null,
         IProcessLauncher? launcher = null,
         TimeSpan? reviewerTimeout = null,
-        Noticing? noticing = null) => new(
+        Noticing? noticing = null,
+        string homes = "") => new(
         new PanelSettings
         {
+            ConsultantHomesRoot = homes,
             Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
             Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
             DataDir = _data,

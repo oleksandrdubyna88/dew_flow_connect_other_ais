@@ -371,6 +371,23 @@ public sealed record PanelSettings
     /// </remarks>
     public string RoundTreeRoot { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Where a consultant CLI's coai-owned CONVERSATION homes live — <c>&lt;this&gt;/coai-vibe/&lt;consultation id&gt;</c> (D17 and
+    /// D20 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>): the person's local application data, or
+    /// <c>COAI_CONSULTANT_HOMES</c> when set.
+    /// </summary>
+    /// <remarks>
+    /// Empty unless the environment built these settings, which is every server — so a test or a tool that builds settings
+    /// by hand neither makes nor SWEEPS homes in the machine's own folder; a conversation on a runtime that needs one is
+    /// then refused by name. A LOCAL path, like <see cref="RoundTreeRoot"/>: a Vibe home must be short and on this machine
+    /// (a deep home broke on a path over 260 characters, research/RESULTS_vibe_and_kimi_first_probe.md §4), never a share.
+    /// </remarks>
+    public string ConsultantHomesRoot { get; init; } = string.Empty;
+
+    /// <summary><c>COAI_CONSULTANT_HOMES</c> when set, else the person's local application data.</summary>
+    private static string HomesRootOf(Func<string, string?> env) =>
+        env("COAI_CONSULTANT_HOMES") is { Length: > 0 } homes ? homes : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
     /// <summary>The root a <see cref="Runners.Worktrees.WorktreeManager"/> is given: <see cref="RoundTreeRoot"/>, or the data dir's own.</summary>
     /// <remarks>One expression for every place that builds a manager — the service and the <c>--cadence</c> reader.</remarks>
     public string WorktreeRoot => RoundTreeRoot is { Length: > 0 } roundTrees ? roundTrees : Path.Combine(DataDir, "worktrees");
@@ -939,6 +956,7 @@ public sealed record PanelSettings
             ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
             ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
             ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
+            ConsultantHomesRoot = HomesRootOf(env),
             Pace = ServerPace.From(env),
             ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
             ConsultantsUnreadable = consultants.Unreadable,

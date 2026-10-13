@@ -24,7 +24,7 @@ public sealed class OnlyARuntimeThatAsksGetsASanitisedSnapshotTests
     }
 
     [Fact]
-    public void EveryShippedConsultant_StillRunsInTheCheckout()
+    public void EveryConsultantButVibe_StillRunsInTheCheckout_AndVibeAsksForACopy()
     {
         var consultants = ConsultantResolution.Consulting
             .Select(runtime => ConsultantResolution.For(new VendorIdentity(runtime, runtime, string.Empty)))
@@ -33,6 +33,7 @@ public sealed class OnlyARuntimeThatAsksGetsASanitisedSnapshotTests
             .ToList();
 
         consultants.Should().NotBeEmpty();
-        consultants.Should().OnlyContain(consultant => !consultant.NeedsASanitisedSnapshot, "the Vibe consultant is S3's");
+        consultants.Where(consultant => consultant.NeedsASanitisedSnapshot).Should().ContainSingle()
+            .Which.Should().BeOfType<VibeConsultant>("S3: Vibe consults from a copy of the live tree, every other consultant from the checkout");
     }
 }
