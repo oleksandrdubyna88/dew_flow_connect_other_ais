@@ -65,12 +65,12 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     private const string Export =
         """{"outcome":"finished","usage":{"input_tokens":1200,"output_tokens":34,"cached_input_tokens":0,"total_tokens":1234},"cost_usd":0.01,"config":{"active_model":"{{env:VIBE_ACTIVE_MODEL}}"}}""";
 
-    private void Steer(string answer, string envRecord = "", string homeWrite = "", string recordDir = "") =>
+    private void Steer(string answer, string envRecord = "", string homeWrite = "", string recordDir = "", string version = "2.26.1") =>
         File.WriteAllText(SteeringFile, JsonSerializer.Serialize(new Dictionary<string, string>
         {
             ["FAKECLI_STDOUT"] = Array(answer),
             ["FAKECLI_EXPORT_TEXT"] = Export,
-            ["FAKECLI_VERSION_STDOUT"] = "python.exe C:\\Users\\p\\.local\\bin\\vibe 2.26.1\r\n",
+            ["FAKECLI_VERSION_STDOUT"] = $"python.exe C:\\Users\\p\\.local\\bin\\vibe {version}\r\n",
             ["FAKECLI_RECORD_ENV"] = envRecord,
             ["FAKECLI_HOME_WRITE"] = homeWrite,
             ["FAKECLI_RECORD_DIR"] = recordDir,
@@ -207,5 +207,34 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         codeLaunch.Should().NotStartWith(repo);
         Directory.Exists(codeLaunch).Should().BeFalse("the snapshot went with the round");
         Directory.Exists(Path.GetDirectoryName(codeLaunch)).Should().BeFalse("and so did the round's scratch, the Vibe homes in it");
+    }
+
+    /// <summary>
+    /// The owner's decision of 2026-10-13: a Vibe version nobody measured is RUN, and the round's record of the reviewer says
+    /// so — <c>reviewerStates[].warning</c>, what the rounds view reads — beside an answer counted as any other.
+    /// </summary>
+    [Fact]
+    public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal");
+        }
+
+        var (repo, data) = await RepositoryAsync();
+        Steer(Clean, version: "2.27.0");
+        var service = Service(data);
+        await service.OpenAsync(repo, "feature");
+
+        var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
+        var status = JsonDocument.Parse(await service.StatusAsync(repo, "feature")).RootElement;
+
+        planned.GetProperty("verdict").GetString().Should().Be("proceed", $"the unmeasured Vibe answered: {planned}");
+        planned.GetProperty("reviewers").GetString().Should().Contain("warned — vibe/PlanCritique").And.Contain("2.27.0",
+            "the round's reviewer line, what the calling AI reads, says it too");
+        var reviewer = status.GetProperty("rounds")[0].GetProperty("reviewerStates")[0];
+        reviewer.GetProperty("status").GetString().Should().Be("done");
+        reviewer.TryGetProperty("warning", out var warning).Should().BeTrue($"the reviewer's state carries the warning: {reviewer}");
+        warning.GetString().Should().Contain("2.27.0").And.Contain("2.26.1");
     }
 }

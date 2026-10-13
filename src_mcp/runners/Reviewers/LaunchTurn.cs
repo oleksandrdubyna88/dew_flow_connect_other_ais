@@ -19,10 +19,11 @@ public sealed class LaunchTurn : IDisposable
     private readonly IDisposable? _held;
     private bool _given;
 
-    private LaunchTurn(string refusal, IDisposable? held)
+    private LaunchTurn(string refusal, IDisposable? held, string warning = "")
     {
         Refusal = refusal;
         _held = held;
+        Warning = warning;
     }
 
     /// <summary>Start it; nothing is held. The default of every adapter that has no such check.</summary>
@@ -31,11 +32,17 @@ public sealed class LaunchTurn : IDisposable
     /// <summary>Do not start it — the sentence names what was found and what cures it.</summary>
     public static LaunchTurn Refused(string reason) => new(reason, null);
 
-    /// <summary>Start it, and give <paramref name="held"/> back once the launch has been read.</summary>
-    public static LaunchTurn Holding(IDisposable held) => new(string.Empty, held);
+    /// <summary>
+    /// Start it, and give <paramref name="held"/> back once the launch has been read — with <paramref name="warning"/>, the
+    /// sentence the person is owed about a launch that was ALLOWED (a CLI version nobody measured), carried to the outcome.
+    /// </summary>
+    public static LaunchTurn Holding(IDisposable held, string warning = "") => new(string.Empty, held, warning);
 
     /// <summary>Empty when the launch may start.</summary>
     public string Refusal { get; }
+
+    /// <summary>What the person should know about a launch that may start; empty for nearly every launch.</summary>
+    public string Warning { get; }
 
     public void Dispose()
     {

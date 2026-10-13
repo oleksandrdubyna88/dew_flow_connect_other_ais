@@ -153,7 +153,7 @@ public static class VibeLaunch
         }
 
         var turn = await VibeHomeTurns.TakeAsync(Value(request, HomeVariable), ct);
-        string inside;
+        HomeVerdict inside;
         try
         {
             inside = await CheckedAsync(request, launcher, ct);
@@ -164,15 +164,21 @@ public static class VibeLaunch
             throw;
         }
 
-        return inside.Length > 0 ? Given(turn, inside) : LaunchTurn.Holding(new Attempt(turn, exportFolder));
+        return inside.Refusal.Length > 0 ? Given(turn, inside.Refusal) : LaunchTurn.Holding(new Attempt(turn, exportFolder), inside.Warning);
+    }
+
+    /// <summary>What the check inside the turn concluded: a refusal, or a go — with a warning when the version was not measured.</summary>
+    internal sealed record HomeVerdict(string Refusal, string Warning)
+    {
+        public static HomeVerdict Refuse(string refusal) => new(refusal, string.Empty);
     }
 
     /// <summary>Inside the turn: the manifest this build carries, then the home against it.</summary>
-    private static async Task<string> CheckedAsync(ProcessRequest request, IProcessLauncher launcher, CancellationToken ct) =>
+    private static async Task<HomeVerdict> CheckedAsync(ProcessRequest request, IProcessLauncher launcher, CancellationToken ct) =>
         VibeHomeManifest.Builtin switch
         {
             VibeManifestLoad.Loaded { Manifest: var manifest } => await AgainstAsync(manifest, request, launcher, ct),
-            VibeManifestLoad.Broken broken => broken.Reason,
+            VibeManifestLoad.Broken broken => HomeVerdict.Refuse(broken.Reason),
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
@@ -180,18 +186,18 @@ public static class VibeLaunch
     /// The home's SHAPE first — before anything of Vibe's starts on it, the version probe included, so a <c>hooks.toml</c> or
     /// a link is never in the home while Vibe runs — then the installed version, then the plugin bytes for that version.
     /// </summary>
-    private static async Task<string> AgainstAsync(VibeHomeManifest manifest, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
+    private static async Task<HomeVerdict> AgainstAsync(VibeHomeManifest manifest, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
     {
         var home = Value(request, HomeVariable);
         var shape = VibeHome.Refusal(home, manifest);
         if (shape.Length > 0)
         {
-            return shape;
+            return HomeVerdict.Refuse(shape);
         }
 
         var version = await VersionAsync(request, launcher, ct);
 
-        return version.Refusal.Length > 0 ? version.Refusal : HomeRefusal(manifest, home, version.Version);
+        return version.Refusal.Length > 0 ? HomeVerdict.Refuse(version.Refusal) : Verdict(manifest, home, version.Version);
     }
 
     private static LaunchTurn Given(IDisposable turn, string refusal)
@@ -238,14 +244,30 @@ public static class VibeLaunch
         }
     }
 
-    /// <summary>The home checked against the manifest entry for <paramref name="version"/>; no entry is a refusal of its own.</summary>
-    internal static string HomeRefusal(VibeHomeManifest manifest, string home, string version) => manifest.For(version) switch
+    /// <summary>
+    /// The home against the manifest entry for <paramref name="version"/>. A MEASURED version has its plugin bytes enforced —
+    /// a mismatch is tampered bytes of a known version, and stays a refusal. A version with NO entry is run with a warning
+    /// (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse — set it up once and it must work if it can"): its
+    /// home's SHAPE was already checked before its `--version` started, so its plugin files are admitted by name.
+    /// </summary>
+    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version) => manifest.For(version) switch
     {
-        [var entry] => VibeHome.Refusal(home, manifest, entry),
-        _ => $"Vibe {version} is not one this coai-mcp has qualified (it knows {manifest.Known}): what it writes into its home "
-             + "has not been hashed — run `node scripts/vibe-home-manifest.mjs --write` with this Vibe and ship the manifest, "
-             + "or install a Vibe version coai knows (D17 of todo/PLAN_vibe_and_kimi_runtimes.md)",
+        [var entry] => HomeVerdict.Refuse(VibeHome.Refusal(home, manifest, entry)),
+        _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version)),
     };
+
+    /// <summary>
+    /// The warning for a Vibe version nobody measured — the same sentence on the launch (<see cref="LaunchTurn.Warning"/>)
+    /// and on the row's card (<c>VibeRuntime.VersionWarning</c>) — or empty for a measured one.
+    /// </summary>
+    public static string VersionWarning(VibeHomeManifest manifest, string version) =>
+        version.Length == 0 || manifest.For(version).Count > 0 ? string.Empty : Unmeasured(manifest, version);
+
+    private static string Unmeasured(VibeHomeManifest manifest, string version) =>
+        $"Vibe {version} is not a version coai has measured (it measured {manifest.Known}); it is run anyway, but its "
+        + $"confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are {manifest.Known}'s, and this "
+        + "version's plugin files are admitted by name only — re-run `node scripts/vibe-home-manifest.mjs --write` and "
+        + "`node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it";
 
     private static string OneLine(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 

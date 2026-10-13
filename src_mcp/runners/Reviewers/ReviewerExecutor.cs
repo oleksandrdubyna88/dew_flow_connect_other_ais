@@ -63,6 +63,17 @@ public abstract record ReviewerOutcome
     /// </remarks>
     public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
 
+    /// <summary>
+    /// What the launch control said the person should know about a launch it ALLOWED — empty for nearly every reviewer.
+    /// Runtime-neutral: a CLI version nobody measured is the first case (Vibe, the owner's decision of 2026-10-13: "warn,
+    /// not refuse"), and any adapter's launch control can say one (<see cref="LaunchTurn.Warning"/>).
+    /// </summary>
+    /// <remarks>
+    /// On the BASE, because it is about the launch and not about how it ended: a warned launch that then failed still ran
+    /// on a version nobody measured, and the person reading the failure is owed that too.
+    /// </remarks>
+    public string Warning { get; init; } = string.Empty;
+
     /// <summary>What the launch this outcome describes reported: an answer's, an unparseable one's; nothing for a run that never finished.</summary>
     protected virtual Usage OwnUsage => Usage.None;
 
@@ -536,6 +547,10 @@ public sealed class ReviewerExecutor(
         _ => null,
     };
 
+    /// <remarks>
+    /// The outcome carries the FIRST launch's warning (<see cref="ReviewerOutcome.Warning"/>), however the reviewer ended:
+    /// the launch control says it once per launch, and a repair or a follow-up runs on the same CLI.
+    /// </remarks>
     public async Task<ReviewerOutcome> RunAsync(
         ReviewerInvocation invocation,
         ReviewerInvocation? repair = null,
@@ -545,8 +560,17 @@ public sealed class ReviewerExecutor(
         // The clock starts here so the second one gets what the first left, exactly as the
         // rate-limit ladder already does — same helper, same arithmetic.
         var spent = System.Diagnostics.Stopwatch.StartNew();
+        var first = await RunOnceAsync(invocation, ct);
+
+        return (await ConcludedAsync(invocation, repair, first, spent, ct)) with { Warning = first.Warning };
+    }
+
+    /// <summary>The reviewer's outcome once its first launch has run: that launch's own, or after its one repair.</summary>
+    private async Task<ReviewerOutcome> ConcludedAsync(
+        ReviewerInvocation invocation, ReviewerInvocation? repair, OneLaunch first, System.Diagnostics.Stopwatch spent, CancellationToken ct)
+    {
         var budget = invocation.Request.Timeout;
-        var (outcome, review, usage, answer, evidence, notApplied) = await RunOnceAsync(invocation, ct);
+        var (outcome, review, usage, answer, evidence, notApplied, _) = first;
         if (outcome is not null)
         {
             return outcome;
@@ -619,7 +643,7 @@ public sealed class ReviewerExecutor(
     private ReviewerOutcome AfterTheRepair(
         ReviewerInvocation repair,
         (Usage Usage, string? Answer, string Evidence) first,
-        (ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied) second)
+        OneLaunch second)
     {
         if (second.Outcome is { } failed)
         {
@@ -774,13 +798,17 @@ public sealed class ReviewerExecutor(
     /// <summary>How long a courtesy cleanup may take before the round stops waiting for it.</summary>
     private static readonly TimeSpan AbandonBudget = TimeSpan.FromSeconds(10);
 
-    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    /// <summary>What one launch came to, read: a terminal outcome, or the parsed review with what the run said beside it.</summary>
+    private sealed record OneLaunch(
+        ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied, string Warning);
+
+    private async Task<OneLaunch> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         var launch = await LaunchAsync(invocation, ct);
 
         return launch.Terminal is not null
-            ? (launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty)
-            : (null, Cited(ParseAnswer(launch.Answer, invocation.Provider), invocation.Citations), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied);
+            ? new(launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty, launch.Warning)
+            : new(null, Cited(ParseAnswer(launch.Answer, invocation.Provider), invocation.Citations), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied, launch.Warning);
     }
 
     /// <summary>
@@ -851,7 +879,7 @@ public sealed class ReviewerExecutor(
 
         return turn.Refusal.Length > 0
             ? new ReviewerLaunch(new ReviewerOutcome.NotStarted(turn.Refusal), null, Usage.None, string.Empty)
-            : await LaunchTakenAsync(invocation, ct);
+            : (await LaunchTakenAsync(invocation, ct)) with { Warning = turn.Warning };
     }
 
     /// <summary>The launch, once its turn is taken: started, then judged — killed, rate limited, failed, or read.</summary>
@@ -1050,4 +1078,8 @@ public sealed record ReviewerLaunch(
     Usage Usage,
     string Evidence,
     ProcessResult? Process = null,
-    string NotApplied = "");
+    string NotApplied = "")
+{
+    /// <summary>What the adapter's launch control warned about this launch (<see cref="LaunchTurn.Warning"/>) — or empty.</summary>
+    public string Warning { get; init; } = string.Empty;
+}

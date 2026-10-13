@@ -156,8 +156,13 @@ public sealed class VibeLaunchControlTests : IDisposable
         vibe.Started.Should().BeEmpty("nothing of Vibe's starts on a home that holds something Vibe does not write");
     }
 
+    /// <summary>
+    /// The owner's decision of 2026-10-13: "Vibe must WARN, not refuse — set it up once and it must work if it can." A Vibe
+    /// version with no manifest entry LAUNCHES — its plugin files admitted by name — and the outcome carries a warning that
+    /// names the running version, the measured one, and what to re-run.
+    /// </summary>
     [Fact]
-    public async Task AnUnqualifiedVibe_IsRefused_OnAFreshHome_AndOnAResumedOne_NamingTheVersionAndTheScript()
+    public async Task AnUnmeasuredVibe_Launches_OnAFreshHome_AndOnAResumedOne_AndTheOutcomeCarriesTheWarning()
     {
         foreach (var resumed in new[] { false, true })
         {
@@ -165,17 +170,59 @@ public sealed class VibeLaunchControlTests : IDisposable
             var invocation = Invocation();
             if (resumed)
             {
+                // A resumed home of the UNMEASURED version: its session, and plugin bytes no manifest names.
                 Directory.CreateDirectory(Path.Combine(HomeOf(invocation), "logs", "session", "unified", "s1"));
+                Directory.CreateDirectory(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "blobs", "zz"));
+                await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "blobs", "zz", "new-blob"), "2.27.0's bytes", TestContext.Current.CancellationToken);
                 await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "vibehistory"), "Hello Vibe!\r\n", TestContext.Current.CancellationToken);
             }
 
             var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
 
-            outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should()
-                .Contain("2.27.0").And.Contain("vibe-home-manifest.mjs").And.Contain("2.26.1", $"resumed={resumed}: it names what it knows");
-            vibe.Reviews.Should().BeEmpty($"resumed={resumed}: only the version was asked");
+            outcome.Should().BeOfType<ReviewerOutcome.Ok>($"resumed={resumed}: an unmeasured version launches");
+            outcome.Warning.Should().Contain("2.27.0").And.Contain("2.26.1").And.Contain("vibe-home-manifest.mjs")
+                .And.Contain("probe-vibe-confinement.mjs", $"resumed={resumed}: it names the running version, the measured one and what to re-run");
+            vibe.Reviews.Should().ContainSingle($"resumed={resumed}");
             Directory.Delete(HomeOf(invocation), recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task AMeasuredVibe_CarriesNoWarning()
+    {
+        var outcome = await new ReviewerExecutor(new FakeVibe()).RunAsync(Invocation(), ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Ok>().Which.Warning.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AMeasuredVibe_WithATamperedPluginFile_IsStillRefused()
+    {
+        var vibe = new FakeVibe();
+        var invocation = Invocation();
+        var pinned = ((VibeManifestLoad.Loaded)VibeHomeManifest.Builtin).Manifest.For("2.26.1")[0].Pinned[0].Path;
+        var file = Path.Combine([HomeOf(invocation), .. pinned.Split('/')]);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        await File.WriteAllTextAsync(file, "tampered", TestContext.Current.CancellationToken);
+
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should().Contain(pinned).And.Contain("bytes");
+        vibe.Reviews.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AForbiddenFileInTheHome_IsStillRefused_OnAnUnmeasuredVibe()
+    {
+        var vibe = new FakeVibe(version: "2.27.0");
+        var invocation = Invocation();
+        Directory.CreateDirectory(HomeOf(invocation));
+        await File.WriteAllTextAsync(Path.Combine(HomeOf(invocation), "hooks.toml"), "[[hooks]]\n", TestContext.Current.CancellationToken);
+
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should().Contain("hooks.toml");
+        vibe.Started.Should().BeEmpty();
     }
 
     [Fact]

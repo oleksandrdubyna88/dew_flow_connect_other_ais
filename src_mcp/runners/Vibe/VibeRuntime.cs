@@ -185,6 +185,16 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
     /// <summary>The last assistant message of <c>--output json</c>'s array (D7).</summary>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) => VibeStdout.Answer(result.StdOut);
 
+    /// <summary>
+    /// The card's warning for the version <c>providers</c> read: the launch control's own sentence for a Vibe version with no
+    /// measured home manifest — empty for a measured one, and for a manifest this build could not read (the launch refuses
+    /// then, and says why).
+    /// </summary>
+    public string VersionWarning(string printedVersion) =>
+        VibeHomeManifest.Builtin is VibeManifestLoad.Loaded { Manifest: var manifest }
+            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion))
+            : string.Empty;
+
     /// <summary>The export's usage; unknown, never zero, when it is missing or null (D8, D9).</summary>
     public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result) => Export(invocation).Usage;
 

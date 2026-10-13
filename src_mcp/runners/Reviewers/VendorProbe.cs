@@ -17,7 +17,12 @@ namespace CoaiMcp.Runners.Reviewers;
 /// deliberately — the panel renders a single note per row and `providers` answers a single note, so
 /// a second field would be dropped on the floor.
 /// </param>
-public sealed record VendorHealth(bool Enabled, bool CliFound, string Version, string Auth, string Note);
+/// <param name="Warning">
+/// What the person should know about a CLI that WILL be run — today, a version nobody measured (Vibe, the owner's
+/// decision of 2026-10-13: warn, not refuse). Runtime-neutral (<see cref="IReviewerRuntime.VersionWarning"/>); empty for
+/// nearly every row.
+/// </param>
+public sealed record VendorHealth(bool Enabled, bool CliFound, string Version, string Auth, string Note, string Warning = "");
 
 /// <summary>
 /// The health probe behind `providers` and, later, the Team server's catalog: run the CLI's own
@@ -223,7 +228,10 @@ public static class VendorProbe
     {
         try
         {
-            return Answered(await runtime.ProbeVersionAsync(launcher, exe, timeout, ct), exe, timeout, readiness);
+            var health = Answered(await runtime.ProbeVersionAsync(launcher, exe, timeout, ct), exe, timeout, readiness);
+
+            // What the person should know about the version that WILL run — Vibe's unmeasured version (warn, not refuse).
+            return health with { Warning = runtime.VersionWarning(health.Version) };
         }
         // Win32Exception is what a missing or unrunnable executable throws, and it is the case with
         // a cure. The other two are the ones a bad path can still produce — a directory where a file

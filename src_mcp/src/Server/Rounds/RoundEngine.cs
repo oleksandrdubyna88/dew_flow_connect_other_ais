@@ -474,7 +474,10 @@ internal sealed class RoundEngine(
                     + WhereTheDocumentWent(stage.Stage, work.Select(w => w.Invocation.Provider))
                     // And what the round did not look at: a `proceed` must not cover an uncommitted
                     // tail nobody read. Empty for every round that has none.
-                    + roundWork.Unreviewed,
+                    + roundWork.Unreviewed
+                    // And what a launch control WARNED about a reviewer it let run — a CLI version nobody measured (the
+                    // owner's decision of 2026-10-13: warn, not refuse). Empty for every round that has none.
+                    + RoundWarnings.Clause(results),
             };
             // The commit it reviewed, kept with the round: what a later `again` compares the branch to.
             var record = live.Finish(answer.Verdict, gate.GatingCount, SecurityRound.Clause(results, roundWork) + summary.Sentence, results) with

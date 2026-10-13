@@ -5,8 +5,9 @@
     "never edited by hand. coai-mcp embeds it (VibeHome): before EVERY Vibe launch the owned home is validated - a file under",
     "pinnedPrefix is admitted only when its path and SHA-256 are in the entry for the INSTALLED Vibe version, a path matching",
     "`varying` is admitted by name (its bytes are caches, logs and sessions), anything else - a hooks.toml, a config.toml, an",
-    "agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is refused",
-    "with a sentence naming this file and the script: re-run it after every Vibe update. `seen` is informational."
+    "agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is RUN",
+    "with a warning (the owner, 2026-10-13: warn, not refuse) - its plugin files admitted by name, its home's shape still checked;",
+    "re-run this script after every Vibe update to measure it. `seen` is informational."
   ],
   "pinnedPrefix": "logs/session/plugins/",
   "varying": [

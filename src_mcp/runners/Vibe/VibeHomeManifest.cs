@@ -22,7 +22,8 @@ public sealed record VibeHomeEntry(string Version, IReadOnlyList<VibePinnedFile>
 /// environment and hashes what it wrote. Three facts: the folder whose files are PINNED by hash (Vibe's bundled plugin
 /// artifacts — "any file under <c>logs/session/plugins/</c>" would admit whatever a tampered or upgraded Vibe put there),
 /// the paths admitted by NAME because their bytes are Vibe's caches, logs and sessions, and one entry per Vibe version
-/// that was qualified. A version with no entry is refused before the launch.</para>
+/// that was qualified. A version with no entry is RUN with a warning (the owner's decision of 2026-10-13: warn, not refuse) —
+/// its plugin files admitted by name, the home's shape still checked; a measured version's mismatched bytes are refused.</para>
 /// <para>Embedded for the reason every shared seed here is: a Native-AOT binary runs where no <c>shared/</c> exists, and a
 /// launch must not be admitted against a manifest it could not read — a load failure is a refusal of every Vibe launch,
 /// never an empty manifest that admits nothing and says so badly.</para>

@@ -360,6 +360,13 @@ public interface IReviewerRuntime
         launcher.RunAsync(new ProcessRequest(executable, ["--version"], Environment.CurrentDirectory) { Timeout = timeout }, ct);
 
     /// <summary>
+    /// What the person should know about the INSTALLED version this CLI printed for <c>--version</c> — empty when nothing.
+    /// The same sentence a launch's control carries (<see cref="LaunchTurn.Warning"/>), so the row's card says before a round
+    /// what the round will say: Vibe names a version with no measured home manifest (the owner's decision of 2026-10-13).
+    /// </summary>
+    string VersionWarning(string printedVersion) => string.Empty;
+
+    /// <summary>
     /// Whether this reviewer can READ a mounted checkout — a CLI agent started in the worktree with file tools.
     /// </summary>
     /// <remarks>

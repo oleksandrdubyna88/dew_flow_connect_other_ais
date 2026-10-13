@@ -6,8 +6,9 @@
 // src_mcp/runners/Reviewers/VibeHome.cs). Vibe unpacks its bundled plugin artifacts into that home on its first start
 // (§22 of the RESULTS: names and sizes, never hashes), and "any file under logs/session/plugins/" would admit whatever a
 // tampered or upgraded Vibe put there. So the validation admits those bytes only through this manifest: one entry per Vibe
-// version, path → SHA-256. A Vibe version with no entry is REFUSED by the launch with a sentence naming this script — the
-// cost of every Vibe update that changes those bytes is one run of it.
+// version, path → SHA-256. A Vibe version with no entry is RUN with a warning naming this script (the owner's decision of
+// 2026-10-13: warn, not refuse) — its plugin files admitted by name, its home's shape still checked; one run of this script
+// measures it.
 //
 //   node scripts/vibe-home-manifest.mjs [--vibe <exe>] [--scratch <dir>] [--write]
 //   node scripts/vibe-home-manifest.mjs --from <scratch> [--write]   rebuild from a run's saved steps.json — no launch
@@ -163,8 +164,9 @@ const WHY = [
   'never edited by hand. coai-mcp embeds it (VibeHome): before EVERY Vibe launch the owned home is validated - a file under',
   'pinnedPrefix is admitted only when its path and SHA-256 are in the entry for the INSTALLED Vibe version, a path matching',
   '`varying` is admitted by name (its bytes are caches, logs and sessions), anything else - a hooks.toml, a config.toml, an',
-  'agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is refused',
-  'with a sentence naming this file and the script: re-run it after every Vibe update. `seen` is informational.',
+  'agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is RUN',
+  "with a warning (the owner, 2026-10-13: warn, not refuse) - its plugin files admitted by name, its home's shape still checked;",
+  're-run this script after every Vibe update to measure it. `seen` is informational.',
 ];
 const prior = existsSync(MANIFEST) ? JSON.parse(readFileSync(MANIFEST, 'utf8')) : { versions: [] };
 const manifest = {

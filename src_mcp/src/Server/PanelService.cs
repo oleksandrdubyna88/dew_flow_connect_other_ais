@@ -287,8 +287,12 @@ public sealed class PanelService
         {
             Api = ApiReportOf(provider),
             Fast = FastReportOf(provider),
+            Warning = WarningOf(health),
         };
     }
+
+    /// <summary>The health's warning on the wire — absent (null) for a row that has none, so its JSON reads as it did.</summary>
+    private static string? WarningOf(VendorHealth health) => health.Warning.Length > 0 ? health.Warning : null;
 
     /// <summary>
     /// The health's sentence — and, for an Off codex row whose installed release refuses the standard tier, what its
