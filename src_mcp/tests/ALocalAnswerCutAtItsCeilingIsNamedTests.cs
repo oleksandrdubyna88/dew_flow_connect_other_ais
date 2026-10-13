@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>--ask-local</c> refuses an answer its engine CUT at the token ceiling, and says so with the ceiling, the tokens and
-/// the effort it sent (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.2).
+/// the effort it sent (research/PLAN_local_effort_reaches_every_local_launch.md, S1.2).
 /// </summary>
 /// <remarks>
 /// <para>Found 2026-10-13: a Gemma4 check generated exactly 8 192 tokens of thinking and no content. Ollama answered

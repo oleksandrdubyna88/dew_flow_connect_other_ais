@@ -99,6 +99,16 @@ public sealed class SecurityLaneCalibrationTests
             reviewers.Should().StartWith($"all {4 + promptIds.Length} reviewers answered",
                 "each measured cell needs a usable security answer as well as four clean ordinary test reviewers");
         }
+        else
+        {
+            // A cut at the ceiling is the one failure an effort measurement records; anything else fails the cell, and every
+            // reviewer that did not answer must be one of those cuts — the four ordinary reviewers answered (epic 2's code round).
+            IReadOnlyList<ProcessResult> launches = [.. Directory.GetFiles(output, "turn-*.process.json").Order(StringComparer.Ordinal)
+                .Select(file => JsonSerializer.Deserialize<ProcessResult>(File.ReadAllText(file))!)];
+            SecurityLaneEffortArm.UnexpectedFailures(launches).Should().BeEmpty("only a cut at the ceiling is an observation");
+            SecurityLaneEffortArm.NotAnswered(reviewers, asked: 4 + promptIds.Length).Should().Be(launches.Count(launch => launch.ExitCode == 70),
+                $"every reviewer that did not answer must be a cut local reviewer: {reviewers}");
+        }
 
         Directory.GetFiles(output, "*.request.txt").Length.Should().BeGreaterThanOrEqualTo(promptIds.Length,
             "every configured security prompt must actually reach the local shim");
@@ -167,7 +177,7 @@ public sealed class SecurityLaneCalibrationTests
             if (!args.Contains("--ask-local")) return await inner.RunAsync(request, ct);
             var name = Path.Combine(output, $"turn-{Interlocked.Increment(ref _turn)}");
             // The argv itself, so every cell's effort and ceiling can be read back against its arm.
-            await File.WriteAllTextAsync(name + ".argv.json", JsonSerializer.Serialize(args), ct);
+            await File.WriteAllTextAsync(name + ".arguments.json", JsonSerializer.Serialize(args), ct);
             var prompt = args[args.IndexOf("--prompt-file") + 1];
             await File.WriteAllTextAsync(name + ".request.txt", await File.ReadAllTextAsync(prompt, ct), ct);
             var result = await inner.RunAsync(request, ct);

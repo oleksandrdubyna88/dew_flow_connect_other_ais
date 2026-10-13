@@ -21,7 +21,7 @@ public sealed class AConsultantRunsWithItsRowsOptionsTests
 
     /// <summary>
     /// A local consultant with no effort of its own is told the PANEL's local effort and ceiling, as a local reviewer is
-    /// (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.1) — read off the shim argv the turn is launched with.
+    /// (research/PLAN_local_effort_reaches_every_local_launch.md, S1.1) — read off the shim argv the turn is launched with.
     /// NON-default values, so a launch hard-coding <c>none</c>/8192 could not pass.
     /// </summary>
     [Fact]

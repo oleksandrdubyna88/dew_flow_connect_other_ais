@@ -1,13 +1,39 @@
 # PLAN — the local engine's effort reaches every local launch, and a thinking model that runs out says so
 
-> Status: **epic 1 implemented on its branch (code gate `proceed`, not yet merged), epic 2 not started, 2026-10-13.** Scope: `src_mcp` (consultant and question-consultant
-> launch settings, the `--ask-local` shim), `src_vs_code` (the Models card's ✓ Check badge), the explicit
-> security-lane calibration harness, and one `research/RESULTS_*.md`. Two epics.
+> Status: **IMPLEMENTED, 2026-10-13.** Epic 1 merged as PR #797; epic 2 measured — results in
+> [RESULTS_security_lane_effort_2026-10-13.md](RESULTS_security_lane_effort_2026-10-13.md): `none` found both planted
+> defects from both prompts, every thinking arm found at most one and lost a reviewer to the ceiling, so the shipped
+> default stays. Scope: `src_mcp` (consultant and question-consultant launch settings, the `--ask-local` shim),
+> `src_vs_code` (the Models card's ✓ Check badge), the explicit security-lane calibration harness, and one
+> `research/RESULTS_*.md`. Two epics.
 >
-> Related docs: [module_server.md](../research/module_server.md) (§ *A local reviewer is told not to think*),
-> [module_security_lane.md](../research/module_security_lane.md),
-> [RESULTS_security_lane_local_llm_windows.md](../research/RESULTS_security_lane_local_llm_windows.md),
-> [PLAN_security_lane_calibration_tail.md](PLAN_security_lane_calibration_tail.md).
+> Related docs: [module_server.md](module_server.md) (§ *A local reviewer is told not to think*),
+> [module_security_lane.md](module_security_lane.md),
+> [RESULTS_security_lane_local_llm_windows.md](RESULTS_security_lane_local_llm_windows.md),
+> [PLAN_security_lane_calibration_tail.md](../todo/PLAN_security_lane_calibration_tail.md).
+
+## What shipped differently from this plan
+
+- **The tripwire is the compiler, not a scan.** S1.1's source scan went RED naming both sites and was then replaced in
+  the code round: `EffortFor` takes `PanelSettings`, and all three composers go through `RosterBuilder.WithLocalEngine`.
+  Checked: the scan missed a named argument (`localEffort: string.Empty`), a call-shaped first argument, and the ceiling.
+- **`engine` reads as "none sent".** Found by the code round's correctness review: `CutCure` switched on the raw flag,
+  so `COAI_LOCAL_REASONING_EFFORT=engine` (which sends nothing) was said as "reasoning_effort was engine". It now reads
+  `ApiDialect.EffortToSend` — RED first, then fixed.
+- **Usage before judgement**, from the cadence consultation: a refused cut would otherwise have reported zero tokens.
+- **`CutSentence(source, answer, dialect, maxTokens, cure)`** takes the dialect rather than its two fields.
+- **No CHANGELOG lines in the feature PRs** — the release pull request writes them, as for every feature PR here.
+- **Epic 2 ran the pilot and the decision-point arm only.** No thinking arm finished most of its cells, so the
+  procedure's three-repeat branch and the safe-twin arms were not run; the safe twin exists in the harness, unexercised
+  on hardware.
+
+## Open tail
+
+- **Decided, nothing to build:** the `medium` round lost both security reviewers to the ceiling and still answered
+  `proceed` ("4 of 6 reviewers answered"). The owner's decision, 2026-10-13: intended — a lane whose reviewers all
+  failed does not hold the round.
+- **Proposed, not done (code round, reuse-first):** the three near-identical `new ReviewerSettings { … }` initialisers
+  (reviewer, consultant, question row) could share one base builder; only the local effort and ceiling were unified.
 
 ## The symptom (observed 2026-10-13, owner's machine)
 
@@ -30,7 +56,7 @@ model, 131072 context, fully resident in VRAM):
 2. **"The security lane makes the GPU work and returns nothing — is that normal?"** Every `redteam-*` reviewer of
    today's rounds read ~17 000 prompt tokens in ~6 s and generated **exactly 10 tokens** — a strict empty
    `{"status":"SECURE","findings":[]}` — sent with `reasoning_effort: none`. That is the same 10-token answer
-   [RESULTS_security_lane_local_llm_windows.md](../research/RESULTS_security_lane_local_llm_windows.md) §6.1
+   [RESULTS_security_lane_local_llm_windows.md](RESULTS_security_lane_local_llm_windows.md) §6.1
    recorded on all fifteen preset slices; its §6.2/§6.3 show the same model at `none` DOES report a planted
    tenant bypass (1 511/391) and stays empty on the safe twin. So the plumbing works; what is unknown is whether
    any effort above `none` buys a better security answer on this model at the product's pinned sampling.
@@ -140,7 +166,7 @@ Harness: `SecurityLaneCalibrationTests` (explicit, never CI) — real `PanelServ
   the harness's `PanelSettings` (`:110-120`), its loop (`:64`) and the manifest;
   `COAI_SECURITY_CALIBRATION_FIXTURE=safe` makes the head a benign change of the safe source that still touches
   the guard method and the query (`ORDER BY Id` added to the parameterised query), so both prompts route and the
-  correct answer is empty. The recording launcher also writes each `--ask-local` argv (`turn-N.argv.json`).
+  correct answer is empty. The recording launcher also writes each `--ask-local` argv (`turn-N.arguments.json`).
   A new explicit **effort-measurement** test records every cell — a predicted exit-70 cut included — instead of
   asserting `all N reviewers answered` (`:90`, cadence consultation, point 1); it still FAILS on a missing prompt,
   an argv whose `--reasoning-effort`/`--max-tokens` differ from the arm (plan round, finding 1), or an
@@ -160,7 +186,7 @@ Harness: `SecurityLaneCalibrationTests` (explicit, never CI) — real `PanelServ
   `none`, or a security-only `local` row with its own `CliEffort` (possible today with no code change, because a
   row's `CliEffort` wins in `EffortFor`).
 
-## Boundary with [PLAN_security_lane_calibration_tail.md](PLAN_security_lane_calibration_tail.md)
+## Boundary with [PLAN_security_lane_calibration_tail.md](../todo/PLAN_security_lane_calibration_tail.md)
 
 | Item | Built by | The other plan's part |
 |---|---|---|

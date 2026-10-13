@@ -270,7 +270,7 @@ public static class LocalAsk
     /// The refusal of an answer the engine CUT at its ceiling — with content or without — or null for one that was not.
     /// </summary>
     /// <remarks>
-    /// <para>todo/PLAN_local_effort_reaches_every_local_launch.md, S1.2. Measured 2026-10-13: a Gemma4 consultant check
+    /// <para>research/PLAN_local_effort_reaches_every_local_launch.md, S1.2. Measured 2026-10-13: a Gemma4 consultant check
     /// generated exactly 8 192 tokens of thinking and no content, twice, and this shim — which did not read
     /// <c>finish_reason</c> — said only that no content came back. A cut WITH content was written as the answer: a
     /// schema-whole <c>{"findings":[]}</c> cut before its findings is a clean review nobody gave, the defect the api

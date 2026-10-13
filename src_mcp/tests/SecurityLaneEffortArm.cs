@@ -3,7 +3,7 @@ using System.Globalization;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// One arm of the security-lane effort measurement (epic 2 of todo/PLAN_local_effort_reaches_every_local_launch.md): the
+/// One arm of the security-lane effort measurement (epic 2 of research/PLAN_local_effort_reaches_every_local_launch.md): the
 /// <c>reasoning_effort</c> and ceiling every local security reviewer of the arm is launched with, how many repeats, and
 /// which fixture — the planted regression, or its safe twin. Read from the environment, refused out of range.
 /// </summary>
@@ -37,6 +37,41 @@ internal sealed record SecurityLaneEffortArm(string Effort, int MaxTokens, int R
         argvs.Count == 0
             ? ["no --ask-local launch was recorded"]
             : [.. argvs.SelectMany((argv, at) => CellMismatches(argv, at + 1))];
+
+    /// <summary>
+    /// Every recorded launch that failed for a reason other than a cut at the ceiling — the one failure a measurement of
+    /// effort records as an observation. An unreachable engine, a timeout, a crash or an empty answer fails the cell, so it
+    /// can never pass for an effort-related cut (the code round of epic 2).
+    /// </summary>
+    public static IReadOnlyList<string> UnexpectedFailures(IReadOnlyList<Runners.Processes.ProcessResult> launches) =>
+        [.. launches.Select((launch, at) => Unexpected(launch, at + 1)).Where(said => said.Length > 0)];
+
+    /// <summary>How many reviewers the round's own line says did not answer — or -1 when the line cannot be read.</summary>
+    /// <remarks>A line naming a different number of reviewers than <paramref name="asked"/> is -1 too: a round that never
+    /// asked one of them is not a clean cell, whatever it says about the ones it did ask (CodeRabbit on #800).</remarks>
+    public static int NotAnswered(string reviewersLine, int asked) => Counted.Match(reviewersLine) switch
+    {
+        { Success: false } => -1,
+        var line when int.Parse(line.Groups["asked"].Value, CultureInfo.InvariantCulture) != asked => -1,
+        var all when all.Groups["all"].Success => 0,
+        var some => asked - int.Parse(some.Groups["answered"].Value, CultureInfo.InvariantCulture),
+    };
+
+    /// <summary>The round's own reviewer line (<c>SessionState</c>): "all N reviewers answered" or "A of N reviewers answered".</summary>
+    private static readonly System.Text.RegularExpressions.Regex Counted = new(
+        @"^(?:(?<all>all) (?<asked>\d+)|(?<answered>\d+) of (?<asked>\d+)) reviewers answered",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    /// <summary>The sentence the shim writes for a cut (epic 1, <c>CompletionReader.CutSentence</c>).</summary>
+    private const string CutMarker = "was cut at the token limit";
+
+    private static string Unexpected(Runners.Processes.ProcessResult launch, int cell) => launch switch
+    {
+        { TimedOut: true } => $"cell {cell} timed out",
+        { ExitCode: 0 } => string.Empty,
+        { ExitCode: 70 } when launch.StdErr.Contains(CutMarker, StringComparison.Ordinal) => string.Empty,
+        _ => $"cell {cell} exited {launch.ExitCode}: {launch.StdErr.Trim()}",
+    };
 
     private IEnumerable<string> CellMismatches(IReadOnlyList<string> argv, int cell)
     {

@@ -325,7 +325,7 @@ public sealed class QuestionFanOut(
             Fast = provider.Fast,
         };
         // The row's CLI effort and the local ceiling by the reviewers' own road (research/PLAN_one_model_catalog.md, C2;
-        // todo/PLAN_local_effort_reaches_every_local_launch.md) — a local row's own effort, else the panel's; an api row's
+        // research/PLAN_local_effort_reaches_every_local_launch.md) — a local row's own effort, else the panel's; an api row's
         // are its module's, below.
         var told = RosterBuilder.WithLocalEngine(settings, provider, panel);
         if (row.Runtime is not ApiConsultant)

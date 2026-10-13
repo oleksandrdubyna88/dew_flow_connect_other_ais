@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// One ARM of the security-lane effort measurement through real code rounds — explicit hardware, never unattended CI
-/// (epic 2 of todo/PLAN_local_effort_reaches_every_local_launch.md; results in
+/// (epic 2 of research/PLAN_local_effort_reaches_every_local_launch.md; results in
 /// research/RESULTS_security_lane_effort_2026-10-13.md).
 /// </summary>
 /// <remarks>
@@ -56,7 +56,7 @@ public sealed class SecurityLaneEffortMeasurementTests
     }
 
     private static IReadOnlyList<IReadOnlyList<string>> RecordedArgv(string output) =>
-        [.. Directory.EnumerateFiles(output, "turn-*.argv.json", SearchOption.AllDirectories)
+        [.. Directory.EnumerateFiles(output, "turn-*.arguments.json", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
             .Select(file => (IReadOnlyList<string>)(JsonSerializer.Deserialize<List<string>>(File.ReadAllText(file)) ?? []))];
 
