@@ -3161,3 +3161,26 @@ sequenceDiagram
 Tests: `AcpClientTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpShimScenarioTests`
 (the REAL binary through the real launcher) — listed in [module_tests.md](module_tests.md). The scripted agent is the
 fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
+
+### The first live round's two defects, fixed (2026-10-13 — research/RESULTS_vibe_confinement.md §26)
+
+- **UTF-8 on every path.** `VibeLaunch.Built` adds `PYTHONUTF8=1` to the built environment and `EnvironmentRefusal`
+  admits exactly that set — four names, `VIBE_CLI=python` and `PYTHONUTF8=1` pinned. Without it CPython 3.14 on Windows
+  wrote `--output json` in cp1252 and a `→` killed a paid review with exit 2. Every Vibe launch goes through the one builder:
+  the reviewer and its retry and repair (`ForLaunch` changes argv only), `consult`, a question row, the consultant check and
+  the `providers` probe; `scripts/lib/vibe.mjs` exports the probes' `BUILT_FIXED` and `builtEnv`, held to the product's.
+  `PYTHONIOENCODING` is not added (narrower, unmeasured, subsumed). A non-zero exit is still never read as an answer, even
+  with an export: the variable prevents the crash, a real exit 2 must stay a failure, and the export's message shape is
+  unmeasured; `VendorDiagnosis` names the crash ("codec can't encode character", kind `BrokenInstall`, cure: update
+  coai-mcp).
+- **Read-only FOLDERS.** Vibe unpacks its plugin package with the ReadOnly attribute on folders; `GitScratch.DeleteEvenIfReadOnly`
+  cleared files only, so a round's `vh-*` home failed its delete and the six-hour sweep (the same deleter) failed on it for
+  ever. Each real folder's ReadOnly is now cleared before its entries go — links still unlinked by name, never entered.
+  Every deleter that meets a Vibe home goes through it: the round's scratch (`RoundScratch`), the six-hour sweep
+  (`PanelService.PruneOldScratchDirs`), D20's home sweep and `close_consult` (`ConsultantHomeSweep`), a question row's
+  `finally`, the consultant check's scratch, the snapshot's root, the export folder and the probe home — and the test
+  suite's own `TempDir`, which now calls it instead of a copy.
+- **The ledger names the release.** `LaunchTurn.CliVersion` carries what the launch control ASKED (`vibe --version`
+  before every launch) as `vibe 2.26.1` — never Vibe's raw line, which begins with the interpreter's path under the
+  person's profile — through `ReviewerLaunch` and `ReviewerOutcome.CliVersion` to the line's `cliVersion`, when the row's
+  own options carry none (`UsageLedger.VersionedBy`).

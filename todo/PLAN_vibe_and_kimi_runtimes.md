@@ -272,7 +272,18 @@ against the code or a run before it went in here — the question consultant had
     `logs/`); a `config.toml` declaring hooks, MCP servers or agents, a `hooks.toml`, an `agents/` or `tools/` folder, a
     non-empty trust list, or a link anywhere in it refuses the launch with the path named. Turns sharing a home are serialised.
   - **The environment.** Built, never inherited: `ProcessEnvironment.Minimal` for the platform, plus exactly
-    `VIBE_HOME`, `VIBE_CLI=python` and `VIBE_ACTIVE_MODEL`. No other `VIBE_*` reaches the child (RESULTS §22 A).
+    `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL` and — **amended 2026-10-13** — `PYTHONUTF8=1`. No other `VIBE_*`
+    reaches the child (RESULTS §22 A). *The amendment's evidence (RESULTS_vibe_confinement.md §26, the first live plan
+    round through coai-mcp 0.53.0):* under the three-variable environment CPython 3.14 on Windows writes cp1252 to a pipe
+    (`sys.stdout.encoding cp1252`, UTF-8 mode off), `--output json` echoes the conversation, and a `→` in the review
+    killed the run with exit 2 after 131 s and 18 092 paid output tokens; with `PYTHONUTF8=1` the same turn exited 0 and
+    answered `a → b` (n = 1 per arm). `PYTHONIOENCODING` is not added: narrower, unmeasured, and subsumed by UTF-8 mode.
+    The one builder (`VibeLaunch.Built`) sets it on every path — reviewer, retry and repair, consult, question row,
+    consultant check, the `providers` probe — and the launch control admits exactly that set; the probe scripts build the
+    same (`scripts/lib/vibe.mjs` `BUILT_FIXED`, held to the product's by `VibePrintsUtf8OnEveryPathTests`). A run that
+    exits non-zero is NOT read from its export even when the export holds an answer: the prevention is the variable, a
+    real exit 2 (the Rust CLI's usage error, §3) must stay a failure, and the export's message shape is unmeasured — the
+    encoding crash is named instead (`VendorDiagnosis`: "codec can't encode character").
   - **The CLI.** `vibe` is two CLIs, and a GrowthBook flag cached in the home flipped this account from the Python CLI to a
     Rust CLI between two launches; the Rust CLI refuses `--time-limit` and `--output-dir` (exit 2) and is unmeasured
     (RESULTS §3). `VIBE_CLI=python` pins the measured one. If a later Vibe drops the Python CLI, the launch fails with
