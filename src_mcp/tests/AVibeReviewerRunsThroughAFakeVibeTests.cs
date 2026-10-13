@@ -200,7 +200,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
         code.TryGetProperty("reviewers", out var reviewers).Should().BeTrue($"the code round ran — plan: {planned}; code: {answered}");
         reviewers.GetString().Should().NotContain("FAILED").And.NotContain("not started");
-        var workdirs = Directory.GetFiles(record, "*.argv").Select(File.ReadAllText).Select(argv => argv.Split('\0'))
+        var workdirs = Directory.GetFiles(record, "*.argv").Select(LaunchRecords.Read).Select(argv => argv.Split('\0'))
             .Select(argv => argv[System.Array.IndexOf(argv, "--workdir") + 1]).ToList();
         var codeLaunch = workdirs.Should().ContainSingle(dir => Path.GetFileName(dir).StartsWith(Runners.Snapshots.ReviewSnapshots.Prefix, StringComparison.Ordinal),
             "the code round's Vibe reviewer started in the round's sanitised snapshot").Subject;

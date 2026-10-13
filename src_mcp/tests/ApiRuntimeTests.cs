@@ -152,7 +152,9 @@ public sealed class ApiRuntimeTests
     public void TheSelectorKnowsTheName_AndTheMachineOnlySetHoldsIt()
     {
         ReviewerRuntimeSelector.RuntimeNames.Should().Contain("api");
-        ReviewerRuntimeSelector.MachineOnlyRuntimes.Should().BeEquivalentTo(["local", "api"]);
+        // Contain, not BeEquivalentTo: a second copy of the set went red the day `vibe` joined it (S2 of
+        // todo/PLAN_vibe_and_kimi_runtimes.md) for a change that did not touch what this test is about.
+        ReviewerRuntimeSelector.MachineOnlyRuntimes.Should().Contain(["local", "api"]);
         ReviewerRuntimeSelector.MachineOnlyRuntimes.Should().BeSubsetOf(ReviewerRuntimeSelector.RuntimeNames);
     }
 

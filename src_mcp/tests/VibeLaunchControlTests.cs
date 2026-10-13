@@ -87,7 +87,8 @@ public sealed class VibeLaunchControlTests : IDisposable
             var model = ranOn ?? request.Environment[VibeLaunch.ModelVariable];
             File.WriteAllText(Path.Combine(export, VibeExport.FileName),
                 $$$"""{"outcome":"{{{outcome}}}","usage":{{{usage}}},"cost_usd":0.009,"config":{"active_model":"{{{model}}}"}}""");
-            File.WriteAllText(Path.Combine(request.Environment[VibeLaunch.HomeVariable]!, "vibehistory"), "Hello Vibe!\r\n");
+            // Vibe makes its home when it is not there (§24: a bare start writes vibehistory into it).
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(request.Environment[VibeLaunch.HomeVariable]!).FullName, "vibehistory"), "Hello Vibe!\r\n");
 
             return new ProcessResult(exit, exit == 0 ? Answer : "[]", exit == 3 ? "Stopped: deadline\r\n" : string.Empty, TimedOut: false);
         }
@@ -184,7 +185,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         vibe.Review = request =>
         {
             // The first launch answers nothing the parser can read, and leaves a hooks.toml in its home.
-            File.WriteAllText(Path.Combine(request.Environment[VibeLaunch.HomeVariable]!, "hooks.toml"), "[[hooks]]\n");
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(request.Environment[VibeLaunch.HomeVariable]!).FullName, "hooks.toml"), "[[hooks]]\n");
             var answered = FakeVibe.Answered(request);
             return answered with { StdOut = """[{"role":"assistant","content":"not the schema"}]""" };
         };
