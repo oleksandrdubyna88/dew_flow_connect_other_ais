@@ -93,6 +93,23 @@ public static class VibeLaunch
             ? string.Empty
             : $"this Vibe launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {CliVariable}={PythonCli} and {ModelVariable}, nothing inherited) and is refused (D17)";
 
+    /// <summary>
+    /// <paramref name="request"/> in the BUILT environment (D17) — the one builder every Vibe child goes through: a review
+    /// launch (<c>VibeRuntime.Build</c>) and the <c>providers</c> probe alike, so the two cannot drift. What
+    /// <see cref="EnvironmentRefusal"/> admits is exactly what this makes.
+    /// </summary>
+    public static ProcessRequest Built(ProcessRequest request, string home, string model) => request with
+    {
+        InheritsEnvironment = false,
+        Passthrough = ProcessEnvironment.Minimal,
+        Environment = new Dictionary<string, string?>
+        {
+            [HomeVariable] = home,
+            [CliVariable] = PythonCli,
+            [ModelVariable] = model,
+        },
+    };
+
     /// <summary>Nothing inherited but the platform's minimal names.</summary>
     private static bool Confined(ProcessRequest request) =>
         !request.InheritsEnvironment && request.Passthrough.SetEquals(ProcessEnvironment.Minimal);

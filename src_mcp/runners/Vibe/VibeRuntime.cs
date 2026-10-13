@@ -75,25 +75,52 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var model = settings.Model.Length > 0 ? settings.Model : VibeModels.Default;
-        var request = new ProcessRequest(
-            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
-            Arguments(worktreePath, ExportFolder(outputDir, role, Guid.NewGuid()), settings.Timeout),
-            worktreePath)
-        {
-            StdIn = prompt,
-            Timeout = settings.Timeout,
-            InheritsEnvironment = false,
-            Passthrough = ProcessEnvironment.Minimal,
-            Environment = new Dictionary<string, string?>
+        var request = VibeLaunch.Built(
+            new ProcessRequest(
+                settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
+                Arguments(worktreePath, ExportFolder(outputDir, role, Guid.NewGuid()), settings.Timeout),
+                worktreePath)
             {
-                [VibeLaunch.HomeVariable] = HomeFor(settings.OwnedScratch.Length > 0 ? settings.OwnedScratch : outputDir, Provider, role),
-                [VibeLaunch.CliVariable] = VibeLaunch.PythonCli,
-                [VibeLaunch.ModelVariable] = model,
+                StdIn = prompt,
+                Timeout = settings.Timeout,
             },
-        };
+            HomeFor(settings.OwnedScratch.Length > 0 ? settings.OwnedScratch : outputDir, Provider, role),
+            model);
 
         // No effort and no tier: neither is measured taking effect on Vibe (shared/feature-availability.json), so none is sent.
         return new ReviewerInvocation(Provider, role, request, string.Empty, this, Model: model);
+    }
+
+    /// <summary>
+    /// The <c>providers</c> probe's <c>--version</c>, in the launch control's BUILT environment on a coai-owned home made
+    /// for it and deleted after it — never the person's own <c>~/.vibe</c>, which a bare start writes <c>vibehistory</c>
+    /// into (research/RESULTS_vibe_confinement.md §24; D17: the person's home gains nothing from coai).
+    /// </summary>
+    public async Task<ProcessResult> ProbeVersionAsync(IProcessLauncher launcher, string executable, TimeSpan timeout, CancellationToken ct)
+    {
+        var home = Directory.CreateTempSubdirectory("coai-answers-").FullName;
+        try
+        {
+            return await launcher.RunAsync(
+                VibeLaunch.Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default), ct);
+        }
+        finally
+        {
+            DeleteQuietly(home);
+        }
+    }
+
+    /// <summary>Best effort: a probe home left behind is a <c>coai-answers-*</c> folder in temp, which the product's six-hour scratch sweep removes.</summary>
+    private static void DeleteQuietly(string home)
+    {
+        try
+        {
+            Files.GitScratch.DeleteEvenIfReadOnly(home);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Left for the sweep; the probe's answer is what the caller asked for.
+        }
     }
 
     /// <summary>

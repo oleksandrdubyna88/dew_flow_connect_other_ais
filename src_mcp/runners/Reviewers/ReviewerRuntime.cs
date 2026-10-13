@@ -347,6 +347,19 @@ public interface IReviewerRuntime
     string DefaultExecutable => Provider;
 
     /// <summary>
+    /// The health probe's <c>--version</c> (<see cref="VendorProbe"/>, behind <c>providers</c>): by default the CLI started
+    /// as it always was, in this process's environment and working folder.
+    /// </summary>
+    /// <remarks>
+    /// An adapter overrides it when its CLI must not be started that way: Vibe writes <c>vibehistory</c> into whatever home
+    /// it is given — the person's own when given none (research/RESULTS_vibe_confinement.md §24) — so <c>VibeRuntime</c>
+    /// asks in its built environment on a coai-owned home made and deleted around the probe. A capability of the adapter,
+    /// never an <c>if</c> on a vendor name in the probe.
+    /// </remarks>
+    Task<ProcessResult> ProbeVersionAsync(IProcessLauncher launcher, string executable, TimeSpan timeout, CancellationToken ct) =>
+        launcher.RunAsync(new ProcessRequest(executable, ["--version"], Environment.CurrentDirectory) { Timeout = timeout }, ct);
+
+    /// <summary>
     /// Whether this reviewer can READ a mounted checkout — a CLI agent started in the worktree with file tools.
     /// </summary>
     /// <remarks>
