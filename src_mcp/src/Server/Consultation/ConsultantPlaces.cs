@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Snapshots;
 using CoaiMcp.Runners.Vibe;
@@ -88,8 +89,12 @@ public abstract class ConsultantPlace : IDisposable
 /// Where the conversations' folders live — the person's local application data (<c>PanelSettings.ConsultantHomesRoot</c>);
 /// empty when none is configured, and a conversation on a runtime that needs one is then refused by name.
 /// </param>
-public sealed class ConsultantPlaces(string homesRoot, IProcessLauncher launcher, Action<string> note)
+/// <param name="store">This server's store as an owner (<see cref="ConversationFolder.StoreOf"/>), stamped on every conversation folder it makes.</param>
+public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLauncher launcher, Action<string> note)
 {
+    /// <summary>How long a turn waits for its folder's cross-process lock — only the home sweep holds it otherwise, and briefly.</summary>
+    public static readonly TimeSpan LockWait = TimeSpan.FromSeconds(10);
+
     /// <summary>The cure a refused place carries: the copy is coai's, so the cause is in the tree or this machine.</summary>
     public const string Cure =
         "this consultant reads a copy coai makes of the live tree (D6 of todo/PLAN_vibe_and_kimi_runtimes.md) and the copy was refused — "
@@ -102,41 +107,97 @@ public sealed class ConsultantPlaces(string homesRoot, IProcessLauncher launcher
     /// <c>&lt;homes root&gt;/&lt;runtime's homes&gt;/&lt;id&gt;</c>, held by its turn, and the ONE snapshot of the live tree at
     /// <c>tree</c> inside it, refreshed in place (D6) — or the checkout for an adapter that asks for no copy.
     /// </summary>
-    public async Task<ConsultantPlace> ForConversationAsync(IConsultantRuntime runtime, string consultationId, string repo, CancellationToken ct)
+    /// <param name="ceiling">
+    /// How long this turn may run at most — the consult turn's own deadline (<c>ConsultationDeadline.For</c> of its launch's
+    /// timeout). Stamped on the folder when the copy is ready, so the home sweep never takes a home a killed server's child
+    /// may still be running in (R4).
+    /// </param>
+    public async Task<ConsultantPlace> ForConversationAsync(IConsultantRuntime runtime, string consultationId, string repo, TimeSpan ceiling, CancellationToken ct)
     {
         if (!runtime.NeedsASanitisedSnapshot)
         {
             return ConsultantPlace.Checkout;
         }
 
-        if (homesRoot.Length == 0 || runtime.HomesFolder.Length == 0)
+        if (Unconfigured(runtime) is { Length: > 0 } why)
         {
-            return new ConsultantPlace.Refused(
-                $"{runtime.Vendor} keeps its conversation in a coai-owned folder, and this server has none configured for it (COAI_CONSULTANT_HOMES)");
+            return new ConsultantPlace.Refused(why);
         }
 
+        var homes = Path.Combine(homesRoot, runtime.HomesFolder);
         var folder = ConsultantHomes.ConversationFolder(homesRoot, runtime.HomesFolder, consultationId);
+
+        return MadeThrough(homes, folder) is { Length: > 0 } link
+            ? new ConsultantPlace.Refused($"{link} is a link, and a conversation's folder is never made or used through one")
+            : await HeldAsync(folder, repo, ceiling, ct);
+    }
+
+    /// <summary>Why a runtime that keeps a conversation folder has none here — no homes root, or no homes folder named — or empty.</summary>
+    private string Unconfigured(IConsultantRuntime runtime) =>
+        homesRoot.Length == 0 || runtime.HomesFolder.Length == 0
+            ? $"{runtime.Vendor} keeps its conversation in a coai-owned folder, and this server has none configured for it (COAI_CONSULTANT_HOMES)"
+            : string.Empty;
+
+    /// <summary>The first of the homes folder and the conversation's folder that is a link — before and after it is made (R2).</summary>
+    private static string MadeThrough(string homes, string folder)
+    {
+        if (OwnedPaths.FirstLink(homes, folder) is { Length: > 0 } before)
+        {
+            return before;
+        }
+
+        Directory.CreateDirectory(folder);
+
+        return OwnedPaths.FirstLink(homes, folder);
+    }
+
+    /// <summary>The folder held — this process's turn, then the cross-process lock — and its snapshot made fresh in it.</summary>
+    private async Task<ConsultantPlace> HeldAsync(string folder, string repo, TimeSpan ceiling, CancellationToken ct)
+    {
         var turn = await VibeHomeTurns.TakeAsync(folder, ct);
+        var locked = await Task.Run(() => HeldFile.TakeWithin(Path.Combine(folder, ConversationFolder.LockName), LockWait), ct);
+        if (locked is not Hold.Taken taken)
+        {
+            turn.Dispose();
+
+            return new ConsultantPlace.Refused($"{folder} is held by another process (its turn lock), so this turn is not started — try again in a moment");
+        }
+
         try
         {
-            return Placed(await ConversationSnapshots.FreshAsync(_maker, folder, repo, ct), folder, turn);
+            return Placed(await ConversationSnapshots.FreshAsync(_maker, folder, repo, ct), new Stamping(folder, store, ceiling), [taken.Stream, turn]);
         }
         catch
         {
+            taken.Stream.Dispose();
             turn.Dispose();
             throw;
         }
     }
 
-    /// <summary>The conversation's place, holding its folder's turn — or, refused, nothing held.</summary>
-    private static ConsultantPlace Placed(SnapshotOutcome fresh, string folder, IDisposable turn)
+    /// <summary>The stamp a conversation's folder carries for a turn: begun when the copy is ready, ended when it is given back.</summary>
+    private sealed class Stamping(string folder, string store, TimeSpan ceiling) : IDisposable
+    {
+        public void Begin() => ConversationFolder.Begin(folder, store, DateTime.UtcNow, ceiling);
+
+        public void Dispose() => ConversationFolder.End(folder);
+    }
+
+    /// <summary>The conversation's place, holding its folder's locks and its stamp — or, refused, nothing held.</summary>
+    private static ConsultantPlace Placed(SnapshotOutcome fresh, Stamping stamping, IReadOnlyList<IDisposable> held)
     {
         if (fresh is SnapshotOutcome.Made made)
         {
-            return new ConsultantPlace.Owned(folder, made.Snapshot.Root, [made.Snapshot.Root], [turn]);
+            stamping.Begin();
+
+            // The stamp is ended FIRST, while the locks still hold, so a sweep never sees a free folder with a running stamp.
+            return new ConsultantPlace.Owned(Path.GetDirectoryName(made.Snapshot.Root)!, made.Snapshot.Root, [made.Snapshot.Root], [stamping, .. held]);
         }
 
-        turn.Dispose();
+        foreach (var one in held)
+        {
+            one.Dispose();
+        }
 
         return new ConsultantPlace.Refused(((SnapshotOutcome.Refused)fresh).Reason);
     }
@@ -178,10 +239,37 @@ public sealed class ConsultantPlaces(string homesRoot, IProcessLauncher launcher
     /// A copy of one source — the live tree as git lists it, limited to that folder — or the refusal of a folder git has no
     /// work tree for: the copy lists through git (D6), and a plain folder has no listing to trust until a mode for one exists.
     /// </summary>
+    /// <remarks>
+    /// A granted root reached through a LINK is refused too (P1 of the S3 plan round): the root itself, or any folder above
+    /// it up to its work tree's top — a copy through one would be of whatever it points at. Folders above the work tree are
+    /// the machine's own layout (a relocated profile; macOS's <c>/var</c>) and are not asked. Inside the root, a link git
+    /// lists is refused by the snapshot itself.
+    /// </remarks>
     private async Task<SnapshotOutcome> CopyOfAsync(string source, string tree, CancellationToken ct) =>
-        await OutsideAGitTreeAsync(source, ct) is { Length: > 0 } why
-            ? new SnapshotOutcome.Refused(why)
+        await OutsideAGitTreeAsync(source, ct) is { Length: > 0 } why ? new SnapshotOutcome.Refused(why)
+        : LinkUpToTheWorkTree(source) is { Length: > 0 } link
+            ? new SnapshotOutcome.Refused($"{link} is a link, and the granted folder {source} is reached through it — grant the folder it points at instead")
             : await _maker.MakeAsync(new SnapshotSource.Live(source), tree, ct);
+
+    /// <summary>The first folder from <paramref name="source"/> up to its work tree's top that is a link, or empty.</summary>
+    private static string LinkUpToTheWorkTree(string source) =>
+        UpToTheWorkTree(Path.GetFullPath(source)).FirstOrDefault(OwnedPaths.IsLinkIfThere) ?? string.Empty;
+
+    /// <summary>The folder and each one above it, up to and including the first that holds a <c>.git</c>.</summary>
+    private static IEnumerable<string> UpToTheWorkTree(string folder)
+    {
+        for (var at = folder; at is not null; at = Path.GetDirectoryName(at))
+        {
+            yield return at;
+            if (HoldsGit(at))
+            {
+                yield break;
+            }
+        }
+    }
+
+    private static bool HoldsGit(string folder) =>
+        Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git"));
 
     private async Task<string> OutsideAGitTreeAsync(string source, CancellationToken ct)
     {

@@ -54,7 +54,12 @@ public sealed class ConsultationService(
     private readonly ConsultCheckSweeper _checks = new(settings.DataDir, Path.GetTempPath(), DateTime.UtcNow);
 
     /// <summary>Where a consultant that must not stand in the checkout stands — a conversation's folder and its one snapshot (D6, D17).</summary>
-    private readonly ConsultantPlaces _places = new(settings.ConsultantHomesRoot, launcher, note => log.Information("consultations: {Note}", note));
+    private readonly ConsultantPlaces _places = new(
+        settings.ConsultantHomesRoot, ConversationFolder.StoreOf(settings.DataDir), launcher, note => log.Information("consultations: {Note}", note));
+
+    /// <summary>What the home sweep is given (D20): the homes root, this store as an owner, its records, the clock, the window.</summary>
+    private HomeSweepInputs HomeSweep() =>
+        new(settings.ConsultantHomesRoot, ConversationFolder.StoreOf(settings.DataDir), _store.Read, DateTime.UtcNow, settings.ConsultIdle);
 
     /// <summary>
     /// A failed turn, applied (<see cref="ConsultationFailedTurns"/>) — built on first use, since a primary
@@ -244,7 +249,7 @@ public sealed class ConsultationService(
         });
 
         // Its coai-owned home goes as it closes (D17, D20) — under the lock, so no turn of it is running.
-        ConsultantHomeSweep.RemoveNow(settings.ConsultantHomesRoot, id, problem => log.Warning("{Problem}", problem));
+        ConsultantHomeSweep.RemoveNow(HomeSweep(), id, problem => log.Warning("{Problem}", problem));
 
         return Json(
             new CloseAnswer(id, word, Recorded: true, $"consultation {id} is recorded as '{word}'"),
@@ -275,7 +280,7 @@ public sealed class ConsultationService(
 
         // A conversation's coai-owned home (D20 of todo/PLAN_vibe_and_kimi_runtimes.md): after the records, so a record the
         // pass above just lapsed takes its home with it on this same beat.
-        var homes = ConsultantHomeSweep.Sweep(settings.ConsultantHomesRoot, _store.Read, DateTime.UtcNow, settings.ConsultIdle, problem => log.Warning("{Problem}", problem));
+        var homes = ConsultantHomeSweep.Sweep(HomeSweep(), problem => log.Warning("{Problem}", problem));
         if (homes > 0)
         {
             log.Information("consultations: removed {Count} consultant home(s) whose conversation is over, unknown or idle", homes);
@@ -659,7 +664,8 @@ public sealed class ConsultationService(
         var before = await _invariant.SnapshotAsync(repo, ct);
         // A consultant that must not stand in the checkout (Vibe, D6) stands in the conversation's ONE snapshot of the live
         // tree, refreshed now, on its own coai-owned home (D17) — held until the turn is read; every other one: the checkout.
-        using var place = await _places.ForConversationAsync(consultant.Runtime, record.Id, repo, ct);
+        using var place = await _places.ForConversationAsync(
+            consultant.Runtime, record.Id, repo, ConsultationDeadline.For(ConsultantTurnInputs.TurnTimeout(consultant.Row, settings.ReviewerTimeout)), ct);
         // Prepared before it is built: the adapter learns what the INSTALLED CLI accepts (claude: --restricted or
         // not), every turn, so Build stays pure — and may REFUSE when it could not learn it (IConsultantRuntime.PrepareAsync).
         // A place that was refused is that refusal, before anything is asked of the CLI.

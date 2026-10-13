@@ -80,7 +80,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private const string EmptyName = "cwd";
 
     /// <summary>A question row's copies are one-shot: no conversation folder, so no homes root.</summary>
-    private readonly ConsultantPlaces _places = new(string.Empty, launcher, note => log.Information("question row: {Note}", note));
+    private readonly ConsultantPlaces _places = new(string.Empty, string.Empty, launcher, note => log.Information("question row: {Note}", note));
 
     /// <remarks>
     /// <para><b>A question row is one-shot</b> (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), so a runtime that keeps a

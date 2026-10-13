@@ -181,4 +181,106 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         Directory.Exists(RowFolderOf(vibe.Turns.Should().ContainSingle().Subject.Request)).Should().BeFalse(
             "the row's home and copy go in finally, whatever ended it");
     }
+
+    // ---------- links in and around a granted root (P1 of the plan round) ----------
+
+    /// <summary>Nothing of Vibe's started for the row: not its version, not a turn.</summary>
+    private static void NothingOfVibesStarted(PlayedVibe vibe)
+    {
+        vibe.Versions.Should().BeEmpty("nothing of Vibe's starts for a row whose copy was refused");
+        vibe.Turns.Should().BeEmpty();
+    }
+
+    private static void TheRowWasRefusedFor(JsonElement reply, string because)
+    {
+        var row = TheRow(reply);
+        row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
+        row.GetProperty("reason").GetString().Should().Contain(because, reply.ToString());
+    }
+
+    /// <summary>
+    /// A granted root whose repository COMMITS a symbolic link pointing out of it (at the person's own Vibe home, the
+    /// shape a branch would use): the snapshot refuses links, so the row is refused and Vibe never starts. The link is a
+    /// git entry of mode 120000, written into the index directly — no link on disk, no privilege needed.
+    /// </summary>
+    [Fact]
+    public async Task AGitListedSymlinkInAGrantedRoot_RefusesTheRow_AndVibeNeverStarts()
+    {
+        var blob = await GitOutAsync(Repo, ["hash-object", "-w", "--stdin"], Path.Combine(_dir.At("person"), ".vibe"));
+        await GitOutAsync(Repo, ["update-index", "--add", "--cacheinfo", $"120000,{blob.Trim()},src/escape"]);
+        await GitOutAsync(Repo, ["commit", "-m", "a link out"]);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
+
+        TheRowWasRefusedFor(reply, "escape");
+        NothingOfVibesStarted(vibe);
+    }
+
+    [Fact]
+    public async Task AGrantedRootThatIsItselfAJunction_IsRefused_AndVibeNeverStarts()
+    {
+        var junction = _dir.At("granted-link");
+        await DirectoryLink.MakeAsync(_launcher, junction, Other);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(Service(vibe, junction));
+
+        TheRowWasRefusedFor(reply, "link");
+        NothingOfVibesStarted(vibe);
+        DirectoryLink.Remove(junction);
+    }
+
+    /// <summary>
+    /// A granted root reached THROUGH a junction above it, inside its repository's work tree: the copy would be of whatever
+    /// the junction points at, so it is refused too — the walk from the root up to the work tree's top asks every folder.
+    /// </summary>
+    [Fact]
+    public async Task AGrantedRootBelowAJunctionInsideItsWorkTree_IsRefused_AndVibeNeverStarts()
+    {
+        var junction = _dir.At("repo-link");
+        await DirectoryLink.MakeAsync(_launcher, junction, Repo);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(Service(vibe, Path.Combine(junction, "src")));
+
+        TheRowWasRefusedFor(reply, "link");
+        NothingOfVibesStarted(vibe);
+        DirectoryLink.Remove(junction);
+    }
+
+    /// <summary>
+    /// Overlapping grants — a repository and a folder inside it: each is copied on its own, every byte the launch can read
+    /// is a copied byte of a granted root without the branch's configuration, and the prompt names the copies only.
+    /// </summary>
+    [Fact]
+    public async Task OverlappingGrants_StandInCopiesOfAuthorisedBytes_AndThePromptNamesOnlyTheCopies()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        var vibe = new PlayedVibe(_launcher, Advice);
+        var inner = Path.Combine(Repo, "src");
+
+        var reply = await AskAsync(Service(vibe, Repo, inner));
+
+        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+        var turn = vibe.Turns.Should().ContainSingle().Subject;
+        var copies = turn.Files.Keys.Select(file => file.Split('/')[0]).Distinct().ToList();
+        copies.Should().HaveCount(2, "one copy per granted root, the inner one too");
+        turn.Files.Keys.Select(file => file[(file.IndexOf('/') + 1)..]).Should().BeSubsetOf(
+            ["src/Mailer.cs", "docs/notes.md", "Mailer.cs"], "only the granted roots' own files, never their .vibe/ or AGENTS.md");
+        foreach (var copy in copies)
+        {
+            turn.Request.StdIn.Should().Contain(Path.Combine(turn.Request.WorkingDirectory, copy));
+        }
+
+        turn.Request.StdIn.Should().NotContain(Repo, "never an original root — the copies sit elsewhere");
+    }
+
+    private async Task<string> GitOutAsync(string at, string[] args, string stdin = "")
+    {
+        var result = await _launcher.RunAsync(new ProcessRequest("git", args, at) { StdIn = stdin }, TestContext.Current.CancellationToken);
+        result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
+
+        return result.StdOut;
+    }
 }

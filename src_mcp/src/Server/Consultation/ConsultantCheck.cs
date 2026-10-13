@@ -152,7 +152,7 @@ internal sealed class ConsultantCheckTurn(
     private readonly FilesystemInvariant _invariant = new(launcher);
 
     /// <summary>A copy of the scratch repository for a consultant that must not stand in it (Vibe, D6) — one-shot, in the check's own scratch.</summary>
-    private readonly ConsultantPlaces _places = new(string.Empty, launcher, warn);
+    private readonly ConsultantPlaces _places = new(string.Empty, string.Empty, launcher, warn);
 
     /// <summary>The check's outcome, as the record it ends in — answered, failed with its classification, or unavailable.</summary>
     /// <param name="checking">The record the check started with; its vendor, model and times are kept.</param>

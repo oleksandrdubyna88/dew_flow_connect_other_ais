@@ -87,6 +87,58 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         Directory.Exists(folder).Should().BeFalse("the conversation's home and snapshot go as it closes (D17, D20)");
     }
 
+    /// <summary>
+    /// R1 and R4 of the S3 risk consultation, at the place: a turn stamps its folder with THIS store, holds the folder's
+    /// cross-process turn lock for the whole turn, and marks the stamp ended once the turn is read — so a second server
+    /// neither judges the folder by its own records nor deletes it under a running turn.
+    /// </summary>
+    [Fact]
+    public async Task ATurnStampsItsFolderWithItsStore_HoldsItsLockWhileItRuns_AndEndsTheStamp()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var seenDuring = new List<Runners.Files.Hold>();
+        string folder = string.Empty;
+        var vibe = new PlayedVibe(_launcher, Advice)
+        {
+            During = _ =>
+            {
+                folder = Directory.EnumerateDirectories(Path.Combine(Homes, ConsultantHomes.Vibe)).Single();
+                seenDuring.Add(ConversationFolder.TakeTurn(folder));
+                return Task.CompletedTask;
+            },
+        };
+
+        var reply = await Consult(Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes), "why is the count wrong");
+
+        reply.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
+        seenDuring.Should().ContainSingle().Which.Should().BeOfType<Runners.Files.Hold.Busy>("the turn holds its folder's lock while Vibe runs");
+        var stamp = ConversationFolder.Read(folder);
+        stamp.Store.Should().Be(ConversationFolder.StoreOf(_data), "the folder names the store that made it");
+        stamp.Ended.Should().BeTrue("the turn was read in this process, so nothing of it still runs");
+        ConversationFolder.TakeTurn(folder).Should().BeOfType<Runners.Files.Hold.Taken>("and the lock was given back")
+            .Which.Stream.Dispose();
+    }
+
+    /// <summary>R2: a conversation's folder that is a link — redirected before its snapshot is made — refuses the turn, and nothing lands behind it.</summary>
+    [Fact]
+    public async Task AConversationFolderThatIsALink_RefusesTheTurn_AndWritesNothingThere()
+    {
+        var elsewhere = Directory.CreateDirectory(Path.Combine(_data, "elsewhere")).FullName;
+        var id = ConsultationStore.NewId();
+        var folder = ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Vibe, id);
+        Directory.CreateDirectory(Path.GetDirectoryName(folder)!);
+        await DirectoryLink.MakeAsync(_launcher, folder, elsewhere);
+        var places = new ConsultantPlaces(Homes, ConversationFolder.StoreOf(_data), _launcher, _ => { });
+
+        using var place = await places.ForConversationAsync(
+            new VibeConsultant(new VibeRuntime()), id, _repo, TimeSpan.FromMinutes(12), TestContext.Current.CancellationToken);
+
+        place.Refusal.Should().Contain("is a link");
+        Directory.EnumerateFileSystemEntries(elsewhere).Should().BeEmpty("no snapshot, stamp or lock is written through the link");
+        DirectoryLink.Remove(folder);
+    }
+
     [Fact]
     public async Task WithNoFolderForHomes_AVibeConsultationIsRefusedByName_AndNothingIsLaunched()
     {
