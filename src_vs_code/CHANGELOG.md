@@ -1,5 +1,39 @@
 # Changelog
 
+## Server 0.53.0 — 2026-10-13
+
+**Added: Mistral Vibe as a reviewer, on your own Mistral subscription.** Add **Mistral Vibe** from the reviewer presets,
+pick `mistral-medium-3.5` or `glm-5-3`, and the row reviews plans and code with the `vibe` CLI's own sign-in — no key in
+the vault. Windows only for now; on Linux and WSL the row is refused with a sentence until it has been measured there.
+
+- Vibe reads a **copy of the tree** under review, never your checkout: no `.git`, no `.vibe/`, no skills or `AGENTS.md`,
+  no links. It runs read-only (`--agent plan --enabled-tools read_file`), is never given `--trust` or `--add-dir`, and the
+  copy is gone when the round ends.
+- coai gives Vibe **its own home**, checked before every launch and again after it asks Vibe's version: your own
+  `~/.vibe` hooks, MCP servers, agents and trust list are never loaded, and a cached plugin package that would start a
+  server or carry a hook refuses the launch. Checking which Vibe is installed no longer writes into your `~/.vibe`.
+- **A Vibe update keeps working.** A version coai has not measured runs, with a warning on the reviewer's line and on the
+  row's card saying which version was measured; only something that cannot be made safe — a foreign file in coai's own
+  home, or changed plugin bytes of a measured version — refuses the launch.
+- The model is checked before the launch and against what Vibe actually used after it; a run on another model is a
+  failure that keeps its usage. Cost is recorded as unknown, tokens as Vibe reports them.
+
+**Measured, not switched on: Kimi Code.** The `--ask-acp` bridge ran 74 times against Kimi 2.1.1: every write it tried
+asked first and was refused, including a sub-agent's. It also showed that your own Kimi MCP servers and hooks would still
+run, so Kimi will get a coai-owned home before it can be added — in a later release.
+
+## Extension 0.73.0 — 2026-10-13
+
+**Added: the Mistral Vibe row.** The preset, its two models, its own colour, ▶ opens plain `vibe` in a terminal, and a
+`vibe` row is held back from any coai-mcp older than 0.53.0, which would refuse it.
+
+**Install and Update work on every system.** On Windows one press installs Vibe even when `uv` is missing: Astral's
+official installer runs first, then `uv tool install mistral-vibe`, and each step stops the line if it fails. On Linux,
+WSL and macOS the button runs Mistral's own installer. Sign-in stays yours: press ▶ and Vibe asks for its key, or run
+`vibe --setup`. The buttons now accept a command only when every URL and package in every step is an official one.
+
+**A reviewer that runs with a warning says so** — on its line in the round and on its model card.
+
 ## Server 0.52.2 — 2026-10-13
 
 **The release of 0.52.1's fixes.** coai-mcp 0.52.1 was tagged but never published: one of its own tests gave the local
