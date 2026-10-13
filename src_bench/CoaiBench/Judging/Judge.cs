@@ -165,7 +165,11 @@ public sealed class Judge(string executable, string model, string repo)
         "--disallowedTools", "Edit", "Write", "NotebookEdit", "--model", model,
     ];
 
-    private async Task<JsonObject?> AskAsync(string prompt, CancellationToken ct)
+    /// <summary>Env var the shared subagent-model guard hook honours: a harness that MEASURES models must not be steered.</summary>
+    internal const string GuardOptOutVariable = "SUBAGENT_MODEL_GUARD";
+
+    /// <summary>The judge's process: the environment is inherited, with the model-policy guard switched off.</summary>
+    internal static ProcessStartInfo StartInfoFor(string executable, string repo, string model)
     {
         var start = new ProcessStartInfo(executable)
         {
@@ -175,10 +179,18 @@ public sealed class Judge(string executable, string model, string repo)
             UseShellExecute = false,
             WorkingDirectory = repo,
         };
+        start.Environment[GuardOptOutVariable] = "off";
         foreach (var argument in Arguments(model))
         {
             start.ArgumentList.Add(argument);
         }
+
+        return start;
+    }
+
+    private async Task<JsonObject?> AskAsync(string prompt, CancellationToken ct)
+    {
+        var start = StartInfoFor(executable, repo, model);
 
         using var judge = Process.Start(start);
         if (judge is null)

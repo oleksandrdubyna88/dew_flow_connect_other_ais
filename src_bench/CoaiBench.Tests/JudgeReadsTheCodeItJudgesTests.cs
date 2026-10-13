@@ -86,6 +86,16 @@ public sealed class JudgeReadsTheCodeItJudgesTests
     }
 
     [Fact]
+    public void TheJudgeProcess_OptsOutOfTheSubagentModelGuard_AndKeepsItsArguments()
+    {
+        var start = Judge.StartInfoFor("claude", "D:/repo", "claude-fable-5-1");
+
+        start.Environment["SUBAGENT_MODEL_GUARD"].Should().Be("off", "a harness that measures models must not be steered");
+        start.ArgumentList.Should().Equal(Judge.Arguments("claude-fable-5-1"));
+        start.WorkingDirectory.Should().Be("D:/repo");
+    }
+
+    [Fact]
     public void AFindingThatNamesALineBeyondTheFile_IsNotACrash()
     {
         // It was. A reviewer citing line 500 of a fifty-line file made the window start at 420 and
