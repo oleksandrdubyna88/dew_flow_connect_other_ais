@@ -1,5 +1,27 @@
 # Changelog
 
+## Server 0.51.0 — 2026-10-13
+
+**Fixed: a spent Kimi balance is named as one, not as a crash.** Kimi's `429 … insufficient balance` is now read as a
+spent allowance: the review is launched once, not retried, and the vendor's words are the reason you see.
+
+**Added, not yet switched on: the ground for Mistral Vibe and Kimi Code as reviewers.** Nothing you can pick yet — the
+runtimes themselves come in the next release — but two pieces they stand on ship now:
+
+- a **sanitised copy of the tree under review**, with no project configuration in it at any depth (`.git`, `.vibe`,
+  `.agents/skills`, `.kimi-code`, `AGENTS.md`). It refuses rather than follows any link — a Unix symlink to a folder and
+  a dangling link included — refuses names Windows would read as another file, and stops at a size, file-count and time
+  ceiling with the number it met. A file another program holds open for writing is still copied. Reads from it are
+  checked against the opened file itself, so a link or a swapped folder slipped in between the check and the read is
+  refused on Windows, Linux and macOS.
+- **`coai-mcp --ask-acp`**, a one-shot bridge to Kimi Code over its Agent Client Protocol: every write Kimi asks for is
+  refused, files are served only from inside the working folder (never instruction files such as `AGENTS.md`), and the
+  agent's whole process tree is ended with the turn. Run live against Kimi Code 2.1.1: the read inside the folder was
+  served, the write and the read outside it were refused.
+
+**Changed: every child process starts in one place.** The Kimi bridge used its own process start; it now goes through
+the same launcher as every reviewer, with the same environment rule.
+
 ## Server 0.50.0 — 2026-10-12
 
 **Changed: a question row whose model is gone is refused in the extension's words.** The server now says
