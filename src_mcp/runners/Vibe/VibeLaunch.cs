@@ -184,7 +184,9 @@ public static class VibeLaunch
 
     /// <summary>
     /// The home's SHAPE first — before anything of Vibe's starts on it, the version probe included, so a <c>hooks.toml</c> or
-    /// a link is never in the home while Vibe runs — then the installed version, then the plugin bytes for that version.
+    /// a link is never in the home while Vibe runs — then the installed version, then the shape AGAIN on both branches (the
+    /// <c>--version</c> process is Vibe's own and runs on the home, so what it leaves is checked before the review starts —
+    /// risk consultation 6b4726a6, 2026-10-13), then the plugin bytes when that version was measured.
     /// </summary>
     private static async Task<HomeVerdict> AgainstAsync(VibeHomeManifest manifest, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
     {
@@ -196,8 +198,9 @@ public static class VibeLaunch
         }
 
         var version = await VersionAsync(request, launcher, ct);
+        var after = FirstOf(() => version.Refusal, () => VibeHome.Refusal(home, manifest));
 
-        return version.Refusal.Length > 0 ? HomeVerdict.Refuse(version.Refusal) : Verdict(manifest, home, version.Version);
+        return after.Length > 0 ? HomeVerdict.Refuse(after) : Verdict(manifest, home, version.Version);
     }
 
     private static LaunchTurn Given(IDisposable turn, string refusal)

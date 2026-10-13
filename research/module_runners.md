@@ -90,7 +90,7 @@ sequenceDiagram
 | `IReviewerRuntime.NeedsASanitisedSnapshot`, `IConsultantRuntime.NeedsASanitisedSnapshot` | `Reviewers/ReviewerRuntime.cs`, `Consultation/IConsultantRuntime.cs` | the capability an adapter declares to be launched in a snapshot rather than in the tree — default false; `VibeRuntime` is the first to set it (S2, 2026-10-13; the Kimi adapter is S4's); never an `if` on a vendor name |
 | `IReviewerRuntime.TakeTurnAsync`, `LaunchTurn` (`Free` / `Refused` / `Holding`); `IReviewerRuntime.Disowned` | `Reviewers/ReviewerRuntime.cs`, `LaunchTurn.cs` | the ONE launch control (D8b, D17 of `todo/PLAN_vibe_and_kimi_runtimes.md`): `ReviewerExecutor.LaunchAsync` asks the adapter immediately before EVERY launch — review, retry, repair, follow-up, consultation turn, question row — with the executor's own launcher; a refusal is `NotStarted` with the adapter's sentence and nothing starts, a held turn is given back after the answer, usage and reason have been read. `Disowned`: an exit-0 run the adapter will not take as an answer (Vibe on another model than it was asked) becomes `NonZeroExit` keeping its usage. Defaults: free, nothing disowned — every other adapter launches as before |
 | `ICitedPaths`, `CitedAsWritten`, `ReviewerInvocation.Citations` | `Reviewers/LaunchTurn.cs`, `ReviewerRuntime.cs` | how a reviewer's cited file becomes the repository's: `ReviewSnapshot` maps an absolute path under its root back through its manifest; `ReviewerExecutor.Cited` applies it to every finding after the parse; set by the roster, never by an adapter |
-| `VibeRuntime`, `VibeLaunch`, `VibeModels`, `VibeHome`, `VibeHomeManifest`, `VibeHomeTurns`, `VibeExport`, `VibeStdout` | `Vibe/*.cs` | Mistral Vibe as a reviewer (S2, 2026-10-13) — the section *The Vibe reviewer* below |
+| `VibeRuntime`, `VibeLaunch`, `VibeModels`, `VibeHome`, `VibePluginStarters`, `VibeHomeManifest`, `VibeHomeTurns`, `VibeExport`, `VibeStdout` | `Vibe/*.cs` | Mistral Vibe as a reviewer (S2, 2026-10-13) — the section *The Vibe reviewer* below |
 
 ## The decisions a reader needs
 
@@ -2886,14 +2886,17 @@ sequenceDiagram
   §11/§17/§24 — because Vibe exits 0 on an alias it does not know, §11); the home is made when absent and is not a link;
   the home's TURN is taken (`VibeHomeTurns`, in-process, keyed by the full path, dropped when its last holder leaves);
   the home's SHAPE is checked (`VibeHome.Refusal(home, manifest)`) BEFORE anything of Vibe's starts on it; `vibe
-  --version` runs in the same environment on the same home (a bare start writes `vibehistory`, §24); for a version WITH
-  an entry in `shared/vibe-home-manifest.json` the home is checked again with the plugin files' hashes — a mismatch is
-  tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
+  --version` runs in the same environment on the same home (a bare start writes `vibehistory`, §24); the SHAPE is
+  checked AGAIN after it on both branches, because `--version` is Vibe's own process on that home and what it leaves
+  must not reach the review (the risk consultation 6b4726a6 of 2026-10-13 found the unmeasured branch launched without
+  this re-check); for a version WITH an entry in `shared/vibe-home-manifest.json` the home is then checked with the
+  plugin files' hashes — a mismatch is tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
   home; the next launch starts from an empty one).
 - **A version nobody measured is RUN, with a warning** (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse —
   set it up once and it must work if it can"; it replaced the refusal S2 first shipped). Its home's shape is still
   checked before its `--version` starts, so a forbidden name, a link, a trust entry, a `config.toml`, `hooks.toml`,
-  `agents/` or `tools/` still refuse; only its plugin files are admitted by name. The turn carries the warning
+  `agents/` or `tools/` still refuse; only its plugin files are admitted by name — except a cached plugin package file
+  that would START something (below). The turn carries the warning
   (`LaunchTurn.Holding(…, warning)` → `ReviewerLaunch.Warning` → `ReviewerOutcome.Warning`, the FIRST launch's, on the
   base so a failed reviewer carries it too) — one generic, runtime-neutral field Kimi's control can set as well. It
   names the running version, the measured one, that the confinement measurements and the plugin hashes are the measured
@@ -2910,6 +2913,20 @@ sequenceDiagram
   on the way to an admitted file; anything else — `hooks.toml`, ANY `config.toml` (Vibe writes none, §22/§24, so one
   declaring hooks, MCP servers or agents is refused with every other one), `agents/`, `tools/`, `.env`, a link anywhere
   (the walk never follows one; `SnapshotLinks.IsLink`, fails closed) — refuses, naming the first offending path.
+- **A cached plugin package that would start something** (`VibePluginStarters`, the shape check; risk consultation
+  6b4726a6, 2026-10-13, confirmed by reading Vibe 2.26.1's installed code, NOT by a run). Vibe's store hands back an
+  existing `packages/<ab>/<digest>/` folder without re-digesting it (`mistralai_vibe_local_harness/vibe/plugins/_store.py:265-266`),
+  every session checks every pinned package out that way (`_session.py:359-368`), the checkouts are resolved as the
+  plugin folders (`vibe/app_server/_plugins.py:421-423`, `:541-560`) and their declared MCP servers are connected before
+  the session runs (`_plugins.py:204-213`) — before `--enabled-tools` filters anything (RESULTS_vibe_confinement.md
+  §6, §7; this reading is §25). A measured version's package files are admitted by hash only, so this decides the UNMEASURED branch: a
+  declaration (`mcp.json` — `vibe/core/plugins/_native.py:1661` — `.mcp.json`, the Claude/Codex/Kimi manifests) with a
+  non-empty `mcpServers`, `hooks`, `lspServers` or `sessionStart`, or one that is not JSON, and every hook file
+  (`ai.mistral.vibe/hooks.toml`, `hooks/hooks.json`, `hooks.json`) refuse — names compared without case, since Windows
+  answers `MCP.json` to `mcp.json` — unless a measured version pins that exact path with those bytes. Not covered: a
+  package's `ai.mistral.vibe/agents/`, `connectors.json`, `libraries.json` and `knowledge/` (`_native.py:1334`, `:1559`,
+  `:1450`, `:1246`) — read by Vibe, not examined here for what they can start or override; Vibe 2.26.1's built-in
+  package carries none of them, and an unmeasured version's could.
 - **Reading the run** (D7, D8, D9, D10): the answer is the LAST `role: assistant` message of the stdout array; usage is
   the export's `usage` — tokens as reported, cost NEVER carried (`cost_usd` is Vibe's list price even on a subscription),
   `Usage.Unknown` when the block is null (§18: 2 of 3 deadline exports) or the export is missing; a non-zero exit is a

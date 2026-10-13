@@ -53,6 +53,9 @@ public sealed class VibeLaunchControlTests : IDisposable
 
         public TimeSpan ReviewTakes { get; set; } = TimeSpan.Zero;
 
+        /// <summary>What the `--version` process does to the home while it runs — nothing, unless a test says so.</summary>
+        public Action<ProcessRequest> WhileTheVersionIsAsked { get; set; } = _ => { };
+
         private int _inReview;
 
         public int MostAtOnce { get; private set; }
@@ -64,6 +67,7 @@ public sealed class VibeLaunchControlTests : IDisposable
             Started.Enqueue(request);
             if (request.Arguments.SequenceEqual(["--version"]))
             {
+                WhileTheVersionIsAsked(request);
                 return new ProcessResult(0, $"python.exe C:\\Users\\p\\.local\\bin\\vibe {version}\r\n", string.Empty, TimedOut: false);
             }
 
@@ -154,6 +158,51 @@ public sealed class VibeLaunchControlTests : IDisposable
 
         outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should().Contain("hooks.toml").And.Contain(HomeOf(invocation));
         vibe.Started.Should().BeEmpty("nothing of Vibe's starts on a home that holds something Vibe does not write");
+    }
+
+    /// <summary>
+    /// The risk consultation of 2026-10-13 (epic 2): the `--version` process is Vibe's own and runs on the home, so what it
+    /// leaves is checked before the review starts — on the unmeasured branch (where the plugin bytes have no hashes to
+    /// re-check) exactly as on the measured one.
+    /// </summary>
+    [Theory]
+    [InlineData("2.27.0")]
+    [InlineData("2.26.1")]
+    public async Task AHooksFileTheVersionProbeLeaves_RefusesTheReview_OnEitherBranch(string version)
+    {
+        var vibe = new FakeVibe(version)
+        {
+            WhileTheVersionIsAsked = request => File.WriteAllText(
+                Path.Combine(Directory.CreateDirectory(request.Environment[VibeLaunch.HomeVariable]!).FullName, "hooks.toml"), "[[hooks]]\n"),
+        };
+        var invocation = Invocation();
+
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>($"Vibe {version}: the home is checked again after `--version`")
+            .Which.Reason.Should().Contain("hooks.toml");
+        vibe.Reviews.Should().BeEmpty($"Vibe {version}: the review never starts on a home the version probe wrote a hooks.toml into");
+    }
+
+    /// <summary>
+    /// A resumed home of an UNMEASURED Vibe whose cached plugin package carries an <c>mcp.json</c> that declares a server:
+    /// Vibe 2.26.1 checks a cached package out without re-digesting it and connects the servers its <c>mcp.json</c>
+    /// declares before any tool filter applies — so the launch is refused, and nothing of Vibe's starts.
+    /// </summary>
+    [Fact]
+    public async Task ACachedPluginPackageThatDeclaresAServer_IsRefused_OnAnUnmeasuredVibe_BeforeAnythingStarts()
+    {
+        var vibe = new FakeVibe(version: "2.27.0");
+        var invocation = Invocation();
+        var package = Directory.CreateDirectory(Path.Combine(HomeOf(invocation), "logs", "session", "plugins", "packages", "zz", "zz-digest"));
+        await File.WriteAllTextAsync(Path.Combine(package.FullName, "mcp.json"),
+            """{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"canary":{"type":"stdio","command":"python"}}}""",
+            TestContext.Current.CancellationToken);
+
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should().Contain("zz-digest/mcp.json");
+        vibe.Started.Should().BeEmpty("a package that would start a server is refused before Vibe starts on the home");
     }
 
     /// <summary>

@@ -37,9 +37,12 @@ public static class VibeHome
         Checked(home, new Rules(manifest, entry, byHash: true));
 
     /// <summary>
-    /// The home's SHAPE alone — every name, folder and link rule, and the trust list — with any file under the pinned
-    /// prefix admitted without its hash: what can be asked before the installed version is known, so that nothing Vibe
-    /// does not write is in the home when its <c>--version</c> starts.
+    /// The home's SHAPE alone — every name, folder and link rule, and the trust list — with a file under the pinned prefix
+    /// admitted by its place, unless a cached plugin package would START something from it (an <c>mcp.json</c> that
+    /// declares a server, a hook file — <see cref="VibePluginStarters"/>) and no measured version pins it with those bytes.
+    /// Asked before the installed version is known, so nothing Vibe does not write is in the home when its
+    /// <c>--version</c> starts; asked again after, because <c>--version</c> runs on the home too; and all that guards an
+    /// UNMEASURED version, whose plugin bytes have no hashes.
     /// </summary>
     public static string Refusal(string home, VibeHomeManifest manifest) =>
         Checked(home, new Rules(manifest, new VibeHomeEntry(string.Empty, []), byHash: false));
@@ -147,8 +150,24 @@ public static class VibeHome
             || manifest.PinnedPrefix.StartsWith(relative + "/", StringComparison.Ordinal)
             || entry.Pinned.Any(file => file.Path.StartsWith(relative + "/", StringComparison.Ordinal));
 
-        /// <summary>A file under the pinned prefix: admitted by place for the shape check, by its entry's hash otherwise.</summary>
-        private string Pinned(string relative, string path) => byHash ? ByHash(relative, path) : string.Empty;
+        /// <summary>
+        /// A file under the pinned prefix: by its entry's hash; for the shape check, by its place — unless it is a package
+        /// file that would make Vibe start a server or a hook (<see cref="VibePluginStarters"/>).
+        /// </summary>
+        private string Pinned(string relative, string path) => byHash ? ByHash(relative, path) : Unhashed(relative, path);
+
+        /// <summary>A starting file is admitted on the shape check only when a measured Vibe unpacks it with these bytes.</summary>
+        private string Unhashed(string relative, string path)
+        {
+            var starts = VibePluginStarters.Problem(relative, path);
+
+            return starts.Length == 0 || MeasuredAnywhere(relative, path)
+                ? string.Empty
+                : $"{starts}, and no measured Vibe version unpacks it with these bytes (shared/vibe-home-manifest.json)";
+        }
+
+        private bool MeasuredAnywhere(string relative, string path) =>
+            manifest.Versions.SelectMany(measured => measured.At(relative)).Any(pinned => pinned.Sha256 == Sha256Of(path));
 
         private string ByHash(string relative, string path) => entry.At(relative) switch
         {

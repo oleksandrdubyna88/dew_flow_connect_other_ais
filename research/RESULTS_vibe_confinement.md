@@ -470,3 +470,38 @@ home after a turn (content addressing is the argument, not a run); WSL (D18 refu
 own `~/.vibe`, which the health probe (`providers`, `VendorProbe`) does today for every runtime by starting `--version`
 in the inherited environment. Changed in the same story: the probe now runs in the built environment on a home of
 coai's own, deleted after it (`IReviewerRuntime.ProbeVersionAsync`, `TheVibeProbeLeavesThePersonsHomeAloneTests`).
+
+## 25. A cached plugin package is not re-digested — code reading, NOT a run (2026-10-13)
+
+Asked by the risk consultation of epic 2 (gpt-6-astra, consultation 6b4726a6): can a file planted in a cached plugin
+package of an owned home start something under the shipped flags? Read in Vibe **2.26.1**'s installed code
+(`%APPDATA%\uv\tools\mistral-vibe\Lib\site-packages\`); nothing was launched and nothing was spent.
+
+| Step | Where | What it does |
+|---|---|---|
+| check-out | `mistralai_vibe_local_harness/vibe/plugins/_store.py:257-266` | `checkout(digest)`: `if final.is_dir(): return final` — an EXISTING `packages/<ab>/<digest>/` is returned as it is; only a rebuild (folder absent) re-digests against the manifest |
+| every session | `mistralai_vibe_local_harness/vibe/plugins/_session.py:359-368` | `_checkout_all` checks every pinned package out that way, on create AND on restore ("Shared verbatim by both paths") |
+| resolve | `vibe/app_server/_plugins.py:421-423`, `:541-560` | `bind` hands the checkouts to `PluginResolver(plugin_dirs=…)` as the plugin folders outright |
+| connect | `vibe/app_server/_plugins.py:204-213` | `_materialize`: "Before materialization, which is where the declared servers are connected" — `plugin_mcp.bind(resolution.mcp_servers)` |
+| what declares | `vibe/core/plugins/_native.py:1661` (`mcp.json`), `_claude.py:283` / `_codex.py:203` (`.mcp.json`), `_claude.py:59-62`, `_codex.py:45-47`, `_kimi.py:56-58` (manifest `mcpServers`, `hooks`, `lspServers`, `sessionStart`) | the server and hook declarations a package root carries |
+| hooks | `_native.py:1159` (`ai.mistral.vibe/hooks.toml`), `_claude.py:486` (`hooks/hooks.json`), `_codex.py:409` (`hooks.json`) | hook files read from a package root |
+
+**Conclusion (by reading):** the hypothesis holds as far as the code goes — a cached package whose `mcp.json` declares a
+server would have it connected at session start, and §6/§7 measured that a declared server starts before
+`--enabled-tools read_file` filters anything. Vibe 2.26.1's own built-in package (`packages/6b/6bb6380c…/`, §24) carries
+`plugin.json` and four skills, and no declaration or hook file.
+
+**What the product does about it:** the measured branch already refused it (every package file is admitted by its
+SHA-256 for the installed version, and no such file is pinned). The unmeasured branch admitted every file under the
+plugin prefix by place; since this date the shape check refuses a declaration that starts something and every hook file
+unless a measured version pins that exact path with those bytes (`VibePluginStarters`, module_runners.md *The Vibe
+reviewer*).
+
+**The measured cell this would need, NOT run (it is a paid turn; the coordinator decides):** an owned home after one
+turn of the shipped launch (so `packages/6b/6bb6380c…/` exists), a startup-canary `mcp.json`
+(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"canary":{"type":"stdio","command":"python","args":["<canary that writes a marker file>"]}}}`)
+planted into that package folder, then the shipped launch again (`-p --output json --agent plan --enabled-tools
+read_file --workdir <untrusted folder>`, the built environment, `VIBE_CLI=python`) — 3 runs, the canary's marker counted;
+a control without the planted file. It would also say whether a NEW session (create, not restore) re-pins the installed
+built-in package and checks out the planted folder, which the reading says it does (`_session.py:274` — create checks
+out the digests it just ingested).

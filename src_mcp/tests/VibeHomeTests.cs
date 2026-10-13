@@ -155,6 +155,76 @@ public sealed class VibeHomeTests : IDisposable
         VibeHome.Refusal(_home, Manifest).Should().Contain("hooks.toml");
     }
 
+    /// <summary>A cached plugin package root, as Vibe's store lays it out (<c>packages/&lt;ab&gt;/&lt;digest&gt;/</c>).</summary>
+    private const string Package = "logs/session/plugins/packages/zz/zz-digest/";
+
+    private const string DeclaresAServer =
+        """{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"canary":{"type":"stdio","command":"python"}}}""";
+
+    /// <summary>
+    /// The risk consultation of 2026-10-13: Vibe 2.26.1 checks a cached package out WITHOUT re-digesting it
+    /// (<c>_store.py:265-266</c>) and connects the servers its root declares (<c>_native.py:1661</c> for <c>mcp.json</c>,
+    /// the Claude/Codex adapters for <c>.mcp.json</c> and their manifests' <c>mcpServers</c>) before any tool filter — so the
+    /// shape check, all that guards an unmeasured version, refuses a package file that would start one.
+    /// </summary>
+    [Theory]
+    [InlineData("mcp.json", DeclaresAServer)]
+    [InlineData("MCP.json", DeclaresAServer)]
+    [InlineData(".mcp.json", """{"mcpServers":{"canary":{"command":"python"}}}""")]
+    [InlineData(".claude-plugin/plugin.json", """{"name":"p","mcpServers":"./servers.json"}""")]
+    [InlineData(".claude-plugin/plugin.json", """{"name":"p","lspServers":{"x":{"command":"python"}}}""")]
+    [InlineData(".codex-plugin/plugin.json", """{"name":"p","hooks":{"SessionStart":[]}}""")]
+    [InlineData("kimi.plugin.json", """{"name":"p","sessionStart":{"command":"python"}}""")]
+    [InlineData(".kimi-plugin/plugin.json", """{"name":"p","mcpServers":{"x":{}}}""")]
+    [InlineData("mcp.json", "not json at all")]
+    public void TheShapeCheck_RefusesACachedPluginPackage_ThatWouldStartAServer(string file, string text)
+    {
+        TheInventoryVibeWrites();
+        Write(Package + file, text);
+
+        VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {Package}{file},").And.Contain("start");
+    }
+
+    [Theory]
+    [InlineData("ai.mistral.vibe/hooks.toml")]
+    [InlineData("hooks/hooks.json")]
+    [InlineData("hooks.json")]
+    public void TheShapeCheck_RefusesAHookFileInACachedPluginPackage(string file)
+    {
+        TheInventoryVibeWrites();
+        Write(Package + file, "[[hooks]]\n");
+
+        VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {Package}{file},").And.Contain("hook");
+    }
+
+    [Theory]
+    [InlineData("mcp.json", """{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{}}""")]
+    [InlineData(".claude-plugin/plugin.json", """{"name":"p","mcpServers":null,"hooks":[]}""")]
+    [InlineData("plugin.json", """{"name":"p"}""")]
+    [InlineData("skills/vibe/SKILL.md", "mcpServers: a word in a skill, not a declaration\n")]
+    public void TheShapeCheck_AdmitsAPackageFile_ThatStartsNothing(string file, string text)
+    {
+        TheInventoryVibeWrites();
+        Write(Package + file, text);
+
+        VibeHome.Refusal(_home, Manifest).Should().BeEmpty("a package file that declares no server and no hook is admitted by its place");
+    }
+
+    [Fact]
+    public void TheShapeCheck_AdmitsADeclaringFile_ThatAMeasuredVersionPins_WithThoseBytes()
+    {
+        TheInventoryVibeWrites();
+        var pinned = Manifest with
+        {
+            Versions = [Entry with { Pinned = [.. Entry.Pinned, new VibePinnedFile(Package + "mcp.json", Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(DeclaresAServer))))] }],
+        };
+        Write(Package + "mcp.json", DeclaresAServer);
+        VibeHome.Refusal(_home, pinned).Should().BeEmpty("a measured Vibe unpacks exactly this file with exactly these bytes");
+
+        Write(Package + "mcp.json", DeclaresAServer.Replace("python", "pwsh", StringComparison.Ordinal));
+        VibeHome.Refusal(_home, pinned).Should().Contain($"holds {Package}mcp.json,", "the pin admits those bytes only");
+    }
+
     [Fact]
     public void ALinkInTheHome_RefusesTheLaunch()
     {
