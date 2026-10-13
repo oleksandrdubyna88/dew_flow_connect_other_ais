@@ -171,7 +171,7 @@ test('a title or a text holding markup is drawn as text', () => {
 
 test('an older server is told, on the place, that it ignores the commands', () => {
   assert.match(paneHtml(withTexts({}, '0.32.0')), /class="stale"/u);
-  // A 0.33–0.50 server reads the texts but leaves {coder} unfilled (CODER_SLOT_SINCE); from 0.51.0 nothing is said.
+  // A 0.33–0.51 server reads the texts but leaves {coder} unfilled (CODER_SLOT_SINCE); from 0.52.0 nothing is said.
   assert.match(paneHtml(withTexts({}, '0.33.0')), /class="stale"[^>]*>[^<]*\{coder\} unfilled/u);
-  assert.doesNotMatch(paneHtml(withTexts({}, '0.51.0')), /class="stale"/u);
+  assert.doesNotMatch(paneHtml(withTexts({}, '0.52.0')), /class="stale"/u);
 });

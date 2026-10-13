@@ -167,9 +167,10 @@ test('a server that reads two slots is told about, changed coder or not, and the
 
   const note = commandModelsSkewNote('0.50.0', changed);
   assert.match(note, /Code and search/);
-  assert.match(note, /0\.51\.0/);
+  assert.match(note, /0\.52\.0/);
+  assert.match(commandModelsSkewNote('0.51.0', changed), /Code and search/, 'mcp 0.51.0 shipped before the coder slot');
   assert.equal(commandModelsSkewNote(CODER_SLOT_SINCE, changed), '');
-  assert.equal(commandModelsSkewNote('0.51.0', changed), '');
+  assert.equal(commandModelsSkewNote('0.52.0', changed), '');
   // The SHIPPED order changed: a pristine panel draws Sonnet for Code and search, which a 0.50 server ignores.
   assert.match(commandModelsSkewNote('0.50.0', commandModelsFrom(undefined)), /two-model order.*Code and search/s);
   assert.match(commandModelsSkewNote('0.50.0', commandModelsFrom({ codex: { strongest: 'gpt-6-astra' } })), /Code and search/);

@@ -215,11 +215,11 @@ export function commandModelsSkewNote(installedServerVersion: string, models: Co
 }
 
 /**
- * The first `coai-mcp` that reads the third slot, `coder`, and whose order names it. The release after
- * mcp 0.50.0; set too LOW this stays silent on a server that ignores a chosen coder — the unsafe
+ * The first `coai-mcp` that reads the third slot, `coder`, and whose order names it. mcp 0.51.0 was
+ * already being cut without it (the Vibe and Kimi ground, #785), so this is the release after; set too LOW this stays silent on a server that ignores a chosen coder — the unsafe
  * direction — so whoever cuts the release keeps it level with the tag.
  */
-export const CODER_SLOT_SINCE = '0.51.0';
+export const CODER_SLOT_SINCE = '0.52.0';
 
 /**
  * The sentence for any known server older than {@link CODER_SLOT_SINCE} — said even on a pristine panel,

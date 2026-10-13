@@ -91,7 +91,7 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
    `CommandModelsSetting.Rows` carries it (`CommandModelsSetting.cs:69`).
 4. **Extension.** `commandModels.ts`: the slot list, `SLOT_LABELS` (`strongest` *Strongest*, `implementation`
    *Briefs and review*, `coder` *Code and search*), `SHIPPED_COMMAND_MODELS`, `NO_MODELS`, `commandModelsFrom`,
-   `resolvedPair`, a `CODER_SLOT_SINCE = '0.51.0'` and the skew sentence for it; `panelView.ts:1687` a third box;
+   `resolvedPair`, a `CODER_SLOT_SINCE = '0.52.0'` and the skew sentence for it; `panelView.ts:1687` a third box;
    `commands.ts:64` the placeholder list; `scripts/generate-command-texts.mjs` regenerates
    `commandTexts.generated.ts`; `package.json` schema + descriptions.
 5. **Help.** `help.ts:75`, `helpContent.ts:149` and the matching paragraph in `helpDe.ts`, `helpEs.ts`, `helpRu.ts`
@@ -102,7 +102,7 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
    `live-security-settings-compat.mjs`: a `COAI_COMMAND_MODELS` row WITH `coder` handed to the released mcp 0.50.0
    and to the new build through `--providers`; neither may list it as unrecognised. Run once, result in the PR.
 8. **Release** after the merge: mcp (minor — `feat:`), then the extension; the release PR gets its
-   `## Server 0.51.0` / `## Extension 0.72.0` heading before it is squash-merged; the changelog-baseline row for mcp
+   `## Server 0.52.0` / `## Extension 0.72.0` heading before it is squash-merged; the changelog-baseline row for mcp
    follows in its own PR. The Team server is not released.
 
 ## 5. Test plan
@@ -119,7 +119,7 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
 - `TheOrdersAreWhatTheyWereTests`: re-recorded; the diff is read and touches only model orders.
 - Extension `commandModels.test.ts`: the shipped map matches `shared/command-models.json` with `coder`; `coder`
   round-trips through `commandModelsAfter` / `commandModelsFrom` / `commandModelsEnv`; the skew sentence names the coder
-  slot against a 0.50.0 server and is silent against 0.51.0; `gateModelPickers`/panel harness see three pickers per kind.
+  slot against a 0.50.0 server and is silent against 0.52.0; `gateModelPickers`/panel harness see three pickers per kind.
 - `helpCoverage.test.ts`: every language's gate article mentions *Code and search*.
 - Whole suites: `CoaiMcp.Tests.exe` and `npm test` in `src_vs_code`; family checks `plan-lifecycle.mjs`, `pin-check.mjs`.
 
@@ -142,9 +142,9 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
   say so and decide" after the question-consultant step (a gate with no question consultant configured).
 - **The skew sentence covers a pristine panel too.** §2.5 said "only when a coder differs from the shipped one"; both
   the consultant and this change's own Opus reviewer showed that is too narrow, because the SHIPPED behaviour changed:
-  the panel draws *Code and search* = Sonnet while a server older than 0.51.0 still sends the two-model order. Any
+  the panel draws *Code and search* = Sonnet while a server older than 0.52.0 still sends the two-model order. Any
   known server below `CODER_SLOT_SINCE` now gets the sentence; the per-caller sentence for a server below 0.33.0 still
-  needs a changed picker. The commands page's `commandsSkewNote` also says that a 0.33–0.50 server leaves `{coder}`
+  needs a changed picker. The commands page's `commandsSkewNote` also says that a 0.33–0.51 server leaves `{coder}`
   unfilled in an edited model order.
 - **"Every other story" became "Every story that is not a cornerstone"** — an AI can read the first as "every
   second story" (Opus reviewer).
@@ -153,10 +153,13 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
 - **The compatibility script carries a negative control**: an unreadable `COAI_COMMAND_MODELS` must be reported by
   the old binary, or "not reported" would prove nothing. Measured against the released mcp 0.50.0
   (sha256 `5f7ae859…a414`): control reported, `coder` ignored, current build accepts it.
+- **The server half ships as coai-mcp 0.52.0, not 0.51.0**: while this branch was in review, mcp 0.51.0 was
+  being released from main without it (#785, release pull request #791), so `CODER_SLOT_SINCE` is `0.52.0` and the
+  plan's 0.51.0 references were moved with it.
 - **The cadence gate needed the plan declared as `epic: "1/1"`** and a closed cadence consultation before the code
   round, although the plan has no epics of its own — its text names epics throughout.
 
-**The open tail** is the release, which happens after the merge rather than in this diff: coai-mcp 0.51.0 and
-extension 0.72.0. `CODER_SLOT_SINCE` must equal the mcp tag actually cut; if another release takes 0.51.0 first,
+**The open tail** is the release, which happens after the merge rather than in this diff: coai-mcp 0.52.0 and
+extension 0.72.0. `CODER_SLOT_SINCE` must equal the mcp tag actually cut; if another release takes 0.52.0 first,
 it must be raised before the extension ships. The mirror boundary row in the conventions plan is owed by that
 plan's author.
