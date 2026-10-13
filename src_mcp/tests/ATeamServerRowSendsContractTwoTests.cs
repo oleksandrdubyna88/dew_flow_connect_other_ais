@@ -65,7 +65,7 @@ public sealed class ATeamServerRowSendsContractTwoTests
     {
         var remote = new RemoteRuntime("srv-claude", "https://coai.example", "claude");
 
-        RosterBuilder.EffortFor(Row("remote", effort: "high"), localEffort: "none").Should().Be("high",
+        RosterBuilder.EffortFor(Row("remote", effort: "high"), new PanelSettings { LocalReasoningEffort = "none" }).Should().Be("high",
             "the Team server judges a remote row's effort per vendor — the local engines' setting is not it");
         RosterBuilder.FieldPromptFor(Row("remote", systemPrompt: Marker), remote).Should().Be(Marker);
         RosterBuilder.FieldPromptFor(Row("claude", systemPrompt: Marker), new ClaudeRuntime()).Should().BeEmpty(

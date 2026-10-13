@@ -71,14 +71,15 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         QuestionConsultSettings settings,
         TimeSpan? heartbeatEvery = null,
         QuestionOutlineCache? outlines = null,
-        Func<string, string, CancellationToken, Task<string>>? buildOutline = null) => new(
+        Func<string, string, CancellationToken, Task<string>>? buildOutline = null,
+        Func<PanelSettings, PanelSettings>? panel = null) => new(
         launcher,
         new ReviewerExecutor(launcher),
         Store(),
         new RolePrompts(_data),
         new UsageLedger(_data),
         new VaultKeys(new Dictionary<string, string> { ["grok-openrouter"] = "sk-test-0123456789abcdefghijklmnop" }, string.Empty),
-        new PanelSettings { DataDir = _data, QuestionConsult = settings, Providers = [] },
+        (panel ?? (p => p))(new PanelSettings { DataDir = _data, QuestionConsult = settings, Providers = [] }),
         new TreeSitterOutliner(),
         ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"), QuestionAnswerSchema.Name, QuestionAnswerSchema.Json, "a test").Path,
         _ => null,
@@ -104,6 +105,25 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         : launch.Request.Executable.Contains("claude", StringComparison.OrdinalIgnoreCase) ? ScriptedAnswer.Claude("A ladder: 5, 30, 60, 120 seconds.")
         : launch.Request.Executable.Contains("codex", StringComparison.OrdinalIgnoreCase) ? ScriptedAnswer.Codex("A ladder, and give up after four.")
         : null);
+
+    // ---------- a local row is told what a local reviewer is told (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.1) ----------
+
+    [Fact]
+    public async Task ALocalQuestionRow_IsLaunchedWithThePanelsLocalEffortAndCeiling()
+    {
+        // NON-default values, so a launch that ignored the panel and hard-coded `none`/8192 could not pass.
+        var settings = Settings([Row("gemma", "local", "local", "gemma4", "question-opinion", baseUrl: "http://127.0.0.1:9/v1")]);
+        var launcher = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Is("--ask-local") ? new ScriptedAnswer(ExitCode: 70, StdErr: "the script answers nothing") : null));
+
+        await FanOut(launcher, settings, panel: p => p with { LocalReasoningEffort = "medium", LocalMaxTokens = 4096 })
+            .RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        var argv = launcher.Vendors.Should().ContainSingle(l => l.Request.Arguments.Contains("--ask-local")).Subject.Request.Arguments;
+        argv.Should().ContainInConsecutiveOrder(["--reasoning-effort", "medium"],
+            "a thinking model told nothing thinks to the ceiling — a local question row must send what a local reviewer sends");
+        argv.Should().ContainInConsecutiveOrder(["--max-tokens", "4096"], "the panel's local ceiling, not the record's default");
+    }
 
     // ---------- A1: one row past its deadline, the others return ----------
 

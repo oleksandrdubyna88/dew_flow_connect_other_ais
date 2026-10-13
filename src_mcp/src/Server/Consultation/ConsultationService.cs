@@ -809,7 +809,7 @@ public sealed class ConsultationService(
     private string AnswersDir => ConsultHealthPaths.AnswersDirectory(settings.DataDir);
 
     private ReviewerSettings Settings(TurnConsultant consultant) =>
-        ConsultantTurnInputs.Settings(consultant.Row, consultant.Model, settings.ReviewerTimeout, settings.DataDir, keys, settings.ApiOverrides);
+        ConsultantTurnInputs.Settings(consultant.Row, consultant.Model, settings.ReviewerTimeout, settings, keys);
 
     private async Task<string> ShapedTreeAsync(string repo, CancellationToken ct)
     {

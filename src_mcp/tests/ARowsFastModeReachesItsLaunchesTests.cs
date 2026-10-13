@@ -51,7 +51,7 @@ public sealed class ARowsFastModeReachesItsLaunchesTests
     {
         var row = new ProviderSettings("codex") { Runtime = "codex", Fast = FastMode.Cli };
 
-        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), "D:/data", VaultKeys.None("t"), Core.Api.ApiOverrides.None)
+        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = "D:/data" }, VaultKeys.None("t"))
             .Fast.Should().Be(FastMode.Cli);
     }
 

@@ -234,7 +234,7 @@ internal sealed class ConsultantCheckTurn(
         var schema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
 
         return new ConsultantLaunch(turn.Scratch.Repo, prompt, string.Empty, answers,
-            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings.DataDir, keys, settings.ApiOverrides), schema.Path);
+            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings, keys), schema.Path);
     }
 
     /// <summary>The sentence a breach is — the repository's changes, the canary's, or both — or empty when nothing broke.</summary>

@@ -3672,3 +3672,26 @@ on a machine without the privilege to make one (skipped, with the reason); the s
 by another process during a refresh) — exercised only by code reading; the macOS fallback of `HandleRead` (a walk after
 the open plus the device-and-inode check of `MacFileIdentity`) — no macOS run here, the macOS CI job is its only run; a hard link in a live tree (a known limit, not a test); the ACP teardown
 order losing a grandchild — not observable on Windows, where the test would pass under either order.
+
+## Every local launch is told the panel's effort, and a cut answer is named (2026-10-13, epic 1 of `todo/PLAN_local_effort_reaches_every_local_launch.md`)
+
+Every RED below was observed against the unfixed code; every break-it reverted the one line the behaviour depends on,
+rebuilt (C# build 0 errors, `tsc` exit 0), saw red, and restored.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `ALocalLaunchCarriesThePanelsEffortTests` (2, mcp) | a ✓ Check of a `local` row (`ConsultantCheckMode.AnswerModelAsync`, the row on stdin, a spy launcher for `--ask-local` and the real one for git) is launched with the panel's NON-default `--reasoning-effort medium` and `--max-tokens 4096`; a row with its own `effort: low` keeps `low` | RED: `Expected argv {"--ask-local", …, "--max-tokens", "8192"} to contain items {"--reasoning-effort", "medium"}`. Break-it: `EffortFor(row, string.Empty)` restored → red |
+| `QuestionFanOutTests.ALocalQuestionRow_…` (1, mcp) | a `local` question-consultant row's argv carries the panel's `medium` and `4096` (the harness's `FanOut` gained a panel transform) | RED: the same message, `--timeout-seconds 20 --max-tokens 8192` and no effort. Break-it: `EffortFor(provider, string.Empty)` restored → red |
+| `AConsultantRunsWithItsRowsOptionsTests.ALocalConsultant_…` (1, mcp) | a consultation turn's `--ask-local` argv, built through `ConsultantResolution.For` and `ConsultantTurnInputs.Settings(…, panel, …)`, carries `medium` and `4096` | written against the new signature; break-it: the effort line reverted → red |
+| *(removed in the code round)* `NoLocalLaunchIsToldAnEmptyEffortTests` | a source scan for `EffortFor(…, "")`. It went RED naming both sites (`ConsultantTurnInputs.cs:64`, `QuestionFanOut.cs:322`), and was then REPLACED: `EffortFor` takes the `PanelSettings`, and all three composers go through `RosterBuilder.WithLocalEngine`, so an empty default cannot be written — the reviewers found the scan blind to a named argument, a call-shaped first argument and the ceiling | the three argv tests above hold each composer's behaviour |
+| `EpicTwoCodeRoundTests`, `ATeamServerRowSendsContractTwoTests` (changed) | `EffortFor` called with a `PanelSettings` carrying the level the test used to pass as a string; assertions unchanged | — |
+| `ALocalAnswerCutAtItsCeilingIsNamedTests` (6, mcp, `fakecli-env`) | `Program.AskLocalAsync` against `ApiEndpointStub` answering recorded Ollama bodies: content `""` + `finish_reason: length` + 8 192 tokens → exit 70, no `--out` file, stderr `cut at the token limit (max_tokens 8192)`, `8192 tokens generated`, `0 characters of content arrived`, `sent no reasoning_effort`, stdout `"tokensOut":8192`; a schema-whole `{"status":"SECURE","findings":[]}` cut with effort `low` → exit 70, no file, `reasoning_effort was low`; a `stop` answer written as before; `--reasoning-effort engine` said as `sent no reasoning_effort` (RED first: `reasoning_effort was engine` — the code round's correctness review); `CutSentence` equal to the api shim's former inline sentence to the byte; the sentence neither `RateLimit.Hit` nor `VendorDiagnosis.Classify` | RED: `Expected code to be 70, but found 0` (the cut fragment kept) and `Expected stderr "[coai-mcp] the local engine returned no message content: {…"finish_reason":"length"…` to contain "cut at the token limit (max_tokens 8192)"`. Break-it: the `CutRefusal` block removed → both red again |
+| `modelCheck.test.ts` (+1, extension) | a failed check record (through the real `parseCheckDocument`) with `failureWhat` and no `reason` reads `checked: no answer — <failureWhat>`; one with a `reason` keeps the reason | RED: `actual: 'checked: no answer'`. Break-it: `reasonOf` returning only the reason → red |
+
+The five call sites of `ConsultantTurnInputs.Settings` in tests now pass a `PanelSettings` (`AConsultantIsHandedItsRowsKeyTests`,
+`AnApiConsultantRunsWithItsModulesSettingsTests`, `AnApiRowIsSettableTests`, `ARowsFastModeReachesItsLaunchesTests`,
+`AConsultantRunsWithItsRowsOptionsTests`); their assertions are unchanged.
+
+**NOT covered:** a real thinking model answering a check at `none` (epic 2's hardware run measures the lane, and one live
+✓ Check after the release is the owner's to press); the lost repair launch of a cut fragment is pinned only as "exit 70,
+nothing written" — the executor's no-repair-on-exit is its existing behaviour, not re-tested here.

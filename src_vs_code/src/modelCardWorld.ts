@@ -49,7 +49,16 @@ function judged(record: CheckRecord, nowMs: number): CheckFacts {
     return streamed;
   }
 
-  return (JUDGED[check.state] ?? ((reason) => ({ checking: false, said: `checked: ${check.state}${reason.length > 0 ? ` — ${reason}` : ''}`, tone: 'warn' })))(check.reason);
+  return (JUDGED[check.state] ?? ((reason) => ({ checking: false, said: `checked: ${check.state}${reason.length > 0 ? ` — ${reason}` : ''}`, tone: 'warn' })))(reasonOf(check.reason, record));
+}
+
+/**
+ * Why the check ended as it did: its stated reason, else — for a failed check, which records its classification and no
+ * reason — what coai-mcp classified it as. Without it the card said a bare "checked: no answer" while the record said why
+ * (todo/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
+ */
+function reasonOf(reason: string, record: CheckRecord): string {
+  return reason.length > 0 ? reason : record.failureWhat;
 }
 
 function fromFile(file: HealthFile<CheckRecord> | undefined, nowMs: number): CheckFacts {

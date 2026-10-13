@@ -1967,6 +1967,40 @@ route `think:false` and `chat_template_kwargs` are ignored and `"low"` still bur
 thinking is WORTH on a review — four of eight planted defects when it finished — against a reviewer
 that always finishes is the measurement recorded in `RESULTS_model_comparison.md`.
 
+### …and so is every other local launch (2026-10-13)
+
+The decision above was taken for reviewers and applied only there. The two other launch composers —
+`ConsultantTurnInputs.Settings` (a consultation turn AND the ✓ Check, which reuses it) and
+`QuestionFanOut.SettingsFor` (a question-consultant row) — passed an EMPTY local default to
+`RosterBuilder.EffortFor`, so a `local` row with no effort of its own sent no `reasoning_effort`, and a
+thinking model thought to its ceiling. Measured on the owner's machine: two ✓ Checks of a Gemma4 row
+each generated exactly 8 192 tokens and no content (Ollama's own log), and the card said
+`checked: no answer`. All three composers now take the effort and the ceiling from ONE helper,
+`RosterBuilder.WithLocalEngine(settings, row, panel)` — `EffortFor(row, panel)` and `panel.LocalMaxTokens`;
+a row's own effort still wins, and an api row's module overrides both afterwards. `EffortFor` takes the
+`PanelSettings` rather than a loose default string, so there is no empty default left to pass — the
+compiler holds what a source scan first held (the scan missed a named argument and a call-shaped first
+argument, and could not see the ceiling at all; the code round's own reviewers). `ConsultantTurnInputs.Settings`
+takes the `PanelSettings` its two callers hold rather than its data directory and api overrides as
+loose arguments.
+
+### A cut answer is named, not kept (2026-10-13)
+
+`--ask-local` reads the whole completion (`LocalAsk.ReadAnswer`), prints the usage line BEFORE judging
+it — a refused generation still spent the card — and refuses an answer whose `finish_reason` is
+`length`, with content or without: exit 70, nothing written to `--out`, and one sentence from
+`CompletionReader.CutSentence` (shared with the api shim, whose wording is pinned to the byte):
+the ceiling the request carried, tokens generated, characters of content that arrived, and a cure that
+names the `reasoning_effort` the request CARRIED (`ApiDialect.EffortToSend` — `engine` and blank both
+send nothing) — none sent (the engine's default applied), `none` (the answer itself ran long), or
+another level (set it to `none`, or raise `COAI_LOCAL_MAX_TOKENS`). Before this a cut
+with no content read "the local engine returned no message content: {raw json}", and a cut WITH content
+was written as the answer and parsed. **The trade-off, recorded:** such a fragment used to get the
+executor's one repair launch; it no longer does, because the repair is asked under the same ceiling and
+effort that produced the cut. The sentence is neither a rate limit (`RateLimit.Hit`) nor a known
+vendor refusal, so a consultation classifies it as an exit with what it said
+(`ALocalAnswerCutAtItsCeilingIsNamedTests`).
+
 ## One list of runtime names, because two hand-written ones both forgot the same entry (2026-09-02)
 
 `ReviewerRuntimeSelector.RuntimeNames` is the set a configured vendor's `runtime` is validated

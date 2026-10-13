@@ -1896,15 +1896,23 @@ internal static class Program
             // their wait is nearly over. (gemini, code round.)
             lease.Record(engineKey, model, thinking.Elapsed);
 
-            var (answer, usage) = Runners.Reviewers.LocalAsk.ReadResponse(text);
-            if (answer is null)
+            var answer = Runners.Reviewers.LocalAsk.ReadAnswer(text);
+            // The usage goes out BEFORE the answer is judged, as the api shim's does: a refused generation spent the
+            // card all the same, and a usage line printed only after a kept answer reported a cut one as zero tokens.
+            Console.Out.WriteLine($"{{\"tokensIn\":{answer.Usage.TokensIn},\"tokensOut\":{answer.Usage.TokensOut}}}");
+            if (Runners.Reviewers.LocalAsk.CutRefusal(answer, endpoint, maxTokens, reasoningEffort) is { } cut)
+            {
+                Note(cut);
+                return 70;
+            }
+
+            if (answer.Content is null)
             {
                 Note($"the local engine returned no message content: {Trim(text)}");
                 return 70;
             }
 
-            await File.WriteAllTextAsync(outFile, answer);
-            Console.Out.WriteLine($"{{\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut}}}");
+            await File.WriteAllTextAsync(outFile, answer.Content);
 
             return 0;
         }

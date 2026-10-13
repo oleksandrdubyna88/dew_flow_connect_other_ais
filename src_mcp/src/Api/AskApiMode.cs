@@ -262,7 +262,7 @@ internal static class AskApiMode
     {
         if (answer.Content is null)
         {
-            note($"the API at {ask.Endpoint} returned no message content{Thinking(answer)}: {Quoted(text)}");
+            note($"the API at {ask.Endpoint} returned no message content{CompletionReader.Thinking(answer)}: {Quoted(text)}");
 
             return Failed;
         }
@@ -272,9 +272,7 @@ internal static class AskApiMode
             // Not written to the out file: a fragment where the executor reads an answer is the defect
             // this branch exists for — `{"findings":[]}` cut before its findings is a clean review nobody
             // gave (the coordinator's acceptance case of 2026-09-26; measured on GLM-5.3 and Qwen3.8-max).
-            note($"the answer from {ask.Endpoint} was cut at the token limit ({ask.Vendor.Dialect.MaxTokensField} {ask.Vendor.Dialect.CeilingFor(ask.MaxTokens)}): "
-                 + $"{answer.Usage.TokensOut} tokens generated{Thinking(answer)}, {answer.Content.Length} characters of content arrived — "
-                 + "raise the ceiling or bound the reasoning; the fragment was not kept");
+            note(CompletionReader.CutSentence(ask.Endpoint, answer, ask.Vendor.Dialect, ask.MaxTokens, "raise the ceiling or bound the reasoning"));
 
             return Failed;
         }
@@ -378,10 +376,6 @@ internal static class AskApiMode
         // The vendor answered and said nothing about what the call consumed: the parent records it as unknown.
         + (usage.NotCaptured ? ",\"notCaptured\":true" : string.Empty)
         + (streamed ? ",\"streamed\":true" : string.Empty) + "}";
-
-    /// <summary>" (N reasoning tokens)" when the vendor reported any — the number a person needs to size the ceiling.</summary>
-    private static string Thinking(ChatAnswer answer) =>
-        answer.ReasoningTokens > 0 ? $" ({answer.ReasoningTokens} reasoning tokens)" : string.Empty;
 
     /// <summary>" — try again in Ns" when the vendor said how long, or nothing.</summary>
     private static string RetryAfter(HttpResponseMessage response) =>

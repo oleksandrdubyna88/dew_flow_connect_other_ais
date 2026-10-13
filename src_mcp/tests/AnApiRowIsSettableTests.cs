@@ -294,7 +294,7 @@ public sealed class AnApiRowIsSettableTests : IDisposable
         // the card that the Check then ignored would measure a row that is not the one configured.
         var row = PanelSettings.ParseVendors(Row(",\"stream\":true")).Single();
 
-        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), _dir, VaultKeys.None("t"), ApiOverrides.None).Stream.Should().BeTrue();
+        ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = _dir }, VaultKeys.None("t")).Stream.Should().BeTrue();
     }
 
     [Fact]
