@@ -111,4 +111,27 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
         Directory.Exists(home).Should().BeFalse("a real folder is the home's own, and goes with it");
         TheTargetIsUntouched();
     }
+
+    /// <summary>
+    /// Vibe unpacks its plugin package with the ReadOnly attribute on its FOLDERS (research/RESULTS_vibe_confinement.md §26):
+    /// a deleter that cleared files only removed every file and then failed on the first read-only folder, so a round's
+    /// <c>vh-*</c> home was left for ever — the six-hour sweep calls the same deleter.
+    /// </summary>
+    [Fact]
+    public void ATreeWithReadOnlyFolders_IsDeletedWhole()
+    {
+        var home = _dir.At("vh-0123456789");
+        var skill = Path.Combine(home, "logs", "session", "plugins", "packages", "6b", "6bb6380c", "skills", "create-plugin");
+        Directory.CreateDirectory(skill);
+        File.WriteAllText(Path.Combine(skill, "SKILL.md"), "x");
+        File.SetAttributes(Path.Combine(skill, "SKILL.md"), FileAttributes.ReadOnly);
+        foreach (var folder in (string[])[skill, Path.GetDirectoryName(skill)!, Path.Combine(home, "logs", "session", "plugins", "packages", "6b", "6bb6380c")])
+        {
+            new DirectoryInfo(folder).Attributes |= FileAttributes.ReadOnly;
+        }
+
+        GitScratch.DeleteEvenIfReadOnly(home);
+
+        Directory.Exists(home).Should().BeFalse("read-only folders go with their tree");
+    }
 }

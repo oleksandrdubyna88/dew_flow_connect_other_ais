@@ -33,12 +33,27 @@ public static class GitScratch
             return;
         }
 
+        Writable(dir);
         foreach (var entry in Directory.EnumerateFileSystemEntries(dir))
         {
             DeleteEntry(entry);
         }
 
         Directory.Delete(dir);
+    }
+
+    /// <summary>
+    /// A real folder's own ReadOnly attribute cleared before its entries go — Vibe unpacks its plugin package with read-only
+    /// FOLDERS (research/RESULTS_vibe_confinement.md §26), and a read-only folder refused its own deletion, so a round's
+    /// <c>vh-*</c> home outlived every sweep. Never asked of a link, which is unlinked before this is reached.
+    /// </summary>
+    private static void Writable(string dir)
+    {
+        var attributes = File.GetAttributes(dir);
+        if ((attributes & FileAttributes.ReadOnly) != 0)
+        {
+            File.SetAttributes(dir, attributes & ~FileAttributes.ReadOnly);
+        }
     }
 
     /// <summary>One entry of a real directory: a link unlinked, a directory descended, a file deleted whatever its attribute.</summary>

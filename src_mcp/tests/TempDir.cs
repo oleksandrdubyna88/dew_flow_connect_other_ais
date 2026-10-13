@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// a file open — a spawned CLI, a SQLite handle, a reader mid-poll — and a leftover temp directory
 /// is not a failing test. What catches those leftovers is <see cref="TempDirsAreSwept"/>, which runs
 /// once per assembly; this only means there are far fewer for it to find.</para>
-/// <para><b>Read-only files are cleared first.</b> Git marks every object file read-only and
+/// <para><b>Read-only files and folders are cleared first</b>, by the product's own deleter. Git marks every object file read-only and
 /// <c>Directory.Delete(recursive: true)</c> refuses one with <c>UnauthorizedAccessException</c> — so
 /// a directory that ever held a clone could not be removed at all, which is how 5,476 of them
 /// accumulated before anybody looked (see <c>GitScratch.DeleteEvenIfReadOnly</c>, which learned
@@ -40,24 +40,13 @@ public sealed class TempDir : IDisposable
     {
         try
         {
-            Clear(Path);
-            Directory.Delete(Path, recursive: true);
+            // The product's deleter: read-only files AND folders (a Vibe home's plugin folders, research/RESULTS_vibe_confinement.md
+            // §26), and a link unlinked by its own name, never entered.
+            Runners.Files.GitScratch.DeleteEvenIfReadOnly(Path);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
             // Somebody still holds a file in it, or it is already gone. Neither is a test result.
-        }
-    }
-
-    private static void Clear(string directory)
-    {
-        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
-        {
-            var attributes = File.GetAttributes(file);
-            if ((attributes & FileAttributes.ReadOnly) != 0)
-            {
-                File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
-            }
         }
     }
 }
