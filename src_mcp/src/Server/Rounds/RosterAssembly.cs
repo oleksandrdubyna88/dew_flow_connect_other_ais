@@ -36,8 +36,10 @@ internal sealed record RosterFrame(
     public static (string LaunchDir, bool HasCheckout) Directories(string codeWorkspace, string worktreePath, bool readsCheckout)
     {
         var fastCode = codeWorkspace == "none" && readsCheckout;
+        // Named, because ThePromptSaysWhatTheReviewerHasTests holds this very line: the mode is TOLD (readsCheckout).
+        var hasCheckout = readsCheckout && !fastCode;
 
-        return (fastCode ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName : worktreePath, readsCheckout && !fastCode);
+        return (fastCode ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName : worktreePath, hasCheckout);
     }
 
     /// <summary>The feature stage's source conversation for a reviewer, or a single turn for every other stage (S3.2).</summary>

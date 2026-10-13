@@ -3768,3 +3768,18 @@ this story: `RoundEngine.RunStageAsync` (38), `PanelService.ResolveUnderClaim` (
 (10), `OpenDocumentSession`, `PruneOldScratchDirs`, `StatusAsync` (6), the constructor (5),
 `ReviewerExecutor.Complaint` and `Longer` (6), `CodexRuntime.ReasonIn` (9) and `Said` (5), `VendorDiagnosis.Classify`,
 `RosterBuilder.NamedAs` and `WhyNotCarried`, `RoundEngine.ApplyAnyHumanDecision` and `WhatTheCallerWasDoing` (5).
+**What that regression set missed** (CI on #803, Linux and macOS): `ThePromptSaysWhatTheReviewerHasTests.
+EveryComposedPrompt_CarriesTheSentence_AndTheModeReachesIt` source-reads the roster for the lines that carry the REAL
+checkout mode into every prompt, and the split moved them — red on every platform, the class was not in the set. The
+behaviour was checked unchanged (`hasCheckout = readsCheckout && !fastCode`, now `RosterFrame.Directories` in
+`RosterAssembly.cs`; `material` per reviewer from the frame's `HasCheckout`; `instruction` once; `material` into
+`ComposePrompt`), the expected lines follow the code, `RosterAssembly.cs` is read too, and two asserts were ADDED for the
+lines that now carry the mode across the split (`FrameFor`'s call to `Directories` and its `new RosterFrame(…, hasCheckout,`).
+`hasCheckout` is a named local again so its line can be held. Teeth, each planted in the source and restored: a literal
+`true` as the material's mode, as the frame's mode, and as `hasCheckout` — each red on its own assertion. Every other test
+that source-reads a file this story touched ran green (`AReviewerIsToldOnlyWhatItCanReadTests`, `AnApiRowIsSettableTests`,
+`ArchitectureTests`, `GoodEnoughPolicyTests`, `QuestionConsultScenarioTests`, `TheReviewerFailuresAreWrittenDownTests`,
+`WebQuestionSanitiserTests`, `ARoundHasAnIdOnTheWireTests`, `ARoundIsMintedAKeyTests`, `ConsultLimitsScenarioTests`).
+On macOS `AVibeReviewerRunsThroughAFakeVibeTests` saw `__CF_USER_TEXT_ENCODING` in the child: CoreFoundation writes it
+into the child's own environment, and the test now uses `ChildEnvironmentTests.SetByTheChildItself` — the one allowance,
+widened to `internal`, macOS only — rather than a copy.
