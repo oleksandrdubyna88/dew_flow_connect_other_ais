@@ -12574,3 +12574,101 @@ them — and `--check-security` as *touches no data directory*, held by the serv
 halves are held level by the seam leg `scripts/seam-missing-named-root.mjs` (`npm run test:seam`): the extension's own
 decision (`namedRoot()` + the page's probes + `dataDirFinding`) against the real binary's `--check-model` and a served
 `providers` call, for a missing root, an existing root with a missing side folder, and no `COAI_DATA_DIR`.
+
+## Mistral Vibe on the panel's side (2026-10-13, S2 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+`vibe` is a CLI runtime of the extension: Mistral's own CLI on the person's own subscription, signed in as itself, run by
+coai-mcp's `VibeRuntime` (`module_runners.md`). The extension's half is the row, its card, its buttons and the gate
+that keeps it away from a server that cannot review with it. Chat (§8) and the consultant and question rows (S3) are
+not built: `CHAT` and `CONSULTING` leave `vibe` out, and the card says so on its consultant tick.
+
+```mermaid
+flowchart LR
+  P["Add a model: the Mistral Vibe preset"] --> R["coai.vendors row, runtime vibe"]
+  R --> W{"vendorsEnv: runtimeOnServer('vibe', installed)"}
+  W -->|"installed >= 0.53.0, or unknown"| F["settings.json: the row crosses"]
+  W -->|"installed < 0.53.0"| H["row withheld; the card says why (runtimeNote)"]
+  R --> B["card: run, install, update"]
+  B --> T["run: vibe, env VIBE_ACTIVE_MODEL + VIBE_CLI=python"]
+  B --> I{"host platform"}
+  I -->|win32| U["uv tool install mistral-vibe (uv first: Astral's installer)"]
+  I -->|"linux, darwin"| S["mistral.ai/vibe/install.sh piped to bash"]
+```
+
+- **The runtime list.** `RUNTIMES` gains `vibe` (last, so it equals `shared/feature-availability.json`'s `runtimes`,
+  which `featureAvailability.test.ts` holds it to); both `package.json` runtime enums list it. `CLI_RUNTIMES`
+  (`models.ts`) is now ONE list — the model card's CLI badge (`modelCardWorld.cliBadge`) and the Setup tab's CLI table
+  (`setupTab.cliGroups`) each kept their own until this change. `JUDGED_HERE` (`catalogWriteRules.ts`) is derived from
+  `RUNTIMES` minus `api` and `remote`, so an effort on a Vibe row is refused as unmeasured (the seed's `effort` row is
+  `unmeasured`) instead of being stored and not applied. `KNOWS_ITS_OWN_ENDPOINT` has `vibe` (no base-URL box), and
+  `vendorColour.ANCHORED` pins it to slot 2, amber (the manifest's colour 2 says `vibe`).
+- **The preset** (`VENDOR_PRESETS`, D11): `Mistral Vibe`, id `vibe`, model `mistral-medium-3.5`, no endpoint, no key.
+  Never in `DEFAULT_VENDORS`. Its hint names the two limits a person meets first — Windows only for now (D18) and the
+  coai-mcp release that knows the runtime.
+- **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
+  `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
+  `modelsFor('vibe')` offers it (an unknown runtime used to fall to the Gemini list); a typed alias stays in its own
+  dropdown. The caption (`modelsProvenance`, `CURATED_NOTE`) says it is curated, on which Vibe version, and that coai-mcp
+  refuses any other alias before the launch — Vibe itself would answer it on its default.
+- **▶** (`vendorTerminal`): `vibe`, plain and interactive, never `codex -m`. Vibe has no model flag (`MODEL_FLAG`), so
+  the row's model rides the terminal's ENVIRONMENT (`VendorTerminal.env`, passed to `createTerminal` by
+  `panelProvider.runVendor`) — `VIBE_ACTIVE_MODEL` and `VIBE_CLI=python`, the measured Python CLI every coai launch pins
+  (RESULTS_vibe_confinement.md §3). `VIBE_HOME` is not set: it is the person's own Vibe, and the sign-in lives in the OS
+  keyring every home reads (§12). The usage command typed at the prompt is `/status` (Vibe 2.26.1's
+  `vibe/cli/commands.py`; it has no spend command).
+- **⤓ and ⟳, per operating system** (D16; the owner's decision of 2026-10-13 that the buttons install on every side, WSL
+  included). Sources, read 2026-10-13: the package README (`mistral_vibe-2.26.1.dist-info/METADATA`, "One-line
+  install") and the script `mistral.ai/vibe/install.sh` (a redirect to `scripts/install.sh` of
+  github.com/mistralai/mistral-vibe).
+
+  | side | ⤓ install | ⟳ update | typed above it |
+  |---|---|---|---|
+  | Linux, WSL, macOS | `curl -LsSf https://mistral.ai/vibe/install.sh` piped to `bash` | the same script — it runs `uv tool upgrade mistral-vibe` when a Vibe is there | nothing: the script installs uv itself (Astral's installer, pinned and SHA-256-checked) |
+  | Windows | `uv tool install mistral-vibe` | `uv tool upgrade mistral-vibe` (`uv tool install` on an installed tool changes nothing) | Astral's uv installer, the README's Windows prerequisite |
+
+  The side is the extension host's (`hostPlatform()`): a WSL window gets the script. The sign-in stays the person's —
+  the note after the command says to press ▶ (Vibe asks for it on its first start) or run `vibe --setup`. On Linux,
+  WSL and macOS the note also says coai-mcp does not run Vibe there yet (D18): installing it is what the later
+  measurement needs. `OFFICIAL_SOURCES` admits `curl -LsSf https://mistral.ai/`, `uv tool install mistral-vibe` and
+  `uv tool upgrade mistral-vibe` — the package by its full name, so no other uv tool rides behind the button. The
+  commands are the ones `VendorDiagnosis.InstallCure` names when a round finds no Vibe (one asymmetry: on macOS the
+  server's cure says uv and the button says the script; both are Mistral's, and coai-mcp refuses a macOS host anyway).
+- **The update light** (`cliVersions.ts`): a third version source, `{ kind: 'pypi', package: 'mistral-vibe' }` →
+  `https://pypi.org/pypi/mistral-vibe/json`, whose version is under `info` (`versionFrom`). `mistral-vibe` is the
+  package both Mistral routes install, so PyPI is the index the button installs from, not a mirror.
+- **An older server** (D13, path 1; `runtimeSince.ts`): `VIBE_RUNTIME_SINCE = '0.53.0'`: mcp 0.51.0 shipped the Vibe
+  ground without the runtime, and mcp 0.52.0 was released from main on 2026-10-13 while the runtime was still on its
+  branch, so the next minor is the first that can carry it (too high only holds a row back from a server that could
+  run it; too low leaves the row on a server that cannot). `runtimeOnServer(runtime, installed)` is one table with an
+  arm per runtime some released server does not know (`api` → `API_RUNTIME_SINCE`, `vibe` → `VIBE_RUNTIME_SINCE`);
+  `crossesTo` in `vendorsWire.ts` asks it, so a vibe row is withheld from an older server's settings file while every
+  other row crosses — unknown is not old. The card's sentence is `runtimeSkewNote` (the api sentence unchanged, a
+  generic one for the rest), carried per card as `CardContext.runtimeNote` (it was `apiNote`, a name that would have
+  lied for a vibe row); non-empty switches the card's stage boxes off.
+  **What an older server does with the row — measured, and not what D13 assumed.** D13 said an older server turns an
+  unknown runtime into codex. That was true before mcp 0.44.0; since then (`AnUnknownRuntimeIsRefusedByNameTests`) it
+  REFUSES the row by name. `scripts/live-vibe-runtime-compat.mjs` (`npm run test:vibe-runtime-compat`, by hand, needs
+  `gh`), run 2026-10-13 on Windows against the released mcp-v0.52.0 and this checkout's Debug server: with the gate,
+  the file carries codex and antigravity and the released server serves them exactly as from a file that never had the
+  row; with the gate bypassed, it reports `vibe` as `unavailable` — "the runtime 'vibe' is not one this build of
+  coai-mcp runs"; this checkout's server lists the row as `own auth`. Exit 0. Teeth: `runtimeOnServer` forced true in
+  the compiled output → three FAILs (the row in the file, the served rows changed), exit 1. So the card's note says
+  only that the installed server cannot review with the row — never that it would run it as codex — and
+  `vibeRuntime.test.ts` pins that.
+- **Mixed versions — what is not guarded** (D13): path 2, an older extension window writing the server's settings file,
+  stands down before a newer build's stamp (`ServerSettingsSync`, *The settings file has more than one writer* above) —
+  `vibeRuntime.test.ts` holds that for a vibe row. Path 3 is the limit already recorded for `remote` and `api`: an
+  OLDER extension's own save of `coai.vendors` rewrites a vibe row's runtime to `codex` (its `RUNTIMES` lacks it), and
+  this build then mirrors that. Code that already shipped cannot be changed; the help says in five languages to reload
+  every window after updating.
+- **Help** (five languages, `choose-reviewers`): the preset, its Windows-only standing and release, ⤓ per OS, the
+  sign-in, the reload advice, and ⟳'s Vibe route; `HELP.installVendorCli` names Mistral's sources.
+- **Tests**: `vibeRuntime.test.ts` (26) — the round trip, the preset, the curated list and caption, ▶'s command and
+  environment, ⤓/⟳ per OS, the official sources, the agreement with coai-mcp's cure and curated list (two positive
+  `reads-another-program` assertions), PyPI, the gate, the note, the stand-down, the card RUN on the Models tab
+  against a new and an older server, the effort refusal, the Setup table, the help. The hand-typed runtime lists in
+  `runtimeSurvives`, `addModelGroups`, `vendorColour` gained `vibe`; `vendorTerminal`'s and `cliVersions`' official-source
+  loops now read `CLI_RUNTIMES`.
+- **Not here**: Vibe as a consultant or question row (S3); chat (§8); a live round through the product (the plan's
+  §5, with the server half); a REAL install by the buttons on any side — the commands are pinned and their sources
+  read, but none was run on this machine.
