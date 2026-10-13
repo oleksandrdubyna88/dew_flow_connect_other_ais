@@ -517,25 +517,44 @@ static class VibeShape
 {
     public static void Write(string[] args, string? exportText, string? envRecord, string? homeWrite)
     {
+        Export(args, exportText);
+        RecordEnvironment(envRecord);
+        WriteIntoTheHome(homeWrite);
+    }
+
+    private static void Export(string[] args, string? exportText)
+    {
         var at = Array.IndexOf(args, "--output-dir");
-        if (at >= 0 && at + 1 < args.Length && exportText is { Length: > 0 })
+        if (at < 0 || at + 1 >= args.Length || exportText is not { Length: > 0 })
         {
-            Directory.CreateDirectory(args[at + 1]);
-            File.WriteAllText(Path.Combine(args[at + 1], "export.json"), WithEnvironment(exportText));
+            return;
         }
 
-        if (envRecord is { Length: > 0 })
+        Directory.CreateDirectory(args[at + 1]);
+        File.WriteAllText(Path.Combine(args[at + 1], "export.json"), WithEnvironment(exportText));
+    }
+
+    private static void RecordEnvironment(string? envRecord)
+    {
+        if (envRecord is not { Length: > 0 })
         {
-            File.WriteAllLines(envRecord, Environment.GetEnvironmentVariables().Keys.Cast<string>().Order(StringComparer.Ordinal)
-                .Select(name => name.StartsWith("VIBE_", StringComparison.Ordinal) ? $"{name}={Environment.GetEnvironmentVariable(name)}" : name));
+            return;
         }
 
-        if (homeWrite is { Length: > 0 } && Environment.GetEnvironmentVariable("VIBE_HOME") is { Length: > 0 } home)
+        File.WriteAllLines(envRecord, Environment.GetEnvironmentVariables().Keys.Cast<string>().Order(StringComparer.Ordinal)
+            .Select(name => name.StartsWith("VIBE_", StringComparison.Ordinal) ? $"{name}={Environment.GetEnvironmentVariable(name)}" : name));
+    }
+
+    private static void WriteIntoTheHome(string? homeWrite)
+    {
+        if (homeWrite is not { Length: > 0 } || Environment.GetEnvironmentVariable("VIBE_HOME") is not { Length: > 0 } home)
         {
-            var file = Path.Combine(home, homeWrite);
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            File.WriteAllText(file, "written by the fake Vibe\n");
+            return;
         }
+
+        var file = Path.Combine(home, homeWrite);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "written by the fake Vibe\n");
     }
 
     /// <summary>Every <c>{{env:NAME}}</c> replaced by NAME's value in this child — empty when it has none.</summary>

@@ -441,15 +441,16 @@ internal sealed class RosterBuilder(
     /// round's empty folder, the "none" workspace) there is nothing of the branch's to keep it from, and it starts there.
     /// </summary>
     internal static LaunchPlace PlaceFor(IReviewerRuntime runtime, string launchDir, bool hasCheckout, RoundScratch scratch) =>
-        !runtime.NeedsASanitisedSnapshot || !hasCheckout
-            ? new LaunchPlace.At(launchDir, CitedAsWritten.Instance)
-            : scratch.Tree switch
-            {
-                RoundTree.Made made => new LaunchPlace.At(made.Snapshot.Root, made.Snapshot),
-                RoundTree.Refused refused => new LaunchPlace.Refused(refused.Reason),
-                _ => new LaunchPlace.Refused(
-                    "no sanitised snapshot of the tree was made for this round, and this runtime is never started in the checkout itself (D6 of todo/PLAN_vibe_and_kimi_runtimes.md)"),
-            };
+        runtime.NeedsASanitisedSnapshot && hasCheckout ? InTheSnapshot(scratch.Tree) : new LaunchPlace.At(launchDir, CitedAsWritten.Instance);
+
+    /// <summary>The round's snapshot as a launch directory — or why there is none to give.</summary>
+    private static LaunchPlace InTheSnapshot(RoundTree tree) => tree switch
+    {
+        RoundTree.Made made => new LaunchPlace.At(made.Snapshot.Root, made.Snapshot),
+        RoundTree.Refused refused => new LaunchPlace.Refused(refused.Reason),
+        _ => new LaunchPlace.Refused(
+            "no sanitised snapshot of the tree was made for this round, and this runtime is never started in the checkout itself (D6 of todo/PLAN_vibe_and_kimi_runtimes.md)"),
+    };
 
     /// <summary>A CLI row seen through no module: the generic defaults, which nothing below reads for it.</summary>
     private static readonly ApiRowView NotApi = new(

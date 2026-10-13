@@ -147,11 +147,13 @@ public static class VibeHome
             || manifest.PinnedPrefix.StartsWith(relative + "/", StringComparison.Ordinal)
             || entry.Pinned.Any(file => file.Path.StartsWith(relative + "/", StringComparison.Ordinal));
 
-        private string Pinned(string relative, string path) => (byHash, entry.At(relative)) switch
+        /// <summary>A file under the pinned prefix: admitted by place for the shape check, by its entry's hash otherwise.</summary>
+        private string Pinned(string relative, string path) => byHash ? ByHash(relative, path) : string.Empty;
+
+        private string ByHash(string relative, string path) => entry.At(relative) switch
         {
-            (false, _) => string.Empty,
-            (_, []) => $"is not one of the files Vibe {entry.Version} unpacks (shared/vibe-home-manifest.json)",
-            (_, [var pinned]) when pinned.Sha256 == Sha256Of(path) => string.Empty,
+            [] => $"is not one of the files Vibe {entry.Version} unpacks (shared/vibe-home-manifest.json)",
+            [var pinned] when pinned.Sha256 == Sha256Of(path) => string.Empty,
             _ => $"does not have the bytes Vibe {entry.Version} writes there (shared/vibe-home-manifest.json)",
         };
     }
@@ -167,15 +169,17 @@ public static class VibeHome
     /// Whether <paramref name="parts"/> matches the glob: <c>*</c> is one segment, a final <c>**</c> one or more.
     /// </summary>
     internal static bool Matches(IReadOnlyList<string> glob, IReadOnlyList<string> parts) =>
-        glob.Count > 0 && glob[^1] == "**"
-            ? parts.Count >= glob.Count && Prefix(glob, parts, glob.Count - 1)
-            : parts.Count == glob.Count && Prefix(glob, parts, glob.Count);
+        EndsInAnyDepth(glob) ? MatchesAnyDepth(glob, parts) : parts.Count == glob.Count && Prefix(glob, parts, glob.Count);
 
     /// <summary>Whether <paramref name="parts"/> is a folder a file matching the glob could live in.</summary>
     internal static bool Leads(IReadOnlyList<string> glob, IReadOnlyList<string> parts) =>
-        glob.Count > 0 && glob[^1] == "**"
-            ? parts.Count < glob.Count - 1 ? Prefix(glob, parts, parts.Count) : Prefix(glob, parts, glob.Count - 1)
-            : parts.Count < glob.Count && Prefix(glob, parts, parts.Count);
+        EndsInAnyDepth(glob) ? Prefix(glob, parts, Math.Min(parts.Count, glob.Count - 1)) : parts.Count < glob.Count && Prefix(glob, parts, parts.Count);
+
+    private static bool EndsInAnyDepth(IReadOnlyList<string> glob) => glob.Count > 0 && glob[^1] == "**";
+
+    /// <summary>A glob ending in <c>**</c>: its fixed part, and at least one more segment.</summary>
+    private static bool MatchesAnyDepth(IReadOnlyList<string> glob, IReadOnlyList<string> parts) =>
+        parts.Count >= glob.Count && Prefix(glob, parts, glob.Count - 1);
 
     private static bool Prefix(IReadOnlyList<string> glob, IReadOnlyList<string> parts, int count) =>
         Enumerable.Range(0, count).All(at => glob[at] == "*" || glob[at] == parts[at]);
