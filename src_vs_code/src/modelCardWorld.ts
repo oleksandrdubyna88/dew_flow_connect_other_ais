@@ -133,6 +133,18 @@ export function offMachineNote(vendor: Vendor): string {
   return warning.length === 0 ? '' : `<p class="skew">${escapeHtml(warning)}</p>`;
 }
 
+/**
+ * What coai-mcp WARNED about the CLI this row will run — today a Vibe version coai has not measured, which runs anyway
+ * (the owner's decision of 2026-10-13; `providers[].warning`). Said on the card, in the warning tone, for an AVAILABLE
+ * row too: `cannotRun` speaks only for an unavailable one, and a warned row is not that. Nothing when the server sent
+ * no warning, which is every other row and every server older than the field.
+ */
+export function versionWarningNote(id: string, reported: CardContext['reported']): string {
+  const warning = reported[id]?.warning ?? '';
+
+  return warning.length === 0 ? '' : `<p class="skew warned"><b>Runs with a warning:</b> ${escapeHtml(warning)}</p>`;
+}
+
 /** The contract the row's own Team server last said it speaks — undefined for any other row, or one not heard from. */
 function contractOf(vendor: Vendor, servers: readonly TeamServerState[]): number | undefined {
   return vendor.runtime === 'remote' ? servers.find((one) => one.server.id === vendor.teamServerId)?.contract : undefined;

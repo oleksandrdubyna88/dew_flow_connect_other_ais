@@ -4,7 +4,7 @@ import { escapeHtml } from './escapeHtml';
 import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
 import {
-  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
+  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
 } from './modelCardWorld';
 import type { TeamServerState } from './teamServerView';
 import { modelsFor, modelsProvenance } from './models';
@@ -193,7 +193,8 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
     + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${verdictBadge(vendor.id, facts.context)}`
     + `${cannotRun(vendor.id, facts.context.reported)}${cliBadge(vendor, facts.context.cli)}${healthBadge(facts.check)}</div>`
     + `<div class="world">${worldButtons(vendor, id, facts.context)}</div>`
-    + `${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}${ignoredNote(vendor, facts.binary, facts.context.runtimeNote)}</div>`;
+    + `${versionWarningNote(vendor.id, facts.context.reported)}${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}`
+    + `${ignoredNote(vendor, facts.binary, facts.context.runtimeNote)}</div>`;
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {

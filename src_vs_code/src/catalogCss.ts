@@ -94,6 +94,8 @@ const SHELL = `
     padding: 4px 8px; margin: 6px 0; border-radius: 0 3px 3px 0;
   }
   .path-unknown { --mark: var(--warn); }
+  /* A row coai-mcp runs WITH a warning (an unmeasured Vibe version, 2026-10-13): the skew shape in the warning tone. */
+  .skew.warned { --mark: var(--warn); }
   .path-missing .path-note, .path-unknown .path-note { color: var(--mark); font-weight: 600; }
   .path-mark { color: var(--mark); }
   /* The other side's group (paths per side, E4): a bordered fieldset whose legend names that side — nothing in it is

@@ -12696,3 +12696,28 @@ flowchart LR
 - **Not here**: Vibe as a consultant or question row (S3); chat (§8); a live round through the product (the plan's
   §5, with the server half); a REAL install by the buttons on any side — the commands are pinned and their sources
   read, but none was run on this machine.
+
+## A row coai-mcp runs WITH a warning is said so (2026-10-13, the owner's decision for Vibe: warn, not refuse)
+
+The server now RUNS a Vibe version it has not measured and carries one runtime-neutral string about it in two places
+(`module_server.md`, *A launch the control WARNED about*): `reviewerStates[].warning` in the session file and in
+`status`, for ANY reviewer status, and `providers[].warning` on the providers wire. Both were invisible here — the
+round's line showed a reviewer's `note` only when it failed, queued or stood down, and the card showed `note` only for
+an UNAVAILABLE row, while a warned Vibe is done and available.
+
+- **The round's line** (`rounds.ts`): `ReviewerState.warning` (optional); `reviewerRows` adds `warned: <the warning>`
+  to the reviewer's detail for every status (`warnedOf`, through the same `usableString` distrust as the model and the
+  effort — blank, whitespace or a non-string is nothing). So the sidebar's running round shows it under the reviewer it
+  is about, and the rounds log, its search and its CSV export carry it through `reviewerLines`. A reviewer without the
+  field — every reviewer of a server older than it — reads exactly as before (`done (2 findings)`).
+- **The card** (new UI only, `modelCard.top`): `ProviderHealth.warning` (optional) is read by `parseProviders` only when
+  it is a non-blank string (`warningOf`, beside `apiOf`); `modelCardWorld.versionWarningNote` draws
+  `<p class="skew warned"><b>Runs with a warning:</b> …</p>` under the card's badges — the `.skew` shape in the warning
+  tone (`catalogCss`: `.skew.warned { --mark: var(--warn); }`), for an available row too, and no "cannot review" badge.
+  No field, no line.
+- **Help**: the `choose-reviewers` article says in five languages what a warned row looks like — **Runs with a warning:**
+  on the card, *warned:* on its round line.
+- **Tests**: `aWarnedReviewerIsShown.test.ts` (8). RED first, 5 of 7 against the code before (`done (2 findings)` with
+  the warning missing; the rounds-log line; the sidebar's reviewer; `reported.vibe.warning` undefined; "the card draws
+  no warning"), the two no-warning guards green throughout; 7 of 7 green after. The help test was written after the
+  help: its teeth — the Spanish label changed in the compiled output → `the es article does not name the card's line`.
