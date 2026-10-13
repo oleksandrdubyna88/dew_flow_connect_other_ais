@@ -81,7 +81,8 @@ export const UNNAMED_VENDOR_COLOUR = 'var(--vscode-foreground)';
  * <p>Not decoration. `codex`, `gemini` and `local` keep the blue, green and orange they have worn
  * since the feature shipped, because a mapping somebody has already learned is not worth
  * invalidating; `claude` and `antigravity` are pinned for the same reason before anybody learns
- * something else.</p>
+ * something else, and `vibe` (Mistral, 2026-10-13) takes amber — the warm end of Mistral's own mark,
+ * the orange of which `local` already wears.</p>
  *
  * <p><b>Their slots are reserved whether or not they are configured.</b> Placing anchors "first" is
  * not enough: with only `claude` configured, an unanchored vendor would otherwise be free to take
@@ -91,6 +92,7 @@ export const UNNAMED_VENDOR_COLOUR = 'var(--vscode-foreground)';
  */
 const ANCHORED: Readonly<Record<string, number>> = {
   codex: 0,        // Blue
+  vibe: 1,         // Amber
   antigravity: 3,  // Cyan
   gemini: 4,       // Green
   claude: 6,       // Purple

@@ -24,13 +24,27 @@ export type Arch = 'x64' | 'arm64';
 /** Where a runtime's newest published version can be read from. */
 export type VersionSource =
   | { readonly kind: 'npm'; readonly package: string }
-  | { readonly kind: 'manifest'; readonly url: string };
+  | { readonly kind: 'manifest'; readonly url: string }
+  | { readonly kind: 'pypi'; readonly package: string };
 
 /** The npm package each CLI publishes — queried live, not recalled. */
 const NPM_PACKAGE: Record<string, string> = {
   codex: '@openai/codex',
   gemini: '@google/gemini-cli',
   claude: '@anthropic-ai/claude-code',
+};
+
+/**
+ * The PyPI package a CLI is installed from — Vibe is not on npm.
+ *
+ * <p>`mistral-vibe` is the package both of Mistral's own routes install: `uv tool install mistral-vibe` on Windows,
+ * and `mistral.ai/vibe/install.sh` on Linux and macOS, which runs the same `uv tool install` (and `uv tool upgrade`
+ * when one is there). Its PyPI JSON (`pypi.org/pypi/mistral-vibe/json`, read 2026-10-13: name `mistral-vibe`, author
+ * Mistral AI, homepage github.com/mistralai/mistral-vibe, `info.version` 2.26.1 — the version installed here) is
+ * therefore the index the update button installs from, not a mirror of it.</p>
+ */
+const PYPI_PACKAGE: Record<string, string> = {
+  vibe: 'mistral-vibe',
 };
 
 /**
@@ -66,6 +80,10 @@ const MANIFEST_ARCH: Record<Arch, string> = {
 export function versionSourceFor(runtime: string, platform: Platform, arch: Arch): VersionSource | undefined {
   if (runtime === 'antigravity') {
     return { kind: 'manifest', url: `${ANTIGRAVITY_MANIFESTS}/${MANIFEST_OS[platform]}_${MANIFEST_ARCH[arch]}.json` };
+  }
+  const pypiPackage = PYPI_PACKAGE[runtime];
+  if (pypiPackage !== undefined) {
+    return { kind: 'pypi', package: pypiPackage };
   }
   const npmPackage = NPM_PACKAGE[runtime];
 
@@ -128,12 +146,32 @@ function parts(version: string): number[] {
  */
 /** Where a vendor's newest version is read from. Exported for the test that pins the escaping. */
 export function registryUrlFor(source: VersionSource): string {
-  return source.kind === 'npm'
-    // Every slash, not the first: a scoped name has exactly one, so the two are equivalent today,
-    // and CodeQL (js/incomplete-sanitization, 2026-09-05) is right that a sanitiser which handles
-    // the first occurrence is a sanitiser that fails the moment the input has a second.
-    ? `https://registry.npmjs.org/${source.package.replaceAll('/', '%2f')}/latest`
-    : source.url;
+  switch (source.kind) {
+    case 'npm':
+      // Every slash, not the first: a scoped name has exactly one, so the two are equivalent today,
+      // and CodeQL (js/incomplete-sanitization, 2026-09-05) is right that a sanitiser which handles
+      // the first occurrence is a sanitiser that fails the moment the input has a second.
+      return `https://registry.npmjs.org/${source.package.replaceAll('/', '%2f')}/latest`;
+    case 'pypi':
+      return `https://pypi.org/pypi/${encodeURIComponent(source.package)}/json`;
+    default:
+      return source.url;
+  }
+}
+
+/**
+ * The version a registry answered with, or `''`. npm's `/latest` and the antigravity manifest carry it at the top;
+ * PyPI's JSON API keeps it under `info` (and a top-level `version` there is not its answer).
+ */
+export function versionFrom(source: VersionSource, body: unknown): string {
+  const holder = source.kind === 'pypi' ? fieldOf(body, 'info') : body;
+  const version = fieldOf(holder, 'version');
+
+  return typeof version === 'string' ? version : '';
+}
+
+function fieldOf(value: unknown, name: string): unknown {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[name] : undefined;
 }
 
 export async function latestCliVersion(source: VersionSource): Promise<string> {
@@ -143,9 +181,8 @@ export async function latestCliVersion(source: VersionSource): Promise<string> {
     if (!response.ok) {
       return '';
     }
-    const body = (await response.json()) as { version?: unknown };
 
-    return typeof body.version === 'string' ? body.version : '';
+    return versionFrom(source, await response.json());
   } catch {
     return '';
   }

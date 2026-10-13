@@ -5,7 +5,7 @@ import { groupOf, grouped } from '../addModelGroups';
 /** "Add a model" grouped by where a model runs (research/PLAN_one_model_catalog.md E3.2). */
 
 test('a runtime is in the group of where it runs', () => {
-  assert.deepEqual(['codex', 'claude', 'antigravity', 'api', 'local', 'remote'].map(groupOf), ['cli', 'cli', 'cli', 'api', 'gpu', 'remote']);
+  assert.deepEqual(['codex', 'claude', 'antigravity', 'vibe', 'api', 'local', 'remote'].map(groupOf), ['cli', 'cli', 'cli', 'cli', 'api', 'gpu', 'remote']);
 });
 
 test('the items come in group order, each group under its separator, an empty group with none', () => {

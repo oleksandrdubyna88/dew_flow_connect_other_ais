@@ -19,6 +19,8 @@ export interface VendorTerminal {
   readonly usageCommand: string;
   /** Shown before the CLI starts when there is something the person needs to know. */
   readonly note: string;
+  /** Variables the terminal starts with — how a CLI that takes no model flag is given the row's model. */
+  readonly env: Readonly<Record<string, string>>;
 }
 
 /** Each vendor's own name for "what have I spent" — verified in each CLI, not guessed. */
@@ -29,6 +31,9 @@ const USAGE_COMMAND: Record<string, string> = {
   // agy prints its own accounting under this one; it is a subcommand, not a slash command, so it
   // is typed at the shell prompt rather than inside a session.
   antigravity: 'agy usage',
+  // Vibe 2.26.1's own command table (`vibe/cli/commands.py` in the installed package): "Display agent
+  // statistics and model and provider details". It has no spend command; `/whoami` names the plan.
+  vibe: '/status',
 };
 
 /** Which binary each runtime actually is. A default here runs somebody else's CLI under this name. */
@@ -37,7 +42,40 @@ const EXECUTABLE: Record<string, string> = {
   gemini: 'gemini',
   claude: 'claude',
   antigravity: 'agy',
+  vibe: 'vibe',
 };
+
+/**
+ * How each CLI is told its model on a command line: the flag, or `''` for a CLI that takes no model flag.
+ * Anything not listed is `-m`, the Codex CLI's (and gemini's) spelling.
+ */
+const MODEL_FLAG: Record<string, string> = {
+  claude: '--model',
+  antigravity: '--model',
+  // Vibe has no `--model`: the alias rides `VIBE_ACTIVE_MODEL` (D10), so the ▶ terminal sets it in the
+  // terminal's environment ({@link TERMINAL_ENV}) instead — the same variable every coai launch of Vibe sets.
+  vibe: '',
+};
+
+/**
+ * The environment a runtime's ▶ terminal starts with — the shell-independent way to hand a CLI what it reads
+ * from variables, because the terminal may be PowerShell, cmd or bash and each spells an assignment differently.
+ */
+const TERMINAL_ENV: Record<string, (vendor: Vendor) => Readonly<Record<string, string>>> = {
+  vibe: vibeTerminalEnv,
+};
+
+/**
+ * Vibe's ▶ terminal: the row's model, and the Python CLI.
+ *
+ * <p>`vibe` is two CLIs and a flag cached in its home picks one on every launch (research/RESULTS_vibe_confinement.md
+ * §3); `VIBE_CLI=python` is the one every coai launch pins (D17), so the terminal a person checks their account in is
+ * the CLI that reviews. `VIBE_HOME` is NOT set: this is the person's own Vibe, in their own home — and the sign-in
+ * lives in the operating system's keyring, which every home reads (§12), so signing in here signs coai's launches in.</p>
+ */
+function vibeTerminalEnv(vendor: Vendor): Readonly<Record<string, string>> {
+  return vendor.model.length === 0 ? { VIBE_CLI: 'python' } : { VIBE_ACTIVE_MODEL: vendor.model, VIBE_CLI: 'python' };
+}
 
 /**
  * How to bring a vendor's CLI up to date — its OWN command, verified one by one.
@@ -58,6 +96,8 @@ const EXECUTABLE: Record<string, string> = {
  *       released in rust-v0.126.0, so an older codex — or one whose version could not be read — is
  *       still installed again, which works on every version (research/PLAN_codex_updates_itself.md).</li>
  *   <li><b>gemini</b>: `npm install -g @google/gemini-cli@latest`, from its README.</li>
+ *   <li><b>vibe</b>: Mistral's own script again on Linux and macOS (it upgrades an installed Vibe), and
+ *       `uv tool upgrade mistral-vibe` on Windows — {@link vibeUpdate}.</li>
  * </ul>
  *
  * <p>A vendor whose CLI path is set gets that path, not the bare name: the update must touch the
@@ -86,6 +126,10 @@ function selfUpdate(vendor: Vendor, subcommand: string, platform: Platform): Ven
 
 /** The installer, again — the update for a CLI that cannot update itself, or a version too old or unread to know. */
 function installAgain(vendor: Vendor, platform: Platform): VendorInstall {
+  const own = OWN_UPDATE[vendor.runtime];
+  if (own !== undefined) {
+    return own(platform);
+  }
   const install = vendorInstall(vendor, platform);
   const npmPackage = PACKAGE[vendor.runtime];
 
@@ -181,16 +225,10 @@ export function vendorTerminal(vendor: Vendor): VendorTerminal {
   // answer; a button that then runs the bare name ignores the one thing they told it. Quoted,
   // because a path with a space is otherwise two arguments.
   const executable = quoteIfNeeded(executableFor(vendor));
-  const model =
-    vendor.model.length === 0
-      ? []
-      : vendor.runtime === 'claude' || vendor.runtime === 'antigravity'
-        ? ['--model', vendor.model]
-        : ['-m', vendor.model];
   const provider = vendor.baseUrl.length === 0 ? [] : providerOverrides(vendor);
 
   return {
-    command: [executable, ...provider, ...model].join(' '),
+    command: [executable, ...provider, ...modelArgs(vendor)].join(' '),
     // agy's usage command is a SHELL command rather than a slash command inside a session, so it
     // must run the same binary the button just launched — which, with a CLI path set, is not the
     // bare name.
@@ -203,7 +241,15 @@ export function vendorTerminal(vendor: Vendor): VendorTerminal {
         ? ''
         : `${vendor.id} reaches ${vendor.baseUrl}. Reviews take its key from the vault; this terminal ` +
           `does not, so export ${keyVariable(vendor.id)} first if the CLI asks for one.`,
+    env: TERMINAL_ENV[vendor.runtime]?.(vendor) ?? {},
   };
+}
+
+/** The model on the command line, in this CLI's own spelling — nothing for a row with no model or a CLI with no flag. */
+function modelArgs(vendor: Vendor): readonly string[] {
+  const flag = MODEL_FLAG[vendor.runtime] ?? '-m';
+
+  return vendor.model.length === 0 || flag.length === 0 ? [] : [flag, vendor.model];
 }
 
 /** The same overrides the review runtime builds — one shape, so the terminal is what reviews. */
@@ -269,6 +315,7 @@ const DOCS: Record<string, string> = {
   gemini: 'https://github.com/google-gemini/gemini-cli',
   claude: 'https://docs.claude.com/en/docs/claude-code',
   antigravity: 'https://antigravity.google',
+  vibe: 'https://github.com/mistralai/mistral-vibe',
 };
 
 /** How each platform gets node, which is the actual reason somebody reads this on a fresh box. */
@@ -286,8 +333,9 @@ const NODE_PREREQUISITE: Record<Platform, string> = {
  * rule in a form a future change cannot quietly break.</p>
  */
 export function vendorInstall(vendor: Vendor, platform: Platform): VendorInstall {
-  if (vendor.runtime === 'antigravity') {
-    return antigravityInstall(platform);
+  const own = OWN_INSTALLER[vendor.runtime];
+  if (own !== undefined) {
+    return own(platform);
   }
 
   const runtime = PACKAGE[vendor.runtime] !== undefined ? vendor.runtime : 'codex';
@@ -338,6 +386,69 @@ function antigravityInstall(platform: Platform): VendorInstall {
 }
 
 /**
+ * Mistral Vibe: Mistral's own routes, per operating system (todo/PLAN_vibe_and_kimi_runtimes.md D16; the owner's
+ * decision of 2026-10-13 that the button installs on every side, WSL included — never a hand install).
+ *
+ * <p><b>Sources, read 2026-10-13, never guessed.</b> The package README (`mistral_vibe-2.26.1.dist-info/METADATA`,
+ * "One-line install"): "Linux and macOS — `curl -LsSf https://mistral.ai/vibe/install.sh | bash`"; "Windows — First,
+ * install uv: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`. Then, use uv
+ * command below: `uv tool install mistral-vibe`". The script itself (mistral.ai/vibe/install.sh, a redirect to
+ * `scripts/install.sh` in github.com/mistralai/mistral-vibe): accepts Linux and Darwin and refuses anything else;
+ * installs uv when `command -v uv` finds none — Astral's installer at a pinned version, its SHA-256 checked before it
+ * runs; then `uv tool install mistral-vibe`, or `uv tool upgrade mistral-vibe` when a `vibe` is already there; and runs
+ * NO sign-in. So on Linux and macOS install and update are one command, and uv is no prerequisite there.</p>
+ *
+ * <p>These are the same commands `VendorDiagnosis.InstallCure` names when a round finds no Vibe, held level by
+ * `vibeRuntime.test.ts`. Astral's uv installer is the one third-party line here, and it is Mistral's own documented
+ * Windows route — so it is offered as the PREREQUISITE line, never typed as the command.</p>
+ */
+function vibeInstall(platform: Platform): VendorInstall {
+  return platform === 'win32'
+    ? { command: VIBE_UV_INSTALL, prerequisite: UV_INSTALL_WINDOWS, docs: DOCS['vibe']!, note: VIBE_NOTE_WINDOWS }
+    : { command: VIBE_SCRIPT, prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_POSIX };
+}
+
+/**
+ * Vibe's update: the script again on Linux and macOS — it upgrades an installed Vibe itself — and on Windows
+ * `uv tool upgrade mistral-vibe`, the command that script runs, because `uv tool install` on an installed tool
+ * changes nothing.
+ */
+function vibeUpdate(platform: Platform): VendorInstall {
+  return platform === 'win32' ? { ...vibeInstall(platform), command: VIBE_UV_UPGRADE } : vibeInstall(platform);
+}
+
+const VIBE_SCRIPT = 'curl -LsSf https://mistral.ai/vibe/install.sh | bash';
+const VIBE_UV_INSTALL = 'uv tool install mistral-vibe';
+const VIBE_UV_UPGRADE = 'uv tool upgrade mistral-vibe';
+const UV_INSTALL_WINDOWS = 'powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"';
+
+/** The sign-in is the person's, every time: what the button cannot do, said in one place. */
+const VIBE_SIGN_IN =
+  'Then sign in, which only you can do: press ▶ on this card — Vibe asks for its sign-in the first time it starts — '
+  + 'or run `vibe --setup`. The sign-in is kept in the operating system’s keyring, which every coai launch of Vibe reads.';
+
+const VIBE_NOTE_WINDOWS =
+  'Mistral’s own Windows route: uv first if this machine has none (the line above — Astral’s installer, as '
+  + 'Mistral’s README says), then `uv tool install mistral-vibe`. ' + VIBE_SIGN_IN;
+
+const VIBE_NOTE_POSIX =
+  'Mistral’s own installer, from mistral.ai. It is a piped script — read it first if that matters to you. It '
+  + 'installs uv itself when it is missing, then Vibe, and prints the PATH line to add if uv’s tool folder is not on '
+  + 'yours. ' + VIBE_SIGN_IN + ' coai-mcp does not run Vibe on Linux, WSL or macOS yet — none of them is measured — '
+  + 'so a reviewer on this side waits for that.';
+
+/** The CLIs a person installs from their vendor's own installer rather than from npm. */
+const OWN_INSTALLER: Record<string, (platform: Platform) => VendorInstall> = {
+  antigravity: antigravityInstall,
+  vibe: vibeInstall,
+};
+
+/** The CLIs whose update is neither a subcommand of their own nor npm's `@latest`. */
+const OWN_UPDATE: Record<string, (platform: Platform) => VendorInstall> = {
+  vibe: vibeUpdate,
+};
+
+/**
  * The only publishers an install command may come from.
  *
  * <p>One line per vendor, and nothing else is allowed — see the test. A third-party repackaging can
@@ -351,4 +462,9 @@ export const OFFICIAL_SOURCES: readonly string[] = [
   // piped into a shell is exactly what this list exists to keep out.
   'curl -fsSL https://antigravity.google/',
   'irm https://antigravity.google/',
+  // Mistral's own script on Mistral's own domain, and the two uv commands Mistral's README and that script run — by
+  // the package's full name, so no other uv tool can ride behind this button.
+  'curl -LsSf https://mistral.ai/',
+  'uv tool install mistral-vibe',
+  'uv tool upgrade mistral-vibe',
 ];

@@ -4,6 +4,7 @@ import { checkStateOnThisDisk, type CheckRecord, type HealthFile } from './consu
 import type { ConsultantHealthState } from './consultantHealthState';
 import { escapeHtml } from './escapeHtml';
 import { remoteWarning } from './localEngines';
+import { CLI_RUNTIMES } from './models';
 import { type CardContext, endpointButton, headButtons } from './panelView';
 import { availabilityOf } from './providers';
 import type { TeamServerState } from './teamServerView';
@@ -103,11 +104,9 @@ export function verdictBadge(id: string, context: CardContext): string {
     : '';
 }
 
-const CLI_RUNTIMES: ReadonlySet<Vendor['runtime']> = new Set(['codex', 'claude', 'antigravity', 'gemini']);
-
 /** The CLI this row runs, and whether a newer one is published — for a row that runs a CLI on this machine. */
 export function cliBadge(vendor: Vendor, cli: CliStatus): string {
-  if (!CLI_RUNTIMES.has(vendor.runtime)) {
+  if (!CLI_RUNTIMES.includes(vendor.runtime)) {
     return '';
   }
   return `<span class="badge cli" title="${escapeHtml(cliStatusNote(vendor.runtime, cli))}">${escapeHtml(cliSaid(vendor.runtime, cli))}</span>`;
