@@ -618,8 +618,11 @@ question-consultant row, and a resumed turn reports its usage right.
   - **The sweep keeps an `asking` record's home** whatever its stamps (a turn in flight; the record pass settles an orphan
     first), beside the plan's "skipped while its turn is held".
   - **Measurement-led:** `vibe × web` is `unmeasured` (no Vibe cell exercises the web), so the planner refuses it; the
-    shared "unmeasured" refusal still names research/RESULTS_question_consultant_capabilities.md as the record that would
-    admit it, which is the wrong file for Vibe — open.
+    shared "unmeasured" refusal now names the record the refusing row cites (`CapabilityMatrix.RecordOf` and its TS twin,
+    read off `resultRef`) — research/RESULTS_vibe_confinement.md for Vibe, the first run's words unchanged for the rest.
+  - **Help, five languages:** the question consultant article says what a Vibe row reads (none: an empty folder; disk: a
+    copy of each folder), that its web prompt is disabled, that it runs on Windows only (D18) and that a folder outside a
+    Git repository is refused. The consult article lists no runtimes, so it is unchanged.
 
 **S4 — Kimi measured, then a Kimi reviewer row over ACP.** The owner signed in on 2026-10-12, so S4 is no longer blocked.
 Decisions D1, D6 (the snapshot with Kimi's exclusions), D8b (the Kimi arm = D19), D9, D10 (the ACP model option, the curated

@@ -824,7 +824,7 @@ flowchart LR
   M-V11/M-V1/M-V15 and M-V6/M-V14/M-V1 — denied writes do not prove bounded READS, so the disk row rests on M-V6's
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
-  record it cites (`Records`), not to one record for all.
+  record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first
