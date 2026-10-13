@@ -387,7 +387,7 @@ function antigravityInstall(platform: Platform): VendorInstall {
 
 /**
  * Mistral Vibe: Mistral's own routes, per operating system (todo/PLAN_vibe_and_kimi_runtimes.md D16; the owner's
- * decision of 2026-10-13 that the button installs on every side, WSL included — never a hand install).
+ * decision of 2026-10-13 that the buttons must WORK on every side, WSL included — one press, never a hand install).
  *
  * <p><b>Sources, read 2026-10-13, never guessed.</b> The package README (`mistral_vibe-2.26.1.dist-info/METADATA`,
  * "One-line install"): "Linux and macOS — `curl -LsSf https://mistral.ai/vibe/install.sh | bash`"; "Windows — First,
@@ -396,46 +396,79 @@ function antigravityInstall(platform: Platform): VendorInstall {
  * `scripts/install.sh` in github.com/mistralai/mistral-vibe): accepts Linux and Darwin and refuses anything else;
  * installs uv when `command -v uv` finds none — Astral's installer at a pinned version, its SHA-256 checked before it
  * runs; then `uv tool install mistral-vibe`, or `uv tool upgrade mistral-vibe` when a `vibe` is already there; and runs
- * NO sign-in. So on Linux and macOS install and update are one command, and uv is no prerequisite there.</p>
+ * NO sign-in. So on Linux and macOS install and update are one command already.</p>
  *
- * <p>These are the same commands `VendorDiagnosis.InstallCure` names when a round finds no Vibe, held level by
- * `vibeRuntime.test.ts`. Astral's uv installer is the one third-party line here, and it is Mistral's own documented
- * Windows route — so it is offered as the PREREQUISITE line, never typed as the command.</p>
+ * <p><b>Windows is made one press here</b> ({@link withUv}): the README's two steps, joined, with uv looked for first.
+ * These are the commands `VendorDiagnosis.InstallCure` names when a round finds no Vibe, held level by
+ * `vibeRuntime.test.ts`; `vibeWindowsInstall.test.ts` holds the Windows line to PowerShell's own parser.</p>
  */
 function vibeInstall(platform: Platform): VendorInstall {
   return platform === 'win32'
-    ? { command: VIBE_UV_INSTALL, prerequisite: UV_INSTALL_WINDOWS, docs: DOCS['vibe']!, note: VIBE_NOTE_WINDOWS }
+    ? { command: withUv(VIBE_UV_INSTALL), prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_WINDOWS }
     : { command: VIBE_SCRIPT, prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_POSIX };
 }
 
 /**
  * Vibe's update: the script again on Linux and macOS — it upgrades an installed Vibe itself — and on Windows
  * `uv tool upgrade mistral-vibe`, the command that script runs, because `uv tool install` on an installed tool
- * changes nothing.
+ * changes nothing. It meets a missing uv the way the install does.
  */
 function vibeUpdate(platform: Platform): VendorInstall {
-  return platform === 'win32' ? { ...vibeInstall(platform), command: VIBE_UV_UPGRADE } : vibeInstall(platform);
+  return platform === 'win32' ? { ...vibeInstall(platform), command: withUv(VIBE_UV_UPGRADE) } : vibeInstall(platform);
+}
+
+/**
+ * One PowerShell line that runs a `uv` subcommand on a machine that may have no uv yet.
+ *
+ * <p>Four steps, each from a source read 2026-10-13:</p>
+ * <ol>
+ *   <li>uv on PATH is used as it is (`Get-Command uv`).</li>
+ *   <li>Otherwise Astral's installer runs — exactly the line Mistral's README gives for Windows, and the one
+ *       docs.astral.sh/uv/getting-started/installation prints. It writes its folder to the user PATH in the REGISTRY
+ *       only (`Add-Path` in uv-installer.ps1, which `astral.sh/uv/install.ps1` redirects to), never to the running
+ *       session, so the new uv cannot be found by name in this terminal — it is called by its path, in the
+ *       installer's own order (`Invoke-Installer`): `UV_INSTALL_DIR`, then `XDG_BIN_HOME`, then
+ *       `XDG_DATA_HOME\..\bin`, then `$HOME\.local\bin` — the order docs.astral.sh/uv/reference/storage gives for the
+ *       executable directory. (A `UV_INSTALL_DIR` that is the cargo home puts uv under its `bin`; that case is not
+ *       followed here.)</li>
+ *   <li>The subcommand, then `uv tool update-shell` — Astral's documented way to put the tool executable directory on
+ *       the PATH (docs.astral.sh/uv/concepts/tools: "The executable directory must be in the PATH variable for tool
+ *       executables to be available from the shell").</li>
+ *   <li>That directory (`uv tool dir --bin`, which Mistral's own script uses) is put on THIS session's PATH too, so
+ *       `vibe --setup` runs in the same terminal straight after.</li>
+ * </ol>
+ */
+function withUv(subcommand: string): string {
+  return '$uv = (Get-Command uv -ErrorAction SilentlyContinue).Source; '
+    + `if (-not $uv) { ${UV_INSTALL_WINDOWS}; $uv = Join-Path ${UV_INSTALLED_IN} 'uv.exe' }; `
+    + `& $uv ${subcommand}; & $uv tool update-shell; $env:Path = (& $uv tool dir --bin) + ';' + $env:Path`;
 }
 
 const VIBE_SCRIPT = 'curl -LsSf https://mistral.ai/vibe/install.sh | bash';
-const VIBE_UV_INSTALL = 'uv tool install mistral-vibe';
-const VIBE_UV_UPGRADE = 'uv tool upgrade mistral-vibe';
+const VIBE_UV_INSTALL = 'tool install mistral-vibe';
+const VIBE_UV_UPGRADE = 'tool upgrade mistral-vibe';
 const UV_INSTALL_WINDOWS = 'powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"';
+/** The folder Astral's installer put uv in — its own order, as PowerShell (see {@link withUv}). */
+const UV_INSTALLED_IN = '$(if ($env:UV_INSTALL_DIR) { $env:UV_INSTALL_DIR } elseif ($env:XDG_BIN_HOME) { $env:XDG_BIN_HOME } '
+  + "elseif ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME '..\\bin' } else { Join-Path $HOME '.local\\bin' })";
 
-/** The sign-in is the person's, every time: what the button cannot do, said in one place. */
-const VIBE_SIGN_IN =
-  'Then sign in, which only you can do: press ▶ on this card — Vibe asks for its sign-in the first time it starts — '
-  + 'or run `vibe --setup`. The sign-in is kept in the operating system’s keyring, which every coai launch of Vibe reads.';
+/** Where the sign-in is kept — said in both notes. */
+const VIBE_KEYRING = 'The sign-in is kept in the operating system’s keyring, which every coai launch of Vibe reads.';
 
 const VIBE_NOTE_WINDOWS =
-  'Mistral’s own Windows route: uv first if this machine has none (the line above — Astral’s installer, as '
-  + 'Mistral’s README says), then `uv tool install mistral-vibe`. ' + VIBE_SIGN_IN;
+  'One press: if this machine has no uv, Astral’s own installer runs first (the route Mistral’s README gives for '
+  + 'Windows), then `uv tool install mistral-vibe`, then `uv tool update-shell`, which puts uv’s tool folder '
+  + '(`%USERPROFILE%\\.local\\bin` unless you moved it) on your user PATH. This terminal can run `vibe` at once; '
+  + 'every other terminal of VS Code inherits the PATH VS Code started with, so restart VS Code before ▶ finds `vibe` — '
+  + 'or set this row’s CLI path to that folder’s `vibe.exe`. Then sign in, which only you can do: run `vibe --setup` '
+  + 'here, or press ▶ after the restart — Vibe asks for its sign-in the first time it starts. ' + VIBE_KEYRING;
 
 const VIBE_NOTE_POSIX =
   'Mistral’s own installer, from mistral.ai. It is a piped script — read it first if that matters to you. It '
   + 'installs uv itself when it is missing, then Vibe, and prints the PATH line to add if uv’s tool folder is not on '
-  + 'yours. ' + VIBE_SIGN_IN + ' coai-mcp does not run Vibe on Linux, WSL or macOS yet — none of them is measured — '
-  + 'so a reviewer on this side waits for that.';
+  + 'yours. Then sign in, which only you can do: press ▶ on this card — Vibe asks for its sign-in the first time it '
+  + 'starts — or run `vibe --setup`. ' + VIBE_KEYRING + ' coai-mcp does not run Vibe on Linux, WSL or macOS yet — none '
+  + 'of them is measured — so a reviewer on this side waits for that.';
 
 /** The CLIs a person installs from their vendor's own installer rather than from npm. */
 const OWN_INSTALLER: Record<string, (platform: Platform) => VendorInstall> = {
@@ -449,22 +482,43 @@ const OWN_UPDATE: Record<string, (platform: Platform) => VendorInstall> = {
 };
 
 /**
- * The only publishers an install command may come from.
+ * The only publishers an install command may draw on — every URL it fetches and every package it installs.
  *
- * <p>One line per vendor, and nothing else is allowed — see the test. A third-party repackaging can
- * be the most convenient thing on the machine and it still does not go behind a button.</p>
+ * <p>A third-party repackaging can be the most convenient thing on the machine and it still does not go behind a
+ * button. It was a list of command PREFIXES until the Windows Vibe install became one line of several steps: a prefix
+ * check passes such a line on its first step whatever follows it. So every step is checked now
+ * ({@link fromOfficialSources}).</p>
  */
-export const OFFICIAL_SOURCES: readonly string[] = [
-  'npm install -g @openai/',
-  'npm install -g @google/',
-  'npm install -g @anthropic-ai/',
-  // The vendor's own installer on the vendor's own domain. The DOMAIN is the guard: anything else
-  // piped into a shell is exactly what this list exists to keep out.
-  'curl -fsSL https://antigravity.google/',
-  'irm https://antigravity.google/',
-  // Mistral's own script on Mistral's own domain, and the two uv commands Mistral's README and that script run — by
-  // the package's full name, so no other uv tool can ride behind this button.
-  'curl -LsSf https://mistral.ai/',
-  'uv tool install mistral-vibe',
-  'uv tool upgrade mistral-vibe',
-];
+export const OFFICIAL_SOURCES = {
+  /** The vendor's own installer on the vendor's own domain — the DOMAIN is the guard. */
+  urls: [
+    'https://antigravity.google/',
+    'https://mistral.ai/vibe/',
+    // Astral's installer for uv, the one Mistral's README gives as the Windows prerequisite (and the one Mistral's own
+    // install.sh runs on Linux and macOS, at a pinned version).
+    'https://astral.sh/uv/',
+  ],
+  /** What `npm install -g`, `uv tool install` and `uv tool upgrade` may be handed — by the package's full name. */
+  packages: ['@openai/codex', '@google/gemini-cli', '@anthropic-ai/claude-code', 'mistral-vibe'],
+} as const;
+
+const URL_IN_A_COMMAND = /https?:\/\/[^\s"'|;)]+/gu;
+/** The package an install verb is handed — up to whatever ends a word in a shell: a separator, a pipe, a quote. */
+const PACKAGE_INSTALLED = /\b(?:npm install -g|tool install|tool upgrade) ([^\s;|&)"']+)/gu;
+
+/**
+ * Whether a command draws ONLY on official sources: at least one source, every URL under an admitted prefix, and
+ * every package an install verb is handed an admitted one (a version suffix such as `@latest` allowed).
+ */
+export function fromOfficialSources(command: string): boolean {
+  const urls = [...command.matchAll(URL_IN_A_COMMAND)].map((match) => match[0]);
+  const packages = [...command.matchAll(PACKAGE_INSTALLED)].map((match) => match[1]!);
+
+  return urls.length + packages.length > 0
+    && urls.every((url) => OFFICIAL_SOURCES.urls.some((prefix) => url.startsWith(prefix)))
+    && packages.every(isOfficialPackage);
+}
+
+function isOfficialPackage(spec: string): boolean {
+  return OFFICIAL_SOURCES.packages.some((name) => spec === name || spec.startsWith(`${name}@`));
+}

@@ -16,7 +16,7 @@ import { serverSettingsJson } from '../serverSettingsFile';
 import { ServerSettingsSync } from '../serverSettingsSync';
 import { DEFAULTS } from '../settingsShape';
 import { cliGroups } from '../setupTab';
-import { OFFICIAL_SOURCES, vendorInstall, vendorTerminal, vendorUpdate } from '../vendorTerminal';
+import { fromOfficialSources, vendorInstall, vendorTerminal, vendorUpdate } from '../vendorTerminal';
 import { DEFAULT_VENDORS, VENDOR_PRESETS, type Vendor, vendorsFrom } from '../vendors';
 import { vendorsEnv } from '../vendorsWire';
 import { panelState, runPanel } from './panelPageHarness';
@@ -147,9 +147,10 @@ test('⤓ installs Vibe with Mistral’s own script on Linux and macOS, and with
   assert.equal(on('linux').command, 'curl -LsSf https://mistral.ai/vibe/install.sh | bash');
   assert.equal(on('darwin').command, on('linux').command, 'Mistral’s README gives one script for Linux and macOS');
   assert.equal(on('linux').prerequisite, '', 'the script installs uv itself when it is missing');
-  assert.equal(on('win32').command, 'uv tool install mistral-vibe');
-  assert.equal(on('win32').prerequisite, 'powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"',
-    'the README’s Windows route: uv first, from Astral');
+  // The README's Windows route — uv first, from Astral, then uv — as ONE line (vibeWindowsInstall.test.ts parses it).
+  assert.ok(on('win32').command.includes('& $uv tool install mistral-vibe'));
+  assert.ok(on('win32').command.includes('powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"'));
+  assert.equal(on('win32').prerequisite, '', 'nothing is left for the person to run first');
 });
 
 test('⤓ for Vibe says that a sign-in follows and that only the person can do it', () => {
@@ -165,7 +166,7 @@ test('⟳ updates Vibe the way Mistral’s own installer does: the script again 
   for (const installed of ['', '2.26.1']) {
     assert.equal(vendorUpdate(VIBE, 'linux', installed).command, 'curl -LsSf https://mistral.ai/vibe/install.sh | bash');
     assert.equal(vendorUpdate(VIBE, 'darwin', installed).command, 'curl -LsSf https://mistral.ai/vibe/install.sh | bash');
-    assert.equal(vendorUpdate(VIBE, 'win32', installed).command, 'uv tool upgrade mistral-vibe',
+    assert.ok(vendorUpdate(VIBE, 'win32', installed).command.includes('& $uv tool upgrade mistral-vibe'),
       '`uv tool install` on an installed tool changes nothing');
   }
 });
@@ -173,7 +174,7 @@ test('⟳ updates Vibe the way Mistral’s own installer does: the script again 
 test('the Vibe install and update commands come only from sources Mistral publishes', () => {
   for (const platform of ['win32', 'linux', 'darwin'] as const) {
     for (const command of [vendorInstall(VIBE, platform).command, vendorUpdate(VIBE, platform).command]) {
-      assert.ok(OFFICIAL_SOURCES.some((prefix) => command.startsWith(prefix)), `${platform}: "${command}" is not an official source`);
+      assert.ok(fromOfficialSources(command), `${platform}: "${command}" draws on a source that is not official`);
       assert.match(command, /mistral/u, `${platform}: "${command}" installs something that is not Mistral’s`);
     }
   }
@@ -193,8 +194,12 @@ test('the panel’s install commands are the ones coai-mcp names when it finds n
   const windowsArm = source.slice(windows, source.indexOf('\n', source.indexOf('"', windows + 20) + 1)).replaceAll('\\"', '"');
 
   assert.ok(linuxArm.includes(vendorInstall(VIBE, 'linux').command), 'the Linux script differs from coai-mcp’s cure');
-  assert.ok(windowsArm.includes(vendorInstall(VIBE, 'win32').command), 'the uv command differs from coai-mcp’s cure');
-  assert.ok(windowsArm.includes(vendorInstall(VIBE, 'win32').prerequisite), 'the uv installer differs from coai-mcp’s cure');
+  // The panel joins the README's two Windows steps into one line; each step is still the cure's, word for word.
+  const panel = vendorInstall(VIBE, 'win32').command;
+  for (const step of ['uv tool install mistral-vibe', 'powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"']) {
+    assert.ok(windowsArm.includes(step), `coai-mcp’s cure does not say: ${step}`);
+    assert.ok(panel.replace('& $uv ', 'uv ').includes(step), `the panel does not run: ${step}`);
+  }
 });
 
 // ---------------------------------------------------------------- the update light
@@ -336,6 +341,7 @@ test('every language’s choose-reviewers article names Mistral Vibe and that it
     assert.equal(fallback, false, `the ${language} article is missing`);
     assert.ok(body.setup.includes('Mistral Vibe'), `the ${language} article does not name the Vibe preset`);
     assert.ok(body.setup.includes('vibe --setup'), `the ${language} article does not say how Vibe is signed in`);
+    assert.ok(body.setup.includes('uv tool update-shell'), `the ${language} article does not say the Windows line puts Vibe on the PATH`);
     assert.ok(body.usage.includes('uv tool upgrade mistral-vibe'), `the ${language} article does not say how Vibe is updated`);
   }
 });

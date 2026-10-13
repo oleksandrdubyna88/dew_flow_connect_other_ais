@@ -12591,7 +12591,7 @@ flowchart LR
   R --> B["card: run, install, update"]
   B --> T["run: vibe, env VIBE_ACTIVE_MODEL + VIBE_CLI=python"]
   B --> I{"host platform"}
-  I -->|win32| U["uv tool install mistral-vibe (uv first: Astral's installer)"]
+  I -->|win32| U["one line: Astral's uv installer if uv is missing, uv tool install mistral-vibe, uv tool update-shell"]
   I -->|"linux, darwin"| S["mistral.ai/vibe/install.sh piped to bash"]
 ```
 
@@ -12621,18 +12621,42 @@ flowchart LR
   install") and the script `mistral.ai/vibe/install.sh` (a redirect to `scripts/install.sh` of
   github.com/mistralai/mistral-vibe).
 
-  | side | ⤓ install | ⟳ update | typed above it |
+  | side | ⤓ install | ⟳ update | a machine without uv |
   |---|---|---|---|
-  | Linux, WSL, macOS | `curl -LsSf https://mistral.ai/vibe/install.sh` piped to `bash` | the same script — it runs `uv tool upgrade mistral-vibe` when a Vibe is there | nothing: the script installs uv itself (Astral's installer, pinned and SHA-256-checked) |
-  | Windows | `uv tool install mistral-vibe` | `uv tool upgrade mistral-vibe` (`uv tool install` on an installed tool changes nothing) | Astral's uv installer, the README's Windows prerequisite |
+  | Linux, WSL, macOS | `curl -LsSf https://mistral.ai/vibe/install.sh` piped to `bash` | the same script — it runs `uv tool upgrade mistral-vibe` when a Vibe is there | the script installs uv itself (Astral's installer, pinned and SHA-256-checked) and prints the PATH line to add |
+  | Windows | ONE PowerShell line (`vendorTerminal.withUv`): `Get-Command uv`; when missing, Astral's installer `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 \| iex"`, then uv called by the path that installer used; then `& $uv tool install mistral-vibe`, `& $uv tool update-shell`, and `uv tool dir --bin` put on this session's PATH | the same line with `tool upgrade mistral-vibe` (`uv tool install` on an installed tool changes nothing) | handled in the line — nothing is left for the person to run first |
+
+  **Windows, one press (2026-10-13, the owner's "the install buttons must WORK, per OS").** It was the uv installer as
+  a commented line above `uv tool install mistral-vibe`: run it by hand, then press again, and in between `uv` was not
+  recognised. Now the README's two steps are one line. Sources, read 2026-10-13: the installer command is the README's
+  Windows prerequisite and docs.astral.sh/uv/getting-started/installation's, verbatim. `astral.sh/uv/install.ps1`
+  redirects to `releases.astral.sh/installers/uv/latest/uv-installer.ps1`, whose `Invoke-Installer` chooses the folder
+  `UV_INSTALL_DIR`, then `XDG_BIN_HOME`, then `XDG_DATA_HOME\..\bin`, then `$HOME\.local\bin` (the executable
+  directory of docs.astral.sh/uv/reference/storage), and whose `Add-Path` writes the user PATH in the REGISTRY only —
+  so the running session cannot find the new uv by name, and the line calls it by that path in that order (a
+  `UV_INSTALL_DIR` that is the cargo home, where uv goes under `bin`, is not followed). `uv tool update-shell` is
+  Astral's documented way to put the tool executable directory on the PATH (docs.astral.sh/uv/concepts/tools). The
+  line also prepends `uv tool dir --bin` to the session's `$env:Path`, so `vibe --setup` runs in the same terminal;
+  every OTHER terminal of VS Code inherits the PATH VS Code started with, so the note says to restart VS Code before ▶
+  finds `vibe` (or to set the row's CLI path to that folder's `vibe.exe`). The line is never run by a test — it
+  installs software. `vibeWindowsInstall.test.ts` holds it to PowerShell's own parser (`Parser.ParseInput`, which runs
+  nothing): no parse error, `Get-Command uv` before the installer, the installer before `& $uv tool install
+  mistral-vibe`, `& $uv tool update-shell` after it, the installer's folder order, and the same for ⟳. RED first: 6 of
+  6 failed against the two-step line (the prerequisite was the installer line; no `Get-Command uv`; no folder order;
+  no session PATH; ⟳ the same; the prefix check passed a line with an unofficial URL appended); green after.
 
   The side is the extension host's (`hostPlatform()`): a WSL window gets the script. The sign-in stays the person's —
-  the note after the command says to press ▶ (Vibe asks for it on its first start) or run `vibe --setup`. On Linux,
+  the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). On Linux,
   WSL and macOS the note also says coai-mcp does not run Vibe there yet (D18): installing it is what the later
-  measurement needs. `OFFICIAL_SOURCES` admits `curl -LsSf https://mistral.ai/`, `uv tool install mistral-vibe` and
-  `uv tool upgrade mistral-vibe` — the package by its full name, so no other uv tool rides behind the button. The
-  commands are the ones `VendorDiagnosis.InstallCure` names when a round finds no Vibe (one asymmetry: on macOS the
-  server's cure says uv and the button says the script; both are Mistral's, and coai-mcp refuses a macOS host anyway).
+  measurement needs. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
+  several steps on its first one, whatever follows. It is `{ urls, packages }`: the hosts a command may fetch from
+  (`https://antigravity.google/`, `https://mistral.ai/vibe/`, and `https://astral.sh/uv/` — the uv installer Mistral's
+  README gives for Windows and Mistral's own script runs elsewhere) and the packages `npm install -g`, `uv tool
+  install` and `uv tool upgrade` may be handed (`@openai/codex`, `@google/gemini-cli`, `@anthropic-ai/claude-code`,
+  `mistral-vibe`, by full name, a `@version` suffix allowed). `fromOfficialSources(command)` admits a command only when
+  it names at least one source and EVERY URL and EVERY installed package is admitted. The steps are the ones
+  `VendorDiagnosis.InstallCure` names when a round finds no Vibe, word for word (one asymmetry: on macOS the server's
+  cure says uv and the button says the script; both are Mistral's, and coai-mcp refuses a macOS host anyway).
 - **The update light** (`cliVersions.ts`): a third version source, `{ kind: 'pypi', package: 'mistral-vibe' }` →
   `https://pypi.org/pypi/mistral-vibe/json`, whose version is under `info` (`versionFrom`). `mistral-vibe` is the
   package both Mistral routes install, so PyPI is the index the button installs from, not a mirror.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { keyVariable, OFFICIAL_SOURCES, vendorInstall, vendorTerminal , executableForRuntime } from '../vendorTerminal';
+import { fromOfficialSources, keyVariable, vendorInstall, vendorTerminal , executableForRuntime } from '../vendorTerminal';
 import { CLI_RUNTIMES } from '../models';
 import { hostFamily } from '../hostSide';
 import { Vendor } from '../vendors';
@@ -124,7 +124,7 @@ test('an install command may only come from a source the vendor itself publishes
         continue;
       }
       assert.ok(
-        OFFICIAL_SOURCES.some((prefix) => command.startsWith(prefix)),
+        fromOfficialSources(command),
         `${runtime} on ${p} would install with "${command}", which is not from a source the vendor publishes`,
       );
     }
