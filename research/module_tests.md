@@ -52,6 +52,21 @@ the OpenAI-compatible endpoint (default `http://localhost:11434/v1`). The audit 
 configured by the operator, not measured. Their manifests record the selected model and endpoint,
 and the reviewer vendor ID is `local-security` independently of the model family.
 The calibration fixture includes written repository rules so its Conventions reviewer participates.
+`SecurityLaneEffortMeasurementTests` (explicit, 2026-10-13, epic 2 of
+[PLAN_local_effort_reaches_every_local_launch.md](../todo/PLAN_local_effort_reaches_every_local_launch.md)) runs ONE
+effort arm through the same `RunCell` — `COAI_SECURITY_CALIBRATION_EFFORT` (`none`/`low`/`medium`/`high`, default
+`none`), `COAI_SECURITY_CALIBRATION_MAX_TOKENS` (default 8192), `COAI_SECURITY_CALIBRATION_REPEATS` (1–10, default 3)
+and `COAI_SECURITY_CALIBRATION_FIXTURE` (`unsafe`, the default, or `safe`: the safe controller with `ORDER BY Id` added,
+whose correct answer is empty) — into `<out>/<effort>-<ceiling>-<fixture>-<utc>/`. Unlike the qualification test, a
+reviewer cut at its ceiling does not fail it (`RunCell(…, strict: false)`): the cut is the observation. It still fails on
+an error reply, a prompt that never reached the shim, or any cell whose recorded argv (`turn-N.argv.json`, written by the
+recording launcher for every `--ask-local`) did not carry the arm's effort and ceiling. Results:
+[RESULTS_security_lane_effort_2026-10-13.md](RESULTS_security_lane_effort_2026-10-13.md). Its pure half is in CI:
+`SecurityLaneEffortArmTests` (11) — the defaults reproduce today's product, every input read, each out-of-range input
+refused naming what is legal, a cell that did not differ named, no cell at all a mismatch, the safe twin keeping the
+guard and the parameters and changing only the ordering. Green on first run; four mutations built and run at once —
+the ceiling check disabled, an empty cell list passing, the safe twin equal to its base, `0` accepted as a count — turned
+five tests red, each its own.
 Passing these hardware tests establishes usable replies and wiring; semantic accuracy of each
 finding and reproduction is inspected separately in the [Windows results](RESULTS_security_lane_qwen_windows.md).
 `SecurityPresetTests` also covers the historical-PR routing regressions: prose-only changes do not
