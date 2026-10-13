@@ -121,7 +121,7 @@ internal sealed record ConsultantDto(
 
 /// <summary>One caller kind's row of <c>COAI_COMMAND_MODELS</c> (issue #117).</summary>
 /// <remarks>Nullable for the reason <see cref="ConsultantDto"/> gives: an omitted field arrives null.</remarks>
-internal sealed record CommandModelDto(string? Strongest = null, string? Implementation = null);
+internal sealed record CommandModelDto(string? Strongest = null, string? Implementation = null, string? Coder = null);
 
 /// <summary>One row of <c>COAI_COMMANDS</c> — a command a person added (issue #467).</summary>
 /// <remarks>Nullable for the reason <see cref="ConsultantDto"/> gives: an omitted field arrives null.</remarks>

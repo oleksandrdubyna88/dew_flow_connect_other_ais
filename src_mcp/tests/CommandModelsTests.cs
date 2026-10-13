@@ -6,8 +6,8 @@ using CoaiMcp.Server;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Which two models the split order names for a caller kind, and how the setting that chooses them
-/// is read (issue #117).
+/// Which three models the split order names for a caller kind, and how the setting that chooses them
+/// is read (issue #117; the third tier, <c>coder</c>, 2026-10-13).
 /// </summary>
 public sealed class CommandModelsTests
 {
@@ -31,15 +31,16 @@ public sealed class CommandModelsTests
             row => row.Name,
             row => new ModelPair(
                 row.Value.GetProperty("strongest").GetString()!,
-                row.Value.GetProperty("implementation").GetString()!));
+                row.Value.GetProperty("implementation").GetString()!,
+                row.Value.GetProperty("coder").GetString()!));
 
         CommandModels.Shipped.Should().BeEquivalentTo(shared);
     }
 
     [Fact]
-    public void AClaudeCodeCaller_WithNothingConfigured_IsFableAndOpus()
+    public void AClaudeCodeCaller_WithNothingConfigured_IsFableOpusAndSonnet()
     {
-        CommandModels.For(Nothing, CallerIdentity.Claude).Should().Be(new ModelPair("Fable", "Opus"));
+        CommandModels.For(Nothing, CallerIdentity.Claude).Should().Be(new ModelPair("Fable", "Opus", "Sonnet"));
     }
 
     [Theory]
@@ -48,7 +49,7 @@ public sealed class CommandModelsTests
     [InlineData(CallerIdentity.Other)]
     public void EveryOtherCaller_WithNothingConfigured_IsNamedNoModel(string kind)
     {
-        CommandModels.For(Nothing, kind).Should().Be(new ModelPair(string.Empty, string.Empty));
+        CommandModels.For(Nothing, kind).Should().Be(new ModelPair(string.Empty, string.Empty, string.Empty));
     }
 
     [Theory]
@@ -56,9 +57,9 @@ public sealed class CommandModelsTests
     [InlineData("a-client-from-next-year")]
     public void AKindWithNoRow_ReadsAsOther_SoItIsNeverToldClaudeModels(string kind)
     {
-        var configured = new Dictionary<string, ModelPair> { [CallerIdentity.Other] = new("x-strong", "x-usual") };
+        var configured = new Dictionary<string, ModelPair> { [CallerIdentity.Other] = new("x-strong", "x-usual", "x-fast") };
 
-        CommandModels.For(configured, kind).Should().Be(new ModelPair("x-strong", "x-usual"));
+        CommandModels.For(configured, kind).Should().Be(new ModelPair("x-strong", "x-usual", "x-fast"));
         CommandModels.For(Nothing, kind).Should().Be(new ModelPair(string.Empty, string.Empty));
     }
 
@@ -66,10 +67,32 @@ public sealed class CommandModelsTests
     public void AConfiguredName_WinsPerField_AndABlankFieldKeepsTheShippedOne()
     {
         // A person who changed only the implementation model for Claude Code keeps Fable for the
-        // split — clearing one box must not blank the other slot.
-        var configured = new Dictionary<string, ModelPair> { [CallerIdentity.Claude] = new(string.Empty, "sonnet") };
+        // split and Sonnet for the code — clearing one box must not blank another slot.
+        var configured = new Dictionary<string, ModelPair> { [CallerIdentity.Claude] = new(string.Empty, "x-usual") };
 
-        CommandModels.For(configured, CallerIdentity.Claude).Should().Be(new ModelPair("Fable", "sonnet"));
+        CommandModels.For(configured, CallerIdentity.Claude).Should().Be(new ModelPair("Fable", "x-usual", "Sonnet"));
+    }
+
+    [Fact]
+    public void OnlyTheCoderConfigured_KeepsTheShippedStrongestAndImplementation()
+    {
+        var configured = new Dictionary<string, ModelPair> { [CallerIdentity.Claude] = new(Coder: "x-fast") };
+
+        CommandModels.For(configured, CallerIdentity.Claude).Should().Be(new ModelPair("Fable", "Opus", "x-fast"));
+    }
+
+    [Fact]
+    public void ARowWithACoder_IsRead_AndARowWithoutOne_LeavesItBlankForTheShippedOne()
+    {
+        // Every extension released before the third tier writes rows with two fields; this server must
+        // read those as "coder not named", which For() then resolves to the shipped coder.
+        var setting = CommandModelsSetting.Parse(
+            """{ "codex": { "strongest": "a", "implementation": "b", "coder": " c " }, "claude": { "implementation": "x-usual" } }""");
+
+        setting.Complaints.Should().BeEmpty();
+        setting.Map["codex"].Should().Be(new ModelPair("a", "b", "c"));
+        setting.Map["claude"].Coder.Should().BeEmpty();
+        CommandModels.For(setting.Map, CallerIdentity.Claude).Coder.Should().Be("Sonnet");
     }
 
     [Fact]

@@ -264,11 +264,13 @@ public static class GateCommands
     /// </remarks>
     public const string ModelOrderMarker = "Do the SPLIT itself with ";
 
-    /// <summary>Which model does which half — the caller's OWN two, per its kind.</summary>
+    /// <summary>Which model does which part of the work — the caller's OWN three, per its kind.</summary>
     /// <remarks>
-    /// <para>One template, and its Claude Code instance is the sentence every release before issue
-    /// #117 sent, byte for byte: a person who configured nothing cannot tell the feature landed. A
-    /// test holds it to the old text by equality.</para>
+    /// <para>One template with three tiers since 2026-10-13, when the operator's subagent policy
+    /// (conventions D1–D12) replaced "Fable splits, Opus implements": the strongest model splits the plan
+    /// into epics and specs the cornerstone and security stories, the implementation model splits epics
+    /// into stories, writes scenarios and briefs and reviews, and the coder writes the code and scouts.
+    /// A test pins the Claude Code instance's clauses.</para>
     /// <para>A slot with no name reads as generic words rather than as a gap — never "with  at its
     /// highest", and never another vendor's model.</para>
     /// </remarks>
@@ -276,10 +278,12 @@ public static class GateCommands
     {
         var strongest = CommandModels.NamedOr(models.Strongest, "the strongest model your client offers");
         var implementation = CommandModels.NamedOr(models.Implementation, "your usual model");
+        var coder = CommandModels.NamedOr(models.Coder, "a faster model your client offers");
 
         return ModelOrderMarker + texts.Text(CommandTexts.Model)
             .Replace("{strongest}", strongest, StringComparison.Ordinal)
-            .Replace("{implementation}", implementation, StringComparison.Ordinal);
+            .Replace("{implementation}", implementation, StringComparison.Ordinal)
+            .Replace("{coder}", coder, StringComparison.Ordinal);
     }
 
     /// <summary>

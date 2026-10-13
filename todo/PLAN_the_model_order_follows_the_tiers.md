@@ -11,6 +11,15 @@
 > Across the boundary: `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` §1 (D1–D12) is the canonical
 > statement of the policy; this plan only makes the gate's ORDER say the same thing.
 
+| Item | Built by | The other plan's part |
+|---|---|---|
+| The policy itself — `common/subagent-models.md`, the guard hook, the epic/story layout in `planning-docs.md`, the behaviour smoke | `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` | none — this plan only reads its §1 |
+| The gate's *Split with the strongest model* ORDER, its three slots, the panel pickers, the help, the coai releases | this plan | none — the conventions plan does not touch coai's order |
+
+Order: the conventions plan's §1 decisions come first (they are the source); this plan follows them and may ship
+before the conventions rule does — the order is advice either way. Disjoint otherwise. The conventions plan is being
+written by another session and is not edited from here; the mirror row there is owed by its author.
+
 ## 1. The symptom
 
 With *Split with the strongest model* on, a first plan round hands the caller this order (Claude Code, nothing
@@ -89,7 +98,10 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
    (`:112`) and `helpUk.ts` (`:48`).
 6. **Docs.** `research/module_server.md` (§ the model order, ~4847-4871, and the placeholder list ~6407),
    `research/module_extension.md` (~8143-8166), an `## Unreleased` section in `src_vs_code/CHANGELOG.md`.
-7. **Release** after the merge: mcp (minor — `feat:`), then the extension; the release PR gets its
+7. **Compatibility, measured.** `src_vs_code/scripts/live-command-models-compat.mjs`, the shape of
+   `live-security-settings-compat.mjs`: a `COAI_COMMAND_MODELS` row WITH `coder` handed to the released mcp 0.50.0
+   and to the new build through `--providers`; neither may list it as unrecognised. Run once, result in the PR.
+8. **Release** after the merge: mcp (minor — `feat:`), then the extension; the release PR gets its
    `## Server 0.51.0` / `## Extension 0.72.0` heading before it is squash-merged; the changelog-baseline row for mcp
    follows in its own PR. The Team server is not released.
 

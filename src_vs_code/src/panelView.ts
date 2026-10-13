@@ -1653,7 +1653,7 @@ ${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
 }
 
 /**
- * The two models the model order names, one row per KIND of calling assistant (issue #117).
+ * The three models the model order names, one row per KIND of calling assistant (issue #117).
  *
  * <p>The order is carried out by the caller, so each kind names its OWN vendor's models: every picker
  * offers that vendor's list — the Claude families the CLI is asked about, the Codex list read from its
@@ -1686,6 +1686,7 @@ function commandModelsBlock(state: PanelState): string {
     <div class="model-pair-boxes">
       <label>${SLOT_LABELS.strongest}${box('strongest', 'its strongest')}</label>
       <label>${SLOT_LABELS.implementation}${box('implementation', 'its usual')}</label>
+      <label>${SLOT_LABELS.coder}${box('coder', 'its faster')}</label>
     </div>
   </div>`;
   }).join('\n');

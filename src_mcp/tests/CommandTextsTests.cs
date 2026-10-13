@@ -57,9 +57,9 @@ public sealed class CommandTextsTests
     [Fact]
     public void AnOverriddenModelOrder_StillOpensWithItsMarker_AndNamesTheModels()
     {
-        var order = GateCommands.For(Everything(CommandTexts.Model, "{strongest} splits; {implementation} builds."))[1];
+        var order = GateCommands.For(Everything(CommandTexts.Model, "{strongest} splits; {implementation} judges; {coder} builds."))[1];
 
-        order.Should().Be(GateCommands.ModelOrderMarker + "Fable splits; Opus builds.");
+        order.Should().Be(GateCommands.ModelOrderMarker + "Fable splits; Opus judges; Sonnet builds.");
     }
 
     [Fact]

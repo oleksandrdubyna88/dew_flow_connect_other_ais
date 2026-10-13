@@ -4823,7 +4823,7 @@ they come from a person and outrank the caller's own defaults.
 |---|---|
 | Work autonomously | a question that does not block is written down and asked at the END, all together; one that does block is asked at once — but only after gathering every other blocking question, so the person is interrupted once |
 | Split the plan | 2-4 epics, each 2-4 logically complete stories, and after EVERY story: `review_code`, resolve, fix, document, test, commit — then the next |
-| Split with the strongest model (`COAI_SPLIT_WITH_FABLE`, a historical name) | the split itself on the CALLER's strongest model at its highest version; ordinary stories on its implementation model; payments, security, architecture and data migration back on the strongest — the two names per caller kind, below |
+| Split with the strongest model (`COAI_SPLIT_WITH_FABLE`, a historical name) | the subagent model tiers (since 2026-10-13): the CALLER's strongest model splits the plan into epics after asking the question consultant, and specs cornerstone and security stories; its implementation model splits epics into stories, writes scenarios and briefs and reviews; its coder writes the code and runs the scouts — the three names per caller kind, below |
 
 Everything is off by default, and an empty command list is exactly the behaviour of every release
 before this one.
@@ -4854,11 +4854,12 @@ chosen by:
 | `ModelPair`, the shipped map, `For(map, kind)` — per-FIELD fallback, configured → shipped; a kind with no row resolves as `other` | `core/Commands/CommandModels.cs` |
 | `COAI_COMMAND_MODELS` → `PanelSettings.CommandModels`; an unreadable value is the shipped map plus one `UnrecognisedSetting`, never a refusal — the order is advice | `src/Server/CommandModelsSetting.cs` |
 | `CommandContext.Models` (an init property defaulting to Claude Code's pair) filled from the caller's kind | `PanelService.RunStageAsync` |
-| the template: `Do the SPLIT itself with {S} at its highest available version … ordinary stories on {I} … on {S} (max) again`; a blank slot reads "the strongest model your client offers" / "your usual model" | `GateCommands.ModelCommand` |
+| the template, `shared/commands/command-model.md` — `{strongest}`, `{implementation}`, `{coder}`; a blank slot reads "the strongest model your client offers" / "your usual model" / "a faster model your client offers" | `GateCommands.ModelCommand` |
 
-- **Claude Code with nothing configured gets the pre-#117 sentence byte for byte** — a test pins it by
-  equality against the old text. Codex, Gemini and other clients ship with NO names: the order then
-  says the generic words rather than naming another vendor's model.
+- **Claude Code with nothing configured is told Fable, Opus and Sonnet.** Until 2026-10-13 it got the
+  pre-#117 sentence byte for byte; the subagent model tiers (conventions D1–D12) replaced it — see
+  *The model order follows the subagent tiers* below. Codex, Gemini and other clients ship with NO
+  names: the order then says the generic words rather than naming another vendor's model.
 - **The shipped map is held level with the extension by a file neither owns**,
   `shared/command-models.json`; each half asserts its own constant against it.
 - **`GateCommands.ModelOrderMarker`** (`"Do the SPLIT itself with "`) is the words every model order
@@ -4869,7 +4870,26 @@ chosen by:
   last one wins, through the indexer, as in `ConsultantRouting.Merge`. The first build used
   `ToDictionary`, which threw outside the `JsonException` catch — caught in the code round.
 - **The log line says who and which**: `split ordered to caller {Caller} ({CallerKind}); strongest
-  model …, implementation …`.
+  model …, implementation …, coder …`.
+
+### The model order follows the subagent tiers (2026-10-13)
+
+The operator's subagent policy of 2026-10-13 (`dew_flow_conventions · todo/PLAN_subagent_model_tiers.md`
+§1, D1–D12) has THREE tiers, and the order named two, so `ModelPair` gained a third field, `Coder`
+(the type keeps its name: the wire and the stored setting key on the fields). Design record:
+[PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md).
+
+| tier | slot | Claude Code ships | what the order gives it |
+|---|---|---|---|
+| strongest | `strongest` | Fable | the split of the PLAN into epics — after asking the question consultant (`ask_consultants`) what matters and where — the epics at the bottom of the plan; the spec (scenarios + brief) of cornerstone stories (at most ⌈2·E/5⌉) and of security work outside that quota |
+| judge | `implementation` | Opus | each EPIC into stories, one stories document per epic, marking the cornerstones; test scenarios and briefs; every reviewer, judge, architect and finding verifier; the fallback when the strongest is refused on a spend limit |
+| coder | `coder` | Sonnet | code, fixes, unit and integration tests; search scouts, ⌈1.5·N⌉ with distinct focuses; any change bigger than one file and 50 changed lines |
+
+The order also says: models by alias, never a versioned id; the summary names models and counts.
+`CommandModelsSetting` reads `coder` from `COAI_COMMAND_MODELS`; a row without it (every extension
+before 0.72.0) resolves to the shipped coder per field. An OLD server handed a row with `coder` ignores
+the field — System.Text.Json drops unmapped members — measured against the released binary by
+`src_vs_code/scripts/live-command-models-compat.mjs`. The sibling split-size orders are unchanged.
 
 ### The split is sized honestly, gated once, and written down (2026-09-23, issue #131)
 
@@ -6405,7 +6425,7 @@ Open tail: a per-worktree HEAD commit check would also catch a consultant's `com
 `CommandTexts` (core, pure) holds THE list of ids and the layering: a person's override when it says
 something (only its END is trimmed — three texts continue the marker before them), else the shipped
 text. A missing resource throws naming it. The computed parts are placeholders filled by `GateCommands`:
-`{scope}`, `{strongest}`, `{implementation}`, `{numbers}`, `{verdict}`.
+`{scope}`, `{strongest}`, `{implementation}`, `{coder}`, `{numbers}`, `{verdict}`.
 
 **The markers stay in code**, before the editable text: `GateCommands.AutonomyMarker` (`Work AUTONOMOUSLY.`),
 `ModelOrderMarker`, `GateOrderMarker`, `AlreadySplitMarker` (`This plan is a PIECE of a split that is

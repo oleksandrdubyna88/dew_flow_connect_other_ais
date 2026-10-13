@@ -1,9 +1,13 @@
 namespace CoaiMcp.Core.Commands;
 
-/// <summary>The two models the split order names: the one for the hard half, and the one for the rest.</summary>
-/// <param name="Strongest">The split itself and the stories where being wrong is expensive. Empty = not named.</param>
-/// <param name="Implementation">The ordinary stories. Empty = not named.</param>
-public sealed record ModelPair(string Strongest = "", string Implementation = "");
+/// <summary>The models the split order names, one per tier of the subagent policy (conventions D1–D12, 2026-10-13).</summary>
+/// <param name="Strongest">The epic split, and the spec of cornerstone and security stories. Empty = not named.</param>
+/// <param name="Implementation">The story split, test scenarios, briefs and every review. Empty = not named.</param>
+/// <param name="Coder">The code, fixes and tests, and the search scouts. Empty = not named.</param>
+/// <remarks>A pair in name only: it held two models until the third tier arrived (2026-10-13). The type keeps its
+/// name because the wire and the stored setting key on the FIELDS, and a rename would touch every reader for no
+/// behaviour.</remarks>
+public sealed record ModelPair(string Strongest = "", string Implementation = "", string Coder = "");
 
 /// <summary>
 /// Which models the split order names, per KIND of calling AI (issue #117).
@@ -21,8 +25,9 @@ public static class CommandModels
 {
     private const string Other = "other";
 
-    /// <summary>What every release before issue #117 named, kept for the caller it was right for.</summary>
-    public static ModelPair ClaudeCode { get; } = new("Fable", "Opus");
+    /// <summary>The three Claude tiers of the subagent policy: Fable, Opus, Sonnet — named as the aliases the
+    /// host resolves to the newest version of each.</summary>
+    public static ModelPair ClaudeCode { get; } = new("Fable", "Opus", "Sonnet");
 
     /// <summary>
     /// The shipped pair per caller kind. Only Claude Code's names anything: for the others this
@@ -43,7 +48,7 @@ public static class CommandModels
     /// </summary>
     /// <remarks>
     /// Per field, so a person who changed only the implementation model for Claude Code keeps Fable
-    /// for the split. A kind with no row at all — blank, or one a newer client exports — resolves as
+    /// for the split and Sonnet for the code. A kind with no row at all — blank, or one a newer client exports — resolves as
     /// <c>other</c>, so an unidentified caller is never named Claude models.
     /// </remarks>
     public static ModelPair For(IReadOnlyDictionary<string, ModelPair> configured, string kind)
@@ -54,7 +59,8 @@ public static class CommandModels
 
         return new ModelPair(
             NamedOr(chosen.Strongest, shipped.Strongest),
-            NamedOr(chosen.Implementation, shipped.Implementation));
+            NamedOr(chosen.Implementation, shipped.Implementation),
+            NamedOr(chosen.Coder, shipped.Coder));
     }
 
     /// <summary>A name, trimmed — or the fallback when there is none. The one spelling of "blank".</summary>

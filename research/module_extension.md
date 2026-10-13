@@ -8171,6 +8171,29 @@ sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipp
   `data-*` attribute to its `dataset` name as a DOM does (with `rolesPageHarness`' `camel`); the old
   copy dropped them, and `panelPageHarness.test.ts` holds the fake to that.
 
+### A third picker per caller: the subagent model tiers (2026-10-13)
+
+The operator's subagent policy of 2026-10-13 has three tiers, and the order named two
+([PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md); the order
+itself is in [module_server.md](module_server.md)). Each caller row now has three pickers —
+**Strongest** (epic split, cornerstone and security specs), **Briefs and review** (the `implementation`
+slot, relabelled: story split, scenarios, briefs, every review) and **Code and search** (the new
+`coder` slot: code, tests, scouts). Claude Code ships Fable, Opus and Sonnet; the other kinds ship
+nothing, as before.
+
+- `ModelPair` gained `coder` (the type keeps its name; the stored record and the wire key on the
+  fields). `commandModelsFrom`, `resolvedPair`, `commandModelsAfter` and `commandModelsEnv` carry it
+  through the same per-field rules; `package.json` declares it in the `coai.commandModels` schema.
+- **`CODER_SLOT_SINCE = 0.51.0`.** `commandModelsSkewNote` keeps its first sentence for a server older
+  than 0.33.0 and adds a second for one that reads two slots but not `coder` — only when some kind's
+  coder differs from the shipped one, since an older server names no coder at all.
+- The commands page lists `{coder}` among the model order's placeholders; the gate article's
+  paragraph, the `splitWithFable` hint and both `package.json` descriptions describe the three tiers,
+  in all five languages where the help is translated.
+- `scripts/live-command-models-compat.mjs` (`npm run test:command-models-compat`) hands a row WITH
+  `coder` to the released mcp and to the current build through `--providers`: neither may list
+  `COAI_COMMAND_MODELS` as unrecognised.
+
 ### One gate per epic or for the whole task, and the orders on the log page (2026-09-23, issue #131)
 
 - **`coai.gatePer`** (`epic` default, `task`) — a segmented radio under *Split the plan into epics and

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import {
+  CODER_SLOT_SINCE,
   COMMAND_MODELS_SINCE,
   SHIPPED_COMMAND_MODELS,
   commandModelTarget,
@@ -24,7 +25,7 @@ import { DEFAULTS, envBlock, settingWrite } from '../settingsShape';
 
 const shared = JSON.parse(
   readFileSync(join(__dirname, '..', '..', '..', 'shared', 'command-models.json'), 'utf8'),
-) as { shipped: Record<string, { strongest: string; implementation: string }> };
+) as { shipped: Record<string, { strongest: string; implementation: string; coder: string }> };
 
 test('the shipped pairs are the ones in the shared file, for exactly the caller kinds that exist', () => {
   // `shared/command-models.json` is owned by neither half; coai-mcp asserts CommandModels.Shipped
@@ -43,21 +44,21 @@ test('only the kind whose pair differs crosses, and it crosses resolved', () => 
 
   // `claude` typed exactly its shipped name, so it resolves to the shipped pair and stays home.
   assert.deepEqual(JSON.parse(commandModelsEnv(models)['COAI_COMMAND_MODELS']!), {
-    codex: { strongest: 'gpt-6-astra', implementation: '' },
+    codex: { strongest: 'gpt-6-astra', implementation: '', coder: '' },
   });
 });
 
 test('a record holding one kind still answers the shipped pair for every other kind', () => {
   const models = commandModelsFrom({ codex: { strongest: 'gpt-6-astra' } });
 
-  assert.deepEqual(resolvedPair(models, 'claude'), { strongest: 'Fable', implementation: 'Opus' });
-  assert.deepEqual(resolvedPair(models, 'gemini'), { strongest: '', implementation: '' });
+  assert.deepEqual(resolvedPair(models, 'claude'), { strongest: 'Fable', implementation: 'Opus', coder: 'Sonnet' });
+  assert.deepEqual(resolvedPair(models, 'gemini'), { strongest: '', implementation: '', coder: '' });
 });
 
 test('a blank field keeps the shipped name for that field only', () => {
   const models = commandModelsFrom({ claude: { implementation: 'sonnet' } });
 
-  assert.deepEqual(resolvedPair(models, 'claude'), { strongest: 'Fable', implementation: 'sonnet' });
+  assert.deepEqual(resolvedPair(models, 'claude'), { strongest: 'Fable', implementation: 'sonnet', coder: 'Sonnet' });
 });
 
 test('junk of any type reads as nothing chosen, never as a crash', () => {
@@ -91,7 +92,7 @@ test('a kind this build does not know is never written, whatever the message say
 test('choosing the CLI alias of the default is choosing the default', () => {
   // The Claude picker offers `fable`; the shipped name is `Fable`. Sending it would change nothing
   // and put a warning about an older server beside a panel that asked for nothing new.
-  const models = commandModelsFrom({ claude: { strongest: 'fable', implementation: 'opus' } });
+  const models = commandModelsFrom({ claude: { strongest: 'fable', implementation: 'opus', coder: 'sonnet' } });
 
   assert.deepEqual(kindsOnTheWire(models), []);
   assert.equal(commandModelsSkewNote('0.32.0', models), '');
@@ -131,4 +132,41 @@ test('the skew note speaks only for a known, older server and a panel that chang
   assert.equal(commandModelsSkewNote(COMMAND_MODELS_SINCE, changed), '');
   assert.equal(commandModelsSkewNote('0.32.0', pristine), '',
     'a pristine panel means Fable and Opus, which is what an older server says anyway');
+});
+
+test('the coder slot round-trips: set, blank-removes, read back, and a coder-only change crosses with the other two resolved', () => {
+  const set = commandModelsAfter({ claude: { strongest: 'opus' } }, 'claude', 'coder', ' x-fast ');
+  assert.deepEqual(set, { claude: { strongest: 'opus', coder: 'x-fast' } });
+  assert.deepEqual(commandModelsAfter(set, 'claude', 'coder', '  '), { claude: { strongest: 'opus' } });
+  assert.deepEqual(commandModelsAfter({ claude: { coder: 'x-fast' } }, 'claude', 'coder', ''), {});
+
+  assert.equal(resolvedPair(commandModelsFrom(set), 'claude').coder, 'x-fast');
+  const coderOnly = commandModelsFrom({ claude: { coder: 'x-fast' } });
+  assert.deepEqual(kindsOnTheWire(coderOnly), ['claude']);
+  assert.deepEqual(JSON.parse(commandModelsEnv(coderOnly)['COAI_COMMAND_MODELS']!), {
+    claude: { strongest: 'Fable', implementation: 'Opus', coder: 'x-fast' },
+  });
+  assert.deepEqual(commandModelTarget('claude:coder'), { kind: 'claude', label: 'Claude Code', slot: 'coder' });
+});
+
+test('choosing the CLI alias of the default coder is choosing the default', () => {
+  const models = commandModelsFrom({ claude: { coder: 'sonnet' } });
+
+  assert.deepEqual(kindsOnTheWire(models), []);
+  assert.equal(commandModelsEnv(models)['COAI_COMMAND_MODELS'], undefined);
+  assert.equal(commandModelsSkewNote('0.50.0', models), '');
+});
+
+test('a changed coder warns on a server that reads two slots, and stays quiet once the server reads three', () => {
+  const changed = commandModelsFrom({ claude: { coder: 'x-fast' } });
+
+  const note = commandModelsSkewNote('0.50.0', changed);
+  assert.match(note, /Code and search/);
+  assert.match(note, /0\.51\.0/);
+  assert.equal(commandModelsSkewNote(CODER_SLOT_SINCE, changed), '');
+  assert.equal(commandModelsSkewNote('0.51.0', changed), '');
+  assert.equal(commandModelsSkewNote('0.50.0', commandModelsFrom({ codex: { strongest: 'gpt-6-astra' } })), '',
+    'a coder left at its shipped value asks the 0.50 server for nothing it would miss');
+  assert.match(commandModelsSkewNote('0.32.0', changed), /does not read these models/,
+    'a server older than the pickers keeps the original sentence');
 });

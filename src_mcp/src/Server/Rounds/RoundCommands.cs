@@ -86,7 +86,7 @@ internal sealed class RoundCommands(PanelSettings settings, RolePrompts prompts,
     /// <summary>Which models a split order named, as the log line says it (issue #117).</summary>
     internal static string ModelsInLog(Core.Commands.CommandContext context) =>
         context.SplitWithFable
-            ? $"strongest model {NamedInLog(context.Models.Strongest)}, implementation {NamedInLog(context.Models.Implementation)}"
+            ? $"strongest model {NamedInLog(context.Models.Strongest)}, implementation {NamedInLog(context.Models.Implementation)}, coder {NamedInLog(context.Models.Coder)}"
             : "no model order";
 
     private static string NamedInLog(string name) => name.Length > 0 ? name : "(generic words)";

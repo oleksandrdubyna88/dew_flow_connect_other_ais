@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**Changed: *Split with the strongest model* follows the subagent model tiers.** The order now names THREE of the
+calling assistant's models, as the operator's policy of 2026-10-13 does: the strongest (Fable for Claude Code) splits
+the plan into epics — after asking the question consultant what matters and where — and writes the spec of the
+cornerstone stories (at most 2·E/5 rounded up for E epics) and of any security work; the briefs-and-review model (Opus)
+splits each epic into stories, one stories document per epic, writes the test scenarios and briefs, and runs every
+review; the new code-and-search model (Sonnet) writes the code, fixes and tests and runs the search scouts (1.5·N
+rounded up). The assistant writes code itself only for one file and at most 50 changed lines, passes models by alias,
+falls back from Fable to Opus on a spend limit and says so, and names models and counts in its summary. Each caller row
+under the switch has a third picker, **Code and search**; Codex, Gemini and other clients still ship with no names and
+are told generic words. A coai-mcp older than 0.51.0 ignores the new picker, and the panel says so once you change it.
+Help in all five languages. The server's half is coai-mcp 0.51.0.
+
 ## Server 0.51.0 — 2026-10-13
 
 **Fixed: a spent Kimi balance is named as one, not as a crash.** Kimi's `429 … insufficient balance` is now read as a
