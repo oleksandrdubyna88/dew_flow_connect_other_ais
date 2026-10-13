@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.51.0...mcp-v0.52.0) (2026-10-13)
+
+
+### Features
+
+* the split order follows the subagent model tiers — Fable splits epics and specs cornerstones, Opus judges, Sonnet writes ([#792](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/792)) ([d9a8cda](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d9a8cda7ab0ad368609a8e59f18f40933b08a0ba))
+
 ## [0.51.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.50.0...mcp-v0.51.0) (2026-10-13)
 
 
