@@ -7136,3 +7136,21 @@ step after the release, recorded then in research/RESULTS_vibe_confinement.md an
 - **A refusal that says what is there (R3).** See [module_runners.md](module_runners.md): when both the install rename and
   the rollback fail, the refusal says there is no snapshot at the path, the turn is refused, and the next turn's
   `MakeAtAsync` recovers the path.
+
+### The epic-3 code round (codex, proceed — 2026-10-13)
+
+- **A home and a copy are two declarations.** `ConsultantPlaces.ForConversationAsync` gives a runtime that names a
+  `HomesFolder` its owned, stamped, locked conversation folder whether or not it asks for a copy (`Workdir` then empty —
+  the launch keeps its own cwd); one that asks for a copy needs a homes folder to keep it in; only a runtime declaring
+  neither stands in the checkout with nothing held. No runtime declares a home without a copy today; Kimi's consultant
+  (S5) may, and it would have had no owned home.
+- **The in-process turn is given back on every way out but one.** A cancellation while the turn waited for the folder's
+  cross-process lock threw before the old try/catch, and the folder's `VibeHomeTurns` turn stayed held until a restart.
+  Now a `finally` gives it back unless the returned place took it (`TakingTheLock` is the seam the test cancels through).
+- **A stamp nobody can read is no owner.** `ConversationFolder.Read` answered an `ArgumentException` for a key written
+  twice and an `OverflowException` / `ArgumentException` for a ceiling no `TimeSpan` holds — out of the sweep, and out of a
+  start. Such a stamp is now `Unowned` (the foreign-age rule applies), and one bad folder never stops the pass.
+- **A known cost, not changed (the round's performance note, rejected):** a question row's granted roots are copied one
+  after another, not in parallel. Each copy is bounded by D6's ceilings (bytes, files, 60 s) and all of them by the
+  aggregate cap and the free-space floor; a parallel copy would contend for the same disk and the same budget for little
+  wall time on the one or two roots a row usually grants.
