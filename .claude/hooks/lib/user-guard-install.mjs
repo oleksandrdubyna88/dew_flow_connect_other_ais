@@ -149,7 +149,7 @@ const sameBytes = (a, b) => (a === null || b === null ? a === b : a.equals(b));
 function parseSettings(bytes) {
   if (bytes === null) return { settings: {} };
   try {
-    const value = JSON.parse(bytes.toString('utf8').replace(/^﻿/, ''));
+    const value = JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/, ''));
     return isObject(value) ? { settings: value } : { error: 'is not a JSON object' };
   } catch (e) {
     return { error: `does not parse (${e.message})` };

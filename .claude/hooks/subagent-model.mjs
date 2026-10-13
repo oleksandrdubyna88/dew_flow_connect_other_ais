@@ -166,13 +166,14 @@ async function readStdin() {
 }
 
 if (process.argv[1]?.endsWith('subagent-model.mjs')) {
-  let out = '';
-  try {
-    const { text, size } = await readStdin();
-    out = size > STDIN_LIMIT ? '' : hookResponse(text, process.env);
-  } catch {
-    out = '';
-  }
+  const out = await (async () => {
+    try {
+      const { text, size } = await readStdin();
+      return size > STDIN_LIMIT ? '' : hookResponse(text, process.env);
+    } catch {
+      return '';
+    }
+  })();
   if (out === '') process.exit(0);
   else {
     // The host may close the pipe before the write completes: every stdout failure still exits 0, silently.
