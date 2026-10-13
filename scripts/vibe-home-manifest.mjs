@@ -99,7 +99,9 @@ function measure() {
   const steps = [];
   const v1 = launch('home A: vibe --version', ['--version'], homeA, work);
   steps.push({ ...v1, after: inventory(homeA) });
-  const version = (/(\d+\.\d+\.\d+)/u.exec(v1.stdout) ?? [])[1] ?? '';
+  // By piece, not by an unanchored `(\d+\.\d+\.\d+)`, which backtracks quadratically on a long run of digits (SonarCloud
+  // S8786 on #803; 1.5 s at 40 000). The pieces are the runs of digits and dots; the version is the first that is N.N.N.
+  const version = v1.stdout.split(/[^\d.]+/u).find((piece) => /^\d+\.\d+\.\d+$/u.test(piece)) ?? '';
   if (v1.exit !== 0 || version.length === 0) {
     console.error(`vibe --version did not answer a version (exit ${v1.exit}): ${v1.stdout}${v1.stderrTail}`);
     process.exit(69);

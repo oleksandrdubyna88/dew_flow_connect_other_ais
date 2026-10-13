@@ -65,7 +65,28 @@ export function fromOfficialSources(command: string): boolean {
 
 /** A step's words, quotes stripped — what a shell would hand the program. */
 function wordsOf(step: string): readonly string[] {
-  return step.trim().split(/\s+/u).map((word) => word.replace(/^["']+|["']+$/gu, '')).filter((word) => word.length > 0);
+  return step.trim().split(/\s+/u).map(withoutOuterQuotes).filter((word) => word.length > 0);
+}
+
+/**
+ * A word without the quotes around it — by index, because `^["']+|["']+$` backtracks quadratically on a word with a long
+ * run of quotes inside it (SonarCloud S8786 on #803; 5.5 s for 60 000).
+ */
+function withoutOuterQuotes(word: string): string {
+  const start = quotesFrom(word, 0, 1, word.length);
+  const end = word.length - quotesFrom(word, word.length - 1, -1, word.length - start);
+
+  return word.slice(start, end);
+}
+
+/** How many quote characters stand at `from`, walking by `step`, looking at no more than `limit` characters. */
+function quotesFrom(word: string, from: number, step: 1 | -1, limit: number): number {
+  let count = 0;
+  while (count < limit && (word[from + count * step] === '"' || word[from + count * step] === "'")) {
+    count++;
+  }
+
+  return count;
 }
 
 type Verb = (typeof VERBS)[number];

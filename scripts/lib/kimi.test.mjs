@@ -4,11 +4,11 @@
 // only under this user's own temp folder, and removes them. CI runs it on Linux (ci.yml, "Probe script tests"), where the
 // two mode-bit cases run; on Windows they skip, because Windows has no mode bits and the profile's ACL is what it relies on.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, rmdirSync, statSync, symlinkSync, unlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { after, test } from 'node:test';
-import { copyHome, scratchRefusal } from './kimi.mjs';
+import { CredentialGuard, copyHome, parseStreamJson, scratchRefusal, withoutTrailingSeparators } from './kimi.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'kimi-scratch-test-'));
@@ -81,4 +81,72 @@ test('an existing folder other users can read is refused where the platform has 
   const open = join(base, 'open');
   mkdirSync(open, { mode: 0o755 });
   assert.match(scratchRefusal(open), /other users/u);
+});
+
+// SonarCloud S8786 on #803: an end-anchored separator run backtracked quadratically; the loop is linear and says the same.
+test('trailing separators go, in linear time on a pathological run', () => {
+  assert.equal(withoutTrailingSeparators('C:/a/b//'), 'C:/a/b');
+  assert.equal(withoutTrailingSeparators('C:\\a\\b\\\\'), 'C:\\a\\b');
+  assert.equal(withoutTrailingSeparators('/'), '');
+  assert.equal(withoutTrailingSeparators('a'), 'a');
+  const evil = `${'/'.repeat(200_000)}x`;
+  const started = performance.now();
+  assert.equal(withoutTrailingSeparators(evil), evil);
+  assert.ok(performance.now() - started < 200, 'a run of separators that does not end the path is one pass');
+});
+
+/** A home whose credentials/<name>.json carries this refresh token. */
+function homeWith(name, refresh, access = 'a') {
+  const home = mkdtempSync(join(base, `${name}-`));
+  mkdirSync(join(home, 'credentials'));
+  writeFileSync(join(home, 'credentials', 'kimi.json'), JSON.stringify({ refresh_token: refresh, access_token: access, expires_at: 1 }));
+  return home;
+}
+const refreshIn = (home) => JSON.parse(readFileSync(join(home, 'credentials', 'kimi.json'), 'utf8')).refresh_token;
+
+// SonarCloud S3403 on #803 said `rotates !== false` is always true. It is not: `rotates` is null until the real home's
+// first refresh, then whatever that refresh showed. All three states, and what each does to a copy that refreshed.
+test('the credential guard: a copy that refreshed is written back unless the real home showed no rotation', () => {
+  const unknown = homeWith('real-unknown', 'R1');
+  const guardUnknown = new CredentialGuard(unknown);
+  assert.equal(guardUnknown.rotates, null);
+  assert.equal(guardUnknown.afterCopiedRun(homeWith('copy-unknown', 'R2'), 'u'), true, 'unknown counts as rotating: written back');
+  assert.equal(refreshIn(unknown), 'R2');
+
+  const rotating = homeWith('real-rotating', 'R1');
+  const guardRotating = new CredentialGuard(rotating);
+  writeFileSync(join(rotating, 'credentials', 'kimi.json'), JSON.stringify({ refresh_token: 'R3', access_token: 'b', expires_at: 2 }));
+  assert.equal(guardRotating.afterRealRun('r'), true);
+  assert.equal(guardRotating.rotates, true);
+  assert.equal(guardRotating.afterCopiedRun(homeWith('copy-rotating', 'R4'), 'c'), true);
+  assert.equal(refreshIn(rotating), 'R4');
+
+  const steady = homeWith('real-steady', 'R1');
+  const guardSteady = new CredentialGuard(steady);
+  writeFileSync(join(steady, 'credentials', 'kimi.json'), JSON.stringify({ refresh_token: 'R1', access_token: 'b', expires_at: 2 }));
+  assert.equal(guardSteady.afterRealRun('r'), true);
+  assert.equal(guardSteady.rotates, false, 'the real home refreshed and kept its refresh token');
+  assert.equal(guardSteady.afterCopiedRun(homeWith('copy-steady', 'R5'), 'c'), false, 'no rotation: nothing written back');
+  assert.equal(refreshIn(steady), 'R1');
+});
+
+// SonarCloud S3776 on #803: parseStreamJson was split at a cognitive complexity of 20; what it reads must not move.
+test('stream-json: the LAST non-blank assistant text, the LAST resume hint, the lines parsed, each role counted', () => {
+  const stream = [
+    JSON.stringify({ role: 'assistant', content: 'first' }),
+    '',
+    'not json',
+    JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'sec' }, 'ond'] }),
+    JSON.stringify({ role: 'assistant', content: '   ' }),
+    JSON.stringify({ role: 'meta', type: 'session.resume_hint', session_id: 's-1' }),
+    JSON.stringify({ role: 'meta', type: 'other', session_id: 'ignored' }),
+    JSON.stringify({ role: 'meta', type: 'session.resume_hint', session_id: 's-2' }),
+    JSON.stringify({ content: 'no role' }),
+    JSON.stringify({ role: 'assistant', content: { not: 'text' } }),
+  ].join('\n');
+
+  assert.deepEqual(parseStreamJson(stream), {
+    answer: 'second', sessionId: 's-2', lines: 8, roles: { assistant: 4, meta: 3, '?': 1 },
+  });
+  assert.deepEqual(parseStreamJson(undefined), { answer: '', sessionId: '', lines: 0, roles: {} });
 });

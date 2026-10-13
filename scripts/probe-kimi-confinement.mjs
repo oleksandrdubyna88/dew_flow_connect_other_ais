@@ -44,6 +44,7 @@ import {
   CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
   parseStreamJson, promptMode, scratchRefusal, scrubHome, sessionFacts, shimArgs, trustInHome,
 } from './lib/kimi.mjs';
+import { table } from './lib/kimi-report.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -523,38 +524,7 @@ async function runResume(n) {
 
 // --------------------------------------------------------------------------------------------------------------- report
 
-const cut = (s, k) => String(s ?? '').replaceAll(/\s+/gu, ' ').replaceAll('\\', '\\\\').replaceAll('|', String.raw`\|`).slice(0, k);
-const flags = (o) => Object.entries(o ?? {}).map(([k, v]) => `${k}=${v ? 'yes' : 'no'}`).join(' ');
-
-function table(cell, rows) {
-  const lines = [`### ${cell}`, ''];
-  if (cell === 'M-K5') {
-    lines.push('| Run | Exit t1 / err t2 | Refusals t1 | Remembered | Marker read (new/old) | Reads t2 | Refusals t2 | Same session | Files A / B |', '|---|---|---|---|---|---|---|---|---|');
-    for (const r of rows) {
-      const t2 = r.turn2;
-      lines.push(`| ${r.run} | ${r.turn1.exit} / ${cut(t2?.reason || '—', 60)} | ${cut(r.turn1.refusals, 60)} | ${t2?.expect.word ? 'yes' : 'no'} | ${t2?.expect.newMarker ? 'new' : ''}${t2?.expect.oldMarker ? 'old' : ''}${!t2?.expect.newMarker && !t2?.expect.oldMarker ? 'neither' : ''} | ${cut(t2?.reads ?? '—', 80)} | ${cut(t2?.refusals ?? '—', 60)} | ${r.sameSession} | ${r.filesA.join(' ')} / ${r.filesB.join(' ')} |`);
-    }
-    return lines.join('\n');
-  }
-  lines.push('| Arm | Run | Exit | End / failure | Answer (excerpt) | Canary / written | Expect | Refusals | Tool calls | Reads | Session store |', '|---|---|---|---|---|---|---|---|---|---|---|');
-  for (const r of rows) {
-    if (r.error) {
-      lines.push(`| ${r.arm} | ${r.run} | — | ${cut(r.error, 160)} | | | | | | | |`);
-      continue;
-    }
-    const written = [flags(r.canaries), r.newFiles.length ? `new: ${r.newFiles.join(' ')}` : 'new: none', r.changedFiles.length ? `changed: ${r.changedFiles.join(' ')}` : ''].filter(Boolean).join('; ');
-    const end = [r.end, r.failure, r.reason ? `(${cut(r.reason, 70)})` : ''].filter(Boolean).join(' ');
-    const answer = (r.answer ? cut(r.answer, 90) : `(no answer) ${cut(r.stderrTail.split('\n').filter(Boolean).slice(-2).join(' '), 120)}`)
-      + (r.answer2 ? ` ⟶ /usage: ${cut(r.answer2, 160)}` : '');
-    const extra = [r.models.length ? `models: ${r.models.join('; ')}` : '', r.modeOptions.length ? `modes: ${r.modeOptions.join(',')}` : '', r.notes].filter(Boolean).join('; ');
-    const store = r.session?.found ? `${r.session.subagents?.length ? `sub-agents: ${r.session.subagents.join(',')}; ` : ''}wire ${Math.round((r.session.wireBytes ?? 0) / 1024)} KB`
-      + `${r.home ? `; in copy; real index ${r.realIndexUnchanged ? 'unchanged' : 'CHANGED'}` : ''}` : (r.home ? `not in copy's index; real index ${r.realIndexUnchanged ? 'unchanged' : 'CHANGED'}` : '—');
-    const expectCell = Object.keys(r.expect ?? {}).length ? `${flags(r.expect)}${Object.keys(r.inSession ?? {}).length ? ` / in session: ${flags(r.inSession)}` : ''}` : '';
-    const credentials = r.credentialsRefreshed ? `; credentials refreshed${r.home ? ' (through the home)' : ''}` : '';
-    lines.push(`| ${r.arm} | ${r.run} | ${r.exit} | ${end} | ${answer} | ${written} | ${expectCell}${extra ? ` ${cut(extra, 160)}` : ''} | ${cut(r.refusals, 80)} | ${cut(`${r.toolCallCount}: ${r.toolCalls}`, 120)} | ${cut(r.reads, 100)} | ${cut(store + credentials, 140)} |`);
-  }
-  return lines.join('\n');
-}
+// The tables are lib/kimi-report.mjs's — split out of here at a cognitive complexity of 64 (SonarCloud on #803).
 
 function report(byCell) {
   const text = Object.entries(byCell).map(([cell, rows]) => table(cell, rows)).join('\n\n');

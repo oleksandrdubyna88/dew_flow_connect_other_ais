@@ -144,8 +144,16 @@ function realOf(p) {
 }
 
 const fold = (p) => (WINDOWS ? p.toLowerCase() : p);
-const samePath = (a, b) => fold(a.replace(/[\\/]+$/u, '')) === fold(b.replace(/[\\/]+$/u, ''));
-const isInside = (child, parent) => fold(child).startsWith(fold(parent.replace(/[\\/]+$/u, '')) + sep);
+
+/** `p` without trailing separators — a loop, because an end-anchored `[\\/]+$` backtracks quadratically on a long run of them. */
+export function withoutTrailingSeparators(p) {
+  let end = p.length;
+  while (end > 0 && (p[end - 1] === '/' || p[end - 1] === '\\')) end--;
+  return p.slice(0, end);
+}
+
+const samePath = (a, b) => fold(withoutTrailingSeparators(a)) === fold(withoutTrailingSeparators(b));
+const isInside = (child, parent) => fold(child).startsWith(fold(withoutTrailingSeparators(parent)) + sep);
 
 /**
  * The sensitive files a copied home must not keep once the run is over: the sign-in and the config (it carries an API key).
@@ -252,7 +260,7 @@ export class CredentialGuard {
     const copy = credentialFingerprint(home);
     if (sameRefresh(copy, this.#last)) return false;
     const refreshedInCopy = Object.keys(copy).length > 0;
-    if (refreshedInCopy && this.rotates !== false) {
+    if (refreshedInCopy && (this.rotates ?? true)) {
       this.events.push({ tag, where: 'copy', rotatedInCopy: true, writtenBack: syncCredentials(home, this.#real) });
       this.#last = credentialFingerprint(this.#real);
       return true;
@@ -287,26 +295,35 @@ export function promptMode(exe, { cwd, env, prompt, timeoutMs, viaStdin = false 
   return run(exe, args, { cwd, env, input: viaStdin ? prompt : '', encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
 }
 
-/** The assistant text and the session id out of stream-json lines. */
-export function parseStreamJson(text) {
-  let answer = '';
-  let sessionId = '';
-  let lines = 0;
-  const roles = {};
-  for (const raw of String(text ?? '').split('\n')) {
-    if (!raw.trim()) continue;
-    let el;
-    try { el = JSON.parse(raw); } catch { continue; }
-    lines++;
-    roles[el.role ?? '?'] = (roles[el.role ?? '?'] ?? 0) + 1;
-    if (el.role === 'assistant') {
-      const c = el.content;
-      const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => (typeof x === 'string' ? x : x?.text ?? '')).join('') : '';
-      if (t.trim()) answer = t;
-    }
-    if (el.role === 'meta' && el.type === 'session.resume_hint') sessionId = el.session_id ?? '';
+/** One stream-json line as an object, or null when it is blank or not JSON. */
+function jsonLine(raw) {
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
-  return { answer, sessionId, lines, roles };
+}
+
+/** A message's text, whether its content is a string or an array of parts. */
+function contentText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((part) => (typeof part === 'string' ? part : part?.text ?? '')).join('');
+}
+
+/**
+ * The assistant text and the session id out of stream-json lines: the LAST non-blank assistant message, the LAST resume
+ * hint's session id, how many lines parsed, and how many of each role. (Split at a cognitive complexity of 20, SonarCloud
+ * on #803; a `null` line, which the one function threw on, is now skipped like any line that is not an object.)
+ */
+export function parseStreamJson(text) {
+  const elements = String(text ?? '').split('\n').map(jsonLine).filter((el) => el !== null);
+  const roles = {};
+  for (const el of elements) roles[el.role ?? '?'] = (roles[el.role ?? '?'] ?? 0) + 1;
+  const answer = elements.filter((el) => el.role === 'assistant').map((el) => contentText(el.content)).filter((t) => t.trim()).at(-1) ?? '';
+  const hint = elements.filter((el) => el.role === 'meta' && el.type === 'session.resume_hint').at(-1);
+  return { answer, sessionId: hint ? hint.session_id ?? '' : '', lines: elements.length, roles };
 }
 
 // ------------------------------------------------------------------------------------------------- the session store
@@ -436,7 +453,13 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
       }
     });
     child.stderr.on('data', (c) => { stderr += c.toString('utf8'); });
-    child.on('exit', (code) => { state.exit = code; for (const p of pending.values()) p.rej(new Error(`the agent exited with code ${code}`)); pending.clear(); });
+    child.on('exit', (code) => {
+      state.exit = code;
+      for (const p of pending.values()) {
+        p.rej(new Error(`the agent exited with code ${code}`));
+      }
+      pending.clear();
+    });
     child.on('error', (e) => finish(`spawn: ${e.message}`));
     (async () => {
       try {
@@ -460,6 +483,6 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
       } catch (e) {
         finish(String(e.message ?? e));
       }
-    })();
+    })().catch((e) => finish(`client: ${String(e?.message ?? e)}`));
   });
 }

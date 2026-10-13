@@ -169,3 +169,17 @@ test('every package an install step names is an official one, with at most a pla
     assert.equal(fromOfficialSources(command), true, command);
   }
 });
+
+test('a pathological command is judged in linear time — quotes inside a word do not make the check backtrack', () => {
+  // SonarCloud S8786 on #803: stripping a word's quotes with `^["']+|["']+$` is quadratic on a word with a long run of
+  // quotes INSIDE it — measured 1.46 s at 40 000, ×4 per doubling. A command line is the person's own, but the check
+  // runs on every install press; it must not be the slow part.
+  const evil = `npm install -g x${'"'.repeat(60_000)}x`;
+  const started = performance.now();
+  assert.equal(fromOfficialSources(evil), false);
+  const ms = performance.now() - started;
+  assert.ok(ms < 250, `judged in ${ms.toFixed(0)} ms`);
+
+  assert.equal(fromOfficialSources('npm install -g "@openai/codex"'), true, 'a quoted package is still read without its quotes');
+  assert.equal(fromOfficialSources(`uv tool install 'mistral-vibe'`), true);
+});
