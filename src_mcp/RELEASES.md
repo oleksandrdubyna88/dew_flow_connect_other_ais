@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.0...mcp-v0.52.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* every local launch is told the panel's effort, and a cut answer is named ([8d1af40](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8d1af40f31f084393033e547e098e14f4479d873))
+
 ## [0.52.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.51.0...mcp-v0.52.0) (2026-10-13)
 
 
