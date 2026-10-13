@@ -8,12 +8,12 @@
 > Related: [PLAN_the_caller_names_its_strongest_model.md](PLAN_the_caller_names_its_strongest_model.md)
 > (issue #117 — the two slots this plan widens to three), [PLAN_commands_and_autonomy.md](PLAN_commands_and_autonomy.md)
 > (the switches), [module_server.md](module_server.md), [module_extension.md](module_extension.md).
-> Across the boundary: `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` §1 (D1–D12) is the canonical
+> Across the boundary: `dew_flow_conventions · research/PLAN_subagent_model_tiers.md` §1 (D1–D12) is the canonical
 > statement of the policy; this plan only makes the gate's ORDER say the same thing.
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| The policy itself — `common/subagent-models.md`, the guard hook, the epic/story layout in `planning-docs.md`, the behaviour smoke | `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` | none — this plan only reads its §1 |
+| The policy itself — `common/subagent-models.md`, the guard hook, the epic/story layout in `planning-docs.md`, the behaviour smoke | `dew_flow_conventions · research/PLAN_subagent_model_tiers.md` | none — this plan only reads its §1 |
 | The gate's *Split with the strongest model* ORDER, its three slots, the panel pickers, the help, the coai releases | this plan | none — the conventions plan does not touch coai's order |
 
 Order: the conventions plan's §1 decisions come first (they are the source); this plan follows them and may ship
