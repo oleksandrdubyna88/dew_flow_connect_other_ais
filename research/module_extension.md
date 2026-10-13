@@ -8143,7 +8143,8 @@ whose only explanation is its label is a switch people leave alone.
 The label is **Split with the strongest model** now; the stored key keeps its historical name,
 `coai.splitWithFable`, because renaming it is a migration of every settings file for a word nobody
 sees. Under the three switches sits one row per caller kind (Claude Code, Codex, Gemini, another
-client) with two pickers — *Strongest* and *Implementation* — stored in **`coai.commandModels`** and
+client) with two pickers — *Strongest* and *Implementation* (three since 2026-10-13: see *A third picker per caller*
+below) — stored in **`coai.commandModels`** and
 sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipped one.
 
 - **`commandModels.ts`** is the one reader: `commandModelsFrom` (key by key, junk reads as nothing),
@@ -8170,6 +8171,31 @@ sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipp
   `consultantSectionScript.test.ts` when this section needed it too. It now maps a hyphenated
   `data-*` attribute to its `dataset` name as a DOM does (with `rolesPageHarness`' `camel`); the old
   copy dropped them, and `panelPageHarness.test.ts` holds the fake to that.
+
+### A third picker per caller: the subagent model tiers (2026-10-13)
+
+The operator's subagent policy of 2026-10-13 has three tiers, and the order named two
+([PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md); the order
+itself is in [module_server.md](module_server.md)). Each caller row now has three pickers —
+**Strongest** (epic split, cornerstone and security specs), **Briefs and review** (the `implementation`
+slot, relabelled: story split, scenarios, briefs, every review) and **Code and search** (the new
+`coder` slot: code, tests, scouts). Claude Code ships Fable, Opus and Sonnet; the other kinds ship
+nothing, as before.
+
+- `ModelPair` gained `coder` (the type keeps its name; the stored record and the wire key on the
+  fields). `commandModelsFrom`, `resolvedPair`, `commandModelsAfter` and `commandModelsEnv` carry it
+  through the same per-field rules; `package.json` declares it in the `coai.commandModels` schema.
+- **`CODER_SLOT_SINCE = 0.52.0`.** `commandModelsSkewNote` keeps its per-caller sentence for a server
+  older than 0.33.0 with a changed picker, and otherwise says, for ANY known server below 0.52.0 — a
+  pristine panel included, because the shipped order itself changed — that it still gives the two-model
+  order and ignores *Code and search*. `commandsSkewNote` (the commands page) says a 0.33–0.51 server
+  gives the shipped two-model order and leaves `{coder}` unfilled in an edited one.
+- The commands page lists `{coder}` among the model order's placeholders; the gate article's
+  paragraph, the `splitWithFable` hint and both `package.json` descriptions describe the three tiers,
+  in all five languages where the help is translated.
+- `scripts/live-command-models-compat.mjs` (`npm run test:command-models-compat`) hands a row WITH
+  `coder` to the released mcp and to the current build through `--providers`: neither may list
+  `COAI_COMMAND_MODELS` as unrecognised.
 
 ### One gate per epic or for the whole task, and the orders on the log page (2026-09-23, issue #131)
 

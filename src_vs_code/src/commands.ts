@@ -61,7 +61,7 @@ export const SHIPPED_COMMANDS: readonly ShippedCommand[] = [
   shipped('another-code-round', 'Gate: the door to a second code round'),
   shipped('already-split-epic', 'A piece of a split, gated per epic', ALREADY_SPLIT_MARKER),
   shipped('already-split-task', 'A piece of a split, gated once for the task', ALREADY_SPLIT_MARKER),
-  shipped('model', 'Split with the strongest model', 'Do the SPLIT itself with ', ['{strongest}', '{implementation}']),
+  shipped('model', 'Split with the strongest model', 'Do the SPLIT itself with ', ['{strongest}', '{implementation}', '{coder}']),
   shipped('consult-forecast', 'Consult on a cadence: what the plan will owe', 'CONSULT ON A CADENCE. ', ['{owed}', ...CONSULT_FILL]),
   shipped('consult-group', 'Consult on a cadence: a group of epics is due', 'CONSULT BEFORE YOU BUILD this group of epics. ',
     ['{range}', '{titles}', '{call}', ...CONSULT_FILL]),

@@ -47,10 +47,10 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   gatePer: 'task',
   // Issue #117: a kind whose pair differs from the shipped one is what reaches the env block.
   commandModels: {
-    claude: { strongest: '', implementation: '' },
-    codex: { strongest: 'gpt-6-astra', implementation: 'gpt-6-luna' },
-    gemini: { strongest: '', implementation: '' },
-    other: { strongest: '', implementation: '' },
+    claude: { strongest: '', implementation: '', coder: '' },
+    codex: { strongest: 'gpt-6-astra', implementation: 'gpt-6-luna', coder: '' },
+    gemini: { strongest: '', implementation: '', coder: '' },
+    other: { strongest: '', implementation: '', coder: '' },
   },
   roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
             prompts: [{ id: 'requirements-general', label: 'General' }] }],

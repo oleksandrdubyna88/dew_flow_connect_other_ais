@@ -66,7 +66,7 @@ public sealed record CommandModelsSetting(
         var map = new Dictionary<string, ModelPair>(StringComparer.Ordinal);
         foreach (var (kind, row) in rows.Where(row => row.Value is not null && row.Key.Trim().Length > 0))
         {
-            map[kind.Trim().ToLowerInvariant()] = new ModelPair(Trimmed(row!.Strongest), Trimmed(row.Implementation));
+            map[kind.Trim().ToLowerInvariant()] = new ModelPair(Trimmed(row!.Strongest), Trimmed(row.Implementation), Trimmed(row.Coder));
         }
 
         return map;

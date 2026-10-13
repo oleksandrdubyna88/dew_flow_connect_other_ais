@@ -1127,6 +1127,8 @@ the marker in `SettingsApplied`, because the bench drives the PUBLISHED server a
 its code. Each asserts its own copy against the file in its own suite, the URL-vectors shape rather
 than the generated one: eight short strings do not earn a generator.
 
+**A third slot, `coder`, since 2026-10-13** — the subagent model tiers ([PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md)). Each row of `COAI_COMMAND_MODELS` may now carry `strongest`, `implementation` and `coder`; the boundary is additive in both directions — a server before 0.52.0 drops the unknown field (System.Text.Json ignores unmapped members; measured against the released 0.50.0 by `src_vs_code/scripts/live-command-models-compat.mjs`), and a row from an older panel without it resolves to the shipped coder per field. The panel says when the installed server is older than `CODER_SLOT_SINCE`.
+
 | | Role seed | URL vectors | Credential words | Command models |
 |---|---|---|---|---|
 | Server | embeds | reads in tests | embeds | a constant, read against the file in tests |

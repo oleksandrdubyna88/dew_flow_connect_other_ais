@@ -34,11 +34,11 @@ function optionsOf(page: Page, kind: string, slot: string): readonly string[] {
   return [...markup.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]!);
 }
 
-test('every caller kind has both pickers, and each writes for its own kind', () => {
+test('every caller kind has all three pickers, and each writes for its own kind', () => {
   const page = gate();
 
   for (const { id } of CALLER_KINDS) {
-    for (const slot of ['strongest', 'implementation']) {
+    for (const slot of ['strongest', 'implementation', 'coder']) {
       const control = picker(page, id, slot);
       // An option the page DREW: a select takes no other value, and the harness now refuses one as a DOM does.
       // A kind with no list of its own (`other`) offers only its default, which is then the choice to make.
@@ -51,7 +51,7 @@ test('every caller kind has both pickers, and each writes for its own kind', () 
       assert.deepEqual(lastWrite(page), {
         type: 'setting', key: slot, value: model,
         vendor: undefined, role: undefined, caller: undefined, commandModel: id, control: 'select',
-      }, 'eight pickers share two slot names, so a write with no kind lands in whichever the host guesses');
+      }, 'twelve pickers share three slot names, so a write with no kind lands in whichever the host guesses');
     }
   }
 });
@@ -93,6 +93,30 @@ test('"another model…" asks the host for a name for THAT kind and slot, and wr
     { type: 'command', command: 'customCommandModel', id: 'gemini:implementation' },
   ]);
   assert.equal(page.posted.filter((one) => one['type'] === 'setting').length, 0);
+});
+
+test('"another model…" on the Code and search picker asks for a name for THAT kind and the coder slot', () => {
+  const page = gate();
+  const control = picker(page, 'codex', 'coder');
+
+  control.value = '__other__';
+  control.fire('change');
+
+  assert.deepEqual(work(page).filter((one) => one['type'] === 'command'), [
+    { type: 'command', command: 'customCommandModel', id: 'codex:coder' },
+  ]);
+  assert.equal(page.posted.filter((one) => one['type'] === 'setting').length, 0);
+});
+
+test('a Code and search choice reaches the host as a commandModel write with the coder key', () => {
+  const page = gate();
+  const control = picker(page, 'codex', 'coder');
+  control.value = 'gpt-6-astra';
+  control.fire('change');
+
+  assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(page))), {
+    kind: 'commandModel', key: 'coder', value: 'gpt-6-astra', commandModel: 'codex', control: 'select',
+  });
 });
 
 test('each kind is offered its OWN vendor’s models, never another’s', () => {

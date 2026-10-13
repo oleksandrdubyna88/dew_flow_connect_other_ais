@@ -15,7 +15,7 @@ namespace CoaiMcp.Core.Commands;
 /// <see cref="GateCommands.AlreadySplitMarker"/> are the phrases the bench and
 /// <c>shared/command-models.json</c> recognise an order by. They stay in code, before the editable text,
 /// so no override can make a switch that worked read as one that did not.</para>
-/// <para><b>Placeholders</b> — <c>{scope}</c>, <c>{strongest}</c>, <c>{implementation}</c>,
+/// <para><b>Placeholders</b> — <c>{scope}</c>, <c>{strongest}</c>, <c>{implementation}</c>, <c>{coder}</c>,
 /// <c>{numbers}</c>, <c>{verdict}</c> — are the computed parts, filled by <see cref="GateCommands"/>. An
 /// override that leaves one out simply does not say it: the order is the operator's words. The cadence
 /// texts (<c>command-consult-*</c>) have their own — <c>{owed}</c>, <c>{range}</c>, <c>{titles}</c>,
