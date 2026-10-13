@@ -66,6 +66,47 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
         };
     }
 
+    /// <summary>
+    /// A snapshot of <paramref name="source"/> published AT <paramref name="root"/> — a path its owner fixed, the stuck
+    /// consultant's <c>coai-vibe/&lt;id&gt;/tree</c> — or a refusal with a sentence.
+    /// </summary>
+    /// <remarks>
+    /// <para>A conversation keeps ONE snapshot path across its turns (D6 as amended, §22 B/E: a resumed session is bound to
+    /// the folder it was created in) — across a restart of the server too, when the object that refreshed it in place is
+    /// gone and only the tree it left is there. So the copy is built COMPLETE beside the root, under every rule a snapshot
+    /// has, and only then takes the root's place: by one rename when nothing is there, by the same two renames a refresh
+    /// uses when a tree is (the old one aside, the new one in, the old one back if the second rename fails). A refusal
+    /// leaves whatever was at the root exactly as it was.</para>
+    /// </remarks>
+    public async Task<SnapshotOutcome> MakeAtAsync(SnapshotSource source, string root, CancellationToken ct = default)
+    {
+        var built = await BuildTwiceAsync(source, Path.GetDirectoryName(root)!, replacing: 0, ct);
+
+        return built switch
+        {
+            Attempt.Built b => Directory.Exists(root) || File.Exists(root) ? ReplaceAt(b, root) : Publish(b, root),
+            Attempt.Refused r => new SnapshotOutcome.Refused($"the snapshot of {source.Directory} was refused: {r.Reason}"),
+            _ => throw new InvalidOperationException("a changed attempt never leaves BuildTwiceAsync"),
+        };
+    }
+
+    /// <summary>A tree left at <paramref name="root"/> replaced by the built one — or, refused, left where it was.</summary>
+    private SnapshotOutcome ReplaceAt(Attempt.Built built, string root)
+    {
+        var aside = root + AsideSuffix + ShortId();
+        if (!Move(root, aside, out var why) || !MovedIn(built.Directory, root, aside))
+        {
+            built.Hold.Dispose();
+            TryDelete(built.Directory);
+
+            return new SnapshotOutcome.Refused($"the snapshot could not take the place of what is at {root} ({why}); that is left as it was");
+        }
+
+        TryDelete(aside);
+
+        return new SnapshotOutcome.Made(new ReviewSnapshot(this, root, built.Manifest, built.Hold, note));
+    }
+
     /// <summary>The live tree copied again into <paramref name="snapshot"/>'s own root; the previous copy stands on a refusal.</summary>
     internal async Task<SnapshotRefresh> RefreshAsync(ReviewSnapshot snapshot, SnapshotSource.Live source, CancellationToken ct)
     {
