@@ -2914,7 +2914,7 @@ sequenceDiagram
   declaring hooks, MCP servers or agents is refused with every other one), `agents/`, `tools/`, `.env`, a link anywhere
   (the walk never follows one; `SnapshotLinks.IsLink`, fails closed) — refuses, naming the first offending path.
 - **A cached plugin package that would start something** (`VibePluginStarters`, the shape check; risk consultation
-  6b4726a6, 2026-10-13, confirmed by reading Vibe 2.26.1's installed code, NOT by a run). Vibe's store hands back an
+  6b4726a6, 2026-10-13, confirmed by reading Vibe 2.26.1's installed code and then by M-V16: a planted `mcp.json` server started 3 of 3 under the shipped flags, control 0 of 1 — RESULTS_vibe_confinement.md §25). Vibe's store hands back an
   existing `packages/<ab>/<digest>/` folder without re-digesting it (`mistralai_vibe_local_harness/vibe/plugins/_store.py:265-266`),
   every session checks every pinned package out that way (`_session.py:359-368`), the checkouts are resolved as the
   plugin folders (`vibe/app_server/_plugins.py:421-423`, `:541-560`) and their declared MCP servers are connected before

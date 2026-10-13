@@ -471,11 +471,11 @@ own `~/.vibe`, which the health probe (`providers`, `VendorProbe`) does today fo
 in the inherited environment. Changed in the same story: the probe now runs in the built environment on a home of
 coai's own, deleted after it (`IReviewerRuntime.ProbeVersionAsync`, `TheVibeProbeLeavesThePersonsHomeAloneTests`).
 
-## 25. A cached plugin package is not re-digested — code reading, NOT a run (2026-10-13)
+## 25. A cached plugin package is not re-digested — code reading, then M-V16 (2026-10-13)
 
 Asked by the risk consultation of epic 2 (gpt-6-astra, consultation 6b4726a6): can a file planted in a cached plugin
 package of an owned home start something under the shipped flags? Read in Vibe **2.26.1**'s installed code
-(`%APPDATA%\uv\tools\mistral-vibe\Lib\site-packages\`); nothing was launched and nothing was spent.
+(`%APPDATA%\uv\tools\mistral-vibe\Lib\site-packages\`); the reading came first, with nothing launched; the cell M-V16 below then confirmed it.
 
 | Step | Where | What it does |
 |---|---|---|
@@ -497,11 +497,39 @@ plugin prefix by place; since this date the shape check refuses a declaration th
 unless a measured version pins that exact path with those bytes (`VibePluginStarters`, module_runners.md *The Vibe
 reviewer*).
 
-**The measured cell this would need, NOT run (it is a paid turn; the coordinator decides):** an owned home after one
-turn of the shipped launch (so `packages/6b/6bb6380c…/` exists), a startup-canary `mcp.json`
-(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"canary":{"type":"stdio","command":"python","args":["<canary that writes a marker file>"]}}}`)
-planted into that package folder, then the shipped launch again (`-p --output json --agent plan --enabled-tools
-read_file --workdir <untrusted folder>`, the built environment, `VIBE_CLI=python`) — 3 runs, the canary's marker counted;
-a control without the planted file. It would also say whether a NEW session (create, not restore) re-pins the installed
-built-in package and checks out the planted folder, which the reading says it does (`_session.py:274` — create checks
-out the digests it just ingested).
+**M-V16 — the cell, run 2026-10-13 (paid; the owner authorised probe turns on the Mistral subscription).** Harness:
+`node scripts/probe-vibe-confinement.mjs --cells M-V16 --repeats 3 --scratch %TEMP%\vcp16b`. Per run: a fresh short home
+under the scratch, a priming turn (a bare start does not unpack the plugins, §24), then `mcp.json` planted into the cached
+built-in package `logs/session/plugins/packages/6b/6bb6380c…/` — one stdio server, `command: "python"`, args
+`-c "import sys; open(sys.argv[1], 'w').write('x')" <canary path outside the home and the working folder>` — then the
+measured launch. Both launches used the shipped flags (`-p --output json --agent plan --enabled-tools read_file --workdir
+<empty untrusted folder> --time-limit 120 --output-dir <export>`), the prompt `Reply with exactly: OK` on stdin and the
+BUILT environment of D17 (`MinimalWindows` + `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL=mistral-medium-3.5`).
+8 turns in all; the measured launches took 17–19 s.
+
+| Arm | Runs | Exit | Canary (the planted server started) | Answer |
+|---|---|---|---|---|
+| `mcp.json` planted in the cached built-in package | 3 | 0, 0, 0 | **3 of 3** | `OK` ×3, no tool call |
+| control: primed home, nothing planted | 1 | 0 | **0 of 1** | `OK` |
+
+**It confirms the code reading.** The server a planted `mcp.json` declares STARTS on the next launch, under the shipped
+flags, in an untrusted folder, with `--enabled-tools read_file`; the turn still exits 0 and answers normally, so nothing
+in its result shows that it happened. Every session — the priming one and the measured one, planted or not — pins the
+package as `content_digest 6bb6380c…`, the folder's NAME, while the folder no longer hashes to it: Vibe did not
+re-digest the checkout. The derived snapshot stayed `600cc68f…` in every session (the canary exits at once, so it never
+became a connected server with tools), so the session record does not show it either. After the run the planted file was still in the
+package and the home held the same 6 blobs (checked on run 1's home). The fix's premise holds: a package file that declares a server must not be
+admitted by its place.
+
+**A first run tested nothing, and is kept as the record of why** (`%TEMP%\vcp16`, the same cell, 3 + 1 runs and 8 more turns, canary 0 of 3
+and 0 of 1): it planted the canary with Vibe's python as an ABSOLUTE path, and Vibe 2.26.1 rejects that before any start
+— its own resolver, run on the planted folder with no turn, said *"Failed to load MCP server 'probe-canary': stdio
+command must be a bare executable or start with './'"*. With the bare `python` the same resolver returned the server
+`('vibe', 'probe-canary')` with no issue, and the re-run above fired 3 of 3. So a plugin's stdio server is any bare
+command on PATH or a `./` path inside the package — the refusal in `VibePluginStarters` does not depend on the command's
+form (any non-empty `mcpServers` is refused).
+
+**Also fixed in the harness:** its first `vibe --version` ran in the inherited environment, which writes `vibehistory`
+into the person's `~/.vibe` (§24); it now runs in the built environment on a scratch home. The person's
+`~/.vibe/vibehistory` was unchanged by both runs (last written 2026-10-11 21:54). Not measured: `.mcp.json` and the
+foreign manifests (the adapters' reading only), a hook file in a package, a restore (`--resume`), WSL.
