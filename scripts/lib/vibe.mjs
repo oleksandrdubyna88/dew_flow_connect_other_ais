@@ -10,8 +10,10 @@ import { join, relative } from 'node:path';
 
 /**
  * ProcessEnvironment.MinimalWindows (src_mcp/runners/Processes/ProcessEnvironment.cs) — the question row's child
- * environment, and (D17) the base of every Vibe launch's BUILT environment. A copy of a C# list, so it is named here as
- * one: change both or neither.
+ * environment, and (D17) the base of every Vibe launch's BUILT environment. A copy of a C# list (a Node script cannot load
+ * the assembly), so it is named here as one, and it cannot drift: TheProbeScriptsMinimalEnvironmentIsTheProductsTests
+ * (src_mcp/tests) parses this literal and fails unless it is the C# set exactly. Keep it ONE array literal of quoted names;
+ * every other script imports it from here.
  */
 export const MINIMAL_WINDOWS = ['PATH', 'PATHEXT', 'SystemRoot', 'windir', 'ComSpec', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
   'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'USERNAME', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432',

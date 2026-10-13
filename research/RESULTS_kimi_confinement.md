@@ -141,6 +141,15 @@ the shim refuses, but that every shell or sub-agent path ASKS is what M-K4, M-K9
   `tui.toml`, `workspace-trust/` and everything else: byte-identical. An arm that needed a USER-level change ran on a COPY of
   the home under `KIMI_CODE_HOME` inside the scratch (§11); every copy's `credentials/` and `config.toml` (it carries an API key)
   were scrubbed in a `finally`, verified absent, 19 homes.
+- **Where those copies may live** (added 2026-10-13, epic 2's code round, codex, security). Until the scrub a copied home
+  holds the person's OAuth refresh token, so the probe now refuses a `--scratch` that another local user might read
+  (`scratchRefusal` in `scripts/lib/kimi.mjs`, exit 65, nothing created): it must be inside the user's own profile (on POSIX
+  also the temp folder), reached through no link (real paths compared; a dangling link refused), and on POSIX an existing
+  folder must be owner-only; the probe makes its scratch and every copied home `0700` where the platform has modes. On
+  Windows it relies on the profile's inherited ACL (the user, SYSTEM, Administrators) — there are no mode bits to set, and
+  `%TEMP%` is trusted only because it lies inside the profile. The run above used `%TEMP%\kcp-full`, which the rule admits.
+  Tests: `node --test scripts/lib/kimi.test.mjs`. **The product never copies the sign-in:** D19's owned home reaches the
+  person's `credentials/` through a JUNCTION (§11, M-K8b), so this concern is the probe's alone.
 
 The raw rows (`results.md`, `results.json`, every run's `spec.json`, `meta.json`, the shim's `stdout.json`, the session log)
 are in the scratch; `--reparse <scratch>` rebuilds the tables from them.

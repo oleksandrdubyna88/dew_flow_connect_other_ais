@@ -34,7 +34,7 @@
 //   M-K9   what Kimi loads from DISK without the client: a project kit (AGENTS.md ×2, skills ×2, a sub-agent, hooks in
 //          .kimi-code/config.toml and local.toml, .kimi-code/mcp.json) untrusted; + .git; + trusted (copied home); a user hook
 //   M-K10  a user-level mcp.json in a copied home while the shim sends mcpServers: []; control in -p
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +42,7 @@ import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, run } from './lib/vibe.mjs';
 import {
   CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
-  parseStreamJson, promptMode, scrubHome, sessionFacts, shimArgs, trustInHome,
+  parseStreamJson, promptMode, scratchRefusal, scrubHome, sessionFacts, shimArgs, trustInHome,
 } from './lib/kimi.mjs';
 
 const argv = process.argv.slice(2);
@@ -67,14 +67,22 @@ if (!reparse && (!existsSync(shim) || !existsSync(kimi))) {
   console.error(`refusing: shim ${shim} exists=${existsSync(shim)}, kimi ${kimi} exists=${existsSync(kimi)}`);
   process.exit(65);
 }
-const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'kcp-'));
+const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(realpathSync.native(tmpdir()), 'kcp-'));
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Kimi's design), so it is held
 // to characters that need no quoting beyond the double quotes the command puts around it (the Vibe probe's rule).
 if (!/^[A-Za-z0-9 _\-.:\\/~()]+$/u.test(scratch)) {
   console.error(`refusing --scratch ${JSON.stringify(scratch)}: only letters, digits, space and _-.:\\/~() are allowed`);
   process.exit(65);
 }
-mkdirSync(scratch, { recursive: true });
+// The copied homes carry the person's refresh token until the scrub, so the scratch must be a folder no other local user can
+// read: inside their own profile, through no link, owner-only where the platform has modes (lib/kimi.mjs scratchRefusal; epic 2's
+// code round). The PRODUCT never copies the sign-in: D19's owned home reaches it through a junction.
+const privacy = reparse ? '' : scratchRefusal(scratch);
+if (privacy.length > 0) {
+  console.error(privacy);
+  process.exit(65);
+}
+mkdirSync(scratch, { recursive: true, mode: 0o700 });
 
 function write(path, text) {
   mkdirSync(dirname(path), { recursive: true });

@@ -10,9 +10,9 @@
 // token and, if it does, puts the live pair back where the person's Kimi expects it (RESULTS §12).
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { SYSTEM32, files, fwd, run } from './vibe.mjs';
 
 export const REAL_HOME = join(homedir(), '.kimi-code');
@@ -79,7 +79,8 @@ const HOME_BIN = ['rg.exe', 'fd.exe'];
  * `credentials: false` leaves the sign-in out (the not-signed-in arm); `config: false` leaves config.toml out too.
  */
 export function copyHome(real, home, { credentials = true, config = true } = {}) {
-  mkdirSync(join(home, 'bin'), { recursive: true });
+  // Owner-only where the platform has modes (POSIX); on Windows the mode is ignored and the profile's ACL holds (scratchRefusal).
+  mkdirSync(join(home, 'bin'), { recursive: true, mode: 0o700 });
   const copied = [];
   const take = (rel) => {
     const from = join(real, rel);
@@ -97,6 +98,54 @@ export function copyHome(real, home, { credentials = true, config = true } = {})
   }
   return copied;
 }
+
+/**
+ * Why `scratch` may NOT hold copies of the person's Kimi sign-in — or '' when it may. A copied home carries the OAuth
+ * refresh token until the scrub, so the folder it lives in must be one no other local user can read (epic 2's code round,
+ * codex, security). The rule:
+ * - **inside the user's own profile** (`homedir()`, links resolved) — and on POSIX also the temp folder, where the probe
+ *   makes its folders `0700`; on Windows only the profile, because `%TEMP%` can be redirected somewhere shared. What it
+ *   relies on there: a folder created under the profile inherits the profile's ACL (the user, SYSTEM, Administrators), so
+ *   no other standard user can read it — Windows has no mode bits to set;
+ * - **reached through no link** anywhere on the way (`realpathSync.native` of the nearest existing ancestor is the path
+ *   itself); a dangling link is refused, never mistaken for an absent folder;
+ * - on POSIX, an EXISTING folder that is not owner-only (`mode & 0o077`) is refused.
+ * The product never needs this: D19 gives every Kimi launch an owned home whose `credentials/` is a JUNCTION to the
+ * person's, so the sign-in is never copied anywhere. Only this probe's copied-home arms copy it.
+ */
+export function scratchRefusal(scratch, { profile = homedir(), temp = tmpdir() } = {}) {
+  const wanted = resolve(scratch);
+  const real = realOf(wanted);
+  if (real.length === 0) return `refusing --scratch ${wanted}: a link on the way to it does not resolve`;
+  if (!samePath(real, wanted)) return `refusing --scratch ${wanted}: it is reached through a link (really ${real}), and a copied sign-in never goes through one`;
+  const roots = (WINDOWS ? [profile] : [profile, temp]).map((root) => realOf(resolve(root))).filter((root) => root.length > 0);
+  if (!roots.some((root) => isInside(wanted, root))) {
+    return `refusing --scratch ${wanted}: it is not inside your own ${WINDOWS ? 'profile' : 'profile or temp folder'} (${roots.join(', ')}), so another local user may be able to read the copied sign-in`;
+  }
+  return !WINDOWS && existsSync(wanted) && (statSync(wanted).mode & 0o077) !== 0
+    ? `refusing --scratch ${wanted}: other users can read it (mode ${(statSync(wanted).mode & 0o777).toString(8)}); give a fresh folder, which the probe makes 0700`
+    : '';
+}
+
+const WINDOWS = process.platform === 'win32';
+
+/** Whether anything is at `p`, a dangling link included (lstat, which never follows). */
+const present = (p) => { try { lstatSync(p); return true; } catch { return false; } };
+
+/** `p` with every link resolved: its nearest present ancestor's real path plus the rest — or '' when a link dangles. */
+function realOf(p) {
+  let existing = p;
+  while (!present(existing) && dirname(existing) !== existing) existing = dirname(existing);
+  try {
+    return join(realpathSync.native(existing), relative(existing, p));
+  } catch {
+    return '';
+  }
+}
+
+const fold = (p) => (WINDOWS ? p.toLowerCase() : p);
+const samePath = (a, b) => fold(a.replace(/[\\/]+$/u, '')) === fold(b.replace(/[\\/]+$/u, ''));
+const isInside = (child, parent) => fold(child).startsWith(fold(parent.replace(/[\\/]+$/u, '')) + sep);
 
 /**
  * The sensitive files a copied home must not keep once the run is over: the sign-in and the config (it carries an API key).
