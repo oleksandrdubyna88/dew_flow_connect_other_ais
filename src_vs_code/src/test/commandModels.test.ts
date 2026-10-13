@@ -95,7 +95,9 @@ test('choosing the CLI alias of the default is choosing the default', () => {
   const models = commandModelsFrom({ claude: { strongest: 'fable', implementation: 'opus', coder: 'sonnet' } });
 
   assert.deepEqual(kindsOnTheWire(models), []);
-  assert.equal(commandModelsSkewNote('0.32.0', models), '');
+  assert.doesNotMatch(commandModelsSkewNote('0.32.0', models), /does not read these models/,
+    'picking the default asks an old server for nothing it would ignore');
+  assert.equal(commandModelsSkewNote(CODER_SLOT_SINCE, models), '');
 });
 
 test('a picker id names a known kind and a real slot, or nothing', () => {
@@ -123,15 +125,17 @@ test('a picker write is routed by its caller kind, and only a real slot is writt
   assert.equal(settingWrite({ key: 'strongest', value: 'x' })?.kind, 'plain');
 });
 
-test('the skew note speaks only for a known, older server and a panel that changed something', () => {
+test('the skew note speaks only for a known, older server — the per-caller sentence only for a panel that changed something', () => {
   const changed = commandModelsFrom({ codex: { strongest: 'gpt-6-astra' } });
   const pristine = commandModelsFrom(undefined);
 
   assert.match(commandModelsSkewNote('0.32.0', changed), /names Fable\s+and Opus to every caller/);
   assert.equal(commandModelsSkewNote('', changed), '', 'an unknown server is not called old');
-  assert.equal(commandModelsSkewNote(COMMAND_MODELS_SINCE, changed), '');
-  assert.equal(commandModelsSkewNote('0.32.0', pristine), '',
-    'a pristine panel means Fable and Opus, which is what an older server says anyway');
+  assert.doesNotMatch(commandModelsSkewNote(COMMAND_MODELS_SINCE, changed), /does not read these models/);
+  assert.doesNotMatch(commandModelsSkewNote('0.32.0', pristine), /does not read these models/,
+    'a pristine panel asks for no per-caller model an older server would ignore');
+  assert.equal(commandModelsSkewNote(CODER_SLOT_SINCE, changed), '');
+  assert.equal(commandModelsSkewNote(CODER_SLOT_SINCE, pristine), '');
 });
 
 test('the coder slot round-trips: set, blank-removes, read back, and a coder-only change crosses with the other two resolved', () => {
@@ -154,10 +158,11 @@ test('choosing the CLI alias of the default coder is choosing the default', () =
 
   assert.deepEqual(kindsOnTheWire(models), []);
   assert.equal(commandModelsEnv(models)['COAI_COMMAND_MODELS'], undefined);
-  assert.equal(commandModelsSkewNote('0.50.0', models), '');
+  assert.equal(commandModelsSkewNote('0.50.0', models), commandModelsSkewNote('0.50.0', commandModelsFrom(undefined)),
+    'the alias of the default reads exactly as the default');
 });
 
-test('a changed coder warns on a server that reads two slots, and stays quiet once the server reads three', () => {
+test('a server that reads two slots is told about, changed coder or not, and the note goes once it reads three', () => {
   const changed = commandModelsFrom({ claude: { coder: 'x-fast' } });
 
   const note = commandModelsSkewNote('0.50.0', changed);
@@ -165,8 +170,9 @@ test('a changed coder warns on a server that reads two slots, and stays quiet on
   assert.match(note, /0\.51\.0/);
   assert.equal(commandModelsSkewNote(CODER_SLOT_SINCE, changed), '');
   assert.equal(commandModelsSkewNote('0.51.0', changed), '');
-  assert.equal(commandModelsSkewNote('0.50.0', commandModelsFrom({ codex: { strongest: 'gpt-6-astra' } })), '',
-    'a coder left at its shipped value asks the 0.50 server for nothing it would miss');
+  // The SHIPPED order changed: a pristine panel draws Sonnet for Code and search, which a 0.50 server ignores.
+  assert.match(commandModelsSkewNote('0.50.0', commandModelsFrom(undefined)), /two-model order.*Code and search/s);
+  assert.match(commandModelsSkewNote('0.50.0', commandModelsFrom({ codex: { strongest: 'gpt-6-astra' } })), /Code and search/);
   assert.match(commandModelsSkewNote('0.32.0', changed), /does not read these models/,
     'a server older than the pickers keeps the original sentence');
 });

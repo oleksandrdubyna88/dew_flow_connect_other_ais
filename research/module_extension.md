@@ -8184,9 +8184,11 @@ nothing, as before.
 - `ModelPair` gained `coder` (the type keeps its name; the stored record and the wire key on the
   fields). `commandModelsFrom`, `resolvedPair`, `commandModelsAfter` and `commandModelsEnv` carry it
   through the same per-field rules; `package.json` declares it in the `coai.commandModels` schema.
-- **`CODER_SLOT_SINCE = 0.51.0`.** `commandModelsSkewNote` keeps its first sentence for a server older
-  than 0.33.0 and adds a second for one that reads two slots but not `coder` — only when some kind's
-  coder differs from the shipped one, since an older server names no coder at all.
+- **`CODER_SLOT_SINCE = 0.51.0`.** `commandModelsSkewNote` keeps its per-caller sentence for a server
+  older than 0.33.0 with a changed picker, and otherwise says, for ANY known server below 0.51.0 — a
+  pristine panel included, because the shipped order itself changed — that it still gives the two-model
+  order and ignores *Code and search*. `commandsSkewNote` (the commands page) says a 0.33–0.50 server
+  leaves `{coder}` unfilled in an edited model order.
 - The commands page lists `{coder}` among the model order's placeholders; the gate article's
   paragraph, the `splitWithFable` hint and both `package.json` descriptions describe the three tiers,
   in all five languages where the help is translated.

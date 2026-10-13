@@ -6,8 +6,9 @@ namespace CoaiMcp.Core.Commands;
 /// <param name="Autonomous">Work without interrupting the person until there is no other way.</param>
 /// <param name="SplitPlan">Break an accepted plan into epics and stories before building it.</param>
 /// <param name="SplitWithFable">
-/// Do the splitting — and the risky stories — with the caller's strongest model; which one is
-/// <see cref="CommandContext.Models"/>. (Named for Fable, which every caller was told until issue #117.)
+/// Order the work in the subagent model tiers — the epic split and the cornerstone and security specs on the
+/// caller's strongest model, the story split and every review on its implementation model, the code on its
+/// coder; which ones is <see cref="CommandContext.Models"/>. (Named for Fable, which every caller was told until issue #117.)
 /// <para>The switch is the WHOLE decision, and there is deliberately no second condition beside it.
 /// It once asked whether a Fable REVIEWER was configured, on the reasoning that a command must never
 /// name a model this machine has not got. The reasoning was sound and the premise was wrong: Fable
@@ -35,12 +36,12 @@ public sealed record CommandContext(
     bool FirstPlanRound = true)
 {
     /// <summary>
-    /// The two models the model order names — already resolved for THIS caller's kind by
+    /// The three models the model order names — already resolved for THIS caller's kind by
     /// <see cref="CommandModels.For"/>.
     /// </summary>
     /// <remarks>
-    /// Defaults to the Claude Code pair, so a context built without it says exactly what every
-    /// release before issue #117 said.
+    /// Defaults to the Claude Code tiers (Fable, Opus, Sonnet), so a context built without it says what a
+    /// Claude Code caller with nothing configured is told.
     /// </remarks>
     public ModelPair Models { get; init; } = CommandModels.ClaudeCode;
 

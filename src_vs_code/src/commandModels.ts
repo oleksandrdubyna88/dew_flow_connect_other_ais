@@ -202,16 +202,16 @@ export const COMMAND_MODELS_SINCE = '0.33.0';
  * means for Claude Code, so there is nothing to warn about until somebody changed a picker.</p>
  */
 export function commandModelsSkewNote(installedServerVersion: string, models: CommandModels): string {
-  if (installedServerVersion.length === 0 || kindsOnTheWire(models).length === 0) {
+  if (installedServerVersion.length === 0) {
     return '';
   }
-  if (compareVersions(COMMAND_MODELS_SINCE, installedServerVersion) > 0) {
+  if (compareVersions(COMMAND_MODELS_SINCE, installedServerVersion) > 0 && kindsOnTheWire(models).length > 0) {
     return `The coai-mcp you have installed (${installedServerVersion}) does not read these models: it names Fable `
       + `and Opus to every caller, whatever the pickers say. Update it to ${COMMAND_MODELS_SINCE} or later — the MCP `
       + 'server tab.';
   }
 
-  return coderSkewNote(installedServerVersion, models);
+  return coderSkewNote(installedServerVersion);
 }
 
 /**
@@ -222,19 +222,16 @@ export function commandModelsSkewNote(installedServerVersion: string, models: Co
 export const CODER_SLOT_SINCE = '0.51.0';
 
 /**
- * The sentence for a server that reads the first two slots but not `coder` — only when some kind's coder
- * actually differs from the shipped one, since an older server names no coder at all and a pristine
- * panel asks for nothing it would miss.
+ * The sentence for any known server older than {@link CODER_SLOT_SINCE} — said even on a pristine panel,
+ * because the SHIPPED behaviour changed: the panel draws a Code and search picker defaulting to Sonnet,
+ * while such a server still sends the two-model order and ignores that picker entirely. (Consultant and
+ * reviewer, this change's code round.)
  */
-function coderSkewNote(installedServerVersion: string, models: CommandModels): string {
-  const coderChanged = CALLER_KINDS.some(({ id }) =>
-    resolvedPair(models, id).coder.toLowerCase() !== (SHIPPED_COMMAND_MODELS[id] ?? NO_MODELS).coder.toLowerCase());
-  if (!coderChanged || compareVersions(CODER_SLOT_SINCE, installedServerVersion) <= 0) {
-    return '';
-  }
-
-  return `The coai-mcp you have installed (${installedServerVersion}) does not read the Code and search model: its `
-    + `order names no coder and still gives the old split-and-implement order. Update it to ${CODER_SLOT_SINCE} or later — the MCP server tab.`;
+function coderSkewNote(installedServerVersion: string): string {
+  return compareVersions(CODER_SLOT_SINCE, installedServerVersion) <= 0
+    ? ''
+    : `The coai-mcp you have installed (${installedServerVersion}) still gives the two-model order and ignores the `
+      + `Code and search model. Update it to ${CODER_SLOT_SINCE} or later — the MCP server tab.`;
 }
 
 function samePair(one: ModelPair, other: ModelPair): boolean {

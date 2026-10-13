@@ -1,13 +1,13 @@
 # PLAN — the split order follows the subagent model tiers: Fable splits and specs the cornerstones, Opus judges, Sonnet writes
 
-> Status: **plan only, nothing implemented yet, 2026-10-13.** Scope: the *Split with the strongest model* order
+> Status: **IMPLEMENTED, 2026-10-13.** Deviations and the open tail are in *What shipped differently* below. Scope: the *Split with the strongest model* order
 > (`shared/commands/command-model.md`, `GateCommands.ModelCommand`), the per-caller model slots it is filled from
 > (`CommandModels`, `COAI_COMMAND_MODELS`, the extension's `coai.commandModels` and its pickers), the help in five
 > languages, and the releases of coai-mcp and the extension. The Team server renders no order and is not touched.
 >
-> Related: [PLAN_the_caller_names_its_strongest_model.md](../research/PLAN_the_caller_names_its_strongest_model.md)
-> (issue #117 — the two slots this plan widens to three), [PLAN_commands_and_autonomy.md](../research/PLAN_commands_and_autonomy.md)
-> (the switches), [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md).
+> Related: [PLAN_the_caller_names_its_strongest_model.md](PLAN_the_caller_names_its_strongest_model.md)
+> (issue #117 — the two slots this plan widens to three), [PLAN_commands_and_autonomy.md](PLAN_commands_and_autonomy.md)
+> (the switches), [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 > Across the boundary: `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` §1 (D1–D12) is the canonical
 > statement of the policy; this plan only makes the gate's ORDER say the same thing.
 
@@ -132,3 +132,31 @@ The order names TWO models; the policy has THREE tiers. So this is not a text ed
 - [ ] Help in five languages, `package.json` descriptions and schema, module docs and CHANGELOG updated.
 - [ ] Both suites green; plan gate and code gate resolved; PR merged; mcp and extension released and their runs seen.
 - [ ] This plan promoted to `research/` with its deviations.
+
+## What shipped differently from this plan
+
+- **§2.8 was wrong for small plans** (the cadence consultant, gpt-6-astra, verified against the fixture's
+  `a0 s1 f1 p1 r1 Epic Small claude` row): `command-split-small` orders stories with NO epics while the model order
+  ordered an epic split. The order gained one sentence — a plan split straight into stories is split by the strongest
+  model too, its stories go at the bottom of the plan, at most one is a cornerstone — and the clause "if none answers,
+  say so and decide" after the question-consultant step (a gate with no question consultant configured).
+- **The skew sentence covers a pristine panel too.** §2.5 said "only when a coder differs from the shipped one"; both
+  the consultant and this change's own Opus reviewer showed that is too narrow, because the SHIPPED behaviour changed:
+  the panel draws *Code and search* = Sonnet while a server older than 0.51.0 still sends the two-model order. Any
+  known server below `CODER_SLOT_SINCE` now gets the sentence; the per-caller sentence for a server below 0.33.0 still
+  needs a changed picker. The commands page's `commandsSkewNote` also says that a 0.33–0.50 server leaves `{coder}`
+  unfilled in an edited model order.
+- **"Every other story" became "Every story that is not a cornerstone"** — an AI can read the first as "every
+  second story" (Opus reviewer).
+- **The run-the-page picker tests** (`gateModelPickers.test.ts`) drive the third picker — its write, its host route
+  and *another model…* — which the first implementation commit had left to pure-function tests.
+- **The compatibility script carries a negative control**: an unreadable `COAI_COMMAND_MODELS` must be reported by
+  the old binary, or "not reported" would prove nothing. Measured against the released mcp 0.50.0
+  (sha256 `5f7ae859…a414`): control reported, `coder` ignored, current build accepts it.
+- **The cadence gate needed the plan declared as `epic: "1/1"`** and a closed cadence consultation before the code
+  round, although the plan has no epics of its own — its text names epics throughout.
+
+**The open tail** is the release, which happens after the merge rather than in this diff: coai-mcp 0.51.0 and
+extension 0.72.0. `CODER_SLOT_SINCE` must equal the mcp tag actually cut; if another release takes 0.51.0 first,
+it must be raised before the extension ships. The mirror boundary row in the conventions plan is owed by that
+plan's author.

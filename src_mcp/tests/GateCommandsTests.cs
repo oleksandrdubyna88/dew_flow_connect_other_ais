@@ -122,6 +122,10 @@ public sealed class GateCommandsTests
         order.Should().StartWith("Do the SPLIT itself with Fable — splitting the PLAN into epics");
         order.Should().Contain("Before that split is final, ask the question consultant (ask_consultants)")
             .And.Contain("write the epics at the bottom of the plan")
+            .And.Contain("if none answers, say so and decide")
+            .And.Contain("A plan split straight into stories, with no epics, is split by Fable too")
+            .And.Contain("at most one of them is a cornerstone")
+            .And.Contain("Every story that is not a cornerstone: Opus writes")
             .And.Contain("split each EPIC into stories on Opus, one stories document per epic")
             .And.Contain("CORNERSTONE stories")
             .And.Contain("at most 2·E/5 rounded up for a plan of E epics (1–2 epics: 1, 3–5: 2, 6–7: 3)")
