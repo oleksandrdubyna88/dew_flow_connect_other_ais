@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.72.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.71.0...extension-v0.72.0) (2026-10-13)
+
+
+### Features
+
+* the split order follows the subagent model tiers — Fable splits epics and specs cornerstones, Opus judges, Sonnet writes ([#792](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/792)) ([d9a8cda](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d9a8cda7ab0ad368609a8e59f18f40933b08a0ba))
+
 ## [0.71.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.70.0...extension-v0.71.0) (2026-10-12)
 
 

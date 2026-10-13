@@ -14,7 +14,7 @@ models and counts in its summary. Claude Code is told Fable, Opus and Sonnet; Co
 generic words and never another vendor's model. `COAI_COMMAND_MODELS` rows may carry `coder`; a row without it keeps
 the shipped one. The opening words the bench reads are unchanged.
 
-## Unreleased
+## Extension 0.72.0 — 2026-10-13
 
 **Changed: *Split with the strongest model* follows the subagent model tiers.** The order now names THREE of the
 calling assistant's models, as the operator's policy of 2026-10-13 does: the strongest (Fable for Claude Code) splits
