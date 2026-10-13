@@ -11,7 +11,7 @@ review; the new code-and-search model (Sonnet) writes the code, fixes and tests 
 rounded up). The assistant writes code itself only for one file and at most 50 changed lines, passes models by alias,
 falls back from Fable to Opus on a spend limit and says so, and names models and counts in its summary. Each caller row
 under the switch has a third picker, **Code and search**; Codex, Gemini and other clients still ship with no names and
-are told generic words. A coai-mcp older than 0.52.0 ignores the new picker, and the panel says so once you change it.
+are told generic words. A coai-mcp older than 0.52.0 still gives the two-model order and ignores the new picker, and the panel says so.
 Help in all five languages. The server's half is coai-mcp 0.52.0.
 
 ## Server 0.51.0 — 2026-10-13
