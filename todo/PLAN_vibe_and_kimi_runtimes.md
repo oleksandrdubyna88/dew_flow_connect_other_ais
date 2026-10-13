@@ -4,10 +4,13 @@
 > `--ask-acp` Kimi shim shipped in coai-mcp 0.51.0 (#785), and the Vibe home manifest (D17) on branch
 > `feat/vibe-kimi-runtimes` (`shared/vibe-home-manifest.json`, RESULTS_vibe_confinement.md §24). S2 is BUILT on the same
 > branch — server (`VibeRuntime`, the launch control, the round's snapshot) and extension (the preset, the models, the
-> buttons, the older-server gate) — unreleased, its live product rounds not yet recorded. S4's MEASUREMENT half is done
+> buttons, the older-server gate) — unreleased, its live product rounds not yet recorded. S3 is BUILT on the stacked
+> branch `feat/vibe-consultant` — `VibeConsultant`, the conversation's one snapshot and home under `coai-vibe/<id>`, the
+> question row's copies of its granted roots, the D20 home sweep, the three `runtime-capabilities.json` rows (web
+> `unmeasured`) — unreleased, its live `consult` and question row not yet run. S4's MEASUREMENT half is done
 > (RESULTS_kimi_confinement.md §3–§15: 74 launches through the shipped shim, 2026-10-13); two cells contradicted the plan,
 > so S4's code half and S5 were re-planned the same day around D19 — a coai-owned `KIMI_CODE_HOME` whose `credentials/` is a
-> junction to the person's — and `KimiRuntime` is not written.** Open: S2's live rounds and release, S3, S4's code half
+> junction to the person's — and `KimiRuntime` is not written.** Open: S2's live rounds and release, S3's live consult and question row and release, S4's code half
 > (gated on D19's cells, §5), S5. Re-planned 2026-10-12 after M-V11 (D6: a sanitised snapshot of the tree replaces the
 > empty working folder). Scope: `src_mcp` (two new reviewer runtimes and two consultants), `shared/*.json` seeds and their
 > generated TypeScript, `src_vs_code` (runtime lists, presets, install, the catalog model card), docs. Chat, the Team server
@@ -587,6 +590,36 @@ question-consultant row, and a resumed turn reports its usage right.
   root refuses; the prompt names only snapshot paths; the row's home and snapshot are gone after success, refusal and
   cancellation.
 - Docs: `module_server.md` consultant sections, `module_core.md`.
+- *Built 2026-10-13 on `feat/vibe-consultant` (stacked on S1+S2), unreleased; the live `consult` and question row are owed
+  after the release.* What shipped differently from the bullets above, and why:
+  - **The snapshot's stable path is a NAME, not only an object.** A conversation's snapshot is `coai-vibe/<id>/tree`
+    beside its home `coai-vibe/<id>/vh-…` (the home is not the conversation folder itself, because the home's shape check
+    refuses anything Vibe does not write — the copy cannot live inside it). A process-wide registry
+    (`ConversationSnapshots`) refreshes it in place; a turn after a restart (or a settings reload's new service) uses the
+    new `ReviewSnapshots.MakeAtAsync`, which builds beside and swaps in at the same path — so §22's "one stable path"
+    holds across servers, not only within one.
+  - **A refused refresh refuses the TURN** (before the launch, the conversation still open), rather than launching on the
+    previous tree: the consultant is promised the live tree.
+  - **The adapter declares its homes folder** (`IConsultantRuntime.HomesFolder`, `ConsultantHomes.Vibe`) — the bullets named
+    only the snapshot capability; a runtime that keeps a home on every consultant path needed a second declared fact, never
+    a vendor name. The homes root is `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application
+    data), EMPTY in hand-built settings, so no test makes or sweeps a home in the machine's own folder.
+  - **The question row's copies are a new `CwdKind.Snapshot`** the planner decides (not a branch in the row's launch), and
+    the prompt naming the copies is composed by the fan-out and called by the launch (`RowLaunchInput.PromptNaming`) once
+    the copies exist. A home-keeping runtime's `none` row stands in an empty `cwd` folder BESIDE its home in the row's
+    folder, so a cwd never holds its own home.
+  - **Also wired, not in the bullets:** the consultant CHECK (`--check-consultant`) gets the same one-shot copy and home —
+    without it a Vibe check would have failed on the missing `Workdir`. `close_consult` removes the conversation's folder at
+    once (`ConsultantHomeSweep.RemoveNow`), the beat being the backstop.
+  - **D20's deleter landed early:** `GitScratch.DeleteEvenIfReadOnly` unlinks every link in place and never enters one (red
+    first: it cleared the target's read-only attribute through a junction and then failed on it). D19's Kimi-specific
+    disposal — the junction removed FIRST by name and the person's folder VERIFIED after — stays S4's, in `KimiHome`; the
+    sweep is runtime-neutral and already safe for a Kimi home's shape (its test plants one).
+  - **The sweep keeps an `asking` record's home** whatever its stamps (a turn in flight; the record pass settles an orphan
+    first), beside the plan's "skipped while its turn is held".
+  - **Measurement-led:** `vibe × web` is `unmeasured` (no Vibe cell exercises the web), so the planner refuses it; the
+    shared "unmeasured" refusal still names research/RESULTS_question_consultant_capabilities.md as the record that would
+    admit it, which is the wrong file for Vibe — open.
 
 **S4 — Kimi measured, then a Kimi reviewer row over ACP.** The owner signed in on 2026-10-12, so S4 is no longer blocked.
 Decisions D1, D6 (the snapshot with Kimi's exclusions), D8b (the Kimi arm = D19), D9, D10 (the ACP model option, the curated

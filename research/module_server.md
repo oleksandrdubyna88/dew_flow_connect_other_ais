@@ -7019,3 +7019,83 @@ differently:
 
 The extension reads neither `reviewerStates[].warning` nor `providers[].warning` yet: the rounds view shows a note only
 for a failed, queued or stood-down reviewer, and the card shows `note` only when a row is unavailable.
+
+## A consultant that must not stand in the checkout — the conversation's place, the row's copies, the home sweep (2026-10-13, S3 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+The server's half of the Vibe consultant ([module_runners.md](module_runners.md), *The Vibe consultant*). Every adapter
+that does not ask (`IConsultantRuntime.NeedsASanitisedSnapshot` false) is launched exactly as before; one that asks is
+handed a PLACE — a coai-owned folder for its home and a sanitised copy to stand in — by one collaborator,
+`ConsultantPlaces` (`Server/Consultation/ConsultantPlaces.cs`), on three paths:
+
+- **`consult` — the conversation's place, kept across its turns (D6, D17).** `ConsultationService.RunTurnAsync` takes it
+  before the prompt is composed and before the record says `asking`: the folder `<homes root>/<runtime's HomesFolder>/<consultation
+  id>` (`coai-vibe/<32 hex>` under the person's local application data — `PanelSettings.ConsultantHomesRoot`, set from the
+  environment, `COAI_CONSULTANT_HOMES` when given), held by its turn (`VibeHomeTurns`) for the whole turn, and the
+  conversation's ONE snapshot at `tree` inside it, from the live checkout: refreshed IN PLACE when this process holds it,
+  made at that same path with `ReviewSnapshots.MakeAtAsync` when it does not (a first turn, or the first turn after a
+  restart — the tree the last server left is replaced whole). The registry is process-wide (`ConversationSnapshots`), so a
+  settings reload, which builds a new service, neither loses the snapshot's budget hold nor makes a second copy. The launch
+  carries `Workdir` = the snapshot and `Settings.OwnedScratch` = the folder; the prompt names the snapshot as the read-only
+  checkout (`PromptShows`), never the checkout Vibe cannot read. A refused copy (a link, a ceiling, a tree that keeps
+  changing, a full disk) or no homes root configured refuses the TURN before anything is launched —
+  `FailedTurns.RefusedBeforeTheLaunch` with `ConsultFailure.VendorRefused` and `ConsultantPlaces.Cure` — and the
+  conversation stays open, as every refusal before a launch leaves it.
+- **`ask_consultants` — a question row's one-shot copies (D6).** A row whose plan stands in `CwdKind.Snapshot` (Vibe's disk
+  row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per GRANTED ROOT
+  (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a repository copies that
+  sub-folder only) under `tree`, and the row stands in `tree`; a root outside any Git work tree is refused with a sentence
+  (the copy lists through git), the row ending `refused`. The prompt names the COPIES' paths: the fan-out composes such a
+  row's prompt with no roots and hands `RowInput.Launch.NamingCopies` → `RowLaunchInput.PromptNaming`, which the launch
+  calls with the copies it made (a row standing in copies with no naming function is a contract violation, never a prompt
+  naming the originals). A runtime with a `HomesFolder` keeps its home in the row's folder too (`OwnedScratch`), and its
+  none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
+  (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
+- **`--check-consultant` — the check's one-shot copy.** `ConsultantCheckTurn` gives a runtime that asks the same: a copy of
+  the scratch repository in the check's own scratch (`own/tree/…`), the home beside it, the prompt naming the copy; gone
+  with the check's scratch.
+
+**The home sweep (D20) — `ConsultantHomeSweep`.** A conversation's folder outlives a host killed mid-conversation, and
+nothing else would read `coai-vibe/` or `coai-kimi/` again, so a third pass joins `ConsultationService.Sweep`, AFTER the
+records and the retention pass — on the `ConsultationSweeper` beat and once in the `PanelService` constructor at start. Over
+every folder of both homes folders (`ConsultantHomes.All`): **removed** when (a) the store has no record for its id and its
+last write (the folder and its direct entries) is older than `ConsultIdle`, (b) its record is over (closed, failed — a
+lapse is a close), or (c) its record is open, not `asking`, and nothing was written inside the window; **kept** when an
+open record's folder was written inside the window, and while a record is `asking`; **skipped this beat** when the
+folder's turn or any home's turn in it is held (`VibeHomeTurns.TryTake`, zero wait — a live launch is judged by the lock,
+never by a stamp). Before the delete the process's snapshot of it is released (its bytes back to the budget); the delete is
+`GitScratch.DeleteEvenIfReadOnly`, which unlinks a junction by its own name and never walks through it — so a Kimi home's
+`credentials` junction goes and the person's folder keeps every file (Kimi's own junction-first-and-verify disposal is S4's,
+in its home's owner; this sweep is the backstop). A folder that cannot be listed, read or removed is logged and skipped —
+never the reason the sweep fails. `close_consult` removes the conversation's folders at once (`ConsultantHomeSweep.RemoveNow`,
+under the repository lock) instead of leaving them to the beat. The bound: while a server runs, a home outlives its
+conversation by at most `ConsultIdle` + one beat (15 min + 60 s by default); a killed host's homes go at the next start.
+
+```mermaid
+flowchart TD
+  turn["consult turn (RunTurnAsync)"] --> asks{"NeedsASanitisedSnapshot?"}
+  asks -->|no| checkout["the checkout, as before"]
+  asks -->|yes| folder["coai-vibe/(id) — its turn held for the whole turn"]
+  folder --> held{"this process holds its snapshot?"}
+  held -->|yes| refresh["RefreshAsync — in place; refused: the old tree stands, the turn is refused"]
+  held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
+  refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
+  makeat --> launch
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; no Git work tree: refused"]
+  copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
+  beat["ConsultationService.Sweep — at start and every beat"] --> records["records swept first (idle: closed)"]
+  records --> sweep["ConsultantHomeSweep over coai-vibe/ and coai-kimi/"]
+  sweep -->|"over, or unknown/idle past ConsultIdle, and no turn held"| gone["snapshot released · folder deleted, links unlinked, never entered"]
+  sweep -->|"open and recent · asking · a turn held"| kept["kept (skipped this beat)"]
+```
+
+| What | Where |
+|---|---|
+| The place, the one-shot copies, the non-Git refusal | `Server/Consultation/ConsultantPlaces.cs` |
+| The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
+| The home sweep and `RemoveNow` | `Server/Consultation/ConsultantHomeSweep.cs` |
+| The homes root | `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application data; empty in hand-built settings, so a test never touches the machine's own) |
+| Wiring | `ConsultationService.RunTurnAsync` / `Sweep` / `CloseAsync`; `QuestionRowLaunch.RunAsync`; `QuestionFanOut.CheckedInput`; `ConsultantCheckTurn.TurnAsync` |
+| Tests | `AVibeConsultationKeepsOneSnapshotTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `ConsultantHomeSweepTests`, `ConsultantCheckTests.AVibeCheck_…` — [module_tests.md](module_tests.md) |
+
+Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
+step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
