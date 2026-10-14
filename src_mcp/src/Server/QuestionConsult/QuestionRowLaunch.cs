@@ -26,6 +26,17 @@ public sealed record RowLaunchInput(
     /// Required, so no caller can launch a row whose follow-up never asks.
     /// </summary>
     public required Func<CancellationToken, Task<IReadOnlyList<TreeChange>>> ChangesSoFar { get; init; }
+
+    /// <summary>
+    /// The prompt naming the folders a row whose plan stands in a COPY of its roots (<see cref="CwdKind.Snapshot"/>, D6 of
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) actually reads — the copies' paths, known only once the launch has made them.
+    /// Every other row's prompt is <see cref="Prompt"/> as composed, and this is never asked.
+    /// </summary>
+    public Func<IReadOnlyList<string>, string> PromptNaming { get; init; } = NamesNoCopies;
+
+    /// <summary>The default: a row that stands in copies and was given no way to name them is a contract violation, never a prompt naming the originals.</summary>
+    public static string NamesNoCopies(IReadOnlyList<string> copies) =>
+        throw new ArgumentException("a question row standing in a copy of its roots needs a prompt that names the copies (RowLaunchInput.PromptNaming)", nameof(copies));
 }
 
 /// <summary>One turn of a row: the launches it made — one, or a launch and its follow-up — and what stopped a follow-up.</summary>
@@ -65,15 +76,34 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 {
     public const string ScratchPrefix = "coai-question-";
 
+    /// <summary>The empty folder a home-keeping runtime's none row stands in, beside its home inside the row's folder.</summary>
+    private const string EmptyName = "cwd";
+
+    /// <summary>A question row's copies are one-shot: no conversation folder, so no homes root.</summary>
+    private readonly ConsultantPlaces _places = new(string.Empty, string.Empty, launcher, note => log.Information("question row: {Note}", note));
+
+    /// <remarks>
+    /// <para><b>A question row is one-shot</b> (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), so a runtime that keeps a
+    /// coai-owned home (<see cref="IConsultantRuntime.HomesFolder"/>, Vibe) keeps it in the ROW's own <c>coai-question-*</c>
+    /// folder, and a plan that stands in a copy of its roots (<see cref="CwdKind.Snapshot"/>) has the copies made there:
+    /// one per granted root, through git, the prompt naming those copies' paths. Both go with the folder in
+    /// <c>finally</c> — on an answer, a refusal and a cancellation alike.</para>
+    /// </remarks>
     public async Task<QuestionRowRecord> RunAsync(RowLaunchInput input, QuestionRowRecord start, CancellationToken ct)
     {
-        var scratch = input.Row.Plan.Cwd == CwdKind.Scratch ? Directory.CreateTempSubdirectory("coai-question-").FullName : string.Empty;
+        var scratch = NeedsAFolder(input.Row) ? Directory.CreateTempSubdirectory(ScratchPrefix).FullName : string.Empty;
         var started = Stopwatch.StartNew();
         using var row = CancellationTokenSource.CreateLinkedTokenSource(ct);
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
         {
-            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch), row.Token), start, started, row.Token);
+            using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
+            if (place.Refusal.Length > 0)
+            {
+                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None);
+            }
+
+            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, place), row.Token), start, started, row.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -103,12 +133,31 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             ? ready.Launch
             : launch;
 
-    private static ConsultantLaunch Launch(RowLaunchInput input, string scratch) =>
-        new(input.Repo, input.Prompt, string.Empty, input.AnswersDir, input.Settings, input.SchemaFile)
+    /// <summary>
+    /// The row's launch: its prompt naming what it reads, and — for a home-keeping runtime — its home in the row's folder
+    /// and an EMPTY folder beside it to stand in, so a none row's cwd never holds its own home.
+    /// </summary>
+    private static ConsultantLaunch Launch(RowLaunchInput input, string scratch, ConsultantPlace place) =>
+        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, scratch), input.SchemaFile)
         {
             Confinement = new LaunchConfinement.Planned(input.Row.Plan),
-            ScratchDir = scratch,
+            ScratchDir = KeepsAHome(input.Row) ? Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName : scratch,
+            Workdir = place.Workdir,
         };
+
+    private static ReviewerSettings Owning(RowLaunchInput input, string scratch) =>
+        KeepsAHome(input.Row) ? input.Settings with { OwnedScratch = scratch } : input.Settings;
+
+    private static bool KeepsAHome(RowAdmission.Admitted row) => row.Runtime.HomesFolder.Length > 0;
+
+    /// <summary>A folder of the row's own: a scratch cwd, a copy of the roots, or a home — every plan but a root cwd with no home.</summary>
+    private static bool NeedsAFolder(RowAdmission.Admitted row) => row.Plan.Cwd != CwdKind.Root || KeepsAHome(row);
+
+    /// <summary>The copies a <see cref="CwdKind.Snapshot"/> plan stands in, made in the row's folder; nothing for any other plan.</summary>
+    /// <param name="budget">The row's own budget (<c>COAI_QCONSULT_ROW_MINUTES</c>, <see cref="RowLaunchInput.Budget"/>): the copies
+    /// must be made inside it, or the row is refused before Vibe starts (the #811 checkpoint round).</param>
+    private async Task<ConsultantPlace> PlaceAsync(RowAdmission.Admitted row, string scratch, TimeSpan budget, CancellationToken ct) =>
+        row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.SnapshotSources, budget, ct) : ConsultantPlace.Checkout;
 
     /// <summary>The turns of one row: one for a CLI (a launch, or a launch and its follow-up), as many as the api row's follow-ups ask for.</summary>
     private async Task<QuestionRowRecord> TurnsAsync(RowLaunchInput input, ConsultantLaunch launch, QuestionRowRecord start, Stopwatch started, CancellationToken ct)
@@ -310,7 +359,8 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
         try
         {
-            Directory.Delete(scratch, recursive: true);
+            // The shared deleter: a home's read-only files go too, and a link in the folder is unlinked, never entered.
+            Runners.Files.GitScratch.DeleteEvenIfReadOnly(scratch);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

@@ -118,6 +118,31 @@ public sealed class ConfinementPlannerTests
         }
     }
 
+    /// <summary>
+    /// Vibe (S3 of todo/PLAN_vibe_and_kimi_runtimes.md): D2's two flags, both, on every capability — and no
+    /// <c>--trust</c> or <c>--add-dir</c> ever (D3). A none row stands in an EMPTY scratch folder; a disk row stands in a
+    /// SNAPSHOT of its roots (D6), because Vibe reads only its working folder (M-V11) — so its roots are never its cwd.
+    /// </summary>
+    [Fact]
+    public void Vibe_None_StandsInAnEmptyScratch_AndDisk_InTheSnapshotOfItsRoots_ReadOnlyBothTimes()
+    {
+        var none = Plan("vibe", CapabilityGrant.None);
+        none.Flags.Should().Equal("--agent", "plan", "--enabled-tools", "read_file");
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.AddDirs.Should().BeEmpty();
+        none.Flag.Should().Be(AdmissionFlag.None);
+
+        var disk = Plan("vibe", CapabilityGrant.Disk(RootA, RootB));
+        disk.Flags.Should().Equal("--agent", "plan", "--enabled-tools", "read_file");
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "M-V11: Vibe cannot read outside its cwd, and its cwd is never the checkout (D6)");
+        disk.AddDirs.Should().BeEmpty("AddDirs are launch flags, and Vibe is never given --add-dir (D3)");
+        disk.SnapshotSources.Should().Equal([RootA, RootB], "the roots it reads through their copies");
+        none.SnapshotSources.Should().BeEmpty();
+        disk.Flag.Should().Be(AdmissionFlag.None);
+        disk.Flags.Concat(disk.Leading).Should().NotContain(["--trust", "--add-dir"], "D3: a trusted folder runs its hooks");
+        ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -126,6 +151,7 @@ public sealed class ConfinementPlannerTests
     [InlineData("api", Capability.Web, "not been measured")]
     [InlineData("local", Capability.Disk, "cannot do 'disk'")]
     [InlineData("local", Capability.Web, "cannot do 'web'")]
+    [InlineData("vibe", Capability.Web, "not been measured")]
     public void APairTheMatrixRefuses_IsRefusedByThePlannerToo_WithTheMatrixsOwnSentence(string runtime, Capability capability, string says)
     {
         var grant = capability == Capability.Disk ? CapabilityGrant.Disk(RootA) : new CapabilityGrant(capability, []);
@@ -138,7 +164,7 @@ public sealed class ConfinementPlannerTests
     public void AnUnknownRuntime_IsRefused_NamingTheOnesItKnows()
     {
         ConfinementPlanner.Plan("gemini", CapabilityGrant.None).Should().BeOfType<Confinement.Refused>()
-            .Which.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api");
+            .Which.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe");
     }
 
     [Fact]
@@ -189,11 +215,17 @@ public sealed class ConfinementPlannerTests
 
     private const string Repo = "D:/rsd/some-checkout";
 
+    /// <summary>The row's own folder and its copy of the roots — what the row launch makes for a runtime that asks (S3); ignored by the rest.</summary>
+    private static readonly string RowFolder = Path.Combine(Path.GetTempPath(), "coai-question-" + Guid.NewGuid().ToString("N"));
+
+    private static readonly string RowTree = Path.Combine(RowFolder, "tree");
+
     private static ConsultantLaunch Planned(string runtime, CapabilityGrant grant, string model = "") => new(
-        Repo, "the question", string.Empty, Answers, new ReviewerSettings(runtime) { Model = model })
+        Repo, "the question", string.Empty, Answers, new ReviewerSettings(runtime) { Model = model, OwnedScratch = RowFolder })
     {
         Confinement = new LaunchConfinement.Planned(Plan(runtime, grant)),
         ScratchDir = Scratch,
+        Workdir = RowTree,
     };
 
     [Fact]
@@ -275,6 +307,68 @@ public sealed class ConfinementPlannerTests
         built.Role.Should().Be(ConsultantRoles.Question);
     }
 
+    /// <summary>
+    /// A Vibe question row (S3 of todo/PLAN_vibe_and_kimi_runtimes.md): the plan's read-only pair, a none row in its EMPTY
+    /// scratch and a disk row in the copy of its roots — never a root, never the checkout — on the row's own home in the
+    /// built environment: <c>VIBE_CLI=python</c> and the model in the EXPLICIT environment, which is all a question row's
+    /// minimal child gets (M-V12, 3 of 3).
+    /// </summary>
+    [Fact]
+    public void AVibeQuestionLaunch_IsThePlansPair_InItsScratchOrItsSnapshot_OnTheRowsOwnHome()
+    {
+        var consultant = new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows));
+
+        var none = consultant.Build(Planned("vibe", CapabilityGrant.None, "glm-5-3"));
+        none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty folder of its own");
+        none.Request.Arguments.Should().ContainInConsecutiveOrder("--agent", "plan", "--enabled-tools", "read_file")
+            .And.ContainInConsecutiveOrder("--workdir", Scratch)
+            .And.NotContain("--trust").And.NotContain("--add-dir").And.NotContain("--resume", "one shot");
+        none.Role.Should().Be(ConsultantRoles.Question);
+
+        var disk = consultant.Build(Planned("vibe", CapabilityGrant.Disk(RootA, RootB), "glm-5-3"));
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "M-V11: Vibe reads its cwd only — the copy of the roots (D6)");
+        disk.Request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the roots are read through their copy, never named to Vibe");
+
+        foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
+        {
+            request.InheritsEnvironment.Should().BeFalse();
+            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal, "the question row's road (ForQuestion)");
+            request.Environment.Should().Contain(Runners.Vibe.VibeLaunch.CliVariable, "python").And.Contain(Runners.Vibe.VibeLaunch.ModelVariable, "glm-5-3");
+            request.Environment[Runners.Vibe.VibeLaunch.HomeVariable].Should().StartWith(RowFolder + Path.DirectorySeparatorChar,
+                "the row's home lives in the row's own folder, gone with it");
+            Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
+        }
+    }
+
+    /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
+    [Fact]
+    public void NoVibeLaunch_CarriesAddDir_WhateverTheGrant()
+    {
+        var consultant = new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows));
+        foreach (var grant in (CapabilityGrant[])[CapabilityGrant.None, CapabilityGrant.Disk(RootA), CapabilityGrant.Disk(RootA, RootB), CapabilityGrant.Web])
+        {
+            if (ConfinementPlanner.Plan("vibe", grant) is not Confinement.Planned plan)
+            {
+                continue;
+            }
+
+            plan.AddDirs.Should().BeEmpty($"vibe × {grant.Capability}");
+            consultant.Build(Planned("vibe", grant)).Request.Arguments.Should().NotContain("--add-dir", $"vibe × {grant.Capability}")
+                .And.NotContain(RootA).And.NotContain(RootB);
+        }
+    }
+
+    [Fact]
+    public void ASnapshotCwd_NeedsAWorkdir_OrTheLaunchIsRefused()
+    {
+        var nowhere = Planned("vibe", CapabilityGrant.Disk(RootA)) with { Workdir = string.Empty };
+
+        var build = () => new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime()).Build(nowhere);
+
+        build.Should().Throw<ArgumentException>().WithMessage("*Workdir*",
+            "falling back to a root would hand Vibe the branch's own .vibe/ and AGENTS.md (D6)");
+    }
+
     /// <summary>The structural half of acceptance 2: whatever a planned launch sends of the sandbox vocabulary, the plan gave it.</summary>
     [Fact]
     public void NoAdapter_SendsASandboxFlag_ThePlanDidNotGiveIt()
@@ -349,11 +443,17 @@ public sealed class ConfinementPlannerTests
             "--model", "m", "--add-dir", Repo);
         agy.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
 
-        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime is not "local" and not "antigravity"))
+        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime is not "local" and not "antigravity" and not "vibe"))
         {
             consultant.Build(launch).Request.WorkingDirectory.Should().Be(Repo, consultant.Vendor);
             consultant.Build(launch).Role.Should().Be(ConsultantRoles.Consult, consultant.Vendor);
         }
+
+        // Vibe never stands in the checkout (D6): the conversation's snapshot, which the service makes.
+        var vibe = new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime()).Build(
+            launch with { Workdir = RowTree, Settings = launch.Settings with { OwnedScratch = RowFolder } });
+        vibe.Request.WorkingDirectory.Should().Be(RowTree);
+        vibe.Role.Should().Be(ConsultantRoles.Consult);
     }
 
     private static IEnumerable<(string Runtime, IConsultantRuntime Consultant)> Adapters() =>
@@ -361,5 +461,6 @@ public sealed class ConfinementPlannerTests
         ("claude", new ClaudeConsultant(new ClaudeRuntime())),
         ("codex", new CodexConsultant(new CodexRuntime())),
         ("antigravity", new AntigravityConsultant(new AntigravityRuntime())),
+        ("vibe", new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows))),
     ];
 }

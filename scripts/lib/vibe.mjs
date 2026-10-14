@@ -29,6 +29,17 @@ export function minimalWindowsEnv() {
   return env;
 }
 
+/**
+ * The FIXED variables of D17's built environment — every name coai sets beside the home and the model, with its value:
+ * the Python CLI pinned (§3) and Python's UTF-8 mode on (§26: without it a character outside cp1252 killed the run with
+ * exit 2). The product builds the same in VibeLaunch.Built; VibePrintsUtf8OnEveryPathTests (src_mcp/tests) parses this
+ * literal and fails unless it is the product's set exactly. Keep it ONE object literal of quoted values.
+ */
+export const BUILT_FIXED = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
+
+/** D17's BUILT environment for `home` and `model`: MinimalWindows, the home, the fixed variables and the model — nothing else. */
+export const builtEnv = (home, model) => ({ ...minimalWindowsEnv(), VIBE_HOME: home, ...BUILT_FIXED, VIBE_ACTIVE_MODEL: model });
+
 export const fwd = (p) => p.replaceAll('\\', '/');
 
 /** A Windows system tool by its absolute path, never looked up through PATH (SonarCloud S4036, the code round 2026-10-12). */

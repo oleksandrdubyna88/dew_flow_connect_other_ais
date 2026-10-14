@@ -66,6 +66,56 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
         };
     }
 
+    /// <summary>
+    /// A snapshot of <paramref name="source"/> published AT <paramref name="root"/> — a path its owner fixed, the stuck
+    /// consultant's <c>coai-vibe/&lt;id&gt;/tree</c> — or a refusal with a sentence.
+    /// </summary>
+    /// <remarks>
+    /// <para>A conversation keeps ONE snapshot path across its turns (D6 as amended, §22 B/E: a resumed session is bound to
+    /// the folder it was created in) — across a restart of the server too, when the object that refreshed it in place is
+    /// gone and only the tree it left is there. So the copy is built COMPLETE beside the root, under every rule a snapshot
+    /// has, and only then takes the root's place: by one rename when nothing is there, by the same two renames a refresh
+    /// uses when a tree is (the old one aside, the new one in, the old one back if the second rename fails). A refusal
+    /// leaves whatever was at the root exactly as it was.</para>
+    /// </remarks>
+    /// <remarks>
+    /// A parent that is a LINK is refused before anything is built (R2 of the S3 risk consultation): a conversation's folder
+    /// redirected elsewhere would otherwise receive the copy wherever it points. A check at one moment, by path —
+    /// <see cref="Files.OwnedPaths"/> says what it does not close.
+    /// </remarks>
+    public async Task<SnapshotOutcome> MakeAtAsync(SnapshotSource source, string root, CancellationToken ct = default)
+    {
+        var parent = Path.GetDirectoryName(root)!;
+        if (Files.OwnedPaths.IsLinkIfThere(parent))
+        {
+            return new SnapshotOutcome.Refused($"the snapshot of {source.Directory} was refused: {parent} is a link, and a snapshot is never made through one");
+        }
+
+        var built = await BuildTwiceAsync(source, parent, replacing: 0, ct);
+
+        return built switch
+        {
+            Attempt.Built b => Directory.Exists(root) || File.Exists(root) ? ReplaceAt(b, root) : Publish(b, root),
+            Attempt.Refused r => new SnapshotOutcome.Refused($"the snapshot of {source.Directory} was refused: {r.Reason}"),
+            _ => throw new InvalidOperationException("a changed attempt never leaves BuildTwiceAsync"),
+        };
+    }
+
+    /// <summary>A tree left at <paramref name="root"/> replaced by the built one — or, refused, a sentence that says what is there now.</summary>
+    private SnapshotOutcome ReplaceAt(Attempt.Built built, string root)
+    {
+        var placed = TakePlace(built.Directory, root);
+        if (placed.How != Placing.In)
+        {
+            built.Hold.Dispose();
+            TryDelete(built.Directory);
+
+            return new SnapshotOutcome.Refused($"the snapshot could not take the place of what is at {root} ({placed.Why}); " + Left(placed.How, root, "that is left as it was"));
+        }
+
+        return new SnapshotOutcome.Made(new ReviewSnapshot(this, root, built.Manifest, built.Hold, note));
+    }
+
     /// <summary>The live tree copied again into <paramref name="snapshot"/>'s own root; the previous copy stands on a refusal.</summary>
     internal async Task<SnapshotRefresh> RefreshAsync(ReviewSnapshot snapshot, SnapshotSource.Live source, CancellationToken ct)
     {
@@ -252,7 +302,7 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
     /// <summary>The one rename that makes a snapshot visible — or a refusal that leaves nothing.</summary>
     private SnapshotOutcome Publish(Attempt.Built built, string final)
     {
-        if (!Move(built.Directory, final, out var why))
+        if (!Mover(built.Directory, final, out var why))
         {
             built.Hold.Dispose();
             TryDelete(built.Directory);
@@ -269,36 +319,78 @@ public sealed class ReviewSnapshots(IProcessLauncher launcher, SnapshotOptions o
     /// </summary>
     private SnapshotRefresh Swap(ReviewSnapshot snapshot, Attempt.Built built)
     {
-        var aside = snapshot.Root + AsideSuffix + ShortId();
-        if (!Move(snapshot.Root, aside, out var why) || !MovedIn(built.Directory, snapshot.Root, aside))
+        var placed = TakePlace(built.Directory, snapshot.Root);
+        if (placed.How != Placing.In)
         {
             built.Hold.Dispose();
             TryDelete(built.Directory);
 
-            return new SnapshotRefresh.Refused($"the refreshed copy could not take the place of {snapshot.Root} ({why}); the previous snapshot stands");
+            return new SnapshotRefresh.Refused(
+                $"the refreshed copy could not take the place of {snapshot.Root} ({placed.Why}); " + Left(placed.How, snapshot.Root, "the previous snapshot stands"));
         }
 
         snapshot.Replace(built.Manifest, built.Hold);
-        TryDelete(aside);
 
         return new SnapshotRefresh.Refreshed(built.Manifest);
     }
 
-    /// <summary>The new tree moved in, or the old one restored — and said out loud when even that fails.</summary>
-    private bool MovedIn(string fresh, string root, string aside)
+    /// <summary>Where a built tree's attempt to take a root's place ended.</summary>
+    private enum Placing
     {
-        if (Move(fresh, root, out _))
-        {
-            return true;
-        }
+        /// <summary>The new tree is at the root; the old one was deleted.</summary>
+        In,
 
-        if (!Move(aside, root, out var why))
-        {
-            note($"the previous snapshot could not be moved back to {root}; it is at {aside} ({why})");
-        }
+        /// <summary>The new tree is not in, and the old one is at the root as it was.</summary>
+        OldStands,
 
-        return false;
+        /// <summary>Neither: the old tree was moved aside and could not be moved back — the root holds NOTHING (R3).</summary>
+        Missing,
     }
+
+    private sealed record Placed(Placing How, string Why);
+
+    /// <summary>
+    /// The built tree under the root's path: the old one aside, the new one in — and the old one back if the second rename
+    /// fails. When even that fails the root is EMPTY, and the answer says so rather than claiming the old tree stands (R3 of
+    /// the S3 risk consultation); the caller refuses the launch either way, and the next <see cref="MakeAtAsync"/> recovers
+    /// the path.
+    /// </summary>
+    private Placed TakePlace(string fresh, string root)
+    {
+        var aside = root + AsideSuffix + ShortId();
+        if (!Mover(root, aside, out var why))
+        {
+            return new Placed(Placing.OldStands, why);
+        }
+
+        if (Mover(fresh, root, out why))
+        {
+            TryDelete(aside);
+
+            return new Placed(Placing.In, string.Empty);
+        }
+
+        return Mover(aside, root, out var back)
+            ? new Placed(Placing.OldStands, why)
+            : Gone(root, aside, $"{why}; the previous copy could not be moved back either ({back})");
+    }
+
+    private Placed Gone(string root, string aside, string why)
+    {
+        note($"the previous snapshot could not be moved back to {root}; it is at {aside} ({why})");
+
+        return new Placed(Placing.Missing, why);
+    }
+
+    /// <summary>What a refused placing left at the root, as the end of its sentence.</summary>
+    private static string Left(Placing how, string root, string stands) =>
+        how == Placing.Missing ? $"there is no snapshot at {root} now, and nothing is launched against it — the next turn makes a new one" : stands;
+
+    /// <summary>One directory rename: true, or false with why.</summary>
+    internal delegate bool MoveDirectory(string from, string to, out string why);
+
+    /// <summary>The renames a snapshot is published, refreshed and replaced with — a test's seam for a rename that fails.</summary>
+    internal MoveDirectory Mover { get; set; } = Move;
 
     private static bool Move(string from, string to, out string why)
     {

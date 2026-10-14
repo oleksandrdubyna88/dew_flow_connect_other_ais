@@ -57,7 +57,8 @@ public sealed class VibeRuntimeTests : IDisposable
 
         request.InheritsEnvironment.Should().BeFalse("§22 A: a VIBE_* the child inherits configures Vibe whatever its home holds");
         request.Passthrough.Should().BeEquivalentTo(ProcessEnvironment.Minimal);
-        request.Environment.Keys.Should().BeEquivalentTo([VibeLaunch.HomeVariable, VibeLaunch.CliVariable, VibeLaunch.ModelVariable]);
+        request.Environment.Keys.Should().BeEquivalentTo([VibeLaunch.HomeVariable, VibeLaunch.CliVariable, VibeLaunch.ModelVariable, VibeLaunch.Utf8Variable],
+            "§26: UTF-8 mode is part of the built set");
         request.Environment[VibeLaunch.CliVariable].Should().Be("python", "§3: the Rust CLI refuses the shipped flags and is unmeasured");
         request.Environment[VibeLaunch.ModelVariable].Should().Be("glm-5-3");
         request.Environment[VibeLaunch.HomeVariable].Should().StartWith(@"C:\Temp\coai-answers-r");

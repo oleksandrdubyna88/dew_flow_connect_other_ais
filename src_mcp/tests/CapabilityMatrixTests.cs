@@ -149,21 +149,52 @@ public sealed class CapabilityMatrixTests
         pairs.Should().HaveCount(RuntimeCapabilities.Runtimes.Count * Enum.GetValues<Capability>().Length);
     }
 
+    /// <summary>
+    /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
+    /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
+    /// </summary>
+    private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
+    [
+        ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
+        ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+    ];
+
     [Fact]
     public void EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone()
     {
         foreach (var row in RuntimeCapabilities.Builtin.Rows)
         {
             var where = $"{row.Runtime} × {row.Capability.Spelled()}";
-            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_question_consultant_capabilities.md", where);
-            row.MeasuredWith.Date.Should().Be("2026-10-01", $"{where}: the full run's date");
+            var cited = Records.Where(record => row.MeasuredWith.ResultRef.Contains(record.Record, StringComparison.Ordinal)).ToList();
+            cited.Should().ContainSingle($"{where}: a row cites exactly one record");
+            var (record, date, prefix) = cited[0];
+            row.MeasuredWith.Date.Should().Be(date, $"{where}: the day {record} was measured");
             (row.MeasuredWith.Cells.Count > 0 || row.MeasuredWith.Note.Length > 0).Should().BeTrue(
                 $"{where}: a row with no cell says why — by construction, or not measured");
             foreach (var cell in row.MeasuredWith.Cells)
             {
-                cell.Should().StartWith("01a0f8c7-18e4-", $"{where}: every cell is from the full run 01a0f8c7");
+                cell.Should().StartWith(prefix, $"{where}: every cell is one of {record}'s");
             }
         }
+    }
+
+    [Fact]
+    public void TheVibeRows_RestOnTheVibeProbe_AndItsWebIsUnmeasured_SoRefused()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            var row = RuntimeCapabilities.Builtin.Of("vibe", capability)!;
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_vibe_confinement.md");
+            row.MeasuredWith.Cells.Should().NotBeEmpty($"vibe × {capability} stands on measured cells");
+            CapabilityMatrix.Admit("vibe", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.None, $"vibe × {capability}: read_file reads its working folder only (M-V6, M-V11)");
+        }
+
+        RuntimeCapabilities.Builtin.Of("vibe", Capability.Disk)!.MeasuredWith.Cells.Should().Contain("M-V6",
+            "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
+        CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
@@ -196,6 +227,23 @@ public sealed class CapabilityMatrixTests
             "the cure for an unmeasured pair is a measurement, and the sentence says where it goes");
     }
 
+    /// <summary>
+    /// An unmeasured pair names the record ITS row cites — the record a measurement would land in — so an unmeasured Vibe
+    /// pair names the Vibe probe's record (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), and the first five runtimes' sentences
+    /// stay exactly what they were.
+    /// </summary>
+    [Fact]
+    public void AnUnmeasuredVibePair_NamesTheVibeRecord_AndTheApiSentenceIsUnchanged()
+    {
+        var vibe = CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason;
+
+        vibe.Should().Contain("a measured cell in research/RESULTS_vibe_confinement.md is what admits it")
+            .And.NotContain("RESULTS_question_consultant_capabilities.md", "no cell of that run could admit a Vibe pair");
+        CapabilityMatrix.Admit("api", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason.Should().Be(
+            "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
+            + "research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability");
+    }
+
     [Fact]
     public void AnUnsupportedPair_IsRefused_WithTheRowsOwnReason()
     {
@@ -222,7 +270,7 @@ public sealed class CapabilityMatrixTests
     public void AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown()
     {
         var runtime = CapabilityMatrix.Admit("gemini", "none").Should().BeOfType<Admission.Refused>().Which;
-        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api",
+        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe",
             "an unknown name fails naming the legal values");
 
         var capability = CapabilityMatrix.Admit("claude", "shell").Should().BeOfType<Admission.Refused>().Which;
@@ -253,8 +301,8 @@ public sealed class CapabilityMatrixTests
     /// <remarks>
     /// Written against a hand-built table rather than by corrupting the embedded file, because the
     /// validation is the unit under test and the resource is not reachable without rebuilding the
-    /// assembly. Every fixture starts from the WHOLE matrix — fifteen well-formed rows — and breaks one
-    /// thing, so the refusal observed is for that thing and not for the fourteen pairs a smaller
+    /// assembly. Every fixture starts from the WHOLE matrix — every pair, well formed — and breaks one
+    /// thing, so the refusal observed is for that thing and not for the other pairs a smaller
     /// fixture would also be missing.
     /// </remarks>
     public sealed class ABrokenTable
@@ -309,7 +357,7 @@ public sealed class CapabilityMatrixTests
         {
             var table = RuntimeCapabilities.FromSeed(new RuntimeCapabilitySeed(["x"], [.. RuntimeCapabilities.Runtimes], ["none", "disk", "web"], Whole()));
 
-            table.Rows.Should().HaveCount(15).And.OnlyContain(row => row.Standing == CapabilityStanding.Confined);
+            table.Rows.Should().HaveCount(RuntimeCapabilities.Runtimes.Count * Capabilities.All.Count).And.OnlyContain(row => row.Standing == CapabilityStanding.Confined);
             table.Of("codex", Capability.Web).Should().NotBeNull();
             table.Of("gemini", Capability.Web).Should().BeNull("a runtime outside the matrix has no row to answer with");
         }

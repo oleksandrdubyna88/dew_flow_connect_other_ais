@@ -39,7 +39,21 @@ export interface Admission {
   readonly caveat: string;
 }
 
-const RECORD = 'research/RESULTS_question_consultant_capabilities.md';
+/** The record a pair's measurement belongs in when its row cites none — the first run's. */
+const FIRST_RUN_RECORD = 'research/RESULTS_question_consultant_capabilities.md';
+
+/**
+ * The record a row's `resultRef` cites — the file a measurement of that pair would land in (the Vibe rows cite
+ * research/RESULTS_vibe_confinement.md, S3 of PLAN_vibe_and_kimi_runtimes.md) — read off the row, never a second sentence
+ * per runtime; the first run's record when the row names none. The twin of `CapabilityMatrix.RecordOf`.
+ */
+function recordOf(row: RuntimeCapabilityRow): string {
+  const cited = row.measuredWith.resultRef;
+  const at = cited.indexOf('research/RESULTS_');
+  const end = at < 0 ? -1 : cited.indexOf('.md', at);
+
+  return end < 0 ? FIRST_RUN_RECORD : cited.slice(at, end + 3);
+}
 
 const CAVEATS: Readonly<Record<AdmissionFlag, string>> = {
   '': '',
@@ -79,7 +93,7 @@ const DECISIONS: Readonly<Record<CapabilityStanding, (row: RuntimeCapabilityRow)
   unsupported: (row) => refused(row.standing, `'${row.runtime}' cannot do '${row.capability}': ${row.measuredWith.note} — `
     + 'give this row a prompt of another capability, or this prompt another runtime'),
   unmeasured: (row) => refused(row.standing, `'${row.runtime}' has not been measured for '${row.capability}' `
-    + `(${row.measuredWith.note}) — a measured cell in ${RECORD} is what admits it; until then give this row a prompt of another capability`),
+    + `(${row.measuredWith.note}) — a measured cell in ${recordOf(row)} is what admits it; until then give this row a prompt of another capability`),
 };
 
 function admitted(row: RuntimeCapabilityRow, flag: AdmissionFlag): Admission {

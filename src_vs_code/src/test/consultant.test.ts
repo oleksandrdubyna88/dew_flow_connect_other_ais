@@ -612,8 +612,9 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
   // The extension's copy of `ConsultantResolution.Consulting`. It decides what a picker OFFERS,
   // which has to be drawable before the server is installed — so it is a mirror, and this is the
   // list the agreement test holds against the C#.
-  // `api` since PLAN_one_model_catalog.md D9 (E2.3) — the server reads the same shared file.
-  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api']);
+  // `api` since PLAN_one_model_catalog.md D9 (E2.3) — the server reads the same shared file; `vibe` since S3 of
+  // PLAN_vibe_and_kimi_runtimes.md, when coai-mcp gained the Vibe consultant.
+  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api', 'vibe']);
 });
 
 // ---------------------------------------------------------------------------------------------

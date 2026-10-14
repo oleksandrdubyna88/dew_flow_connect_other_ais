@@ -2935,7 +2935,7 @@ sequenceDiagram
   DISOWNED (`NonZeroExit`, its usage kept). The per-attempt export folder is deleted when the launch's turn is given
   back, after every read; a crash leaves it in the launch's `coai-answers-*` folder for the sweep.
 - **What it does not do.** No effort, no thinking switch, no fast mode is sent (`shared/feature-availability.json`:
-  `unmeasured`, `unmeasured`, `none`). The consultant and the question row are S3's.
+  `unmeasured`, `unmeasured`, `none`). The consultant and the question row are S3's — *The Vibe consultant*, below.
 - **The `providers` probe leaves the person's home alone** (D17; follow-up of the same story). A bare `vibe --version`
   writes `vibehistory` into whatever `VIBE_HOME` it is given — the person's own `~/.vibe` when it is given none (§24) — so
   `VendorProbe` no longer starts the CLI itself: it asks the adapter (`IReviewerRuntime.ProbeVersionAsync`, by default the
@@ -2953,6 +2953,68 @@ Tests: `VibeRuntimeTests`, `VibeLaunchRulesTests`, `VibeHomeTests`, `VibeHomeMan
 `AVibeRowReviewsInTheRoundsSnapshotTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `VibeIsDiagnosedInItsOwnWordsTests`,
 `TheVibeProbeLeavesThePersonsHomeAloneTests`
 — listed in [module_tests.md](module_tests.md).
+
+## The Vibe consultant — `VibeConsultant` (2026-10-13, S3 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+Vibe answers `consult`, a question-consultant row and the consultant check through ONE adapter,
+`runners/Vibe/VibeConsultant.cs`, composed from the reviewer's (`IConsultantRuntime` over `VibeRuntime`, the family's
+shape since PLAN_consultant): the invocation carries `VibeRuntime` as its adapter, so `ReviewerExecutor.LaunchAsync` asks
+the ONE launch control before every launch — the host (D18), the built environment (D17), the curated model (D10), the
+owned home and its turn, the version and its warning — and reads the answer, the export's usage and the model after-check
+with the reviewer's own code. Nothing about a Vibe launch is decided twice.
+
+- **Where it stands (D6).** Never the checkout: Vibe reads only its working folder (M-V11) and loads its configuration
+  from it. The stuck consultant stands in `ConsultantLaunch.Workdir` — the conversation's ONE snapshot of the live tree,
+  refreshed in place before each turn (§22 B/D/E: a resumed session is bound to the folder it was created in); a question
+  row in its plan's cwd (`CwdKind.Scratch`: an empty folder; `CwdKind.Snapshot`: the copy of its roots). A launch with no
+  `Workdir` is a contract violation (`ArgumentException`), never a fall-back to the checkout.
+- **Its home (D17).** The caller hands a coai-owned folder in `ReviewerSettings.OwnedScratch` — the conversation's
+  `coai-vibe/<id>`, the row's `coai-question-*`, the check's `own` — and the home is `VibeRuntime.HomeFor` inside it: the
+  same short name every turn, so `--resume` finds the session it stored there. The per-attempt export folder lives in the
+  same folder. No `OwnedScratch` is a contract violation: never the person's own `~/.vibe`.
+- **The argv** is the reviewer's (`VibeRuntime.Arguments`, the read-only pair from the plan for a question row and
+  `ConfinementPlanner.VibeReadOnly` otherwise), plus `--resume <handle>` on a follow-up; never `--trust`, `--add-dir` or the
+  prompt. A question row's request also goes through `ConsultantLaunches.ForQuestion`, which keeps the built environment's
+  three variables (M-V12: `VIBE_ACTIVE_MODEL` AND `VIBE_CLI=python` must both ride the explicit environment of a minimal
+  child).
+- **The conversation.** `Memory` is `VendorRemembers`; the handle is the first well-formed `sessionId` (or `session_id`)
+  on an element of the `--output json` array (the first probe: every element carries it); `UsageIsCumulative` is false
+  (M-V5, 3 of 3: a resumed export's input is turn one's plus the history, not the sum). `DroppedTheConversation`
+  recognises nothing: what Vibe says to a resume it cannot honour was never measured, so such a turn fails as its exit.
+- **Declared, never decided by a name.** `NeedsASanitisedSnapshot` (true) and the new `IConsultantRuntime.HomesFolder`
+  (`ConsultantHomes.Vibe`, `coai-vibe`) are what the service, the question row and the check read; `ConsultantHomes`
+  (`runners/Consultation/ConsultantHomes.cs`) lists both homes folders — `coai-vibe` and `coai-kimi` — for the sweep.
+- **Registered** in `ConsultantResolution.OnACli` (`vibe` → `VibeOn`, on the `VibeRuntime` the row resolves to — another
+  adapter there is refused by name) and in `shared/feature-availability.json` `features.consultant`, which
+  `ConsultantResolution.Consulting` IS — and so in `QuestionResolution.Answering` too. `shared/consultant-limitations.json`
+  carries a row per side: Windows `confined` on M-V6/M-V11/M-V1/M-V5, Linux, WSL and macOS `unmeasured` (D18 refuses them).
+
+**`GitScratch.DeleteEvenIfReadOnly` never enters a link** (same story, landed with the home sweep — D19/D20's deleter
+rule). The walk was `EnumerateFiles(…, AllDirectories)`, which ENTERS a directory reparse point: on a tree holding a
+junction to somebody else's folder it cleared the read-only attribute of the target's files and then failed on the
+junction ("Access to the path 'credentials' is denied"). It walks by hand now: an entry that is a link — or cannot be
+inspected, which `SnapshotLinks.IsLink` counts as one — is unlinked by its own name (a directory link by a
+non-recursive delete, told apart by the LINK's attributes, so a dangling one goes too), and only a real directory is
+descended. Every caller benefits: the snapshot's root, the six-hour scratch sweep, the question row's folder, the
+consultant home sweep.
+
+**`ReviewSnapshots.MakeAtAsync(source, root)`** — a snapshot published AT a path its owner fixed, the conversation's
+`coai-vibe/<id>/tree`: built complete beside the root under every snapshot rule, then one rename when nothing is there,
+or the refresh's two renames when a tree a previous server left is (the old aside, the new in, the old back if the second
+fails); a refusal leaves whatever was at the root as it was. That is what keeps ONE path across a server restart, when the
+object that refreshed it in place is gone.
+Hardened before the S3 gate (2026-10-13): `MakeAtAsync` refuses a parent that is a LINK (`Files.OwnedPaths.IsLinkIfThere`,
+failing closed; a check by path at one moment, which narrows a swap race and does not close it). Every rename that
+publishes, refreshes or replaces a snapshot goes through `TakePlace` (and an internal `Mover` seam): the old tree aside,
+the new one in, the old one back if that fails — and when even the rollback fails the refusal says **there is no snapshot
+at the root** and that nothing is launched against it (R3; it used to say "the previous snapshot stands", with an empty
+reason, over an empty root). The next `MakeAtAsync` at that path publishes a fresh copy.
+
+**`VibeHomeTurns.TryTake(home, out turn)`** — the home's turn with no wait: the home sweep's question (a live launch is
+judged by the lock, never by a stamp). Vendor-free, like the rest of the class.
+
+Tests: `VibeConsultantTests`, `ConfinementPlannerTests` (the Vibe question launch), `DeletingAnOwnedTreeNeverEntersALinkTests`,
+`ReviewSnapshotRefreshTests` (`MakeAt…`) — listed in [module_tests.md](module_tests.md).
 
 ## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)
 
@@ -3099,3 +3161,26 @@ sequenceDiagram
 Tests: `AcpClientTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpShimScenarioTests`
 (the REAL binary through the real launcher) — listed in [module_tests.md](module_tests.md). The scripted agent is the
 fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
+
+### The first live round's two defects, fixed (2026-10-13 — research/RESULTS_vibe_confinement.md §26)
+
+- **UTF-8 on every path.** `VibeLaunch.Built` adds `PYTHONUTF8=1` to the built environment and `EnvironmentRefusal`
+  admits exactly that set — four names, `VIBE_CLI=python` and `PYTHONUTF8=1` pinned. Without it CPython 3.14 on Windows
+  wrote `--output json` in cp1252 and a `→` killed a paid review with exit 2. Every Vibe launch goes through the one builder:
+  the reviewer and its retry and repair (`ForLaunch` changes argv only), `consult`, a question row, the consultant check and
+  the `providers` probe; `scripts/lib/vibe.mjs` exports the probes' `BUILT_FIXED` and `builtEnv`, held to the product's.
+  `PYTHONIOENCODING` is not added (narrower, unmeasured, subsumed). A non-zero exit is still never read as an answer, even
+  with an export: the variable prevents the crash, a real exit 2 must stay a failure, and the export's message shape is
+  unmeasured; `VendorDiagnosis` names the crash ("codec can't encode character", kind `BrokenInstall`, cure: update
+  coai-mcp).
+- **Read-only FOLDERS.** Vibe unpacks its plugin package with the ReadOnly attribute on folders; `GitScratch.DeleteEvenIfReadOnly`
+  cleared files only, so a round's `vh-*` home failed its delete and the six-hour sweep (the same deleter) failed on it for
+  ever. Each real folder's ReadOnly is now cleared before its entries go — links still unlinked by name, never entered.
+  Every deleter that meets a Vibe home goes through it: the round's scratch (`RoundScratch`), the six-hour sweep
+  (`PanelService.PruneOldScratchDirs`), D20's home sweep and `close_consult` (`ConsultantHomeSweep`), a question row's
+  `finally`, the consultant check's scratch, the snapshot's root, the export folder and the probe home — and the test
+  suite's own `TempDir`, which now calls it instead of a copy.
+- **The ledger names the release.** `LaunchTurn.CliVersion` carries what the launch control ASKED (`vibe --version`
+  before every launch) as `vibe 2.26.1` — never Vibe's raw line, which begins with the interpreter's path under the
+  person's profile — through `ReviewerLaunch` and `ReviewerOutcome.CliVersion` to the line's `cliVersion`, when the row's
+  own options carry none (`UsageLedger.VersionedBy`).
