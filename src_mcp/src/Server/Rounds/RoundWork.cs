@@ -37,6 +37,12 @@ internal sealed record RoundWork(
     /// </summary>
     public string Unreviewed { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The round's own scratch folder — its sanitised snapshot and its Vibe homes (<see cref="RoundScratch"/>) — which the
+    /// engine disposes when the round ends, however it ends. <see cref="RoundScratch.None"/> for a round that has none.
+    /// </summary>
+    public RoundScratch Scratch { get; init; } = RoundScratch.None;
+
     public RoundWork(IReadOnlyList<ReviewerWork> reviewers, IReadOnlyList<SkippedRole> notAsked)
         : this(reviewers, notAsked, [])
     {

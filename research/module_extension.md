@@ -8145,7 +8145,8 @@ whose only explanation is its label is a switch people leave alone.
 The label is **Split with the strongest model** now; the stored key keeps its historical name,
 `coai.splitWithFable`, because renaming it is a migration of every settings file for a word nobody
 sees. Under the three switches sits one row per caller kind (Claude Code, Codex, Gemini, another
-client) with two pickers — *Strongest* and *Implementation* — stored in **`coai.commandModels`** and
+client) with two pickers — *Strongest* and *Implementation* (three since 2026-10-13: see *A third picker per caller*
+below) — stored in **`coai.commandModels`** and
 sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipped one.
 
 - **`commandModels.ts`** is the one reader: `commandModelsFrom` (key by key, junk reads as nothing),
@@ -8172,6 +8173,31 @@ sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipp
   `consultantSectionScript.test.ts` when this section needed it too. It now maps a hyphenated
   `data-*` attribute to its `dataset` name as a DOM does (with `rolesPageHarness`' `camel`); the old
   copy dropped them, and `panelPageHarness.test.ts` holds the fake to that.
+
+### A third picker per caller: the subagent model tiers (2026-10-13)
+
+The operator's subagent policy of 2026-10-13 has three tiers, and the order named two
+([PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md); the order
+itself is in [module_server.md](module_server.md)). Each caller row now has three pickers —
+**Strongest** (epic split, cornerstone and security specs), **Briefs and review** (the `implementation`
+slot, relabelled: story split, scenarios, briefs, every review) and **Code and search** (the new
+`coder` slot: code, tests, scouts). Claude Code ships Fable, Opus and Sonnet; the other kinds ship
+nothing, as before.
+
+- `ModelPair` gained `coder` (the type keeps its name; the stored record and the wire key on the
+  fields). `commandModelsFrom`, `resolvedPair`, `commandModelsAfter` and `commandModelsEnv` carry it
+  through the same per-field rules; `package.json` declares it in the `coai.commandModels` schema.
+- **`CODER_SLOT_SINCE = 0.52.0`.** `commandModelsSkewNote` keeps its per-caller sentence for a server
+  older than 0.33.0 with a changed picker, and otherwise says, for ANY known server below 0.52.0 — a
+  pristine panel included, because the shipped order itself changed — that it still gives the two-model
+  order and ignores *Code and search*. `commandsSkewNote` (the commands page) says a 0.33–0.51 server
+  gives the shipped two-model order and leaves `{coder}` unfilled in an edited one.
+- The commands page lists `{coder}` among the model order's placeholders; the gate article's
+  paragraph, the `splitWithFable` hint and both `package.json` descriptions describe the three tiers,
+  in all five languages where the help is translated.
+- `scripts/live-command-models-compat.mjs` (`npm run test:command-models-compat`) hands a row WITH
+  `coder` to the released mcp and to the current build through `--providers`: neither may list
+  `COAI_COMMAND_MODELS` as unrecognised.
 
 ### One gate per epic or for the whole task, and the orders on the log page (2026-09-23, issue #131)
 
@@ -11684,6 +11710,11 @@ flowchart LR
   `model-<id>.check.json` the binary keeps: the watcher reads it beside the caller kinds' (`moreKinds`), the health
   is computed while the Models tab or the Consultant place shows, and the card says "checking…", "checked: it
   answered", "checked: no answer — …" or "not checked yet" through `checkStateOnThisDisk` — after a reload too.
+  **The "…" is filled (2026-10-13):** a failed check records its classification (`failureWhat`) and no `reason`,
+  so the badge used to read a bare "checked: no answer" while the record said why; `reasonOf` now falls back to
+  `failureWhat` when the record has no reason (a reason still wins) — e.g. "…did not answer: exit 70: the answer
+  from the local engine at … was cut at the token limit (max_tokens 8192)" (`modelCheck.test.ts`, over the real
+  record parser; research/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
 - coai-mcp's verdict ("coai-mcp will run it", or the current card's "cannot review"), kept apart from the check.
 - The CLI: its version and a newer one (`cliStatusNote`), and the current card's ▶ ⤓ ⟳ / ⟳ ⇄ / ≡ (`headButtons`,
   `endpointButton` — the same commands, by name).
@@ -12595,3 +12626,185 @@ them — and `--check-security` as *touches no data directory*, held by the serv
 halves are held level by the seam leg `scripts/seam-missing-named-root.mjs` (`npm run test:seam`): the extension's own
 decision (`namedRoot()` + the page's probes + `dataDirFinding`) against the real binary's `--check-model` and a served
 `providers` call, for a missing root, an existing root with a missing side folder, and no `COAI_DATA_DIR`.
+
+## Mistral Vibe on the panel's side (2026-10-13, S2 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+`vibe` is a CLI runtime of the extension: Mistral's own CLI on the person's own subscription, signed in as itself, run by
+coai-mcp's `VibeRuntime` (`module_runners.md`). The extension's half is the row, its card, its buttons and the gate
+that keeps it away from a server that cannot review with it. Chat (§8) and the consultant and question rows (S3) are
+not built: `CHAT` and `CONSULTING` leave `vibe` out, and the card says so on its consultant tick.
+
+```mermaid
+flowchart LR
+  P["Add a model: the Mistral Vibe preset"] --> R["coai.vendors row, runtime vibe"]
+  R --> W{"vendorsEnv: runtimeOnServer('vibe', installed)"}
+  W -->|"installed >= 0.53.0, or unknown"| F["settings.json: the row crosses"]
+  W -->|"installed < 0.53.0"| H["row withheld; the card says why (runtimeNote)"]
+  R --> B["card: run, install, update"]
+  B --> T["run: vibe, env VIBE_ACTIVE_MODEL + VIBE_CLI=python"]
+  B --> I{"host platform"}
+  I -->|win32| U["one line: Astral's uv installer if uv is missing, uv tool install mistral-vibe, uv tool update-shell"]
+  I -->|"linux, darwin"| S["mistral.ai/vibe/install.sh piped to bash"]
+```
+
+- **The runtime list.** `RUNTIMES` gains `vibe` (last, so it equals `shared/feature-availability.json`'s `runtimes`,
+  which `featureAvailability.test.ts` holds it to); both `package.json` runtime enums list it. `CLI_RUNTIMES`
+  (`models.ts`) is now ONE list — the model card's CLI badge (`modelCardWorld.cliBadge`) and the Setup tab's CLI table
+  (`setupTab.cliGroups`) each kept their own until this change. `JUDGED_HERE` (`catalogWriteRules.ts`) is derived from
+  `RUNTIMES` minus `api` and `remote`, so an effort on a Vibe row is refused as unmeasured (the seed's `effort` row is
+  `unmeasured`) instead of being stored and not applied. `KNOWS_ITS_OWN_ENDPOINT` has `vibe` (no base-URL box), and
+  `vendorColour.ANCHORED` pins it to slot 2, amber (the manifest's colour 2 says `vibe`).
+- **The preset** (`VENDOR_PRESETS`, D11): `Mistral Vibe`, id `vibe`, model `mistral-medium-3.5`, no endpoint, no key.
+  Never in `DEFAULT_VENDORS`. Its hint names the two limits a person meets first — Windows only for now (D18) and the
+  coai-mcp release that knows the runtime.
+- **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
+  `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
+  `modelsFor('vibe')` offers it (an unknown runtime used to fall to the Gemini list); a typed alias stays in its own
+  dropdown. The caption (`modelsProvenance`, `CURATED_NOTE`) says it is curated, on which Vibe version, and that coai-mcp
+  refuses any other alias before the launch — Vibe itself would answer it on its default.
+- **▶** (`vendorTerminal`): `vibe`, plain and interactive, never `codex -m`. Vibe has no model flag (`MODEL_FLAG`), so
+  the row's model rides the terminal's ENVIRONMENT (`VendorTerminal.env`, passed to `createTerminal` by
+  `panelProvider.runVendor`) — `VIBE_ACTIVE_MODEL` and `VIBE_CLI=python`, the measured Python CLI every coai launch pins
+  (RESULTS_vibe_confinement.md §3). `VIBE_HOME` is not set: it is the person's own Vibe, and the sign-in lives in the OS
+  keyring every home reads (§12). The usage command typed at the prompt is `/status` (Vibe 2.26.1's
+  `vibe/cli/commands.py`; it has no spend command).
+- **⤓ and ⟳, per operating system** (D16; the owner's decision of 2026-10-13 that the buttons install on every side, WSL
+  included). Sources, read 2026-10-13: the package README (`mistral_vibe-2.26.1.dist-info/METADATA`, "One-line
+  install") and the script `mistral.ai/vibe/install.sh` (a redirect to `scripts/install.sh` of
+  github.com/mistralai/mistral-vibe).
+
+  | side | ⤓ install | ⟳ update | a machine without uv |
+  |---|---|---|---|
+  | Linux, WSL, macOS | `curl -LsSf https://mistral.ai/vibe/install.sh` piped to `bash` | the same script — it runs `uv tool upgrade mistral-vibe` when a Vibe is there | the script installs uv itself (Astral's installer, pinned and SHA-256-checked) and prints the PATH line to add |
+  | Windows | ONE PowerShell line (`vendorTerminal.withUv`): `Get-Command uv`; when missing, Astral's installer `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 \| iex"`, then uv called by the path that installer used; then `& $uv tool install mistral-vibe`, `& $uv tool update-shell`, and `uv tool dir --bin` put on this session's PATH | the same line with `tool upgrade mistral-vibe` (`uv tool install` on an installed tool changes nothing) | handled in the line — nothing is left for the person to run first |
+
+  **Windows, one press (2026-10-13, the owner's "the install buttons must WORK, per OS").** It was the uv installer as
+  a commented line above `uv tool install mistral-vibe`: run it by hand, then press again, and in between `uv` was not
+  recognised. Now the README's two steps are one line. Sources, read 2026-10-13: the installer command is the README's
+  Windows prerequisite and docs.astral.sh/uv/getting-started/installation's, verbatim. `astral.sh/uv/install.ps1`
+  redirects to `releases.astral.sh/installers/uv/latest/uv-installer.ps1`, whose `Invoke-Installer` chooses the folder
+  `UV_INSTALL_DIR`, then `XDG_BIN_HOME`, then `XDG_DATA_HOME\..\bin`, then `$HOME\.local\bin` (the executable
+  directory of docs.astral.sh/uv/reference/storage), and whose `Add-Path` writes the user PATH in the REGISTRY only —
+  so the running session cannot find the new uv by name, and the line calls it by that path in that order (a
+  `UV_INSTALL_DIR` that is the cargo home, where uv goes under `bin`, is not followed). `uv tool update-shell` is
+  Astral's documented way to put the tool executable directory on the PATH (docs.astral.sh/uv/concepts/tools). The
+  line also prepends `uv tool dir --bin` to the session's `$env:Path`, so `vibe --setup` runs in the same terminal;
+  every OTHER terminal of VS Code inherits the PATH VS Code started with, so the note says to restart VS Code before ▶
+  finds `vibe` (or to set the row's CLI path to that folder's `vibe.exe`). `vibeWindowsInstall.test.ts` holds it to
+  PowerShell's own parser (`Parser.ParseInput`, which runs nothing): no parse error, `Get-Command uv` before the
+  installer, the installer before `& $uv tool install mistral-vibe`, `& $uv tool update-shell` after it, the installer's
+  folder order, and the same for ⟳. RED first: 6 of 6 failed against the two-step line (the prerequisite was the
+  installer line; no `Get-Command uv`; no folder order; no session PATH; ⟳ the same; the prefix check passed a line with
+  an unofficial URL appended); green after.
+
+  **Each step STOPS the line when it fails, and that is measured by RUNNING it** (the epic 2 risk consultation,
+  2026-10-13: a parse says the line is well-formed, not that it works). After the installer step,
+  `if (-not (Test-Path -LiteralPath $uv)) { throw "no uv at …" }`; after each uv step,
+  `if ($LASTEXITCODE) { throw 'uv stopped with an error; nothing after it was run' }` — a `throw` ends the rest of a
+  typed line in Windows PowerShell 5.1 and pwsh 7 alike. `vibeWindowsInstallRuns.test.ts` (Windows only) runs the real
+  line in BOTH shells against harmless substitutes: a temporary folder whose path has spaces (`coai uv run …\run N\my
+  home`), a cleared environment with a PATH of `System32` alone, the installer step replaced by a `powershell` FUNCTION
+  that records its arguments and copies a fake uv where Astral's installer would put it (the harness refuses to run unless
+  `powershell` resolves to that function), and a fake `uv.exe` compiled by Windows PowerShell's `Add-Type` from twelve
+  lines of C# that logs its arguments and exits with the code a scenario asks for. Never Astral's installer, never a real
+  uv, never an install. Confirmed: (a) paths with spaces work — the default `$HOME\.local\bin` and a `UV_INSTALL_DIR`
+  with spaces — and the session's PATH gets the tool folder; (b) an installer failure stops the line before any uv is
+  called, saying `no uv at …\uv.exe`, and a failing `uv tool install` (⟳: `tool upgrade`) stops it before
+  `update-shell` and the PATH step; (c) a uv already on PATH is used as it is and Astral's step does not run. RED first
+  against the line without the stops: (b) went red three times — the old line went on, `& $uv` not recognised three
+  times over, and after a failed `tool install` it ran `update-shell` and the PATH step. The harness runs the line as a
+  script of its own, not inside a `try`: a `try` catches a statement-ending error the way it catches a `throw`, and its
+  first draft reported a stop a typed line would not have made. **Limit, named in `withUv`**: a uv on PATH is used
+  WHOEVER installed it (winget, scoop, pip) and its version is not checked — one too old for `tool update-shell` fails
+  that step and stops the line; a `uv.ps1` or `uv.cmd` found first would leave `$LASTEXITCODE` unreliable, which is not
+  handled.
+
+  The side is the extension host's (`hostPlatform()`): a WSL window gets the script. The sign-in stays the person's —
+  the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). On Linux,
+  WSL and macOS the note also says coai-mcp does not run Vibe there yet (D18): installing it is what the later
+  measurement needs. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
+  several steps on its first one, whatever follows. It is `{ urls, packages }`: the hosts a command may fetch from
+  (`https://antigravity.google/`, `https://mistral.ai/vibe/`, and `https://astral.sh/uv/` — the uv installer Mistral's
+  README gives for Windows and Mistral's own script runs elsewhere) and the packages `npm install -g`, `uv tool
+  install` and `uv tool upgrade` may be handed (`@openai/codex`, `@google/gemini-cli`, `@anthropic-ai/claude-code`,
+  `mistral-vibe`, by full name). `fromOfficialSources(command)` (`officialSources.ts`, re-exported by `vendorTerminal.ts`)
+  admits a command only when it names at least one source, EVERY URL is admitted, and in EVERY step (split on `;`,
+  `&&`, `||`, `|`, braces and newlines) the install verb is one it reads — `npm install`, `uv tool install`, `uv tool
+  upgrade` — whose every argument is an admitted flag (`-g`/`--global` for npm; none for uv) or an admitted package with
+  at most a plain version (`@latest`, `@1.2.3`; `==1.2.3`). No alias (`@npm:other`, `@file:…`), no second package, no
+  `--from`/`--with`/`--index-url`, no path or `git+` spec; a step that says install through anything else (pip, `npm i`)
+  refuses the whole command. The first matcher read only each step's FIRST package and took any `@…` for a version: the
+  epic 2 risk consultation (gpt-6-astra, 2026-10-13) found `npm install -g @openai/codex left-pad` and
+  `…@openai/codex@npm:left-pad` admitted, and so were `@file:../evil`, `uv tool install mistral-vibe other-pkg`, `npm
+  install -g @openai/codex; pip install evil` and `… | npm i left-pad` — verified, all red in the new test, green after
+  (and `uv tool install mistral-vibe==2.26.1`, wrongly refused before, is admitted). **The RENDERED text is checked, not
+  a recipe** — the consultant preferred validating a structured recipe before rendering; what a person runs is the
+  text, it comes from four builders, and a recipe check would vouch for the recipe and stay silent about a renderer that
+  wrote something else. The throw messages in the Windows line avoid the word "install" for that reason: the check
+  reads every step. The steps are the ones
+  `VendorDiagnosis.InstallCure` names when a round finds no Vibe, word for word (one asymmetry: on macOS the server's
+  cure says uv and the button says the script; both are Mistral's, and coai-mcp refuses a macOS host anyway).
+- **The update light** (`cliVersions.ts`): a third version source, `{ kind: 'pypi', package: 'mistral-vibe' }` →
+  `https://pypi.org/pypi/mistral-vibe/json`, whose version is under `info` (`versionFrom`). `mistral-vibe` is the
+  package both Mistral routes install, so PyPI is the index the button installs from, not a mirror.
+- **An older server** (D13, path 1; `runtimeSince.ts`): `VIBE_RUNTIME_SINCE = '0.53.0'`: mcp 0.51.0 shipped the Vibe
+  ground without the runtime, and mcp 0.52.0 was released from main on 2026-10-13 while the runtime was still on its
+  branch, so the next minor is the first that can carry it (too high only holds a row back from a server that could
+  run it; too low leaves the row on a server that cannot). `runtimeOnServer(runtime, installed)` is one table with an
+  arm per runtime some released server does not know (`api` → `API_RUNTIME_SINCE`, `vibe` → `VIBE_RUNTIME_SINCE`);
+  `crossesTo` in `vendorsWire.ts` asks it, so a vibe row is withheld from an older server's settings file while every
+  other row crosses — unknown is not old. The card's sentence is `runtimeSkewNote` (the api sentence unchanged, a
+  generic one for the rest), carried per card as `CardContext.runtimeNote` (it was `apiNote`, a name that would have
+  lied for a vibe row); non-empty switches the card's stage boxes off.
+  **What an older server does with the row — measured, and not what D13 assumed.** D13 said an older server turns an
+  unknown runtime into codex. That was true before mcp 0.44.0; since then (`AnUnknownRuntimeIsRefusedByNameTests`) it
+  REFUSES the row by name. `scripts/live-vibe-runtime-compat.mjs` (`npm run test:vibe-runtime-compat`, by hand, needs
+  `gh`), run 2026-10-13 on Windows against the released mcp-v0.52.0 and this checkout's Debug server: with the gate,
+  the file carries codex and antigravity and the released server serves them exactly as from a file that never had the
+  row; with the gate bypassed, it reports `vibe` as `unavailable` — "the runtime 'vibe' is not one this build of
+  coai-mcp runs"; this checkout's server lists the row as `own auth`. Exit 0. Teeth: `runtimeOnServer` forced true in
+  the compiled output → three FAILs (the row in the file, the served rows changed), exit 1. So the card's note says
+  only that the installed server cannot review with the row — never that it would run it as codex — and
+  `vibeRuntime.test.ts` pins that.
+- **Mixed versions — what is not guarded** (D13): path 2, an older extension window writing the server's settings file,
+  stands down before a newer build's stamp (`ServerSettingsSync`, *The settings file has more than one writer* above) —
+  `vibeRuntime.test.ts` holds that for a vibe row. Path 3 is the limit already recorded for `remote` and `api`: an
+  OLDER extension's own save of `coai.vendors` rewrites a vibe row's runtime to `codex` (its `RUNTIMES` lacks it), and
+  this build then mirrors that. Code that already shipped cannot be changed; the help says in five languages to reload
+  every window after updating.
+- **Help** (five languages, `choose-reviewers`): the preset, its Windows-only standing and release, ⤓ per OS, the
+  sign-in, the reload advice, and ⟳'s Vibe route; `HELP.installVendorCli` names Mistral's sources.
+- **Tests**: `vibeRuntime.test.ts` (26) — the round trip, the preset, the curated list and caption, ▶'s command and
+  environment, ⤓/⟳ per OS, the official sources, the agreement with coai-mcp's cure and curated list (two positive
+  `reads-another-program` assertions), PyPI, the gate, the note, the stand-down, the card RUN on the Models tab
+  against a new and an older server, the effort refusal, the Setup table, the help. The hand-typed runtime lists in
+  `runtimeSurvives`, `addModelGroups`, `vendorColour` gained `vibe`; `vendorTerminal`'s and `cliVersions`' official-source
+  loops now read `CLI_RUNTIMES`.
+- **Not here**: Vibe as a consultant or question row (S3); chat (§8); a live round through the product (the plan's
+  §5, with the server half); a REAL install by the buttons on any side — the commands are pinned and their sources
+  read, but none was run on this machine.
+
+## A row coai-mcp runs WITH a warning is said so (2026-10-13, the owner's decision for Vibe: warn, not refuse)
+
+The server now RUNS a Vibe version it has not measured and carries one runtime-neutral string about it in two places
+(`module_server.md`, *A launch the control WARNED about*): `reviewerStates[].warning` in the session file and in
+`status`, for ANY reviewer status, and `providers[].warning` on the providers wire. Both were invisible here — the
+round's line showed a reviewer's `note` only when it failed, queued or stood down, and the card showed `note` only for
+an UNAVAILABLE row, while a warned Vibe is done and available.
+
+- **The round's line** (`rounds.ts`): `ReviewerState.warning` (optional); `reviewerRows` adds `warned: <the warning>`
+  to the reviewer's detail for every status (`warnedOf`, through the same `usableString` distrust as the model and the
+  effort — blank, whitespace or a non-string is nothing). So the sidebar's running round shows it under the reviewer it
+  is about, and the rounds log, its search and its CSV export carry it through `reviewerLines`. A reviewer without the
+  field — every reviewer of a server older than it — reads exactly as before (`done (2 findings)`).
+- **The card** (new UI only, `modelCard.top`): `ProviderHealth.warning` (optional) is read by `parseProviders` only when
+  it is a non-blank string (`warningOf`, beside `apiOf`); `modelCardWorld.versionWarningNote` draws
+  `<p class="skew warned"><b>Runs with a warning:</b> …</p>` under the card's badges — the `.skew` shape in the warning
+  tone (`catalogCss`: `.skew.warned { --mark: var(--warn); }`), for an available row too, and no "cannot review" badge.
+  No field, no line.
+- **Help**: the `choose-reviewers` article says in five languages what a warned row looks like — **Runs with a warning:**
+  on the card, *warned:* on its round line.
+- **Tests**: `aWarnedReviewerIsShown.test.ts` (8). RED first, 5 of 7 against the code before (`done (2 findings)` with
+  the warning missing; the rounds-log line; the sidebar's reviewer; `reported.vibe.warning` undefined; "the card draws
+  no warning"), the two no-warning guards green throughout; 7 of 7 green after. The help test was written after the
+  help: its teeth — the Spanish label changed in the compiled output → `the es article does not name the card's line`.

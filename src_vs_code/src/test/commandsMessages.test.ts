@@ -19,6 +19,8 @@ test('the parser ignores what the page never sends', () => {
 
 test('an older server is told it ignores all of this; a new one and an unknown one say nothing', () => {
   assert.match(commandsSkewNote('0.32.0'), /ignores these texts and commands.*0\.33\.0/);
-  assert.equal(commandsSkewNote('0.33.0'), '');
+  assert.match(commandsSkewNote('0.33.0'), /two-model order.*\{coder\} has it left unfilled.*0\.52\.0/);
+  assert.match(commandsSkewNote('0.50.0'), /\{coder\} has it left unfilled/);
+  assert.equal(commandsSkewNote('0.52.0'), '');
   assert.equal(commandsSkewNote(''), '');
 });

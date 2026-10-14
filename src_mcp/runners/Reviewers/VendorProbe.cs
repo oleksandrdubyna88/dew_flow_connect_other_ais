@@ -17,7 +17,12 @@ namespace CoaiMcp.Runners.Reviewers;
 /// deliberately — the panel renders a single note per row and `providers` answers a single note, so
 /// a second field would be dropped on the floor.
 /// </param>
-public sealed record VendorHealth(bool Enabled, bool CliFound, string Version, string Auth, string Note);
+/// <param name="Warning">
+/// What the person should know about a CLI that WILL be run — today, a version nobody measured (Vibe, the owner's
+/// decision of 2026-10-13: warn, not refuse). Runtime-neutral (<see cref="IReviewerRuntime.VersionWarning"/>); empty for
+/// nearly every row.
+/// </param>
+public sealed record VendorHealth(bool Enabled, bool CliFound, string Version, string Auth, string Note, string Warning = "");
 
 /// <summary>
 /// The health probe behind `providers` and, later, the Team server's catalog: run the CLI's own
@@ -137,11 +142,10 @@ public static class VendorProbe
             return new VendorHealth(false, false, "", auth, "disabled in settings");
         }
 
-        var exe = executablePath.Length > 0
-            ? executablePath
-            : RuntimeResolution.For(vendor)!.DefaultExecutable;
+        var runtime = RuntimeResolution.For(vendor)!;
+        var exe = executablePath.Length > 0 ? executablePath : runtime.DefaultExecutable;
 
-        return await AskItsVersionAsync(launcher, runtimeName, exe, auth, authNote, timeout ?? DefaultTimeout, ct);
+        return await AskItsVersionAsync(launcher, runtime, runtimeName, exe, (auth, authNote), timeout ?? DefaultTimeout, ct);
     }
 
     /// <summary>
@@ -208,45 +212,26 @@ public static class VendorProbe
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
         && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
+    /// <remarks>
+    /// The CLI is started by its adapter (<see cref="IReviewerRuntime.ProbeVersionAsync"/>): as it always was for every
+    /// runtime but one, and for Vibe in its built environment on a home of coai's own, so <c>providers</c> writes nothing
+    /// into the person's <c>~/.vibe</c> (D17 of todo/PLAN_vibe_and_kimi_runtimes.md).
+    /// </remarks>
     private static async Task<VendorHealth> AskItsVersionAsync(
         IProcessLauncher launcher,
+        IReviewerRuntime runtime,
         string runtimeName,
         string exe,
-        string auth,
-        string authNote,
+        (string Auth, string Note) readiness,
         TimeSpan timeout,
         CancellationToken ct)
     {
         try
         {
-            var result = await launcher.RunAsync(
-                new ProcessRequest(exe, ["--version"], Environment.CurrentDirectory) { Timeout = timeout },
-                ct);
+            var health = Answered(await runtime.ProbeVersionAsync(launcher, exe, timeout, ct), exe, timeout, readiness);
 
-            // A CLI that never answers is its own diagnosis. It used to fall through to the
-            // exit-code sentence below and report "--version exited -1", which names a number
-            // nobody can act on for a process that was killed rather than one that refused.
-            if (result.TimedOut)
-            {
-                return new VendorHealth(true, true, "", auth,
-                    $"'{exe}' did not answer --version within {timeout.TotalSeconds:F0}s");
-            }
-
-            if (result.ExitCode == 0)
-            {
-                return new VendorHealth(true, true, result.StdOut.Trim(), auth, authNote);
-            }
-
-            // `providers` is the health probe a person reads before trusting a panel, so a known
-            // closed door is named here too rather than only when a round has already failed.
-            var cure = VendorDiagnosis.For(result.StdErr + result.StdOut);
-            // Whichever stream the CLI actually used. Reading stderr alone left the note as
-            // "--version exited 1: " for every vendor that writes its diagnosis to stdout — an exit
-            // code and a colon, which is the shape of a sentence that helps nobody.
-            var said = result.StdErr.Trim().Length > 0 ? result.StdErr.Trim() : result.StdOut.Trim();
-
-            return new VendorHealth(true, true, "", auth,
-                cure ?? $"--version exited {result.ExitCode}: {said}");
+            // What the person should know about the version that WILL run — Vibe's unmeasured version (warn, not refuse).
+            return health with { Warning = runtime.VersionWarning(health.Version) };
         }
         // Win32Exception is what a missing or unrunnable executable throws, and it is the case with
         // a cure. The other two are the ones a bad path can still produce — a directory where a file
@@ -254,16 +239,53 @@ public static class VendorProbe
         // catalog answer with it, which is a worse answer than any note.
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
-            // A missing CLI is the one failure with a one-line answer, so the answer goes here
-            // rather than on a vendor's docs page. This used to be a blanket "antigravity has no
-            // Linux CLI" door in VendorDiagnosis.ForRuntime, which fired BEFORE this probe and so
-            // told a machine with a working `agy` that it had none.
-            var install = VendorDiagnosis.InstallCure(runtimeName);
-
-            return new VendorHealth(true, false, "", auth,
-                install is null
-                    ? $"'{exe}' was not found on this machine"
-                    : $"'{exe}' was not found on this machine — {install}");
+            return NotFound(runtimeName, exe, readiness.Auth);
         }
+    }
+
+    /// <summary>What a CLI that ran said about its version — an answer, a silence, or a refusal.</summary>
+    private static VendorHealth Answered(ProcessResult result, string exe, TimeSpan timeout, (string Auth, string Note) readiness)
+    {
+        // A CLI that never answers is its own diagnosis. It used to fall through to the
+        // exit-code sentence below and report "--version exited -1", which names a number
+        // nobody can act on for a process that was killed rather than one that refused.
+        if (result.TimedOut)
+        {
+            return new VendorHealth(true, true, "", readiness.Auth,
+                $"'{exe}' did not answer --version within {timeout.TotalSeconds:F0}s");
+        }
+
+        return result.ExitCode == 0
+            ? new VendorHealth(true, true, result.StdOut.Trim(), readiness.Auth, readiness.Note)
+            : Refused(result, readiness.Auth);
+    }
+
+    /// <summary>A CLI that answered --version with a non-zero exit: the known closed door, else its own words.</summary>
+    private static VendorHealth Refused(ProcessResult result, string auth)
+    {
+        // `providers` is the health probe a person reads before trusting a panel, so a known
+        // closed door is named here too rather than only when a round has already failed.
+        var cure = VendorDiagnosis.For(result.StdErr + result.StdOut);
+        // Whichever stream the CLI actually used. Reading stderr alone left the note as
+        // "--version exited 1: " for every vendor that writes its diagnosis to stdout — an exit
+        // code and a colon, which is the shape of a sentence that helps nobody.
+        var said = result.StdErr.Trim().Length > 0 ? result.StdErr.Trim() : result.StdOut.Trim();
+
+        return new VendorHealth(true, true, "", auth, cure ?? $"--version exited {result.ExitCode}: {said}");
+    }
+
+    /// <summary>
+    /// A CLI that could not be started. A missing CLI is the one failure with a one-line answer, so the answer goes here
+    /// rather than on a vendor's docs page. This used to be a blanket "antigravity has no Linux CLI" door in
+    /// VendorDiagnosis.ForRuntime, which fired BEFORE this probe and so told a machine with a working `agy` that it had none.
+    /// </summary>
+    private static VendorHealth NotFound(string runtimeName, string exe, string auth)
+    {
+        var install = VendorDiagnosis.InstallCure(runtimeName);
+
+        return new VendorHealth(true, false, "", auth,
+            install is null
+                ? $"'{exe}' was not found on this machine"
+                : $"'{exe}' was not found on this machine — {install}");
     }
 }

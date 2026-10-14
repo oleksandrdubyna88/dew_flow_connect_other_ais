@@ -1,0 +1,254 @@
+using CoaiMcp.Runners.Files;
+
+namespace CoaiMcp.Runners.Acp;
+
+/// <summary>
+/// The one question the client asks when the agent asks for a file: the text, or the sentence refusing it.
+/// </summary>
+/// <remarks>
+/// <para>An interface because the rule changes under the client without the client changing: today
+/// <see cref="FolderReadBoundary"/> serves a folder lexically; the sanitised snapshot's manifest-based resolve
+/// (D6 of <c>PLAN_vibe_and_kimi_runtimes.md</c>) replaces it behind the same seam, and the tests of the client
+/// stay as they are.</para>
+/// <para>The client never inspects the path itself and never reads a file itself — every read the agent makes
+/// goes through here, which is what makes "served only inside the working folder" one decision in one place.</para>
+/// </remarks>
+public interface IAcpReadBoundary
+{
+    /// <summary>The text at the path the agent asked for, or the refusal.</summary>
+    AcpReadAnswer Read(string requestedPath);
+}
+
+/// <summary>What a read came back as: the text, or the sentence the agent is told instead.</summary>
+/// <param name="Served">True when <see cref="Text"/> is the file.</param>
+/// <param name="Text">The file's text, empty when refused.</param>
+/// <param name="Refusal">Why not, empty when served — the sentence the agent is shown, so it names no secret.</param>
+public sealed record AcpReadAnswer(bool Served, string Text, string Refusal)
+{
+    public static AcpReadAnswer Of(string text) => new(true, text, string.Empty);
+
+    public static AcpReadAnswer Refused(string why) => new(false, string.Empty, why);
+}
+
+/// <summary>
+/// Serves only absolute paths lexically inside one root folder, refusing the vendor's excluded names at any
+/// depth and every spelling that could resolve somewhere else.
+/// </summary>
+/// <remarks>
+/// <para><b>Lexical first, then the disk.</b> The path is judged as a string BEFORE anything is normalised,
+/// because normalisation is where the spellings hide: <c>Path.GetFullPath</c> strips a trailing dot or space from a
+/// Windows component and would make <c>secret.txt.</c> read as <c>secret.txt</c>; a drive-relative <c>C:x</c>
+/// resolves against a per-drive current directory nobody chose; a UNC or device path (<c>\\server\</c>,
+/// <c>\\?\</c>, <c>\\.\</c>) is another namespace; a <c>:</c> beyond the drive letter names an alternate data
+/// stream. Each is refused by shape. Then the normalised path must start with the root by components, and no
+/// component (or pair, for <c>.agents/skills</c>) may be an excluded name — ordinal, and case-insensitive where
+/// the filesystem is.</para>
+/// <para><b>Then every step from the root down is checked for a reparse point</b> — a symlink, a junction, any
+/// link — and the read is refused if one is on the way. The check and the read are two operations, so a link
+/// planted between them is not closed here; the snapshot's manifest (D6) closes it by serving retained bytes, and
+/// swaps in behind <see cref="IAcpReadBoundary"/> when it lands.</para>
+/// <para><b>8.3 short names are refused by shape on Windows.</b> Every long name has an alias (<c>VIBE~1</c>,
+/// <c>AGENTS~1.MD</c>) that the exclusions, comparing long names, would never match — so a component with a
+/// <c>~</c> followed by a digit is declined outright (finding 2 of the security review). A legitimate name of that
+/// shape is refused too, and the sentence says why.</para>
+/// <para><b>What it does not know.</b> A link placed between the check and the read is the snapshot manifest's to
+/// close. The root is fixed when the boundary is made (<see cref="ReadRoot"/>): a root swapped for a link afterwards is
+/// a different place from the one every handle is compared with. And a path the filesystem cannot even normalise — too
+/// long, a character it refuses — is declined with a sentence rather than thrown, so the agent's request is
+/// answered (finding 3).</para>
+/// </remarks>
+/// <param name="root">The folder served — the sanitised snapshot, or a scratch folder.</param>
+/// <param name="excludedNames">The profile's exclusions, as relative fragments.</param>
+public sealed class FolderReadBoundary(string root, IReadOnlyList<string> excludedNames) : IAcpReadBoundary
+{
+    /// <summary>
+    /// The most of one file that is served. A review's files are kilobytes; past this a file is a binary or a
+    /// log, and reading it would hold it in the shim's memory to send it down a pipe one line at a time. The one
+    /// number both confined readers use (<see cref="HandleRead.DefaultCap"/>), enforced on the read itself.
+    /// </summary>
+    public const long MaxBytes = HandleRead.DefaultCap;
+
+    private static readonly char[] Separators = ['\\', '/'];
+
+    /// <summary>The platform's rule: Windows and macOS fold case, Linux does not.</summary>
+    private static readonly StringComparison Names =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private readonly string _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+
+    /// <summary>The root as it is now, when the boundary is made — what every opened handle is compared with (<see cref="ReadRoot"/>).</summary>
+    private readonly ReadRoot _trusted = HandleRead.Trust(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)));
+
+    /// <summary>A seam for the tests, run immediately before the file is opened — the window a swapped-in link or a growing file must not win.</summary>
+    internal Action BeforeOpen { get; set; } = static () => { };
+
+    /// <summary>A seam for the tests, run between the open and the check of what was opened.</summary>
+    internal Action AfterOpen { get; set; } = static () => { };
+
+    public AcpReadAnswer Read(string requestedPath)
+    {
+        try
+        {
+            var refusal = Refusal(_root, requestedPath, excludedNames, Names, OperatingSystem.IsWindows());
+            if (refusal.Length > 0)
+            {
+                return AcpReadAnswer.Refused(refusal);
+            }
+
+            var relative = Path.GetFullPath(requestedPath)[_root.Length..];
+            var onTheWay = LinkOnTheWay(_root, relative);
+
+            return onTheWay.Length > 0 ? AcpReadAnswer.Refused(onTheWay) : ReadFile(relative);
+        }
+        catch (Exception e) when (e is PathTooLongException or ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            // The filesystem would not even normalise it: declined, not thrown — the agent is owed an answer.
+            return AcpReadAnswer.Refused("a path this boundary cannot judge — too long, or a character the filesystem refuses");
+        }
+    }
+
+    /// <summary>
+    /// Why <paramref name="requested"/> is not served from <paramref name="root"/> — or empty when it is. Pure,
+    /// so every spelling is a row in a test on any platform.
+    /// </summary>
+    /// <param name="root">Normalised, with its trailing separator.</param>
+    /// <param name="shortNames">Whether the filesystem keeps 8.3 aliases — Windows — so a <c>NAME~1</c> component is refused.</param>
+    public static string Refusal(string root, string requested, IReadOnlyList<string> excluded, StringComparison names, bool shortNames)
+    {
+        if (Spelled(requested, shortNames) is { Length: > 0 } spelled)
+        {
+            return spelled;
+        }
+
+        return Placed(root, Path.GetFullPath(requested), excluded, names);
+    }
+
+    /// <summary>The refusals of the requested spelling: its <see cref="Shape"/>, then an 8.3 short name where the filesystem keeps them.</summary>
+    private static string Spelled(string requested, bool shortNames) =>
+        Shape(requested) is { Length: > 0 } shape ? shape : ShortName(requested, shortNames);
+
+    private static string ShortName(string requested, bool shortNames) =>
+        shortNames && HasShortName(requested) ? "an 8.3 short name (NAME~1) is not served — the exclusions compare long names" : string.Empty;
+
+    /// <summary>The refusals of the normalised path <paramref name="full"/>: outside the root, or under an excluded name.</summary>
+    private static string Placed(string root, string full, IReadOnlyList<string> excluded, StringComparison names) =>
+        !full.StartsWith(root, names) || full.Length == root.Length
+            ? "outside the working folder"
+            : ExcludedIn(full[root.Length..].Split(Separators, StringSplitOptions.RemoveEmptyEntries), excluded, names);
+
+    /// <summary>
+    /// The spelling rules of <see cref="Shape"/>, in order: each is asked only when every one before it passed, so a rule
+    /// may rely on what the earlier ones ruled out.
+    /// </summary>
+    private static readonly Func<string, string>[] SpellingRules = [EmptyOrNul, Unc, NotAbsolute, AlternateStream, Components];
+
+    /// <summary>The refusals decided by the SPELLING alone, before normalisation can tidy it.</summary>
+    private static string Shape(string requested) =>
+        SpellingRules.Select(rule => rule(requested)).FirstOrDefault(static why => why.Length > 0) ?? string.Empty;
+
+    private static string EmptyOrNul(string requested) =>
+        requested.Length == 0 || requested.Contains('\0') ? "an empty path, or one with a NUL in it" : string.Empty;
+
+    private static string Unc(string requested) =>
+        requested.StartsWith(@"\\", StringComparison.Ordinal) || requested.StartsWith("//", StringComparison.Ordinal)
+            ? "a UNC or device path (\\\\server, \\\\?\\, \\\\.\\) is not inside the working folder"
+            : string.Empty;
+
+    private static string NotAbsolute(string requested) =>
+        Path.IsPathFullyQualified(requested)
+            ? string.Empty
+            : "not an absolute path — relative, drive-relative (C:name) and root-relative (\\name) spellings are refused";
+
+    private static string AlternateStream(string requested) =>
+        requested.IndexOf(':', 2) >= 0 ? "a ':' beyond the drive letter names an alternate data stream" : string.Empty;
+
+    /// <summary>A component ending in a dot or a space — which Windows strips, so the spelling and the file differ.</summary>
+    /// <remarks>The drive (<c>C:</c>) is not a component; <c>.</c> and <c>..</c> are spellings normalisation keeps honest.</remarks>
+    private static string Components(string requested) =>
+        requested.Split(Separators, StringSplitOptions.RemoveEmptyEntries)
+            .Where(component => !IsDrive(component))
+            .Any(StripsToAnother)
+            ? "a path component ending in a dot or a space"
+            : string.Empty;
+
+    private static bool IsDrive(string component) => component.Length == 2 && component[1] == ':';
+
+    private static bool StripsToAnother(string component) =>
+        component is not ("." or "..") && (component.EndsWith('.') || component.EndsWith(' '));
+
+    /// <summary>A component with a <c>~</c> followed by a digit — the shape of every Windows 8.3 alias (<c>VIBE~1</c>, <c>AGENTS~1.MD</c>).</summary>
+    private static bool HasShortName(string requested) =>
+        requested.Split(Separators, StringSplitOptions.RemoveEmptyEntries)
+            .Any(component => Enumerable.Range(0, Math.Max(component.Length - 1, 0))
+                .Any(i => component[i] == '~' && char.IsAsciiDigit(component[i + 1])));
+
+    /// <summary>The first excluded fragment the relative components contain, as a refusal — or empty.</summary>
+    private static string ExcludedIn(string[] components, IReadOnlyList<string> excluded, StringComparison names)
+    {
+        foreach (var fragment in excluded)
+        {
+            var parts = fragment.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+            if (Enumerable.Range(0, Math.Max(components.Length - parts.Length + 1, 0))
+                .Any(at => parts.Select((part, i) => string.Equals(components[at + i], part, names)).All(same => same)))
+            {
+                return $"'{fragment}' is not served — a vendor configuration or instruction path";
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>A reparse point on any step from the root to the file — the refusal naming it, or empty.</summary>
+    private static string LinkOnTheWay(string root, string relative)
+    {
+        var walked = root;
+        foreach (var component in relative.Split(Separators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            walked = Path.Combine(walked, component);
+            try
+            {
+                if ((File.GetAttributes(walked) & FileAttributes.ReparsePoint) != 0)
+                {
+                    return $"the path resolves through a link at '{walked}'";
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return "no such file in the working folder";
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// The read itself, by handle (<see cref="HandleRead"/>): opened, the handle's own name checked against the
+    /// entry under the root, the bytes read from it against <see cref="MaxBytes"/> — never a size looked at before
+    /// the open, which a growing file outruns, and never a second open by path, which a swapped-in link wins.
+    /// </summary>
+    private AcpReadAnswer ReadFile(string relative)
+    {
+        if (Directory.Exists(Path.Combine(_root, relative)))
+        {
+            return AcpReadAnswer.Refused("a directory, not a file");
+        }
+
+        BeforeOpen();
+
+        return HandleRead.Read(_trusted, relative, MaxBytes, Names, AfterOpen) switch
+        {
+            FileRead.Served served => AcpReadAnswer.Of(Decoded(served.Bytes)),
+            // The sentence names no path and no system message: the agent is told why not, not what is there.
+            FileRead.Refused refused => AcpReadAnswer.Refused(refused.Reason),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
+    }
+
+    /// <summary>The bytes as text the way <c>File.ReadAllText</c> read them: UTF-8 unless a byte-order mark says otherwise.</summary>
+    private static string Decoded(byte[] bytes)
+    {
+        using var reader = new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true);
+
+        return reader.ReadToEnd();
+    }
+}

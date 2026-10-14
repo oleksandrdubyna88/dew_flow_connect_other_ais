@@ -1,4 +1,4 @@
-import { COMMAND_MODELS_SINCE } from './commandModels';
+import { CODER_SLOT_SINCE, COMMAND_MODELS_SINCE } from './commandModels';
 import { fileIdOf, hasText, shippedTextOf, type CommandRow, type CommandStageName, type ShippedCommand } from './commands';
 import { STAGE_NAMES } from './commandsMessages';
 import { compareVersions } from './coaiInstall';
@@ -22,10 +22,15 @@ import { escapeHtml } from './webviewHtml';
  * release as the per-caller models (`COMMAND_MODELS_SINCE`).
  */
 export function commandsSkewNote(serverVersion: string): string {
-  return serverVersion.length === 0 || compareVersions(COMMAND_MODELS_SINCE, serverVersion) <= 0
-    ? ''
-    : `The installed coai-mcp is ${serverVersion}: it ignores these texts and commands and gives the shipped orders. `
-      + `Update it to ${COMMAND_MODELS_SINCE} or later.`;
+  if (serverVersion.length === 0 || compareVersions(CODER_SLOT_SINCE, serverVersion) <= 0) {
+    return '';
+  }
+
+  return compareVersions(COMMAND_MODELS_SINCE, serverVersion) > 0
+    ? `The installed coai-mcp is ${serverVersion}: it ignores these texts and commands and gives the shipped orders. `
+      + `Update it to ${COMMAND_MODELS_SINCE} or later.`
+    : `The installed coai-mcp is ${serverVersion}: it gives the shipped two-model order, and an edited model order that `
+      + `uses {coder} has it left unfilled. Update it to ${CODER_SLOT_SINCE} or later.`;
 }
 
 /**

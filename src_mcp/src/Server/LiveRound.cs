@@ -115,12 +115,20 @@ public sealed class LiveRound
         Status = progress.Status,
         Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
         Note = Noted(previous, progress),
+        Warning = WarnedOf(previous, progress),
         // Only a FINISHED reviewer has a duration; a "running" report carries zero, and taking it
         // would erase the number of one that had already finished.
         Seconds = progress.Elapsed > TimeSpan.Zero
             ? Math.Round(progress.Elapsed.TotalSeconds, 1)
             : previous.Seconds,
     };
+
+    /// <summary>
+    /// What the launch control warned about this reviewer's launch — whatever it came to — or what it already had; null
+    /// (absent on the wire) for the reviewer nobody warned about.
+    /// </summary>
+    private static string? WarnedOf(ReviewerState previous, ReviewerProgress progress) =>
+        progress.Outcome is { Warning.Length: > 0 } outcome ? outcome.Warning : previous.Warning;
 
     /// <summary>
     /// The sentence this reviewer carries: its failure, or its own note, or what it already had.

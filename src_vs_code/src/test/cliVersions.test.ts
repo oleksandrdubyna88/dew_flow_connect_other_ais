@@ -9,6 +9,7 @@ import {
   versionSourceFor,
   registryUrlFor,
 } from '../cliVersions';
+import { CLI_RUNTIMES } from '../models';
 
 /**
  * Knowing whether a reviewer's CLI has an update, from what the CLI says and what its vendor
@@ -99,12 +100,15 @@ test('a runtime this build does not know has no source at all', () => {
 });
 
 test('every source is a host the vendor itself publishes from', () => {
-  const OFFICIAL = ['registry.npmjs.org', 'antigravity.google', 'run.app'];
-  for (const runtime of ['codex', 'gemini', 'claude', 'antigravity']) {
+  // pypi.org: Vibe is published there as `mistral-vibe` — the package `uv tool install` takes, and the one Mistral's
+  // README badges (todo/PLAN_vibe_and_kimi_runtimes.md D16).
+  const OFFICIAL = ['registry.npmjs.org', 'antigravity.google', 'run.app', 'pypi.org'];
+  assert.ok(CLI_RUNTIMES.length >= 5, 'the list this loop reads has shrunk — the check is asserting less than it says');
+  for (const runtime of CLI_RUNTIMES) {
     for (const platform of ['linux', 'win32', 'darwin'] as const) {
       const source = versionSourceFor(runtime, platform, 'x64');
       assert.ok(source !== undefined, `${runtime} has no version source`);
-      const host = source.kind === 'npm' ? 'registry.npmjs.org' : new URL(source.url).host;
+      const host = new URL(registryUrlFor(source)).host;
       assert.ok(
         OFFICIAL.some((o) => host.endsWith(o)),
         `${runtime} on ${platform} would read its version from ${host}, which the vendor does not publish`,

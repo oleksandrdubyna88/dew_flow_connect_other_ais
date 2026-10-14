@@ -1,5 +1,118 @@
 # Changelog
 
+## Server 0.53.0 — 2026-10-13
+
+**Added: Mistral Vibe as a reviewer, on your own Mistral subscription.** Add **Mistral Vibe** from the reviewer presets,
+pick `mistral-medium-3.5` or `glm-5-3`, and the row reviews plans and code with the `vibe` CLI's own sign-in — no key in
+the vault. Windows only for now; on Linux and WSL the row is refused with a sentence until it has been measured there.
+
+- Vibe reads a **copy of the tree** under review, never your checkout: no `.git`, no `.vibe/`, no skills or `AGENTS.md`,
+  no links. It runs read-only (`--agent plan --enabled-tools read_file`), is never given `--trust` or `--add-dir`, and the
+  copy is gone when the round ends.
+- coai gives Vibe **its own home**, checked before every launch and again after it asks Vibe's version: your own
+  `~/.vibe` hooks, MCP servers, agents and trust list are never loaded, and a cached plugin package that would start a
+  server or carry a hook refuses the launch. Checking which Vibe is installed no longer writes into your `~/.vibe`.
+- **A Vibe update keeps working.** A version coai has not measured runs, with a warning on the reviewer's line and on the
+  row's card saying which version was measured; only something that cannot be made safe — a foreign file in coai's own
+  home, or changed plugin bytes of a measured version — refuses the launch.
+- The model is checked before the launch and against what Vibe actually used after it; a run on another model is a
+  failure that keeps its usage. Cost is recorded as unknown, tokens as Vibe reports them.
+
+**Measured, not switched on: Kimi Code.** The `--ask-acp` bridge ran 74 times against Kimi 2.1.1: every write it tried
+asked first and was refused, including a sub-agent's. It also showed that your own Kimi MCP servers and hooks would still
+run, so Kimi will get a coai-owned home before it can be added — in a later release.
+
+## Extension 0.73.0 — 2026-10-13
+
+**Added: the Mistral Vibe row.** The preset, its two models, its own colour, ▶ opens plain `vibe` in a terminal, and a
+`vibe` row is held back from any coai-mcp older than 0.53.0, which would refuse it.
+
+**Install and Update work on every system.** On Windows one press installs Vibe even when `uv` is missing: Astral's
+official installer runs first, then `uv tool install mistral-vibe`, and each step stops the line if it fails. On Linux,
+WSL and macOS the button runs Mistral's own installer. Sign-in stays yours: press ▶ and Vibe asks for its key, or run
+`vibe --setup`. The buttons now accept a command only when every URL and package in every step is an official one.
+
+**A reviewer that runs with a warning says so** — on its line in the round and on its model card.
+
+## Server 0.52.2 — 2026-10-13
+
+**The release of 0.52.1's fixes.** coai-mcp 0.52.1 was tagged but never published: one of its own tests gave the local
+consultant a fixed `D:/answers` directory, so its Windows-on-ARM build failed and the release stayed an unpublished
+draft. 0.52.2 carries everything listed under 0.52.1 below — a check or a consultation of a local thinking model told
+the panel's reasoning effort and ceiling, and an answer cut at the token ceiling named rather than used — with that test
+fixed. Nothing else changes. Extension 0.72.1 pairs with this release.
+
+## Extension 0.72.1 — 2026-10-13
+
+**Fixed: a failed ✓ Check says why.** When a model card's check failed, its badge read only `checked: no answer`,
+though coai-mcp had recorded what went wrong. It now shows that reason — for a local thinking model, for example, that
+its answer was cut at the token limit and which reasoning effort was sent. Pairs with coai-mcp 0.52.2 (0.52.1's fixes),
+which stops a local thinking model from spending a check on reasoning alone.
+
+## Server 0.52.1 — 2026-10-13
+
+**Fixed: a check or a consultation of a local thinking model answers instead of thinking to its ceiling.** A ✓ Check,
+a consultation and a question-consultant row on a `local` model now send the panel's local reasoning effort
+(`COAI_LOCAL_REASONING_EFFORT`, default `none`) and its token ceiling (`COAI_LOCAL_MAX_TOKENS`), exactly as a local
+reviewer always has; a row's own effort still wins. They used to send no effort at all, so a thinking model such as
+Gemma4 spent all 8 192 tokens reasoning and returned nothing — the card read `checked: no answer`.
+
+**Fixed: an answer cut at the token ceiling is named, never used.** When the local engine stops an answer at its
+ceiling (`finish_reason: length`), coai-mcp now refuses it — with content or without — and says so: the ceiling, the
+tokens generated, how much content arrived, and the reasoning effort the request carried, with what to change (set it
+to `none`, or raise the ceiling). A cut fragment used to be written as the answer and parsed as a review; its tokens
+are still counted.
+
+## Server 0.52.0 — 2026-10-13
+
+**Changed: the *Split with the strongest model* order follows the subagent model tiers.** With the switch on, a first
+plan round now orders three tiers instead of "Fable splits, Opus implements": the strongest model splits the plan into
+epics after asking the question consultant what matters and where (a plan split straight into stories is covered too)
+and writes the spec of the cornerstone stories — at most 2·E/5 rounded up — and of any security work; the
+implementation model splits each epic into stories, one stories document per epic, writes the test scenarios and the
+briefs, and runs every review; a new third model, the coder, writes the code, the fixes and the tests and runs the
+search scouts (1.5·N rounded up). The caller writes code itself only for one file and at most 50 changed lines, passes
+models by alias, falls back from the strongest to the implementation model on a spend limit and says so, and names
+models and counts in its summary. Claude Code is told Fable, Opus and Sonnet; Codex, Gemini and other clients are told
+generic words and never another vendor's model. `COAI_COMMAND_MODELS` rows may carry `coder`; a row without it keeps
+the shipped one. The opening words the bench reads are unchanged.
+
+## Extension 0.72.0 — 2026-10-13
+
+**Changed: *Split with the strongest model* follows the subagent model tiers.** The order now names THREE of the
+calling assistant's models, as the operator's policy of 2026-10-13 does: the strongest (Fable for Claude Code) splits
+the plan into epics — after asking the question consultant what matters and where — and writes the spec of the
+cornerstone stories (at most 2·E/5 rounded up for E epics) and of any security work; the briefs-and-review model (Opus)
+splits each epic into stories, one stories document per epic, writes the test scenarios and briefs, and runs every
+review; the new code-and-search model (Sonnet) writes the code, fixes and tests and runs the search scouts (1.5·N
+rounded up). The assistant writes code itself only for one file and at most 50 changed lines, passes models by alias,
+falls back from Fable to Opus on a spend limit and says so, and names models and counts in its summary. Each caller row
+under the switch has a third picker, **Code and search**; Codex, Gemini and other clients still ship with no names and
+are told generic words. A coai-mcp older than 0.52.0 still gives the two-model order and ignores the new picker, and the panel says so.
+Help in all five languages. The server's half is coai-mcp 0.52.0.
+
+## Server 0.51.0 — 2026-10-13
+
+**Fixed: a spent Kimi balance is named as one, not as a crash.** Kimi's `429 … insufficient balance` is now read as a
+spent allowance: the review is launched once, not retried, and the vendor's words are the reason you see.
+
+**Added, not yet switched on: the ground for Mistral Vibe and Kimi Code as reviewers.** Nothing you can pick yet — the
+runtimes themselves come in the next release — but two pieces they stand on ship now:
+
+- a **sanitised copy of the tree under review**, with no project configuration in it at any depth (`.git`, `.vibe`,
+  `.agents/skills`, `.kimi-code`, `AGENTS.md`). It refuses rather than follows any link — a Unix symlink to a folder and
+  a dangling link included — refuses names Windows would read as another file, and stops at a size, file-count and time
+  ceiling with the number it met. A file another program holds open for writing is still copied. Reads from it are
+  checked against the opened file itself, so a link or a swapped folder slipped in between the check and the read is
+  refused on Windows, Linux and macOS.
+- **`coai-mcp --ask-acp`**, a one-shot bridge to Kimi Code over its Agent Client Protocol: every write Kimi asks for is
+  refused, files are served only from inside the working folder (never instruction files such as `AGENTS.md`), and the
+  agent's whole process tree is ended with the turn. Run live against Kimi Code 2.1.1: the read inside the folder was
+  served, the write and the read outside it were refused.
+
+**Changed: every child process starts in one place.** The Kimi bridge used its own process start; it now goes through
+the same launcher as every reviewer, with the same environment rule.
+
 ## Server 0.50.0 — 2026-10-12
 
 **Changed: a question row whose model is gone is refused in the extension's words.** The server now says

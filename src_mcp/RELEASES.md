@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.53.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.2...mcp-v0.53.0) (2026-10-13)
+
+
+### Features
+
+* Mistral Vibe as a coai reviewer — the owned home, the round's snapshot, one-press install per OS; Kimi measured and re-planned ([#803](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/803)) ([0312d06](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0312d0637991ff65a42096c97f9c490fe11b1c7d))
+
+## [0.52.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.1...mcp-v0.52.2) (2026-10-13)
+
+
+### Bug Fixes
+
+* the local consultant test owns its answers directory ([b984f98](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b984f986d8b60296e0ae22b451d4cccadd7f4696))
+
+## [0.52.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.0...mcp-v0.52.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* every local launch is told the panel's effort, and a cut answer is named ([8d1af40](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8d1af40f31f084393033e547e098e14f4479d873))
+
+## [0.52.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.51.0...mcp-v0.52.0) (2026-10-13)
+
+
+### Features
+
+* the split order follows the subagent model tiers — Fable splits epics and specs cornerstones, Opus judges, Sonnet writes ([#792](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/792)) ([d9a8cda](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d9a8cda7ab0ad368609a8e59f18f40933b08a0ba))
+
+## [0.51.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.50.0...mcp-v0.51.0) (2026-10-13)
+
+
+### Features
+
+* **server:** the ground for Vibe and Kimi — a sanitised review snapshot, the Kimi ACP bridge, a spent balance named ([#785](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/785)) ([289fdfe](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/289fdfe58343ddeb01669065d950bcfd26b16513))
+
 ## [0.50.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.49.0...mcp-v0.50.0) (2026-10-12)
 
 

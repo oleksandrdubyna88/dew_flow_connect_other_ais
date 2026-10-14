@@ -105,7 +105,7 @@ test('a vendor spelled with stray space in the LIST still claims its anchor', ()
  * else is already wearing.
  */
 test('an anchored vendor wears one colour whatever else is configured', () => {
-  const anchors = ['codex', 'gemini', 'local', 'claude', 'antigravity'];
+  const anchors = ['codex', 'gemini', 'local', 'claude', 'antigravity', 'vibe'];
   const alone = anchors.map((a) => vendorPalette([a])(a));
 
   for (const [at, anchor] of anchors.entries()) {
@@ -118,7 +118,7 @@ test('an anchored vendor wears one colour whatever else is configured', () => {
 });
 
 test('an absent anchor still holds its colour back', () => {
-  const anchors = ['codex', 'gemini', 'local', 'claude', 'antigravity'];
+  const anchors = ['codex', 'gemini', 'local', 'claude', 'antigravity', 'vibe'];
   const reserved = new Set(anchors.map((a) => vendorPalette([a])(a)));
   // Seven unanchored reviewers, no anchor configured: there are exactly seven unreserved slots, so
   // none of these may reach into one an anchor is holding.

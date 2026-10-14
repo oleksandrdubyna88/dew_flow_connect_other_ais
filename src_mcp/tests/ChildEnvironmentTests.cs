@@ -75,9 +75,10 @@ public sealed class ChildEnvironmentTests
     /// <summary>
     /// Names the child's OWN runtime writes into its environment at start, so it reports them whatever it was given:
     /// on macOS CoreFoundation sets <c>__CF_USER_TEXT_ENCODING</c> when it is absent (macOS CI, PR #646). Nothing here
-    /// is passed by the launcher, which is what the assertion below is about.
+    /// is passed by the launcher, which is what the assertion below is about. Internal so every child-environment check
+    /// uses THIS allowance rather than a copy (AVibeReviewerRunsThroughAFakeVibeTests, macOS CI on #803).
     /// </summary>
-    private static readonly string[] SetByTheChildItself = OperatingSystem.IsMacOS() ? ["__CF_USER_TEXT_ENCODING"] : [];
+    internal static readonly string[] SetByTheChildItself = OperatingSystem.IsMacOS() ? ["__CF_USER_TEXT_ENCODING"] : [];
 
     [Fact]
     public async Task AQuestionChild_SeesTheMinimalList_AndNothingElse()

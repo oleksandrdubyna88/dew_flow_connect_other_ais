@@ -318,22 +318,24 @@ public sealed class QuestionFanOut(
             // The question consultant's own per-row budget, not the catalog row's timeout: the store's sweep and the fan-out's
             // deadline are both derived from it, so a row that outlived it would be swept as stale while it still ran.
             Timeout = panel.QuestionConsult.RowBudget,
-            // The row's CLI effort by the reviewers' own rule (research/PLAN_one_model_catalog.md, C2); an api row's is its module's.
-            ReasoningEffort = RosterBuilder.EffortFor(provider, string.Empty),
             DataDir = panel.DataDir,
             // A question row starts no MCP server either (issue #514).
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(env),
             // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
         };
+        // The row's CLI effort and the local ceiling by the reviewers' own road (research/PLAN_one_model_catalog.md, C2;
+        // research/PLAN_local_effort_reaches_every_local_launch.md) — a local row's own effort, else the panel's; an api row's
+        // are its module's, below.
+        var told = RosterBuilder.WithLocalEngine(settings, provider, panel);
         if (row.Runtime is not ApiConsultant)
         {
-            return settings;
+            return told;
         }
 
         var api = ApiRowView.Of(provider, panel.ApiOverrides).Effective;
 
-        return settings.WithApi(api);
+        return told.WithApi(api);
     }
 
     // ---------- the invariant, around the disk rows ----------

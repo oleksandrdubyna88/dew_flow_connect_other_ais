@@ -32,9 +32,18 @@ import type { ModelChoice } from './modelChoice';
  * the one thing the local runtime exists to avoid. The comment beside that check already said the
  * two had to be kept in step, which is the argument for there being only one of them.</p>
  */
-export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api'] as const;
+export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api', 'vibe'] as const;
 
 export type Runtime = (typeof RUNTIMES)[number];
+
+/**
+ * The runtimes that run a CLI on THIS machine — the rows with ▶ ⤓ ⟳, a CLI version and a CLI path.
+ *
+ * <p>One list. There were two — the model card's CLI badge and the Setup tab's CLI table each kept
+ * its own — and a runtime added to one and not the other is a CLI the card names and the table
+ * forgets.</p>
+ */
+export const CLI_RUNTIMES: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'gemini', 'vibe'];
 
 /**
  * `agy models` → the ids it lists, in its order.
@@ -101,6 +110,27 @@ export const CURATED_CLAUDE_MODELS: readonly ModelChoice[] = [
   { id: 'opus', label: 'Opus — the strongest' },
   { id: 'fable', label: 'Fable — the newest family' },
 ];
+
+/**
+ * Mistral Vibe's aliases — curated, because Vibe lists none without spending a model turn
+ * (todo/PLAN_vibe_and_kimi_runtimes.md D10).
+ *
+ * <p><b>The list coai-mcp checks a launch against, not a suggestion.</b> Vibe does not refuse an alias
+ * it does not know: it exits 0 and answers on its routed default (research/RESULTS_vibe_confinement.md
+ * §11), so coai-mcp refuses any alias outside its own list (`VibeModels.Curated`) before the launch.
+ * The panel offers exactly those; a typed one stays in its dropdown, and the caption says the server
+ * will refuse it. Seen accepted on Vibe {@link VIBE_MODELS_SEEN_ON}.</p>
+ */
+export const VIBE_MODELS: readonly ModelChoice[] = [
+  { id: 'mistral-medium-3.5', label: 'Mistral Medium 3.5 — Vibe’s default' },
+  { id: 'glm-5-3', label: 'GLM-5.3' },
+];
+
+/** The Vibe version the curated aliases were seen accepted on — the label D10 asks the list to carry. */
+export const VIBE_MODELS_SEEN_ON = '2.26.1';
+
+/** A runtime whose models are a list shipped with this build, because its CLI publishes none. */
+const CURATED_FOR: Partial<Record<Runtime, readonly ModelChoice[]>> = { vibe: VIBE_MODELS };
 
 export function modelsFor(
   runtime: Runtime,
@@ -188,7 +218,9 @@ export function modelsFor(
         ? claudeModels(probeFor(claudeProbe, claudeExecutable), CURATED_CLAUDE_MODELS)
         : runtime === 'antigravity'
           ? [...(discoveredAgy.length > 0 ? discoveredAgy : ANTIGRAVITY_MODELS)]
-          : [...CURATED_GEMINI_MODELS];
+          // A runtime with a list of its own gets it; only gemini falls to the Gemini list. Vibe fell to it
+          // before it had one, which offered a Mistral row three Google models.
+          : [...(CURATED_FOR[runtime] ?? CURATED_GEMINI_MODELS)];
   if (current.length > 0 && !base.some((m) => m.id === current)) {
     base.unshift({ id: current, label: `${current} (yours)` });
   }
@@ -319,6 +351,19 @@ export interface ProvenanceFacts {
   readonly endpoint?: RowEndpoint | undefined;
 }
 
+/**
+ * The caption of a list shipped with this build — said plainly, so nobody mistakes curation for discovery.
+ *
+ * <p>Vibe's says more than gemini's, because a typed alias means something different there: the Gemini
+ * CLI runs any model it is given, while coai-mcp refuses a Vibe alias it has not seen Vibe accept (D10).
+ * A caption promising "any other can be typed in" would send a person to a round that refuses it.</p>
+ */
+const CURATED_NOTE: Partial<Record<Runtime, string>> = {
+  gemini: 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.',
+  vibe: `a curated list — the aliases coai-mcp has seen Vibe ${VIBE_MODELS_SEEN_ON} accept; Vibe lists none without `
+    + 'a model turn. coai-mcp refuses any other alias before the launch, because Vibe would answer it on its default.',
+};
+
 export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
@@ -349,8 +394,9 @@ export function modelsProvenance(
     // It used to send the person to a terminal for `coai-mcp --probe-api`; the ≡ on the card asks it.
     return endpointNote(endpoint);
   }
-  if (runtime === 'gemini') {
-    return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';
+  const curated = CURATED_NOTE[runtime];
+  if (curated !== undefined) {
+    return curated;
   }
   if (runtime === 'claude') {
     // The sentence this used to carry was a CLAIM — that the CLI resolves each alias to the latest

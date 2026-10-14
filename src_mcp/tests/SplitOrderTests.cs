@@ -211,7 +211,7 @@ public sealed class SplitOrderTests : FakeCliRoundTests
 
             commands.Should().HaveCount(2);
             commands[1].Should().Contain("gpt-6-astra").And.Contain("gpt-6-luna");
-            commands[1].Should().NotContain("Fable").And.NotContain("Opus");
+            commands[1].Should().NotContain("Fable").And.NotContain("Opus").And.NotContain("Sonnet");
         }
         finally
         {

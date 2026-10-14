@@ -24,6 +24,7 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
+import { runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -52,7 +53,7 @@ import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
+import { DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
 import { help, segmentedRadio } from './panelControls';
 import { cadenceBlock } from './cadenceSettings';
@@ -1164,8 +1165,8 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     askingEndpoint: (state.askingEndpoints ?? []).includes(v.id),
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
-    // Per card, so the sentence names THIS row (`apiRuntimeOnServer` decides whether there is one).
-    apiNote: apiRuntimeSkewNote(serverVersion, [v]),
+    // Per card, so the sentence names THIS row (`runtimeOnServer` decides whether there is one).
+    runtimeNote: runtimeSkewNote(serverVersion, [v]),
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),
@@ -1191,7 +1192,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
  * on this list is asked for an endpoint, which is the safe direction: an unnecessary empty box is
  * a smaller defect than a reviewer that cannot be configured.</p>
  */
-const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 'gemini', 'antigravity']);
+const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 'gemini', 'antigravity', 'vibe']);
 
 /**
  * What a Team server still allows for one of its vendors.
@@ -1259,11 +1260,12 @@ export interface CardContext {
   /** This vendor's colour, already decided against every other configured vendor. */
   readonly colour: string;
   /**
-   * For an `api` row: the sentence naming a server too old to run it — or empty. Non-empty DISABLES
+   * For a row of a runtime newer than the installed server (`api`, `vibe` — `runtimeSince.ts`): the sentence naming
+   * that server as too old to run it — or empty. Non-empty DISABLES
    * the card's controls and is shown on it; the writer keeps the same row out of the settings file
    * (`vendorsEnv`), so the card and the file agree about what the old server will run.
    */
-  readonly apiNote: string;
+  readonly runtimeNote: string;
   /**
    * Why this card's "reviews features" box is off — a Team server row (D10), or an installed server
    * older than `FEATURE_SINCE` — or empty when the box is live. The writer holds the same tick back
@@ -1661,7 +1663,7 @@ ${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
 }
 
 /**
- * The two models the model order names, one row per KIND of calling assistant (issue #117).
+ * The three models the model order names, one row per KIND of calling assistant (issue #117).
  *
  * <p>The order is carried out by the caller, so each kind names its OWN vendor's models: every picker
  * offers that vendor's list — the Claude families the CLI is asked about, the Codex list read from its
@@ -1694,6 +1696,7 @@ function commandModelsBlock(state: PanelState): string {
     <div class="model-pair-boxes">
       <label>${SLOT_LABELS.strongest}${box('strongest', 'its strongest')}</label>
       <label>${SLOT_LABELS.implementation}${box('implementation', 'its usual')}</label>
+      <label>${SLOT_LABELS.coder}${box('coder', 'its faster')}</label>
     </div>
   </div>`;
   }).join('\n');

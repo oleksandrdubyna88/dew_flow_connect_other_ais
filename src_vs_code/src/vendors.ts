@@ -1,7 +1,8 @@
 import { DEFAULT_API_DIALECT } from './apiRuntime';
 import { storedApiSettings } from './apiSettings';
 import { reviewsFeatures } from './featureGate';
-import { Runtime, RUNTIMES } from './models';
+import { Runtime, RUNTIMES, VIBE_MODELS } from './models';
+import { VIBE_RUNTIME_SINCE } from './runtimeSince';
 import { saidText } from './saidText';
 import { catalogFields, CatalogUse, type FastSetting } from './catalogFields';
 import { bySideOf, type ExecutableBySide } from './pathFamily';
@@ -279,6 +280,21 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'claude',
     runtime: 'claude',
     model: 'haiku',
+    enabled: true, plan: true, code: true,
+    baseUrl: '',
+    executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+  },
+  // Mistral's own CLI on the person's own Mistral subscription (todo/PLAN_vibe_and_kimi_runtimes.md S2). A preset and
+  // never a default (D11). The hint carries the two limits a person meets first: coai-mcp runs it on Windows only until
+  // Linux and WSL are measured (D18), and an older coai-mcp does not know the runtime (D13 — `runtimeSince.ts`).
+  {
+    label: 'Mistral Vibe',
+    hint: `Mistral’s own Vibe CLI on your Mistral subscription, signed in as itself — no key in the vault. coai-mcp runs it on Windows only for now (Linux and WSL are not measured yet) and needs coai-mcp ${VIBE_RUNTIME_SINCE} or later.`,
+    id: 'vibe',
+    runtime: 'vibe',
+    model: VIBE_MODELS[0]!.id,
     enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',

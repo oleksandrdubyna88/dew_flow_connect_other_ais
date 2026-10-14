@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.73.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.72.1...extension-v0.73.0) (2026-10-13)
+
+
+### Features
+
+* Mistral Vibe as a coai reviewer — the owned home, the round's snapshot, one-press install per OS; Kimi measured and re-planned ([#803](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/803)) ([0312d06](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0312d0637991ff65a42096c97f9c490fe11b1c7d))
+
+## [0.72.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.72.0...extension-v0.72.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* every local launch is told the panel's effort, and a cut answer is named ([8d1af40](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8d1af40f31f084393033e547e098e14f4479d873))
+
+## [0.72.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.71.0...extension-v0.72.0) (2026-10-13)
+
+
+### Features
+
+* the split order follows the subagent model tiers — Fable splits epics and specs cornerstones, Opus judges, Sonnet writes ([#792](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/792)) ([d9a8cda](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d9a8cda7ab0ad368609a8e59f18f40933b08a0ba))
+
 ## [0.71.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.70.0...extension-v0.71.0) (2026-10-12)
 
 

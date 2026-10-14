@@ -16,8 +16,39 @@ public sealed class AConsultantRunsWithItsRowsOptionsTests
 {
     private static readonly TimeSpan Callers = TimeSpan.FromMinutes(5);
 
-    private static ReviewerSettings SettingsOf(ProviderSettings row) =>
-        ConsultantTurnInputs.Settings(row, row.Model, Callers, "D:/data", VaultKeys.None("t"), Core.Api.ApiOverrides.None);
+    private static ReviewerSettings SettingsOf(ProviderSettings row, PanelSettings? panel = null) =>
+        ConsultantTurnInputs.Settings(row, row.Model, Callers, panel ?? new PanelSettings { DataDir = "D:/data" }, VaultKeys.None("t"));
+
+    /// <summary>
+    /// A local consultant with no effort of its own is told the PANEL's local effort and ceiling, as a local reviewer is
+    /// (research/PLAN_local_effort_reaches_every_local_launch.md, S1.1) — read off the shim argv the turn is launched with.
+    /// NON-default values, so a launch hard-coding <c>none</c>/8192 could not pass.
+    /// </summary>
+    [Fact]
+    public void ALocalConsultant_IsToldThePanelsLocalEffortAndCeiling()
+    {
+        var panel = new PanelSettings { DataDir = "D:/data", LocalReasoningEffort = "medium", LocalMaxTokens = 4096 };
+        var row = new ProviderSettings("gemma") { Runtime = "local", Model = "gemma4", BaseUrl = "http://127.0.0.1:9/v1" };
+        // The local shim's build WRITES its prompt file into the answers directory, so the directory is the test's own:
+        // a fixed "D:/answers" failed the win-arm64 release leg of mcp 0.52.1 (no D: drive there) and left prompt files
+        // on every machine that had one.
+        var answers = Directory.CreateTempSubdirectory("coai-localconsultant-").FullName;
+        try
+        {
+            var arguments = ConsultantResolution.For(row.Identity())!
+                .Build(new ConsultantLaunch("D:/rsd/some-checkout", "help me", string.Empty, answers, SettingsOf(row, panel), Path.Combine(answers, "schema.json")))
+                .Request.Arguments;
+
+            arguments.Should().ContainInConsecutiveOrder(["--reasoning-effort", "medium"]);
+            arguments.Should().ContainInConsecutiveOrder(["--max-tokens", "4096"]);
+        }
+        finally
+        {
+            Directory.Delete(answers, recursive: true);
+        }
+
+        Directory.Exists(answers).Should().BeFalse("the test leaves no prompt file behind on any machine");
+    }
 
     [Theory]
     [InlineData("claude", "high", "high")]

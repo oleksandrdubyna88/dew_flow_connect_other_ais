@@ -305,7 +305,9 @@ Every setting carries a **?** that explains what it does and why it exists.
 - **An MCP client** — Claude Code, or anything that speaks MCP over stdio.
 - **At least one reviewer CLI**, signed in: [Codex](https://developers.openai.com/codex/cli),
   [Antigravity](https://antigravity.google) (which fronts Gemini, Claude and GPT-OSS), or
-  [Claude Code](https://claude.com/claude-code). They authenticate themselves; no API key is needed
+  [Claude Code](https://claude.com/claude-code), or [Mistral Vibe](https://github.com/mistralai/mistral-vibe)
+  (on your Mistral subscription; coai-mcp 0.53.0 or later runs it, on Windows only until Linux, WSL and
+  macOS are measured). They authenticate themselves; no API key is needed
   for these. A fresh install starts with Codex and Antigravity enabled. The standalone
   [Gemini CLI](https://github.com/google-gemini/gemini-cli) is still selectable but Google **retired
   Code Assist for individual accounts**, so it refuses before reaching a model — it is kept only for

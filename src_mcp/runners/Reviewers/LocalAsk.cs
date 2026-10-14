@@ -245,6 +245,9 @@ public static class LocalAsk
     /// Null rather than an empty string: the round already distinguishes "unparseable" from "no
     /// findings", and an engine that returned prose instead of the schema is the first, with its raw
     /// text kept on disk.
+    /// <para>The shim itself reads <see cref="ReadAnswer"/> since 2026-10-13, because it must see how
+    /// the answer STOPPED (<see cref="CutRefusal"/>); this pair is kept for the tests that read a body's
+    /// content and usage through it.</para>
     /// </remarks>
     public static (string? Answer, Usage Usage) ReadResponse(string response)
     {
@@ -262,4 +265,35 @@ public static class LocalAsk
 
     /// <summary>The vendor's finish reason for a generation its own ceiling cut short.</summary>
     public const string CutAtTheCeiling = CompletionReader.CutAtTheCeiling;
+
+    /// <summary>
+    /// The refusal of an answer the engine CUT at its ceiling — with content or without — or null for one that was not.
+    /// </summary>
+    /// <remarks>
+    /// <para>research/PLAN_local_effort_reaches_every_local_launch.md, S1.2. Measured 2026-10-13: a Gemma4 consultant check
+    /// generated exactly 8 192 tokens of thinking and no content, twice, and this shim — which did not read
+    /// <c>finish_reason</c> — said only that no content came back. A cut WITH content was written as the answer: a
+    /// schema-whole <c>{"findings":[]}</c> cut before its findings is a clean review nobody gave, the defect the api
+    /// shim already refused. The sentence is <see cref="CompletionReader.CutSentence"/>, shared with that shim.</para>
+    /// <para>Refusing costs a cut fragment its one repair launch (<c>ReviewerExecutor</c>): accepted, because the repair
+    /// is asked under the same ceiling and the same effort that produced the cut.</para>
+    /// </remarks>
+    /// <param name="maxTokens">The <c>--max-tokens</c> this shim was given; the request carried the dialect's ceiling for it.</param>
+    /// <param name="effort">The <c>--reasoning-effort</c> this shim was given. What the request CARRIED is the dialect's
+    /// reading of it — <c>engine</c> and blank both send nothing — and the sentence names that, never the raw word.</param>
+    public static string? CutRefusal(ChatAnswer answer, string endpoint, int maxTokens, string effort) =>
+        answer.WasCut
+            ? CompletionReader.CutSentence($"the local engine at {endpoint}", answer, ApiDialects.Local, maxTokens,
+                CutCure(ApiDialects.Local.EffortToSend(effort)))
+            : null;
+
+    /// <summary>What a person can do about a cut, by the effort the request carried (empty: none was sent).</summary>
+    private static string CutCure(string sent) => sent switch
+    {
+        "" => "the request sent no reasoning_effort, so the engine's own default applied and a thinking model can spend the "
+              + "whole ceiling thinking: set this row's effort, or COAI_LOCAL_REASONING_EFFORT, to none — or raise COAI_LOCAL_MAX_TOKENS",
+        "none" => "reasoning_effort was none, so the answer itself ran past the ceiling: raise COAI_LOCAL_MAX_TOKENS",
+        _ => $"reasoning_effort was {sent}, and a thinking model can spend the whole ceiling thinking: set it to none, "
+             + "or raise COAI_LOCAL_MAX_TOKENS",
+    };
 }

@@ -22,9 +22,13 @@ internal static class ConsultantTurnInputs
     /// The vault — read only for a row that authenticates with a key (<see cref="TakesAKey"/>). A claude or plain codex
     /// consultant keeps its CLI's own sign-in: a vault key would move it onto per-token billing.
     /// </param>
-    /// <param name="overrides">The environment's api overrides — an api row runs with its module's view of them, as a reviewer does.</param>
-    public static ReviewerSettings Settings(ProviderSettings row, string model, TimeSpan timeout, string dataDir, VaultKeys keys, Core.Api.ApiOverrides overrides) =>
-        RuntimeResolution.NameOf(row.Identity()) == "api" ? WithModule(Plain(row, model, timeout, dataDir, keys), row, overrides) : Plain(row, model, timeout, dataDir, keys);
+    /// <param name="panel">
+    /// The panel this launch runs under — its data directory, its api overrides (an api row runs with its module's view of
+    /// them, as a reviewer does), and the local engine's effort and ceiling, which a local row is told exactly as a local
+    /// reviewer is (research/PLAN_local_effort_reaches_every_local_launch.md).
+    /// </param>
+    public static ReviewerSettings Settings(ProviderSettings row, string model, TimeSpan timeout, PanelSettings panel, VaultKeys keys) =>
+        RuntimeResolution.NameOf(row.Identity()) == "api" ? WithModule(Plain(row, model, timeout, panel, keys), row, panel.ApiOverrides) : Plain(row, model, timeout, panel, keys);
 
     /// <summary>
     /// The row's own timeout, else the caller's (research/PLAN_one_model_catalog.md, C2) — the reviewers' rule
@@ -50,7 +54,17 @@ internal static class ConsultantTurnInputs
         return settings.WithApi(api);
     }
 
-    private static ReviewerSettings Plain(ProviderSettings row, string model, TimeSpan timeout, string dataDir, VaultKeys keys) => new(row.Provider)
+    /// <remarks>
+    /// The row's CLI effort and the local ceiling come from <see cref="RosterBuilder.WithLocalEngine"/>, the reviewers' own
+    /// road — claude's level, a local row's own else the PANEL's local effort, nothing for a runtime that does not take one
+    /// (C2); an api row's are its module's (WithModule). This composer used to pass an empty local default, so a thinking
+    /// model consulted or checked was told nothing and thought to its ceiling (2026-10-13, two checks of 8 192 tokens and
+    /// no answer).
+    /// </remarks>
+    private static ReviewerSettings Plain(ProviderSettings row, string model, TimeSpan timeout, PanelSettings panel, VaultKeys keys) =>
+        RosterBuilder.WithLocalEngine(Launch(row, model, timeout, panel, keys), row, panel);
+
+    private static ReviewerSettings Launch(ProviderSettings row, string model, TimeSpan timeout, PanelSettings panel, VaultKeys keys) => new(row.Provider)
     {
         ApiKey = TakesAKey(row) ? keys.Keys.GetValueOrDefault(row.KeyName, string.Empty) : string.Empty,
         // Only the api runtime reads these two: the module its request is spelled in, and the price of each turn.
@@ -59,10 +73,7 @@ internal static class ConsultantTurnInputs
         ExecutablePath = row.ExecutablePath,
         Model = model,
         Timeout = TurnTimeout(row, timeout),
-        // The row's CLI effort by the reviewers' own rule — claude's level, a local row's; nothing for a runtime that does
-        // not take one (C2). An api row's is its module's (WithModule). The panel's local default is a reviewer setting.
-        ReasoningEffort = RosterBuilder.EffortFor(row, string.Empty),
-        DataDir = dataDir,
+        DataDir = panel.DataDir,
         // A consultant starts no MCP server either (issue #514).
         McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
         // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).

@@ -129,6 +129,7 @@ internal sealed class SubmodulePopulator(IProcessLauncher launcher)
         !dir.Exists || !dir.Attributes.HasFlag(FileAttributes.ReparsePoint);
 
     /// <summary>A populated submodule carries a <c>.git</c> file; an empty mount carries nothing.</summary>
-    private static bool HasGit(string path) =>
+    /// <remarks>Internal rather than private since the sanitised snapshot (<c>Snapshots/SnapshotListing</c>) asks the same question of a gitlink — one answer to "populated".</remarks>
+    internal static bool HasGit(string path) =>
         File.Exists(Path.Combine(path, ".git")) || Directory.Exists(Path.Combine(path, ".git"));
 }

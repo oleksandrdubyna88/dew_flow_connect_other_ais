@@ -1543,7 +1543,7 @@ moved the engine into `src_mcp/src/Server/Rounds/`, as proved moves with no beha
 |---|---|
 | `RoundEngine` | `RunStageAsync` — claim, human decision, deadline, Team-server role probe, sha, refusal-before-building (where the consultation cadence is prepared), the cadence plan and epic onto the session, lease, work, schedule, dedup, gate, verdict, the cadence note on the record and its facts in the orders, save, project, notify — plus the round deadline (`RoundDeadlineFor`, `ConfiguredReviewers`, `WhatEndedIt`), `AnswerFor`, `WhereTheDocumentWent`, `NoticeIfAPersonMustDecide` (the `call_human` notice, BUILT before the save so its id is recorded as the hold's question, WRITTEN after), `SpentPrompts`, `WhatTheCallerWasDoing` and its own `Error`, which reaches the one refusal boundary exactly as the service's does |
 | `RoundCommands` | the orders a round carries: `MayProceed`, `CallerFor`, the words a person wrote for the orders (`CommandTextsNow`), their own commands (`CustomOrdersFor`), `CommandStageOf`. A unit of its own so the engine stays under the 800-line ceiling. `PanelService` constructs it and hands it to the engine, because the consultation cadence's check before a code round (`CadenceBeforeTheCode`) reads the same order texts |
-| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor`; since 2026-09-26 it also gives each reviewer ONE conversation key (`ConversationKey.Of(provider, role, base prompt)` on `ReviewerSettings.Conversation`) that every launch of that reviewer — its turns and their repairs — carries, so a vendor that routes its prompt cache by a conversation id (xAI's `x-grok-conv-id`) serves turn 2 from turn 1's cache; and the row's `TokenPrice` rides on the invocation, for the parent to price each turn ([module_runners.md](module_runners.md), *An api turn is priced in the parent*) |
+| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor`; since 2026-09-26 it also gives each reviewer ONE conversation key (`ConversationKey.Of(provider, role, base prompt)` on `ReviewerSettings.Conversation`) that every launch of that reviewer — its turns and their repairs — carries, so a vendor that routes its prompt cache by a conversation id (xAI's `x-grok-conv-id`) serves turn 2 from turn 1's cache; and the row's `TokenPrice` rides on the invocation, for the parent to price each turn ([module_runners.md](module_runners.md), *An api turn is priced in the parent*); since 2026-10-13 `ScratchAsync` (the round's own scratch and, for a runtime that asks, its one sanitised snapshot) and `PlaceFor` (each runtime's launch directory: the snapshot, or the row left out) — the section *A runtime that must not start in the checkout* |
 | `ReviewerPrompt` | `ComposePrompt`, `WithoutTheStaleClaim` (the one `[GeneratedRegex]`, so `PanelService` is no longer `partial`), `WhatYouHave` |
 | `StageRun`, `RoundWork`, `ExcludedRole` | the records a stage hands the engine and the roster hands back |
 
@@ -1966,6 +1966,40 @@ route `think:false` and `chat_template_kwargs` are ignored and `"low"` still bur
 `"none"` returns `finish_reason: stop`. This repository's own probes reproduced all three. What
 thinking is WORTH on a review — four of eight planted defects when it finished — against a reviewer
 that always finishes is the measurement recorded in `RESULTS_model_comparison.md`.
+
+### …and so is every other local launch (2026-10-13)
+
+The decision above was taken for reviewers and applied only there. The two other launch composers —
+`ConsultantTurnInputs.Settings` (a consultation turn AND the ✓ Check, which reuses it) and
+`QuestionFanOut.SettingsFor` (a question-consultant row) — passed an EMPTY local default to
+`RosterBuilder.EffortFor`, so a `local` row with no effort of its own sent no `reasoning_effort`, and a
+thinking model thought to its ceiling. Measured on the owner's machine: two ✓ Checks of a Gemma4 row
+each generated exactly 8 192 tokens and no content (Ollama's own log), and the card said
+`checked: no answer`. All three composers now take the effort and the ceiling from ONE helper,
+`RosterBuilder.WithLocalEngine(settings, row, panel)` — `EffortFor(row, panel)` and `panel.LocalMaxTokens`;
+a row's own effort still wins, and an api row's module overrides both afterwards. `EffortFor` takes the
+`PanelSettings` rather than a loose default string, so there is no empty default left to pass — the
+compiler holds what a source scan first held (the scan missed a named argument and a call-shaped first
+argument, and could not see the ceiling at all; the code round's own reviewers). `ConsultantTurnInputs.Settings`
+takes the `PanelSettings` its two callers hold rather than its data directory and api overrides as
+loose arguments.
+
+### A cut answer is named, not kept (2026-10-13)
+
+`--ask-local` reads the whole completion (`LocalAsk.ReadAnswer`), prints the usage line BEFORE judging
+it — a refused generation still spent the card — and refuses an answer whose `finish_reason` is
+`length`, with content or without: exit 70, nothing written to `--out`, and one sentence from
+`CompletionReader.CutSentence` (shared with the api shim, whose wording is pinned to the byte):
+the ceiling the request carried, tokens generated, characters of content that arrived, and a cure that
+names the `reasoning_effort` the request CARRIED (`ApiDialect.EffortToSend` — `engine` and blank both
+send nothing) — none sent (the engine's default applied), `none` (the answer itself ran long), or
+another level (set it to `none`, or raise `COAI_LOCAL_MAX_TOKENS`). Before this a cut
+with no content read "the local engine returned no message content: {raw json}", and a cut WITH content
+was written as the answer and parsed. **The trade-off, recorded:** such a fragment used to get the
+executor's one repair launch; it no longer does, because the repair is asked under the same ceiling and
+effort that produced the cut. The sentence is neither a rate limit (`RateLimit.Hit`) nor a known
+vendor refusal, so a consultation classifies it as an exit with what it said
+(`ALocalAnswerCutAtItsCeilingIsNamedTests`).
 
 ## One list of runtime names, because two hand-written ones both forgot the same entry (2026-09-02)
 
@@ -4828,7 +4862,7 @@ they come from a person and outrank the caller's own defaults.
 |---|---|
 | Work autonomously | a question that does not block is written down and asked at the END, all together; one that does block is asked at once — but only after gathering every other blocking question, so the person is interrupted once |
 | Split the plan | 2-4 epics, each 2-4 logically complete stories, and after EVERY story: `review_code`, resolve, fix, document, test, commit — then the next |
-| Split with the strongest model (`COAI_SPLIT_WITH_FABLE`, a historical name) | the split itself on the CALLER's strongest model at its highest version; ordinary stories on its implementation model; payments, security, architecture and data migration back on the strongest — the two names per caller kind, below |
+| Split with the strongest model (`COAI_SPLIT_WITH_FABLE`, a historical name) | the subagent model tiers (since 2026-10-13): the CALLER's strongest model splits the plan into epics after asking the question consultant, and specs cornerstone and security stories; its implementation model splits epics into stories, writes scenarios and briefs and reviews; its coder writes the code and runs the scouts — the three names per caller kind, below |
 
 Everything is off by default, and an empty command list is exactly the behaviour of every release
 before this one.
@@ -4859,11 +4893,12 @@ chosen by:
 | `ModelPair`, the shipped map, `For(map, kind)` — per-FIELD fallback, configured → shipped; a kind with no row resolves as `other` | `core/Commands/CommandModels.cs` |
 | `COAI_COMMAND_MODELS` → `PanelSettings.CommandModels`; an unreadable value is the shipped map plus one `UnrecognisedSetting`, never a refusal — the order is advice | `src/Server/CommandModelsSetting.cs` |
 | `CommandContext.Models` (an init property defaulting to Claude Code's pair) filled from the caller's kind | `PanelService.RunStageAsync` |
-| the template: `Do the SPLIT itself with {S} at its highest available version … ordinary stories on {I} … on {S} (max) again`; a blank slot reads "the strongest model your client offers" / "your usual model" | `GateCommands.ModelCommand` |
+| the template, `shared/commands/command-model.md` — `{strongest}`, `{implementation}`, `{coder}`; a blank slot reads "the strongest model your client offers" / "your usual model" / "a faster model your client offers" | `GateCommands.ModelCommand` |
 
-- **Claude Code with nothing configured gets the pre-#117 sentence byte for byte** — a test pins it by
-  equality against the old text. Codex, Gemini and other clients ship with NO names: the order then
-  says the generic words rather than naming another vendor's model.
+- **Claude Code with nothing configured is told Fable, Opus and Sonnet.** Until 2026-10-13 it got the
+  pre-#117 sentence byte for byte; the subagent model tiers (conventions D1–D12) replaced it — see
+  *The model order follows the subagent tiers* below. Codex, Gemini and other clients ship with NO
+  names: the order then says the generic words rather than naming another vendor's model.
 - **The shipped map is held level with the extension by a file neither owns**,
   `shared/command-models.json`; each half asserts its own constant against it.
 - **`GateCommands.ModelOrderMarker`** (`"Do the SPLIT itself with "`) is the words every model order
@@ -4874,7 +4909,26 @@ chosen by:
   last one wins, through the indexer, as in `ConsultantRouting.Merge`. The first build used
   `ToDictionary`, which threw outside the `JsonException` catch — caught in the code round.
 - **The log line says who and which**: `split ordered to caller {Caller} ({CallerKind}); strongest
-  model …, implementation …`.
+  model …, implementation …, coder …`.
+
+### The model order follows the subagent tiers (2026-10-13)
+
+The operator's subagent policy of 2026-10-13 (`dew_flow_conventions · research/PLAN_subagent_model_tiers.md`
+§1, D1–D12) has THREE tiers, and the order named two, so `ModelPair` gained a third field, `Coder`
+(the type keeps its name: the wire and the stored setting key on the fields). Design record:
+[PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md).
+
+| tier | slot | Claude Code ships | what the order gives it |
+|---|---|---|---|
+| strongest | `strongest` | Fable | the split of the PLAN into epics — after asking the question consultant (`ask_consultants`) what matters and where — the epics at the bottom of the plan; the spec (scenarios + brief) of cornerstone stories (at most ⌈2·E/5⌉) and of security work outside that quota |
+| judge | `implementation` | Opus | each EPIC into stories, one stories document per epic, marking the cornerstones; test scenarios and briefs; every reviewer, judge, architect and finding verifier; the fallback when the strongest is refused on a spend limit |
+| coder | `coder` | Sonnet | code, fixes, unit and integration tests; search scouts, ⌈1.5·N⌉ with distinct focuses; any change bigger than one file and 50 changed lines |
+
+The order also says: models by alias, never a versioned id; the summary names models and counts.
+`CommandModelsSetting` reads `coder` from `COAI_COMMAND_MODELS`; a row without it (every extension
+before 0.72.0) resolves to the shipped coder per field. An OLD server handed a row with `coder` ignores
+the field — System.Text.Json drops unmapped members — measured against the released binary by
+`src_vs_code/scripts/live-command-models-compat.mjs`. The sibling split-size orders are unchanged.
 
 ### The split is sized honestly, gated once, and written down (2026-09-23, issue #131)
 
@@ -5178,6 +5232,7 @@ sequenceDiagram
 |---|---|
 | **The sweep runs while serving, every minute by default** (`COAI_SWEEP_SECONDS`, 10–3 600, since 2026-10-06; it begins once the background start has built the service), on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
 | **Each record is decided under the repository's lock, on a fresh read.** A cheap look first, then the lock. A follow-up takes the same lock and re-reads the record before it marks it `asking`, so the sweep and a follow-up can no longer interleave into a stale close written over a running turn. (Found at the code round; pinned by `ASweepHoldingAStaleCopy_DoesNotCloseAConsultationThatHasSinceStartedATurn`, which is red when the decision uses the enumerated copy.) | `ConsultationStore.SweepOne`, `Swept` |
+| **The beat is the scratch sweep's second caller** (2026-10-12, `todo/PLAN_vibe_and_kimi_runtimes.md` §7, plan gate finding). `PruneOldAnswerDirs` — the product's `coai-answers-*` and sibling directories in temp older than six hours, at most once every ten minutes per process — ran only on the round's build path, so a crashed `consult` followed by no round left its scratch directory, and the sanitised snapshot inside it, for ever. `Swept` now calls `PanelService.SweepScratch()` after the three record sweeps: one sweep, two callers, the same static throttle, so a beat a minute after a round's build walks nothing. Pinned by `AScratchSweepRunsOnTheConsultationBeatTests` — an old `coai-answers-*` directory holding a snapshot is gone after one beat with no round built; red before the call existed. | `ConsultationSweeper.Swept`, `PanelService.SweepScratch` → `PruneOldAnswerDirs` |
 | **What each limit applies to, now each pinned by a test broken by compiling code.** Turns per consultation: every kind, frozen into the record at open. Calls per session: stuck only; a follow-up is counted by the kind its record holds. Idle close: every kind, both the follow-up refusal and the record's close. | `ConsultLimitsScenarioTests` (the idle refusal; cadence and risk past the turn cap; cadence and risk follow-ups that spend no stuck budget; the running-server lapse), `ConsultationSweeperTests` (the real host, with a settings reload between two lapses; a throwing beat) |
 | **The kind on the server's own surfaces.** `status` lists each open consultation with `kind`, never empty, because a record from before the kinds reads `stuck`. Every consultation log line starts with it: `risk consultation … turn 1/5`, `… answered turn 1`, and the filesystem alert. | `ServerJsonContext.OpenConsultation.Kind`, `ConsultationService.OpenIn`, `ConsultationService` log lines |
 | **The `consult` tool description** says turns are capped for every kind and calls per session count only stuck consultations. | `Tools.cs` |
@@ -6409,7 +6464,7 @@ Open tail: a per-worktree HEAD commit check would also catch a consultant's `com
 `CommandTexts` (core, pure) holds THE list of ids and the layering: a person's override when it says
 something (only its END is trimmed — three texts continue the marker before them), else the shipped
 text. A missing resource throws naming it. The computed parts are placeholders filled by `GateCommands`:
-`{scope}`, `{strongest}`, `{implementation}`, `{numbers}`, `{verdict}`.
+`{scope}`, `{strongest}`, `{implementation}`, `{coder}`, `{numbers}`, `{verdict}`.
 
 **The markers stay in code**, before the editable text: `GateCommands.AutonomyMarker` (`Work AUTONOMOUSLY.`),
 `ModelOrderMarker`, `GateOrderMarker`, `AlreadySplitMarker` (`This plan is a PIECE of a split that is
@@ -6908,3 +6963,64 @@ flowchart TD
     sroot -->|Present / Unknown / default| full[logger, notices, run marker, StartingHost, sweeps, survey]
     classify -->|a reader / one-shot| reader[as before — never makes the folder]
 ```
+
+## A runtime that must not start in the checkout — the round's scratch and its snapshot (2026-10-13, S2 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
+
+The server's half of the Vibe reviewer row ([module_runners.md](module_runners.md), *The Vibe reviewer*). Three seams:
+
+- **`RosterBuilder.ScratchAsync`** (called by every stage that builds a roster — plan, code, document, feature — right
+  before `BuildWork`, beside `CodexTiersAsync`, because `BuildWork` is synchronous): reserves the round's own scratch
+  path (`RoundScratch`, a `coai-answers-*` name in temp, made only when something is put in it) and, when the stage
+  mounts a checkout (`readsCheckout` and a workspace other than `none`) and a runnable row serving the stage runs on a
+  runtime that asks (`NeedsASanitisedSnapshot`), makes ONE sanitised snapshot of the round's pinned worktree inside it
+  (`SnapshotSource.Pinned`). A refusal is kept on the scratch (`RoundTree.Refused`) and logged.
+- **`BuildWork(…, scratch:)`** — optional; absent is `RoundScratch.None`. (Taken to cyclomatic complexity 4 the same
+  day: the round's fixed facts are a `RosterFrame`, what the deal collects a `RosterCollector`, both in
+  `Rounds/RosterAssembly.cs`; one dealt seat is `AddReviewer` → `PlaceOf` → `ReviewerFor`.) `PlaceFor(runtime, launchDir, hasCheckout,
+  scratch)` decides each runtime's launch directory: unchanged for every runtime that does not ask (its argv byte for
+  byte, `AVibeRowReviewsInTheRoundsSnapshotTests.EveryOtherRuntime_KeepsTheDirectoryItAlwaysHad`); the snapshot's root
+  for one that asks when there is a checkout, with `ReviewerInvocation.Citations` set to the snapshot so a finding's
+  absolute path inside it maps back; and — when the round has no snapshot to give, none made or refused — the row is
+  EXCLUDED for that role with the reason, never started in the checkout. Every row's settings carry
+  `OwnedScratch = scratch.Directory` (only `VibeRuntime` reads it: its homes), the security lane's included.
+- **`RoundEngine`** disposes `RoundWork.Scratch` with the round, however the round ends (`using`, right after
+  `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
+  it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
+  beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+
+```mermaid
+flowchart TD
+  stage["a stage's MakeWork"] --> tiers["CodexTiersAsync"]
+  stage --> scratch["ScratchAsync(launcher, stage, worktree, readsCheckout)"]
+  scratch -->|no checkout, or no runnable row asks| none["RoundScratch: a path, no folder"]
+  scratch -->|a row asks and a checkout is mounted| snap["ReviewSnapshots.MakeAsync(Pinned(worktree), scratch path)"]
+  snap -->|Made| made["RoundTree.Made(snapshot)"]
+  snap -->|Refused| refused["RoundTree.Refused(reason) — logged"]
+  none --> build["BuildWork(…, scratch)"]
+  made --> build
+  refused --> build
+  build --> place{"PlaceFor(runtime)"}
+  place -->|does not ask, or no checkout| dir["the stage's directory, as before"]
+  place -->|asks, snapshot made| root["the snapshot's root · Citations = the snapshot"]
+  place -->|asks, none to give| excluded["ExcludedRole(provider, role, reason)"]
+  build --> engine["RoundEngine: using RoundWork.Scratch — disposed when the round ends"]
+```
+
+## A launch the control WARNED about (2026-10-13, the owner's decision for Vibe: warn, not refuse)
+
+A launch control may allow a launch and still have something to say — today a Vibe version with no measured home manifest
+([module_runners.md](module_runners.md), *The Vibe reviewer*). One generic field carries it, `ReviewerOutcome.Warning`, and
+the server puts it in four places, each absent or empty for every reviewer nobody warned about, so nothing else reads
+differently:
+
+- **The round's reviewer line** — what the calling AI reads: `RoundWarnings.Clause(results)` appends
+  `; warned — vibe/PlanCritique, vibe/Architecture: <the warning>`, each distinct warning once after the reviewers it is
+  about (`RoundEngine`, beside the document-went and unreviewed clauses).
+- **The reviewer's state** — `ReviewerState.Warning`, written `reviewerStates[].warning` in the session file and in
+  `status` (`LiveRound.WarnedOf`), whatever the reviewer's status; null and not written otherwise.
+- **The round's log** — `RoundAudit.Warned`: one WARNING line per warned reviewer.
+- **The row's card, before any round** — `providers`: `ProviderStatus.warning` from `VendorHealth.Warning`, which the probe
+  asks the adapter for (`IReviewerRuntime.VersionWarning` of the version it printed); absent for every other row.
+
+The extension reads neither `reviewerStates[].warning` nor `providers[].warning` yet: the rounds view shows a note only
+for a failed, queued or stood-down reviewer, and the card shows `note` only when a row is unavailable.

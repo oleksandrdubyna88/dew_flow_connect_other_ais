@@ -28,6 +28,12 @@ export interface ProviderHealth {
    * server that predates the vendor modules, which is how the card knows to hide the controls.
    */
   readonly api?: ApiReport | undefined;
+  /**
+   * What the person should know about the installed CLI this row WILL run — today a Vibe version coai has not
+   * measured, which runs anyway (the owner's decision of 2026-10-13; `ProviderStatus.Warning`). Absent for every other
+   * row, and from a server older than the field, so the card draws nothing for them.
+   */
+  readonly warning?: string | undefined;
 }
 
 /**
@@ -244,7 +250,7 @@ function oneProvider(row: unknown): ProviderHealth | undefined {
   if (typeof row !== 'object' || row === null) {
     return undefined;
   }
-  const { provider, auth, note, api } = row as Record<string, unknown>;
+  const { provider, auth, note, api, warning } = row as Record<string, unknown>;
 
   return typeof provider === 'string' && provider.length > 0
     ? {
@@ -252,8 +258,16 @@ function oneProvider(row: unknown): ProviderHealth | undefined {
       auth: typeof auth === 'string' ? auth : '',
       note: typeof note === 'string' ? note : '',
       ...apiOf(api),
+      ...warningOf(warning),
     }
     : undefined;
+}
+
+/** The server's warning about the row's CLI when it sent a usable one — no field otherwise, like `api`. */
+function warningOf(raw: unknown): { warning?: string } {
+  const warning = typeof raw === 'string' ? raw.trim() : '';
+
+  return warning.length > 0 ? { warning } : {};
 }
 
 /** An `api` row's report when the server sent one the panel can read — nothing otherwise, never a half. */

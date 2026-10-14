@@ -58,6 +58,20 @@ test('every language describes the sides seen and the path-fields switch, by the
   }
 });
 
+test('every language says the split order names Briefs and review, Code and search and Sonnet (model tiers)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-gate');
+  assert.ok(article !== undefined, 'the gate article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} gate article is missing`);
+    assert.ok(said.includes('**Split with the strongest model**'), `the ${language} gate article lost the split paragraph`);
+    for (const label of ['**Briefs and review**', '**Code and search**', 'Sonnet']) {
+      assert.ok(said.includes(label), `the ${language} gate article never says ${label} — the third model slot is undocumented there`);
+    }
+  }
+});
+
 test('every language says a CLI path is kept per side, and names the older-extension limit (paths per side E3)', () => {
   // Design (c) of research/PLAN_paths_per_side.md: "Said in the help and in the CHANGELOG when E3 ships." The two example
   // paths are the same in every language, so they are what all five are asked for; `PATH` is the lookup an emptied
@@ -352,7 +366,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.autonomous': 'work autonomously',
   'coai.splitPlan': 'split the plan into epics and stories',
   'coai.stopLocalWhenQuiet': 'stop the local reviewer when the cloud reviewers found almost nothing',
-  // Issue #117: the switch names the caller's own strongest model now, and the two models are chosen
+  // Issue #117: the switch names the caller's own strongest model now, and the three models are chosen
   // per kind of assistant — the key keeps its historical name.
   'coai.splitWithFable': 'split with the strongest model',
   'coai.commandModels': 'chosen per kind of assistant',

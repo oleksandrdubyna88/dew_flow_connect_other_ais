@@ -1,12 +1,14 @@
 /**
- * Which two models the gate's split order names, per KIND of calling assistant (issue #117).
+ * Which three models the gate's split order names, per KIND of calling assistant (issue #117; the
+ * third, `coder`, since the subagent model tiers of 2026-10-13).
  *
  * <p>The order is carried out by the CALLER, never by the gate — so a Codex session told "Fable and
  * Opus" was handed two models it does not have. A person now picks, per caller kind, the STRONGEST
- * model (the split itself and the risky stories) and the one for ordinary IMPLEMENTATION. Claude
- * Code ships with Fable and Opus, the pair every earlier release named; the other kinds ship with
- * nothing, and the order then says "the strongest model your client offers" rather than naming
- * another vendor's.</p>
+ * model (the epic split, and the spec of cornerstone and security stories), the IMPLEMENTATION model
+ * (the story split, test scenarios, briefs and every review) and the CODER (code, fixes, tests and the
+ * search scouts). Claude Code ships with Fable, Opus and Sonnet; the other kinds ship with nothing,
+ * and the order then says "the strongest model your client offers" rather than naming another
+ * vendor's.</p>
  *
  * <p>Pure and `vscode`-free, ONE reader for the panel and the env block alike — the rule
  * `consultSettings.ts` states: what the panel shows and what the server runs cannot disagree, because
@@ -18,18 +20,23 @@ import { CALLER_KINDS } from './consultSettings';
 import { Runtime } from './models';
 import { record, text } from './savedRows';
 
-/** The two slots. An empty string is "not named here", resolved per field against the shipped pair. */
+/**
+ * The three slots. An empty string is "not named here", resolved per field against the shipped one.
+ * A pair in name only: it held two until the third tier (2026-10-13), and the type keeps its name because
+ * the stored setting and the wire key on the FIELDS.
+ */
 export interface ModelPair {
   readonly strongest: string;
   readonly implementation: string;
+  readonly coder: string;
 }
 
-/** The two field names, as the stored record and the wire spell them. */
+/** The three field names, as the stored record and the wire spell them. */
 export type ModelSlot = keyof ModelPair;
 
-const MODEL_SLOTS: readonly ModelSlot[] = ['strongest', 'implementation'];
+const MODEL_SLOTS: readonly ModelSlot[] = ['strongest', 'implementation', 'coder'];
 
-/** Whether a name is one of the two slots — typed by a predicate, never a cast. */
+/** Whether a name is one of the three slots — typed by a predicate, never a cast. */
 export function isModelSlot(name: string): name is ModelSlot {
   return (MODEL_SLOTS as readonly string[]).includes(name);
 }
@@ -37,18 +44,19 @@ export function isModelSlot(name: string): name is ModelSlot {
 /** How a slot is named where a person reads it. */
 export const SLOT_LABELS: Readonly<Record<ModelSlot, string>> = {
   strongest: 'Strongest',
-  implementation: 'Implementation',
+  implementation: 'Briefs and review',
+  coder: 'Code and search',
 };
 
-/** A pair that names nothing — the shipped pair of every kind but Claude Code. */
-export const NO_MODELS: ModelPair = { strongest: '', implementation: '' };
+/** A row that names nothing — the shipped row of every kind but Claude Code. */
+export const NO_MODELS: ModelPair = { strongest: '', implementation: '', coder: '' };
 
 /**
  * The shipped pairs — one contract with `CommandModels.Shipped` in the server, held level by
  * `shared/command-models.json`, which each half's suite asserts its own copy against.
  */
 export const SHIPPED_COMMAND_MODELS: Readonly<Record<string, ModelPair>> = {
-  claude: { strongest: 'Fable', implementation: 'Opus' },
+  claude: { strongest: 'Fable', implementation: 'Opus', coder: 'Sonnet' },
   codex: NO_MODELS,
   gemini: NO_MODELS,
   other: NO_MODELS,
@@ -80,7 +88,7 @@ export function commandModelsFrom(raw: unknown): CommandModels {
   return Object.fromEntries(CALLER_KINDS.map(({ id }): [string, ModelPair] => {
     const row = record(stored[id]) ?? {};
 
-    return [id, { strongest: text(row['strongest']), implementation: text(row['implementation']) }];
+    return [id, { strongest: text(row['strongest']), implementation: text(row['implementation']), coder: text(row['coder']) }];
   }));
 }
 
@@ -98,6 +106,7 @@ export function resolvedPair(models: CommandModels, kind: string): ModelPair {
   return {
     strongest: typedOr(typed.strongest, shipped.strongest),
     implementation: typedOr(typed.implementation, shipped.implementation),
+    coder: typedOr(typed.coder, shipped.coder),
   };
 }
 
@@ -193,14 +202,36 @@ export const COMMAND_MODELS_SINCE = '0.33.0';
  * means for Claude Code, so there is nothing to warn about until somebody changed a picker.</p>
  */
 export function commandModelsSkewNote(installedServerVersion: string, models: CommandModels): string {
-  if (installedServerVersion.length === 0 || kindsOnTheWire(models).length === 0
-    || compareVersions(COMMAND_MODELS_SINCE, installedServerVersion) <= 0) {
+  if (installedServerVersion.length === 0) {
     return '';
   }
+  if (compareVersions(COMMAND_MODELS_SINCE, installedServerVersion) > 0 && kindsOnTheWire(models).length > 0) {
+    return `The coai-mcp you have installed (${installedServerVersion}) does not read these models: it names Fable `
+      + `and Opus to every caller, whatever the pickers say. Update it to ${COMMAND_MODELS_SINCE} or later — the MCP `
+      + 'server tab.';
+  }
 
-  return `The coai-mcp you have installed (${installedServerVersion}) does not read these models: it names Fable `
-    + `and Opus to every caller, whatever the pickers say. Update it to ${COMMAND_MODELS_SINCE} or later — the MCP `
-    + 'server tab.';
+  return coderSkewNote(installedServerVersion);
+}
+
+/**
+ * The first `coai-mcp` that reads the third slot, `coder`, and whose order names it. mcp 0.51.0 was
+ * already being cut without it (the Vibe and Kimi ground, #785), so this is the release after; set too LOW this stays silent on a server that ignores a chosen coder — the unsafe
+ * direction — so whoever cuts the release keeps it level with the tag.
+ */
+export const CODER_SLOT_SINCE = '0.52.0';
+
+/**
+ * The sentence for any known server older than {@link CODER_SLOT_SINCE} — said even on a pristine panel,
+ * because the SHIPPED behaviour changed: the panel draws a Code and search picker defaulting to Sonnet,
+ * while such a server still sends the two-model order and ignores that picker entirely. (Consultant and
+ * reviewer, this change's code round.)
+ */
+function coderSkewNote(installedServerVersion: string): string {
+  return compareVersions(CODER_SLOT_SINCE, installedServerVersion) <= 0
+    ? ''
+    : `The coai-mcp you have installed (${installedServerVersion}) still gives the two-model order and ignores the `
+      + `Code and search model. Update it to ${CODER_SLOT_SINCE} or later — the MCP server tab.`;
 }
 
 function samePair(one: ModelPair, other: ModelPair): boolean {

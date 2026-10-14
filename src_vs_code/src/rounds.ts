@@ -40,6 +40,12 @@ export interface ReviewerState {
    * Antigravity's effort is inside its model id (`gemini-3.7-flash-high`) rather than beside it.</p>
    */
   readonly effort?: string;
+  /**
+   * What the launch control WARNED about this reviewer's launch, whatever its status — today a Vibe version coai has
+   * not measured, which runs anyway (the owner's decision of 2026-10-13). Absent for every other reviewer, and in every
+   * file a server older than the field wrote (research/module_server.md, *A launch the control WARNED about*).
+   */
+  readonly warning?: string;
 }
 
 export interface RoundRecord {
@@ -428,6 +434,13 @@ function usableString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** A reviewer's warning as a detail of its line — `warned: …` — or empty; anything not a usable string is absent. */
+function warnedOf(state: ReviewerState): string {
+  const warning = usableString(state.warning);
+
+  return warning.length > 0 ? `warned: ${warning}` : '';
+}
+
 export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
   return (round.reviewerStates ?? []).map((s) => {
     const detail = [
@@ -436,6 +449,9 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
       // 4 min". "queued" alone cannot tell ten seconds from ten minutes, and the server knows.
       // A reviewer that stood down (issue #485) carries WHY — the cloud reviewers were quiet.
       s.status === 'failed' || s.status === 'queued' || s.status === 'stood down' ? s.note : '',
+      // What the launch control WARNED about, whatever the status — a warned Vibe is DONE, and its warning was
+      // invisible behind the note's status filter above (2026-10-13). Absent: nothing, as before.
+      warnedOf(s),
       // Each part is present only when the server recorded it. A round from an older server says
       // nothing about time or tokens rather than saying zero — which would be a measurement.
       reviewerTime(s),

@@ -19,7 +19,27 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-12 · mcp **0.50.0** and extension **0.71.0** (released) · server 0.11.0 released, NOT deployed —
+Last verified: 2026-10-13 · mcp **0.52.2** and extension **0.72.1** (released) · server 0.11.0 released, NOT deployed —
+the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 7, 8,
+11 and 12 were not run. Run locally:
+`MCP_VERSION=0.52.2 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.72.1`. The
+`mcp-v0.52.2` run (38432921841) published 12 assets with no re-run. **`mcp-v0.52.1` was tagged and NOT published**: its
+win-arm64 build failed `AConsultantRunsWithItsRowsOptionsTests.ALocalConsultant_…` (the test wrote into a fixed
+`D:\answers`, and that runner has no D: drive — fixed in #804), so its release stayed a draft and 0.52.2 ships its fixes;
+the tag never moved. Also checked by hand: the win-x64 archive's SHA-256 matches, `coai-mcp --version` says 0.52.2, and the
+binary carries the cut sentence; the 0.72.1 `.vsix` carries the check badge's reason. In these: #797 (every local launch
+is told the panel's reasoning effort and ceiling; a cut answer is named; a failed check says why).
+
+Previously verified: 2026-10-13 · mcp **0.51.0** and extension **0.71.0** (released) · server 0.11.0 released, NOT deployed —
+the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 7, 8,
+11 and 12 were not run. Run locally:
+`MCP_VERSION=0.51.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.71.0`. The
+`mcp-v0.51.0` run (38381481292) published 12 assets after two of its six builds were re-run: the win-x64 and linux-x64
+test steps failed on timing-only tests (`SecuritySourcesCharacterizationTests` — two 30 s timers race; `CadenceStoreTests`;
+then `AcpClientTests.TheDeadlineEndsAHungAgent_AndItsGrandchild`, widened in #796), the tag never moved. In these: #785
+(a spent Kimi balance named; the sanitised review snapshot and the `--ask-acp` Kimi bridge, not switched on yet).
+
+Previously verified: 2026-10-12 · mcp **0.50.0** and extension **0.71.0** (released) · server 0.11.0 released, NOT deployed —
 the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them (item 2 failed twice while
 the Marketplace caught up, then passed); manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
 `MCP_VERSION=0.50.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.71.0`. The

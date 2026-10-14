@@ -111,24 +111,36 @@ public sealed class GateCommandsTests
         commands[1].Should().Contain("payments").And.Contain("security");
     }
 
-    /// <summary>The model order as every release up to mcp 0.32.0 wrote it, verbatim.</summary>
-    private const string TodaysModelOrder =
-        "Do the SPLIT itself with Fable at its highest available version — deciding what the epics "
-            + "and stories are is the judgement that shapes everything after it. Then implement: "
-            + "ordinary stories on Opus, and anything where being wrong is expensive — payments, "
-            + "money, authentication, security, architecture, data migration — on Fable (max) again. "
-            + "Name the model you used for each story in your summary.";
-
     [Fact]
-    public void AClaudeCodeCaller_WithNothingConfigured_GetsTodaysOrderByteForByte()
+    public void AClaudeCodeCaller_WithNothingConfigured_IsToldTheThreeTiersOfTheSubagentPolicy()
     {
-        // Issue #117 made the two models a choice per caller kind. The shipped choice for Claude
-        // Code is the pair every release before it named, and a person who changed nothing must not
-        // be able to tell the feature landed — so this is equality, not containment.
-        var commands = GateCommands.For(new CommandContext(
-            SplitPlan: true, SplitWithFable: true, PlanText: SmallPlan, PlanStage: true));
+        // The operator's policy of 2026-10-13 (conventions D1–D12) replaced "Fable splits, Opus implements".
+        // Each clause below is one decision of that policy; a reworded order that drops one goes red here.
+        var order = GateCommands.For(new CommandContext(
+            SplitPlan: true, SplitWithFable: true, PlanText: SmallPlan, PlanStage: true))[1];
 
-        commands[1].Should().Be(TodaysModelOrder);
+        order.Should().StartWith("Do the SPLIT itself with Fable — splitting the PLAN into epics");
+        order.Should().Contain("Before that split is final, ask the question consultant (ask_consultants)")
+            .And.Contain("write the epics at the bottom of the plan")
+            .And.Contain("if none answers, say so and decide")
+            .And.Contain("A plan split straight into stories, with no epics, is split by Fable too")
+            .And.Contain("at most one of them is a cornerstone")
+            .And.Contain("Every story that is not a cornerstone: Opus writes")
+            .And.Contain("split each EPIC into stories on Opus, one stories document per epic")
+            .And.Contain("CORNERSTONE stories")
+            .And.Contain("at most 2·E/5 rounded up for a plan of E epics (1–2 epics: 1, 3–5: 2, 6–7: 3)")
+            .And.Contain("Opus writes the test scenarios and the brief")
+            .And.Contain("Sonnet writes the code, the fixes and the unit and integration tests, and Opus reviews it")
+            .And.Contain("every reviewer, judge, architect and finding verifier runs on Opus")
+            .And.Contain("any security work — cryptography, authentication, authorisation, outside that quota")
+            .And.Contain("gets its spec (the scenarios and the brief) from Fable, its review from Opus and its code from Sonnet")
+            .And.Contain("ONE file of at most 50 changed lines; anything bigger goes to a subagent on Sonnet")
+            .And.Contain("Search and research go to scouts on Sonnet: 1.5·N rounded up where N would have run on Opus")
+            .And.Contain("each with its own focus")
+            .And.Contain("pass it by its alias, never a versioned id")
+            .And.Contain("If Fable is refused on a spend or session limit, continue on Opus and say so")
+            .And.Contain("how many agents ran on each model");
+        order.Should().NotContain("(max)").And.NotContain("highest available version").And.NotContain("Haiku");
     }
 
     private static string ModelOrderFor(ModelPair models) =>
@@ -137,37 +149,41 @@ public sealed class GateCommandsTests
         { Models = models })[1];
 
     [Fact]
-    public void ACodexCaller_IsToldItsOwnPair_AndNoClaudeModel()
+    public void ACodexCaller_IsToldItsOwnThree_AndNoClaudeModel()
     {
         // The command is carried out by the CALLER. A Codex session told "use Fable and Opus" has
         // neither, so it was being handed an order it could not follow (issue #117).
-        var order = ModelOrderFor(new ModelPair("gpt-6-astra", "gpt-6-luna"));
+        var order = ModelOrderFor(new ModelPair("gpt-6-astra", "gpt-6-luna", "gpt-6-mini"));
 
-        order.Should().Contain("with gpt-6-astra at its highest available version")
-            .And.Contain("ordinary stories on gpt-6-luna")
-            .And.Contain("on gpt-6-astra (max) again");
-        order.Should().NotContain("Fable").And.NotContain("Opus");
+        order.Should().StartWith("Do the SPLIT itself with gpt-6-astra — ")
+            .And.Contain("stories on gpt-6-luna")
+            .And.Contain("gpt-6-mini writes the code")
+            .And.Contain("scouts on gpt-6-mini");
+        order.Should().NotContain("Fable").And.NotContain("Opus").And.NotContain("Sonnet");
     }
 
     [Fact]
     public void ACallerWithNothingNamed_IsToldTheGenericWords_NeverAnotherVendorsModel()
     {
-        var order = ModelOrderFor(new ModelPair(string.Empty, string.Empty));
+        var order = ModelOrderFor(new ModelPair(string.Empty, string.Empty, string.Empty));
 
-        order.Should().Contain("with the strongest model your client offers at its highest available version")
-            .And.Contain("ordinary stories on your usual model");
-        order.Should().NotContain("Fable").And.NotContain("Opus");
+        order.Should().StartWith("Do the SPLIT itself with the strongest model your client offers — ")
+            .And.Contain("stories on your usual model")
+            .And.Contain("a faster model your client offers writes the code")
+            .And.Contain("scouts on a faster model your client offers");
+        order.Should().NotContain("Fable").And.NotContain("Opus").And.NotContain("Sonnet");
     }
 
     [Theory]
-    [InlineData("gpt-6-astra", "", "with gpt-6-astra at", "stories on your usual model")]
-    [InlineData("", "gpt-6-luna", "with the strongest model your client offers at", "stories on gpt-6-luna")]
-    public void APairWithOneNameSet_UsesItForThatSlotAndTheGenericWordsForTheOther(
-        string strongest, string implementation, string splitWords, string implementWords)
+    [InlineData("gpt-6-astra", "", "", "with gpt-6-astra — ", "stories on your usual model", "scouts on a faster model your client offers")]
+    [InlineData("", "gpt-6-luna", "", "with the strongest model your client offers — ", "stories on gpt-6-luna", "scouts on a faster model your client offers")]
+    [InlineData("", "", "gpt-6-mini", "with the strongest model your client offers — ", "stories on your usual model", "scouts on gpt-6-mini")]
+    public void ATripleWithOneNameSet_UsesItForThatSlotAndTheGenericWordsForTheOthers(
+        string strongest, string implementation, string coder, string splitWords, string storyWords, string scoutWords)
     {
-        // Never half-blank: an empty slot is not "with  at its highest available version".
-        ModelOrderFor(new ModelPair(strongest, implementation))
-            .Should().Contain(splitWords).And.Contain(implementWords).And.NotContain("  ");
+        // Never half-blank: an empty slot is not "with  —" or "scouts on :".
+        ModelOrderFor(new ModelPair(strongest, implementation, coder))
+            .Should().Contain(splitWords).And.Contain(storyWords).And.Contain(scoutWords).And.NotContain("  ");
     }
 
     [Fact]
@@ -187,14 +203,14 @@ public sealed class GateCommandsTests
     }
 
     [Theory]
-    [InlineData("Fable", "Opus")]
-    [InlineData("gpt-6-astra", "gpt-6-luna")]
-    [InlineData("", "")]
-    public void EveryVariant_OpensWithTheWordsTheBenchReads(string strongest, string implementation)
+    [InlineData("Fable", "Opus", "Sonnet")]
+    [InlineData("gpt-6-astra", "gpt-6-luna", "gpt-6-mini")]
+    [InlineData("", "", "")]
+    public void EveryVariant_OpensWithTheWordsTheBenchReads(string strongest, string implementation, string coder)
     {
         // The bench recognises the order by these words, never by a model name — a name is now a
         // setting, and the old check ("contains Fable") would call every Codex round unapplied.
-        ModelOrderFor(new ModelPair(strongest, implementation))
+        ModelOrderFor(new ModelPair(strongest, implementation, coder))
             .Should().StartWith(GateCommands.ModelOrderMarker);
     }
 

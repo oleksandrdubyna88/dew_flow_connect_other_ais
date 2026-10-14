@@ -41,6 +41,19 @@ model may be described as qualified for it.
 > `COAI_SECURITY_AUDIT_PROMPTS` now runs it as the first of thirteen modules — set the variable to keep runs comparable
 > with the recorded ones.
 
+> **Boundary, 2026-10-13.** [PLAN_local_effort_reaches_every_local_launch.md](../research/PLAN_local_effort_reaches_every_local_launch.md)
+> measures `reasoning_effort` as the variable — one model, this plan's existing invoice fixture — and adds three
+> harness inputs (`COAI_SECURITY_CALIBRATION_EFFORT`, `…_MAX_TOKENS`, `…_FIXTURE`) whose defaults reproduce the
+> recorded runs:
+>
+> | Item | Built by | The other plan's part |
+> |---|---|---|
+> | Effort as the variable, one model, the existing invoice fixture | that plan (epic 2) | none here — this plan varies prompt/model/fixture at fixed `none` |
+> | Prompt fidelity, a second fixture, the 30-PR campaign, the final feature gate | this plan | none there; its RESULTS is one more input this plan may cite |
+> | The three harness env inputs | that plan (S2.1) | this plan uses them at their defaults |
+>
+> The two are otherwise disjoint; that one goes first only because it is smaller.
+
 ## Build order
 
 1. Re-establish the harnesses on current `main` (schema step 18; `COAI_SECURITY_CALIBRATION_ENDPOINT`,

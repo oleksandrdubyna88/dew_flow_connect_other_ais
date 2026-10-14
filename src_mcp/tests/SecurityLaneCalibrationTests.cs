@@ -15,13 +15,13 @@ namespace CoaiMcp.Tests;
 public sealed class SecurityLaneCalibrationTests
 {
     private static readonly JsonSerializerOptions ManifestJson = new() { WriteIndented = true };
-    private static readonly string[] CalibrationPrompts = ["redteam-authz", "redteam-sql"];
+    internal static readonly string[] CalibrationPrompts = ["redteam-authz", "redteam-sql"];
     internal static string Model => Environment.GetEnvironmentVariable("COAI_SECURITY_CALIBRATION_MODEL")
         ?? "Qwen3.5-35B-A3B-Q5_vk128:latest";
     /// <summary>The OpenAI-compatible endpoint of the local model; Ollama's default unless overridden.</summary>
     internal static string Endpoint => Environment.GetEnvironmentVariable("COAI_SECURITY_CALIBRATION_ENDPOINT")
         ?? "http://localhost:11434/v1";
-    private const string Scope = """
+    internal const string Scope = """
         Review the committed invoice-search change. A caller must only read invoices belonging to
         the tenant in their authenticated claims, and search text must remain a SQL parameter.
         Report concrete regressions with a reproduction. This is an isolated, synthetic source fixture;
@@ -66,11 +66,18 @@ public sealed class SecurityLaneCalibrationTests
                 CalibrationPrompts);
     }
 
+    /// <param name="tune">What a measurement varies on the panel — the effort arm's effort and ceiling; nothing by default.</param>
+    /// <param name="strict">
+    /// True for a qualification run: every reviewer must have answered. False for the effort measurement, where a reviewer
+    /// cut at its ceiling (exit 70) IS the observation to record (cadence consultation of 2026-10-13, point 1) — a missing
+    /// prompt or an error reply still fails.
+    /// </param>
     internal static async Task RunCell(string repo, string baseline, string revision, string output, ProcessLauncher real,
-        string scope, string[] promptIds, int contextTokens = 131072)
+        string scope, string[] promptIds, int contextTokens = 131072, Func<PanelSettings, PanelSettings>? tune = null,
+        bool strict = true)
     {
         Directory.CreateDirectory(output);
-        var settings = Settings(Path.Combine(output, "state"), promptIds, contextTokens);
+        var settings = (tune ?? (panel => panel))(Settings(Path.Combine(output, "state"), promptIds, contextTokens));
         var launcher = new RecordingLauncher(new SecurityLaneRoundTests.Reviewers(real, false, false), output);
         var service = new PanelService(settings, VaultKeys.None("local calibration"), default, launcher,
             Serilog.Core.Logger.None, Noticing.None);
@@ -87,8 +94,22 @@ public sealed class SecurityLaneCalibrationTests
         using var parsed = JsonDocument.Parse(reply);
         parsed.RootElement.TryGetProperty("error", out _).Should().BeFalse(reply);
         var reviewers = parsed.RootElement.GetProperty("reviewers").GetString()!;
-        reviewers.Should().StartWith($"all {4 + promptIds.Length} reviewers answered",
-            "each measured cell needs a usable security answer as well as four clean ordinary test reviewers");
+        if (strict)
+        {
+            reviewers.Should().StartWith($"all {4 + promptIds.Length} reviewers answered",
+                "each measured cell needs a usable security answer as well as four clean ordinary test reviewers");
+        }
+        else
+        {
+            // A cut at the ceiling is the one failure an effort measurement records; anything else fails the cell, and every
+            // reviewer that did not answer must be one of those cuts — the four ordinary reviewers answered (epic 2's code round).
+            IReadOnlyList<ProcessResult> launches = [.. Directory.GetFiles(output, "turn-*.process.json").Order(StringComparer.Ordinal)
+                .Select(file => JsonSerializer.Deserialize<ProcessResult>(File.ReadAllText(file))!)];
+            SecurityLaneEffortArm.UnexpectedFailures(launches).Should().BeEmpty("only a cut at the ceiling is an observation");
+            SecurityLaneEffortArm.NotAnswered(reviewers, asked: 4 + promptIds.Length).Should().Be(launches.Count(launch => launch.ExitCode == 70),
+                $"every reviewer that did not answer must be a cut local reviewer: {reviewers}");
+        }
+
         Directory.GetFiles(output, "*.request.txt").Length.Should().BeGreaterThanOrEqualTo(promptIds.Length,
             "every configured security prompt must actually reach the local shim");
     }
@@ -120,9 +141,16 @@ public sealed class SecurityLaneCalibrationTests
         };
     }
 
-    private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+    internal static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    private static string Source(bool unsafeChange) => """
+    /// <summary>
+    /// The safe twin's head: the safe source with <c>ORDER BY Id</c> added to its parameterised query — a change on the
+    /// query line inside the guarded method, so both security prompts route, and the correct answer is empty.
+    /// </summary>
+    internal static string SafeHead() =>
+        Source(false).Replace("AND Name = @search\"", "AND Name = @search ORDER BY Id\"", StringComparison.Ordinal);
+
+    internal static string Source(bool unsafeChange) => """
         using System.Security.Claims;
         using Dapper;
         using Microsoft.AspNetCore.Authorization;
@@ -148,6 +176,8 @@ public sealed class SecurityLaneCalibrationTests
             var args = request.Arguments.ToList();
             if (!args.Contains("--ask-local")) return await inner.RunAsync(request, ct);
             var name = Path.Combine(output, $"turn-{Interlocked.Increment(ref _turn)}");
+            // The argv itself, so every cell's effort and ceiling can be read back against its arm.
+            await File.WriteAllTextAsync(name + ".arguments.json", JsonSerializer.Serialize(args), ct);
             var prompt = args[args.IndexOf("--prompt-file") + 1];
             await File.WriteAllTextAsync(name + ".request.txt", await File.ReadAllTextAsync(prompt, ct), ct);
             var result = await inner.RunAsync(request, ct);

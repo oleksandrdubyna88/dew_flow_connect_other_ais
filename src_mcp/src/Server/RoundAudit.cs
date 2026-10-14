@@ -68,9 +68,22 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
         }
     }
 
+    /// <summary>
+    /// A finished reviewer whose launch control warned about the launch it allowed — a CLI version nobody measured — is
+    /// logged as a WARNING of its own, whatever the reviewer came to (the owner's decision of 2026-10-13: warn, not refuse).
+    /// </summary>
+    private void Warned(ReviewerProgress progress)
+    {
+        if (progress.Outcome is { Warning.Length: > 0 } outcome)
+        {
+            _log.Warning("reviewer {Provider}/{Role} ran with a warning: {Warning}", progress.Provider, progress.Role, outcome.Warning);
+        }
+    }
+
     /// <summary>One reviewer moved. Failures are logged as WARNINGS with their reason attached.</summary>
     public void Moved(ReviewerProgress progress)
     {
+        Warned(progress);
         switch (progress.Status)
         {
             case ReviewerState.Running:

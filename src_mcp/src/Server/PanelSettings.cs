@@ -433,7 +433,7 @@ public sealed record PanelSettings
     public bool StopLocalWhenQuiet { get; init; }
 
     /// <summary>
-    /// Do the splitting — and the expensive-to-get-wrong stories — with the caller's strongest model.
+    /// Order the work in the subagent model tiers, on the caller's own three models (strongest, implementation, coder).
     /// </summary>
     /// <remarks>
     /// The name is historical: the switch named Fable to every caller until issue #117 made the models
@@ -443,7 +443,7 @@ public sealed record PanelSettings
     public bool SplitWithFable { get; init; }
 
     /// <summary>
-    /// The model pairs a person configured, per caller kind — only those; the rest resolve through
+    /// The models (three slots) a person configured, per caller kind — only those; the rest resolve through
     /// <see cref="Core.Commands.CommandModels.For"/>. From <c>COAI_COMMAND_MODELS</c>; issue #117.
     /// </summary>
     public IReadOnlyDictionary<string, Core.Commands.ModelPair> CommandModels { get; init; } =

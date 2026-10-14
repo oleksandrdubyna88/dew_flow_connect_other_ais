@@ -103,6 +103,19 @@ test('the card reads the check from its durable record — and says "checking…
   assert.equal(checkFactsOf(undefined, 'codex').said, '', 'no badge while the health is not being read');
 });
 
+// research/PLAN_local_effort_reaches_every_local_launch.md, S1.3 — measured 2026-10-13: two checks of a local row failed
+// with a classified reason on record, and the card said only "checked: no answer", because a failed check carries
+// `failureWhat` and no `reason`.
+test('a failed check says WHY on the card — the classified failure when the record has no reason, the reason when it has one', () => {
+  const what = 'the consultant (local) did not answer: exit 70: the answer from the local engine at http://127.0.0.1:11434/v1 was cut at the token limit (max_tokens 8192)';
+  const failed = parseCheckDocument(JSON.stringify({ callerKind: 'model-local', state: 'failed', failureKind: 'exit', failureWhat: what }))!;
+  const reasoned = parseCheckDocument(JSON.stringify({ callerKind: 'model-local', state: 'failed', reason: 'the stated reason', failureWhat: what }))!;
+  const files = (value: typeof failed) => ({ report: undefined, checks: { 'model-local': { kind: 'found' as const, value } } });
+
+  assert.equal(checkFactsOf(health({ files: files(failed) }), 'local').said, `checked: no answer — ${what}`);
+  assert.equal(checkFactsOf(health({ files: files(reasoned) }), 'local').said, 'checked: no answer — the stated reason', 'a reason still wins');
+});
+
 test('the Models tab is where the health is read too, beside the Consultant tab', () => {
   assert.equal(consultantTabShowing(true, 'models'), true);
   assert.equal(consultantTabShowing(true, 'consultants/consultant'), true);

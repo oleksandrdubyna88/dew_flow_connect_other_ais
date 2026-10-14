@@ -4,7 +4,7 @@ import { escapeHtml } from './escapeHtml';
 import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
 import {
-  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
+  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
 } from './modelCardWorld';
 import type { TeamServerState } from './teamServerView';
 import { modelsFor, modelsProvenance } from './models';
@@ -177,15 +177,15 @@ export function ignoredSaid(vendor: Vendor, binary: BinarySays): readonly string
 }
 
 /**
- * Everything the card's one note says about this side's coai-mcp: an api row it cannot run at all (the old page's
+ * Everything the card's one note says about this side's coai-mcp: a row whose runtime it cannot run at all (the old page's
  * note, kept — the epics 4–5 consultation, §7 parity), then what it ignores on the row.
  */
-export function skewSaid(vendor: Vendor, binary: BinarySays, apiNote: string): readonly string[] {
-  return [...(apiNote.length > 0 ? [apiNote] : []), ...ignoredSaid(vendor, binary)];
+export function skewSaid(vendor: Vendor, binary: BinarySays, runtimeNote: string): readonly string[] {
+  return [...(runtimeNote.length > 0 ? [runtimeNote] : []), ...ignoredSaid(vendor, binary)];
 }
 
-function ignoredNote(vendor: Vendor, binary: BinarySays, apiNote: string): string {
-  const said = skewSaid(vendor, binary, apiNote);
+function ignoredNote(vendor: Vendor, binary: BinarySays, runtimeNote: string): string {
+  const said = skewSaid(vendor, binary, runtimeNote);
 
   return said.length === 0 ? '' : `<p class="skew">${escapeHtml(said.join(' '))}</p>`;
 }
@@ -198,11 +198,12 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
     + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${verdictBadge(vendor.id, facts.context)}`
     + `${cannotRun(vendor.id, facts.context.reported)}${cliBadge(vendor, facts.context.cli)}${healthBadge(facts.check)}</div>`
     + `<div class="world">${worldButtons(vendor, id, facts.context)}</div>`
-    + `${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}${ignoredNote(vendor, facts.binary, facts.context.apiNote)}</div>`;
+    + `${versionWarningNote(vendor.id, facts.context.reported)}${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}`
+    + `${ignoredNote(vendor, facts.binary, facts.context.runtimeNote)}</div>`;
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {
-  const on = vendor.enabled && facts.context.apiNote.length === 0;
+  const on = vendor.enabled && facts.context.runtimeNote.length === 0;
   const stage = (kind: 'plan' | 'code', text: string): string => stageBox(kind, id, vendor[kind], on && !facts.lastFor.includes(kind), text, '',
     facts.lastFor.includes(kind) ? lockLineId(vendor) : '');
 

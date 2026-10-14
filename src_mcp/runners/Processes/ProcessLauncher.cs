@@ -208,6 +208,45 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
+        using var process = Started(request);
+        var stdout = new BoundedText(request.MaxOutputChars);
+        var stderr = new BoundedText(request.MaxOutputChars);
+
+        // Recorded as soon as it exists and forgotten however this method leaves — returned,
+        // timed out, cancelled or thrown. The record is what a LATER server reads: the kill below
+        // is performed by this process, so it cannot happen if this process is the one that dies,
+        // which is exactly how a reviewer ends up outliving its round by ten hours.
+        var tracked = request.TrackAs.Length > 0;
+        if (tracked)
+        {
+            await RecordedAsync(process, request);
+        }
+
+        try
+        {
+            return await RunToCompletionAsync(process, request, stdout, stderr, tracked, ct);
+        }
+        finally
+        {
+            if (tracked)
+            {
+                _tracker.Forget(process.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The ONE place a child process is built and started — <see cref="RunAsync"/> and the ACP transport's long-lived
+    /// duplex pipe alike — with all three streams redirected. Throws what <see cref="Process.Start()"/> throws.
+    /// </summary>
+    /// <remarks>
+    /// Extracted for the code gate of epic 4 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c> (2026-10-12): the ACP
+    /// transport had its own copy of the resolver and the encodings and none of the environment rule, so a launch
+    /// policy written here would have reached every runtime but Kimi. <c>OnlyTheLauncherStartsAProcessTests</c> keeps it
+    /// the only one.
+    /// </remarks>
+    internal static Process Started(ProcessRequest request)
+    {
         // Resolved here, at the one place a process is started, so every caller — reviewers, git,
         // the creds probe — gets the npm-shim fix without knowing it exists.
         var info = new ProcessStartInfo(ExecutableResolver.Resolve(request.Executable))
@@ -239,33 +278,18 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
 
         ApplyEnvironment(info.Environment, request);
 
-        using var process = new Process { StartInfo = info };
-        var stdout = new BoundedText(request.MaxOutputChars);
-        var stderr = new BoundedText(request.MaxOutputChars);
-
-        process.Start();
-
-        // Recorded as soon as it exists and forgotten however this method leaves — returned,
-        // timed out, cancelled or thrown. The record is what a LATER server reads: the kill below
-        // is performed by this process, so it cannot happen if this process is the one that dies,
-        // which is exactly how a reviewer ends up outliving its round by ten hours.
-        var tracked = request.TrackAs.Length > 0;
-        if (tracked)
-        {
-            await RecordedAsync(process, request);
-        }
-
+        var process = new Process { StartInfo = info };
         try
         {
-            return await RunToCompletionAsync(process, request, stdout, stderr, tracked, ct);
+            process.Start();
         }
-        finally
+        catch
         {
-            if (tracked)
-            {
-                _tracker.Forget(process.Id);
-            }
+            process.Dispose();
+            throw;
         }
+
+        return process;
     }
 
     /// <summary>
@@ -286,7 +310,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         }
         catch (Exception)
         {
-            await EndItAsync(process, request with { EndsWhen = ProcessRequest.Never }, tracked: false);
+            await EndAndConfirmAsync(process, request with { EndsWhen = ProcessRequest.Never }, tracked: false);
             throw;
         }
     }
@@ -396,7 +420,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         var end = await UntilExitOrAnswerAsync(process, answered.Task, deadline.Token);
         var ending = end == WaitEnd.Exited
             ? Ending.None
-            : await EndItAsync(process, request, tracked);
+            : await EndAndConfirmAsync(process, request, tracked);
 
         // The child is gone, so the streams should end now. The grace is what bounds the case where
         // they do not — and it CANCELS the read rather than walking away from it, so no suspended
@@ -502,19 +526,64 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// crash in the middle of this still leaves every member named on disk; after the kill each member is checked by
     /// pid and start time, and the ones still there at the bound come back as survivors. A request without a
     /// predicate takes the old path exactly: kill the tree, wait for the root, list nothing.</para>
-    /// </remarks>
     /// <para><b>A record that fails does not stop the end</b> (epic 6's code round). A tracker that writes a slot's marker
     /// can throw on a descendant — a state file that will not take the write — and the end used to stop right there: no
     /// stdin closed, no kill, a descendant outliving the recorded root. The failure is now held, the tree is ended and
     /// confirmed exactly as before (nothing forgotten — the identity on disk is partial, and the caller decides how to
     /// stay fail-closed), and the caller raises it once the drain has settled.</para>
+    /// </remarks>
     /// <returns>The tree members still alive after the confirmation — empty for a request that lists none — and the record failure, if any.</returns>
-    private async Task<Ending> EndItAsync(Process process, ProcessRequest request, bool tracked)
+    private async Task<Ending> EndAndConfirmAsync(Process process, ProcessRequest request, bool tracked)
     {
         var members = request.EndsEarly ? ProcessTree.Descendants(process.Id) : [];
         var unrecorded = tracked ? RecordEach(members, request.TrackAs) : null;
+        await EndItAsync(process);
 
+        return new Ending(await ConfirmedGoneAsync(members, tracked && unrecorded is null), unrecorded);
+    }
+
+    /// <summary>
+    /// The launcher's one tree kill: stdin closed, the tree killed, the root waited for — shared with the ACP transport.
+    /// </summary>
+    /// <remarks>
+    /// <para>Stdin closes BEFORE the kill, for the reason given on <see cref="EndAndConfirmAsync"/>: a write blocked on a full
+    /// pipe is failed at once by closing our own end, whoever else holds theirs.</para>
+    /// <para>Internal rather than private since the ACP transport (<c>Acp/AcpTransport</c>) ends its
+    /// agent through the same parts — in the other order, <see cref="EndTreeFirstAsync"/>: the one tree
+    /// kill of this repository, widened rather than copied.</para>
+    /// </remarks>
+    internal static async Task EndItAsync(Process process)
+    {
         Close(process.StandardInput);
+        KillTree(process);
+
+        // No token: this is the wait for a process we have already killed, and a cancelled one would
+        // return before the handle is free.
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Ends a child whose stdin is a CONVERSATION: the tree killed first, while the child still lives to name its
+    /// children, then stdin closed, then the wait.
+    /// </summary>
+    /// <remarks>
+    /// The launcher's own order (<see cref="EndItAsync"/>: stdin first) is right for a child that was handed one
+    /// prompt and closed: nothing of it exits on EOF. An ACP agent DOES exit on EOF — that is how a well-behaved one
+    /// leaves — and a process that has exited can no longer name its children: on Linux they are reparented to init
+    /// the moment it goes, and the kill that follows finds an empty tree (finding G of the risk consultations,
+    /// 2026-10-12). Only the ACP transport takes this road; every other caller keeps the launcher's order, whose own
+    /// reason (a write blocked on a full pipe, failed by the close) the <see cref="Close"/> after the kill still serves.
+    /// </remarks>
+    internal static async Task EndTreeFirstAsync(Process process)
+    {
+        KillTree(process);
+        Close(process.StandardInput);
+        await process.WaitForExitAsync(CancellationToken.None);
+    }
+
+    /// <summary>The whole tree, by this handle; a child that exited between the deadline and the kill is fine either way.</summary>
+    private static void KillTree(Process process)
+    {
         try
         {
             process.Kill(entireProcessTree: true);
@@ -523,12 +592,6 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         {
             // It exited between the deadline and the kill; the race loser is fine either way.
         }
-
-        // No token: this is the wait for a process we have already killed, and a cancelled one would
-        // return before the handle is free.
-        await process.WaitForExitAsync(CancellationToken.None);
-
-        return new Ending(await ConfirmedGoneAsync(members, tracked && unrecorded is null), unrecorded);
     }
 
     /// <summary>How an end came out: the members still alive, and the tracker's failure when a descendant would not record.</summary>
@@ -589,7 +652,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// <para>Every one of these is an ordinary way for it to already be gone, so none of them is an
     /// error here: the point is that after this call nothing is holding our end open.</para>
     /// </remarks>
-    private static void Close(StreamWriter stream)
+    internal static void Close(StreamWriter stream)
     {
         try
         {

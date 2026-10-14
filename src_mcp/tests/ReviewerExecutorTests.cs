@@ -211,6 +211,38 @@ public sealed class ReviewerExecutorTests : IDisposable
         RateLimit.Hit(new ProcessResult(exitCode, stdout, stderr, TimedOut: false)).Should().Be(hit);
 
     /// <summary>
+    /// A billing refusal is a SPENT allowance: named as one, and never put on the retry ladder.
+    /// </summary>
+    /// <remarks>
+    /// Captured 2026-10-11 from Kimi Code 0.41.0 on an API-key account (research/RESULTS_vibe_and_kimi_first_probe.md §5),
+    /// the account ids redacted. Its <c>429</c> is followed by neither "too many" nor a status label, so before this it
+    /// matched nothing and reached the person as a bare non-zero exit — never retried, but never named either: a
+    /// consultant reported no quota and a round no spent vendor.
+    /// </remarks>
+    [Fact]
+    public async Task ABillingRefusal_IsASpentAllowance_NamedAndNotRetried()
+    {
+        const string kimi = "error: failed to run prompt: provider.api_error: 429 Your account org-REDACTED <ak-REDACTED> "
+            + "is suspended due to insufficient balance, please recharge your account or check your plan and billing details";
+        var result = new ProcessResult(1, string.Empty, kimi, TimedOut: false);
+
+        RateLimit.Hit(result).Should().BeTrue("the vendor refused for a limit, and the person must be told which");
+        RateLimit.Hopeless(RateLimit.Reason(result)).Should().BeTrue("a balance does not refill while the ladder waits");
+
+        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1);
+        var launcher = new CountingLauncher(result);
+        var outcomes = await scheduler.RunAllAsync(
+            [new ReviewerWork(FakeCliInvocations.Invoke("kimi", ["noop"]))],
+            new ReviewerExecutor(launcher),
+            TestContext.Current.CancellationToken);
+
+        launcher.Calls.Should().Be(1, "a spent balance is not waited out");
+        var outcome = outcomes[0].Outcome;
+        outcome.Should().BeOfType<ReviewerOutcome.RateLimited>();
+        ((ReviewerOutcome.RateLimited)outcome).Reason.Should().Contain("insufficient balance");
+    }
+
+    /// <summary>
     /// What the person is told when the vendor's own CLI fails for a reason no retry clears: the
     /// vendor's words, once, and no wording about a limit that was never hit.
     /// </summary>

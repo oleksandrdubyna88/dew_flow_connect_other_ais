@@ -189,6 +189,12 @@ jobs:
             src_vs_code/eslint-suppressions.json "$RUNNER_TEMP/base-suppressions.json"
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs
+      # The measurement scripts' own tests — today `scripts/lib/kimi.test.mjs`, the refusal of a Kimi probe scratch another
+      # local user could read (the copied sign-in sits there until the scrub). A test CI never runs guards nothing. The
+      # glob is node's own, quoted so the shell does not expand it, so a new `scripts/**/*.test.mjs` is picked up without
+      # touching this step. On Linux the mode-bit cases run; they skip only on Windows, which has none.
+      - name: Probe script tests
+        run: node --test "scripts/**/*.test.mjs"
       # The protection `main` is supposed to have is a FILE now — `.github/branch-protection.json` —
       # because branch protection is the one part of a repository's CI that is not IN the repository.
       # Nothing makes GitHub read it; what it buys is that the intent is reviewed, and that the drift

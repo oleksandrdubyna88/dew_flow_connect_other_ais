@@ -67,6 +67,12 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_VERSION_COUNT — a file that gets one line per `--version` asked (how "never cached" is counted)
 //   FAKECLI_VERSION_PID   — a file a `--version` writes its own process id into before it waits (how "the hung
 //                           child was killed" is checked rather than assumed)
+//   FAKECLI_EXPORT_TEXT   — Vibe's `--output-dir <folder>`: this text is written there as export.json (D7 of
+//                           todo/PLAN_vibe_and_kimi_runtimes.md); {{env:NAME}} in it is the value NAME had in THIS child
+//   FAKECLI_RECORD_ENV    — a file this launch writes every environment variable NAME it was started with into, one per
+//                           line, and the VALUE of each VIBE_* — what crossed the process boundary, not what a dictionary said
+//   FAKECLI_HOME_WRITE    — a path relative to this child's VIBE_HOME, written as a file: a Vibe that leaves something in
+//                           its home the next launch's check must refuse
 //
 // Two placeholders are filled in FAKECLI_STDOUT and FAKECLI_OUTFILE_TEXT (the consultant check, epic 4 — its
 // marker and canary are random, so the answer cannot be scripted in advance):
@@ -92,6 +98,19 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 // sees no FAKECLI_* variable at all — TEMP is on the list and nothing of a test's is — so the vendor mode
 // can also be steered by a FILE in the temp directory, read only when the environment says nothing and the
 // argv is a vendor's shape. The same names as the variables, so one test scripts both roads alike.
+// The ACP stand-in (AcpAgent.cs): by verb, or spelled the way the real profile spells `kimi acp` with the
+// script named in the environment. BEFORE the vendor mode, so a FAKECLI_MODE another test left in the
+// process environment cannot turn an ACP launch into a reviewer answering on stdout.
+if (args is ["acp-agent", var acpScript])
+{
+    return CoaiMcp.FakeCli.AcpAgent.Run(acpScript);
+}
+
+if (args is ["acp"] && Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT") is { Length: > 0 } acpScriptFromEnv)
+{
+    return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
+}
+
 var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
@@ -172,6 +191,8 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     {
         Console.Out.Write(Placeholders.Fill(stdoutText, prompt.Text));
     }
+
+    VibeShape.Write(args, steering.Get("EXPORT_TEXT"), read("FAKECLI_RECORD_ENV"), read("FAKECLI_HOME_WRITE"));
 
     // A vendor that writes where it was told not to. A consultant runs in the LIVE working tree
     // behind three read-only flags that are the VENDOR's promise rather than ours, so the filesystem
@@ -501,6 +522,61 @@ static class VersionAnswer
         using var writer = new StreamWriter(counter);
         writer.Write(line);
     }
+}
+
+/// <summary>
+/// What a Vibe-shaped launch leaves behind (D7, D17 of todo/PLAN_vibe_and_kimi_runtimes.md): its export in
+/// <c>--output-dir</c>, the environment it was started with, and a file in its home.
+/// </summary>
+static class VibeShape
+{
+    public static void Write(string[] args, string? exportText, string? envRecord, string? homeWrite)
+    {
+        Export(args, exportText);
+        RecordEnvironment(envRecord);
+        WriteIntoTheHome(homeWrite);
+    }
+
+    private static void Export(string[] args, string? exportText)
+    {
+        var at = Array.IndexOf(args, "--output-dir");
+        if (at < 0 || at + 1 >= args.Length || exportText is not { Length: > 0 })
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(args[at + 1]);
+        File.WriteAllText(Path.Combine(args[at + 1], "export.json"), WithEnvironment(exportText));
+    }
+
+    private static void RecordEnvironment(string? envRecord)
+    {
+        if (envRecord is not { Length: > 0 })
+        {
+            return;
+        }
+
+        File.WriteAllLines(envRecord, Environment.GetEnvironmentVariables().Keys.Cast<string>().Order(StringComparer.Ordinal)
+            .Select(name => name.StartsWith("VIBE_", StringComparison.Ordinal) ? $"{name}={Environment.GetEnvironmentVariable(name)}" : name));
+    }
+
+    private static void WriteIntoTheHome(string? homeWrite)
+    {
+        if (homeWrite is not { Length: > 0 } || Environment.GetEnvironmentVariable("VIBE_HOME") is not { Length: > 0 } home)
+        {
+            return;
+        }
+
+        var file = Path.Combine(home, homeWrite);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "written by the fake Vibe\n");
+    }
+
+    /// <summary>Every <c>{{env:NAME}}</c> replaced by NAME's value in this child — empty when it has none.</summary>
+    private static string WithEnvironment(string text) =>
+        System.Text.RegularExpressions.Regex.Replace(text, @"\{\{env:([A-Za-z_][A-Za-z0-9_]*)\}\}",
+            match => Environment.GetEnvironmentVariable(match.Groups[1].Value) ?? string.Empty,
+            System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
 }
 
 /// <summary>One launch's record under <c>FAKECLI_RECORD_DIR</c>: its argv, NUL-joined, stdin last.</summary>
