@@ -706,6 +706,12 @@ Decisions D1, D6 (the snapshot with Kimi's exclusions), D8b (the Kimi arm = D19)
 D14) and S2 for the shapes it repeats (a `crossesTo` constant and arm per runtime, the preset and installer maps, the
 owned-home validation and the one launch control); not on S3. Complete on its own: a Kimi row reviews plans and code.
 
+Cornerstones: 2 of 2 — E4.1 (junction-safe ownership), E4.2 (`KimiHome` + `KimiLaunch`)
+
+*The ledger line sits here because this plan has no `## Epics` section: its five stories S1–S5 stand for the epics
+(Q = ⌈2·5/5⌉ = 2). S4's code half is split into stories in
+[PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md) (2026-10-14) — E4.1 and E4.2 are `model: fable`.*
+
 *The measurement half — DONE 2026-10-13.* `scripts/probe-kimi-confinement.mjs` → `research/RESULTS_kimi_confinement.md`
 §3–§15: cells M-K1…M-K10 and M-K8b, 74 launches, each ACP arm through the shipped `coai-mcp --ask-acp` (so the probe
 measured the shipped client, not a copy) but two — M-K5's `session/load` turn and M-K7's bare `session/new`, which the
