@@ -134,11 +134,16 @@ export function drift(settings, hookPath, installedBytes, sourceBytes) {
   return [...out, ...registrationProblems(settings, hookPath)];
 }
 
-function writeAtomic(dest, data) {
+/** Temp file + rename; the temp file never outlives a failed write, and `mode` (when given) is kept. */
+function writeAtomic(dest, data, mode) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, data);
-  fs.renameSync(tmp, dest);
+  try {
+    fs.writeFileSync(tmp, data, mode === undefined ? undefined : { mode });
+    fs.renameSync(tmp, dest);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
 }
 
 const readOrNull = file => (fs.existsSync(file) ? fs.readFileSync(file) : null);
@@ -158,11 +163,11 @@ function parseSettings(bytes) {
 
 const stamp = (now = new Date()) => now.toISOString().replace(/\.\d+Z$/, 'Z').replace(/[-:]/g, '');
 
-function writeBackup(settingsPath, bytes) {
+function writeBackup(settingsPath, bytes, mode) {
   for (let n = 0; ; n += 1) {
     const file = path.join(path.dirname(settingsPath), `${BACKUP_TAG}${stamp()}${n ? `-${n}` : ''}`);
     try {
-      fs.writeFileSync(file, bytes, { flag: 'wx' });
+      fs.writeFileSync(file, bytes, { flag: 'wx', mode });
       return file;
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
@@ -298,7 +303,133 @@ export function uninstall({ home, beforeWrite = () => {} }) {
   return result(0, [...lines, markOptout()]);
 }
 
-/** Exit 0 only when the installation is exactly what `install` would write. */
+/** The one effort level every model runs at (the rule: common/subagent-models.md § Effort). */
+export const EFFORT = 'high';
+/** Models whose effort is always pinned, present in settings.json or not. */
+export const EFFORT_MODELS = ['sonnet', 'opus', 'fable'];
+
+const effortOf = value => (isObject(value) && typeof value.effortLevel === 'string' ? value.effortLevel : 'unset');
+
+/** Model keys to pin: the three aliases, then any other `modelSettings` key already present. */
+function effortKeys(settings) {
+  const present = isObject(settings.modelSettings) ? Object.keys(settings.modelSettings) : [];
+  return [...new Set([...EFFORT_MODELS, ...present])];
+}
+
+/** One phrase per setting that is not `EFFORT` (`effortLevel xhigh`, `sonnet unset`); empty when converged. */
+export function effortProblems(settings) {
+  const models = isObject(settings.modelSettings) ? settings.modelSettings : {};
+  const top = effortOf(settings) === EFFORT ? [] : [`effortLevel ${effortOf(settings)}`];
+  const each = effortKeys(settings).filter(key => effortOf(models[key]) !== EFFORT).map(key => `${key} ${effortOf(models[key])}`);
+  return [...top, ...each];
+}
+
+const withEffort = value => (isObject(value) ? { ...value, effortLevel: EFFORT } : { effortLevel: EFFORT });
+
+/** A copy of `settings` with every effort at `EFFORT`; every other key keeps its value and its place. */
+export function convergeEffort(settings) {
+  const next = structuredClone(settings);
+  next.effortLevel = EFFORT;
+  const models = isObject(next.modelSettings) ? next.modelSettings : {};
+  for (const key of effortKeys(next)) models[key] = withEffort(models[key]);
+  next.modelSettings = models;
+  return next;
+}
+
+const noEffort = (res, problems = []) => ({ ...res, changed: false, problems });
+const refuseEffort = message => noEffort(result(1, [message]));
+const EFFORT_CHANGED = 'settings.json changed while converging effort; nothing written to it — it converges at the next session start';
+
+/** The first reason `modelSettings` cannot be converged without replacing the user's data; '' when it can. */
+function effortShapeProblem(settings) {
+  const models = settings.modelSettings;
+  if (models === undefined) return '';
+  if (!isObject(models)) return 'modelSettings is not an object';
+  const bad = Object.keys(models).find(key => !isObject(models[key]));
+  return bad === undefined ? '' : `modelSettings.${bad} is not an object`;
+}
+
+/** Why settings.json cannot be converged (unparsable or an unexpected shape); '' when it can. */
+function effortRefusal(file, parsed) {
+  if (parsed.error) return `${file} ${parsed.error}; nothing changed — fix or move the file and run again`;
+  const shape = effortShapeProblem(parsed.settings);
+  return shape ? `${file}: ${shape}; nothing changed — fix it by hand` : '';
+}
+
+function writableReason(file) {
+  try {
+    fs.accessSync(file, fs.constants.W_OK);
+    return '';
+  } catch (e) {
+    return `is not writable (${e.code})`;
+  }
+}
+
+/** Where to read and write: the symlink's target when settings.json is a link; null when there is no file. */
+function effortTarget(settingsPath) {
+  return fs.existsSync(settingsPath) ? fs.realpathSync(settingsPath) : null;
+}
+
+/** A backup of `bytes`, unless the newest backup already holds exactly these bytes (a retry loop must not pile up files). */
+function backupOnce(file, bytes, mode) {
+  const dir = path.dirname(file);
+  const newest = fs.readdirSync(dir).filter(name => name.startsWith(BACKUP_TAG)).sort().at(-1);
+  const newestPath = newest === undefined ? '' : path.join(dir, newest);
+  return newestPath && sameBytes(readOrNull(newestPath), bytes) ? newestPath : writeBackup(file, bytes, mode);
+}
+
+function writeConverged(file, original, settings, problems) {
+  try {
+    const mode = fs.statSync(file).mode & 0o777;
+    const backup = backupOnce(file, original, mode);
+    writeAtomic(file, serialise(convergeEffort(settings)), mode);
+    return { ...result(0, [`backup ${backup}`, `wrote ${file} (effort: ${EFFORT} for every model)`]), changed: true, problems };
+  } catch (e) {
+    return refuseEffort(`${file} could not be written (${e.code ?? e.message}); nothing changed`);
+  }
+}
+
+/** The file changed under us: fine when whoever changed it converged effort too, a refusal otherwise. */
+function settledOrChanged(now) {
+  const again = parseSettings(now);
+  return !again.error && effortProblems(again.settings).length === 0 ? noEffort(result(0, [])) : refuseEffort(EFFORT_CHANGED);
+}
+
+function commitEffort({ file, original, settings, problems, beforeWrite }) {
+  const reason = writableReason(file);
+  if (reason) return refuseEffort(`${file} ${reason}; nothing changed`);
+  beforeWrite();
+  const now = readOrNull(file);
+  return sameBytes(now, original) ? writeConverged(file, original, settings, problems) : settledOrChanged(now);
+}
+
+/**
+ * Converge the effort keys of an EXISTING settings.json (a missing file is not created; a symlink is
+ * followed, never replaced). Same safety as the installer, and more: unparsable settings, a non-object
+ * `modelSettings` or per-model value, or an unwritable file are refused untouched; the original mode is
+ * kept; a failed write throws nothing and leaves no temp file; a concurrent session that converged first
+ * is not an error. `changed` is false (nothing written) when everything is already `EFFORT`.
+ */
+export function applyEffort({ home, beforeWrite = () => {} }) {
+  const t = targets(home);
+  const file = effortTarget(t.settings);
+  if (file === null) return noEffort(result(0, []));
+  const original = fs.readFileSync(file);
+  const parsed = parseSettings(original);
+  const refusal = effortRefusal(t.settings, parsed);
+  if (refusal) return refuseEffort(refusal);
+  const problems = effortProblems(parsed.settings);
+  if (problems.length === 0) return noEffort(result(0, []));
+  return commitEffort({ file, original, settings: parsed.settings, problems, beforeWrite });
+}
+
+/** The `--check` line about effort; informational (it never changes the exit code). */
+const effortLine = settings => {
+  const problems = effortProblems(settings);
+  return problems.length ? `effort: ${problems.join(', ')} (the session self-install converges it to ${EFFORT})` : `effort: ${EFFORT} for every model`;
+};
+
+/** Exit 0 only when the installation is exactly what `install` would write; effort is reported, never gating. */
 export function check({ home, source }) {
   const t = targets(home);
   if (!fs.existsSync(source)) return result(1, [`source hook not found: ${source} — pass --source <file>`]);
@@ -306,10 +437,11 @@ export function check({ home, source }) {
   if (parsed.error) return result(1, [`${t.settings} ${parsed.error}`]);
   const installed = readOrNull(t.hook);
   const lines = drift(parsed.settings, t.hook, installed, fs.readFileSync(source));
+  const effort = effortLine(parsed.settings);
   const manifest = readManifest(t);
-  if (manifest === null) return result(1, [...lines, 'provenance manifest missing or unreadable: ' + t.manifest]);
+  if (manifest === null) return result(1, [...lines, 'provenance manifest missing or unreadable: ' + t.manifest, effort]);
   const shown = `provenance: ${JSON.stringify(manifest)}`;
   if (installed !== null && manifest.sha256 !== sha256(installed)) lines.push('installed hook no longer matches the sha256 in its provenance manifest (edited after install)');
-  return lines.length ? result(1, [shown, ...lines]) : result(0, ['installed and current', shown]);
+  return lines.length ? result(1, [shown, ...lines, effort]) : result(0, ['installed and current', shown, effort]);
 }
 

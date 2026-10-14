@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Refuse a subagent launch that does not name its model as a bare alias, and teach the role table
- * on every launch that does.
+ * Refuse a subagent launch that does not name its model as a bare alias, and teach the role table on every
+ * launch that passes. It does not judge `effort`: measured 2026-10-14, the hook payload never carries the
+ * Agent tool's per-launch `effort`, and the child's effort comes from the settings.
  *
  * <p>Copied verbatim into each consumer as `.claude/hooks/subagent-model.mjs` and wired by
  * `settings/settings.json` as a `PreToolUse` hook on `Agent|Task`, exactly like `build-flags.mjs`. It
@@ -31,7 +32,7 @@
  */
 
 /** Raise with every behaviour change; it decides whether a session self-install upgrades the user copy. */
-export const GUARD_VERSION = 1;
+export const GUARD_VERSION = 2;
 export const DENY_MARKER = 'subagent-models.md:';
 export const ALLOWED_MODELS = Object.freeze(['sonnet', 'opus', 'fable']);
 export const OPT_OUT_VARIABLE = 'SUBAGENT_MODEL_GUARD';
@@ -81,6 +82,13 @@ const isPlainObject = value => typeof value === 'object' && value !== null && !A
 
 const envText = (env, name) => String(env[name] ?? '').trim();
 
+const SILENT = Object.freeze({ kind: 'silent', text: '', warnings: Object.freeze([]) });
+
+const hasAllowedModel = toolInput => typeof toolInput.model === 'string' && ALLOWED_MODELS.includes(toolInput.model);
+
+/** The refusal for this `tool_input`; `''` when the launch is fine. */
+const refusalText = toolInput => (hasAllowedModel(toolInput) ? '' : DENY_TEXT);
+
 /** `silent` unless the payload is a PreToolUse `Agent`/`Task` call with an object `tool_input`. */
 function inEnvelope(payload) {
   return isPlainObject(payload)
@@ -106,17 +114,17 @@ function warningsFor(env) {
 /**
  * The verdict on one hook payload. Pure: no I/O, no clock. Reads exactly six keys of `env`.
  *
+ * <p>Order: the opt-out and the envelope first (silent), then the MODEL (a missing or non-alias model is the
+ * denial), otherwise teach. `effort` is never read.</p>
+ *
  * @returns {{ kind: 'deny' | 'teach' | 'silent', text: string, warnings: string[] }}
  */
 export function subagentModelVerdict(payload, env) {
-  if (envText(env, OPT_OUT_VARIABLE).toLowerCase() === 'off') return { kind: 'silent', text: '', warnings: [] };
-  if (!inEnvelope(payload)) return { kind: 'silent', text: '', warnings: [] };
-  const model = payload.tool_input.model;
-  const named = typeof model === 'string' && ALLOWED_MODELS.includes(model);
+  if (envText(env, OPT_OUT_VARIABLE).toLowerCase() === 'off') return SILENT;
+  if (!inEnvelope(payload)) return SILENT;
+  const text = refusalText(payload.tool_input);
 
-  return named
-    ? { kind: 'teach', text: TEACH_TEXT, warnings: warningsFor(env) }
-    : { kind: 'deny', text: DENY_TEXT, warnings: warningsFor(env) };
+  return text === '' ? { kind: 'teach', text: TEACH_TEXT, warnings: warningsFor(env) } : { kind: 'deny', text, warnings: warningsFor(env) };
 }
 
 /** `''` for silent, otherwise ONE line of JSON ending in a newline. */
