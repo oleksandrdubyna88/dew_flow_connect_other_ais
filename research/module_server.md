@@ -4908,7 +4908,7 @@ chosen by:
 
 ### The model order follows the subagent tiers (2026-10-13)
 
-The operator's subagent policy of 2026-10-13 (`dew_flow_conventions · todo/PLAN_subagent_model_tiers.md`
+The operator's subagent policy of 2026-10-13 (`dew_flow_conventions · research/PLAN_subagent_model_tiers.md`
 §1, D1–D12) has THREE tiers, and the order named two, so `ModelPair` gained a third field, `Coder`
 (the type keeps its name: the wire and the stored setting key on the fields). Design record:
 [PLAN_the_model_order_follows_the_tiers.md](PLAN_the_model_order_follows_the_tiers.md).
