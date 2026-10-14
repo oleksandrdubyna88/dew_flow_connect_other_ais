@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 
 namespace CoaiMcp.Runners.Processes;
 
@@ -131,6 +130,9 @@ public sealed record ProcessRequest(
 
     /// <summary>Whether this request ends its child itself, and so owns the tree it ends.</summary>
     public bool EndsEarly => !ReferenceEquals(EndsWhen, Never);
+
+    /// <summary>How often a request that ends its child itself lists the root's descendants while it runs — the knob a test turns.</summary>
+    internal TimeSpan ListingStep { get; init; } = ProcessTree.ListingStep;
 }
 
 /// <summary>What a run produced. <see cref="TimedOut"/> true means the tree was killed.</summary>
@@ -310,7 +312,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         }
         catch (Exception)
         {
-            await EndAndConfirmAsync(process, request with { EndsWhen = ProcessRequest.Never }, tracked: false);
+            await EndAndConfirmAsync(process, request with { EndsWhen = ProcessRequest.Never }, new TreeWatch(_tracker, request.TrackAs, tracked: false));
             throw;
         }
     }
@@ -406,9 +408,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         // Set the moment the stdout so far satisfies the request's own predicate — for a child that is
         // a server and answers before it ends. Checked on the stdout drain alone: an answer arrives there.
         var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Action onStdOut = request.EndsEarly
-            ? () => AnsweredIf(request, stdout, answered)
-            : static () => { };
+        var onStdOut = OnStdOut(request, stdout, answered);
 
         // Started before the write, because a child may answer before it has finished reading — and
         // one that fills ITS pipe while nobody drains ours is a deadlock made of two blocked writes.
@@ -417,10 +417,18 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             DrainAsync(process.StandardError, stderr, draining.Token, static () => { }));
         var writing = WriteStdInAsync(process, request.StdIn, closeAfter: !request.EndsEarly, deadline.Token);
 
-        var end = await UntilExitOrAnswerAsync(process, answered.Task, deadline.Token);
+        // A request that ends its child itself lists the child's tree WHILE it runs: a root that exits by itself can no
+        // longer name its children, and the one listing before a kill never happens for it (see TreeWatch).
+        var watch = new TreeWatch(_tracker, request.TrackAs, tracked);
+        if (request.EndsEarly)
+        {
+            watch.Start(process.Id, request.ListingStep);
+        }
+
+        var end = await WaitStoppingTheLegAsync(process, answered.Task, deadline.Token, watch);
         var ending = end == WaitEnd.Exited
-            ? Ending.None
-            : await EndAndConfirmAsync(process, request, tracked);
+            ? await ExitedByItselfAsync(process, watch)
+            : await EndAndConfirmAsync(process, request, watch);
 
         // The child is gone, so the streams should end now. The grace is what bounds the case where
         // they do not — and it CANCELS the read rather than walking away from it, so no suspended
@@ -430,15 +438,47 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         await Task.WhenAll(SettledAsync(writing), SettledAsync(reading));
 
         // Raised only now: the tree is ended and confirmed, and no read or write is left suspended (epic 6's code round).
-        if (ending.Unrecorded is { } failed)
+        if (PartialTree(ending, HeldByAnUnlisted(end, request, tracked, stdout, stderr)) is { } partial)
         {
-            throw new ProcessTreeNotRecordedException(ending.Survivors, failed);
+            throw partial;
         }
 
+        return ResultOf(process.ExitCode, stdout, stderr, end, ct.IsCancellationRequested, ending);
+    }
+
+    /// <summary>The root exited by itself, and a stream of a tracked request was still open when the drain grace cut it: something it never listed holds its pipes.</summary>
+    private static bool HeldByAnUnlisted(WaitEnd end, ProcessRequest request, bool tracked, BoundedText stdout, BoundedText stderr) =>
+        end == WaitEnd.Exited && request.EndsEarly && tracked && new[] { stdout, stderr }.Any(stream => stream.HeldOpen);
+
+    /// <summary>What each chunk of stdout does: nothing, or — for a request that ends its child itself — asks its predicate.</summary>
+    private static Action OnStdOut(ProcessRequest request, BoundedText stdout, TaskCompletionSource answered) =>
+        request.EndsEarly
+            ? () => AnsweredIf(request, stdout, answered)
+            : static () => { };
+
+    /// <summary>
+    /// The tree the caller must treat as only partly named, or nothing: a descendant that would not record, or — when the
+    /// root exited by itself and a stream was still open at the drain grace — something never listed that holds its pipes.
+    /// </summary>
+    /// <remarks>
+    /// The second is EVIDENCE, not suspicion: an exit with its streams closed and nothing seen is an ordinary one, and
+    /// failing it would block every slot for a human on a benign early exit.
+    /// </remarks>
+    private static ProcessTreeNotRecordedException? PartialTree(Ending ending, bool unlisted)
+    {
+        Exception? inner = ending.Unrecorded
+            ?? (unlisted ? new ProcessTreeUnlistedException("the root exited by itself while an unlisted process still held its pipes") : null);
+
+        return inner is null ? null : new ProcessTreeNotRecordedException(ending.Survivors, inner);
+    }
+
+    private static ProcessResult ResultOf(
+        int exitCode, BoundedText stdout, BoundedText stderr, WaitEnd end, bool callerCancelled, Ending ending)
+    {
         var timedOut = end == WaitEnd.Deadline;
 
         return new ProcessResult(
-            process.ExitCode,
+            exitCode,
             stdout.ToString(),
             stderr.ToString(),
             timedOut,
@@ -446,10 +486,33 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             // OperationCanceledException and mean opposite things. A budget that ran out is a vendor
             // too slow for it; a caller that cancelled is a job somebody withdrew, and retrying that
             // is spending money on an answer nobody is waiting for.
-            Cancelled: timedOut && ct.IsCancellationRequested,
+            Cancelled: timedOut && callerCancelled,
             Truncated: stdout.Truncated || stderr.Truncated,
             Ended: end == WaitEnd.Answered,
             Survivors: ending.Survivors);
+    }
+
+    /// <summary>The wait for exit or answer, with the listing leg stopped however it ends — a leg must never outlive the wait it belongs to.</summary>
+    private static async Task<WaitEnd> WaitStoppingTheLegAsync(Process process, Task answered, CancellationToken deadline, TreeWatch watch)
+    {
+        try
+        {
+            return await UntilExitOrAnswerAsync(process, answered, deadline);
+        }
+        finally
+        {
+            await watch.StopAsync();
+        }
+    }
+
+    /// <summary>The root left on its own: nothing to kill — but whatever the watch saw is ended and confirmed, as for an ended tree.</summary>
+    private static async Task<Ending> ExitedByItselfAsync(Process process, TreeWatch watch)
+    {
+        // An EndsWhen request keeps our end of stdin open; a write blocked on a full pipe whose read end an unlisted
+        // process inherited would otherwise hold the drain for ever.
+        Close(process.StandardInput);
+
+        return new Ending(await watch.ConfirmAsync(), watch.Unrecorded);
     }
 
     /// <summary>Asks the request's predicate of the stdout so far, and marks the launch answered once it says yes.</summary>
@@ -533,13 +596,18 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// stay fail-closed), and the caller raises it once the drain has settled.</para>
     /// </remarks>
     /// <returns>The tree members still alive after the confirmation — empty for a request that lists none — and the record failure, if any.</returns>
-    private async Task<Ending> EndAndConfirmAsync(Process process, ProcessRequest request, bool tracked)
+    private async Task<Ending> EndAndConfirmAsync(Process process, ProcessRequest request, TreeWatch watch)
     {
-        var members = request.EndsEarly ? ProcessTree.Descendants(process.Id) : [];
-        var unrecorded = tracked ? RecordEach(members, request.TrackAs) : null;
+        // The leg is stopped first, so nothing lists or records beside this final listing — taken while the root is alive.
+        await watch.StopAsync();
+        if (request.EndsEarly)
+        {
+            watch.ListOnce(process.Id);
+        }
+
         await EndItAsync(process);
 
-        return new Ending(await ConfirmedGoneAsync(members, tracked && unrecorded is null), unrecorded);
+        return new Ending(await watch.ConfirmAsync(), watch.Unrecorded);
     }
 
     /// <summary>
@@ -595,49 +663,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     }
 
     /// <summary>How an end came out: the members still alive, and the tracker's failure when a descendant would not record.</summary>
-    private sealed record Ending(IReadOnlyList<ProcessIdentity> Survivors, Exception? Unrecorded)
-    {
-        /// <summary>A child that exited by itself: nothing ended, nothing to say.</summary>
-        public static readonly Ending None = new([], null);
-    }
-
-    /// <summary>Writes every descendant to the tracker — and answers its failure rather than throwing, so the end goes on.</summary>
-    private Exception? RecordEach(IReadOnlyList<ProcessIdentity> members, string label)
-    {
-        try
-        {
-            foreach (var member in members)
-            {
-                _tracker.Record(member.Pid, member.StartedUtc, label);
-            }
-
-            return null;
-        }
-        catch (Exception e)
-        {
-            return e;
-        }
-    }
-
-    /// <summary>The members still alive after the bound — each one confirmed gone is forgotten by the tracker.</summary>
-    private async Task<IReadOnlyList<ProcessIdentity>> ConfirmedGoneAsync(IReadOnlyList<ProcessIdentity> members, bool tracked)
-    {
-        if (members.Count == 0)
-        {
-            return [];
-        }
-
-        var survivors = await ProcessTree.ConfirmGoneAsync(members);
-        if (tracked)
-        {
-            foreach (var gone in members.Where(member => !survivors.Contains(member)))
-            {
-                _tracker.Forget(gone.Pid);
-            }
-        }
-
-        return survivors;
-    }
+    private sealed record Ending(IReadOnlyList<ProcessIdentity> Survivors, Exception? Unrecorded);
 
     /// <summary>
     /// Closes our end of the child's stdin, even with a write still blocked inside it.
@@ -765,68 +791,4 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             }
         }
     }
-}
-
-/// <summary>
-/// One stream's text, up to a ceiling, with the truncation said out loud.
-/// </summary>
-/// <remarks>
-/// Not a <see cref="StringBuilder"/> with a check beside it, because the check has to hold at every
-/// call site and there are two of them per launch. A bound that lives in the type cannot be
-/// forgotten by the next reader of this file.
-/// </remarks>
-internal sealed class BoundedText(int maxChars)
-{
-    private readonly StringBuilder _text = new();
-    private long _dropped;
-    private bool _cutShort;
-
-    /// <summary>True when what this holds is a HEAD rather than the whole stream.</summary>
-    public bool Truncated => _dropped > 0 || _cutShort;
-
-    /// <summary>Take up to the ceiling, and count the rest rather than keeping it.</summary>
-    /// <remarks>
-    /// Reading continues past the ceiling in the caller — a pipe nobody drains blocks the child that
-    /// is writing to it — so this goes on being called and goes on counting. The count is what makes
-    /// the sentence below worth reading: "cut at 8 Mi" says nothing about whether one character was
-    /// lost or two hundred megabytes.
-    /// </remarks>
-    public void Append(char[] buffer, int count)
-    {
-        var room = maxChars - _text.Length;
-        if (count <= room)
-        {
-            _text.Append(buffer, 0, count);
-
-            return;
-        }
-
-        _text.Append(buffer, 0, Math.Max(room, 0));
-        _dropped += count - Math.Max(room, 0);
-    }
-
-    /// <summary>The stream was still open when the drain grace ran out.</summary>
-    /// <remarks>
-    /// A different fact from the ceiling and it deserves a different sentence: the ceiling is this
-    /// launcher's decision about a runaway, while this is something that outlived the tree kill and
-    /// is still holding the pipe. Reading them as one would send somebody to raise a limit that was
-    /// never reached.
-    /// </remarks>
-    public void CutShort() => _cutShort = true;
-
-    /// <summary>
-    /// The text, with one sentence at the end when it is not all of it.
-    /// </summary>
-    /// <remarks>
-    /// Composed HERE rather than appended when the ceiling was crossed, because the number worth
-    /// printing — how much was dropped — is not known until the stream ends. It opens with a newline
-    /// so it cannot run on from output that ended without one.
-    /// </remarks>
-    public override string ToString() => Truncated
-        ? _text.ToString() + Sentence()
-        : _text.ToString();
-
-    private string Sentence() => _dropped > 0
-        ? $"\n[coai: output truncated at {maxChars} characters; {_dropped} more were dropped]\n"
-        : "\n[coai: output truncated — the stream was still open when the drain grace ran out]\n";
 }

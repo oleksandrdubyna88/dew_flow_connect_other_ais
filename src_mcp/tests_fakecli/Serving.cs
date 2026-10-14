@@ -72,6 +72,32 @@ static class Serving
         return 0;
     }
 
+    /// <summary>
+    /// The <c>serve-quit</c> verb: writes its pid (and its sleeper's), never answers, never reads stdin, and exits 0 by itself
+    /// after <paramref name="quitAfterMs"/> — a root that leaves by its own decision, the case the launcher's listing leg exists for.
+    /// </summary>
+    /// <param name="tree"><c>alone</c>; <c>grandchild</c> (the sleeper inherits our stdio, so it holds the launcher's pipes);
+    /// or <c>grandchild-mute</c> (all three streams redirected, so it holds none).</param>
+    public static int RunQuit(string pidFile, string tree, int quitAfterMs)
+    {
+        var started = new List<string> { Environment.ProcessId.ToString() };
+        if (tree != "alone")
+        {
+            var info = new ProcessStartInfo(Environment.ProcessPath!) { ArgumentList = { "sleep", "600000" }, UseShellExecute = false };
+            if (tree == "grandchild-mute")
+            {
+                info.RedirectStandardInput = info.RedirectStandardOutput = info.RedirectStandardError = true;
+            }
+
+            started.Add(Process.Start(info)!.Id.ToString());
+        }
+
+        File.WriteAllLines(pidFile, started);
+        Thread.Sleep(quitAfterMs);
+
+        return 0;
+    }
+
     /// <summary>The <c>app-server</c> argv: steered by the file in the temp directory, or the defaults.</summary>
     public static int AppServer()
     {

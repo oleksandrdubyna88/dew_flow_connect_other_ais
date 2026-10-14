@@ -40,6 +40,10 @@ public static class ProcessTree
 
     private static readonly TimeSpan ConfirmationStep = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>How often the descendants of a child that a request ends itself are listed while it runs.</summary>
+    /// <remarks>Short enough that a grandchild that lives for seconds is seen; long enough that listing the process table stays negligible beside a vendor CLI.</remarks>
+    public static readonly TimeSpan ListingStep = TimeSpan.FromMilliseconds(200);
+
     /// <summary>Whether this platform can list a process's descendants — Linux and Windows only.</summary>
     public static bool Supported => OperatingSystem.IsLinux() || OperatingSystem.IsWindows();
 

@@ -2693,6 +2693,23 @@ one launcher both halves share, and nothing a reviewer launch does changed:
   up to `ProcessTree.ConfirmationBound` (2 s), re-killed meanwhile, and the ones still there come back as
   **`ProcessResult.Survivors`**. The deadline path of such a request takes the same discipline. A request without a
   predicate is killed on its deadline exactly as it always was, and lists nothing. It ends the child through the launcher's one tree kill, `EndItAsync` (stdin closed, tree killed, root waited for), which the ACP transport shares.
+- **The tree is listed WHILE the child runs, for every `EndsWhen` request** (`Processes/TreeWatch.cs`, CodeRabbit on PR #790): a
+  root that EXITS BY ITSELF can no longer name its children — they are reparented the moment it goes — and the one listing
+  the launcher had ran only just before it killed an answered or timed-out root. `TreeWatch` is a `PeriodicTimer` leg
+  beside the reading/writing/waiting halves (step `ProcessTree.ListingStep` = 200 ms, first tick after one step; an
+  `internal ProcessRequest.ListingStep` is the knob a test turns): every identity not yet seen is added to its `seen` set
+  and, when tracked, recorded as it appears — a record (or listing) failure is HELD in `Unrecorded`, never thrown mid-run.
+  `Observe` / `ConfirmAsync` serve both ends: on `Answered`/`Deadline` the final listing is unioned with `seen` before the kill;
+  on `Exited` there is no root to kill, but `ExitedByItselfAsync` confirms `seen` (re-killing through `ProcessTree.Terminate`,
+  the 2 s bound) and survivors come back in `ProcessResult.Survivors`. **The evidence-gated partial**: when the root exited by
+  itself, the request is tracked, and a stream was still open when the drain grace cut it (`BoundedText.HeldOpen`, its own flag,
+  distinct from the size ceiling), something never listed holds the inherited stdio — the launch raises
+  `ProcessTreeNotRecordedException` with the inner **`ProcessTreeUnlistedException`** (`Processes/ProcessTreeUnlistedException.cs`;
+  its own type because the server logs only the inner type's name). Untracked: no exception, `Truncated` says it. An exit with
+  closed streams and nothing seen is an ordinary result (`Ended=false`, no grace wait). **Residual limit**: a descendant spawned
+  within the last listing step before the root's self-exit AND holding none of the inherited stdio is neither seen nor detected.
+  CodeRabbit's proposal — fail every early exit of a tracked request — was rejected: it kills nothing, and a benign early exit
+  of any codex version would block every codex slot for a human. `BoundedText` moved to its own file (`ProcessLauncher.cs` was over the size limit).
 - **A child that cannot be recorded is ended before the failure travels** (`RecordedAsync`): `ProcessTracking.Record`
   never throws, but a tracker that writes a slot's marker can, and a child alive with its identity on nobody's disk is
   the one state the containment has no answer to.

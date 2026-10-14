@@ -152,20 +152,19 @@ public sealed class GaugeCapture(
         }
 
         var current = slots.Read(slot.Vendor, slot.Name);
-        if (current.NeedsSignIn || current.Blocked.Length > 0 || current.GaugeSuspended.Length > 0)
-        {
-            return new GaugeCaptured.Skipped(GaugeCodes.SlotNotReadable);
-        }
 
-        if (!ProcessTree.Supported)
-        {
-            return new GaugeCaptured.Skipped(GaugeCodes.PlatformUnsupported);
-        }
-
-        return Guard(CodexAuthExpiry.Of(slot.Directory), DateTimeOffset.UtcNow) is { } skipped
+        return (Unreadable(current) ?? Unsupported() ?? Guard(CodexAuthExpiry.Of(slot.Directory), DateTimeOffset.UtcNow)) is { } skipped
             ? skipped
             : await ReadAsync(vendor, current, ct);
     }
+
+    private static GaugeCaptured? Unreadable(AccountSlot slot) =>
+        slot.NeedsSignIn || slot.Blocked.Length > 0 || slot.GaugeSuspended.Length > 0
+            ? new GaugeCaptured.Skipped(GaugeCodes.SlotNotReadable)
+            : null;
+
+    private static GaugeCaptured? Unsupported() =>
+        ProcessTree.Supported ? null : new GaugeCaptured.Skipped(GaugeCodes.PlatformUnsupported);
 
     /// <summary>The expiry guard: an unknown expiry skips; a known one skips unless it clears the lifetime plus the margin.</summary>
     internal static GaugeCaptured? Guard(Expiry expiry, DateTimeOffset nowUtc) => expiry switch

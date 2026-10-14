@@ -175,6 +175,10 @@ public static class GaugeProtocol
         }
     }
 
+    /// <summary>The line's id when it is an Int32; any other id (fractional, out of range, not a number) is no id.</summary>
+    private static int? IdOf(JsonElement root) =>
+        root.TryGetProperty("id", out var idValue) && idValue.ValueKind == JsonValueKind.Number && idValue.TryGetInt32(out var id) ? id : null;
+
     private static Line? ParseLine(string text)
     {
         if (!text.StartsWith('{'))
@@ -184,10 +188,10 @@ public static class GaugeProtocol
 
         try
         {
-            var root = JsonDocument.Parse(text).RootElement.Clone();
-            var id = root.TryGetProperty("id", out var idValue) && idValue.ValueKind == JsonValueKind.Number ? idValue.GetInt32() : (int?)null;
+            using var document = JsonDocument.Parse(text);
+            var root = document.RootElement.Clone();
 
-            return new Line(id, Text(root, "method"), root);
+            return new Line(IdOf(root), Text(root, "method"), root);
         }
         catch (JsonException)
         {

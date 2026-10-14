@@ -69,3 +69,10 @@ test('no share without a shown figure, a weekly window and a price', () => {
   assert.equal(shareLine(200, weekly(4, { windowMins: 300 }), OCTOBER), '', 'a five-hour window is not the weekly share');
   assert.equal(shareLine(200, undefined, OCTOBER), '', 'no gauge reading, no share');
 });
+
+test('a clock that is not a number hides the share — never a $NaN line', () => {
+  const line = shareLine(200, weekly(4), Number.NaN);
+
+  assert.equal(line, '', `the share line was "${line}"`);
+  assert.doesNotMatch(line, /NaN/);
+});

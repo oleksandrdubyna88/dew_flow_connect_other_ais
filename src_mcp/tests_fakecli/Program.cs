@@ -344,6 +344,11 @@ switch (args0)
     case ["serve", var pidFile, var afterEofMs, var tree, var answer]:
         return Serving.Run(pidFile, int.Parse(afterEofMs), tree == "grandchild", answer);
 
+    // A "server" that never answers and never reads stdin, and EXITS 0 by itself after <quitAfterMs> — leaving its sleeping
+    // grandchild behind (`grandchild` inherits the launcher's pipes, `grandchild-mute` redirects all three, `alone` has none).
+    case ["serve-quit", var quitPidFile, var quitTree, var quitAfterMs]:
+        return Serving.RunQuit(quitPidFile, quitTree, int.Parse(quitAfterMs));
+
     // A server that answers only <answerAfterMs> after it was asked — and SHUTS DOWN on the end of its input first if
     // that comes first, exit 3, unanswered: the shape the launcher's "spoken to, not fed" rule exists for.
     case ["serve-shy", var shyPidFile, var answerAfterMs, var shyAnswer]:

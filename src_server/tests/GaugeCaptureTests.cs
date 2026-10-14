@@ -220,11 +220,13 @@ public sealed class GaugeCaptureTests : IDisposable
     /// names the root alone. A marker like that must NOT be cleared by reconciling the root — the slot stays fail-closed
     /// until a person proves it safe, and the job's result is untouched.
     /// </summary>
-    [Fact]
-    public async Task ADescendantThatCouldNotBeRecorded_KeepsTheSlotFailClosed()
+    [Theory]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(ProcessTreeUnlistedException))]
+    public async Task ADescendantThatCouldNotBeRecorded_KeepsTheSlotFailClosed(Type inner)
     {
         RequiresATree();
-        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.DescendantNotRecorded().For);
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.DescendantNotRecorded((Exception)Activator.CreateInstance(inner, "the reason")!).For);
         jobs.Submit(Job());
 
         await runner.PumpAsync("codex", CancellationToken.None);
@@ -233,6 +235,33 @@ public sealed class GaugeCaptureTests : IDisposable
         Slot().Blocked.Should().Be(BlockedReasons.ReaderIdentityMissing, "a partial identity is a reader nobody can fully name");
         (await new SlotRegistry(_dir, new JsonFileStore()).AcquireAsync(Slot(), TimeSpan.Zero)).Should().BeOfType<Acquisition.Blocked>(
             "reconciling the one recorded root would clear a marker that never named the descendant");
+        _notes.Should().Contain(note => note.Contains(inner.Name, StringComparison.Ordinal), "the log carries the inner type's name, which is all it may carry of the reason");
+    }
+
+    /// <summary>
+    /// The availability pin for a reader that simply EXITED: no descendant, no survivor, no answer. The slot must not be
+    /// blocked, the marker must be cleared, the previous reading marked stale, and the next acquire must succeed.
+    /// </summary>
+    [Fact]
+    public async Task AReaderThatExitedWithoutAnswering_BlocksNothing_AndMarksTheGaugeStale()
+    {
+        RequiresATree();
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n").For);
+        jobs.Submit(Job());
+        await runner.PumpAsync("codex", CancellationToken.None);
+        Slot().Gauge!.Stale.Should().BeFalse();
+        var exited = new GaugeFixtures.Reader(string.Empty, plain => plain with { Ended = false });
+        var (jobs2, runner2) = Build(new GaugeFixtures.Reviewer(), exited.For);
+        jobs2.Submit(Job());
+
+        await runner2.PumpAsync("codex", CancellationToken.None);
+
+        Slot().Blocked.Should().BeEmpty("a reader that exited with nothing behind it blocks no slot");
+        State().Reader.Should().BeNull("the marker is cleared: the tree is confirmed gone");
+        Slot().Gauge!.Stale.Should().BeTrue("the last reading is kept and marked as the last the vendor said");
+        var next = await new SlotRegistry(_dir, new JsonFileStore()).AcquireAsync(Slot(), TimeSpan.Zero);
+        next.Should().BeOfType<Acquisition.Taken>("the next job on the slot is not held up");
+        (next as Acquisition.Taken)?.Lease.Dispose();
     }
 
     [Fact]

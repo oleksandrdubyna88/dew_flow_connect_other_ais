@@ -114,6 +114,9 @@ export function shareLine(priceUsd: number | undefined, ratio: GaugeRatio | unde
     return '';
   }
   const share = (priceUsd * (1 / perPercent)) / 100 / weeksIn(nowMs);
+  if (!Number.isFinite(share)) {
+    return '';
+  }
 
   return `≈ ${money(share)} of your plan per round — a share of the $${dollars(priceUsd)}/month plan, not a bill`;
 }

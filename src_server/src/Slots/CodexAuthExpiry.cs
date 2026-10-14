@@ -43,6 +43,10 @@ public static class CodexAuthExpiry
     public const string NotAJwt = "token-not-a-jwt";
     public const string NoExpiry = "exp-missing";
 
+    // DateTimeOffset.FromUnixTimeSeconds accepts 0001-01-01 through 9999-12-31 only.
+    private const long MinUnixSeconds = -62135596800;
+    private const long MaxUnixSeconds = 253402300799;
+
     /// <summary>The slot's codex home, as <c>SlotEnvironment</c> sets <c>CODEX_HOME</c>.</summary>
     public static string AuthFileOf(string slotDirectory) => Path.Combine(slotDirectory, ".codex", "auth.json");
 
@@ -67,24 +71,25 @@ public static class CodexAuthExpiry
         }
     }
 
-    private static Expiry Read(JsonElement root)
-    {
-        if (!(root.TryGetProperty("auth_mode", out var mode) && mode.ValueKind == JsonValueKind.String && mode.GetString() == "chatgpt"))
-        {
-            return new Expiry.Unknown(NotChatgptMode);
-        }
+    private static Expiry Read(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object ? ReadMode(root) : new Expiry.Unknown(FileUnreadable);
 
-        // codex's own precondition for a token-backed request: `get_token_data` refuses a file with no `last_refresh`.
-        if (!(root.TryGetProperty("last_refresh", out var refreshed) && refreshed.ValueKind == JsonValueKind.String))
-        {
-            return new Expiry.Unknown(NoLastRefresh);
-        }
+    private static Expiry ReadMode(JsonElement root) =>
+        root.TryGetProperty("auth_mode", out var mode) && mode.ValueKind == JsonValueKind.String && mode.GetString() == "chatgpt"
+            ? ReadLastRefresh(root)
+            : new Expiry.Unknown(NotChatgptMode);
 
-        return root.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object
-               && tokens.TryGetProperty("access_token", out var token) && token.ValueKind == JsonValueKind.String
+    // codex's own precondition for a token-backed request: `get_token_data` refuses a file with no `last_refresh`.
+    private static Expiry ReadLastRefresh(JsonElement root) =>
+        root.TryGetProperty("last_refresh", out var refreshed) && refreshed.ValueKind == JsonValueKind.String
+            ? ReadAccessToken(root)
+            : new Expiry.Unknown(NoLastRefresh);
+
+    private static Expiry ReadAccessToken(JsonElement root) =>
+        root.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object
+        && tokens.TryGetProperty("access_token", out var token) && token.ValueKind == JsonValueKind.String
             ? ExpiryOfJwt(token.GetString() ?? string.Empty)
             : new Expiry.Unknown(NoAccessToken);
-    }
 
     /// <summary>The <c>exp</c> claim of a JWT's payload — the second dot-separated part, base64url without padding.</summary>
     private static Expiry ExpiryOfJwt(string jwt)
@@ -99,15 +104,22 @@ public static class CodexAuthExpiry
         {
             using var claims = JsonDocument.Parse(payload);
 
-            return claims.RootElement.TryGetProperty("exp", out var exp) && exp.TryGetInt64(out var seconds)
-                ? new Expiry.Known(DateTimeOffset.FromUnixTimeSeconds(seconds))
-                : new Expiry.Unknown(NoExpiry);
+            return ExpiryOfClaims(claims.RootElement);
         }
         catch (JsonException)
         {
             return new Expiry.Unknown(NotAJwt);
         }
     }
+
+    private static Expiry ExpiryOfClaims(JsonElement claims) =>
+        claims.ValueKind == JsonValueKind.Object && claims.TryGetProperty("exp", out var exp)
+        && exp.ValueKind == JsonValueKind.Number && exp.TryGetInt64(out var seconds) && InCalendar(seconds)
+            ? new Expiry.Known(DateTimeOffset.FromUnixTimeSeconds(seconds))
+            : new Expiry.Unknown(NoExpiry);
+
+    private static bool InCalendar(long seconds) =>
+        seconds is >= MinUnixSeconds and <= MaxUnixSeconds;
 
     private static bool TryDecodeBase64Url(string text, out byte[] bytes)
     {

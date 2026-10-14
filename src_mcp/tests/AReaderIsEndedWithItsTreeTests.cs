@@ -89,6 +89,7 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
         }
 
         var (root, grandchild) = PidsIn(pids);
+        var leftovers = IdentitiesIn(pids);
         try
         {
             Alive(grandchild).Should().BeFalse("a descendant whose record failed must not outlive the recorded root");
@@ -99,8 +100,7 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
         }
         finally
         {
-            KillIfAlive(grandchild);
-            KillIfAlive(root);
+            leftovers.ToList().ForEach(KillIfAlive);
         }
     }
 
@@ -209,7 +209,7 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
     }
 
     /// <summary>Alive by the product's own rule — so a killed child its parent has not reaped yet (a Linux zombie) is gone.</summary>
-    private static bool Alive(int pid) =>
+    internal static bool Alive(int pid) =>
         ProcessTracking.StartedAt(pid) is { } started && ProcessTree.IsAlive(new ProcessIdentity(pid, started));
 
     private static async Task WaitForAsync(Func<bool> condition, Process child)
@@ -224,19 +224,17 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
         condition().Should().BeTrue("the server did not write its pids within 30 s");
     }
 
-    /// <summary>A failed test's leftover, ended by its PID (never by image name) — only while it is still alive.</summary>
-    private static void KillIfAlive(int pid)
-    {
-        try
-        {
-            using var left = Process.GetProcessById(pid);
-            left.Kill(entireProcessTree: true);
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            // Already gone — the expected case.
-        }
-    }
+    /// <summary>The processes a pid file names, each with the start time it has NOW — captured when the file is read, so a later kill can tell it from a stranger under a reused number.</summary>
+    internal static ProcessIdentity[] IdentitiesIn(string file, int skipLines = 0) =>
+        File.Exists(file)
+            ? [.. File.ReadAllLines(file).Skip(skipLines).Select(int.Parse).SelectMany(IdentityOf)]
+            : [];
+
+    private static IEnumerable<ProcessIdentity> IdentityOf(int pid) =>
+        ProcessTracking.StartedAt(pid) is { } started ? [new ProcessIdentity(pid, started)] : [];
+
+    /// <summary>A failed test's leftover, ended by its IDENTITY (pid and start time; never by image name) — only while it is still that process.</summary>
+    internal static void KillIfAlive(ProcessIdentity identity) => ProcessTree.Terminate(identity);
 
     /// <summary>A tracker whose state file takes the root's record and refuses the next one — the descendant's.</summary>
     private sealed class FailsOnSecondRecord : IProcessTracker
@@ -257,7 +255,7 @@ public sealed class AReaderIsEndedWithItsTreeTests : IDisposable
     }
 
     /// <summary>A tracker that remembers every pid it was told about, and forgets nothing — what the marker on a slot does.</summary>
-    private sealed class Recorder : IProcessTracker
+    internal sealed class Recorder : IProcessTracker
     {
         public List<int> Recorded { get; } = [];
 

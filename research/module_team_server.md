@@ -1695,8 +1695,11 @@ lease the moment the lock opened, `VendorLogin` took the same path, `ProcessLaun
    `SlotReaderTracker`, whose `Record` writes the pid and start time into the marker (phase `running`); a launcher whose
    record fails ends the child before it throws ([module_runners.md](module_runners.md)).
 5. **Every descendant confirmed exited, then the marker cleared**: the reader is a request that ends its child on its
-   answer (`ProcessRequest.EndsWhen`), so the launcher lists the descendants BEFORE the kill, records them in the
-   marker, kills the tree, and reports survivors; a survivor blocks the slot (`MarkBlocked`), none clears the marker
+   answer (`ProcessRequest.EndsWhen`), so the launcher lists the descendants WHILE the reader runs (every 200 ms, `TreeWatch`) and
+   records each in the marker as it appears, lists once more BEFORE the kill, kills the tree, and reports survivors; **a reader
+   that exits by itself** (CodeRabbit, PR #790) is no exception — what was listed while it ran is killed and confirmed, and
+   when its pipes were still held at the drain grace by something never listed, the launcher raises the same
+   `ProcessTreeNotRecordedException` (inner `ProcessTreeUnlistedException`) and the slot is marked partial for a human; a survivor blocks the slot (`MarkBlocked`), none clears the marker
    (`ClearReader`) — and only then does the lease end. **A descendant the marker would not take** (epic 6's code round:
    the state file refused the write) no longer stops the end: the launcher still closes stdin, kills the whole tree and
    confirms it, then raises `ProcessTreeNotRecordedException`; the capture makes the marker **`partial`** — unidentified,
@@ -1836,7 +1839,7 @@ flowchart LR
   C --> T
 ```
 
-Tests: `RoundsPerPercentServedTests` (4) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (18),
+Tests: `RoundsPerPercentServedTests` (4) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (19),
 mcp; `http/usage/usage.http` (+3 assertions); the seam's gauge leg (`scripts/seam-gauge.mjs`, the real server over a
 seeded slot and ledger, read and DRAWN by the extension's own code). The older-client check now also asks the released
 client's `fetchUsage(company)`: `extension-v0.69.0` asks no windows and gets no `gauges`; `extension-v0.70.0` asks them,

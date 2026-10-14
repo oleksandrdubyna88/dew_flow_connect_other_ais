@@ -117,7 +117,7 @@ internal static class GaugeFixtures
     /// fails as the launcher does when a descendant would not record: the tree ended, the identity on disk partial
     /// (epic 6's code round).
     /// </summary>
-    public sealed class DescendantNotRecorded : IProcessLauncher
+    public sealed class DescendantNotRecorded(Exception? inner = null) : IProcessLauncher
     {
         private IProcessTracker _tracker = NoProcessTracking.Instance;
 
@@ -132,7 +132,7 @@ internal static class GaugeFixtures
         {
             _tracker.Record(Environment.ProcessId, DateTime.UtcNow.AddHours(-5), request.TrackAs);
 
-            throw new ProcessTreeNotRecordedException([], new IOException("the slot's state file will not take the write"));
+            throw new ProcessTreeNotRecordedException([], inner ?? new IOException("the slot's state file will not take the write"));
         }
     }
 
