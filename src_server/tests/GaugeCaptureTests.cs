@@ -45,6 +45,10 @@ public sealed class GaugeCaptureTests : IDisposable
         GaugeFixtures.WriteAuth(Slot().Directory, FarExpiry);
     }
 
+    /// <summary>The capture refuses to spawn where descendants cannot be listed (macOS), so a test of what it reads skips there.</summary>
+    private static void RequiresATree() =>
+        Assert.SkipUnless(ProcessTree.Supported, "the capture refuses to spawn where descendants cannot be listed");
+
     public void Dispose()
     {
         try
@@ -60,6 +64,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task AFixtureGaugeAnswer_IsCapturedAfterTheJob_StoredOnTheSlot_AndOnTheJobsLedgerLine()
     {
+        RequiresATree();
         var reader = new GaugeFixtures.Reader(GaugeFixtures.Notifications + GaugeFixtures.Answer + "\n");
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), reader.For);
         var job = Job();
@@ -102,6 +107,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task TheReaderIsAsked_OnlyTheRead_InsideTheSlotsOwnHome_Confined()
     {
+        RequiresATree();
         var reader = new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n");
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), reader.For);
         jobs.Submit(Job());
@@ -123,6 +129,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task ANearExpiryToken_SpawnsNothing()
     {
+        RequiresATree();
         GaugeFixtures.WriteAuth(Slot().Directory, DateTimeOffset.UtcNow + GaugeCapture.ReaderLifetime + GaugeCapture.ExpiryMargin - TimeSpan.FromSeconds(30));
         var counting = new GaugeFixtures.Counting();
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), counting.For);
@@ -139,6 +146,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task AnUnknownExpiry_SpawnsNothing()
     {
+        RequiresATree();
         File.WriteAllText(CodexAuthExpiry.AuthFileOf(Slot().Directory), """{"auth_mode":"chatgpt","tokens":{"access_token":"not-a-jwt"},"last_refresh":"2026-10-11T00:00:00Z"}""");
         var counting = new GaugeFixtures.Counting();
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), counting.For);
@@ -155,6 +163,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [InlineData(GaugeFixtures.RefreshRequest, GaugeCodes.RefreshRequested)]
     public async Task AnAuthError_SuspendsCaptureOnly_TheNextJobStillSchedules_AndNeedsSignInIsUntouched(string said, string code)
     {
+        RequiresATree();
         var reader = new GaugeFixtures.Reader(said + "\n");
         var reviewer = new GaugeFixtures.Reviewer();
         var (jobs, runner) = Build(reviewer, reader.For);
@@ -186,6 +195,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task ACaptureFailure_KeepsTheJobsSuccess_AndMarksThePreviousReadingStale()
     {
+        RequiresATree();
         var good = new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n");
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), good.For);
         jobs.Submit(Job());
@@ -213,6 +223,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task ADescendantThatCouldNotBeRecorded_KeepsTheSlotFailClosed()
     {
+        RequiresATree();
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.DescendantNotRecorded().For);
         jobs.Submit(Job());
 
@@ -227,6 +238,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task TheLog_CarriesNoRawMessage_NoAccountId_NoMachineName()
     {
+        RequiresATree();
         var reader = new GaugeFixtures.Reader(GaugeFixtures.Notifications + GaugeFixtures.Answer + "\n");
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), reader.For);
         jobs.Submit(Job());
@@ -242,6 +254,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task AnAbsentSecondaryWindow_StaysAbsent_AndAReportedOneIsKept()
     {
+        RequiresATree();
         var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n").For);
         jobs.Submit(Job());
         await runner.PumpAsync("codex", CancellationToken.None);
@@ -267,6 +280,7 @@ public sealed class GaugeCaptureTests : IDisposable
     [Fact]
     public async Task TheNextLaunchAfterACapture_UsesTheSlotsCredentialsAsTheReaderLeftThem()
     {
+        RequiresATree();
         var rewritten = GaugeFixtures.AuthJson(FarExpiry.AddDays(1), refreshToken: "fake-refresh-token-ROTATED");
         var reader = new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n")
         {
@@ -285,6 +299,27 @@ public sealed class GaugeCaptureTests : IDisposable
         next["CODEX_HOME"].Should().Be(reader.Requests[0].Environment["CODEX_HOME"], "the same home the reader ran in — no copy, no restore");
         File.ReadAllText(Path.Combine(next["CODEX_HOME"]!, "auth.json")).Should().Be(rewritten,
             "the resulting credentials are what the next launch finds: exclusive ownership of the token set is the safety");
+    }
+
+    /// <summary>
+    /// Where a reader's descendants cannot be listed (macOS) the capture refuses to spawn — the platform-limits rule —
+    /// and the job is untouched. The other capture tests are of what it does where it may, and skip here.
+    /// </summary>
+    [Fact]
+    public async Task WhereNoTreeCanBeConfirmed_TheCaptureSpawnsNothing_AndSaysWhy()
+    {
+        Assert.SkipWhen(ProcessTree.Supported, "the refusal is the unsupported platforms'; Linux and Windows capture");
+        var counting = new GaugeFixtures.Counting();
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), counting.For);
+        jobs.Submit(Job());
+
+        (await runner.PumpAsync("codex", CancellationToken.None)).Should().BeTrue();
+
+        jobs.All().Single().Status.Should().Be(JobStatus.Done, "the job's result is the vendor's, whatever the gauge did");
+        counting.Launches.Should().Be(0, "a reader whose tree nobody can confirm gone is never spawned");
+        _notes.Should().ContainSingle(note => note.Contains(GaugeCodes.PlatformUnsupported, StringComparison.Ordinal));
+        State().Reader.Should().BeNull("no marker is written for a reader that is not spawned");
+        Slot().Gauge.Should().BeNull();
     }
 
     [Fact]

@@ -2708,9 +2708,14 @@ one launcher both halves share, and nothing a reviewer launch does changed:
 rather than inheriting an unprobed answer (the platform-limits rule). The production host is Linux.
 **An exited process is not alive even while its table entry stays**: on Linux a killed process keeps its `/proc` entry
 and start time until its parent reaps it — under a parent that never reaps, for ever — so `IsAlive` also reads the state
-field of `/proc/<pid>/stat` and answers false for a zombie (`Z`) or a dying entry (`X`); found by PR #790's Linux CI.
-`DescendantsOf(identity)` lists the descendants only of a process that is still the one recorded — a reused number's
-children are nobody's to kill.
+field of `/proc/<pid>/stat` and answers false for a zombie (`Z`) or a dying entry (`X`) — but only when
+`/proc/<pid>/task` lists no thread but the leader, since a leader whose own thread exited reads `Z` while the group's
+other threads run on; found by PR #790's Linux CI. `DescendantsOf(identity)` lists the descendants only of a process
+that is still the one recorded — a reused number's children are nobody's to kill — and the walk accepts a child only
+when it started no earlier than its parent (`OrphanSweep.Same`'s slack): a table records a parent NUMBER, and a process
+whose parent died is otherwise listed under whoever holds that number now. **Known limit:** a child spawned between the
+listing and the kill is ended by `Kill(entireProcessTree: true)` but not in the confirmed set, and a child already
+reparented before the listing cannot be found at all.
 
 The fake CLI gained the server shape: `serve <pidFile> <afterEofMs> grandchild|alone <answer>` answers the request
 whose line carries `"id":2`, writes its own pid and its sleeping grandchild's, and lives on after stdin closes for as

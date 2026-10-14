@@ -3684,10 +3684,25 @@ Also on that run: `GaugeCaptureTests.TheCatalog_ServesTheLatestReadingPerVendor_
 catalog — the install hint `npm install -g @openai/codex` of a runner without codex, the false positive E5's
 `AParkedSlotIsHeardTests` already met. It now looks for an email, as that test does.
 
+Our own review of that fix found two more, both on tables no machine produces on demand, so they are pinned through
+`ProcessTree`'s pure halves (`Walk`, `ExitedEntry`) in `TheTreeIsReadByIdentityTests` (mcp, 8):
+
+| Hole | Test | Seen red as |
+|---|---|---|
+| A table records a parent NUMBER: a process whose parent died is listed under the reader that reused the number, and the reconcile would kill it | `AChildOlderThanItsParent_IsNotItsChild_NorAreItsOwn`, `ARootThatIsGone_HasNoDescendants` — a child must start no earlier than its parent (`OrphanSweep.Same`'s slack) | `Expected found.Select(member => member.Pid) to be a collection with 2 item(s) because 20 started an hour before the reader that now holds its parent's number, and 21 is 20's, but {10, 20, 11, 21}`; `Expected … to be empty because with no start time for the root there is nothing to tell its children from a reused number's, but found at least one item` |
+| A thread-group leader reads `Z` while the group's other threads still run | `AnEntryHasExited_OnlyWhenNoOtherThreadOfItsGroupRuns` (6 cases) — exited only when `/proc/<pid>/task` lists no thread but the leader | `Expected ProcessTree.ExitedEntry(state, threads, pid: 5) to be False, but found True.` for `("Z", [5, 6])` |
+
 Re-running under WSL also turned `AReaderIsEndedWithItsTreeTests.ATrackerThatFailsOnADescendant_StillEndsTheWholeTree_ThenSaysSo`
 red — `Expected Alive(grandchild) to be False … but found True.` — through the same zombie: the test's own `Alive` helper
 read the start time alone. It now asks `ProcessTree.IsAlive`, the product's rule; Linux CI had passed it on timing only
 (the runner's init reaps faster than WSL's).
+
+The next macOS run reached the server suite for the first time on this branch and failed eleven `GaugeCaptureTests`
+cases — `Expected _notes "gauge codex/a: skipped (platform-unsupported)" to contain "40"` and kin: on macOS the capture
+refuses to spawn (no descendants can be listed; the platform-limits rule), so a test of what it READS cannot run there.
+Those ten tests now skip where `ProcessTree.Supported` is false, and
+`WhereNoTreeCanBeConfirmed_TheCaptureSpawnsNothing_AndSaysWhy` runs ONLY there: the job is Done, nothing is launched,
+the note says `platform-unsupported`, no marker, no reading.
 
 ## Names and a missing root (2026-10-11, `research/PLAN_names_and_a_missing_root.md`)
 

@@ -59,23 +59,45 @@ public static class ProcessTree
             return [];
         }
 
-        var parents = OperatingSystem.IsWindows() ? WindowsParents() : LinuxParents();
+        return Walk(pid, OperatingSystem.IsWindows() ? WindowsParents() : LinuxParents(), ProcessTracking.StartedAt);
+    }
+
+    /// <summary>The descendants of <paramref name="root"/> in a pid → parent-pid map, each with its start time.</summary>
+    /// <remarks>
+    /// A table records a parent NUMBER, and a number is reused: a process whose parent died is listed under whoever holds
+    /// that number now. A child cannot start before its parent, so an entry that did — beyond the identity slack — is
+    /// not a child, and neither is anything under it. A root with no start time is gone, and has nothing to tell apart.
+    /// </remarks>
+    internal static IReadOnlyList<ProcessIdentity> Walk(int root, IReadOnlyDictionary<int, int> parents, Func<int, DateTime?> startedAt)
+    {
+        if (startedAt(root) is not { } rootStarted)
+        {
+            return [];
+        }
+
         var found = new List<ProcessIdentity>();
-        var frontier = new Queue<int>([pid]);
+        var frontier = new Queue<ProcessIdentity>([new ProcessIdentity(root, rootStarted)]);
         while (frontier.TryDequeue(out var parent))
         {
-            foreach (var child in parents.Where(entry => entry.Value == parent).Select(entry => entry.Key))
+            foreach (var child in ChildrenOf(parent, parents, startedAt))
             {
                 frontier.Enqueue(child);
-                if (ProcessTracking.StartedAt(child) is { } started)
-                {
-                    found.Add(new ProcessIdentity(child, started));
-                }
+                found.Add(child);
             }
         }
 
         return found;
     }
+
+    /// <summary>The direct children of <paramref name="parent"/>: listed under its number AND started no earlier than it.</summary>
+    private static IEnumerable<ProcessIdentity> ChildrenOf(
+        ProcessIdentity parent, IReadOnlyDictionary<int, int> parents, Func<int, DateTime?> startedAt) =>
+        parents.Where(entry => entry.Value == parent.Pid)
+            .Select(entry => (Pid: entry.Key, Started: startedAt(entry.Key)))
+            .Where(child => child.Started is { } started && BornAfter(started, parent.StartedUtc))
+            .Select(child => new ProcessIdentity(child.Pid, child.Started!.Value));
+
+    private static bool BornAfter(DateTime child, DateTime parent) => child >= parent || OrphanSweep.Same(child, parent);
 
     /// <summary>
     /// Every live descendant of the process <paramref name="identity"/> names — or none when that pid is somebody else's
@@ -174,7 +196,29 @@ public static class ProcessTree
     /// still running" it is gone. Always false off Linux, where the start-time read already fails for an exited process.
     /// </remarks>
     private static bool Exited(int pid) =>
-        OperatingSystem.IsLinux() && StatFields($"/proc/{pid}/stat") is [var state, ..] && state is "Z" or "X";
+        OperatingSystem.IsLinux() && StatFields($"/proc/{pid}/stat") is [var state, ..] && ExitedEntry(state, ThreadsOf(pid), pid);
+
+    /// <summary>Whether a process table entry in <paramref name="state"/>, whose thread group lists <paramref name="threads"/>, has exited.</summary>
+    /// <remarks>
+    /// The thread-group leader reads <c>Z</c> once its OWN thread has exited, while the group's other threads still run
+    /// and still hold what the process held — so an entry has exited only when no thread but the leader is left.
+    /// </remarks>
+    internal static bool ExitedEntry(string state, IReadOnlyCollection<int> threads, int pid) =>
+        state is "Z" or "X" && threads.All(thread => thread == pid);
+
+    /// <summary>The thread ids of <paramref name="pid"/>'s group, from <c>/proc/&lt;pid&gt;/task</c>.</summary>
+    /// <returns><c>[-1]</c> when the listing cannot be read — a thread nobody can rule out, so the entry is not called exited.</returns>
+    private static int[] ThreadsOf(int pid)
+    {
+        try
+        {
+            return [.. Directory.EnumerateDirectories($"/proc/{pid}/task").Select(path => int.TryParse(Path.GetFileName(path), out var thread) ? thread : -1)];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [-1];
+        }
+    }
 
     /// <summary>The fields of one <c>/proc/&lt;pid&gt;/stat</c> line AFTER the bracketed name: state, parent pid, …</summary>
     /// <remarks>The name may itself hold spaces and brackets, so the fields are counted from the LAST closing bracket.</remarks>
