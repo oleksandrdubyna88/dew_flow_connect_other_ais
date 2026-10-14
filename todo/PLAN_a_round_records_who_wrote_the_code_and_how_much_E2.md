@@ -123,6 +123,7 @@ ALTER TABLE rounds    ADD COLUMN size_state  TEXT NOT NULL DEFAULT '';  -- '' = 
 ALTER TABLE rounds    ADD COLUMN delta_state TEXT NOT NULL DEFAULT '';
 ALTER TABLE rounds    ADD COLUMN delta_from  TEXT NOT NULL DEFAULT '';
 ALTER TABLE rounds    ADD COLUMN size_origin TEXT NOT NULL DEFAULT '';  -- 'live' | 'backfill' (parent §16 D12)
+ALTER TABLE rounds    ADD COLUMN size_gitlinks INTEGER NOT NULL DEFAULT -1;  -- changed gitlinks; -1 = not recorded (parent §7, gate finding 0)
 ALTER TABLE reviewers ADD COLUMN effort      TEXT NOT NULL DEFAULT 'not recorded';  -- '' = applied none (parent §16 D11)
 ```
 
@@ -690,7 +691,8 @@ because a partition that is wrong about one file is not known to be right about 
   - New `src/Store/RoundChangesTable.cs` (the `QuestionConsultTable.cs` shape, through `RoundsDb.Command()`):
     `Record(RoundsDb db, long roundId, RoundSize? size)` = `DELETE FROM round_changes WHERE round_id = $id`, then one insert
     per cell per scope (`added`/`removed` bound `DBNull` when null), then
-    `UPDATE rounds SET size_state = $s, delta_state = $d, delta_from = $f, size_origin = $o WHERE id = $id`. When `size` is
+    `UPDATE rounds SET size_state = $s, delta_state = $d, delta_from = $f, size_origin = $o, size_gitlinks = $g WHERE id = $id`
+    (`$g` from `RoundRecord.Gitlinks`, `-1` when null). When `size` is
     null NOTHING is written — rows and states stay as they are, so a backfilled size survives a live re-record (the
     parent's §16 D14 rule for authors, applied to the size).
   - `src/Store/RoundsDb.cs:196-201` — one call, `RoundChangesTable.Record(this, roundId, round.Size);`, after
@@ -741,6 +743,13 @@ because a partition that is wrong about one file is not known to be right about 
     rule). Every exception except `OperationCanceledException` → the affected scope `unavailable: git failed`, one Warning
     log line with no path. A non-empty `ChangePartition.Disagreement(...)` is a STATE, not an error: the scope is
     `unavailable: numstats disagree` and its fixed sentence (never a path) is logged once at Warning. Logs one Information line: whole files/lines by coverage, delta state, elapsed ms.
+  - **Gitlinks** (parent §7, gate finding 0). The parent repository's numstat shows a submodule change as ONE gitlink
+    line, so the size cannot cover the submodule's own edits. `RoundSizer` counts the changed gitlinks of the `whole`
+    scope from `git diff --raw -z {against}..{sha}` entries whose old or new mode is `160000` (one more git call, no path
+    kept) and sets `RoundRecord.Gitlinks` (`int?`, a trailing member beside `Size`, null = not recorded — E2.S1's
+    `RoundSize` is not widened). The gitlink's own numstat line stays wherever E2.S1's partition puts it (a path with no
+    extension is `unknown`, outside the default `code`+`test` denominator). A failed `--raw` call leaves `Gitlinks` null
+    and the size untouched. Whether the round's WRITES went into a submodule is the authors' side (E4.S3, E5.S4).
   - `src/Server/Rounds/RoundWork.cs` — `public Core.Context.RoundSize? Size { get; init; }` beside `BaseRef` (`:22-30`).
   - `src/Server/PanelService.cs` — after `:757`, `var size = await RoundSizer.MeasureAsync(_context, repoPath, sha,
     collected, shaped, session.Rounds, roundToken);` and `Size = size,` in the `with` at `:866-870`. Nothing else.
@@ -764,6 +773,9 @@ because a partition that is wrong about one file is not known to be right about 
     exits 128: the scope reads `unavailable: git failed`; and end to end, the round's verdict and findings are identical to
     the same round with sizing working.
   - `APlanRound_HasNoSize`.
+  - `AChangedSubmodulePointer_IsCountedAsAGitlink` — real git with a submodule: the branch moves the submodule's commit
+    → `Gitlinks == 1` in the file and `size_gitlinks = 1` in the table; no `code` cell holds its line; a `--raw` failure
+    leaves `Gitlinks` null and the size as measured.
   - `ANumstatDisagreement_IsAStateAndAWarning` — `RoundSizer` driven with an unfiltered numstat that lacks a reviewable
     file: the scope reads `unavailable: numstats disagree`, one Warning with the fixed sentence and no path, and the
     round's verdict and findings are unchanged.

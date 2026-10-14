@@ -201,7 +201,10 @@ opened visible as its own kind, so the report can include or exclude it instead 
 **Association**, per agent in a window — the first that holds:
 
 1. **wrote here** — a write whose checkout root is at or under `repo_path` (a submodule or a worktree under it counts
-   as here, §16 D3).
+   as here, §16 D3). For ASSOCIATION only: the SIZE covers just the gate session's own checkout (`repo_path`'s
+   toplevel), so a write into any OTHER checkout root under `repo_path` — a registered submodule, or a nested worktree —
+   is `wrote here` but its lines are not in this branch's diff, and the round says so (§7, *Only the gate's own
+   checkout is sized*).
 2. **child of an associated agent** — via `parentAgentId` (and `toolUseId`), and only through a SUBAGENT parent that
    is `wrote here` or `child of` in the same window; `main`'s association never propagates (E4.S2, decision 5).
 3. **wrote elsewhere only** — a write into ANOTHER checkout; counted for that repository, not here. A write `outside`
@@ -270,6 +273,16 @@ Two scopes, both kept:
   unavailable — a partition wrong about one file is not known to be right about the rest — and the round logs one
   fixed sentence, no path, at Warning.
 
+**Only the gate's own checkout is sized** (plan gate finding 0, accepted 2026-10-14). The numstat is the parent
+repository's: a change inside a submodule appears there as ONE gitlink line (`Subproject commit …`), and a nested
+worktree that is not a submodule does not appear at all unless it is the same branch. So: the size records changed
+gitlinks AS gitlinks — a count, `rounds.size_gitlinks` (E2.S4, from `git diff --raw` entries of mode `160000`; `-1` =
+not recorded), never their one line as code; and the authors record two counts of `wrote here` write calls whose
+checkout root is NOT `repo_path`'s toplevel — `submodule_writes` (the root is a submodule registered in the checkout's
+`.gitmodules`) and `uncovered_writes` (every such call, submodules included). A round with `uncovered_writes > 0` is
+marked `size not covered`: the report excludes it from per-100-line figures by default and counts it
+(`--with-uncovered` takes it in), and the card says so.
+
 Stored as rows `round_changes(round_id, scope, coverage, kind, files, added, removed)` plus four state columns on
 `rounds` — `size_state` (`''` = not recorded), `delta_state`, `delta_from` (the predecessor's sha) and `size_origin`
 (`live`, or `backfill` for a size reconstructed later with TODAY's exclusion list and diff budget, not the round's;
@@ -316,7 +329,8 @@ coai-mcp --round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stag
   **`gate_count`** = `rounds.gating`, the gate's own count AFTER dedup and the standing-rejection discount
   (`GateRule.cs:32-37`); re-raised; accepted; unresolved. No column, header or test ever calls both "gating".
 - **Denominator**: `shown + elided` lines of `code` and `test` kinds by default (flags select others); rounds with no
-  size, a binary-only change, or `unobserved` authors are excluded AND counted. Per-100-line figures are ratios of
+  size, a binary-only change, `unobserved` authors, or `size not covered` (writes into a submodule or another checkout
+  under `repo_path`, §7; `--with-uncovered` takes them in) are excluded AND counted. Per-100-line figures are ratios of
   sums. A figure with no population is `Unknown`, printed as such, never 0 (the benchmark's `Figure`).
 - **Branch dominance and size**: each cell shows rounds, gate sessions, branches and the largest branch's share;
   under 10 rounds or one branch over 50 % is marked, not hidden.
@@ -327,8 +341,12 @@ coai-mcp --round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stag
   boundary. Exit 0 / 65 (bad flag, unreadable `--add`) / 74 (unreadable store), never 64. Both modes join
   `.agents/PROJECT.md`'s one-shot list.
 
-The round card gets one line: *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9 files*, or
-*authors not observed — transcript not found*.
+The round card gets one line (plan gate finding 2): *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9
+files*. Coders are DISTINCT `wrote here` subagents (by `agent`), grouped by family through
+`shared/model-display-vectors.json`: one family → *N Family coder(s)*; two → *2 Sonnet + 1 Opus coders* (larger group
+first, ties by family name); more than two → *N coders (mixed)*; none → *main only*. A partial state appends
+*· partial — <why>*, `uncovered_writes > 0` appends *· size not covered*, and an unobserved round reads *authors not
+observed — <why>*.
 
 ## 9. Backfill — last, source-local, rerunnable
 
@@ -343,7 +361,13 @@ strength, never overwrites an `observed`/`partial` row produced by a newer or eq
 findings or their resolutions: it NEVER calls `RecordRound`/`RecordRoundRow` (`RoundsDb.cs:190-202,846-868`), which
 rewrites the round row, re-inserts reviewers and deletes findings past the count it is handed — a narrow writer
 writes only the authors and size columns, the round's `round_authors`/`round_changes` rows, and the session file's
-snapshot through the session store under `SessionClaim` (§16 D14). It ships in a RELEASE first; the backfill run and
+snapshot through the session store under `SessionClaim` (§16 D14). **The session file is written FIRST** (plan gate
+finding 3): under the claim, the snapshot is saved and verified by a reload; only then is the projection written FROM
+that snapshot. A rerun reconciles: a round whose snapshot exists but whose database authors are missing or of an older
+reader is re-projected from the snapshot without reading the transcript again; a run killed between the two writes is
+completed by the next one with identical rows. Exit codes: **0** done (nothing to do included), **65** a bad argument,
+**74** a store or I/O error, **75** (`EX_TEMPFAIL`) when at least one busy session was deferred to the next run —
+never 64. It ships in a RELEASE first; the backfill run and
 its RESULTS are a second, docs-and-data commit, and the WSL side needs its own build — NativeAOT does not
 cross-compile Windows → Linux (§16 D16). **Acceptance: a second run changes no totals.** What it
 cannot recover is recorded per round: a deleted transcript or worktree, a rebased-away commit, a session id the
@@ -361,14 +385,16 @@ gone for good. The report does not wait for it.
 | 5 attribution as its own epic | adopted (§6). **Correction**: the window is `RoundEngine.cs:893-902`, not `PanelService ~:2648` (`PanelService.cs` is 1 849 lines) | — |
 | 6 "reviewer model and effort are not persisted" | **half right**: the model IS persisted since step 20 (`RoundsDb.cs:930-944`); the effort is not → `reviewers.effort` joins the first schema step. Requested ≠ ran on a Team server: adopted as a stated limit (`SessionStore.cs:17-28`). Numerators, cohorts, population/arithmetic split: adopted (§8) | `GateRule.cs:32-37` |
 | 7 backfill last, versioned, idempotent | adopted (§9) | `RoundsDb.cs:849-886` |
-| 8 fixtures from the spike before the schema | adopted (step 0) | — |
+| 8 fixtures from the spike before the schema | adopted (step 0) — for the AUTHORS schema (step 23); step 22 derives from git numstat and may land first | — |
 
 ## 11. Build order
 
 0. **Spike: measure, and cut the fixtures.** On Windows and inside WSL: the layout of §2, `meta.json` and `effort`
    presence per Claude Code version on disk, message-id repetition, `/clear` and `--resume` against the registry and
    the inherited variable, transcript coverage of each store's code rounds, WHOLE-session sizes (main + subagents —
-   one real session measured 14.8 MB main + 63 MB subagents, §16 D7) and the read time over them. Predictions written
+   one real session measured 14.8 MB main + 63 MB subagents, §16 D7) and the read time over them. The fixtures gate the
+   AUTHORS schema — step 23 (E5) gives no field a meaning before they exist; step 22 (the size, E2) derives from git
+   numstat alone and may land before E1 (plan gate finding 4, rejected as a dependency, made explicit). Predictions written
    first (`measurement.md` rule 4) for what is still unknown — WSL coverage, read time; Windows coverage (392 / 398)
    was already observed and is recorded as an observation. The read time is Node's; E5 re-measures the C# reader
    before fixing its budget. Output: a `research/RESULTS_` file AND sanitised fixtures under
@@ -379,7 +405,7 @@ gone for good. The report does not wait for it.
    `/clear` and `--resume` probes are attended work by the main session.
 1. **Diff size.** `ReadCounted`, `ChangeSize`, the kind function, the exclusions numstat, the delta numstat,
    `RoundRecord.Size`, schema step 22 (`round_changes`, `size_state`/`delta_state`/`delta_from`/`size_origin`,
-   `reviewers.effort` with its `not recorded` default), written through a new table unit (`RoundsDb.cs` and
+   `size_gitlinks`, `reviewers.effort` with its `not recorded` default), written through a new table unit (`RoundsDb.cs` and
    `RoundsQuery.cs` are past 800 lines and gain call lines only), `--log` emits the size. Ships alone.
 2. **Observation.** `CallerTranscript` → `ObservedSession`, the shared read helpers lifted out of `AgentLog.cs`, the
    reader's own id ladder, the lower bound `fromUtc`, the per-call writes, the home fixture for tests.
@@ -388,7 +414,8 @@ gone for good. The report does not wait for it.
 4. **Store and show.** Schema step 23 (`round_authors` with `who`, `agent` (the opaque agent id, empty for `main` —
    "3 Sonnet coders" counts distinct agents, and contributors deduplicate on it), `requested`, `model`, `effort`,
    `agent_type`, `association`, `window` (the round's `(stage, number)` is its `round_id`'s), `launches`, `turns`, the four token terms,
-   `write_calls`; `rounds.authors_state`, `authors_session`, `authors_id_source`, `authors_reader`, the ambiguous
+   `write_calls`; `rounds.authors_state`, `authors_session`, `authors_id_source`, `authors_reader`,
+   `submodule_writes`, `uncovered_writes` (§7), the ambiguous
    totals, and an index on `authors_session` for the peer lookup E4.S2 needs on EVERY round — peers built from their
    session files; `partial: prior windows unknown` when the lookup cannot answer), all projected from the nullable
    `RoundRecord.Authors` snapshot (§7), which is computed before the round is saved (`RoundEngine.cs:586`) — so
@@ -426,6 +453,9 @@ gone for good. The report does not wait for it.
 | The same round recorded twice | identical rows, no doubled totals |
 | **Migration**: a step-21 database opens at 23; old rows read *not recorded*; read-only `--log`/`--round-counts` on a step-21 file still answer | the append-only contract |
 | **Diff size** on a temp git repo: text edit, binary, rename, lock file, test/docs/config file, an elided file, a second round after one commit, a second round after a rebase | coverage and kind per file; binaries have no lines; `delta` is the head-to-head increment; `unavailable: not an ancestor` |
+| **Submodules and nested checkouts**: a write into a registered submodule under `repo_path`, one into a nested non-submodule worktree, and the submodule's gitlink changed in the diff | both writes `wrote here`; `submodule_writes = 1`, `uncovered_writes = 2`; `size_gitlinks = 1` and the gitlink's line in no `code` cell; the round marked `size not covered`, excluded from per-100-line figures by default and counted, included under `--with-uncovered`; the card says *size not covered* |
+| **Card line** over coder mixes | one family, two families (*2 Sonnet + 1 Opus coders*), three (*3 coders (mixed)*), none (*main only*); coders counted as distinct agents, a straddler once |
+| **Backfill interrupted** between the session-file save and the projection | the next run re-projects from the snapshot without reading the transcript; rows identical to an uninterrupted run |
 | **Report** over a seeded store: known mixes, two reviewer sets, failed reviewers, one dominant branch, unknown sizes, first and corrective rounds | exact cells; ratios of sums; `Unknown` not 0; exclusions counted; cohorts never pooled; marks; `--add` of two halves = the union |
 | Report exit codes | 0 on an empty store, 65, 74, never 64 |
 | Backfill twice, over a store with one `observed` row of a newer reader | the second run changes no totals; the newer row and every resolution survive; reviewers and findings rows are byte-identical before and after |
@@ -474,7 +504,7 @@ document's own defects section (E6 has none; its §0 decisions D1–D16 played t
 |---|---|---|---|
 | D1 | Skipped and interrupted rounds never open a window and are never a delta predecessor; activity before them lands in the next RECORDED round of the same gate session | a skip is written `done` with a sha (`RoundSkips.cs:95-111`) and reviewed nothing; an interrupted round is swept past the call site (`SessionStore.cs:578-597`) | E2/1, E4/7, E5/8 |
 | D2 | Windows tile ALL stages of one gate session in time order; contributors of code round N = the union of every window up to N, each tagged with its stage; the report groups by the tag; rounds are always `(stage, number)` | the coding between plan `proceed` and code round 1 sits in a plan-tiled window; hiding it would lose the main authorship stretch | E4/9, E6 D2 |
-| D3 | A write is `here` when the nearest checkout root of its path is at or under `repo_path` (submodules and worktrees under it count); a path under no checkout is `outside` — never a second repository, never evidence; a write into another checkout is `elsewhere` | scratchpad, memory and temp writes are constant; counted as repositories, `same-session` would almost never apply | E3/4, E3/5, E4/2 |
+| D3 | A write is `here` when the nearest checkout root of its path is at or under `repo_path` (submodules and worktrees under it count); a path under no checkout is `outside` — never a second repository, never evidence; a write into another checkout is `elsewhere`. **Gate finding 0:** `here` is for association only — the size covers `repo_path`'s own checkout, so writes into a submodule or nested checkout are counted (`submodule_writes`, `uncovered_writes`) and mark the round `size not covered`; changed gitlinks are counted as `size_gitlinks`, never sized as code | scratchpad, memory and temp writes are constant; counted as repositories, `same-session` would almost never apply | E3/4, E3/5, E4/2 |
 | D4 | Writes are kept per call — (agent, instant, checkout root, tool) — never as a boolean; `write_calls` counts them | association is per window; a session-wide boolean associates an agent with a window where it wrote nothing | E3/3, E4/1, E5/4 |
 | D5 | Never duplicated: an agent writing into two repositories, or activity two gate sessions could claim, goes to the ambiguous totals of each candidate as a COUNT of ambiguous items; its tokens are never added twice. **Made exact by E4.S2 (decision 4):** the two-repository agent is `ambiguous` with a `wrote here` ROW holding its write calls into this repository and ZERO turns and tokens; its messages are owned once — here or by the first-ranked peer (`claimed by peer`, E4.S3's `ClaimedByPeer` total) | double counting is the one error with no symptom; the row keeps authorship without adding a token | E4/3, E4/5 |
 | D6 | Evidence cutoff: only lines stamped before round N's start are evidence for N, live and backfill alike; compared in UTC, clock source recorded, skew a stated limitation. **Refined by E4.S2 (decision 7):** a PEER's claim is judged on the peer's own window and evidence, which may end after N's start but always before the peer completed | otherwise a live record and a backfill of one round differ, and "a second backfill changes nothing" cannot see it; truncating a peer's evidence at N's start would let one message land in two rows | E4/10, E4/13 |
@@ -485,7 +515,7 @@ document's own defects section (E6 has none; its §0 decisions D1–D16 played t
 | D11 | `reviewers.effort` gets an explicit `not recorded` default for rows before step 22, distinct from `''` = no effort applied | codex, the only reviewer since 2026-10-11, applies none (`RosterBuilder.cs:705-712`); without a marker the two read alike | E2/4, E6 D7 |
 | D12 | `rounds.size_state`, `delta_state`, `delta_from` (E2's C2) are adopted; a backfilled size carries `size_origin = backfill` (today's exclusion list and diff budget, not the round's) | an observed zero must not read like "unavailable"; a reconstruction must say so | E2/3, E7/7 |
 | D13 | The privacy test blanks `rounds.agent_log` (which keeps transcript TEXT today) before checking the `.db` bytes, positive control first; the snapshot is stripped from `open`/`status` replies | `agent_log` keeps its behaviour by design (§3); the replies send `session.Rounds` to the calling AI (`PanelService.cs:1814-1822`) | E5/1, E5/7 |
-| D14 | Session-file snapshot writes go under `SessionClaim`; a live re-record with a null snapshot never erases existing DB authors (E2.S3 applies the same rule to a null `Size`, so a backfilled size survives too); the backfill writes the snapshot through the session store too, and NEVER through `RecordRound`/`RecordRoundRow` — a narrow writer | `RecordRound` rewrites reviewers and deletes findings (`RoundsDb.cs:925,960`); a projection-only backfill would be lost on a rebuild | E5/9, E7/6, E7/8 |
+| D14 | Session-file snapshot writes go under `SessionClaim`; a live re-record with a null snapshot never erases existing DB authors (E2.S3 applies the same rule to a null `Size`, so a backfilled size survives too); the backfill writes the snapshot through the session store too — FIRST, saved and verified under the claim, the projection second and FROM the snapshot, so a rerun re-projects a round whose snapshot exists without re-reading the transcript (gate finding 3) — and NEVER through `RecordRound`/`RecordRoundRow` — a narrow writer | `RecordRound` rewrites reviewers and deletes findings (`RoundsDb.cs:925,960`); a projection-only backfill would be lost on a rebuild | E5/9, E7/6, E7/8 |
 | D15 | Growth: the snapshot row in §14 (22–75 MB a year a side; progress-tick saves rewrite the whole file — stated) | the decision put authors into the session file | E5/6 |
 | D16 | E7: release first (normal flow), then the backfill + RESULTS as a second, docs-and-data commit; WSL needs its own build (no NativeAOT cross-compile); the operation steps say so | the operation needs a binary containing the epic on BOTH sides | E7/1 |
 | D17 | Tests never read the developer's `~/.claude`: a test-assembly fixture points home/profile at a temp dir for the new reader AND for `AgentLog` | FakeCli round tests slice the real `~/.claude/projects` today (`RoundEngine.cs:897`) | E5/12 |
@@ -528,7 +558,12 @@ hand-over — peers on EVERY round, from the peers' session files, `ReadFrom` be
 ## Definition of Done
 
 - [ ] Step 0's results file exists with its prediction written first, the WSL side measured, and the fixtures cut
-      before the schema.
+      before the AUTHORS schema (step 23); step 22 may have landed earlier.
+- [ ] Writes into a submodule or a nested checkout under `repo_path` are counted and mark the round `size not covered`;
+      changed gitlinks are counted, never sized as code.
+- [ ] The card line follows §8's coder-mix format (two families, *N coders (mixed)*, *main only*).
+- [ ] The backfill saves the snapshot first and re-projects from it on a rerun; its exit codes are 0 / 65 / 74 / 75,
+      never 64.
 - [ ] A code round records its size by scope, coverage and kind; binaries carry no lines; the delta is a head-to-head
       diff or says why not; a pre-step round reads *not recorded*.
 - [ ] `reviewers.effort` is persisted.
@@ -540,7 +575,8 @@ hand-over — peers on EVERY round, from the peers' session files, `ReadFrom` be
       as unknown, marks small and dominated cells, and two sides combine through `--add`.
 - [ ] `--backfill-authors` ran on both sides; a second run changed nothing; unrecoverable rounds are counted per reason.
 - [ ] Ten rounds per side were hand-checked before any number was reported; the answer is in a `RESULTS_` file.
-- [ ] `.agents/PROJECT.md` lists both modes; `research/module_server.md` and `module_extension.md` describe the reader,
+- [ ] `.agents/PROJECT.md`'s one-shot list names `--round-authors` and `--backfill-authors`, each in the same commit
+      that wires it into `Program.cs` (gate finding 1); `research/module_server.md` and `module_extension.md` describe the reader,
       the attribution, the tables and the card line; the plan is promoted with its deviations.
 - [ ] All tests pass through the MTP executable and `npm test`; the family checks are green.
 
@@ -554,8 +590,8 @@ E5, E6, E7 carry no area — data, wiring, an arithmetic §8 fixes as exact-cell
 
 *Consultant (gpt-6-astra), 2026-10-14, used for this split:* diff size first, useful on its own; observation (reader + record)
 as ONE epic, attribution kept out; attribution its own epic — the highest risk, it decides what the report means; the report
-after live attribution, not waiting for backfill; backfill last, rerunnable; the spike's fixtures before any schema gives a
-field meaning. Riskiest everywhere: numbers wrong without a symptom — the association, tokens once per `message.id`, the
+after live attribution, not waiting for backfill; backfill last, rerunnable; the spike's fixtures before the AUTHORS schema
+(step 23) gives a field meaning — step 22 (size) is git numstat only and may land first. Riskiest everywhere: numbers wrong without a symptom — the association, tokens once per `message.id`, the
 denominator's coverage kinds, the delta's definition; the three areas hold exactly those four. E7 joins §11's steps 6 and 7:
 the answer cannot precede the backfill, and the hand-check cannot follow the answer.
 
@@ -569,11 +605,11 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
   each store's transcript coverage, the read time over 14 MB — prediction first (`measurement.md` rule 4: ≥ 95 %, ≤ 300 ms p50).
 - **Scope.** A `research/RESULTS_` file; sanitised fixtures under `src_mcp/tests/fixtures/caller-transcripts/` (LF by
   `.gitattributes`), the union of §6's and §12's cases, each with a `rounds.json`, every string off a shape-checked allowlist the
-  sentinel; whole-session sizes (§16 D7); the `/clear` and `--resume` probes attended; the WSL side from inside WSL (`roundCountsRead.ts:18-21`). No product code, no schema step.
+  sentinel; whole-session sizes (§16 D7); the `/clear` and `--resume` probes attended; the WSL side from inside WSL (`roundCountsRead.ts:18-21`). No product code, no schema step. Its fixtures gate the AUTHORS schema (step 23, E5) only; E2's step 22 derives from git numstat and does not wait for them (gate finding 4).
 - **Done when.** The RESULTS file carries prediction then observation for both sides; one fixture per case; a test asserts
   every string off the allowlist is the sentinel and every allowlisted one has its shape; the measured read time is in the file, for E5's budget.
 
-### E2 — Diff size, shipped alone (step 1) · M · depends on nothing, may run beside E1
+### E2 — Diff size, shipped alone (step 1) · M · depends on nothing, may run beside E1 or before it
 
 - **Stories.** [PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md)
 - **Goal.** Every code round records its change by scope, coverage and kind (§7); `reviewers.effort` is persisted.
@@ -652,10 +688,12 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
   accepted, unresolved (§16 D10) — each with total and coverage; contributors through E4.S4; families from
   `shared/model-display-vectors.json` (§16 D19); denominator `shown + elided` lines
   of `code`+`test` by default; ratios of sums; `Unknown` never 0; dominance marks; JSON of sums, `--table`, `--add`; exit
-  0 / 65 / 74, never 64; the one-shot list at `.agents/PROJECT.md:53`.
+  0 / 65 / 74, never 64; `--round-authors` registered in `.agents/PROJECT.md`'s one-shot list IN THE SAME COMMIT that wires
+  it into `Program.cs`; rounds marked `size not covered` excluded from per-100-line figures by default and counted.
 - **Done when.** §12's report row passes over a seeded store — exact cells, ratios of sums, `Unknown` not 0, exclusions counted,
   cohorts never pooled, marks under 10 rounds or one branch over 50 %, `--add` of two halves = the union; exit 0 on an empty
-  store, 65 on a bad flag or an unreadable `--add`, 74 on an unreadable store; the header names coincident changes.
+  store, 65 on a bad flag or an unreadable `--add`, 74 on an unreadable store; the header names coincident changes;
+  `.agents/PROJECT.md` names `--round-authors` and `ARequestFaultIsNotAnOldBinaryTests` is green.
 
 ### E7 — Backfill, then validate, then answer (steps 6–7) · M · depends on E6, which does not wait for it (§8)
 
@@ -666,9 +704,12 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
   with empty or older-reader `authors_state` (a non-session `caller` written `unobserved`); never over an `observed`/`partial`
   row of a newer-or-equal reader; findings and resolutions untouched — a narrow writer, never `RecordRound` (`RoundsDb.cs:190-202`),
   the snapshot through the session store under `SessionClaim` (§16 D14), `size_origin = backfill` (§16 D12); released first,
-  the run and RESULTS a second commit, WSL built in WSL (§16 D16); §9's unrecoverable reasons per round;
-  `.agents/PROJECT.md`. Then rule 2 of `measurement.md` on both sides; the before/after table via `--round-authors --add`
+  the run and RESULTS a second commit, WSL built in WSL (§16 D16); the session file saved FIRST and the projection
+  re-derived from it on a rerun (gate finding 3); exit 0 / 65 / 74 / 75, never 64; §9's unrecoverable reasons per round;
+  `--backfill-authors` registered in `.agents/PROJECT.md`'s one-shot list IN THE SAME COMMIT that wires it into `Program.cs`. Then rule 2 of `measurement.md` on both sides; the before/after table via `--round-authors --add`
   with §11 step 7's columns; `research/module_server.md`, `module_extension.md`; `/promote-plan` of this plan with its `_E<n>.md`.
 - **Done when.** Twice over a store holding one `observed` row of a newer reader: the second run changes no totals, the newer
-  row and every resolution survive; unrecoverable rounds counted per reason; ran on both sides; the RESULTS file has the
+  row and every resolution survive; a run killed between the session-file save and the projection is completed by the
+  next with identical rows; each exit code has its test; `.agents/PROJECT.md` names `--backfill-authors`;
+  unrecoverable rounds counted per reason; ran on both sides; the RESULTS file has the
   hand-check first, the table second, association-only in its header; docs updated; `plan-lifecycle.mjs` clean.

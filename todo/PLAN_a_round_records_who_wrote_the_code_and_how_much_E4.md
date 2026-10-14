@@ -649,8 +649,16 @@ public sealed record ActivityTotals(int Agents, int Launches, int Turns, TokenTe
 public sealed record RoundAuthors(
     string CallerSessionId, string State, ImmutableArray<string> Reasons,
     ImmutableArray<AuthorRow> Rows,
-    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches);
+    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,
+    ImmutableArray<CheckoutWrites> WritesOutsideTheGateCheckout);   // gate finding 0, below
+
+public sealed record CheckoutWrites(string Root, int Calls);   // in memory only — E5 stores counts, never the root
 ```
+
+`WritesOutsideTheGateCheckout` (plan gate finding 0, parent §7): for every owned `wrote here` write placement whose
+checkout root is NOT `Gate.RepoPath` itself (a submodule or a nested worktree under it), the root and its call count,
+ordered by root, ordinal. Association is unchanged by it — those writes are `wrote here` — but their lines are not in
+the gate checkout's diff. E5.S4 turns it into `submodule_writes` and `uncovered_writes`; the root never leaves memory.
 
 `ClaimedByPeer` totals the items E4.S2 labels `claimed by peer` — owned by an earlier-completed window of a peer gate
 session; like `Elsewhere`, they make no row and no contributor here.
@@ -697,6 +705,7 @@ the `-1` sentinel and record the choice (reuse-first).
 |---|---|
 | `ARowIsOneAgentModelAndEffortInOneWindowTests` | a model switch gives two rows for main; an effort switch gives two rows; tokens are exact sums; a message E3 folded from three lines contributes once |
 | `ALaunchIsCountedOnceAndNeverLostTests` | a launch lands on its first-message row; a straddler's later window shows `Launches = 0`; an agent launched with no assistant message in its first window has a zero-token row carrying the launch; Σ `Launches` over every window of a session = the number of distinct launched agents |
+| `AWriteIntoANestedCheckoutIsHereButOutsideTheGateCheckoutTests` | a write into a submodule root and one into a nested worktree under `Gate.RepoPath`: both `wrote here` on the agent's row, both listed in `WritesOutsideTheGateCheckout` with their call counts; a write into `Gate.RepoPath` itself is not |
 | `AmbiguousAndElsewhereActivityHasNoRowsTests` | they appear only in the totals; `Agents` counts distinct agents; `claimed by peer` items only in `ClaimedByPeer` |
 | `ATwoRepositoryAgentKeepsItsWritesAndAddsNoTokenTests` | the agent of E4.S2 decision 4 has one `wrote here` row with its write calls into this repository and zero turns, launches and tokens; its messages are counted once, in `Ambiguous` or `ClaimedByPeer` |
 | `EveryWindowAccountsForEveryMessageTests` | local completeness over ROWS: Σ row turns + ambiguous turns + elsewhere turns + claimed-by-peer turns = the window's distinct message ids, and the same per token term — over every S2 acceptance scenario, through one `[Theory]` fed by the builder |

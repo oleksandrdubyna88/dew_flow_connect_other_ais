@@ -136,7 +136,10 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     `--since`.
   - **Strength** — `observed` 3 > `partial` 2 > `unobserved` 1 > empty 0 — one function over E5's state vocabulary.
   - **Rules, first match**: (1) `StartedUtc` before `--since` → not selected. (2) A non-empty state written by a reader
-    ≥ the current one → `keep: equal or newer reader` — never recomputed. (3) The database holds such a row but the
+    ≥ the current one → `keep: equal or newer reader` — never recomputed. (3a) The session file's round holds a
+    snapshot of a reader ≥ the current one but the database's authors are empty or of an older reader →
+    `re-project`: the rows are written FROM the snapshot, the transcript not read (gate finding 3 — the completion of
+    a run killed between its two writes). (3) The database holds such a row but the
     session file's round has no `Authors` snapshot → `heal snapshot` (copied from the database rows, NOT recomputed —
     the transcript may be gone since). (4) Empty, or an older reader → `compute`; after computing, the result is
     written only when its strength ≥ the existing one, else `keep: stronger existing`. (5) Size, decided apart:
@@ -219,15 +222,18 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   to a shared unit both use ([reuse-first.md](../.agents/conventions/common/reuse-first.md) step 2.2), never retyped
   as a second `INSERT`; tests `src_mcp/tests/ABackfillLeavesEverythingElseWhereItWasTests.cs`.
 - **Brief.**
-  - **Per round, database first, one transaction**: `UPDATE rounds SET authors_state, authors_session,
-    authors_id_source = 'stored', authors_reader, <ambiguous totals> WHERE id = $round`; `DELETE` then `INSERT` that
-    round's `round_authors`; the same for `round_changes` when S1 said compute-size, with `size_origin = 'backfill'`
-    (parent §16 D12). Nothing else is written: no `RecordRound`, no `RecordSession`.
-  - **Then the session file, under the claim**: `SessionClaim.TryTake(dataDir, repo_path, branch)`
-    (`SessionClaim.cs:44-58`) → `SessionStore.Load` → replace ONLY the matching `(stage, number)` round's `Authors` /
-    `Size`, and only where S1 allowed → `SessionStore.Save` (`SessionStore.cs:471-484`) → load again and verify. The
-    claim is taken BEFORE the database transaction: when it is busy the round is `deferred` and NEITHER side is
-    written, so the two never disagree because of a busy session.
+  - **The session file FIRST, under the claim** (plan gate finding 3): `SessionClaim.TryTake(dataDir, repo_path,
+    branch)` (`SessionClaim.cs:44-58`) → `SessionStore.Load` → replace ONLY the matching `(stage, number)` round's
+    `Authors` / `Size` / `Gitlinks`, and only where S1 allowed → `SessionStore.Save` (`SessionStore.cs:471-484`) → load
+    again and verify. When the claim is busy the round is `deferred` and NEITHER side is written. When the verify fails
+    the database is not touched for that round.
+  - **Then the projection, FROM the saved snapshot, one transaction**: `UPDATE rounds SET authors_state,
+    authors_session, authors_id_source = 'stored', authors_reader, submodule_writes, uncovered_writes, <ambiguous
+    totals> WHERE id = $round`; `DELETE` then `INSERT` that round's `round_authors`; the same for `round_changes` (and
+    `size_gitlinks`) when S1 said compute-size, with `size_origin = 'backfill'` (parent §16 D12) — every value read
+    from the snapshot just verified, never from the in-memory result. Nothing else is written: no `RecordRound`, no
+    `RecordSession`. A run killed after the save and before this transaction leaves a snapshot without rows, which
+    S1's rule 3a re-projects on the next run without reading the transcript.
   - **The race §3 names** (`open` and the orphan sweep save without the claim): a verify that finds the snapshot gone
     leaves the database row as written; the next run's S1 rule 3 heals it. The summary counts both.
   - **E5's live re-record must not undo a backfill.** When the live projection re-records a round whose session copy
@@ -252,12 +258,19 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     `Size` removed from both, is equal; the other rounds' snapshots are untouched.
   - `ABusySession_IsDeferred_AndNeitherSideIsWritten`: the test holds the claim → database and file unchanged,
     `deferred = 1`.
+  - `TheSnapshotIsSavedBeforeTheProjection`: a writer seam that throws after the session-file save and before the
+    database transaction (a test-only fault point, the run "killed" between the two writes) → the file holds the
+    snapshot, the database holds no authors for the round; the next run re-projects it (S1 rule 3a) WITHOUT opening
+    the transcript (the fixture's transcript deleted between the runs proves it) and its `round_authors` rows and
+    authors columns equal those of an uninterrupted run, byte for byte. **Break-it**: write the database first → after
+    the fault the database holds rows the file does not, and the equality fails.
   - `ASnapshotLostToAConcurrentOpen_IsHealedOnTheNextRun`: write; save the file from a copy loaded before the write
     (what `open` does); run again → the snapshot is back, the database unchanged.
   - `ALiveReRecordWithoutTheSnapshot_KeepsTheBackfilledAuthors` (the E5 cross-check).
   - Sentinels absent from the database bytes and the session files.
 - **Done when.** All pass; the three break-its observed red with the named symptom and restored green.
-- **Depends on.** S1, E2 (`round_changes` writer, `Size`), E5 (step 23, the authors writer, `RoundRecord.Authors`).
+- **Depends on.** S1, E2.S3 (`round_changes` writer, `RoundRecord.Size`/`Gitlinks`), E5.S1 (`RoundRecord.Authors`), E5.S2
+  (step 23, the authors writer).
 - **Model.** scenarios + brief **opus** → code + tests **sonnet** → review **opus** → fixes **sonnet**.
 
 ### E7.S4 — `coai-mcp --backfill-authors`: the mode, its backup, its summary, its scenario
@@ -287,8 +300,11 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   - **Run**: S1 selects, S2 rebuilds, the reader reads once per caller, S3 writes — ordered by (caller, started).
   - **Summary JSON on stdout**, text-free: `readerVersion`, `since`, `dryRun`, `backupDir`, `selected`, `written`,
     `healed`, `kept: {equalOrNewerReader, strongerExisting}`, `deferred`, `unrecoverable: {<reason>: n}`,
-    `size: {written, kept, unrecoverable: {<reason>: n}}`, `elapsedMs`. A deferred round is not a failure: exit 0, and
-    the summary says to run again.
+    `size: {written, kept, unrecoverable: {<reason>: n}}`, `reprojected`, `elapsedMs`.
+  - **Exit codes** (plan gate finding 5): **0** — done, including nothing to do and a missing store; **65** — a bad,
+    repeated or unknown argument (usage on stderr); **74** — a store or session file that will not read or write;
+    **75** (`EX_TEMPFAIL`) — the run completed but at least one busy session was deferred: the summary is printed
+    and says to run again; **never 64**, which means "this binary does not know the mode".
 - **Tests (the scenario; RED first against a mode that answers `{}` and writes nothing).**
   - `BackfillTwice_TheSecondRunChangesNoTotals`: run 1 writes; run 2 has `written = 0`, `healed = 0`; the SHA-256 of
     a canonical dump of the authors and size tables is identical after both runs, and so is `--round-authors`'s JSON
@@ -301,14 +317,17 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   - `ADryRunWritesNothing`: SHA-256 and mtime of `coai.db` and every session file unchanged, no backup folder; its
     counts equal the real run's.
   - `TheBackupHoldsTheStoreAsItWas`: the backup opens and its row counts equal the pre-run counts.
-  - Exit codes: 0 with no database and no data directory created; 65 for a bad, repeated or unknown flag; 74 for a
-    `coai.db` that is a directory; never 64.
+  - Exit codes, one test each: 0 with no database and no data directory created, and 0 when every round is already
+    current (nothing to do); 65 for a bad, a repeated and an unknown flag; 74 for a `coai.db` that is a directory and for
+    a session file that cannot be written; 75 when the test holds one session's claim during the run (the summary
+    printed, `deferred = 1`); and a sweep asserting no path through the mode returns 64.
   - `--since`: a round started before it is untouched.
   - Sentinels absent from stdout, stderr, the database bytes and the session files.
-- **Done when.** The scenario passes; both break-its observed; `.agents/PROJECT.md` lists the mode and
-  `ARequestFaultIsNotAnOldBinaryTests` is green; `research/module_server.md` and `module_tests.md` carry it; the whole
+- **Done when.** The scenario passes; both break-its observed; `--backfill-authors` is in `.agents/PROJECT.md`'s one-shot
+  list IN THE SAME COMMIT that wires it into `Program.cs`, and `ARequestFaultIsNotAnOldBinaryTests` is green; each exit
+  code 0 / 65 / 74 / 75 has its test and 64 is never returned; `research/module_server.md` and `module_tests.md` carry it; the whole
   `CoaiMcp.Tests.exe` suite and `node .agents/conventions/tools/plan-lifecycle.mjs` green.
-- **Depends on.** S1, S2, S3; E6 (the report used as the totals oracle).
+- **Depends on.** S1, S2, S3; E6.S4 (the report's JSON of sums, used as the totals oracle).
 - **Model.** scenarios + brief **opus** → code + tests **sonnet** → review **opus** → fixes **sonnet**.
 
 ## 6. Operation and hand-check

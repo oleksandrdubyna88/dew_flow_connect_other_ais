@@ -89,7 +89,8 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
 - **Scope.**
   - New `src_mcp/src/Store/RoundAuthors.cs`: `RoundAuthors(State, Session, IdSource, Reader, Rows, Ambiguous)`; a row
     `AuthorRow(Who, Agent /* opaque agent id, "" for main — E4/8, accepted in parent §16 */, Requested, Model, Effort, AgentType, Association, Window, Launches, Turns, InputTokens, OutputTokens,
-    CacheCreationTokens, CacheReadTokens, WriteCalls)` (parent §11 step 4's columns); `AuthorTotals` for the ambiguous totals.
+    CacheCreationTokens, CacheReadTokens, WriteCalls)` (parent §11 step 4's columns); `AuthorTotals` for the ambiguous totals;
+    `SubmoduleWrites` and `UncoveredWrites` (ints, parent §7 — gate finding 0).
     `Rows` is normalised to `[]` inside the snapshot (an empty list and an absent one mean the same thing there); the snapshot
     itself is not. **If E4's per-round output already has this shape, persist E4's type — do not copy its fields into a twin.**
   - `RoundRecord.Authors { get; init; }` (`RoundAuthors?`) beside `Caller` (`SessionStore.cs:193`), with remarks naming the
@@ -119,7 +120,7 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
     requested, model, effort, agent_type, association, window TEXT NOT NULL DEFAULT '', launches, turns, input_tokens,
     output_tokens, cache_creation_tokens, cache_read_tokens, write_calls INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (round_id,
     ordinal))`; on `rounds`: `authors_state`, `authors_session`, `authors_id_source` (TEXT, default `''`), `authors_reader`
-    (INTEGER, default 0), and `ambiguous_launches`, `ambiguous_turns`, `ambiguous_input_tokens`, `ambiguous_output_tokens`,
+    (INTEGER, default 0), `submodule_writes`, `uncovered_writes` (INTEGER, default 0, meaningful only with a state), and `ambiguous_launches`, `ambiguous_turns`, `ambiguous_input_tokens`, `ambiguous_output_tokens`,
     `ambiguous_cache_creation_tokens`, `ambiguous_cache_read_tokens` (INTEGER, default 0); `CREATE INDEX IF NOT EXISTS
     rounds_by_authors_session ON rounds (authors_session)`. Remarks in the style of steps 20–21 (`Schema.cs:576-616`): empty
     state = not recorded; the zero defaults mean nothing without a state.
@@ -178,7 +179,10 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
     round) → `RoundAttribution.ReadFrom(input without the observation)` → E3's read (budget + home seam + that
     `fromUtc`) → the ONE mapping of `ObservedSession` onto E4's records (E4.S1's *Mapping from E3*) with the universe
     of E4.S2 decision 6 (the gate's and every peer's `repo_path` ∪ every `WriteTarget.Where` root E3 resolved) →
-    `RoundAttribution.Assign` → E4.S3's `Build` → the snapshot. The attributed round's `CallerSessionId` is the id E3's
+    `RoundAttribution.Assign` → E4.S3's `Build` → the snapshot. From `Build`'s `WritesOutsideTheGateCheckout` the step
+    derives `UncoveredWrites` (every call listed) and `SubmoduleWrites` (the calls whose root, relative to `repo_path`,
+    is a `submodule.<name>.path` of the checkout's `.gitmodules` — read once per round, `git config -f .gitmodules
+    --get-regexp`, a failed read counting none as submodule and saying so at Debug); no root is stored (gate finding 0). The attributed round's `CallerSessionId` is the id E3's
     ladder resolved; earlier rounds' come from `authors_session`, else a UUID `rounds.caller`, else `""`. An
     `ArgumentException` from `Assign` (its `Validate()` refused the input) becomes `unobserved: invalid input` — a
     reason this story adds to its own vocabulary. Every other exception is caught, logged as a warning with its type
@@ -213,6 +217,8 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
   - An input `Validate()` refuses (a caller mismatch planted in the session file) → `unobserved: invalid input`; the
     round still answers and is saved.
   - A feature round and a skipped round → `Authors == null`.
+  - A fixture write re-pointed into a registered submodule of the temp repository and one into a nested worktree →
+    `SubmoduleWrites = 1`, `UncoveredWrites = 2` on the snapshot and the columns; the rows still `wrote here`.
   - The suite guard: with `CLAUDE_CODE_SESSION_ID` set to a real-looking id and the fixture in place, a `PanelService` round in
     a test that did not ask for authors records `unobserved: no session id` — and the whole suite's wall time is within 5 % of
     the run before this story (measured both, numbers in the summary).
@@ -259,9 +265,12 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
   - `src_vs_code/src/rounds.ts`: `RoundRecord` (`:51-82`) gains `readonly authors?: RoundAuthors` (and E2's `size?` if E2 did
     not add it); a pure `writtenWith(round): string` beside `calledBy` (`:148-160`): no snapshot → `''`; `unobserved: <why>` →
     `authors not observed — <why>`; else main = the distinct displayed models of `who = main` rows; coders = the summed
-    `launches` of subagent rows with association `wrote here`, grouped by family, *N Family coder(s)*; both windows counted
-    (§3); size = E2's `delta` scope when available, else `whole`, lines of `shown` + `elided`, files of `shown` + `elided` +
-    `binary`, the clause omitted when there is no size; `partial: <why>` appends *· partial — <why>*.
+    DISTINCT `agent` keys of subagent rows with association `wrote here` (a straddler once), grouped by family through
+    `shared/model-display-vectors.json`: one family → *N Family coder(s)*; two → *2 Sonnet + 1 Opus coders* (larger group
+    first, ties by family name); more than two → *N coders (mixed)*; none → *main only* (parent §8, gate finding 2); both
+    windows counted (§3); size = E2's `delta` scope when available, else `whole`, lines of `shown` + `elided`, files of `shown` + `elided` +
+    `binary`, the clause omitted when there is no size; `partial: <why>` appends *· partial — <why>*; `uncoveredWrites > 0`
+    appends *· size not covered*.
   - The model display: `claude-<family>-<major>-<minor>[-<date>]` → *Family major.minor*; anything else verbatim, never
     guessed. Its cases live in a new `shared/model-display-vectors.json` (the `shared/path-family-vectors.json` precedent, read
     by `src_vs_code/src/test/pathFamily.test.ts` and `src_mcp/tests/SharedPathVectors.cs`) so E6's C# family function reads the
@@ -274,7 +283,9 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
   calls nothing the minifier can rename (`bundledPage.test.ts:188`). Every value is escaped.
 - **Tests (RED first; `npm test`):**
   - `roundsLog.test.ts`: `writtenWith` over observed (one main model; a model switch → two), partial, unobserved, absent, no
-    size, a `before-open` row, a `child of` subagent (not a coder), a `wrote here` Opus subagent beside two Sonnet ones;
+    size, a `before-open` row, a `child of` subagent (not a coder), a `wrote here` Opus subagent beside two Sonnet ones
+    (*2 Sonnet + 1 Opus coders*), three families (*3 coders (mixed)*), no `wrote here` subagent (*main only*), one coder
+    straddling two windows (counted once), a round with `uncoveredWrites` (*· size not covered*);
     `writtenWithHtml('', esc) === ''`; a hostile model id is escaped.
   - Every vector of `shared/model-display-vectors.json` through the display function.
   - `bundledPage.test.ts`, the running page (`roundsLogPageHarness.ts:52-60` fixture shape, the `:173-186` open-a-row pattern):
