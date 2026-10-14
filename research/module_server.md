@@ -7154,3 +7154,17 @@ step after the release, recorded then in research/RESULTS_vibe_confinement.md an
   after another, not in parallel. Each copy is bounded by D6's ceilings (bytes, files, 60 s) and all of them by the
   aggregate cap and the free-space floor; a parallel copy would contend for the same disk and the same budget for little
   wall time on the one or two roots a row usually grants.
+
+### The #811 checkpoint code round (2026-10-13)
+
+- **A copy's sources are not launch flags.** `Confinement.Planned.AddDirs` means real `--add-dir` flags for claude and agy;
+  Vibe's plan put its granted roots there too, so a future composer could have passed them to Vibe as `--add-dir` (D3
+  forbids it). The roots a launch reads through copies now live in their own field, `Planned.SnapshotSources`; Vibe's
+  `AddDirs` is empty, and `QuestionRowLaunch` copies `SnapshotSources`.
+- **The copies are bounded by the row's budget.** A question row's granted roots are copied one after another before Vibe
+  starts, each up to D6's ceilings — ten slow roots would spend minutes first. `ConsultantPlaces.OneShotAsync` now takes a
+  budget and makes every copy under one linked token cancelled after it: for a question row the row's own
+  (`RowLaunchInput.Budget`, `COAI_QCONSULT_ROW_MINUTES`, `QuestionConsultSettings.RowBudget`), for the consultant check its
+  turn budget. Past it the place is refused — *"copying the granted folders took longer than the row's budget (N s): k of
+  m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
+  starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).

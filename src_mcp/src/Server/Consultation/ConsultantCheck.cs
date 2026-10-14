@@ -208,7 +208,7 @@ internal sealed class ConsultantCheckTurn(
 
     private async Task<ConsultantPlace> PlaceAsync(Turn turn, CancellationToken ct) =>
         turn.Runtime.NeedsASanitisedSnapshot
-            ? await _places.OneShotAsync(Path.Combine(turn.Scratch.Root, OwnName), [turn.Scratch.Repo], ct)
+            ? await _places.OneShotAsync(Path.Combine(turn.Scratch.Root, OwnName), [turn.Scratch.Repo], turn.Budget, ct)
             : ConsultantPlace.Checkout;
 
     private async Task<ConsultCheckRecord> InPlaceAsync(Turn turn, ConsultantPlace place, Func<ConsultFailure> killedAs, CancellationToken ct)

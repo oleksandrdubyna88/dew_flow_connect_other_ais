@@ -97,7 +97,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
         {
-            using var place = await PlaceAsync(input.Row, scratch, row.Token);
+            using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
             if (place.Refusal.Length > 0)
             {
                 return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None);
@@ -154,8 +154,10 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private static bool NeedsAFolder(RowAdmission.Admitted row) => row.Plan.Cwd != CwdKind.Root || KeepsAHome(row);
 
     /// <summary>The copies a <see cref="CwdKind.Snapshot"/> plan stands in, made in the row's folder; nothing for any other plan.</summary>
-    private async Task<ConsultantPlace> PlaceAsync(RowAdmission.Admitted row, string scratch, CancellationToken ct) =>
-        row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.Grant.Roots, ct) : ConsultantPlace.Checkout;
+    /// <param name="budget">The row's own budget (<c>COAI_QCONSULT_ROW_MINUTES</c>, <see cref="RowLaunchInput.Budget"/>): the copies
+    /// must be made inside it, or the row is refused before Vibe starts (the #811 checkpoint round).</param>
+    private async Task<ConsultantPlace> PlaceAsync(RowAdmission.Admitted row, string scratch, TimeSpan budget, CancellationToken ct) =>
+        row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.SnapshotSources, budget, ct) : ConsultantPlace.Checkout;
 
     /// <summary>The turns of one row: one for a CLI (a launch, or a launch and its follow-up), as many as the api row's follow-ups ask for.</summary>
     private async Task<QuestionRowRecord> TurnsAsync(RowLaunchInput input, ConsultantLaunch launch, QuestionRowRecord start, Stopwatch started, CancellationToken ct)

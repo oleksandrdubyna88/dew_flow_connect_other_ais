@@ -817,7 +817,7 @@ flowchart LR
   therefore be neither its cwd nor an added directory; `ConsultantLaunches.Cwd` maps it to `ConsultantLaunch.Workdir`,
   and a planned launch standing in `Snapshot` without one is a contract violation (`MustBePlannable`).
 - **Vibe's arm (S3, 2026-10-13).** `vibe` is the sixth runtime of the table and the planner: `none` stands in an
-  EMPTY `Scratch` folder, `disk` in a `Snapshot` of its roots, both with D2's pair `ConfinementPlanner.VibeReadOnly`
+  EMPTY `Scratch` folder, `disk` in a `Snapshot` of its roots (named in `Planned.SnapshotSources` since the #811 checkpoint round — `AddDirs` is for launch flags only, and Vibe's is empty), both with D2's pair `ConfinementPlanner.VibeReadOnly`
   (`--agent plan --enabled-tools read_file`, which `VibeRuntime`'s reviewer argv now reads too — one spelling), never
   `--trust` or `--add-dir` (D3). `--enabled-tools` and `--trust` joined the sandbox vocabulary; `--agent` did not,
   because agy's adapter names its own read-only agent. The rows: `none` and `disk` `confined` on research/RESULTS_vibe_confinement.md's

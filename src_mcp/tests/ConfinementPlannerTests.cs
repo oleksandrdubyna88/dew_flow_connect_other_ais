@@ -135,7 +135,9 @@ public sealed class ConfinementPlannerTests
         var disk = Plan("vibe", CapabilityGrant.Disk(RootA, RootB));
         disk.Flags.Should().Equal("--agent", "plan", "--enabled-tools", "read_file");
         disk.Cwd.Should().Be(CwdKind.Snapshot, "M-V11: Vibe cannot read outside its cwd, and its cwd is never the checkout (D6)");
-        disk.AddDirs.Should().Equal(RootA, RootB);
+        disk.AddDirs.Should().BeEmpty("AddDirs are launch flags, and Vibe is never given --add-dir (D3)");
+        disk.SnapshotSources.Should().Equal([RootA, RootB], "the roots it reads through their copies");
+        none.SnapshotSources.Should().BeEmpty();
         disk.Flag.Should().Be(AdmissionFlag.None);
         disk.Flags.Concat(disk.Leading).Should().NotContain(["--trust", "--add-dir"], "D3: a trusted folder runs its hooks");
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
@@ -335,6 +337,24 @@ public sealed class ConfinementPlannerTests
             request.Environment[Runners.Vibe.VibeLaunch.HomeVariable].Should().StartWith(RowFolder + Path.DirectorySeparatorChar,
                 "the row's home lives in the row's own folder, gone with it");
             Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
+        }
+    }
+
+    /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
+    [Fact]
+    public void NoVibeLaunch_CarriesAddDir_WhateverTheGrant()
+    {
+        var consultant = new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows));
+        foreach (var grant in (CapabilityGrant[])[CapabilityGrant.None, CapabilityGrant.Disk(RootA), CapabilityGrant.Disk(RootA, RootB), CapabilityGrant.Web])
+        {
+            if (ConfinementPlanner.Plan("vibe", grant) is not Confinement.Planned plan)
+            {
+                continue;
+            }
+
+            plan.AddDirs.Should().BeEmpty($"vibe × {grant.Capability}");
+            consultant.Build(Planned("vibe", grant)).Request.Arguments.Should().NotContain("--add-dir", $"vibe × {grant.Capability}")
+                .And.NotContain(RootA).And.NotContain(RootB);
         }
     }
 

@@ -2,6 +2,7 @@ using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Snapshots;
 using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -78,6 +79,53 @@ public sealed class AConversationPlaceTests : IDisposable
 
         await taking.Should().ThrowAsync<OperationCanceledException>();
         VibeHomeTurns.Held(folder).Should().BeFalse("a turn that never got its place must not keep the folder's in-process turn until a restart");
+    }
+
+    // ---------- a question row's copies are made inside the row's budget (the #811 checkpoint round) ----------
+
+    /// <summary>
+    /// Granted roots are copied one after another before Vibe starts, each up to D6's ceilings — ten slow roots would spend
+    /// minutes of the row's budget before its launch. The copies are bounded by the row's own budget: past it the place is
+    /// refused naming how many roots were copied of how many, and the copies made are disposed.
+    /// </summary>
+    [Fact]
+    public async Task CopiesThatOutrunTheRowsBudget_RefuseThePlace_SayingHowManyWereCopied_AndKeepNone()
+    {
+        var launcher = new ProcessLauncher();
+        var fast = await RepositoryAsync(launcher, "fast");
+        var slow = await RepositoryAsync(launcher, "slow");
+        var budget = new SnapshotBudget(long.MaxValue / 2, 0, static _ => long.MaxValue / 2);
+        var places = Places();
+        places.Maker = new ReviewSnapshots(launcher, SnapshotOptions.Default with
+        {
+            // The slow root's file takes longer to copy than the whole budget.
+            BeforeCopyOf = (_, path) =>
+            {
+                if (path.Contains("slow", StringComparison.OrdinalIgnoreCase))
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(3));
+                }
+            },
+        }, budget, ReviewSnapshots.Quiet);
+        var folder = Directory.CreateDirectory(_dir.At("row")).FullName;
+
+        using var place = await places.OneShotAsync(folder, [fast, slow], TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+
+        place.Refusal.Should().Contain("1 of 2", "the sentence says how far the copying got").And.Contain("budget");
+        Directory.EnumerateDirectories(Path.Combine(folder, "tree")).Should().BeEmpty("the copy that was made is disposed");
+        budget.Held.Should().Be(0, "and its bytes are given back");
+    }
+
+    private async Task<string> RepositoryAsync(ProcessLauncher launcher, string name)
+    {
+        var at = Directory.CreateDirectory(_dir.At(name)).FullName;
+        await File.WriteAllTextAsync(Path.Combine(at, name + ".txt"), name, TestContext.Current.CancellationToken);
+        foreach (var args in (string[][])[["init", "-b", "main"], ["add", "."]])
+        {
+            (await launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken)).ExitCode.Should().Be(0);
+        }
+
+        return at;
     }
 
     // ---------- a stamp nobody can read is no owner ----------

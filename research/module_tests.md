@@ -3853,3 +3853,10 @@ script (`teeth.py`), its class run, and the file restored — the messages are t
 | `VibeLedgerNamesTheVersionTests` | a Vibe launch through the executor puts `cliVersion: "vibe 2.26.1"` on its ledger line | RED FIRST: *Expected line.GetProperty("cliVersion").GetString() to be "vibe 2.26.1" … but "" has a length of 0* |
 | `DeletingAnOwnedTreeNeverEntersALinkTests.ATreeWithReadOnlyFolders_IsDeletedWhole`, `TempDirsAreSwept.ARoundsScratchHoldingAVibeHomeWithReadOnlyFolders_IsSwept` | a `vh-*` home with read-only folders (and a read-only file in one) is deleted whole, directly and by the six-hour sweep; the junction tests stay green | RED FIRST (the deleter): *System.IO.IOException : Access to the path '…\vh-0123456789\logs\session\plugins\packages\6b\6bb6380c\skills\create-plugin' is denied.* — the sweep test, written after, red with the fix reverted |
 | `VibeRuntimeTests`, `AVibeReviewerRunsThroughAFakeVibeTests` (widened) | the built set is four names; `PYTHONUTF8=1` crosses the process boundary (the fake records `PYTHON*` values now) | — the S2 assertions of exactly three names went red with the fix, and were widened |
+
+### The #811 checkpoint code round (2026-10-13)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `ConfinementPlannerTests` (Vibe) | a Vibe disk plan's `AddDirs` is empty and its `SnapshotSources` are the roots; no Vibe launch's argv carries `--add-dir` or a root, whatever the grant | RED FIRST: *Expected disk.AddDirs to be empty because AddDirs are launch flags, and Vibe is never given --add-dir (D3), but found at least one item {"D:/projects/alpha"}* |
+| `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` | two roots, the second's copy slower than a 1 s budget (`SnapshotOptions.BeforeCopyOf` through the `Maker` seam): the place is refused naming "1 of 2" and the budget, nothing is left under `tree`, the snapshot budget holds no bytes | RED FIRST: *Expected place.Refusal "" to contain "1 of 2"* — then, with the budget applied but the cut-short copy's own refusal winning: *Expected place.Refusal "the snapshot of …\slow was refused: git ls-files … did not answer in time" to contain "1 of 2"* |

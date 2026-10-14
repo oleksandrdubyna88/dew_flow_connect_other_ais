@@ -27,7 +27,7 @@ public abstract record Confinement
     /// <param name="Leading">Argv BEFORE the CLI's subcommand — codex's top-level <c>--search</c> (F1); empty everywhere else.</param>
     /// <param name="Flags">The sandbox flags, in order, complete — an adapter splices them and adds none of its own.</param>
     /// <param name="Cwd">Where the process stands.</param>
-    /// <param name="AddDirs">The roots the flags grant, for the record; the flags already spell them the runtime's way.</param>
+    /// <param name="AddDirs">The roots the flags grant as LAUNCH FLAGS (<c>--add-dir</c>), for the record; the flags already spell them the runtime's way — never a copy's sources.</param>
     /// <param name="Flag">D13's caveat on an admitted pair — shown beside every answer the row produces.</param>
     public sealed record Planned(
         string Runtime,
@@ -36,7 +36,15 @@ public abstract record Confinement
         IReadOnlyList<string> Flags,
         CwdKind Cwd,
         IReadOnlyList<string> AddDirs,
-        AdmissionFlag Flag) : Confinement;
+        AdmissionFlag Flag) : Confinement
+    {
+        /// <summary>
+        /// The folders the launch reads through COPIES (<see cref="CwdKind.Snapshot"/>, D6) — never a launch flag. Its own field,
+        /// not <see cref="AddDirs"/>: there a root is something the CLI is told to read, and Vibe is never given one (D3, the
+        /// #811 checkpoint round).
+        /// </summary>
+        public IReadOnlyList<string> SnapshotSources { get; init; } = [];
+    }
 
     public sealed record Refused(string Reason) : Confinement;
 
@@ -188,7 +196,7 @@ public static class ConfinementPlanner
     /// </remarks>
     private static Confinement.Planned Vibe(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
     {
-        Capability.Disk => new("vibe", grant, [], VibeReadOnly, CwdKind.Snapshot, grant.Roots, flag),
+        Capability.Disk => new("vibe", grant, [], VibeReadOnly, CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
         // `web` never reaches here: the matrix refuses it (no Vibe cell exercises the web).
         _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
     };

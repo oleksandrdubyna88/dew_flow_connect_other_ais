@@ -104,7 +104,8 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         "this consultant reads a copy coai makes of the live tree (D6 of todo/PLAN_vibe_and_kimi_runtimes.md) and the copy was refused — "
         + "the sentence says why (a link, a ceiling, a tree that kept changing, a full disk); fix that, or consult on another runtime";
 
-    private readonly ReviewSnapshots _maker = new(launcher, SnapshotOptions.Default, SnapshotBudget.Shared, note);
+    /// <summary>What makes every copy — the product's ceilings and the shared budget; a test's seam for a slow copy.</summary>
+    internal ReviewSnapshots Maker { get; set; } = new(launcher, SnapshotOptions.Default, SnapshotBudget.Shared, note);
 
     /// <summary>
     /// The place one turn of conversation <paramref name="consultationId"/> stands in: its folder under
@@ -210,7 +211,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
 
             return turned.CopyOf.Length == 0
                 ? HomeOnly(turned.Folder, stamping, [taken.Stream, turn])
-                : Placed(await ConversationSnapshots.FreshAsync(_maker, turned.Folder, turned.CopyOf, ct), stamping, [taken.Stream, turn]);
+                : Placed(await ConversationSnapshots.FreshAsync(Maker, turned.Folder, turned.CopyOf, ct), stamping, [taken.Stream, turn]);
         }
         catch
         {
@@ -256,36 +257,72 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
 
     /// <summary>
     /// A ONE-SHOT place inside <paramref name="folder"/> (the launch's own scratch, removed by its owner): a copy of each of
-    /// <paramref name="sources"/> — the live tree of each, through git — under <c>tree</c>, the launch standing in
-    /// <c>tree</c> itself. Disposing it deletes the copies and gives their bytes back; any refusal deletes what was made.
+    /// <paramref name="sources"/> — the live tree of each, through git — each in a <c>snapshot-&lt;id&gt;</c> folder of its own
+    /// under <c>tree</c>, the launch standing in <c>tree</c> itself. Disposing it deletes the copies and gives their bytes back; any refusal deletes what was made.
     /// </summary>
-    public async Task<ConsultantPlace> OneShotAsync(string folder, IReadOnlyList<string> sources, CancellationToken ct)
+    /// <remarks>
+    /// The copies are made one after another, before the launch, so they are bounded TOGETHER by <paramref name="budget"/> —
+    /// the row's own (the #811 checkpoint round: ten roots near D6's 60 s ceiling each would spend ten minutes before Vibe
+    /// started). Past it the place is refused naming how many roots were copied of how many, and every copy made is disposed;
+    /// the caller's own cancellation still leaves as one.
+    /// </remarks>
+    public async Task<ConsultantPlace> OneShotAsync(string folder, IReadOnlyList<string> sources, TimeSpan budget, CancellationToken ct)
     {
         var tree = Path.Combine(folder, ConversationSnapshots.TreeName);
         List<ReviewSnapshot> made = [];
+        using var copying = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        copying.CancelAfter(budget);
         try
         {
-            foreach (var source in sources)
-            {
-                var outcome = await CopyOfAsync(source, tree, ct);
-                if (outcome is SnapshotOutcome.Refused refused)
-                {
-                    made.ForEach(snapshot => snapshot.Dispose());
+            var refused = await CopiedAsync(sources, tree, made, copying.Token);
 
-                    return new ConsultantPlace.Refused(refused.Reason);
-                }
-
-                made.Add(((SnapshotOutcome.Made)outcome).Snapshot);
-            }
+            return refused.Length == 0 ? new ConsultantPlace.Owned(folder, tree, [.. made.Select(snapshot => snapshot.Root)], [.. made]) : Unmade(made, refused);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return Unmade(made, OutOfBudget(made.Count, sources.Count, budget));
         }
         catch
         {
-            made.ForEach(snapshot => snapshot.Dispose());
+            Unmade(made, string.Empty);
             throw;
         }
-
-        return new ConsultantPlace.Owned(folder, tree, [.. made.Select(snapshot => snapshot.Root)], [.. made]);
     }
+
+    /// <summary>Each source copied in turn into <paramref name="made"/> — or the first refusal, or the budget's, when it ran out.</summary>
+    private async Task<string> CopiedAsync(IReadOnlyList<string> sources, string tree, List<ReviewSnapshot> made, CancellationToken copying)
+    {
+        foreach (var source in sources)
+        {
+            var outcome = await CopyOfAsync(source, tree, copying);
+            if (outcome is SnapshotOutcome.Made copy)
+            {
+                made.Add(copy.Snapshot);
+            }
+
+            // A copy cut short by the budget comes back as a refusal of its own (a git listing "did not answer in time"),
+            // and one that finished past it is past it: the budget is what ended them, and the sentence says so.
+            copying.ThrowIfCancellationRequested();
+            if (outcome is SnapshotOutcome.Refused refused)
+            {
+                return refused.Reason;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Every copy made disposed, and the refusal the place carries.</summary>
+    private static ConsultantPlace.Refused Unmade(List<ReviewSnapshot> made, string reason)
+    {
+        made.ForEach(snapshot => snapshot.Dispose());
+
+        return new ConsultantPlace.Refused(reason);
+    }
+
+    private static string OutOfBudget(int copied, int of, TimeSpan budget) =>
+        $"copying the granted folders took longer than the row's budget ({budget.TotalSeconds:0} s): {copied} of {of} copied — "
+        + "grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)";
 
     /// <summary>
     /// A copy of one source — the live tree as git lists it, limited to that folder — or the refusal of a folder git has no
@@ -301,7 +338,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         await OutsideAGitTreeAsync(source, ct) is { Length: > 0 } why ? new SnapshotOutcome.Refused(why)
         : LinkUpToTheWorkTree(source) is { Length: > 0 } link
             ? new SnapshotOutcome.Refused($"{link} is a link, and the granted folder {source} is reached through it — grant the folder it points at instead")
-            : await _maker.MakeAsync(new SnapshotSource.Live(source), tree, ct);
+            : await Maker.MakeAsync(new SnapshotSource.Live(source), tree, ct);
 
     /// <summary>The first folder from <paramref name="source"/> up to its work tree's top that is a link, or empty.</summary>
     private static string LinkUpToTheWorkTree(string source) =>
