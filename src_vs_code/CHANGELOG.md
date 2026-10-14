@@ -1,5 +1,29 @@
 # Changelog
 
+## Server 0.54.0 — 2026-10-14
+
+**Fixed: a Vibe review no longer dies on a character outside the Windows code page.** Vibe's Python wrote cp1252 to
+coai and exited with an error when an answer, a plan or a diff held a `→` — after the review had been paid for. Every
+Vibe launch now runs in UTF-8 mode, and the crash, if an older coai-mcp meets it, is named with its cure.
+
+**Fixed: a round's Vibe home is deleted.** Vibe marks its plugin folders read-only, and the cleanup left the whole home
+behind; it now clears them, and still never follows a link.
+
+**Added: Mistral Vibe as a consultant and a question consultant.** A Vibe row answers `consult` in a copy of your tree
+that keeps one stable path for the whole conversation, refreshed before each turn, and remembers the conversation
+through Vibe's own session. As a question consultant: no file access runs it in an empty folder; disk access gives it
+a copy of each folder you granted (Git files only, never your originals, never through a link); web access is refused
+until it has been measured. Copying never outruns the row's time budget.
+
+**Changed: coai-owned conversation homes have a bounded life.** A consultant's home is removed when its conversation
+closes, or once it has been idle past the conversation window — never while a turn is running, and never one another
+coai-mcp made.
+
+## Extension 0.74.0 — 2026-10-14
+
+**Added: Mistral Vibe in the question consultant's help**, in all five languages: what each access level means for a
+Vibe row, and that it runs on Windows for now.
+
 ## Server 0.53.0 — 2026-10-13
 
 **Added: Mistral Vibe as a reviewer, on your own Mistral subscription.** Add **Mistral Vibe** from the reviewer presets,
