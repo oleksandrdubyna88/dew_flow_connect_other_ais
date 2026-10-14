@@ -166,9 +166,11 @@ written — the prediction precedes every observation, including an exploratory 
     meta `agentType`, `toolUseId`, `spawnDepth`, `parentAgentId`, `requestShape`, `model`. NOT allowed, explicitly:
     `description`, `prompt`, `command`, `content` as a string, `thinking`, `signature`, `toolUseResult`, `gitBranch`,
     `name` of a registry entry.
-  - **Everything else**: a string leaf → the sentinel; numbers, booleans and nulls kept; object KEYS kept, except a key
-    containing `/`, `\` or `:` → replaced by `k<n>` (a filename used as a key must not survive — `snapshot.trackedFileBackups`
-    is the known case: its keys are real file paths). Unknown keys are not an
+  - **Everything else**: a string leaf → the sentinel; numbers, booleans and nulls kept; object KEYS kept ONLY from a closed
+    set — the structural keys the reader and the cutter's allowlist name; every other key → replaced by a deterministic `k<n>`
+    (a filename or identifier used as a key must not survive whether or not it has a separator: `secret.txt` has no `/`, `\` or `:`;
+    `snapshot.trackedFileBackups` is the known case: its keys are real file paths). A test cuts a fixture whose object key is
+    `secret.txt` and asserts the key is absent from the output and the sentinel guard finds nothing. Unknown keys are not an
     error — they are sentinelled and their names counted on stderr, so a new Claude Code field is visible.
   - **Ids**: every `uuid`/`hexid`/`msgid`-shaped allowlisted value is remapped through ONE map per fixture
     (deterministic: `sha256(salt + original)` formatted back into the same shape; the salt is per fixture and

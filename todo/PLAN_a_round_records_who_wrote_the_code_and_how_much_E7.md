@@ -383,7 +383,10 @@ file and what it cites are committed.
 - **Who.** A fresh **Opus** judge launched with `model: opus`, which wrote and reviewed none of E3–E7's code — or the
   operator. Never the main session that briefed the code, never a coder.
 - **Input.** The sample rule and the twenty round ids it drew (O1); `coai-mcp --log` output per side for those rounds
-  (the state E5 prints, the size E2 prints — the WSL one produced by a script file); read access to the transcripts
+  (the state E5 prints, the size E2 prints — the WSL one produced by a script file) PLUS the per-round row-level authors dump — the
+  persisted `RoundRecord.Authors` of the session file / the `round_authors` rows, exported per round id (a read-only SQL or JSON
+  dump the operator runs; `--log` carries no per-agent model, effort, association, launches, tokens or write evidence, which
+  checklist items 2-4 need); read access to the transcripts
   and the repositories. Not the reader's source: the judge re-derives, it does not re-run the product.
 - **Per round, the checklist** — each field checked against the transcript or the repository directly:
   1. `authors_state` and its reason are true (an `unobserved: transcript not found` really has no
@@ -452,7 +455,7 @@ file and what it cites are committed.
 | Surface | Projected size | Who retires it | Interrupted |
 |---|---|---|---|
 | `<dataDir>/backfill-backups/<utc>/` | one copy of `coai.db` (72 MB on Windows, parent §14) plus the session files per WRITING run; two runs per side plus one per J1 fix → ~150–360 MB on Windows, the WSL store's size × the same on WSL | the operator, by hand, after the RESULTS file is committed; the mode never deletes, and in WSL nothing is deleted by an agent | a crashed run leaves its folder, named by its start; the next run makes its own |
-| Rows written by the backfill | none beyond the parent's §14 (`round_authors`, `round_changes`) — the backfill fills rows the live path would have written | with their round | per round: database first, then the file, under the claim; a crash between leaves a database row without its snapshot, which the next run heals (S1 rule 3) |
+| Rows written by the backfill | none beyond the parent's §14 (`round_authors`, `round_changes`) — the backfill fills rows the live path would have written | with their round | per round: the session file first (the snapshot), then the database projection from it, under the claim — S3's order; a crash between leaves a snapshot without its projection, which the next run re-projects without opening the transcript (S1 rule 3a) |
 | Working folders of O1–O4 | summaries and JSON, < 1 MB per side | the operator | — |
 
 ## 8. Points raised to the parent (not settled here)

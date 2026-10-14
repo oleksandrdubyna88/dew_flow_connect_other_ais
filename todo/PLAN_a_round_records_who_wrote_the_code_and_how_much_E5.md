@@ -189,7 +189,12 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
     (never a transcript fragment), and becomes `unobserved: reader failed`.
   - The budget as one named value, `AuthorsBudget.Default = (2 s, 64 MiB)`, with a remark citing E1's RESULTS file; the clock
     is a `TimeProvider` argument so the time path is testable. Hitting either limit → `partial: read budget`, the rows read so
-    far kept (E6 decides what a partial round counts for).
+    far kept (E6 decides what a partial round counts for). **The 2 s is ONE deadline for the whole `For`**, taken from the
+    `TimeProvider` when `For` starts and passed down: E3's `ReadBudget.MaxTime` is the time left at the reader's start, and the
+    peer query, the `.gitmodules` process, E4's attribution and the snapshot construction each check the same deadline between
+    phases; a missed deadline after the read → `partial: read budget` with what is built so far. The 64 MiB stays the reader's
+    own byte limit. A test advances the fake clock inside the peer-query phase (not the reader) and asserts `For` stops and
+    reports `partial: read budget`.
   - The transcripts root: `_settings.AgentLogDir` else `AgentLog.DefaultProjectsDir` — the expression `WhatTheCallerWasDoing`
     already uses (`RoundEngine.cs:897`); lifted into one static both call, not written twice.
   - Call sites only: `RoundEngine.cs:483-491` gains `Authors = _authors.For(session, record)` (the round's own `StartedUtc` is
@@ -244,7 +249,9 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
     and accepted, not rejected (`testing.md` § *A fixture the code REJECTS*). And `rounds.agent_log` DOES contain the sentinel:
     `AgentLog` renders text by design (parent §3, `src_mcp/src/Store/AgentLog.cs:246-287`), which proves the sentinel reached
     the server.
-  - **Text-free:** the sentinel is absent from the session file's bytes, from `--log`'s stdout, from every `ListSink` line, and
+  - **Text-free:** the sentinel is absent from the persisted gate-session JSON's bytes (the file `SessionStore` writes — NOT the
+    E1 transcript fixture under `<projects>/<slug>/<sessionId>.jsonl`, which carries the sentinel on purpose and stays the
+    positive source the test checks first), from `--log`'s stdout, from every `ListSink` line, and
     from the database's bytes after `UPDATE rounds SET agent_log = ''`, `PRAGMA wal_checkpoint(TRUNCATE)` and `VACUUM` — the
     one column that carries text by design is blanked, so what remains is what this epic wrote (§7, defect 1).
   - **Rebuild:** delete `coai.db` (+ `-wal`, `-shm`) after the round; re-project the loaded session file's rounds through

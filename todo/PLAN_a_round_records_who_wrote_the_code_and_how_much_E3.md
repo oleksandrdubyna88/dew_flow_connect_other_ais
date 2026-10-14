@@ -115,7 +115,7 @@ public sealed record ObservedMessage(string AgentKey, string MessageId, DateTime
 public sealed record TokenUsage(long Input, long CacheCreation, long CacheRead, long Output);
 public sealed record ObservedWrite(string AgentKey, DateTime Utc /* its message's instant */, string Tool, WriteTarget Target);
 public sealed record UnobservedLaunch(string ParentKey, string ToolUseId, DateTime? Utc, string Reason); // added
-public sealed record ReadDiagnostics(int FilesRead, long CharsRead, int LinesSkippedByDayGate, int TornTails,
+public sealed record ReadDiagnostics(int FilesRead, long BytesRead, int LinesSkippedByDayGate, int TornTails,
     int SyntheticLines, int WriteCallsRefused, int WriteCallsUnanswered, int MessagesWithoutUsage);    // added
 
 public sealed record ObservationState(ObservationKind Kind, IReadOnlyList<ObservationReason> Reasons)
@@ -488,7 +488,7 @@ public sealed record ObservedMessage(string AgentKey, string MessageId, DateTime
 public sealed record TokenUsage(long Input, long CacheCreation, long CacheRead, long Output);
 public sealed record ObservedWrite(string AgentKey, DateTime Utc /* its message's instant */, string Tool, WriteTarget Target);
 public sealed record UnobservedLaunch(string ParentKey, string ToolUseId, DateTime? Utc, string Reason); // added
-public sealed record ReadDiagnostics(int FilesRead, long CharsRead, int LinesSkippedByDayGate, int TornTails,
+public sealed record ReadDiagnostics(int FilesRead, long BytesRead, int LinesSkippedByDayGate, int TornTails,
     int SyntheticLines, int WriteCallsRefused, int WriteCallsUnanswered, int MessagesWithoutUsage);    // added
 
 public sealed record ObservationState(ObservationKind Kind, IReadOnlyList<ObservationReason> Reasons)
@@ -556,9 +556,10 @@ nothing (a torn tail, a synthetic line, a refused write).
 0. **Unobservable location.** `where` is `NotObservable(session, reason)` → `Unobserved(reason)`, `Session` carried
    through, every list empty, `FirstLineUtc` null, diagnostics zero. **Nothing is opened.**
 1. **The meter.** `ReadMeter(budget)` records `started = Clock.GetUtcNow()`. Every line yielded by
-   `TranscriptLines.ReadShared` adds `line.Length` to `CharsRead` (UTF-16 chars — a line's UTF-8 bytes are at least
-   that; `MaxBytes` is a ceiling against a runaway read, not an accounting, and its remark says so). After EVERY line:
-   `Exhausted = CharsRead > MaxBytes || Clock.GetUtcNow() − started > MaxTime`. On exhaustion the enumeration ends,
+   `TranscriptLines.ReadShared` adds `Encoding.UTF8.GetByteCount(line)` plus the line terminator to `BytesRead` — encoded
+   bytes, never `line.Length` (UTF-16 chars undercount non-ASCII text, so a multibyte transcript would pass 64 MiB before
+   the limit fired). After EVERY line:
+   `Exhausted = BytesRead > MaxBytes || Clock.GetUtcNow() − started > MaxTime`. On exhaustion the enumeration ends,
    the `message.id` of the line it stopped at is removed from the table (S4-3), `ReadBudget` is recorded once, and
    step 7's checks are skipped.
 2. **The day gate.** `days = fromUtc is null ? [] : TranscriptLines.Days(fromUtc − StraddleGuard, max(now, fromUtc))`.
@@ -640,7 +641,7 @@ key outside `message.content[]` are never materialised. `tool-results/` is never
 | *mutation: every `cwd` rewritten to another fixture root* | identical to the unmutated read, member for member | | | | | the cwd test |
 | *mutation: main file emptied / only a torn line* | `unobserved: transcript empty` | empty | empty | — | — | S4-10 |
 | `message-as-several-lines`, `fromUtc` strictly between a message's first and second line | `observed` | — | that id ABSENT; every id whose first line ≥ `fromUtc` present whole | all launches present | — | S4-13 |
-| any fixture, `MaxBytes` = the char offset of the middle of a multi-line message | `partial: read budget` | only what was read | the cut id absent; every present id complete | no `agent call without transcript` reason | — | S4-3 |
+| any fixture, `MaxBytes` = the BYTE offset of the middle of a multi-line message | `partial: read budget` | only what was read | the cut id absent; every present id complete | no `agent call without transcript` reason | — | S4-3 |
 
 #### Tests
 
@@ -691,7 +692,7 @@ the mutations it must cover (E3/11). `SteppingClock(start, step)` is a `TimeProv
 28. `A_parent_link_that_contradicts_the_meta_marks_the_transcript_inconsistent` — `nested-agents`, the nested meta's `parentAgentId` pointed at another agent; `ParentKey` = the join's file; `inconsistent transcript ×1`.
 29. `A_main_transcript_with_no_parseable_line_is_unobserved_transcript_empty` — main file replaced by one torn line; empty lists.
 30. `An_unobservable_location_is_carried_through_and_nothing_is_opened` — a `NotObservable(StatedId)` with a sentinel transcript present in the home; `Unobserved(StatedId)`, `FirstLineUtc == null`, `Diagnostics.FilesRead == 0`.
-31. `The_read_stops_at_the_byte_budget_and_says_so` — `MaxBytes` = the char offset into a multi-line message (computed from the raw file); `partial: read budget`; the cut id absent; every present id has all its lines (the test checks each present id's raw line count against the lines before the cut).
+31. `The_read_stops_at_the_byte_budget_and_says_so` — `MaxBytes` = the BYTE offset into a multi-line message (computed from the raw file; one fixture line carries multibyte text, so a char count would not fire); `partial: read budget`; the cut id absent; every present id has all its lines (the test checks each present id's raw line count against the lines before the cut).
 32. `The_read_stops_at_the_time_budget_and_says_so` — `SteppingClock(start, 1 s)` with `MaxTime = 2 s`; `partial: read budget` after the third line.
 33. `A_budget_hit_never_invents_a_missing_transcript` — budget exhausted inside the main file of `nested-agents`; the reasons are exactly `[read budget]`.
 34. `A_sidechain_line_in_the_main_file_belongs_to_its_agent_id` — mutation: a main line given `isSidechain: true` and an `agentId`; its message's `AgentKey` is that id; without the `agentId` → `partial: sidechain without agent id`.

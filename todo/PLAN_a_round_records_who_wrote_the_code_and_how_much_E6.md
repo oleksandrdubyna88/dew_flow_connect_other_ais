@@ -107,7 +107,7 @@ Not a cornerstone.
      `RoundFacts(long RoundId, string SessionId, string RepoPath, string Branch, string Stage, int Number, string Status,
      string StartedUtc, bool InWindow, AuthorsFacts Authors, SizeFacts Size, IReadOnlyList<ReviewerFact> Reviewers,
      FindingFacts Findings)`;
-     `AuthorsFacts(AuthorsStateKind State, string Why, IReadOnlyList<AuthorRow> Rows, long AmbiguousLaunches, long AmbiguousTokens)`
+     `AuthorsFacts(AuthorsStateKind State, string Why, IReadOnlyList<AuthorRow> Rows, long AmbiguousLaunches, long AmbiguousTokens, long UncoveredWrites)` (`UncoveredWrites` = the persisted `uncovered_writes`, E5.S2; 0 when the state is not recorded)
      with `AuthorsStateKind { NotRecorded, Unobserved, Partial, Observed }` (the order IS D3's worst-first order);
      `AuthorRow(string Who, string Agent, string Requested, string Model, string Effort, string Association, string Window, int Launches)`;
      `SizeFacts(bool Recorded, IReadOnlyList<ChangeRow> Rows, string DeltaUnavailable)`;
@@ -163,7 +163,7 @@ Not a cornerstone.
   `4dc98df`, cited as a path, not linked).
 - **Scope.** New `RoundAuthorsPopulation.cs`; records added to `RoundAuthorsModels.cs`. Input: S1's facts and a
   `RoundAuthorsSelection(string Stage, string SinceUtc, string UntilUtc, string SplitUtc, string Cohort, IReadOnlyList<string>
-  Kinds, bool WithBeforeOpen, bool WithoutElided)` (`SplitUtc = ""` = no split). No I/O, no clock.
+  Kinds, bool WithBeforeOpen, bool WithoutElided, bool WithUncovered)` (`WithUncovered` = the CLI's `--with-uncovered`, D12; it reaches `Population.Of`, which skips the `size not covered` exclusion when set) (`SplitUtc = ""` = no split). No I/O, no clock.
 - **Brief.**
   1. `Population Of(IReadOnlyList<RoundFacts> facts, RoundAuthorsSelection selection)` →
      `Population(IReadOnlyList<CountedRound> In, IReadOnlyList<ExcludedRound> Out)`. Only `InWindow` rounds of the selected
@@ -277,7 +277,7 @@ Not a cornerstone.
 - **Brief.**
   1. `RoundAuthorsAnswer(int Format, RoundAuthorsSelection Selection, IReadOnlyList<RoundAuthorsSource> Sources,
      IReadOnlyList<CellSums> Cells, IReadOnlyList<ExclusionCount> Exclusions, bool EffortMarkerKnown)`; `Format = 1`;
-     `RoundAuthorsSource(string DataDir, string Platform, string ReadUtc)` — the platform from
+     `RoundAuthorsSource(string SourceId, string Platform, string ReadUtc)` — `SourceId` is an OPAQUE id (lower-case hex of the first 16 bytes of SHA-256 over the normalised data-directory path), never the path: the JSON answer carries no absolute path, so it exposes no user name or workspace layout; the merge check compares ids, a test rejects any absolute path in the serialised answer; the platform from
      `RuntimeInformation.OSDescription`'s family, the instant handed in (no clock inside the unit). **Only sums, counts, sets
      and the selection** — no figure, no mark, no header: those are S3's render-time functions over the merged sums.
   2. `Outcome Add(RoundAuthorsAnswer mine, RoundAuthorsAnswer theirs)` → the merged answer or a refusal sentence:
@@ -311,7 +311,7 @@ Not a cornerstone.
 ### E6.S5 — The mode: flags, exit codes, the table, registration, docs
 
 - **Goal.** `coai-mcp --round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan]
-  [--cohort first|corrective|all] [--with-before-open] [--kinds <k,…>] [--without-elided] [--add <file.json>]… [--table]`
+  [--cohort first|corrective|all] [--with-before-open] [--kinds <k,…>] [--without-elided] [--with-uncovered] [--add <file.json>]… [--table]`
   answers from the store read-only, exits 0 / 65 / 74 and never 64, and is registered everywhere a one-shot mode must be.
 - **Scope (verified).** New `RoundAuthorsMode.cs` (the `RoundCountsMode.cs:30-88` shape: `Run(args, env, output, note,
   readFile, clock)`, a pure `Parse` returning `(Ok, Selection, Adds, Table, Why)`), new `RoundAuthorsText.cs` (the table).
