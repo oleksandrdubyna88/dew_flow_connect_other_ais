@@ -32,7 +32,7 @@
  */
 
 /** Raise with every behaviour change; it decides whether a session self-install upgrades the user copy. */
-export const GUARD_VERSION = 2;
+export const GUARD_VERSION = 3;
 export const DENY_MARKER = 'subagent-models.md:';
 export const ALLOWED_MODELS = Object.freeze(['sonnet', 'opus', 'fable']);
 export const OPT_OUT_VARIABLE = 'SUBAGENT_MODEL_GUARD';
@@ -74,7 +74,7 @@ export function roleLine(digest = ROLE_DIGEST) {
     .join(' · ');
 }
 
-export const TEACH_TEXT = `Subagent models — ${roleLine(ROLE_DIGEST)}. Name the model on every launch as a bare alias; the role table is common/subagent-models.md.`;
+export const TEACH_TEXT = `Subagent models — ${roleLine(ROLE_DIGEST)}. Scouts: ⌈1.5·N⌉, N = count given (2→3). Name the model on every launch as a bare alias; the role table is common/subagent-models.md.`;
 
 export const DENY_TEXT = `${DENY_MARKER} name the model on every Agent call as a bare alias — sonnet, opus or fable. Missing, empty, haiku, inherit, a versioned id or another spelling is refused. Roles — ${roleLine(ROLE_DIGEST)}. Relaunch with the alias of the role.`;
 
