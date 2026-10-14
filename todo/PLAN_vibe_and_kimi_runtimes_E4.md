@@ -1,7 +1,7 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
-> Status: **stories written 2026-10-14, nothing implemented yet.** Two cornerstones (E4.1, E4.2) are marked
-> `model: fable`: their scenarios and briefs are still to be written by Fable before any coder starts them.
+> Status: **stories written 2026-10-14; the two cornerstones' scenarios and briefs written by Fable 2026-10-14; nothing
+> implemented yet.** E4.1 and E4.2 are `model: fable` specs — a coder may start them; E4.3–E4.5 are Opus's.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) — §4 **S4**, its code half (the
 > measurement half is done: [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md) §1–§26). Decisions
@@ -20,7 +20,9 @@ here).
 
 **Who does what** ([subagent-models.md](../.agents/conventions/common/subagent-models.md)). Per story: scenarios + brief —
 Opus, or **Fable on a cornerstone**; code + tests — Sonnet; review — Opus; fixes — Sonnet. A coder starts a story only
-when its SCENARIOS and BRIEF sections are written; E4.1 and E4.2 say "to be written by Fable" until Fable writes them.
+when its SCENARIOS and BRIEF sections are written; E4.1's and E4.2's were written by Fable on 2026-10-14, each with a
+*Decisions* list (the reasons), a *Review focus* list for the Opus reviewer, and its deviations from D19 numbered in
+§"Where the parent plan and the code disagree".
 
 **Cornerstones: 2 of 2** (Q = ⌈2·5/5⌉ = 2) — E4.1 (junction-safe ownership) and E4.2 (`KimiHome` + `KimiLaunch`):
 the credentials junction and the owned home are security judgement — a bug in E4.1 deletes the person's sign-in, a bug
@@ -29,17 +31,16 @@ in E4.2 hands Kimi the person's configuration or a path out of its home. The led
 **The build order is the order below**, and it is strict for E4.1 → E4.2 → E4.3 → E4.4; E4.5 needs only E4.4's
 runtime name to exist on the server (it can be written beside E4.4, never merged before it).
 
-**Precondition for every story — S3 (#811) lands first.** `feat/kimi-runtime` is rebased on `main`, and `main` does not
-have S3 yet. PR #811 (`feat/vibe-consultant`) already ships, and this epic BUILDS ON, never re-writes:
-the link-safe deleter (`GitScratch.DeleteEvenIfReadOnly` unlinks a link by its own name and never enters it, clears
-read-only FOLDERS too — commits `feb61bf6`, `92ff01b4`), its red-first test `DeletingAnOwnedTreeNeverEntersALinkTests`
-(already a junction to a read-only file, three shapes), `OwnedPaths.IsLinkIfThere`, `ConsultantHomes` (`coai-vibe` AND
-`coai-kimi`), D20's `ConsultantHomeSweep` (which already walks `coai-kimi/`), `ConversationFolder`'s held turn lock,
-`TempDir.Dispose` through the product deleter, and the `vh-*` read-only-folder sweep test in `TempDirsAreSwept`.
-**Rebase `feat/kimi-runtime` onto `main` after #811 merges, before E4.1 starts.** If #811 is not merged when E4.1 is due,
-the story waits and the operator is told — copying those commits here would be the second copy the reuse rule forbids.
-Every `file:line` below is verified on `main` 43a5637f (2026-10-14) unless it says `(S3)`, which means
-`origin/feat/vibe-consultant` 6fdf0e09.
+**S3 (#811) is on `main` and under this branch.** `feat/kimi-runtime` was rebased on 2026-10-14 onto `origin/main`,
+which holds S3 (`ea84af70`). This epic BUILDS ON, never re-writes: the link-safe deleter
+(`GitScratch.DeleteEvenIfReadOnly` unlinks a link by its own name and never enters it, clears read-only FOLDERS too),
+its red-first test `DeletingAnOwnedTreeNeverEntersALinkTests` (a junction to a read-only file, three shapes),
+`OwnedPaths.IsLinkIfThere`, `ConsultantHomes` (`coai-vibe` AND `coai-kimi`), D20's `ConsultantHomeSweep` (which already
+walks `coai-kimi/`), `ConsultantPlaces` / `ConversationFolder` with the cross-process `coai-turn.lock`, `TempDir.Dispose`
+through the product deleter, and the `vh-*` read-only-folder sweep test in `TempDirsAreSwept`.
+**Anchors:** every `file:line` in E4.1 and E4.2 is verified on HEAD `b121cca8` (2026-10-14, after the rebase). E4.3–E4.5's
+were taken on `main` 43a5637f before the rebase (a `(S3)` mark there means `origin/feat/vibe-consultant` 6fdf0e09, now
+merged) — their coder re-verifies each one on HEAD before citing it; the shapes have not moved, the numbers may have.
 
 **Commands, for every story** (run from the worktree root; never `dotnet test`):
 
@@ -65,73 +66,200 @@ folder, always. Each story adds its CHANGELOG lines under `## Unreleased` and up
 
 ## E4.1 — Junction-safe ownership: making, reading back and disposing of a link into the person's folder
 
-`model: fable` — **cornerstone** (security judgement: the first bug here deletes a person's sign-in).
+`model: fable` — **cornerstone** (security judgement: the first bug here deletes a person's sign-in). **Spec: Fable,
+2026-10-14**; every anchor on HEAD `b121cca8`.
 
 **Goal.** coai can make a directory junction from an owned home to the person's `credentials` folder, read it back and
-refuse a wrong target, and dispose of an owned home junction-first with verification — and every deleter that can ever
-meet a `kh-*` home (or a conversation's `coai-kimi/<id>`) never enters the link. Nothing Kimi-specific beyond the shape:
-no `kimi`, no config, no launch.
+refuse a wrong target, and dispose of an owned home with verification — and every deleter that can ever meet a `kh-*`
+home (or a conversation's `coai-kimi/<id>`) never enters the link and STOPS, saying which name, the moment the person's
+folder lost one. Nothing Kimi-specific beyond the shape: no `kimi`, no config, no launch.
 
-**Files and anchors (verified).**
-- `src_mcp/runners/Files/GitScratch.cs:19-31` on `main`; the link-safe version is `GitScratch.cs:27-101` (S3). Do not
-  re-implement — E4.1 starts after #811 (§0).
-- `src_mcp/runners/Snapshots/SnapshotLinks.cs:37-48` (`IsLink`, fails closed) and `src_mcp/runners/Files/OwnedPaths.cs:18-36`
-  (S3, `IsLinkIfThere` — a path not there is no link).
-- `src_mcp/tests/DirectoryLink.cs:22-46` — the TEST helper that makes a junction with `cmd /c mklink /J` (relative `cmd`)
-  and removes it non-recursively. The product needs its own primitive; the helper may later delegate to it.
-- `src_mcp/runners/Worktrees/WorktreePaths.cs:64-82` — the repository's existing `LinkTarget` / `ResolveLinkTarget` read.
-- `src_mcp/runners/Files/HeldFile.cs:41-55` — not for this story, named so the primitive does not invent a lock.
-- Every deleter that can meet an owned home, each through `GitScratch.DeleteEvenIfReadOnly`: `RoundScratch.cs:75`
-  (`src_mcp/src/Server/Rounds/`, the round's scratch — where a reviewer's `kh-*` home lives, `RosterBuilder.cs:451`
-  passes it as `OwnedScratch`), `ReviewSnapshot.cs:186-197` (`TryDeleteRoot`), `ReviewSnapshots.cs:326`,
-  `PanelService.cs:1342` / `:1376-1389` / `:1416` (the six-hour sweep `PruneOldScratchDirs`), `ConsultCheckScratch.cs:113`,
-  `VibeRuntime.cs:118`, `VibeLaunch.cs:286`; and D20's `ConsultantHomeSweep.cs:157-186` (S3, `Removed` → `DeleteAllBut`
-  → the deleter).
-- The TEST sweeps: `src_mcp/tests/TempDirsAreSwept.cs` (its sweep is `PanelService.PruneOldScratchDirs`; its own fixture
-  roots end in raw `Directory.Delete(root, recursive: true)` at `:132`, `:152`, `:173`) and the extension runner's
-  `src_vs_code/scripts/sweepTemp.mjs:64-71` (`rmSync(target, { recursive: true, force: true })`), called from
-  `src_vs_code/scripts/run-tests.mjs:102-110`.
-- The probe's measured shapes, to port and not to re-guess: `scripts/lib/kimi-home.mjs:107-126` (`disposeOwnedHome`:
-  the link removed by its own name, verified gone, the target's names compared with the names read before, only then
-  the rest — "throws, and deletes nothing more, the moment a check fails") and `scripts/lib/kimi.mjs` `junction()`
-  (the probe's `mklink /J`, plan D19 "Making the junction").
+**Files and anchors (verified on `b121cca8`).**
+- `src_mcp/runners/Files/GitScratch.cs:27-43` (`DeleteEvenIfReadOnly`: a link at the root unlinked `:29-34`, the hand
+  walk `:37-40`), `:60-74` (`DeleteEntry`: a link unlinked, a real directory descended, a file deleted), `:81-90`
+  (`Unlink`: a directory link by a NON-recursive `Directory.Delete`, a file link by `File.Delete`, told apart by the
+  LINK's own attributes — the target never read). The link-safe deleter IS on `main` (S3); this story widens `Unlink`
+  (brief §2) and never re-implements the walk.
+- `src_mcp/tests/DeletingAnOwnedTreeNeverEntersALinkTests.cs` (137 lines): the fixture — `Target`, a read-only `Secret`,
+  `HomeWithALinkAsync` `:51-65`, `TheTargetIsUntouched` `:67-73` — and four cases: the junction at depth 1 and 3
+  (`:75-86`), a tree that is itself a link (`:88-98`), a TAMPERED home whose `credentials` is a real folder, deleted
+  whole (`:100-113`), read-only folders (`:120-136`). New cases join this class; its `coai-answers-linkdelete-` prefix
+  stays (§0).
+- `src_mcp/runners/Snapshots/SnapshotLinks.cs:37-48` (`IsLink`, fails closed; `internal` — every new type of this story
+  lives in the runners assembly, where it is reachable) and `src_mcp/runners/Files/OwnedPaths.cs:18-32`
+  (`IsLinkIfThere`), `:35-36` (`FirstLink`).
+- `src_mcp/tests/DirectoryLink.cs:22-34` (the TEST maker: relative `cmd /c mklink /J`; a symlink elsewhere), `:40-46`
+  (`Remove`: the link itself, never recursive). It stays the tests' INDEPENDENT oracle for the product's maker (S1.2)
+  and does not delegate to it.
+- `src_mcp/runners/Worktrees/WorktreePaths.cs:60-88` (`Resolved` / `Target`: `DirectoryInfo.LinkTarget` and
+  `ResolveLinkTarget(returnFinalTarget: true)` — the repository already reads a junction's target this way, measured by
+  `AReviewRootBehindALinkTests`).
+- `src_mcp/runners/Files/HandleRead.cs:282-287` — the runners project's existing `[LibraryImport("kernel32.dll")]` of
+  `CreateFileW` (`StringMarshalling.Utf16`, `SetLastError = true`): the P/Invoke shape the junction maker follows;
+  `src_mcp/runners/CoaiMcp.Runners.csproj:7` (`IsAotCompatible`), `:14` (`AllowUnsafeBlocks`), `src_mcp/src/CoaiMcp.csproj:15`
+  (`PublishAot`).
+- `src_mcp/runners/Files/HeldFile.cs:41-55` — not for this story; named so the primitive invents no lock.
+- **Every product deleter, each through `GitScratch.DeleteEvenIfReadOnly`, and what it does with an `IOException`:**
+  `src_mcp/src/Server/Rounds/RoundScratch.cs:69-82` (`Delete`: the whole round scratch — a reviewer's `kh-*` home lives
+  in it, `src_mcp/src/Server/Rounds/RosterBuilder.cs:451` passes it as `OwnedScratch`; a failure → `_note(…)`, "the
+  scratch sweep takes it"); `src_mcp/runners/Snapshots/ReviewSnapshot.cs:186-198` (`TryDeleteRoot` → `_note`);
+  `src_mcp/runners/Snapshots/ReviewSnapshots.cs:412-424` (`TryDelete` → `note`); `src_mcp/src/Server/PanelService.cs:1342`
+  (the alias), `:1376-1389` (`PruneOldAnswerDirs`, the six-hour clock), `:1416-1440` (`PruneOldScratchDirs`; its
+  `catch (IOException)` at `:1433-1436` is SILENT — brief §3); `src_mcp/src/Server/Consultation/ConsultCheckScratch.cs:107-120`
+  (`Delete` → `warn`); `src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs:353-368` (`Remove` → `log.Debug` — brief §3);
+  `src_mcp/runners/Vibe/VibeRuntime.cs:116-126` (`DeleteQuietly`, swallowed — a throwaway probe home that never holds a
+  link); `src_mcp/runners/Vibe/VibeLaunch.cs:306-326` (`Attempt.Dispose`, the export folder, swallowed — never a link);
+  D20's `src_mcp/src/Server/Consultation/ConsultantHomeSweep.cs:157-186` (`Removed`: the cross-process `coai-turn.lock`
+  taken `:162`, every in-process turn `:169`, `DeleteAllBut` `:175` → the deleter per entry `:189-203`, then the folder
+  `:178`; a failure → `warn` `:117`), on the beat (`ConsultationService.cs:283`) and from `close_consult` (`RemoveNow`
+  `:72-84`, called at `ConsultationService.cs:252`); `src_mcp/tests/TempDir.cs:39-51` (the tests' own `Dispose`, through
+  the deleter, swallowed — brief §3).
+- **The three RAW recursive deletes left in product code**, none of which can meet a coai junction:
+  `src_mcp/src/Server/Escalations.cs:386` (an escalation's plan folder), `src_mcp/runners/Worktrees/ReviewTreeRoot.cs:201`
+  and `src_mcp/runners/Worktrees/WorktreeManager.cs:269` (git worktrees). Pinned as a list by S1.11, proven safe by S1.10.
+- The TEST sweeps: `src_mcp/tests/TempDirsAreSwept.cs:58-60` (the assembly fixture: `PanelService.PruneOldScratchDirs`
+  over `coai-*`), its own fixture roots removed by raw `Directory.Delete(root, recursive: true)` at `:132`, `:152`, `:174`,
+  `:195` (roots that never hold a link — S1.10 proves the call safe anyway); `src_vs_code/scripts/sweepTemp.mjs:65-72`
+  (`removed`: `rmSync(target, { recursive: true, force: true })`), called from `src_vs_code/scripts/run-tests.mjs:101-109`
+  (`sweepFirst`), tested by `src_vs_code/src/test/sweepTemp.test.mjs` (pure `toSweep` rows, `sweep` with an injected `io`).
+- `src_mcp/tests/ConsultantHomeSweepTests.cs:141-146` — D20's existing junction case
+  (`AnOrphanedKimiHome_PastTheWindow_IsGone_JunctionAndAll_AndThePersonsFolderKeepsItsFile`): the sweep already meets a
+  `credentials` junction; only the LOSS case is new there (S1.8).
+- `src_mcp/tests/TempDir.cs:29-30` (`For(prefix)` → `Directory.CreateTempSubdirectory`): new tests call
+  `TempDir.For("testsToDelete-<what>-")`.
+- The probe's measured shapes: `scripts/lib/kimi-home.mjs:107-126` (`disposeOwnedHome`: the link removed by its own
+  name, verified gone, the target's names compared with those read before, only then the rest — "throws, and deletes
+  nothing more, the moment a check fails") and `scripts/lib/kimi.mjs:179-182` (`junction()`: `%SystemRoot%\System32\cmd.exe
+  /d /c mklink /J`).
 
-**Boundaries — what Fable's brief must decide and pin.**
-- The junction maker: `FSCTL_SET_REPARSE_POINT` by P/Invoke (AOT-safe, no shell, no quoting of a profile path) or
-  `cmd.exe` by its ABSOLUTE `System32` path with `/d /c mklink /J` (the probe's form) — D19 allows either; choose one and
-  say why. Windows only (D18 refuses every other host for Kimi; on Unix the shape is a symlink, unmeasured — the
-  primitive refuses there with the D18 sentence rather than guessing).
-- The refusals BEFORE making it (D19 "Making the junction"): the target exists, is not itself a link (`SnapshotLinks.IsLink`
-  — never chained), is a local path (a junction cannot point at UNC; a roaming profile is refused with the sentence);
-  the link's own path does not exist yet.
-- The read-back AFTER making it: the link IS a reparse point and its target, normalised, equals the person's folder —
-  else the half-made link is removed by its own name and the caller gets a refusal.
-- The verified disposal: which names are recorded before (names and count of the target's entries), what "intact" means
-  after, and what happens when it is not (the probe: stop, delete nothing more, say it). Also the two shapes D19's §5
-  test names: a home whose junction was already removed, and a TAMPERED home whose `credentials` is a real folder (S3's
-  deleter test already deletes that whole; the verified disposal must not mistake it for the person's folder).
-- Where the verified disposal is CALLED: the round's scratch (`RoundScratch.cs:75` deletes the whole folder, and a
-  reviewer's `kh-*` home is inside it — dispose the homes first, or rely on the link-safe deleter and verify after?);
-  D20's sweep (S3) for `coai-kimi/<id>`; S5's question row later. Decide, and say which callers stay on the bare
-  link-safe deleter and why that is enough.
-- The test sweeps: `sweepTemp.mjs`'s `rmSync` — does Node's recursive `rm` enter a junction on Windows? Prove it with a
-  test either way (the probe's note that "a recursive remove followed a junction on a throwaway" is about a different
-  call); `TempDirsAreSwept` — a `coai-answers-*` holding `kh-x/home/credentials` as a junction to a read-only file in the
-  test's own folder, swept by `PruneOldScratchDirs`: junction gone, target file's bytes and read-only attribute intact.
-- D19's red-first junction test of parent §5 ("after every deleter … the junction is gone, the tree is gone, the target
-  folder still exists and its file keeps its bytes AND its read-only attribute") — S3 already has it for
-  `GitScratch` itself; the brief names which deleters still need their own case.
+**Decisions (Fable, 2026-10-14) — each with its reason; the deviations from D19 are items 9–11 of §"Where the parent plan
+and the code disagree".**
 
-**SCENARIOS — to be written by Fable.**
+1. **The junction is made by `DeviceIoControl(FSCTL_SET_REPARSE_POINT)` through P/Invoke, not by `cmd.exe`.** The two
+   differ in exactly one security property: `cmd.exe /d /c mklink /J "<link>" "<target>"` passes the person's PROFILE
+   path through cmd's quoting rules, where `&`, `^`, `%` or an embedded quote in a user name changes the command — the
+   probe's form was measured on one profile path, not on the grammar. The P/Invoke takes the path as UTF-16 bytes,
+   starts no process, needs no privilege (a mount point is unprivileged where a symlink needs Developer Mode) and the
+   runners project already carries an AOT-safe `CreateFileW` import (`HandleRead.cs:285`): three imports, about eighty
+   lines, no shell. The read-back AFTER making it (`DirectoryInfo.LinkTarget` equals the target) is what makes the
+   maker's correctness provable whichever way it was made — and S1.2 compares the product's junction with `mklink`'s on
+   the same target.
+2. **The verified disposal is the one deleter, widened — not a second deleter called "first".** D19's order
+   (`credentials` first by its own name, verify, then the rest) answers a recursive remove that would FOLLOW the link.
+   `GitScratch.DeleteEvenIfReadOnly` has no step that follows a link: it unlinks a link where it meets it and descends
+   only a real directory (S3, measured). So the order is immaterial, and the one thing D19's disposal adds — *verify the
+   person's folder lost nothing, and stop the moment it did* — goes INSIDE the deleter's `Unlink`: the target's entry
+   names are read through the link's own `LinkTarget` before the unlink and again after, and a name that is gone throws
+   `LinkTargetLostException : IOException` naming it; the walk stops there (nothing more is deleted) and every caller's
+   existing `catch (IOException)` carries the sentence to its log. The one deleter has the belt, so no caller can forget
+   it — a separate `DisposeJunctionFirst` would have been every future caller's duty (S5's question row and consultant
+   check among them). A sweep that meets the same tree later finds the link already gone and proceeds. Deviation 10.
+3. **A `credentials` that is a REAL folder is the tree's own and goes with it** (S3's case `:100-113` stays the rule):
+   there is no link to verify, the deleter never leaves coai's tree, and a copied secret inside coai's tree is better
+   deleted than kept. A home whose junction was ALREADY removed is the same case. Neither is a stop.
+4. **Which callers stay on the bare deleter: all of them** — because after §2 the bare deleter IS the verified one.
+   Nothing new is called from `RoundScratch`, the sweep, the snapshot or the question row; what changes is that a loss
+   is LOUD where it was swallowed (brief §3). `PruneOldScratchDirs`, `ConsultantHomeSweep` and `RoundScratch` each get
+   the scenario that proves it (S1.7, S1.8, S1.12).
+5. **Windows only.** `Junctions.Make` on any other host answers the D18 sentence and makes nothing; the deleter's
+   verification is host-neutral (a symlink's `LinkTarget` reads the same way) and runs everywhere.
 
-**BRIEF — to be written by Fable.**
+**BRIEF.**
+1. **`src_mcp/runners/Files/Junctions.cs`** — `public static partial class Junctions` (partial for the generated imports):
+   - `public static string Refusal(HostKind host, string link, string target)` — the FIRST of: `host != HostKind.Windows`
+     → `a directory junction is made on Windows only; Kimi is refused on a {HostKinds.Word(host)} host until it is
+     measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)`; `target` not `Path.IsPathFullyQualified`, or beginning
+     with `\\` (UNC, `\\?\UNC\`, `\\wsl$`), or not `<letter>:\`-rooted → `{target} is not a local drive path, and a junction
+     cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19)`;
+     `!Directory.Exists(target)` → `{target} does not exist`; `SnapshotLinks.IsLink(target)` → `{target} is itself a
+     link, and coai never chains links (D19)`; anything at `link` (`File.Exists || Directory.Exists ||
+     OwnedPaths.IsLinkIfThere`) → `{link} already exists, and a junction is only ever made at a fresh path`; a target over
+     32 000 characters → refused with the number (the reparse buffer's bound); else empty.
+   - `public static string Make(HostKind host, string link, string target)` — `Refusal` first; then
+     `Directory.CreateDirectory(link)`; `CreateFileW(link, GENERIC_WRITE, 0, null, OPEN_EXISTING,
+     FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, 0)`; a `REPARSE_DATA_BUFFER` laid out by hand in a
+     `byte[]` (no struct marshalling): tag `IO_REPARSE_TAG_MOUNT_POINT` `0xA0000003`, `SubstituteName` = `\??\` + the
+     target's full path without a trailing separator, `PrintName` = the target's full path, both UTF-16 without a BOM,
+     the four offset/length fields in BYTES and `ReparseDataLength` computed; `DeviceIoControl(handle,
+     FSCTL_SET_REPARSE_POINT = 0x000900A4, buffer, length, 0, 0, out _, 0)`; the handle disposed; then the READ-BACK:
+     `OwnedPaths.IsLinkIfThere(link) && SameFolder(Target(link), target)` — else the half-made link is removed by its
+     own name (`Directory.Delete(link, recursive: false)`) and the answer is `the junction at {link} was made but reads
+     back as '{read}', not {target} — removed again, the launch is refused`. Any Win32 failure: the empty directory
+     removed, `the junction at {link} could not be made: {Marshal.GetPInvokeErrorMessage(error)}`. The imports
+     (`CreateFileW`, `DeviceIoControl`; `CloseHandle` through `SafeFileHandle`) are `[LibraryImport("kernel32.dll",
+     SetLastError = true)]` in the shape of `HandleRead.cs:282-287`; if `HandleRead`'s `CreateFileW` can be made
+     `internal` and shared, share it (reuse-first, move 2) — never a third import of one function.
+   - `public static string Target(string link)` — `new DirectoryInfo(link).LinkTarget` (ONE level, never
+     `ResolveLinkTarget`: no chaining), made absolute against the link's parent when relative,
+     `Path.TrimEndingDirectorySeparator(Path.GetFullPath(…))`; empty when the path is no link or cannot be read.
+   - `public static bool SameFolder(string a, string b)` — both through `GetFullPath` + `TrimEndingDirectorySeparator`,
+     `OrdinalIgnoreCase` on Windows, `Ordinal` elsewhere.
+   - `internal static string Make(HostKind host, string link, string target, Func<string, string> readBack)` — S1.6's seam;
+     the public overload passes `Target`.
+2. **`GitScratch.DeleteEvenIfReadOnly` widened at `Unlink` (`GitScratch.cs:81-90`).** For a DIRECTORY link:
+   `target = Junctions.Target(link)`; when it is non-empty and listable, `before` = the target's direct entry NAMES
+   (`Directory.EnumerateFileSystemEntries(target)` → `Path.GetFileName`, an ordinal set); the unlink as today; then
+   `OwnedPaths.IsLinkIfThere(link) || Directory.Exists(link)` → `throw new LinkTargetLostException($"{link} still exists
+   after its unlink — nothing more was deleted")`; `after` read the same way; `missing = before.Except(after)` non-empty →
+   `throw new LinkTargetLostException($"the folder {target} that {link} pointed at lost {string.Join(", ", missing)}
+   during the unlink — nothing more was deleted; check that folder before deleting {link}'s tree again")`. For a FILE
+   link: `File.Exists(target)` before and after, the same exception when it is gone. A target that cannot be read
+   (dangling, unreadable) → unverified, nothing said (the unlink by name was always safe). `public sealed class
+   LinkTargetLostException(string message) : IOException(message)` beside it. CC ≤ 4: `Unlink` → `UnlinkDirectory` /
+   `UnlinkFile` / `Verify(before, after, link, target)`. The remarks `:18-26` gain: *and the target of every link is
+   checked to have lost nothing, or the deletion stops with the names (E4.1 of PLAN_vibe_and_kimi_runtimes_E4.md)*.
+   An `internal static Action<string>? AfterUnlink` seam (test only, null in the product) runs between the unlink and
+   the second read — S1.7 and S1.8 need the loss to happen in that window.
+3. **A loss is never swallowed.** `PanelService.PruneOldScratchDirs` gains `Action<string>? warn = null` and
+   `catch (LinkTargetLostException e) { warn?.Invoke(e.Message); }` BEFORE the silent `catch (IOException)` (`:1433`);
+   `PruneOldAnswerDirs` passes the service's warning logger; the test sweep (`TempDirsAreSwept.cs:58-60`, `:112`, …) passes
+   nothing. `QuestionRowLaunch.Remove` (`:353-368`): `catch (LinkTargetLostException e) { log.Warning(…) }` before its
+   `Debug`. `TempDir.Dispose` (`TempDir.cs:39-51`): a `LinkTargetLostException` is RE-THROWN — in a test a lost target is a
+   failing test, never a leftover. Every other caller already warns or notes the message as it is.
+4. **Tests' junctions**: every new test makes its junction INSIDE its own `TempDir.For("testsToDelete-…")` folder, to a
+   sibling folder in the same `TempDir` — never to `~/.kimi-code`, never to another test's folder (§0).
+5. **Docs**: `research/module_runners.md` — a *Files* paragraph: the junction maker (P/Invoke, the read-back, the
+   refusals), the deleter's verification and `LinkTargetLostException` with what each caller does with it;
+   `research/module_tests.md` — the junction tests, S1.13's verdict on Node's `rmSync`, and the rule that no test
+   junctions outside its own `testsToDelete-` folder. `src_vs_code/CHANGELOG.md` under `## Unreleased` only if S1.13
+   changes `sweepTemp.mjs`; the server has no CHANGELOG file (release-please writes its notes from the commits).
 
-**Docs.** `research/module_runners.md` (the files unit: the junction primitive and the verified disposal),
-`research/module_tests.md` (the junction tests, and the rule that no test junctions outside its own folder).
+**SCENARIOS** (each one a test; red first — "expected red today" is what HEAD does. A class that does not exist is a
+COMPILE red: stub the type to return `string.Empty`/do nothing first and watch the behavioural red named here).
+
+| # | Given | When | Then | Expected red today |
+|---|---|---|---|---|
+| S1.1 `AJunctionIsMade_AndReadsBackAsItsTarget` (`JunctionsTests`, Windows; elsewhere only S1.4 runs) | `testsToDelete-junc-` holding `target/secret.json` (read-only) | `Junctions.Make(HostKind.Windows, <dir>/link, <dir>/target)` | empty; `File.GetAttributes(link)` has `ReparsePoint` and `Directory`; `Junctions.Target(link)` `SameFolder`s the target; `File.ReadAllBytes(link/secret.json)` are the target's bytes; `DirectoryLink.Remove(link)` leaves `target/secret.json` with its bytes and attribute | stub returning empty: *Expected … HasFlag(ReparsePoint) to be true, but found False* |
+| S1.2 `TheProductsJunction_IsWhatMklinkMakes` | one link by `Junctions.Make`, one by `DirectoryLink.MakeAsync`, same target | `Target()` and `new DirectoryInfo(x).LinkTarget` of each; `GitScratch.DeleteEvenIfReadOnly` on a tree holding both | equal pairs; both removed by name; `TheTargetIsUntouched` | the product link's `LinkTarget` null |
+| S1.3 `ARefusalBeforeAnythingIsMade` (Theory: target `\\server\share\k`; `\\wsl$\Ubuntu\home\k`; relative `k`; a target that does not exist; a target that is itself a junction (`DirectoryLink`); a link path that is a folder / a file / a link already; a 33 000-character target) | — | `Junctions.Refusal`, then `Make` | the row's sentence (as quoted in brief §1); NOTHING exists at `link` afterwards, not even an empty folder | stub: empty sentence; after a stub that creates the folder, `Directory.Exists(link)` true |
+| S1.4 `ANonWindowsHost_IsRefusedWithTheD18Sentence` (pure; every CI) | `HostKind.Linux`, `Wsl`, `MacOs`, `Other` | `Refusal`, `Make` | names `D18` and the host's word; nothing made | empty |
+| S1.5 `TheReadBackIsNormalised` | a target spelled `c:\…\TARGET\` against a link made to `C:\…\target` | `Make` | empty — `SameFolder` ignores case and the trailing separator on Windows | refusal "reads back as" |
+| S1.6 `AReadBackThatNamesAnotherFolder_UnlinksAndRefuses` | the internal seam's `readBack` answering a sibling folder | `Make` | the "reads back as … removed again" sentence; `link` absent; target intact | the link kept |
+| S1.7 `ALinkWhoseTargetLostAName_StopsTheDeletion_AndSaysWhich` (`DeletingAnOwnedTreeNeverEntersALinkTests`) | `home/credentials` → junction to `persons-credentials/{kimi-code-env.json, kimi-code.json}`; `home/config.toml`, `home/sessions/index.jsonl`; `GitScratch.AfterUnlink` deletes `persons-credentials/kimi-code.json` | `DeleteEvenIfReadOnly(home)` | throws `LinkTargetLostException` naming `kimi-code.json` and `persons-credentials`; `home/config.toml` and `home/sessions/index.jsonl` STILL EXIST; the link is gone; `TheTargetIsUntouched` for the other file | no throw; the home gone whole |
+| S1.8 `TheSweepSaysALoss_AndGoesOn` (`ConsultantHomeSweepTests`) | an orphaned `coai-kimi/<id>` past the window whose junction target loses a file through the seam | `ConsultantHomeSweep.Sweep` | `warn` received the loss sentence; the count excludes the folder; the next `Sweep` (seam off) removes it | no warning, the folder gone |
+| S1.9 `ADanglingLink_AndAFileLink` (Theory; the file-symlink row skipped where the OS refuses to make one) | a junction whose target folder was deleted before the tree; a file symlink (`File.CreateSymbolicLink`) to a read-only file | `DeleteEvenIfReadOnly` | the dangling junction removed, nothing thrown; the file link removed, the target file kept with bytes and attribute | (dangling: green on HEAD — pins it; the file row red if `Verify` treats a file target as a folder: *DirectoryNotFoundException*) |
+| S1.10 `DotNetsRecursiveDelete_DoesNotEnterAJunction` | a tree with `a/credentials` → junction to a folder holding a read-only file | `Directory.Delete(tree, recursive: true)` | the tree gone; the target's file keeps bytes AND attribute | (expected green — pins the three raw sites' safety; if RED, those three sites switch to the shared deleter in this story and brief §3 says so) |
+| S1.11 `EveryProductDeleterIsTheSharedOne` (a source scan in the `TempDirsAreSwept.TempPrefixesIn` shape) | every `.cs` under `src_mcp/src` and `src_mcp/runners` | the set of files holding `Directory.Delete(` with `recursive: true` or `, true)` | exactly `{Escalations.cs, ReviewTreeRoot.cs, WorktreeManager.cs}`; a fourth is red naming its path | (green — pins the list) |
+| S1.12 `ARoundsScratchHoldingAKimiHomeWithAJunction_IsSwept_AndThePersonsFolderKeepsItsFile` (`TempDirsAreSwept`) | `testsToDelete-sweep-kh-/coai-answers-x/kh-0123456789/home/credentials` → junction to `…/persons/` holding a read-only `kimi-code-env.json`; the scratch's last write three days ago | `PanelService.PruneOldScratchDirs(root, -1 day, ["coai-answers-*"])` | the scratch gone; the file: bytes and `ReadOnly` intact; a second arm with the loss seam: `warn` holds the sentence, the scratch left | (green on HEAD through S3's deleter — pins the sweep by name; the warn arm red: the collector empty) |
+| S1.13 `a junction inside a leftover is removed by its own name, never entered` (`sweepTemp.test.mjs`; Windows only — `test.skip` elsewhere, with a symlink twin that runs everywhere) | a `testsToDelete-sweep-` folder under `os.tmpdir()` holding `coai-left/kh/home/credentials` (made with `execFileSync(path.join(process.env.SystemRoot, 'System32', 'cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target])`) → `persons/secret.json` read-only; `rule = { prefix: 'coai-', keepMinutes: 0, neverSwept: [] }` | `sweep(folder, Date.now() + 60_000, rule)` | `removed === 1`; `persons/secret.json` exists with its bytes and its read-only bit. If RED (the file gone or writable): `removed()` first unlinks every link in the tree by name (`lstatSync(p).isSymbolicLink()` → `rmdirSync`/`unlinkSync`) before `rmSync` — then green | UNKNOWN — the measurement IS the scenario; the verdict goes into `research/module_tests.md` either way |
+| S1.14 `ADisposalOfAHomeMadeWithTheProductsJunction_LeavesThePersonsFolderWhole` | `Junctions.Make` into `kh-x/home/credentials` → `persons/` with two read-only files; `config.toml` and `sessions/…` in the home | `TempDir.Dispose` (the tests' path) and `GitScratch.DeleteEvenIfReadOnly` | gone; both files keep bytes and attribute; the folder's names unchanged | (green after S1.1) |
+
+**Review focus (Opus).** (1) `Junctions.Make`'s failure paths: is the empty directory ALWAYS removed after a failed
+`DeviceIoControl` or a failed read-back — can a half-made link survive any branch? (2) The `REPARSE_DATA_BUFFER`
+layout: `ReparseDataLength`, the four name offsets/lengths in BYTES, the `\??\` prefix on the substitute name only, no
+trailing separator, UTF-16 — compare with S1.2's `mklink` link (`fsutil reparsepoint query`) if in doubt. (3) `Unlink`'s
+verification reads the target THROUGH `LinkTarget`, never through the link path (which would be entering it); a listing
+is a read, never a write; `before`/`after` compared by names only. (4) `LinkTargetLostException` really stops the walk —
+no `finally` continues deleting siblings. (5) No caller swallows it any more (brief §3), and `TempDir` re-throws.
+(6) Every test's junction target is inside the test's own `testsToDelete-` folder (grep the diff for `MakeAsync(` and
+`Junctions.Make(`). (7) CC ≤ 4 in `Make`, `Refusal`, `Unlink`. (8) S1.13's verdict is recorded whichever way it went.
+
+**Docs.** As brief §5.
 
 ## E4.2 — `KimiHome` + `KimiLaunch`: the owned home, its config, its validation, the built environment, one launch control
 
-`model: fable` — **cornerstone** (security judgement: what of the person's reaches Kimi, and through which path).
+`model: fable` — **cornerstone** (security judgement: what of the person's reaches Kimi, and through which path). **Spec:
+Fable, 2026-10-14**; every anchor on HEAD `b121cca8`.
 
 **Goal.** Every Kimi launch is checked and built by ONE control, `KimiLaunch` — the Vibe shapes (`VibeLaunch`,
 `VibeHome`, `VibeHomeTurns`) with the inversions D19 names: the owned home (`home/` = the `credentials` junction from
@@ -139,84 +267,377 @@ E4.1 + ONE coai-written `config.toml`) beside an empty `os/`; the person's OAuth
 never copied; the model block from the person's own `[models."<id>"]` or a pinned `shared/kimi-model-blocks.json`;
 validation before every launch; the built environment (`ProcessEnvironment.Minimal`'s names + `KIMI_CODE_HOME` +
 `KIMI_CODE_NO_AUTO_UPDATE=1` + `USERPROFILE`/`HOME`/`HOMEDRIVE`/`HOMEPATH` → `os/` + `PATH` beginning with the person's
-`~/.kimi-code/bin`); the model pre-check against the curated `kimi-code/*` list (D10); `kimi --version` in the built
-environment against `KimiAcpProfile.MeasuredVersions` — warn and run (owner, 2026-10-13); serialisation of the home's
-turn and, across processes, per credentials target. No `KimiRuntime` yet (E4.4) and no shim change (E4.3): E4.2 is the
-library both of them call.
+`~/.kimi-code/bin`); `rg` and `fd` found before any process; the model pre-check against the curated `kimi-code/*` list
+(D10); `kimi --version` in the built environment against `KimiAcpProfile.MeasuredVersions` — warn and run (owner,
+2026-10-13); the home's turn in-process and, across processes, one launch per credentials target. No `KimiRuntime` yet
+(E4.4) and no shim change (E4.3): E4.2 is the library both of them call.
 
-**Files and anchors (verified).**
-- The shapes repeated: `src_mcp/runners/Vibe/VibeLaunch.cs` — `HostRefusal` `:67-72`, `EnvironmentRefusal` `:91-94`,
-  `Built` `:101-111`, `ModelRefusal` `:125-129`, `TakeAsync` `:143-168` (the order: before the turn — host, environment,
-  model, home made; inside the turn — the shape, the version, the shape again, the verdict), `VersionAsync` `:233-248`,
-  `Unmeasured` `:269-273`; `VibeHome.cs:36-62` (`Refusal` / `Checked`: the walk that never follows a link);
-  `VibeHomeTurns.cs:21-41` (`TakeAsync`; vendor-free — D19 says shared, not copied: generalise it, e.g. `OwnedHomeTurns`,
-  and keep `VibeHomeTurns` as the name callers use or move them; S3 adds `TryTake` to it, `VibeHomeTurns.cs` (S3));
-  `VibeRuntime.cs:149-150` (`HomeFor`, the `vh-` + 10-hex shape → `kh-`).
-- `src_mcp/runners/Reviewers/LaunchTurn.cs:17-56` — `Holding(held, warning)`; the warning today is a STRING built by
-  `VibeLaunch.Unmeasured` alone. D19 asks for ONE version-warning shape for both runtimes from ONE builder: extract it
-  here (a shared builder taking the runtime, the running version, the measured versions, what the numbers cover and the
-  advised re-run) and make `VibeLaunch.Unmeasured` call it, so Vibe's sentence and Kimi's come from one place.
-- `src_mcp/runners/Processes/ProcessEnvironment.cs:81-88` (`MinimalWindows` — it already NAMES `USERPROFILE`,
-  `HOMEDRIVE`, `HOMEPATH`, `PATH`; the values change, the names do not), `:94` (`Minimal`).
-- `src_mcp/runners/Reviewers/CodexConfigFile.cs:30-62` — reads ROOT keys only (`RootValue` stops at the first `[`).
-  D19: "the TOML reading `CodexConfigFile.cs` already does … is widened, never duplicated" — the person's
-  `[providers."managed:kimi-code"]` (`type`, `base_url`) and `[providers."managed:kimi-code".oauth]` (`storage`, `key`,
-  `oauth_host`) and `[models."<id>"]` (`provider`, `model`, `max_context_size`, `capabilities` — an ARRAY) are TABLE
-  values. The probe's reader is `scripts/lib/kimi-home.mjs:29-41` (`personsOauth`), its writer `:49-60`
-  (`minimalConfigToml` — the exact bytes that answered 3 of 3, RESULTS §17 rung 3).
-- `src_mcp/runners/Acp/KimiAcpProfile.cs` — `Exclusions` `:34` (E4.3 extends it), `InstalledExecutableFor` `:93-98`
-  (`%USERPROFILE%\.kimi-code\bin\kimi.exe`); `MeasuredVersions` does not exist yet — D19 puts it here (`["2.1.1"]`).
-- `src_mcp/runners/Vibe/VibeHomeManifest.cs:30-35` — how a `shared/*.json` seed is embedded; the model-block table
-  follows it (D19: "embedded as the Vibe manifest is").
-- `src_mcp/runners/Files/HeldFile.cs:41-55`, `:87-100` — the repository's ONE cross-process lock primitive (an exclusive
-  open, released by the kernel on a crash). See the boundary on the cross-process gate below.
-- The probe's measured shapes: `scripts/lib/kimi-home.mjs:177-185` (`builtEnv`: the four OS-home values from one folder,
-  `HOMEDRIVE`/`HOMEPATH` split from it), `research/RESULTS_kimi_confinement.md` §17 (the ladder), §18 (the data names
-  admitted by NAME, no manifest), §19 (the redirect), §20 (the pin), §22 (one answered turn per curated id), §24.
+**Files and anchors (verified on `b121cca8`).**
+- `src_mcp/runners/Vibe/VibeLaunch.cs` — `VibeModels` `:15-29` (`Default`, `Curated`, `SeenOn`: the shape `KimiModels`
+  repeats); `HostRefusal` `:81-86` and the private `RunsInWsl` `:88-96` (decision 7 shares it); `EnvironmentRefusal`
+  `:105-108`, `Confined` `:129-130`, `CarriesTheThree` `:133-137`; `Built` `:115-126`; `ModelRefusal` `:144-148`;
+  `VersionIn` `:151-152` with `VersionPattern` `:73`; `TakeAsync` `:162-187` (the order: before the turn — host,
+  environment, model, home made; the turn; inside — the shape, the version, the shape again, the verdict; a throw inside
+  gives the turn back `:179-183`); `HomeVerdict` `:190-196`; `AgainstAsync` `:213-226`; `Given` `:228-233`; `FirstOf`
+  `:235-237`; `HomeMade` `:239-252`; `VersionAsync` `:255-270` (`Win32Exception` → `VendorDiagnosis.InstallCure`);
+  `Verdict` `:278-282`; `VersionWarning` `:288-289`; `Unmeasured` `:291-295` (the sentence brief §12 moves); `Named`
+  `:301`; `Attempt` `:306-326`.
+- `src_mcp/runners/Vibe/VibeHome.cs:36-62` (`Refusal` / `Checked`: not there → empty; the home itself a link → refused;
+  a read failure → refused rather than started on a home nobody checked `:58-61`), `:64-77` (`FirstProblem`), the hand
+  walk `Inside` / `Judge` / `Folder` `:80-115` that never follows a link, `Sentence` `:118-122`. The Kimi check repeats the
+  WALK and inverts the rule at one path.
+- `src_mcp/runners/Vibe/VibeHomeTurns.cs:22-36` (`TakeAsync`), `:47-61` (`TryTake`), remarks `:43-45` ("Kimi's homes
+  share this, never a copy of it") — used AS IS, keyed by the owned ROOT. No rename in this story: a rename touches the
+  sweep and `ConsultantPlaces` for a name alone — propose it in the summary, do not do it.
+- `src_mcp/runners/Vibe/VibeRuntime.cs:101-113` (`ProbeVersionAsync` — E4.4 repeats it), `:157-158` (`HomeFor`: `vh-` +
+  10 hex of SHA-256 → `kh-`), `:164-165` (`Short`, private — brief §8 shares it).
+- `src_mcp/runners/Reviewers/LaunchTurn.cs:17-63` — `Holding(held, warning, cliVersion)` `:42`; `Warning` is a STRING
+  `:48`; `CliVersion` `:51`. The carrier stays (decision 3).
+- `src_mcp/runners/Processes/ProcessEnvironment.cs:42-46` (`NameComparer` / `ComparerFor`), `:81-88` (`MinimalWindows` —
+  it already NAMES `PATH`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`; the values change, the names do not), `:94` (`Minimal`);
+  `src_mcp/runners/Processes/ProcessLauncher.cs:100` (`InheritsEnvironment`), `:112` (`Passthrough`), `:133-139`
+  (`ProcessResult`), `:143-146` (`IProcessLauncher`) — a request's `Environment` is applied LAST, on top of the
+  passthrough, so an explicit `PATH` wins over the inherited one.
+- `src_mcp/runners/Reviewers/CodexConfigFile.cs:18-26` (`RootKey`: basic / literal / bare), `:45-62` (`RootValue`, stops
+  at the first `[`), `:64-67` (`ValueOf`). Brief §4 widens it with table reads — never a second parser.
+- `src_mcp/runners/Acp/KimiAcpProfile.cs` — `ProfileName` `:27`; `Exclusions` `:34` (E4.3's); `Failures` `:37-54`;
+  `InstalledExecutable` `:71-76` (reads `SpecialFolder.UserProfile` — NEVER called inside a redirected process, decision
+  4); `InstalledExecutableFor` `:93-98` (pure — the parent calls THIS with the real profile). `MeasuredVersions` does not
+  exist yet (brief §11).
+- `src_mcp/runners/Vibe/VibeHomeManifest.cs:31-36` (`Resource`, `Builtin`), `:70-81` (`Load`), `:96-123` (nullable JSON
+  records + the source-generated context) and `src_mcp/runners/CoaiMcp.Runners.csproj:36` (the `EmbeddedResource` line):
+  `shared/kimi-model-blocks.json` is embedded and read the same way (brief §6).
+- `src_mcp/runners/Files/HeldFile.cs:41-55` (`Take` → `Hold.Taken | Busy | Unusable`), `:87-100` (`TakeWithin`, synchronous
+  sleeps); `src_mcp/src/Server/Consultation/ConsultantPlaces.cs:95-100` (`LockWait`, `TakingTheLock` =
+  `Task.Run(() => HeldFile.TakeWithin(path, LockWait), ct)` — the async shape the credentials lock repeats), `:201-221`
+  (the lock taken under the in-process turn, given back on every way out but one); `src_mcp/src/Server/Consultation/ConversationFolder.cs:43`
+  (`LockName`), `:82` (`TakeTurn`); `src_mcp/runners/Reviewers/EngineLease.cs:47-50` (`Directory` =
+  `LocalApplicationData/coai-mcp/engines`, settable — the lock root's precedent and parent folder).
+- `src_mcp/runners/Consultation/ConsultantHomes.cs:21-24` (`Kimi = "coai-kimi"`, `All`) and `src_mcp/src/Server/PanelSettings.cs:385-389`
+  (`ConsultantHomesRoot`: `COAI_CONSULTANT_HOMES` else `LocalApplicationData`): the D20 sweep WALKS every child of
+  `<root>/coai-kimi/` (`ConsultantHomeSweep.cs:89-106`), so the lock root is NOT under it (decision 1).
+- `src_mcp/runners/Platform/HostKind.cs:17-24` (`HostKind`), `:30-31` (`Current`), `:46-53` (`Word`);
+  `src_mcp/runners/Reviewers/VendorDiagnosis.cs:282` (`InstallCure(runtime, linux?)` — E4.4 adds the `kimi` arm; until
+  then it answers null and this story's sentence falls back to the getting-started URL).
+- `src_mcp/runners/Reviewers/ReviewerRuntime.cs:9-12` (`ReviewerSettings.ExecutablePath`), `:186` (`OwnedScratch`).
+- `src_mcp/runners/Acp/AcpClient.cs:36-56` (`AskAsync` → `AcpTransport.Start`), `src_mcp/runners/Acp/AcpTransport.cs:87-88`
+  (inherits), `src_mcp/runners/Acp/AcpOutcome.cs:9` (`AcpAsk`) — E4.3's seam, named so this story's `Built` and
+  `EnvironmentRefusal` signatures fit it (decision 4).
+- `src_mcp/runners/Processes/ExecutableResolver.cs:20-85` (`Resolve(command, isWindows, pathVariable, fileExists)`: the
+  name as given, then each `PATHEXT` suffix, per `PATH` directory) — the rule `KimiTools` resolves `rg`/`fd` by.
+- Tests to mirror: `src_mcp/tests/VibeLaunchControlTests.cs:48-80` (the `FakeVibe` launcher: records every request,
+  answers `--version`, the `WhileTheVersionIsAsked` seam, `MostAtOnce`), `src_mcp/tests/VibeHomeTests.cs:47-60`
+  (`TheInventoryVibeWrites` — the admitted-inventory companion every refusal needs),
+  `src_mcp/tests/AnUnmeasuredVibeIsWarnedAboutNotRefusedTests.cs:21-27` (Vibe's warning asserted by `Contain`; it stays
+  green UNTOUCHED, which is S2.32's proof of decision 3), `src_mcp/tests/KimiAcpProfileTests.cs:28-43`.
+- The probe's measured shapes: `scripts/lib/kimi-home.mjs:29-41` (`personsOauth`), `:49-60` (`minimalConfigToml` — the
+  rung-3 bytes), `:177-185` (`builtEnv`: the four OS-home values from one folder, `HOMEDRIVE`/`HOMEPATH` split from it);
+  `research/RESULTS_kimi_confinement.md` §17 (the ladder), §18 (admitted names), §19 (the redirect), §20 (the pin), §22
+  (per-id blocks), §24.
 
-**Boundaries — what Fable's brief must decide and pin.**
-- **The seam E4.3 and E4.4 call**, fixed here so neither re-designs it: `KimiLaunch.Built(ProcessRequest request,
-  KimiPlaces places)` (or an equivalent single builder) and `KimiLaunch.EnvironmentRefusal(ProcessRequest request)`,
-  `KimiLaunch.TakeAsync(HostKind, ProcessRequest, IProcessLauncher, CancellationToken) → LaunchTurn`, `KimiModels.Curated`
-  / `KimiModels.Default`, and how `--home <path>` alone lets the shim rebuild the same environment. **A trap to close
-  here:** the shim's OWN process may run in the built environment (D19: "the one builder … the runtime also uses for the
-  shim's own request"), where `USERPROFILE` points into `os/` — so nothing that locates the PERSON's folders
-  (`~/.kimi-code`, its `bin/`, its `credentials/`, `KimiAcpProfile.InstalledExecutable` at `:71-76`, which reads
-  `SpecialFolder.UserProfile`) may be derived again inside a redirected process. The person's paths are resolved ONCE,
-  in the unredirected parent, and travel explicitly (flags, or the request) — decide which.
-- **The person's home**: `KIMI_CODE_HOME` of coai's own environment when set, else `~/.kimi-code` (D19); `bin/` is the
-  INSTALL folder's (`KIMI_INSTALL_DIR`, default `~/.kimi-code` — Moonshot's `install.ps1`, read 2026-10-14).
-- **Ripgrep — a finding of this split that the parent plan does not have.** D19 says the person's `~/.kimi-code/bin`
-  holds `rg.exe`/`fd.exe` "where Kimi's installer puts" them. Moonshot's installer does NOT (both `install.ps1` and
-  `install.sh`, `https://cdn.kimi.com/kimi-code/install.{ps1,sh}`, read 2026-10-14: they download `kimi` only); the
-  `rg.exe` measured there (§17, §24) was put there by Kimi ITSELF — its documented ripgrep download into
-  `$KIMI_CODE_HOME/bin` — on a run in the person's own home. So on a machine installed by E4.5's button whose person never
-  ran Kimi's `Grep` at home, the built `PATH` finds no `rg`, the first review downloads ripgrep INTO THE OWNED HOME (the
-  code write D19's validation refuses), and the launch after it is refused. Decide: a pre-launch check that `rg(.exe)`
-  resolves on the built `PATH` (refused before any process, with a cure that does not depend on guessing Kimi's
-  behaviour), or another answer — and record it as a deviation of D19.
-- **The cross-process gate per credentials target.** D19 says "a named mutex". A `Mutex` is owned by a THREAD, and
-  `TakeAsync` resumes on whatever thread the awaits leave it on, so a named mutex held across an `await` throws on
-  release; and `HeldFile` is the repository's one cross-process primitive (its own remarks: "the one primitive every
-  cross-process lock here rests on"). The judge's recommendation: a `HeldFile` lock at
-  `<LocalApplicationData>/coai-kimi/locks/<sha256(target)[..16]>.lock`, taken by an async poll with jitter until the
-  token fires — inside the row's timeout, as D19 states. Fable decides and records the deviation from "named mutex".
-- **The scheduler's cap (`LaunchesOneAtATime`) is NOT this story's** — it moved to E4.4, where the adapter that
-  declares it is registered and the scheduler can be tested through it; it is not security judgement.
-- **The version gate**: today's released Kimi is **2.2.0** (`https://code.kimi.com/kimi-code/latest`, read 2026-10-14),
-  the measured one 2.1.1, and the person's `tui.toml` has `[upgrade] auto_install = true` (RESULTS §3) — so the warning
-  is expected on the owner's machine from the first launch. That is the owner's decision working, not a defect.
-- **D18** — `HostRefusal` for Kimi (a Linux/WSL child or a non-Windows host), the Vibe sentence's shape.
-- The validation list, the refusal sentences and their cures are D19's ("Validation before every launch"); the brief
-  turns each into a scenario against a FAKE person's home inside the test's own folder.
+**Decisions (Fable, 2026-10-14) — deviations 9, 11 and 12 of §"Where the parent plan and the code disagree".**
 
-**SCENARIOS — to be written by Fable.**
+1. **The cross-process gate is a `HeldFile` lock, not a named mutex** (deviation 9). A `Mutex` is thread-affine:
+   `TakeAsync` awaits the version probe and the validation, resumes on whatever thread the pool gives it, and
+   `ReleaseMutex` from another thread throws `ApplicationException` — the lock would be released by the finalizer at
+   process exit, i.e. never. `HeldFile` is the repository's one cross-process primitive, kernel-released on a crash,
+   already waited for asynchronously by `ConsultantPlaces.TakingTheLock`. **Path:** `KimiCredentialsLock.Root` =
+   `<LocalApplicationData>/coai-mcp/kimi-locks/` (beside `EngineLease.Directory`'s `engines/`; settable for tests), the
+   file `<SHA-256 of the normalised target path, lower hex, first 16>.lock`. NOT under `coai-kimi/` (the D20 sweep walks
+   every folder there and would judge a `locks/` a foreign conversation folder) and NOT in temp (no sweep ever takes it;
+   the files are empty and reused per target). **Timing:** inside the row's timeout, as D19 states — a loop of
+   `await Task.Run(() => HeldFile.TakeWithin(path, Slice), ct)` with `Slice = 1 s` until `Taken` or the launch's token
+   fires (the `OperationCanceledException` the executor already reads as the row's end); `Unusable` → a refusal naming
+   the cause and the path. **Order:** the home's in-process turn first (narrow, cheap), the credentials lock second
+   (wide), both held by the `LaunchTurn` until the launch is read, released in reverse. No cycle: the D20 sweep and
+   `ConsultantPlaces` take only `coai-turn.lock` and the in-process turns, with no wait, and never this lock.
+2. **`rg` and `fd` are found BEFORE the launch, or it is refused — never admitted into the home** (deviation 11). D19's
+   `PATH` guarantee assumed Moonshot's installer ships them; it does not (item 4 of §"disagree"). Two answers weighed:
+   (a) admit `bin/rg.exe` by a hash coai pins — coai never measured Kimi's download (§25: unmeasured), the pinned hash
+   would be of a ripgrep release coai never ran, and the owned home would hold code vouched for by a hash KIMI checks,
+   which is the alternative D19 itself rejected; (b) find the tools on the person's machine first and refuse otherwise —
+   the owned home then never holds code, the person's own `rg` is what their own `kimi` already runs, and the cure is two
+   documented commands. (b). **The rule:** `rg` and `fd` (each resolved the `ExecutableResolver` way — the name, then
+   each `PATHEXT` suffix) must each be found in the person's `bin` (`KIMI_INSTALL_DIR` else `~/.kimi-code`, plus `/bin`)
+   or in a directory of the PARENT's `PATH`; the built `PATH` = the person's `bin`, then the directory of each tool found
+   elsewhere (deduplicated, `rg` then `fd`), then the parent's entries not already listed — so `PATH` still BEGINS with
+   the person's `bin` (D19) and both tools resolve without a download. One or both missing → refused before any process:
+   `ripgrep (rg) and fd were not found in {bin} or on PATH — Kimi's Grep and Glob would download them into the
+   coai-owned home, which coai refuses (D19); install them (winget install BurntSushi.ripgrep.MSVC sharkdp.fd) and restart
+   the editor, or run kimi once in a terminal and use its search, which downloads both into {bin}` — with the missing
+   name(s) in place of "rg and fd". Both tools, because Kimi documents downloading BOTH into `bin/` (§18) and a `bin/` of
+   either refuses the next launch (K18). M-K12 (c) stays the cell that lets the help claim "never receives code"; the
+   `bin/` refusal stays the net.
+3. **ONE string builder for both runtimes' version warning** — `VersionWarnings.Unmeasured(runtime, running, measured,
+   numbersCover, advised)`; `VibeLaunch.Unmeasured` calls it with Vibe's four fragments and produces today's sentence BYTE
+   FOR BYTE (the existing Vibe test proves it untouched); Kimi's reads `Kimi {running} is not a version coai has measured
+   (it measured {measured}); it is run anyway, but every confinement number coai has — the write refusals, the owned
+   home's inventory, the OS-home redirect (research/RESULTS_kimi_confinement.md) — is {measured}'s — re-run
+   `node scripts/probe-kimi-confinement.mjs` with this Kimi to measure it`. The carrier stays `LaunchTurn.Warning`, a
+   string (item 2 of §"disagree"): the card and the reviewer line already read it.
+4. **The person's paths are resolved ONCE, in the unredirected parent, and travel on the request** — `KimiPlaces`
+   (brief §2). The runtime (E4.4) calls `KimiPlaces.Resolve(…)` with the REAL profile and this process's environment;
+   the shim (E4.3) calls `KimiPlaces.ForShim(flags["--home"], flags["--persons-bin"])` and NEVER
+   `KimiAcpProfile.InstalledExecutable`, `SpecialFolder.UserProfile` or its own `KIMI_CODE_HOME` — inside the shim
+   `USERPROFILE` IS `os/`. **The shim's flags, pinned here for E4.3 and E4.4:** `--home <owned ROOT>` (the folder holding
+   `home/` and `os/`; `KIMI_CODE_HOME` is `<root>/home`), `--persons-bin <folder>`, and `--executable <absolute kimi>`
+   (a flag already). The tool folders need no flag: they travel in the shim's own `PATH`, which the same builder made,
+   and `BuiltPath` is idempotent — the agent's `PATH` is the shim's `PATH` re-prefixed with nothing new.
+5. **The junction's preconditions, make and read-back are E4.1's `Junctions`** — this story calls
+   `Junctions.Make(host, <root>/home/credentials, <persons home>/credentials)` and `Junctions.Target`, and adds nothing
+   of its own.
+6. **The config is RENDERED from values, never copied; `type` must be `kimi` and `storage` must be `file`** — two
+   refusals D19 did not spell out (deviation 12): the measured bytes say `type = "kimi"`, and a slot stored anywhere but
+   in files has no credentials folder to junction. The person's `[models."<id>"]` block, when present, must be COMPLETE
+   and on `managed:kimi-code`; a block coai cannot read (a multi-line array) refuses with the cure rather than silently
+   falling to the pinned table — the person's intent is their block, and a render that ignored it would be a home
+   written for other values than their own `kimi` runs on.
+7. **`RunsInWsl` is shared, not copied**: moved to `HostKinds.RunsInWsl(executable)` (`HostKind.cs`), `VibeLaunch.HostRefusal`
+   calls it; `VibeLaunch`'s tests stay green.
+8. **The root may hold more than `home/` and `os/`.** S5's conversation folder (`coai-kimi/<id>`) is a root that also
+   holds `tree/`, `coai-conversation.txt` and `coai-turn.lock`; Kimi never reads the root (`KIMI_CODE_HOME` is `root/home`,
+   the OS home `root/os`), so the validation judges `home/` whole and `os/` empty, and the root only for being a link.
 
-**BRIEF — to be written by Fable.**
+**BRIEF** (new files under `src_mcp/runners/Kimi/`, the folder E4.4's `KimiRuntime` joins).
 
-**Docs.** `research/module_runners.md` (the Kimi unit beside the Vibe one: the home, the config render, the validation,
-the environment, the gates, the shared version warning), `shared/kimi-model-blocks.json` documented where the Vibe
-manifest is, the parent plan's D19 deviations (the gate, ripgrep) recorded in its §4 S4 block when the story lands.
+1. **`KimiModels.cs`** — `public static class KimiModels { Default = "kimi-code/k3-256k"; Curated (the embedded
+   table's ids, in its order); SeenOn = "2.1.1"; PlanPrefix = "kimi-code/" }`. `KimiLaunch.ModelRefusal(model)`: empty
+   when curated; an id outside `kimi-code/` → `the model '{m}' is not on the Kimi Code plan (only kimi-code/* ids are:
+   {list}); a moonshot-ai/* id bills your own API key, so coai sends nothing (D10)`; a `kimi-code/*` id not curated →
+   `the model '{m}' is not one coai has seen Kimi answer — choose one of {list} (D10)`.
+2. **`KimiPlaces.cs`** — `public sealed record KimiPlaces(string OwnedRoot, string PersonsHome, string PersonsBin,
+   IReadOnlyList<string> ToolFolders, string ToolsRefusal, string Executable)` with `Home => OwnedRoot/home`,
+   `Os => OwnedRoot/os`, `Link => Home/credentials`, `Config => Home/config.toml`, `Credentials => PersonsHome/credentials`,
+   `PersonsConfig => PersonsHome/config.toml`. `static KimiPlaces Resolve(string ownedRoot, HostKind host,
+   Func<string, string?> env, string userProfile, Func<string, bool> fileExists)`: `PersonsHome` = `env("KIMI_CODE_HOME")`
+   when non-empty else `userProfile/.kimi-code`; `PersonsBin` = (`env("KIMI_INSTALL_DIR")` non-empty else
+   `userProfile/.kimi-code`) + `/bin`; `ToolFolders` / `ToolsRefusal` = `KimiTools.FoldersFor` / `KimiTools.Refusal`
+   (decision 2) over `env("PATH")`, `env("PATHEXT")`; `Executable` = `KimiAcpProfile.InstalledExecutableFor(host,
+   userProfile, env("PATH"), fileExists)` when it is a path, else the bare name through `ExecutableResolver.Resolve(name,
+   host == Windows, env("PATH"), fileExists)` to an ABSOLUTE path, else `kimi` (the launch then fails with the install
+   cure). `static KimiPlaces ForShim(string ownedRoot, string personsBin)` → `PersonsHome`, `ToolFolders`, `Executable`
+   empty, `ToolsRefusal` empty — it reads NO environment. `HostKind` is a parameter everywhere; `HostKinds.Current` only at
+   the runtime's call site (E4.4).
+3. **`KimiTools.cs`** — pure: `FoldersFor(bool isWindows, string bin, string? path, string? pathext,
+   Func<string, bool> exists)` → the directories (never `bin` itself) where `rg` and `fd` resolve; `Refusal(…)` → the
+   sentence of decision 2 naming the missing tool(s), or empty. Resolution per directory: the name, then the name + each
+   `PATHEXT` suffix on Windows — reuse `ExecutableResolver`'s per-directory probe if it is extractable (make it
+   `internal static`), else a private one with a remark naming the duplication and why.
+4. **`CodexConfigFile` widened** (`CodexConfigFile.cs`): `public static string TableValue(string toml, string header,
+   string key)` — the lines after the FIRST line that trims to exactly `header` (e.g. `[providers."managed:kimi-code".oauth]`,
+   `[models."kimi-code/k3"]`) up to the next line that starts with `[`, matched by `RootKey`; empty when absent.
+   `public static IReadOnlyList<string> TableStrings(string toml, string header, string key)` — a ONE-LINE array of basic
+   strings `key = [ "a", "b" ]` (whitespace free); empty when absent or of any other form. `public static bool
+   HasTable(string toml, string header)`. The remarks gain: *and, for Kimi's config (D19), a key inside ONE named table —
+   read for the same reason and with the same "unsure means silent"*. No second parser anywhere.
+5. **`KimiPersonsConfig.cs`** — `public sealed record KimiOauthSlot(string Type, string BaseUrl, string Storage, string
+   Key, string OauthHost)`; `public abstract record SlotRead { Found(KimiOauthSlot); Refused(string) }` (closed, private
+   ctor, the `Hold` shape); `static SlotRead Read(string text, string describedAs)`: no `[providers."managed:kimi-code"]`,
+   no `.oauth` table, or an empty `key` / `oauth_host` / `base_url` → `Refused("not signed in to Kimi Code — {describedAs}
+   names no managed:kimi-code provider with an OAuth slot; run `kimi login` in a terminal and try again")`; `storage` not
+   `file` → `Refused("Kimi's sign-in on this machine is stored as '{s}', not as files (storage = \"file\"), and coai's
+   junction sign-in was measured for file storage only — refused as unmeasured (D19)")`; `type` not `kimi` →
+   `Refused("the managed:kimi-code provider is type '{t}', not 'kimi' — refused as unmeasured (D19)")`. `static SlotRead
+   ReadFile(string path)` — missing or unreadable → the not-signed-in sentence. Nothing else of the file is read:
+   `api_key`, `[[hooks]]`, `[services.*]`, the `moonshot-ai` rows never leave it.
+6. **`KimiModelBlocks.cs` + `shared/kimi-model-blocks.json`** — `public sealed record KimiModelBlock(string Id, string
+   Provider, string Model, long MaxContextSize, IReadOnlyList<string> Capabilities, string Source)`; the JSON
+   `{ "why": […], "seenOn": "2.1.1", "blocks": [ … ] }`, one entry per curated id in D10's order: `kimi-code/k3-256k`
+   (model `k3-256k`, `maxContextSize` 262144, capabilities `["thinking", "always_thinking", "image_in", "tool_use",
+   "dynamically_loaded_tools"]`, source `research/RESULTS_kimi_confinement.md §17 rung 3, 3 of 3`); `kimi-code/k3`
+   (`k3`, 262144, the same, `§22, 1 of 1`); `kimi-code/kimi-for-coding` (`kimi-for-coding`, 262144, the same, `§22, 1 of 1
+   — the template's 262144 where the owner's own block says 1 048 576`); `kimi-code/kimi-for-coding-highspeed`
+   (`kimi-for-coding-highspeed`, 262144, the same, `§22 — the home was accepted; the plan answered 401`). Embedded as
+   `CoaiMcp.Runners.kimi-model-blocks.json` (csproj, beside `:36`, with a comment like the manifest's), loaded through a
+   source-generated context like `VibeHomeManifestJson` (nullable records, doctrine 4a); a broken file is
+   `BlocksLoad.Broken` = a refusal of every Kimi launch, never an empty table. `static BlockRead For(string id, string
+   personsConfigText, KimiModelBlocks pinned)`: `HasTable(text, $"[models.\"{id}\"]")` → `provider`, `model`,
+   `max_context_size` (a bare integer), `capabilities` (`TableStrings`) — all four present → `Found(block)`; `provider`
+   not `managed:kimi-code` → `Refused("your config.toml routes '{id}' through '{p}', which is not the Kimi Code plan —
+   coai sends nothing to it (D10)")`; any of the four missing or unreadable → `Refused("your config.toml has a
+   [models.\"{id}\"] block coai cannot read whole (it reads provider, model, max_context_size and a one-line capabilities
+   array) — fix the block, or remove it and coai's pinned values are used")`; no table → the pinned entry; no pinned
+   entry → the `ModelRefusal` sentence. `KimiModels.Curated` IS the table's ids — one source (E4.5's parity test may
+   read the JSON).
+7. **`KimiConfig.cs`** — `static string Render(KimiOauthSlot slot, KimiModelBlock block)` → EXACTLY, LF-separated, one
+   trailing LF, no BOM (`new UTF8Encoding(false)`):
+   ```
+   default_model = "{block.Id}"
+
+   [providers."managed:kimi-code"]
+   type = "kimi"
+   base_url = "{slot.BaseUrl}"
+
+   [providers."managed:kimi-code".oauth]
+   storage = "file"
+   key = "{slot.Key}"
+   oauth_host = "{slot.OauthHost}"
+
+   [models."{block.Id}"]
+   provider = "managed:kimi-code"
+   model = "{block.Model}"
+   max_context_size = {block.MaxContextSize}
+   capabilities = [ {each capability as "x", joined by ", "} ]
+   ```
+   — the probe's `minimalConfigToml` with `withModels: true`, byte for byte (`research/RESULTS_kimi_confinement.md` §17
+   rung 3). A value holding `"`, `\` or a control character → `Render` throws `ArgumentException` naming the key (the
+   caller turns it into a refusal) — never an escape coai did not measure. `static byte[] Bytes(string text)`.
+8. **`KimiHome.cs`** — the make and the SHAPE check:
+   - `static string Made(HostKind host, KimiPlaces places, byte[] expectedConfig)` — before the turn (the `HomeMade`
+     slot): `OwnedPaths.FirstLink(places.OwnedRoot, places.Home, places.Os)` non-empty → `{link} is a link, and an
+     owned home is never reached through one`; `Directory.CreateDirectory(Home)` and `(Os)`; when `Link` AND `Config` are
+     absent (a FRESH home): `Junctions.Make(host, Link, Credentials)` (its sentence returned as is, prefixed `the Kimi
+     sign-in could not be linked: `), then `File.WriteAllBytes(Config, expectedConfig)`; when either exists nothing is
+     written — the validation inside the turn judges it. An `IOException` → `the coai-owned Kimi home {root} could not be
+     made ({message})`.
+   - `static string Refusal(KimiPlaces places, byte[] expectedConfig)` — inside the turn, the FIRST problem: the root,
+     `home/` or `os/` a link → refused; `os/` missing → `{root}/os is missing — the empty OS home Kimi is given`; `os/`
+     holding anything → `os/ holds {name}: the empty OS home coai gives Kimi received a file`; then the walk of `home/`
+     (the `VibeHome.Inside` / `Judge` shape, `Order(Ordinal)`): at `credentials` — must be a link
+     (`OwnedPaths.IsLinkIfThere`) whose `Junctions.Target` `SameFolder`s `places.Credentials` (absent → `has no
+     credentials junction`; a real folder → `credentials is a real folder, not the junction to {target}`; elsewhere →
+     `credentials points at {read}, not at {target}`), and never descended; at `config.toml` — `File.ReadAllBytes`
+     sequence-equal to `expectedConfig` (else `config.toml is not what coai writes for this person and {id} — tampered,
+     or your Kimi sign-in changed since the home was made (a re-login)`); any OTHER link anywhere → `is a link, and an
+     owned home is never reached through one`; `bin` (file or folder) → `holds bin/, which means Kimi downloaded ripgrep
+     or fd into the home — coai refuses code in an owned home; install rg and fd ({decision 2's commands})`; the ADMITTED
+     set: the folders `cache`, `logs`, `sessions`, `user-history`, `file-history`, `telemetry`, `updates` (descended;
+     anything inside admitted but a link), the files `session_index.jsonl` and `workspaces.json`, and `workspace-trust`
+     only as an EMPTY folder (an entry → `workspace-trust/{e} trusts a folder — an owned home trusts nothing`); EVERYTHING
+     else refused by name — `holds {relative}, which is not something Kimi writes into its home` (that covers `mcp.json`,
+     `tui.toml`, `skills/`, `agents/`, `AGENTS.md`, `agents.md`, `hooks*`, `plugins/`, `themes/`, `local.toml`,
+     `device_id`, `region`, `migrations-effort.json`, `statusline*`, and any name nobody listed — an allowlist, as
+     `VibeHome`). Every sentence ends `— coai refuses to start Kimi on it (D19 of todo/PLAN_vibe_and_kimi_runtimes.md);
+     delete {root} and the next launch makes a fresh home`. Reads only; never follows a link; a read failure → refused
+     rather than started on a home nobody checked.
+   - `static string HomeFor(string scratch, string provider, string role)` → `scratch/kh-<10 hex>` with `VibeRuntime.Short`
+     made `internal` and called (one hash rule, two prefixes).
+9. **`KimiCredentialsLock.cs`** — `public static string Root { get; set; }` (decision 1), `static string PathFor(string
+   target)` (SHA-256 of the `Junctions`-normalised target, lower hex `[..16]`, + `.lock`), `static async Task<Hold>
+   TakeAsync(string target, CancellationToken ct)`: `Directory.CreateDirectory(Root)`; loop `await Task.Run(() =>
+   HeldFile.TakeWithin(PathFor(target), Slice), ct)` → `Taken` returned, `Unusable` returned at once, `Busy` loops;
+   `Slice = TimeSpan.FromSeconds(1)`. `KimiLaunch` turns `Unusable` into `the Kimi sign-in lock {path} cannot be taken
+   ({cause}) — fix the folder's permissions`.
+10. **`KimiLaunch.cs`** — constants `HomeVariable = "KIMI_CODE_HOME"`, `NoUpdateVariable = "KIMI_CODE_NO_AUTO_UPDATE"`,
+    `NoUpdateOn = "1"`, `HomeFlag = "--home"`, `PersonsBinFlag = "--persons-bin"`, `ModelFlag = "--model"`,
+    `VersionTimeout = 60 s`:
+    - `static string HostRefusal(HostKind host, string executable)` — `VibeLaunch`'s two sentences with `Kimi` for
+      `Vibe` and D18 cited, through `HostKinds.RunsInWsl` (decision 7).
+    - `static ProcessRequest Built(ProcessRequest request, KimiPlaces places)` → `request with { InheritsEnvironment =
+      false, Passthrough = ProcessEnvironment.Minimal, Environment = { KIMI_CODE_HOME = places.Home,
+      KIMI_CODE_NO_AUTO_UPDATE = "1", USERPROFILE = places.Os, HOME = places.Os, HOMEDRIVE = Path.GetPathRoot(Os) without
+      its trailing separator (`C:`), HOMEPATH = Os without that root (`\Users\…\os`), PATH = BuiltPath([places.PersonsBin,
+      ..places.ToolFolders], the request's own PATH when it carries one, else this process's PATH) } }`. `static string
+      BuiltPath(IReadOnlyList<string> prefix, string? parent)` — pure, idempotent: the prefix, then each entry of `parent`
+      (split on `Path.PathSeparator`, empties dropped) not already present (`OrdinalIgnoreCase` on Windows, trailing
+      separators trimmed). A non-Windows host is refused by `HostRefusal` first; `Built` still writes all seven names so
+      the shape is one (D19: `HOME` alone when D18 lifts — a later change).
+    - `static string EnvironmentRefusal(ProcessRequest request, KimiPlaces places)` — the FIRST of: inherits, or
+      `Passthrough` not set-equal to `Minimal`, or `Environment.Count != 7`, or a name outside the seven (compared with
+      `ProcessEnvironment.NameComparer`) → `this Kimi launch was not built with coai's own environment (the minimal set
+      plus KIMI_CODE_HOME, KIMI_CODE_NO_AUTO_UPDATE=1, the four OS-home names pointing into coai's own os/ folder, and a
+      PATH beginning with your ~/.kimi-code/bin, nothing inherited) and is refused (D19)`; `KIMI_CODE_HOME != places.Home`;
+      any of `USERPROFILE`, `HOME`, `HOMEDRIVE + HOMEPATH` not `places.Os`; the pin not `1`; `PATH`'s first entry not
+      `places.PersonsBin`; and WHEN the argv carries them, `--home` not `places.OwnedRoot` or `--persons-bin` not
+      `places.PersonsBin` (the shim's request carries both; `--version` carries neither) — each its own sentence naming
+      the value found. `static string FlagOf(ProcessRequest request, string flag)` — the value after `flag` in
+      `Arguments`, empty when absent; `ModelOf(request) => FlagOf(request, ModelFlag)`.
+    - `static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places,
+      IProcessLauncher launcher, CancellationToken ct)` — **before the turn, in this order** (`FirstOf`):
+      `HostRefusal(host, places.Executable)`; `places.ToolsRefusal`; `ModelRefusal(ModelOf(request))`;
+      `EnvironmentRefusal(request, places)`; `KimiPersonsConfig.ReadFile(places.PersonsConfig)` → its refusal;
+      `!Directory.Exists(places.Credentials)` → `not signed in to Kimi Code — {home} has no credentials folder; run
+      `kimi login` in a terminal and try again` (the §10 sentence, earlier and cheaper); `KimiModelBlocks.For(…)` → its
+      refusal; `expected = KimiConfig.Bytes(Render(slot, block))` (an `ArgumentException` → its refusal);
+      `KimiHome.Made(host, places, expected)` (E4.1's UNC / chained-link / fresh-path refusals come through it). **Then**
+      `turn = await VibeHomeTurns.TakeAsync(places.OwnedRoot, ct)`; `held = await KimiCredentialsLock.TakeAsync(places.Credentials,
+      ct)` (a throw or an `Unusable` gives the turn back first). **Inside both:** `KimiHome.Refusal(places, expected)` →
+      `VersionAsync` (`launcher.RunAsync(Built(new ProcessRequest(places.Executable, ["--version"], places.Home) { Timeout
+      = VersionTimeout }, places), ct)`; exit 0 and a `VersionWarnings.VersionIn` match, else `` `{exe} --version` answered
+      no version (exit {n}): {one line} ``; `Win32Exception` → `'{exe}' could not be started: {message} —
+      {VendorDiagnosis.InstallCure("kimi") ?? "install Kimi Code: https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started"}`)
+      → `KimiHome.Refusal` AGAIN → `LaunchTurn.Holding(new Attempt(turn, held.Stream), warning:
+      KimiAcpProfile.MeasuredVersions.Contains(v) ? "" : VersionWarnings.Unmeasured("Kimi", v, …), cliVersion: "kimi " + v)`.
+      A refusal after the turn: `Given` — the lock's stream disposed, then the turn. `Attempt.Dispose`: the stream, then
+      the turn, once.
+    - `static string VersionWarning(string printed)` — for E4.4's card: `VersionIn` → in `MeasuredVersions` → empty, else
+      the Kimi sentence.
+11. **`KimiAcpProfile.MeasuredVersions`** — `public static IReadOnlyList<string> MeasuredVersions { get; } = ["2.1.1"]`,
+    with the remark: every number in the RESULTS is 2.1.1's; a version joins when the whole probe has run on it.
+12. **`VersionWarnings.cs`** (`src_mcp/runners/Reviewers/`) — `Unmeasured(runtime, running, measured, numbersCover,
+    advised)` = `$"{runtime} {running} is not a version coai has measured (it measured {measured}); it is run anyway, but
+    {numbersCover} — {advised}"`; `VersionIn(printed)` (the regex from `VibeLaunch.cs:73`, moved; `VibeLaunch.VersionIn`
+    delegates). `VibeLaunch.Unmeasured` becomes `VersionWarnings.Unmeasured("Vibe", version, manifest.Known, $"its
+    confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are {manifest.Known}'s, and this
+    version's plugin files are admitted by name only", "re-run `node scripts/vibe-home-manifest.mjs --write` and `node
+    scripts/probe-vibe-confinement.mjs` with this Vibe to measure it")` — byte-identical to today's output.
+13. **Docs**: `research/module_runners.md` — a *Kimi* unit beside the Vibe one (the places resolved once, the tools
+    rule, the config render and its readers, the validation list, the environment, the two locks and their order, the
+    shared warning builder); `shared/kimi-model-blocks.json` documented where the Vibe manifest is (the csproj comment
+    and the module doc); `research/module_tests.md` rows for the classes below; the parent plan's §4 S4 block records
+    deviations 9–12 when the story lands (its text stays the plan's until then). E4.3 and E4.4 read the seam from
+    decision 4 (the bracketed notes in their sections).
+
+**SCENARIOS.** Every fake person's home is a folder INSIDE the test's own `TempDir.For("testsToDelete-kimi-…")`, holding
+`config.toml` (the owner's shape: the managed provider, its OAuth slot, a `moonshot-ai` row with an `api_key`, a
+`[[hooks]]` entry, a `[models."kimi-code/kimi-for-coding"]` block with `max_context_size = 1048576`),
+`credentials/{kimi-code-env-x.json, kimi-code.json}` read-only, and `bin/{kimi.exe, rg.exe, fd.exe}` as empty files;
+`KimiPlaces.Resolve` is given an `env` function and a `fileExists` over that folder. Classes: `KimiPersonsConfigTests`,
+`KimiConfigRenderTests`, `KimiModelBlocksTests`, `CodexConfigFileTests` (extended), `KimiToolsTests`, `KimiPlacesTests`,
+`KimiHomeTests`, `KimiLaunchControlTests` (a `FakeKimi` launcher in the `FakeVibe` shape), `KimiCredentialsLockTests`,
+`VersionWarningsTests`. Red first; a missing class is a COMPILE red — stub, then watch the behavioural red named here.
+
+| # | Given | When | Then | Expected red today |
+|---|---|---|---|---|
+| S2.1 `TheSlot_IsReadFromThePersonsConfig_AndNothingElseLeavesIt` | the owner-shaped config | `KimiPersonsConfig.Read` | `Found`: type `kimi`, the base_url, storage `file`, the key, the oauth_host — the managed tables' values; the record's fields hold no `api_key` and no hook command | stub: `Refused` |
+| S2.2 `NoManagedProvider_NoOauth_OrAnEmptyKey_IsNotSignedIn` (Theory: no file; no provider table; no `.oauth`; `key = ""`) | — | `ReadFile` / `Read` | the not-signed-in sentence naming `kimi login` | — |
+| S2.3 `AKeyringStorage_OrAnotherType_IsRefusedAsUnmeasured` (Theory: `storage = "keyring"`; `type = "openai"`) | — | `Read` | the two sentences | `Found` |
+| S2.4 `TableValue_ReadsInsideOneNamedTableOnly` (`CodexConfigFileTests`, Theory) | `base_url` in `[providers."managed:kimi-code"]` AND in `[providers."moonshot-ai"]`; a quoted-dotted header `[models."kimi-code/k3"]`; a key only at root; `capabilities = [ "a", "b" ]`; a multi-line array | `TableValue` / `TableStrings` / `HasTable` | the right table's value; the root key not answered for a table; `["a","b"]`; `[]` for the multi-line form; `HasTable` true / false | (new members — compile red) |
+| S2.5 `TheRender_IsTheProbesBytes` | the slot `(kimi, https://api.kimi.com/coding/v1, file, oauth/kimi-code-env-x, https://auth.kimi.com)` and the pinned `k3-256k` block | `KimiConfig.Render`, `Bytes` | the literal of brief §7 (a raw string with `\n` in the test), no BOM, ends with one `\n` | stub: empty |
+| S2.6 `TheRender_RefusesAQuoteOrABackslashInAValue` (Theory: `"`, `\`, `\n` in the key / base_url / model) | — | `Render` | `ArgumentException` naming the key | no throw |
+| S2.7 `TheModelBlock_IsThePersonsWhenTheyHaveOne` | the owner-shaped config, id `kimi-code/kimi-for-coding` | `KimiModelBlocks.For` | `Found` with `MaxContextSize 1048576` and the person's capabilities in THEIR order; the render carries `1048576` | the pinned 262144 |
+| S2.8 `TheModelBlock_IsThePinnedEntry_ForEveryCuratedId` (Theory over `Curated`) | a config with no `[models]` | `For` | `Found` with the table's values; `Source` names a RESULTS § | — |
+| S2.9 `APersonsBlockOnAnotherProvider_OrUnreadable_IsRefused` (Theory: `provider = "moonshot-ai"`; multi-line `capabilities`; `max_context_size` missing) | — | `For` | the two sentences of brief §6 | the pinned entry (a silent fallback) |
+| S2.10 `TheCuratedList_IsTheTablesIds_InOrder_AndDefaultIsFirst` | — | `KimiModels.Curated`, `Default`, `KimiModelBlocks.Builtin` | equal, in order; `Default == "kimi-code/k3-256k"`; `Parse` of a broken document → `Broken` with the sentence | — |
+| S2.11 `AnIdOutsideKimiCode_IsRefusedWithTheBillingSentence_AndAnUncuratedOneWithTheList` (Theory: `moonshot-ai/kimi-k2.6`; `nope`; `kimi-code/k9`) | — | `KimiLaunch.ModelRefusal` | the two sentences; every curated id → empty | empty |
+| S2.12 `TheToolsAreFoundInBinOrOnPath_ElseRefusedNamingTheMissingOne` (`KimiToolsTests`, Theory, pure) | both in `bin`; rg in bin + fd at `C:\tools`; rg at `C:\rg` + fd at `C:\fd`; neither; rg only; `fd.exe` found only through `PATHEXT` | `FoldersFor` / `Refusal` | `[]`; `[C:\tools]`; `[C:\rg, C:\fd]`; the sentence naming `rg and fd`; naming `fd`; found | — |
+| S2.13 `ThePlaces_AreResolvedFromTheRealProfile_AndHonourKimisOwnVariables` (`KimiPlacesTests`) | env `KIMI_CODE_HOME=D:\kh`, `KIMI_INSTALL_DIR=D:\ki`, a PATH; `D:\ki\bin\kimi.exe` exists | `Resolve` | `PersonsHome D:\kh`, `Credentials D:\kh\credentials`, `PersonsBin D:\ki\bin`, `Executable D:\ki\bin\kimi.exe`; without the two variables: `<profile>\.kimi-code` and its `bin`; a `kimi` only on PATH → the absolute path it resolves to | — |
+| S2.14 `ForShim_ReadsNoEnvironment` | this process's `USERPROFILE` pointed at a `testsToDelete-` `os/` for the test's duration (`Environment.SetEnvironmentVariable`, restored in `finally`) | `KimiPlaces.ForShim(root, bin)` | `Home == root\home`, `PersonsBin == bin`, `Executable` empty; nothing derived from the profile | — |
+| S2.15 `AFreshHome_IsMade_WithTheJunctionTheConfigAndAnEmptyOs` (`KimiHomeTests`, Windows; elsewhere the D18 row) | the fake person's home; `places` for a `kh-x` root in the test's folder | `KimiHome.Made` | empty; `home/credentials` a link whose `Junctions.Target` is the fake `credentials/`; `home/config.toml` bytes == expected; `os/` empty; the fake person's home: the same names, bytes and attributes as before (hash the tree) | stub: nothing made |
+| S2.16 `AMadeHome_Passes_AndAHomeKimiWroteDataInto_Passes` | S2.15's home; then the §18 inventory added: `cache/query-store/cluster.meta.json`, `logs/kimi-code.log`, `session_index.jsonl`, `sessions/.index-dirty/a.b`, `sessions/wd_x_y/session_z/agents/main/wire.jsonl`, `workspaces.json`, `user-history/h`, `file-history/f`, `telemetry/t`, `updates/latest.json`, an EMPTY `workspace-trust/` | `KimiHome.Refusal` | empty, both times | a stub refusing everything: the sentence |
+| S2.17 `EveryForbiddenName_RefusesNamingThePath` (Theory: `mcp.json`, `tui.toml`, `skills/s/SKILL.md`, `agents/a.md`, `AGENTS.md`, `agents.md`, `hooks.toml`, `hooks/h`, `plugins/p`, `themes/t`, `local.toml`, `device_id`, `region`, `migrations-effort.json`, `statusline.json`, `workspace-trust/wd_x`, `notes.txt`, `cache/x/link` (a junction to the test's folder)) | the made home plus the row | `Refusal` | a sentence naming the row's relative path and `delete {root}`; the junction row says `is a link` | empty (nothing refuses yet) |
+| S2.18 `ABinFolder_RefusesWithTheRipgrepCure` | `home/bin/rg.exe` | `Refusal` | the `bin/` sentence naming `rg and fd` and `winget` | the generic sentence |
+| S2.19 `ACredentialsThatIsReal_Absent_OrElsewhere_Refuses` (Theory) | `credentials` a real folder; absent; a junction to `persons2/credentials` | `Refusal` | the three sentences of brief §8 | empty |
+| S2.20 `AConfigWhoseBytesDiffer_RefusesWithTheReLoginCure` (Theory: one byte changed; a CRLF rewrite; the person's `key` changed since the home was made, so `expected` re-rendered differs) | — | `Refusal` | the sentence naming tampering or a re-login | empty |
+| S2.21 `AnOsFolderThatReceivedAFile_OrIsMissing_OrAHomeThatIsALink_Refuses` (Theory: `os/.agents/AGENTS.md`; `os` deleted; `root/home` a junction to a real folder) | — | `Refusal` | each sentence | empty |
+| S2.22 `TheBuiltEnvironment_IsExactlyTheSevenNames_AndPathBeginsWithBin` | a request with `Environment = { "VIBE_MCP_SERVERS": "x" }`; `places` with `ToolFolders [C:\tools]`; the parent PATH `C:\tools;C:\Windows;D:\ki\bin` | `KimiLaunch.Built` | `InheritsEnvironment false`, `Passthrough` set-equals `Minimal`, exactly the seven names, no `VIBE_MCP_SERVERS`; `KIMI_CODE_HOME == root\home`; `USERPROFILE == HOME == root\os`; `HOMEDRIVE + HOMEPATH == root\os`; `PATH == "D:\ki\bin;C:\tools;C:\Windows"`; `Built(Built(r))` equals `Built(r)` | stub: the request unchanged |
+| S2.23 `EnvironmentRefusal_AdmitsOnlyWhatBuiltMakes` (Theory: inherited; `Passthrough = ProcessEnvironment.Passthrough`; an 8th name `KIMI_SHELL_PATH`; `USERPROFILE = C:\Users\real`; a `PATH` beginning with `C:\Windows`; the pin `0`; `KIMI_CODE_HOME` another root; argv `--home` ≠ the root) | — | `EnvironmentRefusal` | the D19 sentence (or the value-naming one); `Built(request)` → empty | empty |
+| S2.24 `HostRefusal_IsVibesShape_ForKimi` (Theory: `Linux`, `Wsl`, `MacOs`, `Other`; Windows with `wsl.exe`; with `\\wsl$\…\kimi`) | — | `HostRefusal`; `HostKinds.RunsInWsl` | the sentences name `Kimi`, `D18` and the host's word; `VibeLaunchControlTests` stay green after the move | — |
+| S2.25 `TheLaunchControl_InOrder_StartsNothingOnARefusal` (`KimiLaunchControlTests`, Theory over the refusals: a Linux host; tools missing; `--model nope`; an inherited request; a config without the slot; `credentials/` absent; `credentials` a link; a UNC `KIMI_CODE_HOME`; a block on `moonshot-ai`) | `FakeKimi` | `TakeAsync` | `Refused` with the row's sentence; `fake.Started` EMPTY; `VibeHomeTurns.Held(root)` false; `HeldFile.IsHeld(PathFor(credentials))` false | stub: `Free`, the launch starts |
+| S2.26 `TheTurnHoldsTheHomeAndTheLock_UntilTheLaunchIsRead` | a valid launch | `TakeAsync` | `Refusal` empty; `Held(root)` true; `IsHeld(…)` true; after `Dispose()` both false; a second `Dispose()` harmless | — |
+| S2.27 `TwoLaunchesOnOneSignIn_WaitOnEachOther_AndOnTwoSignInsDoNot` | two roots, one `credentials` target; then two targets | two `TakeAsync` in parallel | the second completes only after the first's `Dispose` (a `TaskCompletionSource` ordering, the `MostAtOnce` shape); with two targets both hold at once | both hold at once |
+| S2.28 `TheLockIsOutsideTheHomesRootAndTemp_AndItsWaitIsCutByTheToken` | the default `Root`; a lock held by a `FileStream` in the test; a token cancelled after 200 ms | `PathFor`, `TakeAsync` | the path is under `coai-mcp/kimi-locks`, under no `ConsultantHomes.All` folder, not under `GetTempPath()`; `OperationCanceledException` within 2 s; a `Root` that is a FILE → `Unusable` → the refusal sentence | — |
+| S2.29 `TheVersionIsAskedInTheBuiltEnvironmentOnTheOwnedHome` | `FakeKimi("2.1.1")` | `TakeAsync` | the recorded `--version` request: `Executable == places.Executable` (absolute, NOT the shim), `Arguments == ["--version"]`, cwd `root\home`, `EnvironmentRefusal` empty, `Timeout == VersionTimeout`; `CliVersion == "kimi 2.1.1"`; `Warning` empty | — |
+| S2.30 `AnUnmeasuredKimi_LaunchesWithTheWarning_AndAVersionlessOneIsRefused` (Theory: `2.2.0`; exit 1; `Win32Exception`) | — | `TakeAsync` | `Holding` with `Warning` naming `2.2.0`, `2.1.1`, `probe-kimi-confinement.mjs`; "answered no version (exit 1)"; the install cure | refused / no warning |
+| S2.31 `TheShapeIsCheckedAgainAfterTheVersion_AndAThrowGivesEverythingBack` | `WhileTheVersionIsAsked` drops `mcp.json` into the home; a second arm throws `IOException` from the seam | `TakeAsync` | refused naming `mcp.json`, `Held(root)` false, the lock free; the throw propagates and both are free | the launch starts |
+| S2.32 `VersionWarnings_OneBuilderForBoth` | — | `Unmeasured("Vibe", "2.27.0", "2.26.1", …)` and `("Kimi", "2.2.0", "2.1.1", …)` | Vibe's equals the literal `VibeLaunch` produced before this story (pinned as a string in the test); both begin `<runtime> <running> is not a version coai has measured (it measured <m>); it is run anyway, but `; `VersionIn("kimi 2.2.0\n")`, `("2.1.1")`, `("python.exe …\vibe 2.26.1\r\n")` | — |
+| S2.33 `MeasuredVersions_IsTwoOneOne` | — | `KimiAcpProfile.MeasuredVersions`; `KimiLaunch.VersionWarning("kimi 2.1.1")`, `("kimi 2.2.0")` | `["2.1.1"]`; empty; the sentence | — |
+| S2.34 `AfterALaunch_TheHomeGoes_AndThePersonsFolderIsWhole` | S2.26's root disposed through `GitScratch.DeleteEvenIfReadOnly(root)` | — | gone; the fake `credentials/` keeps both files, bytes and `ReadOnly` | (green after E4.1) |
+| S2.35 `NothingOfThePersons_IsEverWritten` | the fake person's home hashed (every file: bytes + attributes) | `Resolve` → `Made` → `Refusal` → `TakeAsync` → `Dispose` → the root deleted | the hash equal (M-K11 (b)'s rule on a fake home — the parent's §9) | — |
+
+**Review focus (Opus).** (1) Nothing in `KimiLaunch`, `KimiHome`, `KimiPlaces.ForShim` reads `SpecialFolder.UserProfile`,
+`Environment.GetEnvironmentVariable` or `KimiAcpProfile.InstalledExecutable` — grep the diff; the only environment read
+is `KimiPlaces.Resolve`'s injected `env`. (2) The render: byte-for-byte the probe's, no escaping invented, the person's
+values pass through unchanged or refuse. (3) The validation is an ALLOWLIST (S2.17's `notes.txt` row is the proof),
+`credentials` is never descended, `config.toml` is compared as bytes, `os/` must be empty. (4) The lock: released on
+EVERY way out of `TakeAsync` after it was taken (a refusal, a throw, a cancellation while the version runs); never under
+`coai-kimi/`; the wait honours `ct`. (5) `BuiltPath` idempotent and the first entry; `EnvironmentRefusal` compares names
+with `ProcessEnvironment.NameComparer`. (6) The tools rule: both names; the sentence's two cures; no download path
+admitted. (7) Vibe's warning byte-identical — the existing test untouched and green. (8) CC ≤ 4 everywhere; `Refusal`'s
+walk will want to grow — keep it in `Judge`-sized methods. (9) No test touches `~/.kimi-code`; every junction target is
+inside the test's `testsToDelete-` folder.
+
+**Docs.** As brief §13.
 
 ## E4.3 — The shim: `--home`, the agent's environment rebuilt, the model checked in the session, `/usage` parsed
 
@@ -263,12 +684,16 @@ added join both exclusion lists.
    returning today's inherited request (so `FakeAcpProfile` and any test profile keep working) and `bool NeedsAHome =>
    false`. `KimiAcpProfile` overrides both: `NeedsAHome => true`, and `AgentRequest` = `KimiLaunch.Built(new
    ProcessRequest(executable, Arguments, cwd), …)` — the E4.2 seam, exactly as E4.2's brief pins it (the person's paths
-   NOT re-derived inside this process — see E4.2's boundary). `AcpAsk` gains `Home`. `AcpClient.AskAsync` builds the
+   NOT re-derived inside this process — see E4.2's boundary). *[E4.2 pinned it, 2026-10-14: `KimiLaunch.Built(request,
+   KimiPlaces.ForShim(flags["--home"], flags["--persons-bin"]))` and `KimiLaunch.EnvironmentRefusal(request, places)`;
+   `--home` is the owned ROOT holding `home/` and `os/` (`KIMI_CODE_HOME` = `<root>/home`), and `--persons-bin` is the
+   second flag the shim needs — so `AgentRequest(executable, cwd, home)` gains `personsBin`.]* `AcpAsk` gains `Home`. `AcpClient.AskAsync` builds the
    request through the profile, then asks `KimiLaunch.EnvironmentRefusal` through a profile member (`string
    AgentRefusal(ProcessRequest request) => string.Empty` by default; Kimi's calls `KimiLaunch.EnvironmentRefusal`) and
    returns `NotStarted` with that sentence when it is not empty — the agent never starts.
 3. **`--home`.** `AskAcpMode.Refusal` gains `HomeRefusal(profile, home)`: a profile that `NeedsAHome` without
-   `--home`, or with a folder that does not exist → 65 with `--ask-acp needs --home <the coai-owned KIMI_CODE_HOME>`.
+   `--home`, or with a folder that does not exist → 65 with `--ask-acp needs --home <the coai-owned KIMI_CODE_HOME>`
+   *[E4.2: the owned ROOT, whose `home/` is `KIMI_CODE_HOME`; `--persons-bin` is refused the same way when absent]*.
    An agent-environment refusal from step 2 is ALSO 65 (a request this shim will not make), and the report is printed
    (`end: not_started`). Update the 65 line of the type's remarks and `Program.cs:2441` with `--home <folder>`.
 4. **The model, checked in the session** (D10 (2)). In `AcpClient.TurnAsync`, after `session/new`, read the announced
@@ -362,7 +787,10 @@ version without touching the person's home, and appears in the seeds. After this
      lays them out. The request: `LocalRuntime.SelfInvocation()` (prefix when no configured path — the shim is THIS
      binary; a row's `ExecutablePath` is the `kimi` path and goes to `--executable`, never replaces the shim), argv
      `[..prefix, "--ask-acp", "--profile", "kimi", "--model", model, "--cwd", worktreePath, "--home", <home>,
-     "--deadline-seconds", LocalAsk.ShimDeadlineSeconds(settings.Timeout), "--executable", <absolute kimi>]` — the
+     "--deadline-seconds", LocalAsk.ShimDeadlineSeconds(settings.Timeout), "--executable", <absolute kimi>]`
+     *[E4.2: `<home>` is the owned ROOT (`kh-*`), and `"--persons-bin", places.PersonsBin` joins the argv; the places
+     come from ONE `KimiPlaces.Resolve(root, HostKinds.Current, Environment.GetEnvironmentVariable,
+     SpecialFolder.UserProfile, File.Exists)` call in this adapter, and `places.Executable` is the `--executable`]* — the
      absolute `kimi` resolved HERE, in the unredirected parent (`settings.ExecutablePath` or
      `KimiAcpProfile.InstalledExecutable`), so the shim never re-derives it from a redirected profile (E4.2's trap);
      `StdIn = prompt`, `Timeout = settings.Timeout`, cwd `worktreePath`; then through `KimiLaunch.Built` (the shim's own
@@ -563,8 +991,9 @@ D18 still refuses a Kimi REVIEW there.
 
 ## Where the parent plan and the code disagree (found while splitting, 2026-10-14)
 
-1. **S3 is not on `main`.** The parent's S4 lists GitScratch's reparse-point safety, D20's sweep and the junction test as
-   S4 work; all three already exist on `feat/vibe-consultant` (#811, open). E4.1 is written to build on them (§0).
+1. **S3's parts of S4 were already built by S3.** The parent's S4 lists GitScratch's reparse-point safety, D20's sweep and
+   the junction test as S4 work; all three shipped with #811 (`ea84af70`, on `main` since 2026-10-14). E4.1 builds on
+   them (§0) and adds only the maker, the verification and the loss sentence.
 2. **The version warning is a string, not a record.** D19 asks for "a record on the launch result built by one builder";
    S2 shipped `LaunchTurn.Warning` as a string built only by `VibeLaunch.Unmeasured` (`VibeLaunch.cs:269-273`). E4.2
    extracts one builder for both; the transport stays a string (the card and the reviewer line already carry it).
@@ -583,11 +1012,33 @@ D18 still refuses a Kimi REVIEW there.
    always passes `--executable` absolute.
 8. **The `.mcp.json` exclusion** is "project-root" in D6/§21, but `SnapshotExclusions` matches a separator-free entry at
    every depth. E4.3 keeps the stricter every-depth match and says so.
+9. **The cross-process gate is a `HeldFile` lock file, not a named mutex** (Fable, E4.2 decision 1): a `Mutex` cannot be
+   released after an `await`; the file is `<LocalApplicationData>/coai-mcp/kimi-locks/<sha256(target)[..16]>.lock`,
+   beside `EngineLease`'s folder — never under `coai-kimi/` (the D20 sweep walks it) and never in temp. Inside the row's
+   timeout, as D19 states. To be recorded in the parent's D19 at promotion.
+10. **D19's disposal ORDER is not what the code does — its GUARANTEE is** (Fable, E4.1 decision 2): no coai deleter has
+    a step that follows a link, so "the junction first, then the rest" has nothing to order; the verification D19 asks
+    for (the target lost nothing, else stop) lives inside the one deleter's `Unlink` as `LinkTargetLostException`, and
+    every caller — the round's scratch, the six-hour sweep, D20's sweep, `close_consult`, the question row, the
+    consultant check, the snapshots, the tests' `TempDir` — gets it with no new call. D20's "junction-first for Kimi"
+    bullet reads the same way at promotion. The maker is the P/Invoke form, not `cmd.exe` (E4.1 decision 1).
+11. **Ripgrep and fd are FOUND before the launch, never guaranteed by `PATH` alone** (Fable, E4.2 decision 2): D19's
+    "where Kimi's installer puts `rg.exe`" is false (item 4); the launch is refused before any process when `rg` or `fd`
+    does not resolve in the person's `bin` or on the parent's `PATH`, with the two cures in the sentence; the built `PATH`
+    still begins with the person's `bin`, then the folder of each tool found elsewhere; the `bin/` refusal in the home
+    stays. Nothing is ever admitted into the home by hash.
+12. **Two refusals D19 did not spell out** (Fable, E4.2 decision 6): the person's managed provider must be `type =
+    "kimi"` and its slot `storage = "file"` (the measured bytes; a keyring slot has no folder to junction); a person's
+    `[models."<id>"]` block that is on another provider, or that coai cannot read whole, refuses with a cure instead of
+    falling silently to the pinned table. And the shim takes TWO place flags, `--home <root>` and `--persons-bin`
+    (E4.2 decision 4), where D19 and E4.3's first draft said `--home` alone.
 
 ## Definition of Done (this epic)
 
-- [ ] E4.1 and E4.2 have SCENARIOS and BRIEF written by Fable before their coders start; the ledger line in the parent
-      reads `Cornerstones: 2 of 2`.
+- [x] E4.1 and E4.2 have SCENARIOS and BRIEF written by Fable before their coders start (2026-10-14); the ledger line in
+      the parent reads `Cornerstones: 2 of 2`.
+- [ ] Deviations 9–12 of §"Where the parent plan and the code disagree" are written into the parent's D19 / D20 and its
+      §4 S4 block when E4.1 and E4.2 land, and again at promotion.
 - [ ] Every scenario of E4.3–E4.5 (and Fable's for E4.1–E4.2) is a test that was watched red with the expected message,
       then green; both suites green; `dotnet format --verify-no-changes` clean; generators current.
 - [ ] No test made a junction outside its own `testsToDelete-` folder; every test leftover is named `testsToDelete-…`.
