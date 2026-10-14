@@ -425,6 +425,8 @@ export function applyEffort({ home, beforeWrite = () => {} }) {
 
 /** The `--check` line about effort; informational (it never changes the exit code). */
 const effortLine = settings => {
+  const shape = effortShapeProblem(settings);
+  if (shape) return `effort: needs a manual repair — ${shape}; set it to {"effortLevel": "${EFFORT}"}`;
   const problems = effortProblems(settings);
   return problems.length ? `effort: ${problems.join(', ')} (the session self-install converges it to ${EFFORT})` : `effort: ${EFFORT} for every model`;
 };
