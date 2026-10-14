@@ -323,7 +323,7 @@ public sealed class UsageLedger(string dataDir)
     /// </remarks>
     public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
     {
-        var line = new LineOf(invocation, model, stage);
+        var line = new LineOf(VersionedBy(invocation, outcome), model, stage);
         foreach (var turn in outcome.EarlierTurns)
         {
             AppendTurn(line, turn.Launches, turn.Usage, turn.Elapsed, LaunchLines.Answered);
@@ -343,6 +343,15 @@ public sealed class UsageLedger(string dataDir)
             line, outcome.Launches, outcome.LastTurnUsage, last < TimeSpan.Zero ? TimeSpan.Zero : last, LaunchLines.OutcomeOf(outcome),
             StatedResetOf(outcome, DateTimeOffset.UtcNow));
     }
+
+    /// <summary>
+    /// The launch with the release its launch control ASKED (Vibe asks <c>--version</c> before every launch) on its line, when
+    /// the row's own options carry none (research/RESULTS_vibe_confinement.md §26: a Vibe line's <c>cliVersion</c> was empty).
+    /// </summary>
+    private static ReviewerInvocation VersionedBy(ReviewerInvocation invocation, ReviewerOutcome outcome) =>
+        outcome.CliVersion.Length > 0 && invocation.RanWith.CliVersion.Length == 0
+            ? invocation with { RanWith = invocation.RanWith with { CliVersion = outcome.CliVersion } }
+            : invocation;
 
     /// <summary>What every line of one reviewer shares: who ran, on which model, at which stage.</summary>
     private sealed record LineOf(ReviewerInvocation Invocation, string Model, string Stage);

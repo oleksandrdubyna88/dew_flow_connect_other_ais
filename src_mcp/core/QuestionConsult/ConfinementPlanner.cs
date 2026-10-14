@@ -12,6 +12,13 @@ public enum CwdKind
     Scratch,
 
     Root,
+
+    /// <summary>
+    /// A coai-owned SANITISED SNAPSHOT of the granted roots, made by the launch (D6 of todo/PLAN_vibe_and_kimi_runtimes.md)
+    /// — for a CLI that reads only its working folder and loads its configuration from it (Vibe, M-V11), whose roots
+    /// therefore can be neither its cwd nor an added directory.
+    /// </summary>
+    Snapshot,
 }
 
 /// <summary>What the planner decided for one runtime × grant: the fragments to compose, or a refusal.</summary>
@@ -20,7 +27,7 @@ public abstract record Confinement
     /// <param name="Leading">Argv BEFORE the CLI's subcommand — codex's top-level <c>--search</c> (F1); empty everywhere else.</param>
     /// <param name="Flags">The sandbox flags, in order, complete — an adapter splices them and adds none of its own.</param>
     /// <param name="Cwd">Where the process stands.</param>
-    /// <param name="AddDirs">The roots the flags grant, for the record; the flags already spell them the runtime's way.</param>
+    /// <param name="AddDirs">The roots the flags grant as LAUNCH FLAGS (<c>--add-dir</c>), for the record; the flags already spell them the runtime's way — never a copy's sources.</param>
     /// <param name="Flag">D13's caveat on an admitted pair — shown beside every answer the row produces.</param>
     public sealed record Planned(
         string Runtime,
@@ -29,7 +36,15 @@ public abstract record Confinement
         IReadOnlyList<string> Flags,
         CwdKind Cwd,
         IReadOnlyList<string> AddDirs,
-        AdmissionFlag Flag) : Confinement;
+        AdmissionFlag Flag) : Confinement
+    {
+        /// <summary>
+        /// The folders the launch reads through COPIES (<see cref="CwdKind.Snapshot"/>, D6) — never a launch flag. Its own field,
+        /// not <see cref="AddDirs"/>: there a root is something the CLI is told to read, and Vibe is never given one (D3, the
+        /// #811 checkpoint round).
+        /// </summary>
+        public IReadOnlyList<string> SnapshotSources { get; init; } = [];
+    }
 
     public sealed record Refused(string Reason) : Confinement;
 
@@ -63,7 +78,14 @@ public static class ConfinementPlanner
     public static IReadOnlyList<string> ClaudeWebTools { get; } = ["WebSearch", "WebFetch"];
 
     /// <summary>
-    /// Every argument that decides a sandbox on any of the five runtimes — what a planned launch may
+    /// Vibe's read-only pair, both always (D2 of todo/PLAN_vibe_and_kimi_runtimes.md): together they denied 9 of 9 write
+    /// attempts (research/RESULTS_vibe_confinement.md §4) and every write under forced experiment variants (§23). Spelled
+    /// once — the reviewer's argv (<c>VibeRuntime</c>) and a question row's plan both read it.
+    /// </summary>
+    public static IReadOnlyList<string> VibeReadOnly { get; } = ["--agent", "plan", "--enabled-tools", "read_file"];
+
+    /// <summary>
+    /// Every argument that decides a sandbox on any of the six runtimes — what a planned launch may
     /// carry ONLY from a plan. The structural test in <c>ConfinementPlannerTests</c> reads it.
     /// </summary>
     private static readonly string[] SandboxVocabulary =
@@ -72,6 +94,9 @@ public static class ConfinementPlanner
         "--allowed-tools", "--dangerously-skip-permissions",
         "--search", "-s", "--sandbox", "--ephemeral", "-C", "--full-auto", "--yolo",
         "--mode",
+        // Vibe's (D2, D3). Not `--agent`: agy's adapter names its own read-only agent (`--agent coai-reader`), which is
+        // the adapter's confinement of agy, not a plan's — and Vibe's `--agent plan` comes from the plan beside it.
+        "--enabled-tools", "--trust",
     ];
 
     public static bool IsSandboxVocabulary(string argument) => SandboxVocabulary.Contains(argument, StringComparer.Ordinal);
@@ -128,6 +153,7 @@ public static class ConfinementPlanner
         "claude" => Claude(grant, flag),
         "codex" => Codex(grant, flag),
         "antigravity" => Antigravity(grant, flag),
+        "vibe" => Vibe(grant, flag),
         // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere.
         _ => new Confinement.Planned(runtime, grant, [], [], CwdKind.Scratch, [], flag),
     };
@@ -161,6 +187,18 @@ public static class ConfinementPlanner
         Capability.Disk => new("antigravity", grant, [], ["--mode", "plan", .. AddDirs("--add-dir", grant.Roots)], CwdKind.Root, grant.Roots, flag),
         // `web` never reaches here: the matrix refuses it (F7, it cannot fetch a page headless).
         _ => new("antigravity", grant, [], ["--mode", "plan"], CwdKind.Scratch, [], flag),
+    };
+
+    /// <remarks>
+    /// D2's pair on every capability, never <c>--trust</c> or <c>--add-dir</c> (D3: a trusted folder runs its hooks, and
+    /// <c>--add-dir</c> trusts its folder). Vibe reads only its working folder (M-V11, 6 of 6), so a disk row's roots are
+    /// COPIED into the snapshot it stands in (D6) and named to it there; a none row stands in an empty folder.
+    /// </remarks>
+    private static Confinement.Planned Vibe(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
+    {
+        Capability.Disk => new("vibe", grant, [], VibeReadOnly, CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+        // `web` never reaches here: the matrix refuses it (no Vibe cell exercises the web).
+        _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
     };
 
     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>

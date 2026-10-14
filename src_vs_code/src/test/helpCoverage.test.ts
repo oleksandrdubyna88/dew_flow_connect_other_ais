@@ -528,3 +528,19 @@ test('every language says the logs move, not only English', () => {
     );
   }
 });
+
+test('every language says what a Vibe question row reads, that its web prompt is refused, and that it runs on Windows only (S3 of PLAN_vibe_and_kimi_runtimes.md)', () => {
+  // Vibe reads only its working folder (M-V11): none is an empty folder, disk a COPY of the folders, web unmeasured and so
+  // refused, and every Vibe cell is Windows (D18). bodyFor marks a MISSING translation, not a stale one, so each language
+  // is asked for the names a person meets on the page — English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-question-consultant');
+  assert.ok(article !== undefined, 'the question consultant article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} question consultant article is missing`);
+    for (const word of ['**Mistral Vibe**', '**none**', '**disk**', '**web**', 'Windows', '`AGENTS.md`']) {
+      assert.ok(said.includes(word), `the ${language} question consultant article never says ${word} — a Vibe row is undocumented there`);
+    }
+  }
+});

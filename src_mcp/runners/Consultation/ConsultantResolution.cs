@@ -40,6 +40,17 @@ public static class ConsultantResolution
             new ClaudeConsultant(RuntimeResolution.For(vendor) ?? new ClaudeRuntime(vendor.Provider), vendor.Provider),
         "antigravity" =>
             new AntigravityConsultant(RuntimeResolution.For(vendor) ?? new AntigravityRuntime(vendor.Provider), vendor.Provider),
+        // Mistral Vibe on the person's own subscription (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), on the reviewer
+        // adapter its row resolves to — the one launch control and the export reading live there.
+        "vibe" => VibeOn(vendor),
+        _ => null,
+    };
+
+    /// <summary>A vibe row's consultant, on the Vibe runtime its row resolves to — never another, which could not launch it.</summary>
+    private static Vibe.VibeConsultant? VibeOn(VendorIdentity vendor) => RuntimeResolution.For(vendor) switch
+    {
+        Vibe.VibeRuntime vibe => new Vibe.VibeConsultant(vibe, vendor.Provider),
+        null => new Vibe.VibeConsultant(new Vibe.VibeRuntime(vendor.Provider), vendor.Provider),
         _ => null,
     };
 

@@ -27,6 +27,9 @@
     { "runtime": "api", "capability": "none", "admitted": true, "standing": "confined", "flag": "", "why": "F8: one completion, no process, no tools" },
     { "runtime": "api", "capability": "disk", "admitted": false, "standing": "unsupported", "flag": "", "why": "F8: a hosted completion reads no disk" },
     { "runtime": "api", "capability": "web", "admitted": false, "standing": "unmeasured", "flag": "", "why": "§6: vendor web search was not measured — an unmeasured pair is refused (D3)" },
+    { "runtime": "vibe", "capability": "none", "admitted": true, "standing": "confined", "flag": "", "why": "M-V11/M-V1: read_file alone, in an empty folder, reads nothing outside it 6 of 6" },
+    { "runtime": "vibe", "capability": "disk", "admitted": true, "standing": "confined", "flag": "", "why": "M-V6: it reads its working folder only — a snapshot of the granted roots (D6)" },
+    { "runtime": "vibe", "capability": "web", "admitted": false, "standing": "unmeasured", "flag": "", "why": "no Vibe cell exercises the web — an unmeasured pair is refused (D3)" },
     { "runtime": "gemini", "capability": "none", "admitted": false, "standing": "", "flag": "", "why": "not a runtime in the table (retired 2026-08-31): refused by name, never defaulted" },
     { "runtime": "remote", "capability": "none", "admitted": false, "standing": "", "flag": "", "why": "a Team server row runs on another box; the question consultant is machine-only (Team server out of scope)" },
     { "runtime": "claude", "capability": "shell", "admitted": false, "standing": "", "flag": "", "why": "not a capability: refused naming the three" }

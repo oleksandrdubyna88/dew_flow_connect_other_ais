@@ -61,10 +61,10 @@ test('a saved vibe row comes back as vibe, never as a codex row under its own na
   assert.equal(vendor!.model, 'glm-5-3');
 });
 
-test('vibe is a CLI on this machine, and neither a chat partner nor a consultant yet (S3 is not built)', () => {
+test('vibe is a CLI on this machine and a consultant (S3), never a chat partner', () => {
   assert.ok(CLI_RUNTIMES.includes('vibe'));
   assert.ok(!(CHAT_RUNTIMES as readonly string[]).includes('vibe'), 'chat is not this plan’s (§8)');
-  assert.ok(!(CONSULTING_RUNTIMES as readonly string[]).includes('vibe'), 'the consultant is S3, and coai-mcp would refuse it by name');
+  assert.ok((CONSULTING_RUNTIMES as readonly string[]).includes('vibe'), 'S3: coai-mcp consults on Vibe, so the consultant box is offered');
 });
 
 // ---------------------------------------------------------------- the preset (D11)

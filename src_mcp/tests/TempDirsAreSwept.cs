@@ -153,6 +153,28 @@ public sealed class TempDirsAreSwept
     }
 
     [Fact]
+    public void ARoundsScratchHoldingAVibeHomeWithReadOnlyFolders_IsSwept()
+    {
+        // research/RESULTS_vibe_confinement.md §26: Vibe unpacks its plugin package with READ-ONLY FOLDERS, the round's own
+        // delete of its scratch failed on the first of them ("the scratch sweep takes it") — and this sweep called the same
+        // deleter, so the leftover was permanent, one per Vibe round.
+        var root = Directory.CreateTempSubdirectory("coai-sweep-vh-").FullName;
+        var scratch = Directory.CreateDirectory(Path.Combine(root, "coai-answers-5f2f12f1795b")).FullName;
+        var skill = Directory.CreateDirectory(Path.Combine(scratch, "vh-9469719504", "logs", "session", "plugins", "packages", "6b", "6bb6380c", "skills", "create-plugin")).FullName;
+        foreach (var folder in (string[])[skill, Path.GetDirectoryName(skill)!])
+        {
+            new DirectoryInfo(folder).Attributes |= FileAttributes.ReadOnly;
+        }
+
+        Directory.SetLastWriteTimeUtc(scratch, DateTime.UtcNow.AddDays(-3));
+
+        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow.AddDays(-1), ["coai-answers-*"]);
+
+        Assert.False(Directory.Exists(scratch), "a round's scratch three days old goes, its Vibe home's read-only folders with it");
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
     public void ADownloadedServerIsNotScratch_AndSurvives()
     {
         // The sweep matches coai-*, and a downloaded server sits under coai-<version> in the same

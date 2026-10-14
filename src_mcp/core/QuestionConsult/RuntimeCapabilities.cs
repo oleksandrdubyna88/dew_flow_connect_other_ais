@@ -81,7 +81,7 @@ public sealed record RuntimeCapabilities
     internal const string SeedResource = "CoaiMcp.Core.runtime-capabilities.json";
 
     /// <summary>The runtimes the question consultant can launch, in the file's order — the one list a refusal spells.</summary>
-    public static IReadOnlyList<string> Runtimes { get; } = ["claude", "codex", "antigravity", "local", "api"];
+    public static IReadOnlyList<string> Runtimes { get; } = ["claude", "codex", "antigravity", "local", "api", "vibe"];
 
     /// <summary>The table, read once from this assembly's manifest resource. Depends on nothing on disk.</summary>
     public static RuntimeCapabilities Builtin { get; } = LoadBuiltin();

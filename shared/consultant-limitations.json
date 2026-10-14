@@ -235,6 +235,39 @@
       "standing": "confined",
       "text": "No tools: it reads only what coai sends.",
       "source": "By construction: an api vendor is a completion request to an OpenAI-compatible endpoint carrying the prompt coai composed, and it has no tool to read anything else."
+    },
+    {
+      "runtime": "vibe",
+      "platform": "windows",
+      "standing": "confined",
+      "text": "Reads only a copy coai makes of the live tree, without its .git, .vibe/, skills and AGENTS.md: read_file is its one tool, a read outside that copy was refused, and every write was denied - measured on vibe 2.26.1.",
+      "measured": {
+        "date": "2026-10-12",
+        "cliVersion": "vibe 2.26.1",
+        "cells": "M-V6: a read inside the working folder 3 of 3, outside it denied 3 of 3; M-V11: outside reads from an empty folder denied 6 of 6; M-V1: 0 of 9 writes; M-V5: a resumed turn remembered and was billed per turn 3 of 3",
+        "document": "research/RESULTS_vibe_confinement.md"
+      }
+    },
+    {
+      "runtime": "vibe",
+      "platform": "linux",
+      "standing": "unmeasured",
+      "text": "Not run here: coai launches Vibe only on Windows, where it was measured, and refuses it on Linux.",
+      "source": "Not measured: every Vibe cell is Windows, and on Linux Vibe's keyring may fall back to a file inside VIBE_HOME (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs on this side."
+    },
+    {
+      "runtime": "vibe",
+      "platform": "wsl",
+      "standing": "unmeasured",
+      "text": "Not run here: coai launches Vibe only on Windows, where it was measured, and refuses it in WSL.",
+      "source": "Not measured: every Vibe cell is Windows, and no vibe is installed or signed in on the WSL side (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs there."
+    },
+    {
+      "runtime": "vibe",
+      "platform": "macos",
+      "standing": "unmeasured",
+      "text": "Not run here: coai launches Vibe only on Windows, where it was measured, and refuses it on macOS.",
+      "source": "Not measured: no macOS machine has run Vibe for this product (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs there."
     }
   ]
 }

@@ -49,6 +49,19 @@ public static class VibeLaunch
     public const string ModelVariable = "VIBE_ACTIVE_MODEL";
 
     /// <summary>
+    /// Python's UTF-8 mode, on (research/RESULTS_vibe_confinement.md §26, 2026-10-13). Under the built environment CPython
+    /// 3.14 on Windows writes the console code page (cp1252) to a pipe, and <c>--output json</c> echoes the whole
+    /// conversation — so any character outside cp1252 in the prompt, the plan, the diff or the answer (<c>→</c>, <c>≤</c>,
+    /// CJK, an emoji) killed the run with exit 2 AFTER the paid review. Measured: <c>PYTHONUTF8=1</c>, exit 0 and the answer
+    /// <c>a → b</c>. <c>PYTHONIOENCODING</c> is NOT added: it is the narrower switch (the three standard streams only), it was
+    /// not the one measured, and UTF-8 mode already sets those streams to UTF-8 — a second name would be an unmeasured one.
+    /// </summary>
+    public const string Utf8Variable = "PYTHONUTF8";
+
+    /// <summary>The value <see cref="Utf8Variable"/> carries: on.</summary>
+    public const string Utf8On = "1";
+
+    /// <summary>
     /// The CLI coai measured. <c>vibe</c> is two CLIs, and a remote flag cached in the home switched this account to the
     /// Rust one between two launches — which refuses <c>--time-limit</c> and <c>--output-dir</c> and is unmeasured (§3).
     /// </summary>
@@ -84,14 +97,14 @@ public static class VibeLaunch
 
     /// <summary>
     /// D17: the launch is the built one — not inheriting this process's environment, keeping only the minimal names, and
-    /// carrying exactly the three Vibe variables with the Python CLI pinned. A path that built a Vibe launch any other way
+    /// carrying exactly the three Vibe variables with the Python CLI pinned, and Python's UTF-8 mode on (§26). A path that built a Vibe launch any other way
     /// is refused here rather than started (one launch control; §22 A: a <c>VIBE_*</c> the child inherits configures Vibe
     /// whatever its home holds).
     /// </summary>
     public static string EnvironmentRefusal(ProcessRequest request) =>
         Confined(request) && CarriesTheThree(request)
             ? string.Empty
-            : $"this Vibe launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {CliVariable}={PythonCli} and {ModelVariable}, nothing inherited) and is refused (D17)";
+            : $"this Vibe launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {CliVariable}={PythonCli}, {ModelVariable} and {Utf8Variable}={Utf8On}, nothing inherited) and is refused (D17)";
 
     /// <summary>
     /// <paramref name="request"/> in the BUILT environment (D17) — the one builder every Vibe child goes through: a review
@@ -107,6 +120,7 @@ public static class VibeLaunch
             [HomeVariable] = home,
             [CliVariable] = PythonCli,
             [ModelVariable] = model,
+            [Utf8Variable] = Utf8On,
         },
     };
 
@@ -114,12 +128,16 @@ public static class VibeLaunch
     private static bool Confined(ProcessRequest request) =>
         !request.InheritsEnvironment && request.Passthrough.SetEquals(ProcessEnvironment.Minimal);
 
-    /// <summary>Exactly the three Vibe variables, the Python CLI pinned and a home named.</summary>
+    /// <summary>Exactly the built names — the three Vibe variables and UTF-8 mode — the Python CLI pinned, UTF-8 on and a home named.</summary>
     private static bool CarriesTheThree(ProcessRequest request) =>
-        request.Environment.Count == 3
-        && request.Environment.Keys.All(name => name is HomeVariable or CliVariable or ModelVariable)
-        && Value(request, CliVariable) == PythonCli
+        request.Environment.Count == 4
+        && request.Environment.Keys.All(name => name is HomeVariable or CliVariable or ModelVariable or Utf8Variable)
+        && Pinned(request)
         && Value(request, HomeVariable).Length > 0;
+
+    /// <summary>The two fixed values: the measured CLI, and UTF-8 mode on (§3, §26).</summary>
+    private static bool Pinned(ProcessRequest request) =>
+        Value(request, CliVariable) == PythonCli && Value(request, Utf8Variable) == Utf8On;
 
     /// <summary>D10, before the launch: an alias outside the curated list is refused with the list.</summary>
     public static string ModelRefusal(string model) =>
@@ -164,13 +182,16 @@ public static class VibeLaunch
             throw;
         }
 
-        return inside.Refusal.Length > 0 ? Given(turn, inside.Refusal) : LaunchTurn.Holding(new Attempt(turn, exportFolder), inside.Warning);
+        return inside.Refusal.Length > 0 ? Given(turn, inside.Refusal) : LaunchTurn.Holding(new Attempt(turn, exportFolder), inside.Warning, inside.CliVersion);
     }
 
     /// <summary>What the check inside the turn concluded: a refusal, or a go — with a warning when the version was not measured.</summary>
     internal sealed record HomeVerdict(string Refusal, string Warning)
     {
         public static HomeVerdict Refuse(string refusal) => new(refusal, string.Empty);
+
+        /// <summary>The release the check asked, as the ledger names it (<c>vibe 2.26.1</c>) — empty until it was asked.</summary>
+        public string CliVersion { get; init; } = string.Empty;
     }
 
     /// <summary>Inside the turn: the manifest this build carries, then the home against it.</summary>
@@ -200,7 +221,7 @@ public static class VibeLaunch
         var version = await VersionAsync(request, launcher, ct);
         var after = FirstOf(() => version.Refusal, () => VibeHome.Refusal(home, manifest));
 
-        return after.Length > 0 ? HomeVerdict.Refuse(after) : Verdict(manifest, home, version.Version);
+        return after.Length > 0 ? HomeVerdict.Refuse(after) : Verdict(manifest, home, version.Version) with { CliVersion = Named(version.Version) };
     }
 
     private static LaunchTurn Given(IDisposable turn, string refusal)
@@ -271,6 +292,12 @@ public static class VibeLaunch
         + $"confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are {manifest.Known}'s, and this "
         + "version's plugin files are admitted by name only — re-run `node scripts/vibe-home-manifest.mjs --write` and "
         + "`node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it";
+
+    /// <summary>
+    /// The release as a ledger line names it: <c>vibe 2.26.1</c>. Never Vibe's raw <c>--version</c> line, which starts with the
+    /// interpreter's path under the person's profile (<c>python.exe C:\Users\…\vibe 2.26.1</c>, §26).
+    /// </summary>
+    internal static string Named(string version) => version.Length > 0 ? "vibe " + version : string.Empty;
 
     private static string OneLine(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
