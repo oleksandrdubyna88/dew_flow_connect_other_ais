@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.54.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.53.0...mcp-v0.54.0) (2026-10-14)
+
+
+### Features
+
+* Mistral Vibe as a consultant and a question-consultant row; consultant homes have a bounded life; the live round's two defects fixed ([#811](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/811)) ([ea86af7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ea86af70f2fa4f6b64ff5d37829da8df44d908bb))
+
 ## [0.53.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.52.2...mcp-v0.53.0) (2026-10-13)
 
 
