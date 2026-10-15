@@ -543,6 +543,12 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE consultations DROP COLUMN evidence;
             ALTER TABLE reviewers DROP COLUMN model;
             ALTER TABLE rounds DROP COLUMN round_key;
+            ALTER TABLE rounds DROP COLUMN size_state;
+            ALTER TABLE rounds DROP COLUMN delta_state;
+            ALTER TABLE rounds DROP COLUMN delta_from;
+            ALTER TABLE rounds DROP COLUMN size_origin;
+            ALTER TABLE rounds DROP COLUMN size_gitlinks;
+            ALTER TABLE reviewers DROP COLUMN effort;
             PRAGMA user_version = 12;
             """);
         SqliteConnection.ClearAllPools();
