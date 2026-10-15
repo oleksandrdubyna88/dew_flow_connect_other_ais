@@ -398,6 +398,23 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
             : CountedNumstat.GitFailed;
 
     /// <summary>
+    /// How many submodule pointers <c>{against}..{sha}</c> changed, from <c>git diff --raw -z</c> (E2.S4; <see cref="RawDiff"/>) —
+    /// or null when git could not say: a failed, timed-out or unparseable answer is no count, never 0. No path is kept.
+    /// </summary>
+    public async Task<int?> GitlinksAsync(
+        string repoPath, string against, string sha, CancellationToken ct, TimeSpan? timeout = null)
+    {
+        if (!IsCommit(against) || !IsCommit(sha))
+        {
+            return null;
+        }
+
+        var result = await RunSizeGit(repoPath, ["diff", "--raw", "-z", $"{against}..{sha}"], timeout, ct);
+
+        return Succeeded(result) ? RawDiff.GitlinkCount(result.StdOut) : null;
+    }
+
+    /// <summary>
     /// The delta range <c>{from}..{sha}</c> — what changed between two heads the gate was asked about — as its two
     /// numstats, or the <see cref="ScopeState"/> word saying why there are none (E2.S2, S1.5 rows 5-7). Never throws for git.
     /// </summary>

@@ -1620,6 +1620,26 @@ empty directory and take no switch. Measured on one commit, Fast found MORE from
 models at a fraction of the tokens —
 [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
 
+**The size step — every code round measures itself (E2.S4, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
+In the code stage's `MakeWork` lambda (`PanelService.ReviewCodeAsync`), right after `CollectAsync` and `DiffShaper.Shape`,
+`RoundSizer.MeasureAsync(_context, repoPath, sha, collected, shaped, session.Rounds, _log, roundToken)` builds the round's
+`RoundSize` from the diff it actually built: the whole scope is `ChangePartition.Of` over `collected.Counted`, the unfiltered
+numstat (`AllChangesAsync`) and `shaped.Elided`; the delta is `DeltaPredecessor.Choose(session.Rounds, collected.ComparedAgainst)`
+→ `DeltaAsync` → `ChangePartition.OfDelta`. `session.Rounds` is the trail BEFORE this round, never re-loaded. **Row 0 comes
+first:** when `collected.Kind != DiffBase.MergeBase` (unrelated or truncated histories — `against` is the base's tip) both
+scopes are `unavailable: no merge base` and no git process runs. A `base unknown`/`base moved` predecessor becomes the delta's
+state with no git call. Changed submodule pointers are counted from `git diff --raw -z` (`ContextAssembler.GitlinksAsync`,
+`RawDiff.GitlinkCount`: an entry whose old or new mode is `160000`) — the numstat shows a submodule as one line, and its own
+edits are outside any size. The result rides `RoundWork.Size` / `RoundWork.Gitlinks` (beside `BaseRef`) to the finished
+record's `with` in `RoundEngine` (`Size`, `Gitlinks`); `RecordRound` reads them from the record, as it reads `Caller`. A plan,
+document or feature round leaves both null. **Best-effort:** every size git call runs under `SizeGitTimeout` (10 s); any
+exception but a cancellation becomes `unavailable: git failed` for the scope it hit (one Warning, exception type only, no
+path); a `ChangePartition.Disagreement` is the state `unavailable: numstats disagree` with its fixed sentence logged once at
+Warning; a failed `--raw` leaves `Gitlinks` null and the size untouched. One Information line per round: whole files/lines by
+coverage, the delta state, gitlinks, elapsed ms. Cost, measured on the test repo with a chosen predecessor under a loaded
+machine: 5 git processes (unfiltered numstat, `--raw`, is-ancestor, two delta numstats), p50 52 ms each, ≈ 330 ms in all —
+the delta's three about 155 ms of it.
+
 ### What the gate found in this half (2026-09-03)
 
 Four of the nine defects from the 2026-09-02 campaign are server-side, and all four are the same

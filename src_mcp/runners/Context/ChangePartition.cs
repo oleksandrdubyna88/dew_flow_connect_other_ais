@@ -38,15 +38,20 @@ public static class ChangePartition
         IReadOnlyList<CountedChange> deltaFiltered,
         IReadOnlyList<CountedChange> deltaUnfiltered,
         IReadOnlyCollection<string> roundElided,
-        string from)
+        string from) =>
+        Of(deltaFiltered, deltaUnfiltered, NarrowedToDelta(deltaFiltered, roundElided), from);
+
+    /// <summary>The round's elided paths that the delta's reviewable numstat names — the only elided files the delta can hold.</summary>
+    public static IReadOnlyCollection<string> NarrowedToDelta(
+        IReadOnlyList<CountedChange> deltaFiltered, IReadOnlyCollection<string> roundElided)
     {
         var reviewable = new HashSet<string>(deltaFiltered.Select(f => f.Change.Path), StringComparer.Ordinal);
 
-        return Of(deltaFiltered, deltaUnfiltered, [.. roundElided.Where(reviewable.Contains)], from);
+        return [.. roundElided.Where(reviewable.Contains)];
     }
 
     /// <summary>Why the three inputs cannot be partitioned — one of three fixed sentences, no path in any — or empty.</summary>
-    internal static string Disagreement(
+    public static string Disagreement(
         IReadOnlyList<CountedChange> filtered,
         IReadOnlyList<CountedChange> unfiltered,
         IReadOnlyCollection<string> elided)
