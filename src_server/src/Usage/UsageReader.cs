@@ -71,6 +71,13 @@ public sealed record UsageLine(
     /// server's own <see cref="Attempt"/>; empty like <see cref="Round"/>.
     /// </summary>
     public string ClientAttempt { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The vendor's own gauge as read on the account right after this launch (story 6.1a of
+    /// todo/PLAN_every_round_is_counted.md); <see cref="GaugeOnLine.None"/> on a line older than the fields, on a local
+    /// line, and on a job after which nothing was read. The writer's own record, read back whole.
+    /// </summary>
+    public GaugeOnLine Gauge { get; init; } = GaugeOnLine.None;
 }
 
 /// <summary>What a read of the ledger produced, including what it could not read.</summary>
@@ -154,6 +161,14 @@ public sealed class UsageReader(string dataDir)
         }
     }
 
+    /// <summary>A line's gauge — every window it carries, each field as said; none when the line carries no reading.</summary>
+    private static GaugeOnLine GaugeOf(UsageEntryDto entry) =>
+        new(
+            entry.GaugeObservedUtc ?? string.Empty,
+            entry.GaugePlan ?? string.Empty,
+            [.. (entry.GaugeWindows ?? []).Select(window => new GaugeWindowOnLine(
+                window.LimitId ?? string.Empty, window.Kind ?? string.Empty, window.Mins, window.UsedPercent, window.ResetsUtc ?? string.Empty))]);
+
     /// <summary>One line, or null when it will not parse.</summary>
     /// <remarks>
     /// A line from before the email column simply has an empty one — the field is trailing and
@@ -232,6 +247,9 @@ public sealed class UsageReader(string dataDir)
                 // Read, not dropped (story 4.2): the client's round and its word for the request. An older line has neither.
                 Round = entry.Round ?? string.Empty,
                 ClientAttempt = entry.ClientAttempt ?? string.Empty,
+                // Read, not dropped (story 6.1a): the gauge read after the launch, every limit's windows. An older line
+                // has none, and a number it does not carry stays null — never 0.
+                Gauge = GaugeOf(entry),
             };
         }
         catch (JsonException)

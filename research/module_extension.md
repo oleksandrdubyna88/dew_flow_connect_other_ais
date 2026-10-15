@@ -3758,6 +3758,8 @@ what can be TESTED rather than by topic:
 | `teamServers.ts` | the canonical URL, the token filename, the server id, the scope rules | anything |
 | `teamServerApi.ts` | every request, each with a deadline; the round-count parser `serverRounds` (story 5.2) | a server (stubbed `fetch`) |
 | `teamRounds.ts` | the Team server tab's Rounds block (story 5.2) | a webview |
+| `teamGauge.ts` | the Team server tab's Vendor gauges block and the `gauges` parser `serverGauges` (story 6.2) | a webview |
+| `gaugeWords.ts`, `planPrice.ts`, `planPricesView.ts`, `cardGauge.ts` | the gauge's sentences; the plan price read, stored and turned into a share; the Setup › Team servers price boxes; a model card's gauge lines (story 6.2) | a webview, a server |
 | `teamServerAuth.ts` | sign in / out / renew, the token file | an extension host (`AuthHost`, `StateStore`) |
 | `teamServerView.ts` | the section's markup, the slot line, the usage block | a webview |
 
@@ -12539,6 +12541,56 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   exactly one two-column rule — on the shared class, at 1100 px — with the cap lifted there; and no top-border rule
   reaches a Chat model block while one still reaches a Models card block. Design record:
   [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
+
+## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+
+The Team server reads the codex account's gauge after each job (story 6.1a, [module_team_server.md](module_team_server.md))
+and derives rounds per 1 % of each window in the shared runners library ([module_runners.md](module_runners.md)). The
+extension SHOWS both — pure renderers, every sentence a test — and never derives anything itself.
+
+**The words** (`gaugeWords.ts`). One line per window the vendor REPORTED, shortest first:
+`codex (weekly): 37 % used · resets Thu 07:00 · seen 12 min ago` — the window named by its limit and its length
+(`5 h`, `24 h`, `weekly`, `monthly`, else hours or minutes; *a window of unstated length* when the vendor gave none), the
+reset in the viewer's zone through `resetWords.clockOf` (now exported — one wording of an instant), the reading's age
+rounded DOWN. **Reset first:** once a window's reset time has passed with no newer reading, the line says *reset time
+passed; availability unverified · 37 % used when last read* — recovery is never inferred from the clock or the
+percentage. *stale — a later read failed* when the slot marked the reading stale; *reset time not stated* when the vendor
+gave none. The vendor's own `ordinaryUsageAllowed: false` is kept as a line of its own. No reading, or a window the vendor
+did not report, draws nothing — never a 0 %. `ratioLine` says a figure as *≈ 4.3 rounds per 1 % of codex (weekly) — over
+the last 6 intervals*, a hidden one as *… hidden — direct codex use outside coai spends the same limit and is not
+counted*, an unavailable one with its reason in words; a code this build does not know is said as it came.
+
+**The Team server tab** (`teamGauge.ts`, under the Rounds block in the Vendors column). Per vendor whose catalog entry
+carries `slots.gauge`, the window lines from the CATALOG and, beside them, the figures from the company USAGE answer —
+read by hand (`serverGauges`: an entry that is not the contract is dropped; a server that sent no `gauges` key is
+`undefined`, said as *rounds per 1 %: this Team server does not derive it yet*, never a figure of none). No vendor read:
+*No vendor's own gauge has been read on this server yet.* The tab's notes say what the gauges, the figure and the share
+are.
+
+**A subscription's share** (`planPrice.ts`). A monthly plan price typed ONCE per vendor account — one subscription serves
+every model on it, so it lives with the account: **Setup › Team servers**, under the servers, *Subscription prices*, a box
+and a **Save price** button per vendor of each signed-in server (`planPricesView.ts`, drawn through `catalogSections`'
+`AFTER`). The page posts `savePlanPrice` with `<server>/<vendor>|<typed>` (`catalogPageScript.ts`'s own click handler —
+it reads the box beside the button); the HOST decides (`savePlanPrice`): a finite decimal number of dollars ≥ 0 is
+stored in `coai.planPrices` (application scope, `{"<server>/<vendor>": usd}`), 0 takes the price away, and anything else
+— NaN, text, `$20`, a negative, an infinity, nothing — is refused AT THE CARD (`role="alert"` under the box, the box
+`aria-describedby` it, what was typed left in the box) and nothing is stored. A write VS Code refuses is said the same
+way. `shareLine` turns a SHOWN weekly figure into *≈ $0.11 of your plan per round — a share of the $200/month plan, not a
+bill* = monthly price × (1 ÷ rounds per 1 %) ÷ 100 ÷ (days in the month ÷ 7); hidden whenever the figure is hidden or
+unavailable, for any other window, and without a price. It is never added to the ~$ list-price estimate.
+
+**The model card** (`cardGauge.ts`, a `gauge-line` in the card's foot). Local capture is deferred, so only an EXPLICIT
+match shows a server's observation: a row that runs on a Team server (`rowBelongsTo`, `serverVendorOf`) shows that
+server's newest reading of its vendor, each line ending *· read on <server>*. A local codex row is never guessed to be the
+same account and says, from `coai-mcp --round-counts`' own `gauge.unavailable` (`roundCounts.ts` reads it by name),
+*codex gauge: unavailable — this machine does not read the gauge; a Team server does*; an older binary's answer and any
+other row say nothing. The card shows no figure: a person's card has no company usage answer to take one from.
+
+Tests: `gaugeWords.test.ts` (9), `planPrice.test.ts` (7), `teamGauge.test.ts` (6), `planPricesView.test.ts` (5 — the
+last presses Save price on the shipped Settings page), `cardGauge.test.ts` (7), `teamServerTabPage.test.ts` (+2, the
+bundled Team server page), `helpCoverage.test.ts` (`coai.planPrices`), `thePanelReadsThisSide.test.ts` (the third
+sanctioned global write); the seam's gauge leg; the older-client check — all in [module_tests.md](module_tests.md). Help:
+the *Show review rounds* and *Team servers* articles, five languages.
 
 ## The Security lane names its reviewers (2026-10-11, story 1 of `research/PLAN_names_and_a_missing_root.md`)
 

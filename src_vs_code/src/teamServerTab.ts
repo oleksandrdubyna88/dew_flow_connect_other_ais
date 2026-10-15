@@ -1,8 +1,10 @@
 import { escapeHtml } from './escapeHtml';
-import { PersonListing, Usage, VendorUsage } from './teamServerApi';
+import { CatalogVendor, PersonListing, Usage, VendorUsage } from './teamServerApi';
 import { costText, ListPrice, totalCost, vendorCost } from './teamCost';
 import { launchesChart } from './teamChart';
+import { teamGaugeBlock } from './teamGauge';
 import { teamRoundsBlock } from './teamRounds';
+import type { PlanPrices } from './planPrice';
 import { idleList, joinPeople, peopleCards, PeopleView, totalsOf } from './teamPeople';
 import { TeamServerState } from './teamServerView';
 import { selectedServer, TeamSelection, TeamWindow, windowOf } from './teamTabSelection';
@@ -76,6 +78,8 @@ export interface TeamTabInput {
   readonly price: ListPrice;
   /** Now, UTC milliseconds — what "last seen" is measured from. */
   readonly now: number;
+  /** The monthly plan prices typed on Setup › Team servers (story 6.2) — what the gauge block's share is taken from. */
+  readonly planPrices?: PlanPrices;
 }
 
 /** The person card's extra inputs, gathered: the listing, the prices, the clock. */
@@ -85,6 +89,8 @@ export interface PartsExtras {
   readonly peopleAsking?: boolean;
   readonly price: ListPrice;
   readonly now: number;
+  /** The monthly plan prices, by `<server>/<vendor>` — none typed is none drawn. */
+  readonly planPrices?: PlanPrices;
 }
 
 const EMPTY_PARTS: TeamParts = { status: '', badges: '', summary: '', people: '', idle: '', vendors: '', chart: '', notes: '' };
@@ -118,7 +124,9 @@ export function teamTabPush(input: TeamTabInput): TeamPush {
 }
 
 function extrasOf(input: TeamTabInput, serverId: string): PartsExtras {
-  return { people: input.people(serverId), peopleAsking: input.peopleAsking(serverId), price: input.price, now: input.now };
+  return {
+    people: input.people(serverId), peopleAsking: input.peopleAsking(serverId), price: input.price, now: input.now, planPrices: input.planPrices ?? {},
+  };
 }
 
 /**
@@ -240,7 +248,13 @@ function viewOf(state: TeamServerState, usage: Usage, palette: VendorPalette, ex
     older: isOlderServer(usage),
     listing,
     listed: listing.kind === 'held' ? listing.people : undefined,
+    ...gaugeFacts(state, extras),
   };
+}
+
+/** What the gauge block reads beside the figures: the catalog's vendors and the typed plan prices (story 6.2). */
+function gaugeFacts(state: TeamServerState, extras: PartsExtras): Pick<View, 'catalogVendors' | 'planPrices'> {
+  return { catalogVendors: state.catalog?.vendors ?? [], planPrices: extras.planPrices ?? {} };
 }
 
 /** No price book at all: every model unpriced — a dash, never a guess. */
@@ -313,6 +327,9 @@ interface View extends PeopleView {
   readonly listing: Listing;
   /** The people listing when it is held, else undefined. */
   readonly listed: readonly PersonListing[] | undefined;
+  /** The server's catalog vendors — where each vendor's own gauge reading comes from (story 6.2). */
+  readonly catalogVendors: readonly CatalogVendor[];
+  readonly planPrices: PlanPrices;
 }
 
 /** What stands where the people listing would be — asking, the failure, or the older server's sentence. */
@@ -370,9 +387,14 @@ function models(row: VendorUsage, usage: Usage): string {
     : `<span class="model">${row.models.map((one) => `${escapeHtml(one.model.length > 0 ? one.model : 'unknown')} ${shortNumber(one.runs)}`).join(', ')}</span>`;
 }
 
-/** The vendor rows over the chosen window, and under them the server's own round counts (story 5.2). */
+/**
+ * The vendor rows over the chosen window, under them the server's own round counts (story 5.2), and under those each
+ * vendor's own gauge with its rounds per 1 % (story 6.2).
+ */
 function vendors(view: View): string {
-  return vendorRows(view) + teamRoundsBlock(view.usage, view.palette);
+  return vendorRows(view) + teamRoundsBlock(view.usage, view.palette) + teamGaugeBlock({
+    serverId: view.serverId, vendors: view.catalogVendors, usage: view.usage, prices: view.planPrices, now: view.now, palette: view.palette,
+  });
 }
 
 function vendorRows(view: View): string {
@@ -406,6 +428,11 @@ const NOTES = '<div><b>Launches</b> are runs of a vendor\'s CLI, not review roun
   + 'pays flat subscriptions. A vendor\'s own reported cost is used where it gave one. A model no list prices is a dash, and a '
   + 'total that includes one is marked ≥. The server\'s lines carry no cached-token count yet, so every input token is priced '
   + 'at the full input rate and an estimate over cache-heavy input overstates.</div>'
+  + '<div><b>Vendor gauges</b> are the vendor\'s own numbers for an account, read on the server after each job: how much of '
+  + 'each window is used, when it resets, and how old the reading is. Once a reset time passes with no newer reading the '
+  + 'line says <i>availability unverified</i> — it never assumes the quota came back. <b>Rounds per 1 %</b> is hidden, '
+  + 'with the reason, while somebody can spend the account where coai cannot count it; the plan share typed on Setup › '
+  + 'Team servers is shown only beside a figure that is shown, and is never added to the ~$ estimate.</div>'
   + '<div><b>Last seen</b> is when a session was last used, which the server records to the hour.</div>'
   + '<div>The windows are the server\'s own: trailing, and counted in UTC — <b>Today</b> here is not since your midnight.</div>';
 

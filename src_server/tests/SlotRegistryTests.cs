@@ -18,30 +18,36 @@ public sealed class SlotRegistryTests : IDisposable
 
     private SlotRegistry New() => new(_dir, new JsonFileStore());
 
+    /// <summary>The lease an acquisition handed out — asserted, since story 6.1a made the answer a closed set.</summary>
+    internal static SlotLease Taken(Acquisition acquisition, string because = "")
+    {
+        acquisition.Should().BeOfType<Acquisition.Taken>(because);
+
+        return ((Acquisition.Taken)acquisition).Lease;
+    }
+
     [Fact]
     public async Task AHeldAccountIsRefusedAndFreeOnceReleased()
     {
         var registry = New();
         var slot = registry.Read("codex", "a");
 
-        var first = await registry.AcquireAsync(slot, TimeSpan.Zero);
-        first.Should().NotBeNull();
+        var first = Taken(await registry.AcquireAsync(slot, TimeSpan.Zero));
 
-        (await registry.AcquireAsync(slot, TimeSpan.Zero)).Should().BeNull("it is in use");
+        (await registry.AcquireAsync(slot, TimeSpan.Zero)).Should().BeOfType<Acquisition.Busy>("it is in use");
 
-        first!.Dispose();
-        var again = await registry.AcquireAsync(slot, TimeSpan.Zero);
-        again.Should().NotBeNull("releasing it makes it available");
-        again!.Dispose();
+        first.Dispose();
+        var again = Taken(await registry.AcquireAsync(slot, TimeSpan.Zero), "releasing it makes it available");
+        again.Dispose();
     }
 
     [Fact]
     public async Task ReleasingTwiceIsNotAnError()
     {
         var registry = New();
-        var lease = await registry.AcquireAsync(registry.Read("codex", "a"), TimeSpan.Zero);
+        var lease = Taken(await registry.AcquireAsync(registry.Read("codex", "a"), TimeSpan.Zero));
 
-        lease!.Dispose();
+        lease.Dispose();
         var second = () => lease.Dispose();
 
         second.Should().NotThrow("a using-block plus an explicit release is ordinary code");
@@ -142,8 +148,7 @@ public sealed class SlotRegistryTests : IDisposable
             """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
 
         var registry = New();
-        using var held = await registry.AcquireAsync(registry.Read("codex", "a"), TimeSpan.Zero);
-        held.Should().NotBeNull();
+        using var held = Taken(await registry.AcquireAsync(registry.Read("codex", "a"), TimeSpan.Zero));
 
         var (exitCode, output) = await RunLoginAsync("codex", "a");
 
@@ -160,8 +165,8 @@ public sealed class SlotRegistryTests : IDisposable
             """[{ "id": "codex", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""");
 
         var registry = New();
-        var lease = await registry.AcquireAsync(registry.Read("codex", "a"), TimeSpan.Zero);
-        lease!.Dispose();
+        var lease = Taken(await registry.AcquireAsync(registry.Read("codex", "a"), TimeSpan.Zero));
+        lease.Dispose();
 
         var (exitCode, _) = await RunLoginAsync("codex", "a");
 

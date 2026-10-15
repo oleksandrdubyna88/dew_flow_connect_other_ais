@@ -18,13 +18,18 @@ namespace CoaiServer;
 /// named and the job goes to the next account at once; only when no account is free does the retry
 /// ladder apply.</para>
 /// </remarks>
+/// <param name="gauge">
+/// The vendor's gauge read after each job, INSIDE the slot's lease (story 6.1a of todo/PLAN_every_round_is_counted.md) —
+/// <see cref="NoGaugeCapture"/> by default, which is what every test of something else gets.
+/// </param>
 public sealed class JobRunner(
     JobStore jobs,
     VendorCatalogHost catalog,
     SlotRegistry slots,
     IReviewLauncher launcher,
     UsageLedger? ledger = null,
-    Action<string, Exception>? onFailure = null)
+    Action<string, Exception>? onFailure = null,
+    IGaugeCapture? gauge = null)
 {
     /// <summary>A slot that refused with no time named is parked this long.</summary>
     /// <remarks>
@@ -34,6 +39,8 @@ public sealed class JobRunner(
     public static readonly TimeSpan TransientCooldown = TimeSpan.FromMinutes(5);
 
     private readonly Action<string, Exception> _report = onFailure ?? ((_, _) => { });
+
+    private readonly IGaugeCapture _gauge = gauge ?? NoGaugeCapture.Instance;
 
     /// <summary>Take one job for this vendor, if there is one that can run. False when idle.</summary>
     /// <param name="started">
@@ -82,12 +89,14 @@ public sealed class JobRunner(
         }
 
         // The lease FIRST, then the claim: taking the job before the account would leave a Running
-        // job with nowhere to run if another process held the slot.
-        using var lease = await slots.AcquireAsync(candidate, TimeSpan.Zero, ct: ct);
-        if (lease is null)
+        // job with nowhere to run if another process held the slot. Busy and blocked alike are "not now":
+        // a blocked account is excluded by the selector, and reconciled again on its next acquisition.
+        if (await slots.AcquireAsync(candidate, TimeSpan.Zero, ct: ct) is not Acquisition.Taken taken)
         {
             return false;
         }
+
+        using var lease = taken.Lease;
 
         // Claimed under the store's own lock, so a DELETE that answered 204 cannot be overtaken by
         // this dispatch. The token comes back with it: it is the one a cancel or the deadline sweep
@@ -100,7 +109,9 @@ public sealed class JobRunner(
         }
 
         started?.TrySetResult(true);
-        await RunAsync(vendor, candidate, job, claim.Token);
+        // The host's token for what runs AFTER the job — the gauge read inside this same lease — never the job's: a
+        // withdrawn job is no reason to skip the slot's own reading, and a stopping host is.
+        await RunAsync(vendor, candidate, job, claim.Token, ct);
 
         return true;
     }
@@ -122,17 +133,17 @@ public sealed class JobRunner(
     {
         foreach (var job in ended)
         {
-            Ledger(new(vendor, string.Empty, job, NothingLaunched), job, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
+            Ledger(new(vendor, string.Empty, job, NothingLaunched), job, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated, GaugeOnLine.None);
         }
     }
 
-    private async Task RunAsync(VendorConfig vendor, AccountSlot slot, JobRecord job, CancellationToken jobToken)
+    private async Task RunAsync(VendorConfig vendor, AccountSlot slot, JobRecord job, CancellationToken jobToken, CancellationToken hostToken)
     {
         try
         {
             var environment = SlotEnvironment.For(vendor.Runtime, slot.Directory, slots.TokenFor(slot, vendor.Runtime));
             var attempt = await launcher.RunAsync(vendor, slot, job, environment, jobToken);
-            Record(vendor, slot, job, attempt);
+            await RecordAsync(vendor, slot, job, attempt, hostToken);
         }
         catch (OperationCanceledException)
         {
@@ -142,7 +153,7 @@ public sealed class JobRunner(
             // todo/PLAN_every_round_is_counted.md; this arm used to finish the job and write nothing).
             // The store already wrote the terminal state and its cause when it fired the token, and `Finish`
             // hands that record back; the runner's own `hostStopped` stands only when nothing else ended it.
-            Record(vendor, slot, job, new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled()));
+            await RecordAsync(vendor, slot, job, new ReviewAttempt.Failed(new ReviewerOutcome.Cancelled()), hostToken);
         }
         catch (Exception e)
         {
@@ -155,7 +166,34 @@ public sealed class JobRunner(
                 DateTimeOffset.UtcNow));
         }
     }
-    private void Record(VendorConfig vendor, AccountSlot slot, JobRecord job, ReviewAttempt attempt)
+
+    /// <summary>
+    /// The job's ending, then the slot's gauge, then the lines — in that order, all inside the lease.
+    /// </summary>
+    /// <remarks>
+    /// The job is made terminal in the store FIRST, so a caller polling it is answered before the reader runs and
+    /// nothing the reader does can change what it is told; the gauge is read AFTER the job, on the account the job
+    /// just used, while this lease still excludes every other user of its token set; and the ledger line is written
+    /// LAST, carrying the reading (story 6.1a of todo/PLAN_every_round_is_counted.md). A capture that produced nothing
+    /// writes a line that says nothing about the gauge — never 0 % — and the job's result is what the store already
+    /// holds. A requeued attempt is not the job's end: its line is written at once and no gauge is read.
+    /// </remarks>
+    private async Task RecordAsync(VendorConfig vendor, AccountSlot slot, JobRecord job, ReviewAttempt attempt, CancellationToken hostToken)
+    {
+        if (Ended(vendor, slot, job, attempt) is not { } finished)
+        {
+            return;
+        }
+
+        var kept = jobs.Finish(finished);
+        var captured = hostToken.IsCancellationRequested
+            ? new GaugeCaptured.Skipped(GaugeCodes.NoAnswer)
+            : await _gauge.CaptureAsync(vendor, slot, hostToken);
+        Ledger(new(vendor, slot.Name, job, attempt), kept, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated, captured.OnLine);
+    }
+
+    /// <summary>The job's terminal record for this attempt — or null when the attempt only sent the job back to the queue.</summary>
+    private JobRecord? Ended(VendorConfig vendor, AccountSlot slot, JobRecord job, ReviewAttempt attempt)
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -184,17 +222,14 @@ public sealed class JobRunner(
             // line per refused attempt would count one review several times; a REVIEW is counted by its turn (the job's
             // id, on every line), and what one line counts now is one launch (story 3.3 of
             // todo/PLAN_every_round_is_counted.md — row 10 of the paid-path census).
-            Ledger(new(vendor, slot.Name, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated);
-
-            return;
+            Ledger(new(vendor, slot.Name, job, attempt), Refused(job, attempt, now), LaunchAttempts.Rotated, GaugeOnLine.None);
         }
 
         // The ledger line is written from the record the STORE kept, not from this method's own `finished`: a cancel or
         // an expiry that fired the token wrote its cause first, under the store's lock, and `Finish` hands that back —
         // carrying what the attempt REPORTED, because a vendor that answered a second before the withdrawal was billed
         // for the answer nobody collected (story 3.2 of todo/PLAN_every_round_is_counted.md).
-        var kept = jobs.Finish(finished);
-        Ledger(new(vendor, slot.Name, job, attempt), kept, job.RefusedBy.Count == 0 ? LaunchAttempts.First : LaunchAttempts.Rotated);
+        return finished;
     }
 
     /// <summary>
@@ -311,7 +346,11 @@ public sealed class JobRunner(
     /// slot's name from <c>vendors.json</c>, which <c>VendorConfig.Refusal</c> holds to letters, digits, <c>-</c> and
     /// <c>_</c>; the account's own sign-in is never named (story 3.4 of todo/PLAN_every_round_is_counted.md).</para>
     /// </remarks>
-    private void Ledger(AttemptOn on, JobRecord finished, string firstAttempt)
+    /// <param name="gauge">
+    /// The vendor's gauge as read on the account right after this job (story 6.1a), on every line of the job —
+    /// <see cref="GaugeOnLine.None"/> when nothing was read, which the line then says by saying nothing.
+    /// </param>
+    private void Ledger(AttemptOn on, JobRecord finished, string firstAttempt, GaugeOnLine gauge)
     {
         if (ledger is null)
         {
@@ -327,7 +366,7 @@ public sealed class JobRunner(
                 ledger.RecordJob(
                     finished.Email, on.Vendor.Id, on.Job.Model, on.Job.Role, line.Outcome, line.Elapsed, line.Usage,
                     kind: JobKinds.Wire(on.Job.Kind), stage: "TeamServer", turn: on.Job.Id, attempt: line.Attempt,
-                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot,
+                    ranWith: on.Attempt.RanWith, job: on.Job.Id, slot: on.Slot, gauge: gauge,
                     // WHY the store killed it, on the line that says Cancelled — a follow-up pair's first launch ended on
                     // its own and says so (story 3.2 of todo/PLAN_every_round_is_counted.md).
                     endCause: line.Outcome == nameof(FailureKind.Cancelled) ? finished.EndCause : string.Empty,

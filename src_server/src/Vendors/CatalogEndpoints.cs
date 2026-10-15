@@ -68,7 +68,15 @@ public static class CatalogEndpoints
             slots.Count(s => s.IsReady(nowUtc)),
             slots.Count(s => s.IsCoolingDown(nowUtc)),
             slots.Count(s => s.NeedsSignIn),
-            FirstBack(slots, nowUtc));
+            FirstBack(slots, nowUtc),
+            LatestGauge(slots));
+
+    /// <summary>
+    /// The newest gauge reading among the vendor's accounts, or null when none has one (story 6.1a of
+    /// todo/PLAN_every_round_is_counted.md). The reading only: which account read it stays on the box.
+    /// </summary>
+    private static GaugeReadingDto? LatestGauge(IReadOnlyList<AccountSlot> slots) =>
+        slots.Select(s => s.Gauge).OfType<GaugeReadingDto>().MaxBy(reading => reading.ObservedUtc);
 
     /// <summary>
     /// When the first parked account comes back, in UTC — or empty when none is parked (story 5.3b of

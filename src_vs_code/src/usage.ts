@@ -89,6 +89,16 @@ export interface UsageEntry {
    * line older than the field; `statedReset.ts` turns it into the words a person reads.
    */
   readonly resetsUtc?: string;
+  /**
+   * The vendor's own gauge as read on the Team server's account right after this launch (story 6.1a of
+   * todo/PLAN_every_round_is_counted.md): when, the plan word, and EVERY window of EVERY limit it reported (epic 6's code
+   * round — the first shape kept one limit's two windows and lost the rest). Each field is present only when the line
+   * says it: absent on a line older than the fields, on a local line, and on a job after which nothing was read; a window
+   * the vendor did not report, or one that is not whole, is not in the list — never a 0 %.
+   */
+  readonly gaugeObservedUtc?: string;
+  readonly gaugePlan?: string;
+  readonly gaugeWindows?: readonly GaugeWindowOnLine[];
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -155,11 +165,81 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...endCauseOf(parsed.endCause),
       ...roundFields(parsed),
       ...resetOf(parsed.resetsUtc),
+      ...gaugeFields(parsed),
     };
   } catch {
     return undefined;
   }
 }
+
+/** One window of one limit, as a Team-server ledger line carries it (epic 6's code round). */
+export interface GaugeWindowOnLine {
+  readonly limitId: string;
+  readonly kind: string;
+  readonly mins: number;
+  readonly usedPercent: number;
+  readonly resetsUtc: string;
+}
+
+/** The gauge's text fields, each present only when the line says it. */
+const GAUGE_TEXT_FIELDS = ['gaugeObservedUtc', 'gaugePlan'] as const;
+
+type GaugeTextField = (typeof GAUGE_TEXT_FIELDS)[number];
+
+/**
+ * The vendor's gauge as read after a Team-server launch (story 6.1a of todo/PLAN_every_round_is_counted.md), by
+ * `launchFields`' rule: a text field is present only when non-empty, and the windows only when the line carries some.
+ */
+function gaugeFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, GaugeTextField | 'gaugeWindows'> {
+  return { ...gaugeTexts(parsed), ...gaugeWindowsOf(parsed.gaugeWindows) };
+}
+
+/** The line's windows, each one WHOLE — a window missing a number is dropped, never coerced to 0 as `number()` would. */
+function gaugeWindowsOf(raw: unknown): Pick<UsageEntry, 'gaugeWindows'> {
+  const windows = Array.isArray(raw) ? raw.flatMap(gaugeWindowOf) : [];
+
+  return windows.length > 0 ? { gaugeWindows: windows } : {};
+}
+
+function gaugeWindowOf(raw: unknown): readonly GaugeWindowOnLine[] {
+  const row = recordOf(raw);
+
+  return WINDOW_CHECKS.every((check) => check(row)) ? [{
+    limitId: String(row['limitId']), kind: String(row['kind']), mins: Number(row['mins']), usedPercent: Number(row['usedPercent']),
+    resetsUtc: textOrEmpty(row['resetsUtc']),
+  }] : [];
+}
+
+function recordOf(raw: unknown): Record<string, unknown> {
+  return typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {};
+}
+
+function textOrEmpty(value: unknown): string {
+  return saidText(value) ? value : '';
+}
+
+/** What a window must be to be read: named, with a length and a use that are finite numbers. */
+const WINDOW_CHECKS: readonly ((row: Record<string, unknown>) => boolean)[] = [
+  (row) => typeof row['limitId'] === 'string' && typeof row['kind'] === 'string',
+  (row) => finite(row['mins']),
+  (row) => finite(row['usedPercent']),
+];
+
+function finite(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function gaugeTexts(parsed: Partial<UsageEntry>): Partial<Record<GaugeTextField, string>> {
+  const said: Partial<Record<GaugeTextField, string>> = {};
+  for (const name of GAUGE_TEXT_FIELDS) {
+    const value: unknown = parsed[name];
+    if (saidText(value)) {
+      said[name] = value;
+    }
+  }
+  return said;
+}
+
 
 /**
  * The three fields the panel did not read until story 2.5 of todo/PLAN_every_round_is_counted.md, though `coai-mcp` has

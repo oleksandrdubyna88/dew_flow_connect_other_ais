@@ -78,6 +78,7 @@ sequenceDiagram
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of todo/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
+| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2 of todo/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
 | `CooldownParser` | `Reviewers/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant — ONE parser for both halves since story 5.3b (moved from `src_server/src/Slots`): `Until` (always an answer; the Team server parks a slot on it, falling back to a doubling guess) and `StatedReset` (only what the vendor NAMED — a duration up to 14 days, a date, a clock time — else null; the local ledger and the ladder read this one) |
 | `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
@@ -2675,6 +2676,126 @@ sequenceDiagram
 ```
 
 Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
+
+## A request that ends its child on an answer owns the tree it ends (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+
+The Team server's gauge reader is a child that is a SERVER: `codex app-server` answers one request and then serves
+until it is told to stop, and the way this product stops a child is the tree kill. Three things were widened on the
+one launcher both halves share, and nothing a reviewer launch does changed:
+
+- **`ProcessRequest.EndsWhen`** — a predicate over the stdout so far, asked after every chunk; when it says yes the
+  child is ended and the launch returns with **`ProcessResult.Ended`** set (`TimedOut` stays false). The default is
+  `ProcessRequest.Never`, and `EndsEarly` says whether a request set it. A predicate that throws is "not answered yet".
+- **The tree discipline, for such a request only** (`EndAndConfirmAsync` with `EndsEarly`): the child's descendants are listed
+  BEFORE the kill — a killed parent's children are reparented and cannot be found afterwards — and handed to the
+  tracker as identities (pid AND start time), so a crash in the middle of the kill leaves every member named on disk;
+  then stdin is closed, the tree killed and the root waited for, as before; then each member is checked by identity for
+  up to `ProcessTree.ConfirmationBound` (2 s), re-killed meanwhile, and the ones still there come back as
+  **`ProcessResult.Survivors`**. The deadline path of such a request takes the same discipline. A request without a
+  predicate is killed on its deadline exactly as it always was, and lists nothing. It ends the child through the launcher's one tree kill, `EndItAsync` (stdin closed, tree killed, root waited for), which the ACP transport shares.
+- **The tree is listed WHILE the child runs, for every `EndsWhen` request** (`Processes/TreeWatch.cs`, CodeRabbit on PR #790): a
+  root that EXITS BY ITSELF can no longer name its children — they are reparented the moment it goes — and the one listing
+  the launcher had ran only just before it killed an answered or timed-out root. `TreeWatch` is a `PeriodicTimer` leg
+  beside the reading/writing/waiting halves (step `ProcessTree.ListingStep` = 200 ms, first tick after one step; an
+  `internal ProcessRequest.ListingStep` is the knob a test turns): every identity not yet seen is added to its `seen` set
+  and, when tracked, recorded as it appears — a record (or listing) failure is HELD in `Unrecorded`, never thrown mid-run.
+  `Observe` / `ConfirmAsync` serve both ends: on `Answered`/`Deadline` the final listing is unioned with `seen` before the kill;
+  on `Exited` there is no root to kill, but `ExitedByItselfAsync` confirms `seen` (re-killing through `ProcessTree.Terminate`,
+  the 2 s bound) and survivors come back in `ProcessResult.Survivors`. **The evidence-gated partial**: when the root exited by
+  itself, the request is tracked, and a stream was still open when the drain grace cut it (`BoundedText.HeldOpen`, its own flag,
+  distinct from the size ceiling), something never listed holds the inherited stdio — the launch raises
+  `ProcessTreeNotRecordedException` with the inner **`ProcessTreeUnlistedException`** (`Processes/ProcessTreeUnlistedException.cs`;
+  its own type because the server logs only the inner type's name). Untracked: no exception, `Truncated` says it. An exit with
+  closed streams and nothing seen is an ordinary result (`Ended=false`, no grace wait). **Residual limit**: a descendant spawned
+  within the last listing step before the root's self-exit AND holding none of the inherited stdio is neither seen nor detected.
+  CodeRabbit's proposal — fail every early exit of a tracked request — was rejected: it kills nothing, and a benign early exit
+  of any codex version would block every codex slot for a human. `BoundedText` moved to its own file (`ProcessLauncher.cs` was over the size limit).
+- **A child that cannot be recorded is ended before the failure travels** (`RecordedAsync`): `ProcessTracking.Record`
+  never throws, but a tracker that writes a slot's marker can, and a child alive with its identity on nobody's disk is
+  the one state the containment has no answer to.
+- **A DESCENDANT that cannot be recorded does not stop the end** (epic 6's code round): the descendants' records were
+  written in a loop BEFORE stdin was closed and the tree killed, so a tracker throwing on one left the loop with nothing
+  ended. `RecordEach` now holds the failure, the end runs exactly as above (no member forgotten — the identity on disk
+  is partial), and once the drain has settled the launch throws **`ProcessTreeNotRecordedException`**
+  (`Processes/ProcessTreeNotRecordedException.cs`: the survivors, the tracker's own error inside) for the caller to
+  stay fail-closed on.
+- **A server is spoken to, not fed**: for an `EndsWhen` request our end of stdin stays OPEN after the request lines are
+  written (flushed, not closed — `WriteStdInAsync(closeAfter: false)`), until the launcher ends the child, which
+  closes it before the kill as always. A stdio server exits on the end of its input, and an exit that outran its own
+  answer would skip the tree discipline the answer path takes — its descendants reparented and unlisted. Every other
+  request still has its stdin closed after the write, which is what a child waiting for EOF is waiting for.
+
+**`ProcessTree`** (`Processes/ProcessTree.cs`) lists a process's descendants with their start times — Linux reads
+`/proc/<pid>/stat` for each process's parent, Windows takes a Toolhelp32 snapshot through four blittable `DllImport`s
+(no unsafe code, nothing for the AOT analyser) — and answers `IsAlive`, `Terminate` and `ConfirmGoneAsync` on
+`ProcessIdentity`, the one identity record (`OrphanSweep.Same`'s slack). **macOS is not supported, and fails closed**:
+`Supported` is false there, `Descendants` answers none, and a caller that needs the confirmation refuses to spawn
+rather than inheriting an unprobed answer (the platform-limits rule). The production host is Linux.
+**An exited process is not alive even while its table entry stays**: on Linux a killed process keeps its `/proc` entry
+and start time until its parent reaps it — under a parent that never reaps, for ever — so `IsAlive` also reads the state
+field of `/proc/<pid>/stat` and answers false for a zombie (`Z`) or a dying entry (`X`) — but only when
+`/proc/<pid>/task` lists no thread but the leader, since a leader whose own thread exited reads `Z` while the group's
+other threads run on; found by PR #790's Linux CI. `DescendantsOf(identity)` lists the descendants only of a process
+that is still the one recorded — a reused number's children are nobody's to kill — and the walk accepts a child only
+when it started no earlier than its parent (`OrphanSweep.Same`'s slack): a table records a parent NUMBER, and a process
+whose parent died is otherwise listed under whoever holds that number now. **Known limit:** a child spawned between the
+listing and the kill is ended by `Kill(entireProcessTree: true)` but not in the confirmed set, and a child already
+reparented before the listing cannot be found at all.
+
+The fake CLI gained the server shape: `serve <pidFile> <afterEofMs> grandchild|alone <answer>` answers the request
+whose line carries `"id":2`, writes its own pid and its sleeping grandchild's, and lives on after stdin closes for as
+long as told (for ever when negative); `app-server` is the same, steered by `fakecli-appserver.json` in the temp
+directory, because a confined launch is handed no `FAKECLI_*` variable (`tests_fakecli/Serving.cs`).
+
+Tests: `AReaderIsEndedWithItsTreeTests` (mcp) — listed in [module_tests.md](module_tests.md).
+
+## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+
+`RoundsPerPercent.Derive(lines)` (`Reviewers/RoundsPerPercent.cs`) is the formula E6's plan round fixed, in the library
+both halves compile against so it exists once. Pure: `GaugeLine`s in — when the line was written, its vendor, its
+account (the Team server's slot), its round id, whether it is a review, and the reading taken right after its launch
+(`GaugeOnLine`, story 6.1a) — and one `GaugeRatio` per vendor × window out.
+
+1. **A window is its limit identity plus its length** — every window of every limit a reading carries
+   (`GaugeOnLine.Windows`, a list since epic 6's code round, so a second limit reaches the derivation) is named by
+   `(limitId, mins)`, never by where the vendor filed it; a window with no stated length cannot be identified, and a
+   reading that does not report a window is a missing reading for it.
+2. **A reading belongs to the launch whose line carries it.** The server reads the gauge after a job and writes it on
+   that job's lines, so the rounds "between" two readings are the rounds of the lines carrying the later one. Readings
+   are per account and never paired across accounts; every line carrying one instant is one reading.
+3. **An interval is unusable — its figure unavailable, never 0 or infinity —** checked in this order: a launch between
+   the readings has no reading of its own, or either reading does not report the window (`missing-reading`); either
+   reading is older than its line by more than `StaleAfter` (5 min — `stale-reading`); either `resetsAt` is unstated
+   (`missing-reading`) or they differ — the window reset (`window-reset`); the percentage did not rise
+   (`percent-did-not-rise`); a review between them sent no round id (`run-without-round`).
+4. **A round's share.** A round that ran several launches on the vendor counts in each interval by its share of those
+   launches — a code round's four reviewers, each followed by its own reading, are one round over four intervals, not
+   four rounds. A non-review launch (a consultation, a canary) spends — its rise is in the interval — and counts no round.
+5. **The figure** is the rounds-weighted mean `Σ Rᵢ·(Rᵢ/Δᵢ) / Σ Rᵢ` over the last `LastIntervals` (10) usable intervals
+   of the vendor's accounts, oldest end first; with no interval at all, `too-few-readings`; with none usable, the LATEST
+   interval's reason; with usable ones that held no round, `no-rounds`.
+6. **Then the consumer rule:** `GaugeConsumers.UncountedFor(limitId)` names the known consumers coai cannot count —
+   `direct-codex-use` for the `codex` limit (RESULTS_vendor_quota_gauges.md §2.4, §6.3) — and a limit with one has its
+   figure hidden: `null`, `consumer-not-counted`, the consumer named. The window is still named, so the gauge beside it
+   is still shown.
+
+`NotReadHere` is what a machine that reads no gauge answers — `{ratios: [], unavailable: "local-capture-deferred"}` —
+and is what `coai-mcp --round-counts` carries as its trailing `gauge` (story 6.1b, local capture, is deferred).
+`GaugeAnswer.Ratios` defaults to `[]` and is normalised (`?? []`), so an answer read or built without its list is no
+ratios, never null (epic 6's code round).
+
+**Cost.** Each account is read ONCE per vendor (`AccountOf`: its readings, and for each interval whether a reading-less
+launch lies in `(before, after]`, found by a pointer over the reading-less lines' instants that only moves forward) and
+the result is shared by every window — linear in the lines after the sort. The first version rescanned every line for
+every interval of every window; epic 6's code round measured 4 000 lines on one account at 11.4 s before and 0.26 s
+after, the two answers byte-identical.
+
+**A recorded limit, not a defect fixed here:** with whole-number percentages, consecutive readings after one job each
+often rise by 0 (unusable) or 1 (one job's rounds over 1 %), so the usable intervals over-represent the jobs that tipped
+the percentage. The plan round's formula is implemented as fixed; pairing a reading with the last reading whose
+percentage DIFFERED would remove the bias, and is an open question for the owner (recorded in the plan's deviations).
+
+Tests: `RoundsPerPercentTests` (19, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
 
 ## The sanitised snapshot — a CLI that reads only its working folder is given a copy without the branch's configuration (2026-10-12, S1 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
 

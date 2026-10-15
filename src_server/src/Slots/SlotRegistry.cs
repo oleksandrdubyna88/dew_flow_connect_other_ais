@@ -42,6 +42,28 @@ public sealed class SlotLease(AccountSlot slot, FileStream handle, Action<Accoun
         }
     }
 }
+/// <summary>What taking an account answered: the lease, a holder that would not let go in time, or a barrier.</summary>
+/// <remarks>
+/// A closed set rather than a nullable lease, since story 6.1a of todo/PLAN_every_round_is_counted.md: "busy" and
+/// "unavailable until recovery proves it safe" have different cures — one is a wait, the other a look at the box —
+/// and <c>login</c> has to say which it met.
+/// </remarks>
+public abstract record Acquisition
+{
+    private Acquisition()
+    {
+    }
+
+    /// <summary>The account is held by the caller, and the previous holder's reader marker, if any, was reconciled.</summary>
+    public sealed record Taken(SlotLease Lease) : Acquisition;
+
+    /// <summary>Another process holds it, and the wait ran out.</summary>
+    public sealed record Busy : Acquisition;
+
+    /// <summary>The lock opened and the barrier refused: a reader marker that could not be cleared, for this <see cref="BlockedReasons"/> code.</summary>
+    public sealed record Blocked(string Code) : Acquisition;
+}
+
 /// <summary>
 /// The accounts on disk: who is free, who is rate-limited, who is signed out — and the exclusion
 /// that stops two processes using one account at once.
@@ -64,8 +86,17 @@ public sealed class SlotLease(AccountSlot slot, FileStream handle, Action<Accoun
 /// would break a lock whose holder is alive and working, which is precisely the race this exists to
 /// prevent. What a caller gets instead is a bounded wait and a message naming the holder.</para>
 /// </remarks>
-public sealed class SlotRegistry(string dataDir, JsonFileStore files, Action<string, Exception>? onFailure = null)
+/// <param name="reconcile">
+/// How a previous holder's reader marker is reconciled — <see cref="ReaderReconcile.RunAsync(ReaderMarkerDto)"/> with the
+/// real process control by default; a test hands in one whose kills keep failing, which no test machine can make for real.
+/// </param>
+public sealed class SlotRegistry(
+    string dataDir,
+    JsonFileStore files,
+    Action<string, Exception>? onFailure = null,
+    Func<ReaderMarkerDto, Task<Reconciled>>? reconcile = null)
 {
+    private readonly Func<ReaderMarkerDto, Task<Reconciled>> _reconcile = reconcile ?? ReaderReconcile.RunAsync;
     /// <summary>How long <c>login</c> and a job wait for a busy account before giving up.</summary>
     /// <remarks>
     /// Bounded rather than infinite: an operator who ran <c>login</c> and sees nothing cannot tell a
@@ -113,17 +144,28 @@ public sealed class SlotRegistry(string dataDir, JsonFileStore files, Action<str
             // needs-sign-in, and saying so is how the catalog tells the operator what to do next.
             state?.NeedsSignIn ?? !SignedIn(directory),
             state?.Note ?? string.Empty,
-            state?.ConsecutiveCooldowns ?? 0);
+            state?.ConsecutiveCooldowns ?? 0,
+            // Absent on an older file, and absent means none (doctrine §4a: an omitted field is null).
+            state?.Blocked ?? string.Empty,
+            state?.GaugeSuspended ?? string.Empty,
+            state?.Gauge);
     }
 
     /// <summary>Take the account, waiting up to <paramref name="wait"/> for whoever holds it.</summary>
-    /// <returns>The lease, or null when the wait ran out.</returns>
+    /// <returns>The lease, busy when the wait ran out, or blocked when the barrier refused.</returns>
     /// <param name="onWaiting">
     /// Called once, if the account is busy on the first attempt. `login` uses it to say so: an
     /// operator staring at a terminal that has printed nothing for two minutes cannot tell a held
     /// lock from a hung command. (gemini, code round.)
     /// </param>
-    public async Task<SlotLease?> AcquireAsync(
+    /// <remarks>
+    /// <b>The barrier is here, under the lock, for every caller</b> — a job, <c>login</c>, the startup sweep (story 6.1a
+    /// of todo/PLAN_every_round_is_counted.md). The moment the lock opens, the previous holder's reader marker, if there
+    /// is one, is reconciled by <see cref="ReaderReconcile"/>: what it names is killed and confirmed gone before the
+    /// lease is usable, and a marker that cannot be cleared keeps the handle closed and the account blocked. A startup
+    /// sweep alone could not do this: the lease used to be handed back the moment the lock opened.
+    /// </remarks>
+    public async Task<Acquisition> AcquireAsync(
         AccountSlot slot,
         TimeSpan? wait = null,
         Action<TimeSpan>? onWaiting = null,
@@ -139,26 +181,12 @@ public sealed class SlotRegistry(string dataDir, JsonFileStore files, Action<str
         {
             if (TryOpen(LockPath(slot.Directory)) is { } handle)
             {
-                try
-                {
-                    // Between opening the handle and handing back a lease, the caller can be
-                    // cancelled — and an unowned open handle holds the account until this process
-                    // exits, with nobody able to release it because nobody has the lease.
-                    // (gemini, code round.)
-                    ct.ThrowIfCancellationRequested();
-
-                    return new SlotLease(slot, handle, Touch);
-                }
-                catch
-                {
-                    handle.Dispose();
-                    throw;
-                }
+                return await BehindTheBarrierAsync(slot, handle, ct);
             }
 
             if (DateTimeOffset.UtcNow >= deadline)
             {
-                return null;
+                return new Acquisition.Busy();
             }
 
             if (!announced)
@@ -170,6 +198,145 @@ public sealed class SlotRegistry(string dataDir, JsonFileStore files, Action<str
             await Task.Delay(TimeSpan.FromMilliseconds(250), ct);
         }
     }
+
+    /// <summary>The lock is open: reconcile what the previous holder left, then hand the lease out or keep the handle closed.</summary>
+    private async Task<Acquisition> BehindTheBarrierAsync(AccountSlot slot, FileStream handle, CancellationToken ct)
+    {
+        try
+        {
+            // Between opening the handle and handing back a lease, the caller can be
+            // cancelled — and an unowned open handle holds the account until this process
+            // exits, with nobody able to release it because nobody has the lease.
+            // (gemini, code round.)
+            ct.ThrowIfCancellationRequested();
+
+            if (await ReconcileReaderAsync(slot) is { } code)
+            {
+                handle.Dispose();
+
+                return new Acquisition.Blocked(code);
+            }
+
+            return new Acquisition.Taken(new SlotLease(slot, handle, Touch));
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>The previous holder's reader marker, reconciled: null when the lease may be used, else the blocking code.</summary>
+    /// <remarks>
+    /// Read from disk here, not from the <see cref="AccountSlot"/> the caller holds: that value may be seconds old, and
+    /// the marker is the one fact that must be current. A blocked slot without a marker is a leftover of nothing and is
+    /// cleared; a marker is reconciled on EVERY acquisition, so a block over a member that later died by itself lifts.
+    /// </remarks>
+    private async Task<string?> ReconcileReaderAsync(AccountSlot slot)
+    {
+        var state = files.Read(StatePath(slot.Directory), ServerJsonContext.Default.SlotStateDto);
+        if (state?.Reader is not { } marker)
+        {
+            if (state?.Blocked is { Length: > 0 })
+            {
+                Save(slot, s => s with { Blocked = string.Empty });
+            }
+
+            return null;
+        }
+
+        switch (await _reconcile(marker))
+        {
+            case Reconciled.Blocked blocked:
+                Save(slot, s => s with { Blocked = blocked.Code });
+                _report($"{slot.Vendor}/{slot.Name} stays unavailable: {blocked.Code}", new InvalidOperationException(blocked.Code));
+
+                return blocked.Code;
+            default:
+                Save(slot, s => s with { Reader = null, Blocked = string.Empty });
+
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Writes the fail-closed "a reader may exist" marker — BEFORE the reader is spawned (story 6.1a). False when it
+    /// could not be written, which the caller reads as "no spawn".
+    /// </summary>
+    public bool MarkReaderExpected(AccountSlot slot, int ownerPid, DateTime ownerStartedUtc)
+    {
+        try
+        {
+            Save(slot, s => s with { Reader = new ReaderMarkerDto(ReaderPhases.Spawning, ownerPid, ownerStartedUtc, DateTimeOffset.UtcNow) });
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _report($"the reader marker of {slot.Vendor}/{slot.Name} could not be written, so no reader was started", e);
+
+            return false;
+        }
+    }
+
+    /// <summary>Adds one process the reader's launcher reported — the child, then each descendant before the kill — to the marker.</summary>
+    public void RecordReader(AccountSlot slot, CoaiMcp.Runners.Processes.ProcessIdentity identity) =>
+        Save(slot, s => s with { Reader = Running(s.Reader, identity) });
+
+    /// <summary>The marker with one more process in its tree, phase Running — a fresh Spawning marker when none was written.</summary>
+    private static ReaderMarkerDto Running(ReaderMarkerDto? reader, CoaiMcp.Runners.Processes.ProcessIdentity identity)
+    {
+        var marker = reader ?? new ReaderMarkerDto(ReaderPhases.Spawning, Environment.ProcessId, DateTime.UtcNow, DateTimeOffset.UtcNow);
+
+        return marker with { Phase = ReaderPhases.Running, Tree = [.. (reader?.Tree ?? []), identity] };
+    }
+
+    /// <summary>The reader's tree is confirmed gone: the marker is cleared, and with it any block.</summary>
+    public void ClearReader(AccountSlot slot) =>
+        Save(slot, s => s with { Reader = null, Blocked = string.Empty });
+
+    /// <summary>The reader marker on the slot's state as it is on disk now, or null when none is.</summary>
+    public ReaderMarkerDto? ReaderMarkerOf(AccountSlot slot) =>
+        files.Read(StatePath(slot.Directory), ServerJsonContext.Default.SlotStateDto)?.Reader;
+
+    /// <summary>The account is unavailable until recovery proves it safe — the marker is KEPT for the next reconcile.</summary>
+    public void MarkBlocked(AccountSlot slot, string code) =>
+        Save(slot, s => s with { Blocked = code });
+
+    /// <summary>
+    /// The reader's tree was ended but a descendant was never written down (epic 6's code round): the marker becomes
+    /// <see cref="ReaderPhases.Partial"/> — unidentified, so no reconcile of the members it does name can clear it — and
+    /// the slot is blocked as a reader nobody can fully name. Kept until a person proves the account safe.
+    /// </summary>
+    public void MarkReaderPartial(AccountSlot slot) =>
+        Save(slot, s => s with
+        {
+            Reader = (s.Reader ?? new ReaderMarkerDto(ReaderPhases.Spawning, Environment.ProcessId, DateTime.UtcNow, DateTimeOffset.UtcNow)) with
+            {
+                Phase = ReaderPhases.Partial,
+            },
+            Blocked = BlockedReasons.ReaderIdentityMissing,
+        });
+
+    /// <summary>A reading arrived: the one overwritten snapshot.</summary>
+    public void SaveGauge(AccountSlot slot, GaugeReadingDto reading) =>
+        Save(slot, s => s with { Gauge = reading with { Stale = false } });
+
+    /// <summary>A capture produced no reading: the previous one, if any, is the last the vendor said and is marked so.</summary>
+    public void MarkGaugeStale(AccountSlot slot) =>
+        Save(slot, s => s with { Gauge = s.Gauge is { } reading ? reading with { Stale = true } : null });
+
+    /// <summary>
+    /// The read met an authentication error or a refresh request: capture is suspended on this account — its OWN
+    /// state, never needs-sign-in — and the previous reading is marked stale. Lifted by <see cref="MarkSucceeded"/>.
+    /// </summary>
+    public void SuspendGauge(AccountSlot slot, string code) =>
+        Save(slot, s => s with
+        {
+            GaugeSuspended = code,
+            GaugeSuspendedUtc = DateTimeOffset.UtcNow,
+            Gauge = s.Gauge is { } reading ? reading with { Stale = true } : null,
+        });
 
     /// <summary>Record that the vendor rate-limited this account, and until when.</summary>
     public void MarkCoolingDown(AccountSlot slot, string reason, DateTimeOffset nowUtc)
@@ -199,7 +366,9 @@ public sealed class SlotRegistry(string dataDir, JsonFileStore files, Action<str
     /// <summary>A job finished on this account without a refusal — it is healthy.</summary>
     /// <remarks>
     /// Clears the cooldown counter as well as the cooldown. Without that, an account that was
-    /// limited three times last week would start its next back-off at four hours.
+    /// limited three times last week would start its next back-off at four hours. And it lifts a suspended gauge
+    /// capture (story 6.1a): a launch that succeeded on this token set is the proof the read's authentication error
+    /// is behind it.
     /// </remarks>
     public void MarkSucceeded(AccountSlot slot) =>
         Save(slot, s => s with
@@ -208,6 +377,8 @@ public sealed class SlotRegistry(string dataDir, JsonFileStore files, Action<str
             ConsecutiveCooldowns = 0,
             NeedsSignIn = false,
             Note = string.Empty,
+            GaugeSuspended = null,
+            GaugeSuspendedUtc = null,
         });
 
     /// <summary>A human signed this account in. The only thing that clears needs-sign-in.</summary>

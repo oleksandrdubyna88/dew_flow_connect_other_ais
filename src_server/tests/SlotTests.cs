@@ -110,4 +110,19 @@ public sealed class SlotSelectorTests
 
         SlotSelector.Explain([], Now).Should().Contain("no account slots");
     }
+
+    /// <summary>Story 6.1a of todo/PLAN_every_round_is_counted.md: unavailable until recovery proves it safe.</summary>
+    [Fact]
+    public void ABlockedAccountIsNeverPicked_WhateverTheClockSays_AndTheRefusalNamesTheWrongCureAway()
+    {
+        var blocked = Slot("a") with { Blocked = BlockedReasons.ReaderIdentityMissing };
+
+        SlotSelector.Pick([blocked], Now).Should().BeNull();
+        SlotSelector.Pick([blocked], Now.AddDays(365)).Should().BeNull("no clock clears it");
+        SlotSelector.Pick([blocked, Slot("b", Now.AddHours(-1))], Now)!.Name.Should().Be("b", "another account still takes the job");
+
+        var sentence = SlotSelector.Explain([blocked], Now);
+        sentence.Should().Contain("unavailable").And.Contain("reader");
+        sentence.Should().NotContain("login", "its credentials are fine, and a sign-in meets the same barrier");
+    }
 }

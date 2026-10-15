@@ -51,6 +51,12 @@ export interface RoundCountsAnswer {
   readonly windows: readonly RoundsWindow[];
   /** From when reviewer rows carry their model — null when no round has one yet. */
   readonly modelsKnownSince: string | null;
+  /**
+   * Why this machine's answer carries no vendor gauge figure — the shared derivation's code (`local-capture-deferred`
+   * today: story 6.1b is deferred), read from `gauge.unavailable` (story 6.2 of todo/PLAN_every_round_is_counted.md).
+   * Absent from a `coai-mcp` older than the field, and then nothing is said about a gauge.
+   */
+  readonly gaugeUnavailable?: string;
 }
 
 /** What a read came to: a count, or why there is none. */
@@ -102,7 +108,14 @@ function answerOf(value: Shaped): RoundCountsAnswer | undefined {
   const windows = value.windows.map(windowOf);
 
   return windows.includes(undefined) ? undefined
-    : { nowUtc: value.nowUtc, windows: windows as RoundsWindow[], modelsKnownSince: textOrNull(value['modelsKnownSince']) };
+    : { nowUtc: value.nowUtc, windows: windows as RoundsWindow[], modelsKnownSince: textOrNull(value['modelsKnownSince']), ...gaugeReasonOf(value['gauge']) };
+}
+
+/** The local answer's gauge reason (story 6.2), present only when the binary said one — an older one says nothing. */
+function gaugeReasonOf(gauge: unknown): Pick<RoundCountsAnswer, 'gaugeUnavailable'> {
+  const said = isRecord(gauge) ? gauge['unavailable'] : undefined;
+
+  return typeof said === 'string' && said.length > 0 ? { gaugeUnavailable: said } : {};
 }
 
 function textOrNull(value: unknown): string | null {

@@ -174,6 +174,21 @@ function modelFiltersScript(): string {
 `;
 }
 
+/**
+ * Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): the account and what was typed in
+ * the box beside the button, as one command — the host reads it, stores it or refuses it at the card.
+ */
+function planPriceScript(): string {
+  return `
+  document.addEventListener('click', (event) => {
+    const pressed = event.target;
+    const price = pressed && typeof pressed.closest === 'function' ? pressed.closest('[data-plan-price]') : null;
+    if (!price) { return; }
+    const box = document.getElementById(price.dataset.planPriceBox || '');
+    send({ type: 'command', command: 'savePlanPrice', id: (price.dataset.planPrice || '') + '|' + (box ? String(box.value || '') : '') }, price);
+  });`;
+}
+
 /** What moves the filters — the chips, the search box, the two pickers — and the prompt's byte count. */
 function modelEventsScript(): string {
   return `
@@ -200,7 +215,7 @@ function modelEventsScript(): string {
       const sample = document.getElementById('security-sample');
       send({ type: 'command', command: 'trySecurity', id: sample ? String(sample.value || '') : '' }, tryIt);
     }
-  });
+  });${planPriceScript()}
   document.addEventListener('input', (event) => {
     const typed = event.target;
     if (!typed) { return; }

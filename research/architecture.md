@@ -57,7 +57,7 @@ C4Container
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
   Rel(ext, srv, "an admin's company usage per window, and who has signed in — only while the Team server tab is in front")
-  Rel(srv, codex, "spawn, one signed-in account per slot")
+  Rel(srv, codex, "spawn, one signed-in account per slot — and, after each codex job inside that slot's lease, a contained app-server read of the account's own gauge (story 6.1a)")
   Rel(gem, srv, "--agy-hook child, for an agy reviewer the server started")
 ```
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.ServiceDefaults;
@@ -260,7 +261,28 @@ public sealed record UsageEntry(
     /// field, and on a Team-server line — the server keeps its reset on the slot and says it in its catalog. Trailing and
     /// defaulted like the rest.
     /// </remarks>
-    string ResetsUtc = "")
+    string ResetsUtc = "",
+
+    /// <summary>
+    /// When the vendor's own gauge was read on the account right after this launch, UTC (<c>O</c>) — or empty.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The three gauge fields are story 6.1a of todo/PLAN_every_round_is_counted.md</b>: the Team server reads
+    /// <c>codex app-server</c> · <c>account/rateLimits/read</c> inside the slot's lease after each job, and every line of
+    /// that job carries the reading (<see cref="GaugeOnLine"/>): when, the plan word, and EVERY window of EVERY limit the
+    /// vendor reported, each with its limit, kind, length, use and reset. Story 6.2 derives rounds per 1 % from
+    /// consecutive readings. Epic 6's code round replaced the first shape — one limit's two windows, flat — because a
+    /// codex answer with several limits lost all but one on the line; nothing had shipped, so it was changed in place.</para>
+    /// <para>Empty on a local line, on a line older than the fields, and on a job after which nothing was read; the
+    /// window list is left off the line then — never a 0 %. Trailing and defaulted like the rest.</para>
+    /// </remarks>
+    string GaugeObservedUtc = "",
+
+    /// <summary>The vendor's plan word (<c>prolite</c>) at the reading, or empty.</summary>
+    string GaugePlan = "",
+
+    /// <summary>Every window the reading reported, each with its limit — null (left off the line) when there is no reading.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<GaugeWindowOnLine>? GaugeWindows = null)
 {
     /// <summary>This line with the fields of what its launch ran with — the ONE place a <see cref="LaunchOptions"/> becomes columns.</summary>
     public UsageEntry RanWith(LaunchOptions ranWith) => this with
@@ -273,6 +295,14 @@ public sealed record UsageEntry(
         TierFrom = ranWith.TierFrom,
         EffortNotSent = ranWith.EffortNotSent,
         TierNotSent = ranWith.TierNotSent,
+    };
+
+    /// <summary>This line with the gauge read after its launch — the ONE place a <see cref="GaugeOnLine"/> becomes columns.</summary>
+    public UsageEntry WithGauge(GaugeOnLine gauge) => this with
+    {
+        GaugeObservedUtc = gauge.ObservedUtc,
+        GaugePlan = gauge.PlanType,
+        GaugeWindows = gauge.Windows.Count == 0 ? null : gauge.Windows,
     };
 }
 
@@ -475,16 +505,19 @@ public sealed class UsageLedger(string dataDir)
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>
-    /// <paramref name="round"/> and <paramref name="clientAttempt"/> are what the job's REQUEST carried (story 4.2 of
+    /// <para><paramref name="round"/> and <paramref name="clientAttempt"/> are what the job's REQUEST carried (story 4.2 of
     /// todo/PLAN_every_round_is_counted.md) — the client's round id and its own word for the request — each empty when the
-    /// request sent none or sent one the server dropped.
+    /// request sent none or sent one the server dropped.</para>
+    /// <para><paramref name="gauge"/> is the vendor's own gauge as read on the account right after the job (story 6.1a),
+    /// <see cref="GaugeOnLine.None"/> when nothing was read. Required rather than defaulted, as <paramref name="ranWith"/>
+    /// is: an absent value is an EMPTY value here, never a null.</para>
     /// </remarks>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        string turn, string attempt, LaunchOptions ranWith, string job, string slot, string endCause = "",
+        string turn, string attempt, LaunchOptions ranWith, string job, string slot, GaugeOnLine gauge, string endCause = "",
         string round = "", string clientAttempt = "") =>
         Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage,
-            new JobPlace(ranWith, turn, attempt, job, slot, endCause, round, clientAttempt)));
+            new JobPlace(ranWith, turn, attempt, job, slot, endCause, round, clientAttempt)).WithGauge(gauge));
 
     /// <summary>Where a job's line sits: the Team server's turn, attempt, launch options, job, slot, end cause and round — all empty locally.</summary>
     private sealed record JobPlace(

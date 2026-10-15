@@ -24,6 +24,12 @@ public static class VendorLogin
     /// <summary>Nobody finished the sign-in before the timeout, and the CLI was stopped.</summary>
     public const int TimedOutExitCode = 73;
 
+    /// <summary>
+    /// The account is unavailable until recovery proves it safe: a gauge reader of a crashed server could not be proved
+    /// gone (story 6.1a of todo/PLAN_every_round_is_counted.md). Distinct from busy — waiting does not help.
+    /// </summary>
+    public const int BlockedExitCode = 76;
+
     /// <summary>How long a person is given to finish a device sign-in.</summary>
     /// <remarks>
     /// Bounded, because a CLI waiting on a browser nobody opened waits for ever otherwise and the
@@ -87,13 +93,25 @@ public static class VendorLogin
         var slot = registry.Read(vendor.Id, slotName);
 
         await output.WriteLineAsync($"taking {vendor.Id}/{slotName}…");
-        using var lease = await registry.AcquireAsync(
+        var taken = await registry.AcquireAsync(
             slot,
             wait,
             budget => output.WriteLine(
                 $"{vendor.Id}/{slotName} is in use by a review — waiting up to {budget.TotalSeconds:0}s…"),
             ct);
-        if (lease is null)
+        if (taken is Acquisition.Blocked blocked)
+        {
+            // The same barrier a job meets (story 6.1a): a sign-in rewrites the token set a reader may still be using,
+            // and a reader nobody can name cannot be proved gone. Not busy — waiting does not help — and the cure is
+            // on the box, not in this command.
+            await output.WriteLineAsync(
+                $"{vendor.Id}/{slotName} is unavailable ({blocked.Code}): a gauge reader of a crashed server could not be "
+                + "proved gone, so the account's credentials are not touched. Check the server log and the account's state.json.");
+
+            return BlockedExitCode;
+        }
+
+        if (taken is not Acquisition.Taken held)
         {
             // The bounded wait the plan round asked for, twice. An unbounded one is worse than a
             // refusal: an operator who sees nothing cannot tell a busy account from a hung command,
@@ -104,6 +122,8 @@ public static class VendorLogin
 
             return BusyExitCode;
         }
+
+        using var lease = held.Lease;
 
         await output.WriteLineAsync(
             $"running `{SignInCommand(vendor.Runtime)} {string.Join(" ", SignInArguments(vendor.Runtime))}` "

@@ -3217,6 +3217,11 @@ exits 0 (`Store/RoundCounts.cs`, `Server/RoundCountsMode.cs`):
 - **Rows are per window**, providers in ordinal order, models by rounds descending then name: a provider with
   rounds in the last week and none in the last five hours has a row in `7d` and none in `5h`; a window nothing ran
   in answers `rows: []`.
+- **`gauge`** (trailing, story 6.2, 2026-10-12): `{"ratios": [], "unavailable": "local-capture-deferred"}` — the shared
+  runners library's `RoundsPerPercent.NotReadHere`, always, because this machine reads no vendor gauge (story 6.1b is
+  deferred) and no local ledger line carries one. The extension reads `gauge.unavailable` by name and says, on a LOCAL
+  codex row's card, that this machine does not read the gauge; an older binary omits the key and the card says nothing.
+  A Team server's figure is `/api/usage`'s `gauges` ([module_team_server.md](module_team_server.md)).
 
 **Exit codes.** **0** with the answer — an EMPTY answer (three windows, no rows, `modelsKnownSince: null`) when
 `coai.db` does not exist yet, and the file is NOT created: a machine that has never run a round has nought rounds.

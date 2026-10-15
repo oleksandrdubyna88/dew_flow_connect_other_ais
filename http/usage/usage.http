@@ -134,6 +134,9 @@ Authorization: Bearer {{token}}
     const codex = response.parsedBody.vendors.find((v) => v.vendor === 'codex');
     assert.strictEqual(typeof codex.rounds, 'number');
   });
+  test('rounds per 1 % rides with the windows: no seeded line carries a reading, so no window has a figure — an empty list, never a zero (story 6.2)', () => {
+    assert.deepStrictEqual(response.parsedBody.gauges, []);
+  });
 }}
 
 ###
@@ -149,6 +152,7 @@ Authorization: Bearer {{token}}
   const assert = require('node:assert');
   test('no several-window block on an answer to ?window= — absent, not null, so an older client reads today\'s shape', () => {
     assert.ok(!('windows' in response.parsedBody));
+    assert.ok(!('gauges' in response.parsedBody), 'rounds per 1 % (story 6.2) is sent only beside the windows a client asked for');
   });
   test('every vendor row — however many there are — carries the round counts as numbers and the launches per kind', () => {
     for (const vendor of response.parsedBody.vendors) {
@@ -177,6 +181,16 @@ Authorization: Bearer {{token}}
     for (const window of windows) {
       assert.ok(Date.parse(window.fromUtc) < Date.parse(window.toUtc));
       assert.ok(Array.isArray(window.vendors) && Array.isArray(window.people));
+    }
+  });
+  test('rounds per 1 %, where the server derives it, is a list of named windows — a figure a number or null with its reason, never 0 standing in (story 6.2)', () => {
+    // Absent from a server older than story 6.2 — this request runs against the deployed one too.
+    for (const gauge of response.parsedBody.gauges ?? []) {
+      for (const key of ['vendor', 'limitId', 'unavailable', 'missingConsumer']) {
+        assert.strictEqual(typeof gauge[key], 'string', key);
+      }
+      assert.ok(Number.isInteger(gauge.windowMins) && Number.isInteger(gauge.intervals));
+      assert.ok(gauge.roundsPerPercent === null ? gauge.unavailable.length > 0 : gauge.roundsPerPercent > 0, JSON.stringify(gauge));
     }
   });
 }}
