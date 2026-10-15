@@ -19,7 +19,17 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-15 · mcp **0.54.0** and extension **0.74.0** (released) · server **0.12.0** deployed — the box
+Last verified: 2026-10-16 · mcp **0.56.0** and extension **0.76.0** (released) · server **0.12.0** deployed — the box
+serves 0.12.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; item 2 first read 0.75.0 and passed
+on the seventh minute, the Marketplace's known lag; manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
+`MCP_VERSION=0.56.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.76.0`. The
+`mcp-v0.56.0` and `extension-v0.76.0` release runs succeeded. In these: #823 (Vibe homes under one short root and
+under the path limit, a conversation's second turn, `launch-refused`, a 20-turn cap on consultant launches, private
+`coai-vh`/`coai-vibe` folders, the Vibe homes folder setting), #829 (a code round records the size of its change) and
+#828 (measurement scripts and fixtures only). Live on the released binary: a Vibe review round, a two-turn consultation
+and a question row all answered (research/RESULTS_vibe_confinement.md §29).
+
+Previously verified: 2026-10-15 · mcp **0.54.0** and extension **0.74.0** (released) · server **0.12.0** deployed — the box
 serves 0.12.0 · automated items 1, 2, 7, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 6 and 12 were
 not run. **Items 8 and 11 observed** on the deploy's own canary (run of 2026-10-14 10:34 UTC) — one real review per
 configured vendor: `codex: done`, `antigravity: done`, `claude: done`. Also on the box: `systemctl show coai-server -p
