@@ -620,6 +620,19 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
 // ---------------------------------------------------------------------------------------------
 // The section around the callers' picks: the caps and the prompt box
 
+
+test('the Vibe homes folder box shows what is saved, and the server\'s word that it is missing beside it', () => {
+  const finding = { key: 'coai.vibeHomesDirectory', place: 'consultants/consultant', value: 'D:\\homes', family: 'windows', state: 'missing', owner: '' } as const;
+
+  const plain = consultantBody(DEFAULT_CONSULT, { vibeHomes: 'D:\\homes' }, '');
+  const marked = consultantBody(DEFAULT_CONSULT, { vibeHomes: 'D:\\homes', vibeHomesFinding: finding }, '');
+
+  assert.match(plain, /id="vibeHomesDirectory"[^>]*value="D:\\homes"/u);
+  assert.doesNotMatch(plain, /path-note/u);
+  assert.match(marked, /aria-invalid="true"/u);
+  assert.match(marked, /class="hint path-note"[^>]*>.*missing — not found on this machine \(Windows\)/su);
+});
+
 test('the three caps are on screen with the numbers in force', () => {
   const html = consultantBody({ ...DEFAULT_CONSULT, turns: 3, callsPerSession: 4, idleMinutes: 30 }, {}, '');
 

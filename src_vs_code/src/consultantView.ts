@@ -12,6 +12,8 @@
 import { ConsultSettings } from './consultSettings';
 import { escapeHtml } from './escapeHtml';
 import { help } from './panelControls';
+import { type PathFinding } from './pathFindings';
+import { markAttributes, markClass, markNote } from './pathMark';
 
 /** What the section needs beyond the settings themselves. */
 export interface ConsultantViewState {
@@ -19,6 +21,8 @@ export interface ConsultantViewState {
   readonly consultPrompt?: string | undefined;
   /** `coai.vibeHomesDirectory` as saved — the folder Mistral Vibe's homes live under; empty is the server's default. */
   readonly vibeHomes?: string | undefined;
+  /** What the server said about that folder (`COAI_CONSULTANT_HOMES` in its `settingProblems`) — missing, or could not be checked. */
+  readonly vibeHomesFinding?: PathFinding | undefined;
 }
 
 /**
@@ -48,7 +52,7 @@ ${callerRows}
   <label for="consultIdleMinutes">${help('consultIdleMinutes')}Close an idle consultation after, minutes</label>
   <input type="number" id="consultIdleMinutes" min="1" max="240" data-setting="consultIdleMinutes" value="${consult.idleMinutes}">
 </div>
-${vibeHomesField(state.vibeHomes ?? '')}
+${vibeHomesField(state.vibeHomes ?? '', state.vibeHomesFinding)}
 ${promptField(state.consultPrompt ?? '')}
 <div class="hint">A consultation leaves a thread in the vendor's own store holding this repository's uncommitted change — that is what makes a follow-up possible, and it is not ours to delete.</div>`;
 }
@@ -57,10 +61,11 @@ ${promptField(state.consultPrompt ?? '')}
  * Where Mistral Vibe's homes live — `COAI_CONSULTANT_HOMES` on the wire. A plain text setting: the server judges it (a full local
  * path that exists, which coai then makes private) and says so in the refusal a launch carries, so the box asks nothing itself.
  */
-function vibeHomesField(value: string): string {
-  return `<div class="field">
+function vibeHomesField(value: string, finding: PathFinding | undefined): string {
+  return `<div class="field${markClass(finding)}">
   <label for="vibeHomesDirectory">${help('vibeHomesDirectory')}Vibe homes folder</label>
-  <input type="text" id="vibeHomesDirectory" data-setting="vibeHomesDirectory" value="${escapeHtml(value)}" placeholder="default: your local application data" spellcheck="false">
+  <input type="text" id="vibeHomesDirectory" data-setting="vibeHomesDirectory" value="${escapeHtml(value)}" placeholder="default: your local application data" spellcheck="false"${markAttributes(finding)}>
+  ${markNote(finding)}
   <div class="hint">Short, local, and made by you: coai keeps Mistral Vibe's homes here — session transcripts of the code under review and its copy of your repository — in folders only you can open.</div>
 </div>`;
 }

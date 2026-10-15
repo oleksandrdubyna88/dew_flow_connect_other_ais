@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  agreed,
   type PathFinding,
   type PathValue,
   type Presence,
@@ -16,7 +17,7 @@ import {
   probeKindOf,
   probeable,
 } from '../pathFindings';
-import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from '../pathSettings';
+import { DATA_DIRECTORY, QCONSULT_ROOTS, VENDOR_EXECUTABLE, VIBE_HOMES, WATCHED_DIRECTORIES } from '../pathSettings';
 
 /**
  * The findings model (research/PLAN_paths_per_side.md E5.1): what the disk said about a path of THIS side, as the one value
@@ -127,4 +128,16 @@ test('the notice says "not found now", names the place, and never says "deleted"
 test('the mark beside a value carries the word missing in red, or "could not be checked" in the warning tone', () => {
   assert.match(markSentence(MISSING), /^missing — not found on this machine \(Windows\) just now$/u);
   assert.match(markSentence(UNKNOWN), /^could not be checked on this machine \(Windows\)/u);
+});
+
+test('the server saying COAI_CONSULTANT_HOMES is missing becomes a finding on the Vibe homes folder, which the page marks and the notice names', () => {
+  const found = agreed([], [{ key: 'COAI_CONSULTANT_HOMES', kind: 'missing-folder', value: 'D:\\homes ', sentence: 'x' }], 'windows');
+
+  assert.equal(found.length, 1);
+  assert.equal(found[0]?.key, VIBE_HOMES.id);
+  assert.equal(found[0]?.place, 'consultants/consultant');
+  assert.equal(found[0]?.value, 'D:\\homes');
+  assert.equal(found[0]?.state, 'missing');
+  assert.match(missingTitle(found[0]!), /^The Vibe homes folder D:\\homes was not found on this machine \(Windows\) just now — a Vibe launch is refused until it exists/u);
+  assert.match(missingCure(found[0]!), /Create a short local folder of your own/u);
 });

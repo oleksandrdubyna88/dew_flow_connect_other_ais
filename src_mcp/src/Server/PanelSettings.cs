@@ -384,6 +384,24 @@ public sealed record PanelSettings
     /// </remarks>
     public string ConsultantHomesRoot { get; init; } = string.Empty;
 
+    /// <summary>
+    /// A <c>COAI_CONSULTANT_HOMES</c> that cannot hold coai's Vibe folders, said at startup with its stored value and a KIND the Settings
+    /// page marks — the extension takes the server's word for this setting, and every launch would otherwise be the first to say so. A path
+    /// that is not a full local one is "unreadable" (a 'missing' mark on a share would lie), a local one that is not there is "missing".
+    /// Unset means the local application data, which needs no check.
+    /// </summary>
+    private static IEnumerable<UnrecognisedSetting> HomesRootProblems(Func<string, string?> env)
+    {
+        if (env("COAI_CONSULTANT_HOMES") is not { Length: > 0 } homes || Runners.Files.PrivateFolder.RootRefusal(homes) is not { Length: > 0 } sentence)
+        {
+            return [];
+        }
+
+        var kind = Runners.Files.PrivateFolder.IsFullLocalPath(homes) ? SettingProblemKinds.MissingFolder : SettingProblemKinds.UnreadableFolder;
+
+        return [new UnrecognisedSetting("COAI_CONSULTANT_HOMES", sentence, kind, homes.Trim())];
+    }
+
     /// <summary><c>COAI_CONSULTANT_HOMES</c> when set, else the person's local application data.</summary>
     private static string HomesRootOf(Func<string, string?> env) =>
         env("COAI_CONSULTANT_HOMES") is { Length: > 0 } homes ? homes : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -945,6 +963,7 @@ public sealed record PanelSettings
                 .. customCommands.Complaints.Select(
                     complaint => new UnrecognisedSetting(CommandsSetting.Key, complaint)),
                 .. questions.Complaints,
+                .. HomesRootProblems(env),
             ],
             QuestionConsult = questions.Settings,
             CommandModels = commandModels.Map,

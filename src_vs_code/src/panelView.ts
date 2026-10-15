@@ -89,7 +89,7 @@ import { hostFamily } from './hostSide';
 import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
-import { DATA_DIRECTORY, VENDOR_EXECUTABLE, WATCHED_DIRECTORIES } from './pathSettings';
+import { DATA_DIRECTORY, VENDOR_EXECUTABLE, VIBE_HOMES, WATCHED_DIRECTORIES } from './pathSettings';
 import { type SidesView } from './sidesSeen';
 import { sidesSeenHtml } from './sidesSeenView';
 import { droppedFor, type DroppedValue } from './cliPathKeep';
@@ -563,7 +563,8 @@ export function consultantSection(state: PanelState, callerRows: string): string
     + vaultKeySplit(state)
     // Each caller's pick carries its own health block (`consultantPicks.ts`); the body draws the switch, the caps and
     // the prompt around the picks.
-    + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt, vibeHomes: state.settings.vibeHomesDirectory }, callerRows)
+    + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt, vibeHomes: state.settings.vibeHomesDirectory,
+      vibeHomesFinding: findingFor(state.pathFindings ?? [], VIBE_HOMES.id, state.settings.vibeHomesDirectory) }, callerRows)
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);
