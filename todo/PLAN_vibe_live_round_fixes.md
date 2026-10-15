@@ -1,7 +1,9 @@
 # PLAN — a Vibe home stays under MAX_PATH, survives its second turn, and a refusal says what it is
 
-> Status: **plan only, nothing implemented yet, 2026-10-15 (revised the same day after the plan gate, an independent
-> review and the M-V17 measurement — see §11).** Scope: every Vibe home site (`src_mcp/runners/Vibe/`,
+> Status: **code implemented on branch `fix/vibe-home-short-path`, 2026-10-15 (D1–D8 and scenarios A–F, K built red-first; D7 per the
+> security review). Open: the DoD's live Vibe round, two-turn consult and question row through the built server, and the plan's promotion
+> to `research/` once they are recorded.** The plan was revised the same day after the plan gate, an independent review and the M-V17
+> measurement — see §11. Scope: every Vibe home site (`src_mcp/runners/Vibe/`,
 > `src_mcp/src/Server/Rounds/`, `src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs`,
 > `src_mcp/src/Server/Consultation/`), the home validation's admitted names (`shared/vibe-home-manifest.json`,
 > `scripts/vibe-home-manifest.mjs`), the consult failure kinds (`src_mcp/runners/Consultation/`,
@@ -292,25 +294,37 @@ the flag's own unit (gate G3):
   second is a confinement question: both are extracted into
   [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
 
-**D7 — SECURITY — Fable reviews. coai's folders under the homes root are private to the person, and a pre-existing one
-that is not is refused.** The root may now be a folder the person picks (D8), and the obvious short choice — a folder at
-a drive's root — inherits `Authenticated Users: Modify` on everything created in it: another local user could read a
-home's session transcript (the reviewed code) or swap a file between the launch control's check and Vibe's read. So:
-- coai creates `<root>\coai-vh` and `<root>\coai-vibe` (and nothing above them) with a PROTECTED DACL — the current user,
-  SYSTEM and Administrators full control, inheritance from the parent cut — through
-  `FileSystemAclExtensions.Create(DirectoryInfo, DirectorySecurity)` (in-box on Windows; if it is not, the NuGet policy
-  applies), Windows only.
-- A `coai-vh` or `coai-vibe` that already exists is used only when its OWNER is the current user and its DACL grants
-  nobody but the three above any right; otherwise every Vibe launch under it is refused: *"{folder} is not private to
-  you (owner {owner}; {who} may {rights}) — coai keeps Vibe's homes only in a folder only you can open; delete it, or
-  choose another Vibe homes folder"*. An upgrade's existing `%LOCALAPPDATA%\coai-vibe` passes (its owner is the user and
-  LocalAppData's ACL is the user's) — a test pins it, so the check cannot lock out every current user.
-- The D2 sentence names no example folder (`C:\coai` was dropped: it is exactly the shared root D1 rejects as a default;
-  with this decision it is safe, but the sentence should not depend on a decision a reviewer may still change).
-- Off Windows nothing (D18). Links: `ReserveOneShot` refuses a `coai-vh` that is a link before making anything under it,
-  and the launch control refuses a home with a link anywhere from `coai-vh`/`coai-vibe` down (`OwnedPaths.FirstLink`, as
-  `ConsultantPlaces.MadeThrough` does, `ConsultantPlaces.cs:163-173`) — checks by path that narrow, not close, the race
-  (the D20 wording).
+**D7 — SECURITY — coai's folders under the homes root are private to the person, through ONE type** (implemented per the security review
+of 2026-10-15, ACCEPT-WITH-CHANGES). The root may be a folder the person picks (D8), and a folder at a drive's root inherits
+`Authenticated Users: Modify`; another local user could read a home's transcript (the reviewed code) or coai's copy of the tree. So every
+entry into `<root>\coai-*` goes through `PrivateFolder` (`src_mcp/runners/Files/PrivateFolder.cs`; a structural test fails on any other
+`Path.Combine` with the root or a `coai-*` name): `VibeHomes.ReserveOneShot` and `SweepOneShot`, `ConsultantPlaces.OwnedAsync`,
+`ConsultantHomeSweep`'s pass and `close_consult`.
+- **The root** must be absolute, not UNC, not `\\?\`, and must EXIST — coai never creates it ("the Vibe homes folder {root} does not
+  exist — create a short local folder of your own and name it in ConnectOtherAIs (COAI_CONSULTANT_HOMES)"). The root's own DACL and everything
+  above it are not judged. The server validates `COAI_CONSULTANT_HOMES` against this, however the value came in.
+- **Create** atomically with the DACL (`new DirectoryInfo(path).Create(security)`): protected, three `FullControl` Allow entries
+  (container+object inherit) for the current user, LocalSystem and BuiltinAdministrators — SIDs, never names; the owner is not set.
+  `CreateDirectory` returns silently on an existing folder, so the create proves nothing and step 3 runs every time.
+- **Verify by HANDLE** (`CreateFileW` with backup semantics, share read+write): `GetFinalPathNameByHandleW` must equal `<canonical root>\<name>`
+  component by component (refuses a junction, a symlink, a swap); `GetSecurityInfo` reads owner and DACL; a failed open or read is a refusal.
+  The owner must be the token user or Administrators (an elevated session creates folders owned by Administrators). When the owner passes
+  but the DACL is not exactly the three entries (another SID, a Deny, inherited entries, Everyone), it is RE-ACLed through the handle
+  (`SetSecurityInfo`, which propagates to existing children and migrates a 0.53/0.54 `coai-vibe` tree), re-read, and one line says
+  "made {path} private; {who} could {read/modify} it until now". A foreign owner is refused: "{path} is not private to you (owner {owner};
+  {who} may {rights}) — … delete it, or choose another Vibe homes folder in ConnectOtherAIs (COAI_CONSULTANT_HOMES)".
+- **The handle is held** for the reservation's life, share read+write without delete. Measured (E7): a handle that asks only for attributes
+  and security records no share mode and blocks nothing; asking for `FILE_LIST_DIRECTORY` as well makes `Directory.Move` throw
+  `IOException`, so the folder cannot be renamed or swapped while it is held.
+- **Below `coai-*`** no ACL checks: `<8>` is created fresh; the link checks stay; `VibeLaunch.HomeMade` refuses a home whose parent does not
+  exist instead of creating the chain. A Vibe export (the whole conversation) lives beside the home in the owned folder, not in TEMP.
+- **Off Windows** the same type: `0700` on create; an existing folder must not be a symlink and must have no group or other bits (refused
+  naming the mode); the owner uid is not checked (a stated limit).
+- **Limits:** a local administrator and SYSTEM are outside the threat model; the root and everything above it belong to the person;
+  re-ACLing does not undo contents planted while the folder was wide (the per-launch home check judges those; the log says the
+  transcripts were readable until now); a `coai-vh` pre-created by another user on a C:\-style root cannot be deleted by the victim — choose another folder.
+- **CI:** a `windows-latest` job runs the MCP suite; the runner is elevated, so E1 accepts owner in {user, Administrators} and E5 skips
+  without `SeRestorePrivilege`.
 
 **D8 — the homes root is a panel setting** (the owner's rule: every action is a panel control). The extension has none
 today: nothing in `src_vs_code/src` writes `COAI_CONSULTANT_HOMES`. A setting `coai.vibeHomesDirectory` (a folder;
@@ -409,14 +423,20 @@ below is then the assertion, never a compile error.
 | D5 | The catalogue: `ConsultFailureTests`' reflection test and `src_vs_code/src/test/consultantHealth.test.ts` pass with `launch-refused` on both sides. | the reflection test names the word missing from the JSON |
 | D6 | End to end: a Vibe conversation turn on a home holding a `hooks.toml`, and one whose home would pass the budget (a homes root of 90 characters, Windows budget) → the record's `failureKind` is `launch-refused`, the answer quotes the whole sentence — `delete <home>` in the first, `COAI_CONSULTANT_HOMES` in the second — and never "install it with uv". | `failureKind` `cli-not-found`, the cure cut at 240 |
 
-### E. The private root (D7 — the scenarios Fable's review may change)
+### E. The private root (D7, as the security review left it)
 
 | # | Given / When / Then | Expected red |
 |---|---|---|
-| E1 | Windows only (skipped elsewhere, said in the skip reason): `ReserveOneShot(root)` on a fresh `testsToDelete-vh-acl-*` root → `coai-vh`'s DACL is protected and grants only the current user, SYSTEM and Administrators. | stub: the folder inherits its parent's ACL |
-| E2 | A `coai-vh` made beforehand with an extra ACE (`Everyone: Read`) → `Refused`, the sentence naming the folder and `Everyone`; nothing made under it. | reserved |
-| E3 | A `coai-vibe` and `coai-vh` as the CURRENT user's `%LOCALAPPDATA%` children are made (a copy of that ACL shape in a test root: owner = user, inherited user-only ACEs) → accepted — the upgrade path. | refused once E2 is naive about inheritance |
-| E4 | `ConsultantPlaces.ForConversationAsync` under a root whose `coai-vibe` fails E2's check → `Refused` with the sentence. | the conversation starts |
+| E1 | A fresh root: `Open` gives a protected DACL with exactly the three FullControl CI/OI Allow ACEs; owner in {user, Administrators}. | stub (plain `CreateDirectory`): `Expected security.AreAccessRulesProtected to be True … but found False` |
+| E2 | A user-owned `coai-vh` with `Everyone: Read` is Opened, the DACL is now exactly the three, and the log names Everyone. | `AreAccessRulesProtected` False |
+| E2b | A Deny ACE for Users is gone after `Open`. | as E2 |
+| E3 | The `%LOCALAPPDATA%` shape `coai-vibe\<id>\h\file`: the child file's ACL is the three (propagation). | as E2 |
+| E4 | `coai-vh` a junction to a private folder: Refused, the sentence names the path, nothing made. | `Expected … Refused, but found … Opened` |
+| E5 | Owner set to SYSTEM under `SeRestorePrivilege` (else skipped, with the reason): Refused naming `NT AUTHORITY\SYSTEM` and `COAI_CONSULTANT_HOMES`. | Opened |
+| E6 | `ForConversationAsync` and the sweep on a root whose `coai-vibe` is a junction: Refused, 0 swept, a warning. | the conversation started |
+| E7 | With an Opened handle held, `Directory.Move` throws `IOException`. | `Expected a <IOException> to be thrown … but no exception was thrown` (until the handle asked for a data right) |
+| E8 | A missing root: Refused with the "does not exist" sentence, nothing created. | Opened (the folder was created) |
+| E9 | Unix legs: `Open` creates 0700; a pre-existing 0755 is Refused naming 755. | — |
 
 ### K. A Vibe consultant launch stops at 20 turns and says why (defect 4, D6)
 
@@ -601,6 +621,10 @@ the session written and resumed, the home validation still passing (does `\\?\` 
       answered, recorded in RESULTS (the parent plan's DoD row this fix unblocks).
 
 ## 11. Gate and review — what changed (2026-10-15)
+
+- **D7 per the security review, 2026-10-15** (ACCEPT-WITH-CHANGES): one `PrivateFolder` type is the only entry into `<root>\coai-*`; the
+  root must exist and is never created; folders are made with a protected DACL and verified by handle (path, owner, DACL), re-ACLed when
+  only the DACL is wrong and refused when the owner is another; the handle is held; the export moves beside the home; a `windows` CI job.
 
 The coai plan gate returned `proceed` with three accepted findings; an independent Opus review returned REVISE with six
 blocking findings and a set of minor ones. Each, and where it landed:

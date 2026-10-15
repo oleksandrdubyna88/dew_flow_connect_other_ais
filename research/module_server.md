@@ -7173,3 +7173,22 @@ step after the release, recorded then in research/RESULTS_vibe_confinement.md an
   turn budget. Past it the place is refused — *"copying the granted folders took longer than the row's budget (N s): k of
   m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
   starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).
+
+## Where the Vibe homes are made, owned and swept (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+
+- **The homes root** is `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else the local application data). The extension's
+  *Vibe homes folder* setting `coai.vibeHomesDirectory` writes it into the settings file; the environment still wins. It must be a full
+  local path that EXISTS, and every entry into `<root>\coai-*` goes through `PrivateFolder.Open`. A refusal reaches the person as
+  `launch-refused` for a consultation and a check, as `refused` for a question row, and leaves the Vibe rows out of a round with the
+  sentence.
+- **A round**: `RosterBuilder.ScratchAsync` reserves a one-shot folder (`RoundScratch.Reserve(note, homesRoot, keepsAHome)`) only when a
+  runnable row's runtime says `KeepsAHome` (`IReviewerRuntime`). `SettingsFor` hands a home-keeping reviewer
+  `RoundScratch.MadeHomeFolder()` (the reservation, else the round's own scratch folder, made here because the launch control makes no
+  chain). `RoundScratch.Dispose` deletes the home after the scratch. `RosterBuilder.PlaceFor` refuses a home-keeping row when the
+  reservation was refused.
+- **A question row** (`QuestionRowLaunch(..., homesRoot)`, passed by `QuestionFanOut`) reserves its folder per run, keeps the copies and
+  the empty `cwd` in its TEMP scratch, and releases the folder in `finally`. **The consultant check** (`ConsultantCheckTurn.TurnAsync`)
+  does the same for one turn. **A conversation** keeps `<root>\coai-vibe\<id>` with its home `h`, and its homes folder's pinned handle
+  sits in the place's held list (`ConsultantPlaces.OwnedAsync`).
+- **Sweeps**: `PanelService.PruneOldAnswerDirs(homesRoot)` also calls `VibeHomes.SweepOneShot`; `ConsultantHomeSweep.Pass.Over` and
+  `SettleOne` (`close_consult`) open each homes folder through `PrivateFolder` first, and a refused one is said and walked by nothing.

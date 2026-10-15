@@ -3305,3 +3305,64 @@ fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
   before every launch) as `vibe 2.26.1` — never Vibe's raw line, which begins with the interpreter's path under the
   person's profile — through `ReviewerLaunch` and `ReviewerOutcome.CliVersion` to the line's `cliVersion`, when the row's
   own options carry none (`UsageLedger.VersionedBy`).
+
+## A Vibe home stays under MAX_PATH, is private to the person, and a consultant launch is capped (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+
+Four defects of the first live runs (RESULTS §27, §28), fixed together:
+
+```mermaid
+flowchart TD
+  L[VibeLaunch.TakeAsync] --> H[host D18] --> E[built environment D17] --> B[VibePathBudget.Refusal home]
+  B -->|over 102 characters on Windows| R[launch-refused: sentence names the number and COAI_CONSULTANT_HOMES]
+  B -->|fits| M[model D10] --> P[HomeMade: parent must exist] --> T[home turn] --> V[vibe --version] --> C[VibeHome.Refusal shape then hashes]
+  subgraph sites [every home is under one root]
+    RR[round: RoundScratch.Reserve] --> OS[VibeHomes.ReserveOneShot] --> PF[PrivateFolder.Open root coai-vh]
+    QR[question row / check] --> OS
+    CV[conversation: ConsultantPlaces.OwnedAsync] --> PF2[PrivateFolder.Open root coai-vibe]
+  end
+```
+
+- **`VibePathBudget`** (`Vibe/VibePathBudget.cs`) is the one adapter for the path numbers: Windows `FileLimit 259`, `DeepestChild 156`
+  (Vibe writes `logs\session\unified\<36>\chunks\.<64 hex>.json.<16 hex>.tmp` below its home: 134 persisted plus 22 for the atomic
+  write), counted in UTF-16 units. There is no budget off Windows (D18 refuses Vibe there first) and no long-paths exemption (the
+  registry flag is not proof that Vibe's interpreter is long-path aware; M-V18 measures it). It is resolved once in `VibeRuntime`'s
+  constructor from the PROCESS's platform (`ForThisProcess`), with `VibePathBudget.None` for a test and an `AsyncLocal` seam (`Using`)
+  for a scenario that drives the real service. It is checked in `VibeLaunch.TakeAsync` right after the environment, before the home
+  is made or `--version` runs. Home lengths at the default root: round `47 + u` (fits a 55-character profile name), row and check
+  `42 + u` (60), conversation `68 + u` (34).
+- **`VibeHomes`** (`Vibe/VibeHomes.cs`) makes `<root>\coai-vh\<8 hex>`. `ReserveOneShot` returns an `OneShotReservation` (`None` for an
+  empty root, so settings built by hand keep their old scratch home; `Refused(sentence)`; `Reserved(OneShotHome)`). The `OneShotHome`
+  holds the folder's `coai-turn.lock` and the private folder's handle for its life and deletes the folder on every way out.
+  `SweepOneShot` (called from `PanelService.PruneOldAnswerDirs(homesRoot)`, at most every ten minutes) removes a folder older than six
+  hours under its lock; the lock, not the age, protects a live home across two servers on one root, and a link is never entered.
+  `coai-vh` is a sibling of `coai-vibe` OUTSIDE `ConsultantHomes.All`, so the D20 conversation sweep never judges it. Home names: round
+  `<8>\<6 hex of provider/role>`, row and check `<8>\h`, conversation `<id>\h`. A Vibe export lives beside the home in the same owned
+  folder (`VibeRuntime.OwnedOr`), outside `VibeHome.Refusal`'s walk.
+- **`PrivateFolder`** (`Files/PrivateFolder.cs`, D7 per the security review) is the ONE entry into `<root>\coai-*`; a structural test
+  (`PrivateFolderTests.EveryEntryIntoACoaiFolderUnderTheHomesRoot_GoesThroughPrivateFolder`) fails on any other `Path.Combine` with the
+  root or a `coai-*` name. The root must be absolute, local and EXIST (coai never creates it). On Windows a missing folder is created
+  atomically with a protected DACL of the person, SYSTEM and Administrators (SIDs). Every folder is then verified BY HANDLE: its final
+  path must equal `<canonical root>\<name>` component by component (a link or a swap is refused), its owner must be the person or
+  Administrators (another owner is refused, naming it), and its DACL must be exactly the three Allow entries. A wrong DACL on the
+  person's own folder is re-ACLed through the handle (migrating an older tree, children included) with one log line saying who could
+  read or modify it until now. The handle is held without `FILE_SHARE_DELETE` and with a data right (a handle of attributes alone
+  records no share mode; measured by E7, after which the folder cannot be renamed). On Unix the folder is `0700`, not a symlink, with
+  no group or other bits; the owner uid is not checked. Limits: a local administrator and SYSTEM are outside the threat model;
+  re-ACLing does not undo contents planted while the folder was wide (the per-launch home check judges those); a `coai-*` folder
+  another user made first on a shared root cannot be deleted by the person, so the cure is another folder. `VibeLaunch.HomeMade` makes
+  only the home, never the chain above it.
+- **A launch-control refusal is `launch-refused`.** `ReviewerOutcome.NotStarted.ByLaunchControl` is set from `LaunchTurn`, whose
+  `CliMissing` marks the one refusal that IS a missing CLI (`Win32Exception` 2 or 3 from `--version`). `ConsultFailure.LaunchRefused`
+  (`shared/consult-failure-kinds.json`, the extension's label map) keeps the whole sentence under `Redaction.TitleLimit`, so its cure
+  ("delete {home}", "set COAI_CONSULTANT_HOMES") reaches the person. A `--version` that started and printed no release is
+  `launch-refused` with both cures.
+- **A second turn starts on the home its first left.** In the manifest (`shared/vibe-home-manifest.json`, generated by
+  `scripts/vibe-home-manifest.mjs`), `logs/session/plugins/tmp/**` joins `varying` (Vibe's re-digested staging folder, judged before
+  the pinned prefix, starters still refused) and the new `varyingFolders` admits `logs/session/plugins/data/*/**` as EMPTY folders
+  only; Vibe adopts a plugin's runtime code from there unchecked, so any file is refused. `deepestChild` is recorded per version (156
+  for 2.26.1, by hand once, from run 2's failing path).
+- **`VibeLimits.ConsultantTurns = 20`.** `VibeConsultant.Build` adds `--max-turns 20` after `--time-limit` (question row, conversation
+  turn, consultant check); a review (`VibeRuntime.Build`, retry, repair) never carries it. `WhyItFailed` says `turn_limit` and
+  `token_limit` as coai's sentence ("Vibe cannot list a folder, so name the files"), and `ConsultFailures` prefers the adapter's
+  reading over a stderr label when nothing in stderr is recognised. The cause (no listing) is
+  [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
