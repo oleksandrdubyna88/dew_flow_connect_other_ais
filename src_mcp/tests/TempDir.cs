@@ -12,6 +12,8 @@ namespace CoaiMcp.Tests;
 /// a file open — a spawned CLI, a SQLite handle, a reader mid-poll — and a leftover temp directory
 /// is not a failing test. What catches those leftovers is <see cref="TempDirsAreSwept"/>, which runs
 /// once per assembly; this only means there are far fewer for it to find.</para>
+/// <para>That re-throw happens inside <c>Dispose</c>, so in an unwinding <c>using</c> it HIDES the failure that started the unwind: read the
+/// inner exception of a test that fails with <c>LinkTargetLostException</c> before blaming the link.</para>
 /// <para><b>Read-only files and folders are cleared first</b>, by the product's own deleter. Git marks every object file read-only and
 /// <c>Directory.Delete(recursive: true)</c> refuses one with <c>UnauthorizedAccessException</c> — so
 /// a directory that ever held a clone could not be removed at all, which is how 5,476 of them

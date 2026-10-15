@@ -228,7 +228,9 @@ public sealed class TempDirsAreSwept
     public void EveryProductDeleterIsTheSharedOne()
     {
         var program = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var raw = new System.Text.RegularExpressions.Regex(@"Directory\.Delete\([^;]*?(recursive:\s*true|,\s*true\s*\))");
+        // `Directory.Delete(path, <anything but a literal false>)` — a flag in a variable counts — and `DirectoryInfo.Delete(true)`.
+        var raw = new System.Text.RegularExpressions.Regex(
+            @"Directory\.Delete\((?:[^;(),]|\([^;()]*\))+,(?>\s*)(?!false\b|recursive:\s*false\b)|\.Delete\(\s*(?:recursive:\s*)?true\s*\)");
         var seen = new List<string>();
         foreach (var folder in (string[])["src", "runners", "core"])
         {

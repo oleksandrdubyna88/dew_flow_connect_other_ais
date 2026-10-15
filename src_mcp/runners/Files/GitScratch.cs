@@ -17,6 +17,24 @@ public static class GitScratch
 
     private static readonly AsyncLocal<Action<string>?> _afterUnlink = new();
 
+    /// <summary>TEST ONLY — null in the product: runs after the pause and before the second listing of a target that seemed to lose a name, so a test can make a concurrent rename settle in that window.</summary>
+    internal static Action<string>? BeforeRelist
+    {
+        get => _beforeRelist.Value;
+        set => _beforeRelist.Value = value;
+    }
+
+    private static readonly AsyncLocal<Action<string>?> _beforeRelist = new();
+
+    /// <summary>TEST ONLY — null in the product: told the path of every target the deleter is about to READ, so a test can prove which targets it never touches.</summary>
+    internal static Action<string>? Reading
+    {
+        get => _reading.Value;
+        set => _reading.Value = value;
+    }
+
+    private static readonly AsyncLocal<Action<string>?> _reading = new();
+
     /// <summary>Deletes <paramref name="dir"/> and everything in it, read-only files included — and never anything a link in it points at.</summary>
     /// <remarks>
     /// <para><c>Directory.Delete(recursive: true)</c> refuses a READ-ONLY file with
@@ -99,7 +117,7 @@ public static class GitScratch
     {
         var isDirectory = File.GetAttributes(link).HasFlag(FileAttributes.Directory);
         var target = Junctions.Target(link);
-        var before = Look(target, isDirectory);
+        var before = Look(target, isDirectory).Without(ItsOwnNameInItsParent(link, target));
 
         if (isDirectory)
         {
@@ -111,21 +129,25 @@ public static class GitScratch
         }
 
         AfterUnlink?.Invoke(link);
-        Verify(link, target, before, Look(target, isDirectory));
+        Verify(link, target, before, isDirectory);
     }
 
     /// <summary>
     /// What the folder a link points at held — for a file link, whether the file is there — as the entry names it could be
     /// listed by. <see cref="Held.Known"/> is false when there was nothing to read (a dangling link, an unreadable folder):
-    /// the unlink by name was always safe, and nothing is said.
+    /// the unlink by name was always safe, and nothing is said. A target that is not on a local drive (a share, a device path, a
+    /// relative name, a mapped network drive) is NEVER read: reading one connects out — Windows sends NTLM — or waits out the SMB
+    /// timeout, on every sweep, from a link anybody could plant in a scratch folder.
     /// </summary>
-    private static Held Look(string target, bool isDirectory) =>
-        target.Length == 0 ? Held.Unread : Readable(isDirectory ? () => Listed(target) : () => OneFile(target));
+    internal static Held Look(string target, bool isDirectory) =>
+        !Junctions.IsLocal(target) ? Held.Unread : Readable(target, isDirectory ? () => Listed(target) : () => OneFile(target));
 
-    private static Held Readable(Func<Held> read)
+    private static Held Readable(string target, Func<Held> read)
     {
         try
         {
+            Reading?.Invoke(target);
+
             return read();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -139,20 +161,45 @@ public static class GitScratch
 
     private static Held OneFile(string file) => File.Exists(file) ? new Held(true, [Path.GetFileName(file)]) : Held.Unread;
 
-    private static void Verify(string link, string target, Held before, Held after)
+    private static void Verify(string link, string target, Held before, bool isDirectory)
     {
         if (StillThere(link))
         {
             throw new LinkTargetLostException($"{link} still exists after its unlink — nothing more was deleted");
         }
 
-        var missing = Missing(before, after);
+        var missing = StillMissing(target, before, isDirectory);
         if (missing.Count > 0)
         {
             throw new LinkTargetLostException(
-                $"the folder {target} that {link} pointed at lost {string.Join(", ", missing)} during the unlink — nothing more was deleted; check that folder before deleting {link}'s tree again");
+                $"the folder {target} that {link} pointed at changed while the link was removed: {string.Join(", ", missing)} no longer there — nothing more was deleted; check that folder before deleting {link}'s tree again");
         }
     }
+
+    /// <summary>
+    /// The names missing from the target — and, when any seem to be, asked AGAIN after a short pause and only the ones still
+    /// missing reported: a Kimi refresh rotates a credentials file by temp file and rename, so a name can be absent for a moment
+    /// that is not a loss.
+    /// </summary>
+    private static List<string> StillMissing(string target, Held before, bool isDirectory)
+    {
+        var missing = Missing(before, Look(target, isDirectory));
+        if (missing.Count == 0)
+        {
+            return missing;
+        }
+
+        Thread.Sleep(SettlePause);
+        BeforeRelist?.Invoke(target);
+
+        return Missing(before, Look(target, isDirectory));
+    }
+
+    private static readonly TimeSpan SettlePause = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>A link that points at its own parent folder lists itself there; its own name is the unlink, not a loss.</summary>
+    private static string ItsOwnNameInItsParent(string link, string target) =>
+        Junctions.SameFolder(target, Path.GetDirectoryName(Path.GetFullPath(link)) ?? string.Empty) ? Path.GetFileName(link) : string.Empty;
 
     private static bool StillThere(string link) => OwnedPaths.IsLinkIfThere(link) || Directory.Exists(link);
 
@@ -161,9 +208,11 @@ public static class GitScratch
         before.Known ? [.. before.Names.Except(after.Names, StringComparer.Ordinal)] : [];
 
     /// <summary>What a link's target held at one moment.</summary>
-    private sealed record Held(bool Known, IReadOnlyList<string> Names)
+    internal sealed record Held(bool Known, IReadOnlyList<string> Names)
     {
         public static readonly Held Unread = new(false, []);
+
+        public Held Without(string name) => this with { Names = [.. Names.Where(known => !string.Equals(known, name, StringComparison.Ordinal))] };
     }
 
     private static void DeleteFile(string file)

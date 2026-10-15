@@ -153,7 +153,7 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
             var delete = () => GitScratch.DeleteEvenIfReadOnly(home);
 
             var thrown = delete.Should().Throw<LinkTargetLostException>().Which;
-            thrown.Message.Should().Contain("kimi-code.json").And.Contain(Target);
+            thrown.Message.Should().Contain("kimi-code.json").And.Contain(Target).And.Contain("changed while the link was removed");
         }
         finally
         {
@@ -212,6 +212,8 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
         var tree = _dir.At("tree");
         var link = Path.Combine(tree, "a", "credentials");
         Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        var writable = Path.Combine(Target, "kimi-code.json");
+        await File.WriteAllBytesAsync(writable, Token, TestContext.Current.CancellationToken);
         await DirectoryLink.MakeAsync(new ProcessLauncher(), link, Target);
 
         try
@@ -227,5 +229,113 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
 
         OwnedPaths.IsLinkIfThere(link).Should().BeFalse("the junction itself is removed, by its own name");
         TheTargetIsUntouched();
+        File.ReadAllBytes(writable).Should().Equal(Token, "a WRITABLE file would have been deleted had .NET entered the link");
+    }
+
+    /// <summary>
+    /// E4.1 review B1: the deleter READS a link's target (its names) to verify nothing was lost — so it must never read one that
+    /// is not on a local drive. A link planted in a coai tree pointing at a share would otherwise make every sweep connect out
+    /// (Windows sends NTLM) or wait out the SMB timeout, twice per link, on the round's start path.
+    /// </summary>
+    [Theory]
+    [InlineData(@"\\server\share\k")]
+    [InlineData(@"\\?\C:\somewhere")]
+    [InlineData(@"\\.\pipe\somewhere")]
+    [InlineData(@"\\?\UNC\server\share\k")]
+    [InlineData("relative-folder")]
+    public void ATargetThatIsNotLocal_IsNeverRead(string target)
+    {
+        List<string> read = [];
+        GitScratch.Reading = read.Add;
+        try
+        {
+            var held = GitScratch.Look(target, isDirectory: true);
+
+            held.Known.Should().BeFalse("nothing was read, so nothing is claimed");
+        }
+        finally
+        {
+            GitScratch.Reading = null;
+        }
+
+        read.Should().BeEmpty("a target off the local drives is never listed, however it is spelled");
+    }
+
+    [Fact]
+    public void ALocalTarget_IsRead()
+    {
+        List<string> read = [];
+        GitScratch.Reading = read.Add;
+        try
+        {
+            GitScratch.Look(Target, isDirectory: true).Known.Should().BeTrue();
+        }
+        finally
+        {
+            GitScratch.Reading = null;
+        }
+
+        read.Should().ContainSingle().Which.Should().Be(Target);
+    }
+
+    /// <summary>E4.1 review M1: a name that vanished between the two listings but is back after a pause (a rotation by temp file and rename) is no loss.</summary>
+    [Fact]
+    public async Task ANameThatCameBackAfterAPause_IsNotALoss()
+    {
+        var rotating = Path.Combine(Target, "kimi-code.json");
+        await File.WriteAllBytesAsync(rotating, Token, TestContext.Current.CancellationToken);
+        var home = await HomeWithALinkAsync("credentials");
+        GitScratch.AfterUnlink = _ => File.Delete(rotating);
+        GitScratch.BeforeRelist = _ => File.WriteAllBytes(rotating, Token);
+        try
+        {
+            GitScratch.DeleteEvenIfReadOnly(home);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+            GitScratch.BeforeRelist = null;
+        }
+
+        Directory.Exists(home).Should().BeFalse("the rename settled, nothing was lost, the deletion went on");
+        TheTargetIsUntouched();
+    }
+
+    /// <summary>E4.1 review M1: a link that points at its own parent would report its own name as lost.</summary>
+    [Fact]
+    public async Task ALinkPointingAtItsOwnParent_IsNotAFalseAlarm()
+    {
+        var tree = _dir.At("tree");
+        Directory.CreateDirectory(tree);
+        await File.WriteAllTextAsync(Path.Combine(tree, "own.txt"), "x", TestContext.Current.CancellationToken);
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), Path.Combine(tree, "self"), tree);
+
+        GitScratch.DeleteEvenIfReadOnly(tree);
+
+        Directory.Exists(tree).Should().BeFalse();
+        TheTargetIsUntouched();
+    }
+
+    /// <summary>E4.1 review M6/M10: a question row's scratch whose link target lost a file is a WARNING in its log, naming the path — not the Debug line an ordinary busy file gets.</summary>
+    [Fact]
+    public async Task AQuestionRowsScratchWhoseLinkTargetChanged_IsAWarning()
+    {
+        var other = Path.Combine(Target, "kimi-code.json");
+        await File.WriteAllBytesAsync(other, Token, TestContext.Current.CancellationToken);
+        var home = await HomeWithALinkAsync("credentials");
+        var sink = new ListSink();
+        var log = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
+        GitScratch.AfterUnlink = _ => File.Delete(other);
+        try
+        {
+            CoaiMcp.Server.QuestionRowLaunch.RemoveScratch(home, log);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        sink.Levels.Should().ContainSingle().Which.Should().Be(Serilog.Events.LogEventLevel.Warning);
+        sink.Lines.Single().Should().Contain(home).And.Contain("kimi-code.json");
     }
 }

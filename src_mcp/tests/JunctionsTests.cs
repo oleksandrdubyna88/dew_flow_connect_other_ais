@@ -118,11 +118,13 @@ public sealed class JunctionsTests : IDisposable
     [InlineData("wsl", "is not a local drive path")]
     [InlineData("relative", "is not a local drive path")]
     [InlineData("missing", "does not exist")]
+    [InlineData("target-is-a-file", "is a file, not a folder")]
     [InlineData("target-is-a-junction", "is itself a link, and coai never chains links (D19)")]
     [InlineData("link-is-a-folder", "already exists, and a junction is only ever made at a fresh path")]
     [InlineData("link-is-a-file", "already exists, and a junction is only ever made at a fresh path")]
     [InlineData("link-is-a-link", "already exists, and a junction is only ever made at a fresh path")]
-    [InlineData("too-long", "characters, more than the 32000")]
+    [InlineData("too-long", "a junction's reparse point can name")]
+    [InlineData("too-long-for-the-buffer", "a junction's reparse point can name")]
     public async Task ARefusalBeforeAnythingIsMade(string kind, string sentence)
     {
         OnWindows();
@@ -135,6 +137,10 @@ public sealed class JunctionsTests : IDisposable
             case "wsl": target = @"\\wsl$\Ubuntu\home\k"; break;
             case "relative": target = "k"; break;
             case "missing": target = _dir.At("not-there"); break;
+            case "target-is-a-file":
+                target = _dir.At("a-file");
+                await File.WriteAllTextAsync(target, "x", TestContext.Current.CancellationToken);
+                break;
             case "target-is-a-junction":
                 target = _dir.At("a-junction");
                 await DirectoryLink.MakeAsync(new ProcessLauncher(), target, Target);
@@ -143,6 +149,7 @@ public sealed class JunctionsTests : IDisposable
             case "link-is-a-file": await File.WriteAllTextAsync(link, "x", TestContext.Current.CancellationToken); break;
             case "link-is-a-link": await DirectoryLink.MakeAsync(new ProcessLauncher(), link, Target); break;
             case "too-long": target = @"C:\" + new string('a', 33_000); break;
+            case "too-long-for-the-buffer": target = @"C:\" + new string('a', 4_997); break;
             default: throw new ArgumentOutOfRangeException(nameof(kind), kind, "a row this test does not know");
         }
 
@@ -150,7 +157,7 @@ public sealed class JunctionsTests : IDisposable
         var made = Junctions.Make(HostKind.Windows, link, target);
 
         refusal.Should().Contain(sentence);
-        if (kind == "too-long")
+        if (kind.StartsWith("too-long", StringComparison.Ordinal))
         {
             refusal.Should().Contain(target.Length.ToString(), "the refusal names the number");
         }
@@ -167,11 +174,11 @@ public sealed class JunctionsTests : IDisposable
     }
 
     [Fact]
-    public void AMakeThatCannotBeCompleted_LeavesNothingBehind()
+    public void ATargetThatExistsButOverflowsTheReparseBuffer_IsRefusedBeforeAnythingIsMade()
     {
         OnWindows();
-        // A target path whose two names overflow a reparse point's 16 KiB, under the 32 000 characters Refusal allows: the
-        // buffer is never laid, and the folder made for the link must not outlive that.
+        // A REAL folder whose path overflows a reparse point's 16 KiB (M2 of the E4.1 review): the 32 000-character ceiling the
+        // first draft had let it through to the kernel; the refusal now knows the real bound.
         var deep = Target;
         for (var i = 0; i < 26; i++)
         {
@@ -182,8 +189,85 @@ public sealed class JunctionsTests : IDisposable
 
         var answer = Junctions.Make(HostKind.Windows, Link, deep);
 
-        answer.Should().StartWith($"the junction at {Link} could not be made");
-        NothingIsAt(Link).Should().BeTrue("a half-made link never survives a failed call");
+        answer.Should().Contain("a junction's reparse point can name");
+        NothingIsAt(Link).Should().BeTrue("refused before anything is made — not even the empty folder");
+    }
+
+    [Theory]
+    [InlineData("a-file-for-a-parent")]
+    [InlineData("a-nul-in-the-name")]
+    public void AMakeThatCannotCreateItsFolder_SaysSo_AndLeavesNothingBehind(string kind)
+    {
+        OnWindows();
+        Person("secret.json");
+        var link = kind == "a-file-for-a-parent" ? _dir.At("a-file", "link") : _dir.At("a\0b");
+        File.WriteAllText(_dir.At("a-file"), "x");
+
+        var answer = Junctions.Make(HostKind.Windows, link, Target);
+
+        answer.Should().Match(kind == "a-file-for-a-parent" ? $"the junction at {link} could not be made*" : $"*is not a path a folder can be made at*", "an exception from the file system is a sentence, never an escape");
+        if (kind == "a-file-for-a-parent")
+        {
+            NothingIsAt(link).Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public void AMappedNetworkDrive_IsNotALocalDrive()
+    {
+        OnWindows();
+        Person("secret.json");
+
+        var refusal = Junctions.Refusal(HostKind.Windows, Link, Target, _ => DriveType.Network);
+        var local = Junctions.Refusal(HostKind.Windows, Link, Target, _ => DriveType.Fixed);
+
+        refusal.Should().Contain("is not a local drive path", "a mapped drive looks like C: and lives on a server");
+        local.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ALinkThatCannotBeTakenBackOut_SaysSo()
+    {
+        OnWindows();
+        Person("secret.json");
+        var sibling = _dir.At("somewhere-else");
+        Directory.CreateDirectory(sibling);
+        try
+        {
+            var answer = Junctions.Make(HostKind.Windows, Link, Target, _ => sibling, _ => throw new IOException("locked by somebody"));
+
+            answer.Should().Contain("reads back as").And.Contain("could not be removed: locked by somebody", "the half-trusted link is still there, and the sentence must not say otherwise");
+        }
+        finally
+        {
+            DirectoryLink.Remove(Link);
+        }
+    }
+
+    [Fact]
+    public async Task TheProductsJunction_HasMklinksRawReparseBytes()
+    {
+        OnWindows();
+        Person("secret.json");
+        var mine = _dir.At("product-link");
+        var theirs = _dir.At("mklink-link");
+        Junctions.Make(HostKind.Windows, mine, Target).Should().BeEmpty();
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), theirs, Target);
+
+        var queryMine = await ReparseQueryAsync(mine);
+        var queryTheirs = await ReparseQueryAsync(theirs);
+
+        queryMine.Should().Contain("Reparse Tag Value", "fsutil answered with the reparse data");
+        queryMine.Should().Be(queryTheirs, "the same tag, names and bytes as the junction mklink /J makes for the same target");
+    }
+
+    private static async Task<string> ReparseQueryAsync(string link)
+    {
+        var result = await new ProcessLauncher().RunAsync(
+            new ProcessRequest(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "fsutil.exe"), ["reparsepoint", "query", link], Path.GetDirectoryName(link)!));
+        result.ExitCode.Should().Be(0, $"fsutil: {result.StdErr}{result.StdOut}");
+
+        return result.StdOut.Replace(link, "<link>", StringComparison.OrdinalIgnoreCase);
     }
 
     // ---------- S1.4 ----------
@@ -250,7 +334,7 @@ public sealed class JunctionsTests : IDisposable
         // Two folders of this test, both testsToDelete-: the person's must outlive the deletion of the home to be looked at,
         // and TempDir.Dispose — the tests' own path — removes its folder whole.
         using var persons = TempDir.For("testsToDelete-junc-persons-");
-        var home = TempDir.For("testsToDelete-junc-home-");
+        using var home = TempDir.For("testsToDelete-junc-home-");
         foreach (var name in (string[])["kimi-code-env.json", "kimi-code.json"])
         {
             File.WriteAllBytes(persons.At(name), Token);
@@ -286,13 +370,14 @@ public sealed class JunctionsTests : IDisposable
     {
         OnWindows();
         var scope = TempDir.For("testsToDelete-junc-lost-");
-        var persons = scope.At("persons");
-        Directory.CreateDirectory(persons);
-        File.WriteAllText(Path.Combine(persons, "kimi-code.json"), "{}");
-        Junctions.Make(HostKind.Windows, scope.At("home", "credentials"), persons).Should().BeEmpty();
-        GitScratch.AfterUnlink = _ => File.Delete(Path.Combine(persons, "kimi-code.json"));
         try
         {
+            var persons = scope.At("persons");
+            Directory.CreateDirectory(persons);
+            File.WriteAllText(Path.Combine(persons, "kimi-code.json"), "{}");
+            Junctions.Make(HostKind.Windows, scope.At("home", "credentials"), persons).Should().BeEmpty();
+            GitScratch.AfterUnlink = _ => File.Delete(Path.Combine(persons, "kimi-code.json"));
+
             var dispose = scope.Dispose;
 
             dispose.Should().Throw<LinkTargetLostException>("in a test a lost target is a failing test");

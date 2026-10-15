@@ -1432,34 +1432,43 @@ public sealed class PanelService
         {
             foreach (var dir in (prefixes ?? ScratchPrefixes).SelectMany(p => Directory.EnumerateDirectories(tempRoot, p)))
             {
-                try
-                {
-                    // The LAST WRITE, not the creation: Windows file tunnelling hands a recreated
-                    // name its predecessor's creation time, so a directory made this minute under a
-                    // name used yesterday reads as a day old — and, the other way round, a long
-                    // campaign's directory looks fresh for as long as anything writes into it.
-                    if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except ?? []))
-                    {
-                        DeleteEvenIfReadOnly(dir);
-                    }
-                }
-                catch (Runners.Files.LinkTargetLostException e)
-                {
-                    // A folder a link in the scratch pointed at lost a file during the unlink, and the deletion stopped (E4.1 of
-                    // PLAN_vibe_and_kimi_runtimes_E4.md): the one IOException that is never "fine" — said, not swallowed.
-                    warn?.Invoke(e.Message);
-                }
-                catch (IOException)
-                {
-                    // In use by another server, or gone already. Either is fine.
-                }
-                catch (UnauthorizedAccessException)
-                {
-                }
+                SweepOne(dir, cutoff, except ?? [], warn);
             }
         }
         catch (DirectoryNotFoundException)
         {
+        }
+    }
+
+    /// <summary>One scratch directory: deleted when due; every failure but a lost link target is "fine" and silent.</summary>
+    private static void SweepOne(string dir, DateTime cutoff, IReadOnlyList<string> except, Action<string>? warn)
+    {
+        try
+        {
+            DeleteIfDue(dir, cutoff, except);
+        }
+        catch (Runners.Files.LinkTargetLostException e)
+        {
+            // A folder a link in the scratch pointed at lost a file during the unlink, and the deletion stopped (E4.1 of
+            // PLAN_vibe_and_kimi_runtimes_E4.md): the one IOException that is never "fine" — said, not swallowed.
+            warn?.Invoke(e.Message);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // In use by another server, or gone already. Either is fine.
+        }
+    }
+
+    /// <summary>
+    /// The LAST WRITE, not the creation: Windows file tunnelling hands a recreated name its predecessor's creation time, so a
+    /// directory made this minute under a name used yesterday reads as a day old — and, the other way round, a long campaign's
+    /// directory looks fresh for as long as anything writes into it.
+    /// </summary>
+    private static void DeleteIfDue(string dir, DateTime cutoff, IReadOnlyList<string> except)
+    {
+        if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except))
+        {
+            DeleteEvenIfReadOnly(dir);
         }
     }
 

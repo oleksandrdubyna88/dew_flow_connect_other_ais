@@ -387,13 +387,19 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             string.Empty, input.Row.Provider.Provider, input.Settings.Model, ConsultantRoles.Question,
             outcome, elapsed, usage, UsageKinds.Question, "Question", resetsUtc);
 
-    private void Remove(string scratch)
-    {
-        if (scratch.Length == 0)
-        {
-            return;
-        }
+    private void Remove(string scratch) => RemoveScratch(scratch, log);
 
+    /// <summary>A question row's scratch removed through the shared deleter; a failure is logged, a lost link target as a warning.</summary>
+    internal static void RemoveScratch(string scratch, Serilog.ILogger log)
+    {
+        if (scratch.Length > 0)
+        {
+            TryRemove(scratch, log);
+        }
+    }
+
+    private static void TryRemove(string scratch, Serilog.ILogger log)
+    {
         try
         {
             // The shared deleter: a home's read-only files go too, and a link in the folder is unlinked, never entered.
@@ -401,7 +407,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         }
         catch (Runners.Files.LinkTargetLostException e)
         {
-            log.Warning("a question row's scratch directory at {Path} was not removed: a folder a link in it pointed at lost a file — {Reason}", scratch, e.Message);
+            log.Warning("a question row's scratch directory at {Path} was not removed: a folder a link in it pointed at changed while the link was removed — {Reason}", scratch, e.Message);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
