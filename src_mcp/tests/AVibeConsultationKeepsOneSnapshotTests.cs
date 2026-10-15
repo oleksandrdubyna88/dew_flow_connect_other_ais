@@ -139,6 +139,34 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         DirectoryLink.Remove(folder);
     }
 
+    /// <summary>C7: turn 1 makes the two empty folders in Vibe's home; turn 2 starts on that home with `--resume` and answers.</summary>
+    [Fact]
+    public async Task ASecondTurn_StartsOnTheHomeTheFirstLeft_WhenTurnOneMadeVibesTwoEmptyFolders()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        PlayedVibe? vibe = null;
+        vibe = new PlayedVibe(_launcher, Advice)
+        {
+            During = _ =>
+            {
+                var home = vibe!.Turns.Last().Request.Environment[VibeLaunch.HomeVariable]!;
+                Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "data", "193149ad-d8e5-069e-8f34-aece24b2623d", "vibe"));
+                Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "tmp"));
+                return Task.CompletedTask;
+            },
+        };
+        var service = Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes);
+        var first = await Consult(service, "why is the count wrong");
+        first.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
+
+        var second = await Consult(service, "and now?", first.GetProperty("consultationId").GetString()!);
+
+        second.TryGetProperty("error", out error).Should().BeFalse(error.ToString());
+        vibe.Turns.Should().HaveCount(2);
+        vibe.Turns.Last().Request.Arguments.Should().ContainInConsecutiveOrder("--resume", Session);
+    }
+
     /// <summary>D6 of PLAN_vibe_live_round_fixes.md: a home the launch control refuses is `launch-refused` with its whole cure, never a missing CLI.</summary>
     [Fact]
     public async Task AHomeTheLaunchControlRefuses_IsLaunchRefused_AndTheAnswerQuotesTheWholeCure()

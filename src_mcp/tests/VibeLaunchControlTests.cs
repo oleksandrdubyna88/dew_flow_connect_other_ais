@@ -146,6 +146,21 @@ public sealed class VibeLaunchControlTests : IDisposable
         vibe.Started.Should().BeEmpty();
     }
 
+    /// <summary>C6: what turn 1 leaves in a measured Vibe's home - two EMPTY folders the manifest never named - must not refuse the repair that follows.</summary>
+    [Fact]
+    public async Task ARepair_OnTheHomeTurnOneLeft_IsHeldNotRefused_OnAMeasuredVibe()
+    {
+        var invocation = Invocation();
+        var home = HomeOf(invocation);
+        File.WriteAllText(Path.Combine(Directory.CreateDirectory(home).FullName, "vibehistory"), "Hello Vibe!\r\n");
+        Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "data", "193149ad-d8e5-069e-8f34-aece24b2623d", "vibe"));
+        Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "tmp"));
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), new FakeVibe(), TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task ARefusal_OfTheLaunchControl_IsMarkedAsTheControlsOwn_ButAMissingExecutableIsNot()
     {

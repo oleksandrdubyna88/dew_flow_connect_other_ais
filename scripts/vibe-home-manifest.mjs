@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { builtEnv as builtEnvFor, files, run, vibeArgs } from './lib/vibe.mjs';
+import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, files, run, vibeArgs } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -70,15 +70,31 @@ const VARYING = [
   'logs/vibe.log',
   'logs/session/active/.registry',
   'logs/session/unified/*/**',
+  // Vibe's plugin store stages an unpack here (vibe/plugins/_store.py:204): re-digested before it is renamed into packages/,
+  // swept by Vibe itself, never loaded as a package - so it is admitted by name even though it lies under the pinned prefix.
+  'logs/session/plugins/tmp/**',
 ];
 
-const globToRegex = (glob) => new RegExp(`^${glob.split('/').map((seg) => (seg === '**' ? '.+' : seg === '*' ? '[^/]+'
-  : seg.replaceAll(/[.+?^${}()|[\]\\]/gu, String.raw`\$&`))).join('/')}$`, 'u');
-const VARYING_RE = VARYING.map(globToRegex);
-const classOf = (path) => (path.startsWith(PINNED_PREFIX) ? 'pinned' : VARYING_RE.some((re) => re.test(path)) ? 'varies' : 'unknown');
+/**
+ * FOLDERS admitted - and no file under them (D4 of todo/PLAN_vibe_live_round_fixes.md). A plugin's per-session data is where
+ * Vibe adopts a plugin's runtime code without re-checking it (vibe/core/plugins/_materialize.py), so turn 1's two EMPTY folders
+ * there are Vibe's own and a file is not: the product refuses one, and so does this script.
+ */
+const VARYING_FOLDERS = [
+  'logs/session/plugins/data/*/**',
+];
+
+const RULES = { pinnedPrefix: PINNED_PREFIX, varying: VARYING, varyingFolders: VARYING_FOLDERS };
+/** lib/vibe.mjs's classifier (the product's rules, one place): a folder is written `a/b/`, and is never hashed. */
+const classIn = (inventoryOfAHome) => {
+  const listing = inventoryOfAHome.map((entry) => entry.path);
+  return (path) => classOfIn(path, RULES, listing);
+};
 
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
-const inventory = (home) => files(home).map((path) => ({ path, sha256: sha256(join(home, path)), bytes: readFileSync(join(home, path)).length }));
+const inventory = (home) => files(home, { folders: true }).map((path) => (path.endsWith('/')
+  ? { path, sha256: '', bytes: 0 }
+  : { path, sha256: sha256(join(home, path)), bytes: readFileSync(join(home, path)).length }));
 
 /** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
 const builtEnv = (home) => builtEnvFor(home, MODEL);
@@ -128,14 +144,19 @@ return { version, steps };
 const { version, steps } = from ? JSON.parse(readFileSync(join(from, 'steps.json'), 'utf8')) : measure();
 
 const afterTurn = steps[1].after;
+const classOf = classIn(afterTurn);
 const unknown = afterTurn.filter((f) => classOf(f.path) === 'unknown');
 const pinned = afterTurn.filter((f) => classOf(f.path) === 'pinned');
 // Stability: a pinned file must keep its bytes across a later start in the same home, and match in a fresh home that has it.
-const drift = [steps[2].after, steps[3].after].flatMap((later) => later.filter((f) => classOf(f.path) === 'pinned')
+const drift = [steps[2].after, steps[3].after].flatMap((later) => later.filter((f) => classIn(later)(f.path) === 'pinned')
   .filter((f) => pinned.some((p) => p.path === f.path && p.sha256 !== f.sha256)).map((f) => f.path));
-const appeared = steps[2].after.filter((f) => classOf(f.path) === 'pinned' && !pinned.some((p) => p.path === f.path)).map((f) => f.path);
+const appeared = steps[2].after.filter((f) => classIn(steps[2].after)(f.path) === 'pinned' && !pinned.some((p) => p.path === f.path)).map((f) => f.path);
 
-console.log(JSON.stringify({ version, pinned: pinned.length, varies: afterTurn.length - pinned.length - unknown.length,
+// The deepest write below a home (review R3): the longest persisted file + Vibe's atomic-write wrapper. VibePathBudget's Windows
+// DeepestChild must not be below it (a parity test); a Vibe that writes deeper turns the suite red until the budget is raised.
+const depth = deepestChild(afterTurn.map((f) => f.path));
+
+console.log(JSON.stringify({ version, pinned: pinned.length, varies: afterTurn.length - pinned.length - unknown.length, ...depth,
   unknown: unknown.map((f) => f.path), drift, appeared,
   bareStartWrote: steps[0].after.map((f) => f.path), homeBWrote: steps[3].after.map((f) => f.path), export: steps[1].export }, null, 2));
 
@@ -150,6 +171,7 @@ const entry = {
   platform: process.platform,
   cli: 'python',
   harness: 'scripts/vibe-home-manifest.mjs',
+  ...depth,
   pinned: pinned.map(({ path, sha256: hash, bytes }) => ({ path, sha256: hash, bytes })),
   seen: afterTurn.map(({ path, bytes }) => ({ path, bytes, class: classOf(path) })),
 };
@@ -165,7 +187,8 @@ const WHY = [
   'the run is recorded in research/RESULTS_vibe_confinement.md). Generated by `node scripts/vibe-home-manifest.mjs --write`,',
   'never edited by hand. coai-mcp embeds it (VibeHome): before EVERY Vibe launch the owned home is validated - a file under',
   'pinnedPrefix is admitted only when its path and SHA-256 are in the entry for the INSTALLED Vibe version, a path matching',
-  '`varying` is admitted by name (its bytes are caches, logs and sessions), anything else - a hooks.toml, a config.toml, an',
+  '`varying` is admitted by name (its bytes are caches, logs and sessions), a FOLDER matching `varyingFolders` is admitted and no',
+  'file under it (a plugin per-session data folder), anything else - a hooks.toml, a config.toml, an',
   'agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is RUN',
   "with a warning (the owner, 2026-10-13: warn, not refuse) - its plugin files admitted by name, its home's shape still checked;",
   're-run this script after every Vibe update to measure it. `seen` is informational.',
@@ -175,6 +198,7 @@ const manifest = {
   why: WHY,
   pinnedPrefix: PINNED_PREFIX,
   varying: VARYING,
+  varyingFolders: VARYING_FOLDERS,
   versions: [...(prior.versions ?? []).filter((v) => v.version !== version), entry].sort((a, b) => a.version.localeCompare(b.version, 'en', { numeric: true })),
 };
 writeFileSync(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);

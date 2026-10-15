@@ -127,12 +127,25 @@ public static class VibeHome
     {
         private readonly IReadOnlyList<string[]> _varying = [.. manifest.Varying.Select(glob => glob.Split('/'))];
 
-        /// <summary>Why this file may not be in the home, or empty.</summary>
+        private readonly IReadOnlyList<string[]> _varyingFolders = [.. manifest.VaryingFolders.Select(glob => glob.Split('/'))];
+
+        /// <summary>
+        /// Why this file may not be in the home, or empty. A file in a plugin's per-session data is refused first, and a name
+        /// the manifest admits is judged as varying BEFORE the pinned prefix: the staging folder lies under it.
+        /// </summary>
         public string FileProblem(string relative, string path) =>
-            relative.StartsWith(manifest.PinnedPrefix, StringComparison.Ordinal) ? Pinned(relative, path)
-            : !_varying.Any(glob => Matches(glob, relative.Split('/'))) ? "is not a file Vibe writes into its home"
-            : relative == TrustFile ? TrustProblem(path)
-            : string.Empty;
+            _varyingFolders.Any(glob => Matches(glob, relative.Split('/'))) ? PluginDataFile
+            : _varying.Any(glob => Matches(glob, relative.Split('/'))) ? VaryingProblem(relative, path)
+            : relative.StartsWith(manifest.PinnedPrefix, StringComparison.Ordinal) ? Pinned(relative, path)
+            : "is not a file Vibe writes into its home";
+
+        private const string PluginDataFile =
+            "is a file in a Vibe plugin's per-session data, where Vibe adopts a plugin's runtime code without re-checking it "
+            + "(vibe/core/plugins/_materialize.py) — coai admits only its empty folders";
+
+        /// <summary>A file admitted by name: the trust list must trust nothing, and a package starter is refused wherever it lies.</summary>
+        private static string VaryingProblem(string relative, string path) =>
+            relative == TrustFile ? TrustProblem(path) : VibePluginStarters.Problem(relative, path);
 
         /// <summary>
         /// A folder on the way to an admitted file — a proper prefix of a varying name or of a pinned path; for the shape
@@ -142,8 +155,11 @@ public static class VibeHome
         {
             var parts = relative.Split('/');
 
-            return _varying.Any(glob => Leads(glob, parts)) || UnderPinned(relative);
+            return _varying.Any(glob => Leads(glob, parts)) || OnTheWayToAFolder(parts) || UnderPinned(relative);
         }
+
+        /// <summary>A folder the manifest admits as a folder: one a data glob matches, or one that leads to such a match.</summary>
+        private bool OnTheWayToAFolder(string[] parts) => _varyingFolders.Any(glob => Matches(glob, parts) || Leads(glob, parts));
 
         private bool UnderPinned(string relative) =>
             (!byHash && (relative + "/").StartsWith(manifest.PinnedPrefix, StringComparison.Ordinal))
