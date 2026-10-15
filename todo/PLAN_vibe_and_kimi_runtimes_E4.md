@@ -1347,6 +1347,14 @@ macOS through Moonshot's official installer — and an older `coai-mcp` never re
    the version warning; NOT "the owned home never receives code" (M-K12 (c) is unrecorded, parent D19). CHANGELOG;
    `research/module_extension.md` (the row, the per-OS install, the mixed-version limit of D13 for `kimi` beside
    `vibe`'s).
+12. **Re-plumb `scripts/probe-kimi-confinement.mjs` to the shipped shim** (added with E4.3's review minors, 2026-10-15; deviation 39). Its shim arms exit 65 since E4.3:
+   `shimArgs` (`scripts/lib/kimi.mjs:28`) passes no `--home <owned ROOT>`, `--persons-bin` or `--locks`, and `makeOwnedHome`/`builtEnv`
+   (`scripts/lib/kimi-home.mjs`, `kimi-d19.mjs`) lay the owned home out as the `KIMI_CODE_HOME` folder itself, where the product's is
+   `<root>/home` beside an empty `<root>/os` with the OS-home redirect and the person's `bin` first on `PATH`. Until it is re-plumbed the
+   warning sentence on a version coai has not measured (`KimiLaunch.WarningFor`) points at `scripts/probe-kimi-tree-hold.mjs` (the one script that
+   runs against the shipped shim) and the confinement probe's header says it is stale. It is a prerequisite for adding a version to
+   `KimiAcpProfile.MeasuredVersions`, and for the 2.2.0 re-measure (disagree item 6). Do NOT run its paid arms to check the plumbing: a dry run
+   of `shimArgs` against the shim's `--help` and the node unit tests of `lib/` are the proof until the owner pays for a full run.
 
 **SCENARIOS** (red first; a new `src_vs_code/src/test/kimiRuntime.test.ts` mirroring `vibeRuntime.test.ts`, and
 `kimiWindowsInstall.test.ts` mirroring `vibeWindowsInstall.test.ts`).

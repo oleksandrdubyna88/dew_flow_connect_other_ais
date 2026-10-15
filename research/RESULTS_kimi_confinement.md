@@ -569,6 +569,8 @@ lock handle and outlives `kimi` (measured by E4.3 on 2026-10-15, §27: nothing d
 every turn's end can cut a refresh); and a sign-in folder on a volume with no drive letter (an admin VHD mount), which
 `GetFinalPathNameByHandle` may not name — refused fail-closed by E4.2, unmeasured.
 
+Added 2026-10-15 (E4.3 review): **many `device_id`s per sign-in** — each refreshed owned home writes a NEW `device_id` (§27), so one sign-in accumulates one id per home that refreshed; whether many ids per sign-in matter to the vendor is unmeasured.
+
 ## 26. What this changes in the plan (for the plan's owner to decide)
 
 | Decision | Measured here | Effect |

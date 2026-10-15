@@ -1,3 +1,9 @@
+// STALE AGAINST THE SHIPPED SHIM (E4.3, deviation 39 of todo/PLAN_vibe_and_kimi_runtimes_E4.md): its shim arms pass
+// `--ask-acp --profile kimi` WITHOUT `--home <owned root>`, `--persons-bin` and `--locks`, and build owned homes with the home folder AS
+// KIMI_CODE_HOME (no `<root>/home` + empty `<root>/os`) — so every shim arm exits 65 today. Re-plumbing shimArgs, makeOwnedHome and builtEnv
+// to the owned-root layout is an explicit E4.5 task; the arms that do not use the shim (lib/kimi.mjs's small client, `kimi -p`) are unaffected.
+// Against the shipped shim, only scripts/probe-kimi-tree-hold.mjs (M-K15) runs.
+//
 // Probe: what confines a Kimi Code launch from coai? PAID: every run that reaches the model is a turn on the person's Kimi
 // Code plan. Plan: todo/PLAN_vibe_and_kimi_runtimes.md (S4, §5 cells M-K1…M-K10). Results: research/RESULTS_kimi_confinement.md.
 //

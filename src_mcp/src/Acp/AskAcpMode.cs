@@ -57,6 +57,9 @@ internal static class AskAcpMode
     /// <summary>The most <c>--deadline-seconds</c> may ask for — a day, the client's own ceiling (<see cref="AcpClient.MaxDeadline"/>).</summary>
     internal static readonly int MaxDeadlineSeconds = (int)AcpClient.MaxDeadline.TotalSeconds;
 
+    /// <summary>The least a turn may be left after a late hold: the client refuses a spent deadline outright, and a turn this short answers nothing.</summary>
+    private static readonly TimeSpan MinimumTurn = TimeSpan.FromSeconds(1);
+
     private const string Mode = "--ask-acp";
 
     /// <summary>The lock folder the tree hold lives in — <see cref="KimiCredentialsLock.Root"/> of the runtime that started this shim.</summary>
@@ -142,21 +145,41 @@ internal static class AskAcpMode
             return await NotStartedAsync(sentence, exit, note, output);
         }
 
+        return await HeldAsync(profile, ask, held, ask.Deadline - waiting.Elapsed, note, output, ct);
+    }
+
+    /// <summary>
+    /// The turn under a hold already taken. A hold taken late can leave the turn nothing — the client refuses "a deadline of 0s" — so under
+    /// <see cref="MinimumTurn"/> the hold is given back at once and the end is the one a still-running tree gives: Busy, 69, nothing started.
+    /// </summary>
+    private static async Task<int> HeldAsync(
+        IAcpProfile profile, AcpAsk ask, AcpHolding.Held held, TimeSpan left, Action<string> note, TextWriter output, CancellationToken ct)
+    {
+        if (left < MinimumTurn)
+        {
+            held.Hold.Dispose();
+
+            return await NotStartedAsync(LateSentence(ask.Deadline), Unavailable, note, output);
+        }
+
         AcpOutcome outcome;
         using (held.Hold)
         {
-            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = ask.Deadline - waiting.Elapsed }, ct);
+            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = left }, ct);
         }
 
         return await ReportedAsync(profile, outcome, note, output);
     }
+
+    private static string LateSentence(TimeSpan deadline) =>
+        $"another Kimi started on this sign-in was still running until less than a second of this turn's {deadline.TotalSeconds:F0}s was left — it ends when its agent does; the turn is given up";
 
     /// <summary>What a hold that was not taken comes to: another tree holding on past the deadline is an end before an answer (69); a hold that cannot be taken at all is a request this shim will not make (65).</summary>
     private static (string Sentence, int Exit) Declined(AcpHolding holding) => holding switch
     {
         AcpHolding.Busy busy => (busy.Sentence, Unavailable),
         AcpHolding.Unusable unusable => (unusable.Sentence, BadRequest),
-        _ => (string.Empty, Ok),
+        _ => ("the sign-in hold came to an answer this shim has no word for — refused rather than started without it (D19)", BadRequest),
     };
 
     /// <summary>A turn that never started an agent, said as every other end is: the report on stdout, the sentence on stderr, the exit.</summary>

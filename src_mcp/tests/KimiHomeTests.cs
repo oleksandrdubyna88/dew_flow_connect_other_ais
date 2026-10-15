@@ -131,6 +131,39 @@ public sealed class KimiHomeTests : IDisposable
         KimiHome.Refusal(places, expected).Should().BeEmpty("the inventory Kimi 2.1.1 writes into its home (RESULTS section 18) is admitted");
     }
 
+    /// <summary>E4.3 review minor 4: <c>device_id</c> is admitted as a short regular file — an identifier, not a place to keep anything. 64 bytes pass; 65 are refused with a sentence (no UUID regex: the format is the vendor's).</summary>
+    [Theory]
+    [InlineData(64, false)]
+    [InlineData(65, true)]
+    [InlineData(4096, true)]
+    public void ADeviceId_IsAdmittedOnlyAsAShortFile(int bytes, bool refused)
+    {
+        OnWindows();
+        var places = Made();
+        Write(Path.Combine(places.Home, "device_id"), new string('a', bytes));
+
+        var refusal = KimiHome.Refusal(places, Expected());
+
+        if (refused)
+        {
+            refusal.Should().Contain("device_id").And.Contain(bytes + " bytes").And.Contain("at most 64 bytes").And.Contain("delete " + places.OwnedRoot);
+        }
+        else
+        {
+            refusal.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public void ADeviceIdThatIsAFolder_IsRefused()
+    {
+        OnWindows();
+        var places = Made();
+        Directory.CreateDirectory(Path.Combine(places.Home, "device_id"));
+
+        KimiHome.Refusal(places, Expected()).Should().Contain("device_id");
+    }
+
     // ---------- S2.17 ----------
 
     public static TheoryData<string> Forbidden => new()

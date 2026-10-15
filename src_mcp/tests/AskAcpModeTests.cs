@@ -292,6 +292,74 @@ public sealed class AskAcpModeTests
         Directory.EnumerateFileSystemEntries(locks.Path).Should().BeEmpty("a stand-in profile has no sign-in to hold, so the lock folder is never even made into");
     }
 
+    /// <summary>E4.3 review minor 1: a hold taken late leaves the turn under a second — the client would refuse "a deadline of 0s" — so the shim gives the hold back and answers Busy.</summary>
+    [Theory]
+    [InlineData(1300, 2)]
+    [InlineData(1300, 1)]
+    public async Task AHoldTakenLate_LeavesNoTime_SoItIsGivenBack_AndTheTurnIsBusy69(int takenAfterMs, int deadlineSeconds)
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+        var hold = new RecordingHold();
+        var profile = new LateHoldProfile(agent.Profile(), TimeSpan.FromMilliseconds(takenAfterMs), hold);
+
+        var code = await AskAcpMode.RunAsync(
+            ["--ask-acp", "--profile", "late", "--model", "m-1", "--cwd", agent.Cwd, "--deadline-seconds", deadlineSeconds.ToString()],
+            new StringReader("say hello"), _stderr.Add, _stdout, [profile]);
+
+        code.Should().Be(69, Stderr);
+        Stderr.Should().Contain("still running").And.NotContain("outside 1..", "the client's own refusal of a spent deadline is not the sentence a person should read");
+        hold.Disposed.Should().Be(1, "the hold taken late was given back, exactly once");
+        agent.Entries().Should().BeEmpty("the agent was never started");
+        Report().GetProperty("end").GetString().Should().Be("not_started");
+    }
+
+    /// <summary>E4.3 review minor 2: a hold answer this shim has no word for fails CLOSED (65), never as an answered turn (0).</summary>
+    [Fact]
+    public async Task AHoldAnswerNobodyKnows_FailsClosed65_NeverOk()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+        var profile = new LateHoldProfile(agent.Profile(), TimeSpan.Zero, new RecordingHold(), answerNothing: true);
+
+        var code = await AskAcpMode.RunAsync(
+            ["--ask-acp", "--profile", "late", "--model", "m-1", "--cwd", agent.Cwd, "--deadline-seconds", "30"],
+            new StringReader("say hello"), _stderr.Add, _stdout, [profile]);
+
+        code.Should().Be(65, "a hold this shim cannot read is a request it will not make: " + Stderr);
+        agent.Entries().Should().BeEmpty("the agent was never started");
+    }
+
+    private sealed class RecordingHold : IDisposable
+    {
+        private int _disposed;
+
+        public int Disposed => _disposed;
+
+        public void Dispose() => Interlocked.Increment(ref _disposed);
+    }
+
+    /// <summary>The fake profile with a hold that takes its time (or answers nothing the shim knows).</summary>
+    private sealed class LateHoldProfile(IAcpProfile inner, TimeSpan takes, RecordingHold hold, bool answerNothing = false) : IAcpProfile
+    {
+        public string Name => "late";
+
+        public string DefaultExecutable => inner.DefaultExecutable;
+
+        public IReadOnlyList<string> Arguments => inner.Arguments;
+
+        public string ModelOptionId => inner.ModelOptionId;
+
+        public IReadOnlyList<string> ExcludedNames => inner.ExcludedNames;
+
+        public IReadOnlyList<AcpKnownFailure> KnownFailures => inner.KnownFailures;
+
+        public AcpHolding Hold(AcpAsk ask, TimeSpan within)
+        {
+            Thread.Sleep(takes);
+
+            return answerNothing ? null! : new AcpHolding.Held(hold);
+        }
+    }
+
     [Fact]
     public void EveryExitCodeIsDistinct_AndNoneIs64()
     {

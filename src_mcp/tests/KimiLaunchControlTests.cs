@@ -278,7 +278,7 @@ public sealed class KimiLaunchControlTests : IDisposable
         using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi("2.2.0"), TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().BeEmpty("the owner's rule: warn and run");
-        turn.Warning.Should().Contain("2.2.0").And.Contain("2.1.1").And.Contain("probe-kimi-confinement.mjs");
+        turn.Warning.Should().Contain("2.2.0").And.Contain("2.1.1").And.Contain("probe-kimi-tree-hold.mjs");
         turn.CliVersion.Should().Be("kimi 2.2.0");
     }
 

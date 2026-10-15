@@ -49,7 +49,12 @@ public static class KimiHome
 
     private static readonly string[] AdmittedFolders = ["cache", "logs", "sessions", "user-history", "file-history", "telemetry", "updates"];
 
-    private static readonly string[] AdmittedFiles = ["session_index.jsonl", "workspaces.json", "device_id"];
+    private const string DeviceId = "device_id";
+
+    /// <summary>The most a <c>device_id</c> may hold (M-K15 saw a UUID's 36); a larger file is not an identifier.</summary>
+    private const int DeviceIdMaxBytes = 64;
+
+    private static readonly string[] AdmittedFiles = ["session_index.jsonl", "workspaces.json", DeviceId];
 
     private static readonly AsyncLocal<Action<string>?> _afterUnlink = new();
 
@@ -246,8 +251,24 @@ public static class KimiHome
         }
 
         return AdmittedFolders.Contains(name, StringComparer.Ordinal) && Directory.Exists(entry) ? Inside(places, entry)
+            : name == DeviceId ? DeviceIdProblem(places, entry)
             : AdmittedFiles.Contains(name, StringComparer.Ordinal) && File.Exists(entry) ? string.Empty
             : Sentence(places, $"holds {name}{(Directory.Exists(entry) ? "/" : string.Empty)}, which is not something Kimi writes into its home");
+    }
+
+    /// <summary><c>device_id</c> is an identifier Kimi writes on a token refresh: a regular file of at most <see cref="DeviceIdMaxBytes"/> bytes — pinned by size, never by a format coai did not measure.</summary>
+    private static string DeviceIdProblem(KimiPlaces places, string entry)
+    {
+        if (!File.Exists(entry))
+        {
+            return Sentence(places, "holds device_id, which is not a file Kimi writes there");
+        }
+
+        var length = new FileInfo(entry).Length;
+
+        return length <= DeviceIdMaxBytes
+            ? string.Empty
+            : Sentence(places, $"holds device_id of {length} bytes, which is not the short identifier Kimi writes (at most {DeviceIdMaxBytes} bytes)");
     }
 
     /// <summary>An owned home trusts nothing: <c>workspace-trust/</c> is admitted only EMPTY.</summary>

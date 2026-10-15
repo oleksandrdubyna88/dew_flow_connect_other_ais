@@ -47,7 +47,7 @@ public static class KimiLaunch
             : VersionWarnings.Unmeasured(
                 "Kimi", version, string.Join(", ", KimiAcpProfile.MeasuredVersions),
                 $"every confinement number coai has — the write refusals, the owned home's inventory, the OS-home redirect (research/RESULTS_kimi_confinement.md) — is {string.Join(", ", KimiAcpProfile.MeasuredVersions)}'s",
-                "re-run `node scripts/probe-kimi-confinement.mjs` with this Kimi to measure it");
+                "re-measure the sign-in hold with `node scripts/probe-kimi-tree-hold.mjs` (the confinement probe, scripts/probe-kimi-confinement.mjs, still has to be re-plumbed to the shim's flags — E4.5)");
 
     private const string InstallFallback = "install Kimi Code: https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started";
 
