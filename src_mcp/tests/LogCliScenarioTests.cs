@@ -85,6 +85,45 @@ public sealed class LogCliScenarioTests : IDisposable
         log.Totals.Findings.Should().Be(1);
     }
 
+    /// <summary>A round's size rides on the list, and a binary's line count is ABSENT from the wire — E2.S5, contract C3.</summary>
+    [Fact]
+    public void TheLogAsAProcess_PrintsTheSize_AndOmitsABinarysLineCount()
+    {
+        var session = new SessionState("s1", "D:/repo", "feat/x", new PanelConfig()) { Stage = Stage.CodeReview };
+        var started = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+        var size = new Core.Context.RoundSize(
+            new Core.Context.ScopeSize(
+                Core.Context.ScopeState.Recorded,
+                "origin/main",
+                [
+                    new Core.Context.SizeCell(Core.Context.ChangeCoverage.Shown, Core.Context.ChangeKind.Code, 2, 30, 4),
+                    new Core.Context.SizeCell(Core.Context.ChangeCoverage.Binary, Core.Context.ChangeKind.Unknown, 1, null, null),
+                ]),
+            Core.Context.ScopeSize.Unavailable(Core.Context.ScopeState.FirstRound));
+        using (var db = RoundsDb.Open(_data, _log)!)
+        {
+            db.RecordRound(
+                session,
+                new RoundRecord("CodeReview", 1, "proceed", 0, "answered", started) { StartedUtc = started, Size = size },
+                [],
+                new RoundContext { BaseRef = "origin/main" });
+        }
+
+        var (code, text) = Run("--log", "--paged");
+
+        code.Should().Be(0);
+        using var doc = JsonDocument.Parse(text);
+        var wire = doc.RootElement.GetProperty("rounds")[0].GetProperty("size");
+        wire.GetProperty("whole").GetProperty("state").GetString().Should().Be("recorded");
+        wire.GetProperty("delta").GetProperty("state").GetString().Should().Be("unavailable: first round");
+        var cells = wire.GetProperty("whole").GetProperty("cells").EnumerateArray().ToList();
+        cells.Should().HaveCount(2);
+        cells[0].GetProperty("added").GetInt32().Should().Be(30);
+        cells[1].GetProperty("coverage").GetString().Should().Be("binary");
+        cells[1].TryGetProperty("added", out _).Should().BeFalse("a binary has no line count — absent, never 0");
+        cells[1].TryGetProperty("removed", out _).Should().BeFalse();
+    }
+
     /// <summary>The reason a round did not run rides on the list — S2.1 of the feature-review plan.</summary>
     [Fact]
     public void ASkippedRoundsReason_IsOnTheList()

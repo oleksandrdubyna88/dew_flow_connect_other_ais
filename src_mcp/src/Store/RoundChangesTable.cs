@@ -18,8 +18,8 @@ public static class RoundChangesTable
     /// <summary>What <c>rounds.size_gitlinks</c> holds when the round recorded no count — a count of 0 is a measurement.</summary>
     private const int GitlinksNotRecorded = -1;
 
-    private const string WholeScope = "whole";
-    private const string DeltaScope = "delta";
+    internal const string WholeScope = "whole";
+    internal const string DeltaScope = "delta";
 
     /// <summary>
     /// Replaces the round's size rows and states with <paramref name="size"/>'s. A null size writes NOTHING — the gitlink

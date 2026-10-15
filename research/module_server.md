@@ -3295,6 +3295,21 @@ written empty, and the column's default `not recorded` marks every row from befo
 Reached through both preview-fork shapes as step 21 is, and `--round-counts` on a step-21 file reads and leaves it at
 twenty-one (`TheRoundsSizeIsStepTwentyTwoTests`).
 
+**`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
+(`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
+`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's ids to `RoundChangesLog.Attach` (its own file, the
+`QuestionConsultLog` shape, on the read-only connection `Read` already opened), which answers with TWO grouped reads per page —
+`rounds` for the states, `round_changes` for the cells — never one per round. **Absent means not recorded:** a round with no
+`size` member predates step 22, is a plan/document round, or never had a size written; a file still at step 21 is asked for
+the `size_state` column (`HasColumn`, not a version guess), answers with no query, is logged exactly as before, and is left
+at twenty-one. **Absent also means "no line count" inside a binary cell:** `added`/`removed` are omitted there (the context
+writes no nulls) and a reader treats absent as *no line count*, never 0 — `RoundChangesLog` reads them with a nullable
+reader, not `Columns.Number`, which would turn the NULL into 0. `whole.from` is `rounds.base_ref` (the resolved base — a
+backfill never recomputes it), `delta.from` is `delta_from`, `origin` is `size_origin` (`live`/`backfill`). The Team server
+reads neither the session file nor `--log`; the extension's parser ignores members it does not know
+(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts`/`roundsLog.ts` are byte-identical to
+`extension-v0.75.0`'s, so that parser is the released one).
+
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
 The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer
