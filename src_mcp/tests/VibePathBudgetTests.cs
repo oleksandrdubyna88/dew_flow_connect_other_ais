@@ -98,4 +98,25 @@ public sealed class VibePathBudgetTests
         Windows.RefusalForLength(HomeAt(fits), HomeAt(fits).Length).Should().BeEmpty($"{site} at a profile of {fits}");
         Windows.RefusalForLength(HomeAt(fails), HomeAt(fails).Length).Should().NotBeEmpty($"{site} at a profile of {fails}");
     }
+
+    /// <summary>The test seam every Windows-only scenario leans on: the budget it names is the process's until it is disposed, then the real one is back.</summary>
+    [Fact]
+    public void UsingABudget_ReplacesTheProcessesUntilItIsDisposed_ThenRestoresTheOneBefore()
+    {
+        var real = VibePathBudget.ForThisProcess;
+        var narrow = new VibePathBudget(100, 50);
+
+        using (VibePathBudget.Using(narrow))
+        {
+            VibePathBudget.ForThisProcess.Should().BeSameAs(narrow);
+            using (VibePathBudget.Using(VibePathBudget.None))
+            {
+                VibePathBudget.ForThisProcess.Should().BeSameAs(VibePathBudget.None, "a nested seam wins while it lasts");
+            }
+
+            VibePathBudget.ForThisProcess.Should().BeSameAs(narrow, "leaving the inner one puts the outer one back");
+        }
+
+        VibePathBudget.ForThisProcess.Should().BeSameAs(real);
+    }
 }

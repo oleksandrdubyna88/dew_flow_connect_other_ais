@@ -525,6 +525,42 @@ public sealed class ConsultantCheckTests : IDisposable
         Directory.EnumerateFileSystemEntries(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
     }
 
+    private PanelSettings VibeSettings(string homesRoot) => Settings() with
+    {
+        ConsultantHomesRoot = homesRoot,
+        Consultants = new Dictionary<string, ConsultantChoice>
+        {
+            [CallerIdentity.Claude] = new("mistral", Model: "glm-5-3", Runtime: "vibe", ExecutablePath: PlayedVibe.Exe),
+        },
+    };
+
+    /// <summary>D1/D7 on every OS: a check of a home-keeping consultant needs its homes root, and a root that is not there refuses it with the root's own sentence — before anything launches.</summary>
+    [Fact]
+    public async Task AVibeCheckWhoseHomesRootDoesNotExist_IsRefusedNamingTheRoot_AndNothingLaunches()
+    {
+        var vibe = new PlayedVibe(new ProcessLauncher(), string.Empty);
+        var missing = Path.Combine(_temp, "no-such-homes");
+
+        var (_, said, _) = await Check(VibeSettings(missing), vibe, TestContext.Current.CancellationToken, "--caller", "claude");
+
+        Text(said, "state").Should().NotBe("answered", said.ToString());
+        Text(said, "failureWhat").Should().Contain("does not exist").And.Contain(missing);
+        vibe.Turns.Should().BeEmpty();
+        vibe.Versions.Should().BeEmpty();
+    }
+
+    /// <summary>The one-shot folder a check reserved is given back on every way out — here the check ends without a Vibe to launch (or, on Windows, without an answer).</summary>
+    [Fact]
+    public async Task AVibeCheckThatEndsWithoutAnAnswer_LeavesNoFolderUnderCoaiVh()
+    {
+        using var homes = TempDir.For("testsToDelete-vh-check-");
+        var vibe = new PlayedVibe(new ProcessLauncher(), string.Empty) { VersionExit = 1 };
+
+        var (_, said, _) = await Check(VibeSettings(homes), vibe, TestContext.Current.CancellationToken, "--caller", "claude");
+
+        Text(said, "state").Should().NotBe("answered", said.ToString());
+        Directory.EnumerateFileSystemEntries(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
+    }
     /// <summary>The real launcher, recording the consultant's prompt and the two words its scratch held at that moment.</summary>
     private sealed class Seen(IProcessLauncher inner) : IProcessLauncher
     {

@@ -1,4 +1,8 @@
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Vibe;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -45,6 +49,17 @@ public sealed class PrivateFolderTests : IDisposable
         PrivateFolder.Open(root, "coai-vh").Should().BeOfType<PrivateFolderOutcome.Refused>().Which.Sentence.Should().Contain("local");
     }
 
+    /// <summary>A failure to make or read the folder is a refusal that says why, on every OS — here the name is taken by a FILE.</summary>
+    [Fact]
+    public void AFolderThatCannotBeMade_BecauseAFileHoldsItsName_IsRefused_SayingWhy_NotThrown()
+    {
+        var name = Path.Combine(_root, "coai-vh");
+        File.WriteAllText(name, "not a folder");
+
+        var refused = PrivateFolder.Open(_root, "coai-vh").Should().BeOfType<PrivateFolderOutcome.Refused>().Subject;
+
+        refused.Sentence.Should().Contain(name).And.Contain("could not be made or read private").And.Contain("COAI_CONSULTANT_HOMES");
+    }
     private const UnixFileMode Private = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
     /// <summary>
@@ -123,6 +138,21 @@ public sealed class PrivateFolderTests : IDisposable
         notes.Should().BeEmpty("nothing was made private, so nothing is said to have been");
     }
 
+    /// <summary>E6 on every OS: a conversation on a root whose <c>coai-vibe</c> is a link is refused, and nothing is made behind the link.</summary>
+    [Fact]
+    public async Task AConversationOnARootWhoseHomesFolderIsALink_IsRefused_NamingTheLink_AndNothingIsMadeBehindIt()
+    {
+        using var target = TempDir.For("testsToDelete-vh-target-");
+        var link = Path.Combine(_root, ConsultantHomes.Vibe);
+        SnapshotTestKit.LinkNow(link, target);
+        var places = new ConsultantPlaces(_root, "store", new ProcessLauncher(), _ => { });
+
+        using var place = await places.ForConversationAsync(new VibeConsultant(new VibeRuntime()), ConsultationStore.NewId(), _root, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
+
+        place.Refusal.Should().Contain(link);
+        Directory.EnumerateFileSystemEntries(target).Should().BeEmpty("nothing was made or removed through the link");
+        Directory.Delete(link);
+    }
     /// <summary>
     /// The one door: no production code combines a path with the homes root or a <c>coai-*</c> folder name except
     /// <see cref="PrivateFolder"/> — so a new entry into <c>&lt;root&gt;coai-*</c> cannot skip the private-folder check.

@@ -375,6 +375,54 @@ public sealed class ConsultantHomeSweepTests : IAsyncLifetime
         DirectoryLink.Remove(link);
     }
 
+    // ---------- close_consult: one conversation's folders, now ----------
+
+    [Fact]
+    public void RemoveNow_TakesAClosedConversationsFolderAtOnce_AndLeavesAnotherConversationsAlone()
+    {
+        var closed = Record(ConsultationStatuses.Closed);
+        var open = Record(ConsultationStatuses.Open);
+        _store.Write(closed);
+        _store.Write(open);
+        var gone = Home(ConsultantHomes.Vibe, closed.Id, TimeSpan.Zero);
+        var kept = Home(ConsultantHomes.Vibe, open.Id, TimeSpan.Zero);
+
+        ConsultantHomeSweep.RemoveNow(Inputs(), closed.Id, _said.Add);
+
+        Directory.Exists(gone).Should().BeFalse("its conversation is over: close_consult does not wait for the beat");
+        Directory.Exists(kept).Should().BeTrue("only the closed conversation's folder is this call's");
+    }
+
+    [Fact]
+    public void RemoveNow_WithNoHomesFolderYet_OrAMalformedId_DoesNothing()
+    {
+        var closed = Record(ConsultationStatuses.Closed);
+        _store.Write(closed);
+        var folder = Home(ConsultantHomes.Vibe, closed.Id, TimeSpan.Zero);
+
+        ConsultantHomeSweep.RemoveNow(Inputs(), "not-an-id", _said.Add);
+        ConsultantHomeSweep.RemoveNow(Inputs(root: _dir.At("no-homes-here")), closed.Id, _said.Add);
+
+        Directory.Exists(folder).Should().BeTrue();
+        _said.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RemoveNow_RefusesAHomesFolderThatIsALink_SaysSo_AndTouchesNothingBehindIt()
+    {
+        var closed = Record(ConsultationStatuses.Closed);
+        _store.Write(closed);
+        var outside = _dir.At("outside");
+        var conversation = Home(ConsultantHomes.Vibe, closed.Id, TimeSpan.Zero, root: outside);
+        Directory.CreateDirectory(Homes);
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), Path.Combine(Homes, ConsultantHomes.Vibe), Path.Combine(outside, ConsultantHomes.Vibe));
+
+        ConsultantHomeSweep.RemoveNow(Inputs(), closed.Id, _said.Add);
+
+        Directory.Exists(conversation).Should().BeTrue("the folder behind the link is not this root's");
+        _said.Should().Contain(line => line.Contains("nothing is removed", StringComparison.Ordinal) && line.Contains("link", StringComparison.Ordinal));
+        DirectoryLink.Remove(Path.Combine(Homes, ConsultantHomes.Vibe));
+    }
     // ---------- never the reason a sweep fails ----------
 
     [Fact]

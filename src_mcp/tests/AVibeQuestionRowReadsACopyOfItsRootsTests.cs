@@ -154,6 +154,31 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         vibe.Turns.Should().BeEmpty();
     }
 
+    /// <summary>D1/D7 on every OS: a homes root that is not there refuses the row with the root's own sentence, before a copy or a launch.</summary>
+    [Fact]
+    public async Task ARowWhoseHomesRootDoesNotExist_IsRefusedWithTheRootsSentence_AndNothingStarts()
+    {
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(ServiceOn(vibe, _dir.At("no-such-homes"), Path.Combine(Repo, "src")));
+
+        TheRowWasRefusedFor(reply, "does not exist");
+        NothingOfVibesStarted(vibe);
+    }
+
+    /// <summary>A row refused at its copy had already reserved its one-shot folder: it is given back on that way out too.</summary>
+    [Fact]
+    public async Task ARowRefusedAtItsCopy_GivesItsOneShotFolderBack()
+    {
+        var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(ServiceOn(vibe, Homes, plain));
+
+        TheRowWasRefusedFor(reply, "not inside a Git work tree");
+        TheHomesFolderIsEmpty();
+    }
     [Fact]
     public async Task ARowTheLaunchControlRefuses_LeavesNoHomeAndNoCopy()
     {
