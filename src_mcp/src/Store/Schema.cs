@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize,
     ];
 
     internal const string SecurityEvidence = """
@@ -613,5 +613,41 @@ internal static class Schema
     /// </remarks>
     internal const string TheRoundsKey = """
         ALTER TABLE rounds ADD COLUMN round_key TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 22: what a code round CHANGED — its size by scope, coverage and kind — and the effort each reviewer applied
+    /// (<c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>, story E2.S3, contract C2).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>round_changes</c> holds one row per (scope, coverage, kind) cell that has at least one file; no path is
+    /// stored. <c>added</c> and <c>removed</c> are NULL for a binary, which has no line count — never 0. The state of each
+    /// scope lives on the round (<c>size_state</c>, <c>delta_state</c>, <c>delta_from</c>), because a delta that is
+    /// <c>unavailable</c> and one that is an observed zero both have no rows and must not read alike. <b>Empty means "not
+    /// recorded"</b>: every round written before this step, and a round with no size. <c>size_origin</c> says whether the
+    /// size was measured live or rebuilt later with today's rules; <c>size_gitlinks</c> counts the changed submodule
+    /// pointers, <b>-1 meaning "not recorded"</b> (a count of 0 is a measurement).</para>
+    /// <para><c>reviewers.effort</c> is the reasoning effort the launch applied. Its default marks every row written
+    /// before this step <c>not recorded</c>; a reviewer that applied none is written empty — the two are never merged.</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only (<c>--round-counts</c>,
+    /// <c>--log</c>) runs no step and never asks for these.</para>
+    /// </remarks>
+    internal const string TheRoundsSize = """
+        CREATE TABLE IF NOT EXISTS round_changes (
+            round_id INTEGER NOT NULL REFERENCES rounds(id),
+            scope    TEXT NOT NULL,
+            coverage TEXT NOT NULL,
+            kind     TEXT NOT NULL,
+            files    INTEGER NOT NULL,
+            added    INTEGER,
+            removed  INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS round_changes_by_round ON round_changes (round_id);
+        ALTER TABLE rounds ADD COLUMN size_state  TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN delta_state TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN delta_from  TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN size_origin TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN size_gitlinks INTEGER NOT NULL DEFAULT -1;
+        ALTER TABLE reviewers ADD COLUMN effort TEXT NOT NULL DEFAULT 'not recorded';
         """;
 }

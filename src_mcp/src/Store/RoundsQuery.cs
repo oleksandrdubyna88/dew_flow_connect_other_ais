@@ -99,7 +99,19 @@ public sealed record LoggedRound(
     /// coalesced into this row — empty for every round that ran, and for every row a database from
     /// before schema step 16 holds (S2.1 of the feature-review plan).
     /// </summary>
-    string Note = "");
+    string Note = "")
+{
+    /// <summary>
+    /// What a code round changed, by scope, coverage and kind (E2 of the round-size plan, contract C3) — or nothing.
+    /// </summary>
+    /// <remarks>
+    /// An init property, so the positional constructor and every call site stay as they are (the
+    /// <see cref="LoggedLog.Consultations"/> precedent). Null is "not recorded": a round from before schema step 22,
+    /// a plan or document round, one whose size was never written. Inside a binary cell <c>added</c> and
+    /// <c>removed</c> are ABSENT from the JSON, and a reader takes absent as "no line count" — never 0.
+    /// </remarks>
+    public Core.Context.RoundSize? Size { get; init; }
+}
 
 
 /// <summary>
@@ -493,9 +505,11 @@ public static class RoundsQuery
         read.Parameters.AddWithValue("$limit", limit);
         using var rows = read.ExecuteReader();
         var rounds = new List<LoggedRound>();
+        var ids = new List<long>();
         while (rows.Read())
         {
             var id = Big(rows, "id");
+            ids.Add(id);
             var started = Text(rows, "started_utc");
             var vendor = Text(rows, "caller_vendor");
             var client = Text(rows, "caller_client");
@@ -527,7 +541,7 @@ public static class RoundsQuery
                 Text(rows, "note")));
         }
 
-        return rounds;
+        return RoundChangesLog.Attach(db, rounds, ids);
     }
 
     /// <summary>

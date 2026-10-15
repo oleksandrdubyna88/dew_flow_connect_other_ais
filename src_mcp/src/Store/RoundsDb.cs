@@ -197,6 +197,7 @@ public sealed class RoundsDb : IDisposable
         RecordSession(state);
         var roundId = RecordRoundRow(state, round, context);
         RecordReviewers(roundId, round);
+        RoundChangesTable.Record(this, roundId, round.Size, round.Gitlinks);
         RecordFindings(roundId, findings, context);
         transaction.Commit();
     }
@@ -927,8 +928,8 @@ public sealed class RoundsDb : IDisposable
         {
             using var write = _db.CreateCommand();
             write.CommandText = """
-                INSERT INTO reviewers (round_id, provider, role, status, findings, seconds, note, model)
-                VALUES ($round, $provider, $role, $status, $findings, $seconds, $note, $model)
+                INSERT INTO reviewers (round_id, provider, role, status, findings, seconds, note, model, effort)
+                VALUES ($round, $provider, $role, $status, $findings, $seconds, $note, $model, $effort)
                 """;
             Bind(write, "$round", roundId);
             Bind(write, "$provider", reviewer.Provider);
@@ -941,6 +942,9 @@ public sealed class RoundsDb : IDisposable
             // a stood-down local reviewer, a remote role whose server chose — and the round counter
             // then counts the round under its stage and under no model.
             Bind(write, "$model", reviewer.Model);
+            // The effort the launch applied (schema step 22). Empty when it applied none — never 'not recorded',
+            // which is the column default for rows written before the step.
+            Bind(write, "$effort", reviewer.Effort);
             write.ExecuteNonQuery();
         }
     }

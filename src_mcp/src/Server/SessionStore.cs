@@ -192,6 +192,24 @@ public sealed record RoundRecord(
     /// </remarks>
     public CallerDeclaration? Caller { get; init; }
 
+    /// <summary>What a code round changed, by scope, coverage and kind — null when no size was recorded.</summary>
+    /// <remarks>
+    /// <b>Nullable, and NOT normalised on the way in</b>, exactly as <see cref="Caller"/> is: a round written before the
+    /// field, a plan round and a skipped round say nothing about a size, and a getter that materialised an empty one
+    /// would turn "not recorded" into a zero-line change the next time the session was saved. The delta predecessor
+    /// rule reads the predecessor's <c>Size.Whole.From</c>.
+    /// </remarks>
+    public Core.Context.RoundSize? Size { get; init; }
+
+    /// <summary>How many submodule pointers (gitlinks) the round's diff changed — null when the round recorded none.</summary>
+    /// <remarks>
+    /// <b>Nullable, and NOT normalised on the way in</b>, exactly as <see cref="Caller"/> and <see cref="Size"/> are: a round
+    /// written before the field, and one whose size was not measured, say nothing about gitlinks, and a getter that
+    /// materialised a 0 would turn "not recorded" into "no submodule moved". It is measured with the size or not at
+    /// all; the projection writes it to <c>rounds.size_gitlinks</c> (<c>-1</c> = not recorded).
+    /// </remarks>
+    public int? Gitlinks { get; init; }
+
     /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
     /// </summary>
