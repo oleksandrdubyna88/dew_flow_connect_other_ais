@@ -306,10 +306,19 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private static string Outcome(ReviewerLaunch final) =>
         final.Terminal is { } terminal ? ReviewerSummaryFactory.DescribeWhole(terminal) : "ok";
 
+    /// <summary>The terminal outcome's sentence, and — for a failure the vendor can advise on — what a question row (not a conversation) adds to it.</summary>
+    private static string WithAdvice(IConsultantRuntime runtime, ReviewerOutcome terminal)
+    {
+        var said = ReviewerSummaryFactory.Describe(terminal);
+        var advice = terminal is ReviewerOutcome.NonZeroExit exit ? runtime.QuestionRowAdvice(exit.FailureReason) : string.Empty;
+
+        return advice.Length > 0 ? $"{said}; {advice}" : said;
+    }
+
     /// <summary>A turn that produced no answer, as the row's ending — or null when it answered.</summary>
     private static (string Status, string Reason)? Unanswered(IConsultantRuntime runtime, RowTurn turn) =>
         turn.Final.Terminal is ReviewerOutcome.TimedOut ? (RowOutcomes.TimedOut, "the row ran past its budget and its process was ended")
-        : turn.Final.Terminal is { } terminal ? (RowOutcomes.Failed, ReviewerSummaryFactory.Describe(terminal))
+        : turn.Final.Terminal is { } terminal ? (RowOutcomes.Failed, WithAdvice(runtime, terminal))
         : string.IsNullOrWhiteSpace(turn.Final.Answer) ? (RowOutcomes.Failed, Silent(runtime, turn))
         : null;
 

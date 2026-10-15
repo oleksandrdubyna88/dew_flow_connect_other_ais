@@ -232,15 +232,22 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// <summary>The export's usage; unknown, never zero, when it is missing or null (D8, D9).</summary>
     public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result) => Export(invocation).Usage;
 
+    /// <summary>How the sentence for coai's turn cap begins — also how a question row recognises it (<see cref="IsACapStop"/>).</summary>
+    private const string TurnCapStop = "Vibe stopped at coai's cap of ";
+
+    private const string TokenCapStop = "Vibe stopped at a token cap (--max-tokens, outcome: token_limit)";
+
+    /// <summary>Whether <paramref name="reason"/> is one of <see cref="WhyItFailed"/>'s sentences for a cap — what a question row adds its guidance to.</summary>
+    public static bool IsACapStop(string reason) =>
+        reason.StartsWith(TurnCapStop, StringComparison.Ordinal) || reason.StartsWith(TokenCapStop, StringComparison.Ordinal);
+
     /// <summary>Why the run failed, in the export's own words: its outcome, and its error when it carries one.</summary>
     public string WhyItFailed(ReviewerInvocation invocation, ProcessResult result) => Export(invocation) switch
     {
         { Exists: false } => string.Empty,
         { Outcome: "deadline" } => $"Vibe stopped at its own time limit (--time-limit, outcome: deadline) — {invocation.Request.Timeout.TotalSeconds:0} s was not enough for this review",
-        { Outcome: "turn_limit" } => $"Vibe stopped at coai's cap of {VibeLimits.ConsultantTurns} assistant turns (--max-turns) before it answered; "
-            + "if the question names files, name them exactly — Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28)",
-        { Outcome: "token_limit" } => "Vibe stopped at a token cap (--max-tokens, outcome: token_limit) before it answered; "
-            + "if the question names files, name them exactly — Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28)",
+        { Outcome: "turn_limit" } => $"{TurnCapStop}{VibeLimits.ConsultantTurns} assistant turns (--max-turns) before it answered",
+        { Outcome: "token_limit" } => $"{TokenCapStop} before it answered",
         { Error.Length: > 0 } failed => $"{failed.Error} (outcome: {failed.Outcome})",
         var other => $"Vibe ended with outcome: {other.Outcome}",
     };

@@ -148,9 +148,14 @@ const classOf = classIn(afterTurn);
 const unknown = afterTurn.filter((f) => classOf(f.path) === 'unknown');
 const pinned = afterTurn.filter((f) => classOf(f.path) === 'pinned');
 // Stability: a pinned file must keep its bytes across a later start in the same home, and match in a fresh home that has it.
-const drift = [steps[2].after, steps[3].after].flatMap((later) => later.filter((f) => classIn(later)(f.path) === 'pinned')
-  .filter((f) => pinned.some((p) => p.path === f.path && p.sha256 !== f.sha256)).map((f) => f.path));
-const appeared = steps[2].after.filter((f) => classIn(steps[2].after)(f.path) === 'pinned' && !pinned.some((p) => p.path === f.path)).map((f) => f.path);
+// One classifier per inventory, built BEFORE the filter: classIn lists the whole inventory once, and a call per entry listed it again.
+const drift = [steps[2].after, steps[3].after].flatMap((later) => {
+  const classOfLater = classIn(later);
+  return later.filter((f) => classOfLater(f.path) === 'pinned')
+    .filter((f) => pinned.some((p) => p.path === f.path && p.sha256 !== f.sha256)).map((f) => f.path);
+});
+const classOfSecond = classIn(steps[2].after);
+const appeared = steps[2].after.filter((f) => classOfSecond(f.path) === 'pinned' && !pinned.some((p) => p.path === f.path)).map((f) => f.path);
 
 // The deepest write below a home (review R3): the longest persisted file + Vibe's atomic-write wrapper. VibePathBudget's Windows
 // DeepestChild must not be below it (a parity test); a Vibe that writes deeper turns the suite red until the budget is raised.

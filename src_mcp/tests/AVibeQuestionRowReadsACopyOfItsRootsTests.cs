@@ -208,7 +208,8 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
 
         var row = TheRow(reply);
         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
-        row.GetProperty("reason").GetString().Should().StartWith("exit 3: Vibe stopped at coai's cap of 20 assistant turns");
+        row.GetProperty("reason").GetString().Should().StartWith("exit 3: Vibe stopped at coai's cap of 20 assistant turns")
+            .And.Contain("name them exactly").And.Contain("Vibe cannot list a folder", "the row's own report carries the file-search guidance");
         vibe.Turns.Should().ContainSingle().Which.Request.Arguments.Should().ContainInConsecutiveOrder("--max-turns", "20");
         var billed = File.ReadAllLines(_dir.At("data", "usage.jsonl")).Select(line => JsonDocument.Parse(line).RootElement).Should().ContainSingle("one ledger line for the turn").Subject;
         billed.GetProperty("tokensIn").GetInt64().Should().Be(84186, "read from the export, never zero");

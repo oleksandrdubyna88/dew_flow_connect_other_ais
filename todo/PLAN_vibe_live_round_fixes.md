@@ -622,6 +622,7 @@ the session written and resumed, the home validation still passing (does `\\?\` 
 
 ## 11. Gate and review — what changed (2026-10-15)
 
+- **Code gate 2026-10-15: 4 findings accepted, 1 rejected — partial is LibraryImport's.** Accepted: `LaunchTurn.Refused` takes a required `RefusalCause` (no default); the descendant walk refuses a child whose OWNER is not the person or Administrators (the limit sentence it replaced said a planted child keeps its owner); `turn_limit` / `token_limit` say only that the cap stopped the launch before it answered, and the file-search guidance is the question row's alone (`IConsultantRuntime.QuestionRowAdvice`); the manifest script builds one classifier per inventory. Deviation: the owner test on a real SYSTEM-owned child (E5b) skips unless elevated, like E5; its rule is tested on a bare descriptor.
 - **Review round, 2026-10-15 (an Opus judge and a cadence consultant): FIX.** D7: ONE handle is opened (with a data right and, when it can,
   WRITE_DAC), verified, re-ACLed and HELD (the first version verified one handle and held another, opened by path); after a re-ACL every
   descendant is walked — links never entered — and reset to inherit (propagation leaves explicit entries and protected DACLs), only when the

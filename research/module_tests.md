@@ -4040,3 +4040,12 @@ already passed the 102-character limit or were changed to a `testsToDelete-vh-*`
 
 Deviation recorded: **B3** (a lock held by another server) is tested with a second open of the same `HeldFile` in the SAME process, not by a child
 process — the exclusive open is the kernel's, so the second opener sees the same refusal, but it is not a second process.
+
+### Code gate of 2026-10-15 — four findings accepted
+
+| Finding | Test | First red |
+|---|---|---|
+| `LaunchTurn.Refused` had a default cause | `ARefusalStatesItsCauseTests` (a stub adapter through the real executor and the classifier) | `AMissingCliRefusal_StaysCliNotFound`: `Expected outcome to be False, but found True` with the cause ignored |
+| the walk did not check a child's owner | `TheOwnerRule_RefusesAChildOwnedBySomeoneElse_ByName_…` (a bare `FileSecurity`, no elevation); `E5b_…` (a SYSTEM-owned child; skips unless elevated) | `Expected PrivateFolder.OwnerProblem(…) "" to contain "C:\homes\coai-vibe\id\h\transcript.jsonl"` |
+| file-search advice on every consultant launch | `ATurnLimit_…` (now neutral), `TheFileSearchAdvice_IsOfferedForACapStop_AndForNothingElse`, the question-row and consult scenarios | `Did not expect runtime.WhyItFailed(…) to contain "list a folder"`; `Expected consultant.QuestionRowAdvice(capped) "" to contain "name them exactly"` |
+| a classifier per entry in the manifest script | none (a refactor with the same output): `scripts/lib/vibe.test.mjs` stays green | — |

@@ -49,8 +49,9 @@ public abstract record PrivateFolderOutcome
 /// <para><b>Unix.</b> Created <c>0700</c>; an existing one must not be a symlink and must have no group or other bits, else
 /// it is refused naming its mode. The owner uid is not checked.</para>
 /// <para><b>Limits, stated.</b> A local administrator and SYSTEM are outside the threat model. Re-ACLing does not undo contents
-/// planted while the folder was wide — the per-launch home check judges those — and a child somebody else planted keeps its OWNER,
-/// and an owner holds an implicit WRITE_DAC, so it can widen that child again (the walk resets its DACL, not its owner). A
+/// planted while the folder was wide — the per-launch home check judges those. A child whose OWNER is not the person or Administrators
+/// refuses the folder by name (the walk checks each child's owner), because an owner holds an implicit WRITE_DAC and could widen the
+/// DACL again right after it was reset. A
 /// <c>coai-*</c> folder another user made first on a shared, root-of-drive root cannot be deleted by the person: the cure is another
 /// folder.</para>
 /// </remarks>
@@ -81,6 +82,17 @@ public static partial class PrivateFolder
             return new PrivateFolderOutcome.Refused($"{PathOf(root, name)} could not be made or read private ({e.Message}) — choose another Vibe homes folder in {Setting}");
         }
     }
+
+    /// <summary>
+    /// Why a descendant's OWNER refuses the folder — or empty: an owner other than the person or Administrators holds an implicit
+    /// WRITE_DAC, so whoever planted the child could widen its DACL again right after the walk reset it. The sentence names the child.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    internal static string OwnerProblem(string entry, FileSystemSecurity security, SecurityIdentifier me) =>
+        Windows.OwnerIsOurs(security, me)
+            ? string.Empty
+            : $"{entry} inside the re-ACLed folder is owned by {Windows.Name(security.GetOwner(typeof(SecurityIdentifier)))}, and an owner keeps the right to change its DACL (WRITE_DAC), "
+              + $"so coai cannot make it private — delete it, or choose another Vibe homes folder in {Setting}";
 
     /// <summary>Whether <paramref name="root"/> is spelled as a full local path — the question before "does it exist" has any meaning.</summary>
     public static bool IsFullLocalPath(string root) =>
@@ -240,7 +252,7 @@ public static partial class PrivateFolder
         }
 
         /// <summary>The owner may be the person or Administrators — an elevated session creates folders owned by the group.</summary>
-        private static bool OwnerIsOurs(DirectorySecurity security, SecurityIdentifier me)
+        internal static bool OwnerIsOurs(FileSystemSecurity security, SecurityIdentifier me)
         {
             var owner = security.GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
 
@@ -351,19 +363,23 @@ public static partial class PrivateFolder
         {
             try
             {
-                if (!NeedsReset(SecurityOf(entry, isFolder)))
-                {
-                    return string.Empty;
-                }
+                var before = SecurityOf(entry, isFolder);
 
-                Reset(entry, isFolder);
-
-                return Inherited(SecurityOf(entry, isFolder), me) ? string.Empty : CouldNotBeMade(entry, "it did not inherit the three entries after a reset");
+                return OwnerProblem(entry, before, me) is { Length: > 0 } foreign ? foreign
+                    : NeedsReset(before) ? ResetAndChecked(entry, isFolder, me)
+                    : string.Empty;
             }
             catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidOperationException)
             {
                 return CouldNotBeMade(entry, e.Message);
             }
+        }
+
+        private static string ResetAndChecked(string entry, bool isFolder, SecurityIdentifier me)
+        {
+            Reset(entry, isFolder);
+
+            return Inherited(SecurityOf(entry, isFolder), me) ? string.Empty : CouldNotBeMade(entry, "it did not inherit the three entries after a reset");
         }
 
         private static string CouldNotBeMade(string entry, string why) =>
@@ -423,7 +439,7 @@ public static partial class PrivateFolder
         private static string Rights(IEnumerable<FileSystemAccessRule> rules) =>
             rules.Any(rule => (rule.FileSystemRights & (FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.Delete | FileSystemRights.WriteAttributes)) != 0) ? "modify" : "read";
 
-        private static string Name(IdentityReference? who)
+        internal static string Name(IdentityReference? who)
         {
             if (who is null)
             {

@@ -204,10 +204,27 @@ public sealed class VibeRuntimeTests : IDisposable
         var deadline = WithExport("""{"outcome":"deadline","stop_reason":null,"usage":null}""");
         var runtime = new VibeRuntime();
 
+        // Only that coai's cap stopped the launch before it answered: a conversation turn or a check may not be a file question at all.
         runtime.WhyItFailed(turns, Finished with { ExitCode = 3 }).Should().Contain("20").And.Contain("--max-turns").And.Contain("before it answered")
-            .And.Contain("Vibe cannot list a folder").And.Contain("§28").And.NotContain("did not find", "a productive investigation can use its budget up too — the sentence does not claim the search failed");
-        runtime.WhyItFailed(tokens, Finished with { ExitCode = 3 }).Should().Contain("token").And.Contain("before it answered").And.Contain("§28").And.NotContain("did not find");
+            .And.NotContain("list a folder").And.NotContain("name them").And.NotContain("did not find");
+        runtime.WhyItFailed(tokens, Finished with { ExitCode = 3 }).Should().Contain("token").And.Contain("before it answered")
+            .And.NotContain("list a folder").And.NotContain("did not find");
         runtime.WhyItFailed(deadline, Finished with { ExitCode = 3 }).Should().Contain("time limit", "the deadline's sentence is unchanged");
+    }
+
+    /// <summary>The file-search guidance belongs to the QUESTION ROW's report only (the consultant adapter offers it; nothing else does).</summary>
+    [Fact]
+    public void TheFileSearchAdvice_IsOfferedForACapStop_AndForNothingElse()
+    {
+        Runners.Consultation.IConsultantRuntime consultant = new VibeConsultant(new VibeRuntime());
+        var capped = new VibeRuntime().WhyItFailed(WithExport("""{"outcome":"turn_limit","stop_reason":"limit"}"""), Finished with { ExitCode = 3 });
+        var tokenCapped = new VibeRuntime().WhyItFailed(WithExport("""{"outcome":"token_limit","stop_reason":"interrupted"}"""), Finished with { ExitCode = 3 });
+
+        consultant.QuestionRowAdvice(capped).Should().Contain("name them exactly").And.Contain("Vibe cannot list a folder").And.Contain("§28");
+        consultant.QuestionRowAdvice(tokenCapped).Should().Contain("Vibe cannot list a folder");
+        consultant.QuestionRowAdvice("Vibe stopped at its own time limit").Should().BeEmpty();
+        consultant.QuestionRowAdvice(string.Empty).Should().BeEmpty();
+        ((Runners.Consultation.IConsultantRuntime)new Runners.Consultation.CodexConsultant(new CodexRuntime())).QuestionRowAdvice(capped).Should().BeEmpty("no other adapter has a cap to explain");
     }
 
     [Fact]

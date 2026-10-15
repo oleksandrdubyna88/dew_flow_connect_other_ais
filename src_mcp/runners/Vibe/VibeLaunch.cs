@@ -168,7 +168,7 @@ public static class VibeLaunch
             () => HomeMade(Value(request, HomeVariable)));
         if (before.Length > 0)
         {
-            return LaunchTurn.Refused(before);
+            return LaunchTurn.Refused(before, RefusalCause.LaunchControl);
         }
 
         var turn = await VibeHomeTurns.TakeAsync(Value(request, HomeVariable), ct);
@@ -242,7 +242,7 @@ public static class VibeLaunch
     {
         turn.Dispose();
 
-        return LaunchTurn.Refused(inside.Refusal, inside.CliMissing);
+        return LaunchTurn.Refused(inside.Refusal, inside.CliMissing ? RefusalCause.CliMissing : RefusalCause.LaunchControl);
     }
 
     /// <summary>The first non-empty sentence of the checks, run in order — later ones are not asked.</summary>

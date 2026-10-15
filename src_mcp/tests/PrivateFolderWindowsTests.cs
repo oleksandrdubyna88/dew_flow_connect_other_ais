@@ -70,6 +70,54 @@ public sealed class PrivateFolderWindowsTests : IDisposable
         enabled.Should().NotBeNull("a standard user token holds SeIncreaseWorkingSetPrivilege, disabled; the helper turns it on");
     }
 
+    /// <summary>
+    /// The rule behind the walk's owner check, on a bare security descriptor (no elevation): a child owned by anyone but the person or
+    /// Administrators is refused BY NAME, because an owner holds an implicit WRITE_DAC and could widen the DACL again after the check.
+    /// </summary>
+    [Fact]
+    public void TheOwnerRule_RefusesAChildOwnedBySomeoneElse_ByName_AndAdmitsThePersonAndAdministrators()
+    {
+        OnWindows();
+        FileSecurity Owned(SecurityIdentifier owner)
+        {
+            var security = new FileSecurity();
+            security.SetOwner(owner);
+
+            return security;
+        }
+
+        const string Child = @"C:\homes\coai-vibe\id\h\transcript.jsonl";
+        PrivateFolder.OwnerProblem(Child, Owned(System), Me)
+            .Should().Contain(Child).And.Contain(@"NT AUTHORITY\SYSTEM").And.Contain("WRITE_DAC");
+        PrivateFolder.OwnerProblem("x", Owned(Everyone), Me).Should().NotBeEmpty();
+        PrivateFolder.OwnerProblem("x", Owned(Me), Me).Should().BeEmpty();
+        PrivateFolder.OwnerProblem("x", Owned(Admins), Me).Should().BeEmpty("an elevated session owns what it makes as Administrators");
+    }
+
+    /// <summary>E5's twin one level down: a child planted with another OWNER makes the whole folder refused, naming the child (skips unless elevated, like E5).</summary>
+    [Fact]
+    public void E5b_AChildOwnedBySomeoneElse_RefusesTheFolder_NamingTheChild()
+    {
+        OnWindows();
+        var parent = WideFolder("coai-vibe");
+        var child = Path.Combine(parent, "id", "transcript.jsonl");
+        Directory.CreateDirectory(Path.GetDirectoryName(child)!);
+        File.WriteAllText(child, "the reviewed code");
+        using var restoring = TokenPrivilege.Enable("SeRestorePrivilege");
+        if (restoring is null)
+        {
+            Assert.Skip("setting another owner needs SeRestorePrivilege, which this session does not hold (it is not elevated)");
+        }
+
+        var security = new FileInfo(child).GetAccessControl();
+        security.SetOwner(System);
+        new FileInfo(child).SetAccessControl(security);
+
+        var refused = PrivateFolder.Open(_root, "coai-vibe").Should().BeOfType<PrivateFolderOutcome.Refused>().Subject;
+
+        refused.Sentence.Should().Contain(child).And.Contain(@"NT AUTHORITY\SYSTEM");
+    }
+
     [Fact]
     public void E1_AFreshFolder_IsMadeWithAProtectedDaclOfExactlyThePersonSystemAndAdministrators()
     {

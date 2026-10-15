@@ -155,6 +155,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         var said = Refusal(reply);
         said.Should().Contain("(failure: exit)").And.Contain("Vibe stopped at coai's cap of 20 assistant turns");
         said.Should().NotContain("cli-not-found").And.NotContain("launch-refused");
+        said.Should().NotContain("list a folder", "a conversation turn may not be a file question at all — it gets the plain cap sentence");
     }
 
     /// <summary>D6 (second case) and A4: a home that would pass Windows' path limit is refused BEFORE the home is made, and the answer says what to set.</summary>
