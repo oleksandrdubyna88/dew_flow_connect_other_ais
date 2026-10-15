@@ -1,0 +1,160 @@
+# PLAN — The plan gate reads the committed plan itself
+
+> Status: **plan only, nothing implemented yet, 2026-10-15.** Scope: `review_plan` (`src_mcp/src/Tools.cs`,
+> `PanelService.ReviewPlanAsync`), one widening of `GitHistory`, a new committed-plan reader, the round record (session
+> file + one `rounds` column), the plan prompt's end line, and one display line in the extension's rounds log.
+>
+> Related: [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md),
+> [architecture.md](../research/architecture.md) (§ *A field added to the round list*),
+> [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md) (schema steps 22/23).
+
+## 1. The symptom (measured 2026-10-15)
+
+The plan gate reviews exactly one string. `ReviewPlanAsync` (`src_mcp/src/Server/PanelService.cs:612-699`) runs with
+`NeedsWorktree: false … ReadsCheckout: false` (`PanelService.cs:635`), and the reviewer's whole view of the plan is
+`$"## The plan under review\n\n{planText}"` (`PanelService.cs:677`) in an empty scratch directory. Epic documents here
+are 60–100 KB. On one day:
+
+1. A calling agent's verbatim copy of such a document into `planText` was cut by a safety classifier **three times**;
+   each round went out truncated and burned `maxRounds: 1`. Nobody can send ~70 KB+ verbatim reliably.
+2. A path-only `planText` produced a **hollow `proceed` with 0 findings** while both reviewers wrote that the body was
+   missing. Nothing in the gate could tell a reviewer that saw nothing from one that saw a sound plan.
+3. The `review_plan` description still says a reviewer reads `planText` "plus a read-only checkout"
+   (`src_mcp/src/Tools.cs:90`). It does not, and has not since the plan stage lost its worktree.
+
+## 2. The goal — what must be true when this is done
+
+1. A caller can name a **committed** plan file instead of pasting it; the server reads it from git's object database at
+   the one commit the round runs on, and every reviewer receives it whole.
+2. The text never transits the calling agent, so no classifier on the caller's side can cut it.
+3. Every way the read could be wrong — dirty file, wrong object type, partial capture, bad encoding, too large — is a
+   **refusal before any round is consumed**, in a sentence that names the cure.
+4. The round records what was reviewed: commit, canonical path, blob id, byte count, and the id of the text sent;
+   `status` and `--log` show it.
+5. A plan reviewer that says the plan did not reach it whole is **not counted as answering** — it cannot help a round
+   pass (option A's mandate, verified with the question consultant).
+6. `planText` keeps working exactly as today for every caller that sends it.
+
+## 3. Decisions (each checked against the code)
+
+| # | Decision | Why — and what was checked |
+|---|---|---|
+| D1 | New optional argument **`committedPlan`** (repo-relative path). Not `plan`, not `planPath`. | `plan` already exists on `review_plan` as the **cadence** key (`Tools.cs:80-83`, parsed at `Server/Cadence/CadenceDesk.cs:143-147`) and legitimately names a different file than the one reviewed — an epic's stories document is reviewed while `plan` names its parent. Giving it a second meaning silently would conflate the two. `planPath` is `review_feature`'s name for a **working-tree** read (`Server/Stages/FeaturePlan.cs:58`); one name with two sources is a trap. `committedPlan` says the source in its name. No mode string (`planFrom`) — a mode plus a path is two arguments for one fact. |
+| D2 | `planText` and `committedPlan` are **mutually exclusive**; neither is refused. | The `DocumentReader` precedent refuses both (`Server/DocumentReader.cs:63-66`). The engine's current "planText is required" (`Server/Rounds/RoundEngine.cs:213-217`) is reworded to name both. **Never** "read the file when `planText` looks like a pointer": a guess about intent is not an input. |
+| D3 | **One commit, pinned once.** `ReviewPlanAsync` resolves the branch tip with `WorktreeManager.ResolveShaAsync` (`runners/Worktrees/WorktreeManager.cs:91-97`), reads the plan at that sha, and passes it as `StageRun.Head` (`Server/Rounds/StageRun.cs:99`). | The engine resolves `stage.Head` when set (`RoundEngine.cs:304`), and `rev-parse --verify <sha>^{commit}` returns the same sha — so the plan, the cadence outline read under the claim (`CadenceDesk.cs:355-362`) and the round record are one commit even if the branch moves mid-call. Precedent: the feature stage pins its head the same way (`PanelService.cs:1498`). |
+| D4 | Optional **`expectedCommit`** (40 hex). Malformed → refused; tip ≠ expected → refused, naming both. | A caller that committed and then had a peer commit land on the branch would otherwise review a plan it never saw. Shape check is `GitHistory.IsCommitish` (`runners/Collecting/GitHistory.cs:72`). |
+| D5 | Read **by blob id**: `git --literal-pathspecs ls-tree -l -z --full-tree <sha> -- <path>`, then `git cat-file blob <oid>`. Not `git show sha:path`. | One `ls-tree` line gives mode, type, oid and size, so symlink (`120000`), submodule (`160000 commit`), directory (`040000 tree`) and the size ceiling are refused **without reading a byte**; the bytes read are then those of the oid that gets recorded. `--literal-pathspecs` stops `*`/`?` in a name from globbing; `-z` stops quoting. Path rules reuse `GitHistory.IsRepoRelative` (`GitHistory.cs:93`: empty, NUL, rooted, drive, `..` refused); `\` → `/` first, as `CadenceDesk.cs:143` does; a trailing `/` is refused. `CommittedFile.ReadAsync` (`runners/Collecting/CommittedFile.cs:31`) was checked and is not reused for the read: it answers "not in commit" vs "git failed" but cannot see the entry's type or size. |
+| D6 | **A partial capture is refused.** `GitAnswer` gains an additive `Truncated` (default false); `GitHistory.RunAsync` sets it from `ProcessResult.Truncated`. | `RunAsync` (`GitHistory.cs:264-274`) checks `TimedOut`/`Cancelled` only (`:271`), while the launcher cuts a stream at its ceiling or drain grace and says so only in `ProcessResult.Truncated` (`runners/Processes/ProcessLauncher.cs:127-139`). The new reader refuses a truncated read. Existing callers keep today's behaviour — see §8. |
+| D7 | **The capture is proved whole**: the reader recomputes git's blob id (SHA-1 of `blob <n>\0` + bytes) over the UTF-8 bytes of the decoded text and requires it to equal the oid. | stdout is decoded with lossy `Encoding.UTF8` (`ProcessLauncher.cs:227`), so invalid bytes become U+FFFD silently; the strict decoder the document reader uses (`DocumentReader.cs:46`) cannot be applied to a captured string. The id check catches a lossy decode, a truncation the flag missed, and a stripped BOM in one comparison. Refusal wording: text contains U+FFFD → "not UTF-8"; else if the id matches over `EF BB BF` + bytes → accept (the BOM is dropped, recorded bytes are the blob's); else → "the capture differs from the blob". SHA-1 only: `IsCommitish` already accepts 40 hex and nothing else. |
+| D8 | **Uncommitted or staged changes to the path are refused**, via `git --no-optional-locks --literal-pathspecs status --porcelain=v1 -z --untracked-files=no -- <path>`, run from the toplevel — **only when the checkout's HEAD is the pinned sha**. | `git status` compares through the clean filters, so a CRLF working copy of an LF blob under `core.autocrlf` is clean — a byte comparison of the working file would refuse it wrongly. `--no-optional-locks` keeps it from taking `index.lock` in a tree other sessions share. One `git rev-parse --show-toplevel HEAD` answers both "where is the root" and "is HEAD the pinned sha". When HEAD is another commit the working tree says nothing about the branch, so nothing is compared and the reply says so in one line. |
+| D9 | **Refusals, all before `RunStageAsync`** (so before the claim, the begin and any round number): both/neither input; credential-shaped name (`CredentialFiles.WhichPattern`, `core/Feature/CredentialFiles.cs:20`, as `FeaturePlan.cs:37`); bad path shape; branch unresolvable; `expectedCommit` malformed or stale; path not in the tree; symlink / submodule / directory; empty or whitespace-only; over the ceiling; an LFS pointer (text starts `version https://git-lfs.github.com/spec/v1`); truncated; not UTF-8 / capture mismatch; dirty or staged. | Ceiling = `DocumentRules.MaxBytes` (256 KiB, `core/Rounds/DocumentRules.cs:31`), the existing bound; the reason it is the bound is `DocumentRules.cs:22-29`. Refusals go through `PanelService.Error` → `Refusal.Answer` (`PanelService.cs:1847`), the same recorded path the engine's use. |
+| D10 | **What the round records.** A `PlanSource` record — `Origin` (`commit`/`text`), `Commit`, `Path`, `Blob`, `Bytes`, `TextId` — on `RoundRecord` in the session file, nullable and not normalised, like `RoundRecord.Caller` (`Server/SessionStore.cs:193`); `status` serialises `RoundRecord`s (`Server/ServerJsonContext.cs:143-151`), so it shows there with no new member. A text round records `Origin: text`, `Commit` (the sha), `Bytes`, `TextId` — "what was reviewed" for every plan round. `TextId` = `DocumentRules.ArtifactIdOf` (`DocumentRules.cs:117`). | Absent ≠ empty, exactly as `Caller`'s remark argues: a round written before the field said nothing. |
+| D11 | **One schema step**: `ALTER TABLE rounds ADD COLUMN plan_source TEXT NOT NULL DEFAULT ''` (JSON of D10; `''` = not recorded). `LoggedRound` (`Store/RoundsQuery.cs:27`) gains a trailing `PlanSource? PlanSource = null`, read only when `HasColumn(db, "rounds", "plan_source")` (`RoundsQuery.cs:895`). | The session file + existing columns were checked and do **not** suffice for `--log`: `head_sha` holds the commit and `plan_text` the text (`Store/RoundsDb.cs:847-882`), so bytes, `TextId` and even the blob id are functions of `plan_text` — but **the path is in no column**, and nothing distinguishes a committed read from a pasted one (`subject` is a heading or a file name, `core/Rounds/RoundSubject.cs`). **Step number:** main is at step 21 (`Store/Schema.cs:603-616`); the size epic claims 22 and the authors epic 23 (parent plan §11). The array index IS the version (`storage/SqliteMigrator.cs:90`), so the number is fixed **at merge**: the next free index then — 22 if this lands first, 24 if both land first. Whichever PR merges second renumbers before merging; no build of an unmerged branch is pointed at a real data directory. |
+| D12 | **The incomplete-plan sentinel.** The composed plan section gains a source line and a final line `END OF PLAN <TextId>`; the instruction before it says: if that line is not visible, or the section holds no plan body (only a path or a pointer), answer exactly one finding titled `PLAN_INCOMPLETE`. For `Stage.PlanReview`, an `Ok` outcome carrying that title becomes `ReviewerOutcome.Unparseable(reason, usage)` (`runners/Reviewers/ReviewerExecutor.cs:201`) **before** `ReviewerSummaryFactory.From` (`RoundEngine.cs:434`); its findings are dropped. | So it is a failure, never an answer: zero answered → `call_human` (`core/Rounds/RoundMachine.cs:404`); some answered → the reviewer line names it. `Unparseable` is reused rather than a new variant because it already means "an answer the gate cannot use" and keeps the usage; a new variant would touch every exhaustive switch for one sentence. The sentinel rides **in the prompt** with the existing finding schema (`core/Findings/FindingSchema.cs`), so an older Team server — which receives the prompt from this side — needs nothing. `TextId` cannot be forged by a plan (it would have to contain its own hash). It covers `planText` rounds too: that is where the hollow pass happened. |
+| D13 | **No token preflight.** Per-model context capacity is not data here: `DocumentRules.cs:26-29` says so, and the one configured token number, the security lane's `ContextTokens` (`Server/SecurityLaneSetting.cs:7`), is an operator setting for that lane, not a model capability. The bound stays the 256 KiB ceiling; D12 is what happens when a reviewer still did not get it whole. | A check against a guessed number would refuse valid rounds and miss invalid ones (`DocumentRules.cs:27-29`). |
+| D14 | Prompts keep travelling on stdin. | `StdIn = prompt` at `runners/Reviewers/ReviewerRuntime.cs:638` and `:821`, `ClaudeRuntime.cs:108` — unchanged. |
+| D15 | The tool description is updated; the server instructions are not. | The 2 KiB budget binds `Program.Instructions` only (`tests/TheInstructionsFitWhatAClientKeepsTests.cs`, whose remark sends detail INTO tool descriptions because their budget is separate). The new text: `committedPlan` / `expectedCommit`, the refusals in one sentence, the end-line rule, and the false "plus a read-only checkout" (`Tools.cs:90`) corrected. |
+| D16 | Extension: **display only**, no new action, so no new button. | Nothing in `src_vs_code` calls `review_plan` or shows `planText`; the rounds log shows `subject` (`src_vs_code/src/roundsLog.ts:501`) from the session file read in `rounds.ts`. It gains one detail line from `planSource` — `todo/PLAN_x.md @ 1a2b3c4 · blob 9f8e7d6 · 98 304 bytes` — and shows nothing when the field is absent (older server). |
+
+## 4. The read, in order (one `CommittedPlanReader.ReadAsync(git, repoPath, sha, path, ct)`)
+
+1. Normalise the path (D5); credential shape (D9). No process yet.
+2. `rev-parse --show-toplevel HEAD` → root, and whether HEAD is the pinned sha (D8).
+3. `ls-tree -l -z --full-tree` → exactly one entry whose path equals the canonical path; mode `100644`/`100755`, type
+   `blob`; `0 < size ≤ MaxBytes`. Otherwise the matching refusal.
+4. `cat-file blob <oid>` → refuse `!Ran`, `Truncated`, non-zero exit.
+5. U+FFFD / blob-id proof (D7); empty-after-trim; LFS pointer.
+6. When HEAD is the sha: `status` (D8) → refuse a non-empty answer, naming staged (`X`) or unstaged (`Y`).
+7. Return `Accepted(PlanSource, Text)`.
+
+Five git processes, each bounded by `GitHistory`'s 30 s budget (`GitHistory.cs:44`); none writes. The reader lives in
+`runners/Collecting/` beside `CommittedFile`; the pure parts — path normalisation, `ls-tree -z` parsing, the blob id,
+the LFS test — live in `core/` so they are unit-tested without git.
+
+## 5. The prompt (plan stage only)
+
+```
+## The plan under review
+(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)   ← committed reads only
+
+<the text>
+
+END OF PLAN <TextId>
+```
+
+and, immediately before the heading, the D12 instruction. The `context for review` log line (`PanelService.cs:649-656`)
+gains the source and `TextId`. The session keeps the text as `PlanText` (`RoundEngine.cs:597`) — the whole committed
+plan — so `review_code`'s reuse of it as scope and the split order's measurement (`RoundEngine.cs:506`) see the real
+plan rather than a pointer.
+
+## 6. Build order (one PR, five commits, each green on its own)
+
+1. **`GitHistory` widened** — `GitAnswer.Truncated`; `EntryAtAsync` (ls-tree), `BlobAsync` (cat-file blob),
+   `RootAndHeadAsync`, `PathStatusAsync`. Every argument an array element; revision arguments behind `IsCommitish`.
+2. **Core helpers + `CommittedPlanReader`** with its refusals (§4).
+3. **Wiring**: `Tools.cs` (`planText` becomes optional — `string? planText = null`; `committedPlan`, `expectedCommit`),
+   `ReviewPlanAsync` (D2–D4, D9, `Head = sha`), the prompt (§5), the description (D15).
+4. **Recording**: `PlanSource` on `RoundRecord` + `ServerJsonContext` registration; the schema step (D11) with the
+   projection write and the `HasColumn`-guarded read; the D12 fold.
+5. **Extension + docs**: `rounds.ts` type + the rounds-log line; `research/module_server.md`,
+   `research/module_extension.md`, and `research/architecture.md` § the `--log` seam (one more field, same rule).
+
+## 7. Test plan
+
+Real git in a temp repo via `tests/TempGitRepo.cs`; reviewers through the existing fake-launcher round tests
+(`tests/FakeCliRoundTests.cs`, `tests/EndToEndTests.cs` patterns). Run as the MTP executable, never `dotnet test`.
+
+| # | Scenario | Asserts |
+|---|---|---|
+| T1 | 100 KB committed plan whose last line is unique | **every** reviewer's prompt contains that last line and `END OF PLAN <TextId>` |
+| T2 | committed plan edited in the working tree | refused "uncommitted", no round recorded, session unchanged |
+| T3 | edit staged, not committed | refused "staged" |
+| T4 | CRLF working copy of an LF blob under `core.autocrlf=true` | **accepted** (the eol case D8 exists for) |
+| T5 | `../outside.md`, `/etc/x`, `C:\x`, `a\0b`, `todo/` | refused, no git process started for the shape cases |
+| T6 | path is a committed symlink / a submodule / a directory | refused with its own word, before `cat-file` |
+| T7 | fake launcher returns exit 0 with `Truncated: true` on `cat-file` | refused "incomplete read" (precedent `tests/ClaudeCapabilityTests.cs:234`) |
+| T8 | blob with invalid UTF-8; blob with a BOM | refused "not UTF-8"; BOM accepted, recorded bytes = blob size |
+| T9 | empty file; 257 KiB file; an LFS pointer | three refusals; the size one starts no `cat-file` |
+| T10 | both `planText` and `committedPlan`; neither | refused, no round |
+| T11 | `expectedCommit` malformed; stale | refused, naming tip and expected |
+| T12 | branch moves between the read and the engine (fake resolve) | the round's `head_sha` = the read's commit (D3) |
+| T13 | a completed committed round | session file `PlanSource` = commit, path, blob, bytes, `TextId`; `status` returns it; `--log` row has it; a DB without the column reads `null` |
+| T14 | `planText` round | `PlanSource.Origin = text`, behaviour otherwise byte-identical to today's prompt + the two new lines |
+| T15 | one reviewer answers `PLAN_INCOMPLETE`, one answers normally | 1 of 2 answered, the sentinel's finding not merged; both answer it → `call_human` |
+| T16 | checkout HEAD ≠ the branch's sha, file dirty | accepted with the "not compared" line |
+| T17 | extension: a round with and without `planSource` | the page, run per `bundledPage.test.ts`, shows the line / shows nothing |
+
+**Break-its** (mutate production, name the test that must go red, restore, re-run green — reported with the red text):
+B1 drop the `Truncated` refusal → T7. B2 read the working file instead of the blob → T2 and T8. B3 accept both
+inputs → T10. B4 skip the blob-id proof → T8. B5 drop the `Head = sha` pin → T12. B6 drop the D12 fold → T15.
+
+## 8. Out of scope — named, not silently left
+
+- `review_code` gains no `committedPlan`: its scope is the session's kept `PlanText`, which is now whole.
+- `review_feature`'s `planPath` stays a working-tree read (`FeaturePlan.cs:58`); `review_document` is untouched.
+- Existing `GitHistory` readers (`CommittedFile`, the cadence outline, `--file-at`) still ignore `Truncated`; making
+  them refuse changes what the review page shows for files past 16 MiB — a separate, smaller plan.
+- The family snippet that tells callers "verbatim as `planText`" lives in `dew_flow_conventions`
+  (`common/coai-review-gate.md`, step 2) and the extension's `claudeSnippet.ts`; offering `committedPlan` there is a
+  conventions change after this ships, and this plan does not depend on it.
+- No refusal of a pointer-shaped `planText`: D12 makes such a round fail closed instead of guessing.
+
+## 9. Growth
+
+| Surface | Size at stated volumes | Retired by | Interrupted |
+|---|---|---|---|
+| `rounds.plan_source` | ≈ 200 B per plan round; at 50 plan rounds/day ≈ 3.6 MB/year | kept forever, as every round row (`Schema.cs:311`: a retention window "would delete the product") | written with the round row; no in-flight state |
+| `RoundRecord.PlanSource` | ≈ 250 B per plan round in a session file | the session file's existing owner | written with the round |
+| `plan_text` / `PersistedSession.PlanText` | ≤ 256 KiB per plan round — **unchanged class**: a verbatim `planText` is the same text | unchanged | unchanged |
+
+No directory, cache or long-lived process is added; the reader's five git processes end with the call.
+
+## Definition of Done
+
+- [ ] `review_plan` takes `committedPlan` (+ optional `expectedCommit`), exclusive with `planText`; old callers unchanged.
+- [ ] The text is read from the blob at the one pinned commit, proved whole by its blob id, and refused on every §3-D9 case before any round is consumed.
+- [ ] Each round records `PlanSource`; `status`, `--log` and the rounds log show it; the schema step's number is taken at merge and the other two plans' steps are respected.
+- [ ] A `PLAN_INCOMPLETE` answer counts as a failure; all-failed → `call_human`.
+- [ ] The tool description is corrected (no checkout) and says how to use the new argument; server instructions still pass their budget test.
+- [ ] T1–T17 green; B1–B6 each observed red with the named test, then green.
+- [ ] `module_server.md`, `module_extension.md`, `architecture.md` updated; `node .agents/conventions/tools/plan-lifecycle.mjs` clean; this plan promoted.
