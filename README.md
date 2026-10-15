@@ -93,6 +93,10 @@ two of its seventy code-stage findings were worth having.
 - **Mistral Vibe** — Mistral's own CLI on your Mistral subscription, signed in as itself; added from
   the panel's *Add a model*, whose ⤓ runs Mistral's own installer for the side it is on. coai-mcp
   runs it on Windows only until Linux, WSL and macOS are measured, and needs coai-mcp 0.53.0.
+- **Kimi Code** — Kimi's own CLI on your Kimi Code plan, signed in as itself (`kimi login`). coai-mcp runs it
+  on Windows only, in a home of its own that reaches your sign-in by a link (your `~/.kimi-code` is never
+  copied, edited or loaded for configuration), one review launch at a time. The server runs it from this
+  release; the panel's *Add a model* row follows.
 - **A model on your own machine** — Ollama, vLLM, or **any OpenAI-compatible endpoint (DeepSeek,
   vLLM, Ollama)**. Called directly with a strict `json_schema`, not through a vendor CLI that spends
   20k tokens on a system prompt before it reads your diff.

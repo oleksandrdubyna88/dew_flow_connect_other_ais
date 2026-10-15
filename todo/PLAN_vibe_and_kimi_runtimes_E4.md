@@ -1,6 +1,6 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
-> Status: **E4.1–E4.3 implemented 2026-10-15 (feat/kimi-runtime); E4.4–E4.5 not started.** Stories written 2026-10-14; the two
+> Status: **E4.1–E4.4 implemented 2026-10-15 (feat/kimi-runtime); E4.5 not started.** Stories written 2026-10-14; the two
 > cornerstones' scenarios and briefs written by Fable 2026-10-14; E4.2 amended by Fable 2026-10-15 (the junction risk
 > consultation 7de9430b and the E4.1 review folded in: decisions 9–13, brief §15–§17, S2.41–S2.46; revised the same day
 > after the Opus review of f1983923 — B1–B3, M1–M4 taken, E4.3 gains S3.14–S3.17). E4.2 is a `model: fable` spec — a
@@ -1218,9 +1218,20 @@ suite is green, and — the live check that unit tests cannot replace (parent §
 machine shows the Kimi row's version and its warning, recorded in `research/module_tests.md`. The live plan and code
 rounds are the parent's DoD, after E4.5.
 
+**Implemented 2026-10-15** (S4.1–S4.15, the S2.45 re-run through the round's records, and the E4.3 review's five minors first, in their own commit; the tests and the
+reds they were seen as are in `research/module_tests.md`, the unit in `research/module_runners.md` *The Kimi reviewer*, the round's scratch in `research/module_server.md`).
+The deviations from the brief as written are 43–53 of §"Where the parent plan and the code disagree". **Owed, said plainly:** the live `providers` check on the owner's
+machine (the story forbade running the real `kimi`), and no test starts the real `coai-mcp.exe --ask-acp` FROM `KimiRuntime`'s request — the adapter is proved against a scripted
+launcher (the argv it builds, the report it reads) and the shim is proved against its own argv (`AKimiShimScenarioTests`), so a flag the two disagree on would be found only by the
+first live round. **What E4.5 must know:** the server now accepts `kimi` by name (`RuntimeNames`), so the extension's `RUNTIMES`, both `package.json` enums and the hard-coded list in
+`runtimeSurvives.test.ts` already carry it (deviation 50) — brief item 1 is done for those three and NOT for `CLI_RUNTIMES`; the seeds are in (`effort`/`thinking` `unmeasured`, fast
+mode `none`, `kimi` not a consultant); `KIMI_RUNTIME_SINCE` must name the first server that has this story; `scripts/probe-kimi-confinement.mjs` is stale against the shim (brief item 12 below).
+
 ## E4.5 — The extension row: runtime, models, preset, colour, ▶, `crossesTo`, install and update per OS
 
 `model: opus` spec (this document) · Sonnet codes · Opus reviews.
+
+*[E4.4 as built, 2026-10-15: the server runs `kimi` and names it in `RuntimeNames`; the seeds (`shared/feature-availability.json`, the two generated TS files) and brief item 1's `RUNTIMES` + both `package.json` enums are DONE (deviation 50) — E4.5 adds `CLI_RUNTIMES` and the rest; `probe-kimi-confinement.mjs` is stale against the shim (item 12); the server's `providers` card for a Kimi row shows `KimiLaunch.VersionWarning`'s sentence.]*
 
 **Goal.** In the extension, Kimi is a runtime a person adds from the catalog's preset, picks a curated model for, sees
 in its own colour, opens with ▶ (plain interactive `kimi`), installs and updates with ONE press on Windows, Linux/WSL and
@@ -1572,6 +1583,43 @@ taken immediately before `AskAsync` and disposed after it, and is taken only und
     collection with 8 item(s) … contains 1 item(s) less*) and passed again with the file as it was. The shim's contract lives where it can grow — the type's remarks in
     `AskAcpMode.cs`, the `--help` text, `research/module_runners.md` — and the one-shot-mode list in PROJECT.md already names `--ask-acp`. Making room in the base (or raising
     the budget) is a decision for whoever owns `research/RESULTS_rules_selection_budget.md`.
+
+**What the E4.4 coder built differently from the brief as written (2026-10-15), each with its reason.** Items 43–53; none weakens a ruling (classification is by the report's fields,
+one Kimi launch at a time, every launch through the one control, the round's scratch disposes junction-first).
+
+43. **The E4.3 review's five minors went first, in their own commit** (`735ebf04`), each red first: (1) a tree hold taken with under a second of the deadline left
+    (`AskAcpMode.MinimumTurn`) is given back and the turn answers Busy (69, report `not_started`) — so a `--deadline-seconds 1` turn that waited at all is Busy too, a one-second turn
+    answering nothing anyway; (2) the `Declined` default arm is 65 (fail closed), reachable only by a defective profile; (3) `scripts/probe-kimi-confinement.mjs` was NOT re-plumbed —
+    it is 742 lines whose owned homes are the `KIMI_CODE_HOME` folder itself, and nothing here may run its paid arms to prove a re-plumbing — so the unmeasured-version warning
+    (`KimiLaunch.WarningFor`) and `KimiAcpProfile.MeasuredVersions`' remark point at `probe-kimi-tree-hold.mjs`, the script's header says it is stale, and the re-plumbing is E4.5 brief
+    item 12; (4) `device_id` is a regular file of at most 64 bytes (no format regex; a folder, 65 and 4096 bytes refused with a sentence); (5) RESULTS §25 names "many `device_id`s per sign-in"
+    as unmeasured.
+44. **`KimiRuntime` takes a `KimiSeams` record** (`PlacesFor(root)`, `Shim()`): the smallest seam that lets a test hand the adapter a fake person and a fake shim path without a
+    process-wide environment change. It is public only because the primary constructor is; `KimiSeams.Real(host)` is the default. No `IReviewerRuntime` member was added for homes
+    (`ReviewerSettings.OwnedScratch` has been there since S2); the only two new members are the brief's own, `RateLimited` and `LaunchesOneAtATime`. `KeepsAHome` was looked for on the
+    reviewer side and is not there (the one on this branch is `QuestionRowLaunch`'s private, consultant-side) — nothing was ported from #823, so the merge has no seam of mine to reconcile except these.
+45. **`ReviewerOutcome.RateLimited` gained a `Usage`** (default `None`, and `OwnUsage` returns it): the brief says the verdict carries the report's usage, and the outcome had nowhere to hold it.
+    `RateLimitVerdict` (`Limited`, `Reason`, `Usage`) is the seam's return; its default (`ByText`) is today's exactly, so every other adapter is byte-identical (S4.8).
+46. **`ReadUsage` answers `Usage.None` for an end that never reached the model** (`not_started`, `model_not_offered`) where the brief says `notCaptured` is `Usage.Unknown`: no agent
+    started, or the session did not offer the model before any prompt, so nothing was consumed — a fact, and an "unknown" would flag a busy sign-in's round as having uncounted spend.
+47. **`model_not_offered` is diagnosed through `WhyItFailed`, not through the shim's stderr.** The shim writes `<failure>: <reason> — <cure>` only for a known failure; for the end that is
+    itself a verdict it writes the bare reason, so `VendorDiagnosis.For(stderr)` never sees the word. `KimiRuntime.WhyItFailed` files the report's reason under its label (`Failure`, else the
+    `model_not_offered` end word) and LEADS with the cure — the summary cuts a line at 160 characters and the offered-models list is longer. The shim was not changed.
+48. **A `Stopped` Kimi home keeps the round's whole scratch** where the brief said "the scratch's own delete still runs on the rest". A stop is either a target loss (the link is already gone) or a
+    live tree (nothing unlinked): deleting the rest in the second case unlinks the junction under a running `kimi` — the sign-out decision 11 exists to prevent — and the first case costs only disk
+    until the six-hour sweep. This is the D20 sweep's rule. `RoundScratch.At(directory, note)` is a second factory so a test keeps the scratch (and its junctions) in a `testsToDelete-` folder.
+49. **`ForLaunch` rewrites `--deadline-seconds`** from the launch's own timeout (not in the brief): a retry's and a repair's timeouts are shorter, and a shim whose deadline outlives the executor's
+    is killed before it can print its report — the round would be left guessing, which the shim's own deadline exists to prevent.
+50. **`'kimi'` is already in the extension's `RUNTIMES`, both `package.json` runtime enums and `runtimeSurvives.test.ts`'s list** (E4.5 brief item 1, three of its four): the seed's `runtimes` must equal
+    `RUNTIMES` (`featureAvailability.test.ts`) and its rows are typed `Runtime`, so seeding `kimi` without them leaves `tsc` red and three tests failing (seen: the manifest enums twice, the one-declaration
+    test). `CLI_RUNTIMES`, the preset, models, colour, terminal, install, `crossesTo` stay E4.5's — a hand-written `kimi` row is accepted but has no card.
+51. **The shim's words are constants shared with their reader**: `KimiReport.SpentExit/AnsweredWord/NotStartedWord/ModelNotOfferedWord`, `KimiEnvironment.ExecutableFlag/LocksFlag`,
+    `KimiAcpProfile.BalanceSpent` — the writer (`AskAcpMode`, the profile) uses them too, as `ApiRuntime.EndedBeforeAnAnswerExit` is shared with `AskApiMode`.
+52. **`VendorDiagnosis.InstallCure("kimi")` is no longer null**, so `KimiLaunch`'s fallback to the getting-started URL is gone and the `could not be started` row of `KimiLaunchControlTests` now expects Moonshot's
+    install line (a reviewed E4.2 scenario changed). No CHANGELOG line: the server's is written by release-please and the extension's has no `## Unreleased` section (as deviation 41).
+53. **S2.45's round-records re-run lives inside `NothingOfTheSignIn_EverAppearsInWhatCoaiWrites`** (four new collectors — the reviewer line, the ledger text, the warning, the outcome record — each with
+    its liveness check) and a control, `TheDetector_SeesVendorTextRelayedIntoTheRoundsRecords`: the shim is scripted, so the canary can only enter through coai's own sentences, and the control shows the detector
+    sees a vendor's stderr relayed into the line (outside the pin, decision 12).
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
