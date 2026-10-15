@@ -34,6 +34,15 @@
 > preflight never runs under `kimi acp` and the pin works where it does run (§20); `/usage` is cumulative across
 > `session/load` (§23); the person's home was byte-identical but for `credentials/` across all 53 owned-home launches (§24).
 > M-K14 was NOT run (the owner's answer: later).
+>
+> **E4.3's cell (§27, 2026-10-15): M-K15 — the shim's inheritable tree hold, with the real Kimi 2.1.1.** 16 launches of the shipped
+> `coai-mcp --ask-acp --profile kimi` on owned homes (12 in the recorded run, 4 smoke runs of the script). **The hold gates:** after a normal end
+> both lock files are Free by the first poll after the shim's exit (≤ 165 ms, 6 of 6); with the shim killed mid-turn they are Held at EVERY 50-ms
+> sample while `kimi` lives and Free in the sample `kimi` is gone in (6 of 6, `kimi` leaving 121–126 ms after the kill on a plain turn and 4.7–5.1 s
+> after it with an `rg` running); nothing that `kimi` started — `rg.exe`, its console host — was alive after it (6 of 6 cut launches, 3 of them with
+> `rg` running). **One finding is not about the hold:** Kimi writes a `device_id` file into the owned home when a launch's token refresh rotates the
+> sign-in (2 of 2 refreshing launches, none of 13 others observed) — `KimiHome`'s allowlist did not admit it and would have refused the next launch
+> on that home; it does now.
 
 ## 1. Prompt mode cannot carry a review prompt
 
@@ -555,7 +564,7 @@ redirected together); whether the server registers a device (no `device_id` ever
 the preflight under the TUI; a launch with a model id outside the curated list on an owned home; the owned home's size over a
 long session; Linux and WSL (D18). Added 2026-10-15 (E4.2 decisions 9–10 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`):
 **M-K15**, the inheritable tree hold's lifetime — whether anything of Kimi's (a helper, an updater, `rg`) inherits the shim's
-lock handle and outlives `kimi` (E4.3's S3.17 measures it; until then the hold is "unmeasured" and does not gate); whether
+lock handle and outlives `kimi` (measured by E4.3 on 2026-10-15, §27: nothing did, in 6 of 6 cut launches); whether
 `kimi` refreshes its token unasked, at idle or near the 900 s expiry (M-K14's question, which decides whether the tree kill at
 every turn's end can cut a refresh); and a sign-in folder on a volume with no drive letter (an admin VHD mount), which
 `GetFinalPathNameByHandle` may not name — refused fail-closed by E4.2, unmeasured.
@@ -578,3 +587,45 @@ every turn's end can cut a refresh); and a sign-in folder on a volume with no dr
 The probe's own lesson, for the record: a re-attempt or a second arm that shares a run folder meets the first one's junction
 (`mklink /J` refuses, nothing worse) — the run folders are now unique per attempt and per arm name; and a killed run leaves its
 junctions in place, which is exactly why the disposal is a tested function a hand can call.
+
+## 27. M-K15 — the shim's tree hold with the real Kimi 2.1.1: it frees with `kimi`, and nothing of Kimi's outlives it (2026-10-15)
+
+`node scripts/probe-kimi-tree-hold.mjs --repeats 3` (branch `feat/kimi-runtime`, the shim as built after E4.3; Kimi Code 2.1.1; Windows 11). A separate
+script, not a cell of `probe-kimi-confinement.mjs`: that script's shim arms predate E4.3's flags (`--home`, `--persons-bin`, `--locks`) and its homes are
+`KIMI_CODE_HOME` folders, where the product's is `<root>/home` beside an empty `<root>/os`. Every arm launches the SHIPPED shim exactly as `KimiRuntime`
+will: the shim in the environment the runtime builds (the minimal names plus the seven, the person's `bin` first on `PATH`), `--home` an owned root in a
+`testsToDelete-kimi-mk15-<id>` scratch, its `home/credentials` a junction to the person's, one coai-written `config.toml`, `--locks` a folder of the same
+scratch. The person's sign-in is reached only through that junction; the script never copies, prints or reads a credential file — it records the folder's
+file NAMES, sizes and modification times around a launch (a refresh rewrites a file, so a changed time says one happened) and nothing of their content —
+and never runs `kimi login`. **Before every launch** the process list is read (never killed from) and a running `kimi` waits up to ten minutes and then skips
+the launch; none ran. A process is ended only by the PID the script started (the shim); a `kimi` orphaned by a killed shim is waited for. Each home was disposed of
+junction-first and the person's folder verified: **16 of 16 clean** (the first smoke run's by hand, with the same function, after the script's own first-draft bug), and the credentials folder kept every file name throughout.
+
+How a lock file is read: opening a file another handle holds with `FileShare.None` fails with a sharing violation whatever the opener asks for, so `Held` is a
+refused open (`EBUSY`) and `Free` a successful one, polled every 50 ms (the poll itself takes a few ms); "the same sample" below means within one poll.
+
+| Arm | Runs | The shim | `kimi` and its tree | The two files |
+|---|---|---|---|---|
+| `normal` — `Reply with exactly: OK` | 3 | exit 0, `answered` in 12.3 / 14.2 / 15.0 s; `/usage` tokens 19 977 in, 52 / 35 / 30 out (S3.7, live) | `kimi` and its console host seen; none alive after the shim | **Free 153 / 160 / 153 ms after the shim's exit** — the first poll |
+| `normal-tools` — a Grep and a Glob in the turn | 3 | exit 0, `answered` in 22.1 / 39.9 / 17.8 s; tokens 60 602 / 40 220 / 40 222 in; 3, 2, 2 tool calls | `rg.exe` seen in one run; **none alive after the shim** (the tree kill ends them first) | Free 151 / 151 / 165 ms after the shim's exit |
+| `killed` — the shim killed by its own handle 4.6 / 4.3 / 6.0 s into the turn (4 s after the hold), `kimi` left to itself | 3 | killed; no report | `kimi` exited **121 / 126 / 124 ms** after the kill (EOF on its stdin) with the turn cut; its console host went with it | **Held at every sample while `kimi` lived** (3 of 3); Free **in the sample `kimi` was gone in** (0 ms after) |
+| `killed-rg` — killed while an `rg` child of `kimi` ran (a Grep over `C:\Windows\System32` for a text no file holds), 13.9 / 17.5 / 32.4 s in | 3 | killed; no report | `kimi` lived **5.1 / 4.7 / 5.1 s** after the kill (`rg.exe` had been seen running just before the kill); `rg.exe` and both console hosts were gone **in the same sample as `kimi`** (3 of 3) | **Held at every sample while `kimi` lived** (3 of 3); Free in that same sample |
+
+**Verdict.** The tree hold ships as a GATE, as the owner ruled. Both files follow the LAST process that inherited them: the shim's exit after a normal end, `kimi`'s
+after a cut one. Nothing of Kimi's — `rg`, its console host, a helper, an updater — outlived `kimi` in any of the 6 cut launches, three of them with an `rg` running at the
+kill, so no descendant held a file after `kimi` was gone and no later launch would have been refused for one. **What the numbers do not say:** whether `rg` (or `kimi`'s
+console host) actually inherited the handle — they cannot be asked, only seen to be gone with `kimi` or before it; and a cut launch whose `rg` outlives `kimi` was not
+produced (the script never ends `kimi` itself). If a later Kimi lets a child outlive it while holding the file, the symptom is the one E4.2 predicted: exit 69 for every
+launch on that sign-in until it ends, and a disposal that keeps the home.
+
+**Two things the run showed besides.**
+
+- **`device_id`.** The two launches in the 16 whose token refresh rotated the sign-in (the first smoke run, and `killed` run 3 — the credentials file rewritten during the
+  launch) left a 36-byte `device_id` in the owned home; the 13 others whose home was listed did not (one smoke run was not listed). §17–§18 never saw it
+  written (their launches did not refresh, or ran without the OS-home redirect — which of the two was not separated) and E4.2's allowlist refused it by name: a home that had refreshed once would have refused its
+  next launch (a retry, and every later turn of a conversation). It is Kimi's own data (the data-locations page lists it), and `KimiHome` admits it as a FILE now;
+  `region` and `migrations-effort.json` stay out — nothing wrote them.
+- **`/usage` live.** A plain turn reported 19 977 input and 30–52 output tokens; with two tools 40–60 000 input. The shim reported them in all 6 answered launches of the
+  recorded run (`notCaptured` false) — the first live confirmation of E4.3's `/usage` after the fake agent's.
+
+Spend: 16 launches — 9 answered turns (6 recorded, 3 smoke) and 7 cut by the kill, whose spend is not measured; nothing was refused.
