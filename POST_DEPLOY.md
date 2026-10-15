@@ -19,7 +19,7 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-16 · mcp **0.56.0** and extension **0.76.0** (released) · server **0.12.0** deployed — the box
+Last verified: 2026-10-15 · mcp **0.56.0** and extension **0.76.0** (released) · server **0.12.0** deployed — the box
 serves 0.12.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; item 2 first read 0.75.0 and passed
 on the seventh minute, the Marketplace's known lag; manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
 `MCP_VERSION=0.56.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.76.0`. The
