@@ -3545,13 +3545,14 @@ flowchart LR
   Kimi holds the sign-in past the deadline" (report `not_started`, the sentence on stderr and in `reason`); exit **65** also covers `model_not_offered` and an
   unusable hold. The exit and end words are shared with the shim (`KimiReport.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared where they are
   READ, as `ApiRuntime.EndedBeforeAnAnswerExit` is.
-- **One Kimi launch of a round at a time.** `IReviewerRuntime.LaunchesOneAtATime` (default false; Kimi true — D19, until M-K14) makes
-  `BoundedScheduler.CapFor(work, perProviderCap)` give the provider's limiter a cap of ONE. The limiter is created once per provider for the scheduler's life, so the first
-  run's cap sticks, which is right: a provider id's runtime does not change within one server. The cross-process half is the sign-in's gate (E4.2).
+- **One Kimi launch at a time, in one lane.** `IReviewerRuntime.LaunchesOneAtATime` (default false; Kimi true — D19, until M-K14) makes
+  `BoundedScheduler.CapFor(work, perProviderCap)` give the limiter a cap of ONE, and `LaneOf(work)` key that limiter by the ADAPTER's kind, not by the provider id: what it protects is the
+  machine's one rotating sign-in, so two Kimi rows with different ids (or a settings reload that builds a new adapter) share the lane (E4.4 review M1). Every other vendor keeps its
+  limiter per provider id. The limiter is created once per lane for the scheduler's life, so the first run's cap sticks. The cross-process half is the sign-in's gate (E4.2).
 - **The round's scratch** (`RoundScratch`, `src/Server/Rounds/`): `Dispose` calls `KimiHome.DisposeAllUnder(Directory, …)` — every `kh-*` home has its `credentials` junction
   removed by its own name, the person's folder verified, under no live tree — BEFORE the shared deleter, which then meets no link. A `Stopped` home is noted and the
   scratch is KEPT whole (the D20 sweep's rule): deleting "the rest" would unlink the junction under a `kimi` that is still running (an orphan of a crashed server, which
-  holds the per-home file) and its next refresh would sign the person out (E4.2 decision 11). The six-hour scratch sweep finishes it once the tree has ended.
+  holds the per-home file) and its next refresh would sign the person out (E4.2 decision 11). The six-hour scratch sweep (`PanelService.PruneOldScratchDirs`) finishes it once the tree has ended: it calls `KimiHome.DisposeAllUnder` on each due `coai-answers-*` folder BEFORE the deleter, asks the same per-home hold, and on any `Stopped` skips the folder for that beat (warned) — a folder's last-write time cannot say a `kimi` is still running, because writes deep inside a home never move it (E4.4 review B1).
 - **Registered** in `ReviewerRuntimeSelector.Default`, `RuntimeNames` and `Named("kimi", vendorId)`, and in `MachineOnlyRuntimes` (D12: the Team server derives its accepted set as
   `RuntimeNames` minus that one, so it refuses a `kimi` row by name). `shared/feature-availability.json` names it: effort and thinking `unmeasured` (the k3 models announce
   `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; NOT a consultant, NOT in `runtime-capabilities.json` (S5 — a runtime may not enter it without its

@@ -199,7 +199,7 @@ public sealed class TempDirsAreSwept
         List<string> warned = [];
         if (lossDuringTheUnlink)
         {
-            Runners.Files.GitScratch.AfterUnlink = _ => File.Delete(other);
+            Runners.Kimi.KimiHome.AfterUnlink = _ => File.Delete(other); // the sweep now unlinks through KimiHome first (E4.4 review B1); the deleter is the second belt
         }
 
         try
@@ -208,7 +208,7 @@ public sealed class TempDirsAreSwept
         }
         finally
         {
-            Runners.Files.GitScratch.AfterUnlink = null;
+            Runners.Kimi.KimiHome.AfterUnlink = null;
         }
 
         File.ReadAllText(secret).Should().Be("{}", "the person's file keeps its bytes");

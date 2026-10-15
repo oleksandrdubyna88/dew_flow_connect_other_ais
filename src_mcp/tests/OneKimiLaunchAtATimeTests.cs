@@ -47,6 +47,19 @@ public sealed class OneKimiLaunchAtATimeTests : IDisposable
         results.Should().OnlyContain(result => result.Outcome is ReviewerOutcome.Ok, "all five answered");
     }
 
+    /// <summary>E4.4 review M1: the lane is keyed by the ADAPTER, not by the provider id — two Kimi rows on one sign-in (or a settings reload that builds a new adapter) share it.</summary>
+    [Fact]
+    public async Task TwoKimiRowsOfDifferentIds_ShareOneLane()
+    {
+        var launcher = new ScriptedKimi(delay: TimeSpan.FromMilliseconds(300));
+        var work = new[] { Work("kimi", "architecture", Kimi()), Work("my-kimi", "architecture", Kimi()), Work("other-kimi", "security", Kimi()) };
+        var scheduler = new BoundedScheduler(globalCap: 5, perProviderCap: 2);
+
+        await scheduler.RunAllAsync(work, new ReviewerExecutor(launcher), TestContext.Current.CancellationToken);
+
+        launcher.PeakShims.Should().Be(1, "three rows, three ids, ONE sign-in: never two Kimi launches at once");
+    }
+
     [Fact]
     public void OnlyKimiSaysSo()
     {

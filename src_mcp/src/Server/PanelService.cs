@@ -1445,7 +1445,7 @@ public sealed class PanelService
     {
         try
         {
-            DeleteIfDue(dir, cutoff, except);
+            DeleteIfDue(dir, cutoff, except, warn);
         }
         catch (Runners.Files.LinkTargetLostException e)
         {
@@ -1464,12 +1464,30 @@ public sealed class PanelService
     /// directory made this minute under a name used yesterday reads as a day old — and, the other way round, a long campaign's
     /// directory looks fresh for as long as anything writes into it.
     /// </summary>
-    private static void DeleteIfDue(string dir, DateTime cutoff, IReadOnlyList<string> except)
+    private static void DeleteIfDue(string dir, DateTime cutoff, IReadOnlyList<string> except, Action<string>? warn)
     {
-        if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except))
+        if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except) && KimiHomesDisposed(dir, warn))
         {
             DeleteEvenIfReadOnly(dir);
         }
+    }
+
+    /// <summary>
+    /// D19's order for a Kimi home in a due scratch (E4.4 review B1): the folder's own home and every <c>kh-*</c> child have their <c>credentials</c> junction
+    /// removed by its own name, the person's folder verified, UNDER NO LIVE TREE — before anything else of the folder is deleted. The folder's last-write
+    /// time cannot say a <c>kimi</c> is still running (writes deep inside a home never move it), so the per-home hold is asked, as the round's scratch and
+    /// <c>ConsultantHomeSweep</c> ask it. A stop is said and the folder is KEPT this beat; the next one finishes it.
+    /// </summary>
+    private static bool KimiHomesDisposed(string dir, Action<string>? warn)
+    {
+        var stopped = false;
+        Runners.Kimi.KimiHome.DisposeAllUnder(dir, said =>
+        {
+            stopped = true;
+            warn?.Invoke($"scratch sweep: {dir} is kept this beat: {said}");
+        });
+
+        return !stopped;
     }
 
     /// <summary>

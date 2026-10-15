@@ -61,6 +61,43 @@ public sealed class AKimiReviewerRunsThroughTheShimTests : IDisposable
         File.ReadAllBytes(places.Config).Should().Equal(_person.ExpectedConfig("kimi-code/k3"), "the one config.toml coai writes, for this person and this model");
     }
 
+    // ---------- E4.4 review M2: the request meets the real shim ----------
+
+    /// <summary>Answers <c>--version</c> itself (the fake CLI would need a steering file the built environment does not carry) and hands everything else — the SHIM — to the real launcher.</summary>
+    private sealed class VersionAnsweringLauncher(IProcessLauncher real) : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
+            request.Arguments.Contains("--version")
+                ? Task.FromResult(new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false))
+                : real.RunAsync(request, ct);
+    }
+
+    [Fact]
+    public async Task TheRealArgv_ParsesInTheRealShim_ThatStartsItsAgentInTheBuiltEnvironment()
+    {
+        OnWindows();
+        using var rooted = Rooted();
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk(KimiShimScripts.CleanReview)], FakeAcpAgent.Models("kimi-code/k3"));
+        agent.WithFields(agent.EnvField());
+        var runtime = new KimiRuntime("kimi", HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (ServerBinary.Path, [])));
+        var settings = new ReviewerSettings("kimi")
+        {
+            Model = "kimi-code/k3",
+            ExecutablePath = FakeAcpAgent.FakeCliExe,
+            OwnedScratch = Path.Combine(_person.Folder, "round"),
+            Timeout = TimeSpan.FromMinutes(2),
+        };
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "review this", agent.Cwd, Path.Combine(_person.Folder, "s.json"), _person.Folder, settings);
+
+        var outcome = await new ReviewerExecutor(new VersionAnsweringLauncher(new ProcessLauncher())).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Ok>("the argv KimiRuntime builds is one the real coai-mcp --ask-acp accepts, and the fake agent's answer comes back through the report");
+        var variables = File.ReadAllLines(agent.EnvFile).Where(line => line.IndexOf('=', 1) > 0).ToDictionary(line => line[..line.IndexOf('=')], line => line[(line.IndexOf('=') + 1)..], StringComparer.OrdinalIgnoreCase);
+        var places = _person.PlacesAt(KimiEnvironment.FlagOf(invocation.Request, "--home"));
+        variables["USERPROFILE"].Should().Be(places.Os, "the shim itself started in the built environment, and the agent in the one it built");
+        variables["KIMI_CODE_HOME"].Should().Be(places.Home);
+    }
+
     // ---------- S4.11, the line ----------
 
     [Fact]

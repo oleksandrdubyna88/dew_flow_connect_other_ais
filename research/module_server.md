@@ -7052,7 +7052,7 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
 - **A Kimi home in the scratch** (E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`, S4.15): `RoundScratch.Delete` first calls `KimiHome.DisposeAllUnder(Directory, note)` — every `kh-*`
   home (a Kimi reviewer's, `KimiRuntime`) has its `credentials` junction to the person's own folder removed by its own name, the person's names verified, under no live tree — and only
-  then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep, not
+  then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep (which asks the same per-home hold before it deletes a due folder, E4.4 review B1), not
   deleted "around" it: the stop that matters is a Kimi still running on that home (it holds the per-home file), and unlinking its junction would make its next refresh write the rotated
   token into a folder it re-creates inside coai's home and sign the person out (E4.2 decision 11) — the D20 sweep's rule, applied to the round. `RoundScratch.At(directory, note)` is the
   one factory besides `Reserve`, so a test puts the scratch in its own `testsToDelete-` folder; the rest of the roster is unchanged (`KimiRuntime` asks for the snapshot through

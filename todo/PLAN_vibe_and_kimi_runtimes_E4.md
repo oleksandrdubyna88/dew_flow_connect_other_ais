@@ -1601,7 +1601,7 @@ one Kimi launch at a time, every launch through the one control, the round's scr
 45. **`ReviewerOutcome.RateLimited` gained a `Usage`** (default `None`, and `OwnUsage` returns it): the brief says the verdict carries the report's usage, and the outcome had nowhere to hold it.
     `RateLimitVerdict` (`Limited`, `Reason`, `Usage`) is the seam's return; its default (`ByText`) is today's exactly, so every other adapter is byte-identical (S4.8).
 46. **`ReadUsage` answers `Usage.None` for an end that never reached the model** (`not_started`, `model_not_offered`) where the brief says `notCaptured` is `Usage.Unknown`: no agent
-    started, or the session did not offer the model before any prompt, so nothing was consumed — a fact, and an "unknown" would flag a busy sign-in's round as having uncounted spend.
+    started, or the session did not offer the model before any prompt, so nothing was consumed — a fact, and an "unknown" would flag a busy sign-in's round as having uncounted spend. (Review M4: a shim refusal BEFORE any report — `PlacesRefusal`, no profile — prints no JSON at all, so usage reads `Unknown`, not `None`. Harmless.)
 47. **`model_not_offered` is diagnosed through `WhyItFailed`, not through the shim's stderr.** The shim writes `<failure>: <reason> — <cure>` only for a known failure; for the end that is
     itself a verdict it writes the bare reason, so `VendorDiagnosis.For(stderr)` never sees the word. `KimiRuntime.WhyItFailed` files the report's reason under its label (`Failure`, else the
     `model_not_offered` end word) and LEADS with the cure — the summary cuts a line at 160 characters and the offered-models list is longer. The shim was not changed.
@@ -1620,6 +1620,21 @@ one Kimi launch at a time, every launch through the one control, the round's scr
 53. **S2.45's round-records re-run lives inside `NothingOfTheSignIn_EverAppearsInWhatCoaiWrites`** (four new collectors — the reviewer line, the ledger text, the warning, the outcome record — each with
     its liveness check) and a control, `TheDetector_SeesVendorTextRelayedIntoTheRoundsRecords`: the shim is scripted, so the canary can only enter through coai's own sentences, and the control shows the detector
     sees a vendor's stderr relayed into the line (outside the pin, decision 12).
+
+**The Opus review of the E4.4 commits (2026-10-15, verdict FIX; deviations 43–53 accepted) — what was done.**
+
+54. **The six-hour scratch sweep asks the per-home tree hold** (B1). `PanelService.PruneOldScratchDirs` called the bare deleter on a due `coai-answers-*` folder, and a folder's
+    last-write time does not move for writes deep in a home — so it could take a Kimi home from under a running `kimi`, and deviation 48's backstop ("the sweep finishes it") depended on it.
+    `DeleteIfDue` now runs `KimiHome.DisposeAllUnder(dir, warn)` first (junction first, the live-tree probe, the person's names verified) and skips the folder for the beat on any
+    `Stopped`, warned — `ConsultantHomeSweep`'s rule. The existing S1.12 loss arm's seam moved from `GitScratch.AfterUnlink` to `KimiHome.AfterUnlink`, since the sweep now unlinks through
+    `KimiHome` first (the deleter stays the second belt, pinned by E4.1's own tests). Red: the old sweep warned nothing; its junction survived the first beat only because the deleter hit the held
+    lock file first.
+55. **The one-at-a-time lane is keyed by the adapter's kind, not the provider id** (M1): `BoundedScheduler.LaneOf` — two Kimi rows with different ids, or a reloaded adapter, share one limiter. Other vendors keep theirs per id.
+56. **The request meets the real shim in a test** (M2): `AKimiReviewerRunsThroughTheShimTests.TheRealArgv_ParsesInTheRealShim_…` — `ServerBinary.Path` as the shim, the fake CLI as the kimi, the real launcher
+    (a decorator answers only `--version`: the fake CLI would need a steering file the built environment does not carry). It closes the "owed" gap of the E4.4 paragraph above for the argv.
+57. **DEFERRED, not done (review M3, M5).** M3: the generic ACP shim's constants (`KimiEnvironment.LocksFlag`, `KimiReport.*Word`, `KimiAcpProfile.BalanceSpent`, the exit codes) still live in Kimi classes
+    though the shim is vendor-neutral — move them to a neutral ACP unit in E4.5 or later. M5: `VendorDiagnosis.InstallCure("kimi")` has no macOS-specific line; PR #823 already fixes it on another branch,
+    so the merge reconciles it.
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing

@@ -194,6 +194,14 @@ public sealed class BoundedScheduler(
     internal static int CapFor(ReviewerWork work, int perProviderCap) =>
         work.Invocation.Adapter is { LaunchesOneAtATime: true } ? 1 : perProviderCap;
 
+    /// <summary>
+    /// The limiter a provider's reviewers wait in: its own id — a rate limit is per vendor — except for an adapter that launches one at a time, whose
+    /// lane is the ADAPTER's kind. What it protects (Kimi's rotating sign-in) belongs to the machine, not to a row, so two rows of different ids, or a
+    /// settings reload that builds a new adapter, share one lane (E4.4 review M1). Pure.
+    /// </summary>
+    internal static string LaneOf(ReviewerWork work) =>
+        work.Invocation.Adapter is { LaunchesOneAtATime: true } adapter ? "one-at-a-time:" + adapter.GetType().FullName : work.Invocation.Provider;
+
     /// <param name="onProgress">
     /// Called as each reviewer is queued, starts and ends. Invoked from the fan-out's threads, so
     /// the handler must be thread-safe and quick — a slow one delays the reviewer it reports on.
@@ -218,7 +226,7 @@ public sealed class BoundedScheduler(
         var perProvider = work
             .Where(w => !w.Invocation.IsOnEngine)
             .GroupBy(w => w.Invocation.Provider, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => Limiter(_perProvider, group.Key, CapFor(group.First(), perProviderCap)), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(group => group.Key, group => Limiter(_perProvider, LaneOf(group.First()), CapFor(group.First(), perProviderCap)), StringComparer.OrdinalIgnoreCase);
         try
         {
             foreach (var w in work)

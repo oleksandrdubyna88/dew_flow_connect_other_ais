@@ -135,7 +135,8 @@ internal sealed class RoundScratch : IDisposable
     /// <c>kh-*</c> home has its <c>credentials</c> junction removed by its own name, the person's folder verified, under no live tree — BEFORE the
     /// shared deleter, which then meets no link. A stop is noted and the scratch is KEPT whole (the sweep's rule, <c>ConsultantHomeSweep</c>):
     /// deleting "the rest" would unlink the junction under a Kimi that is still running — its next refresh would write the rotated token into a
-    /// folder it re-creates inside coai's home and sign the person out. The six-hour scratch sweep finishes it once the tree has ended.
+    /// folder it re-creates inside coai's home and sign the person out. The six-hour scratch sweep (<c>PanelService.PruneOldScratchDirs</c>) finishes it once
+    /// the tree has ended — and it asks the same per-home hold before it deletes anything (E4.4 review B1), so it never takes the folder from under a live Kimi either.
     /// </summary>
     private bool KimiHomesDisposed()
     {
