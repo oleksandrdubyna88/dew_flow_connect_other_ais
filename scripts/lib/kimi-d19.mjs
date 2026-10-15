@@ -187,19 +187,31 @@ function extendedKit(workdir, runDir, write) {
  * M-K11 (c): one owned home — `kimi --version`, a first turn, a second start — and what it holds after each step, which
  * of those names are configuration or code against data, and whose bytes moved between the starts.
  */
+/**
+ * One M-K11c step: the home's inventory against the PREVIOUS step's — what was added (and of what class), changed and removed. Pure: a new
+ * object, nothing it was given is touched.
+ */
+export function inventoryStep(previous, name, inv, classify, extra = {}) {
+  const added = Object.keys(inv).filter((f) => !(f in previous));
+  const changed = Object.keys(inv).filter((f) => f in previous && previous[f] !== inv[f]);
+  const removed = Object.keys(previous).filter((f) => !(f in inv));
+
+  return { step: name, inventory: inv, added, changed, removed, classes: Object.fromEntries(added.map((f) => [f, classify(f)])), ...extra };
+}
+
+/** The steps with one more at the end — a NEW list; the one passed in is left as it was (the immutability rule: no push). */
+export function withStep(steps, name, inv, classify, extra = {}) {
+  return [...steps, inventoryStep(steps.at(-1)?.inventory ?? {}, name, inv, classify, extra)];
+}
+
 export async function runInventory(n, ctx) {
   const { scratch, ownedHome, launch, rowOf, write, versionLaunch, classify, mkdir } = ctx;
   const runDir = join(scratch, `M-K11c-inventory-${n}`);
   mkdir(runDir);
   const home = ownedHome(runDir);
-  const steps = [];
+  let steps = [];
   const step = (name, extra = {}) => {
-    const inv = inventory(home.path);
-    const previous = steps.at(-1)?.inventory ?? {};
-    const added = Object.keys(inv).filter((f) => !(f in previous));
-    const changed = Object.keys(inv).filter((f) => f in previous && previous[f] !== inv[f]);
-    const removed = Object.keys(previous).filter((f) => !(f in inv));
-    steps.push({ step: name, inventory: inv, added, changed, removed, classes: Object.fromEntries(added.map((f) => [f, classify(f)])), ...extra });
+    steps = withStep(steps, name, inventory(home.path), classify, extra);
   };
   step('made');
   const v = versionLaunch(home.path, join(runDir, 'work-v'));
