@@ -223,7 +223,16 @@ public abstract record ReviewerOutcome
     /// however many launches there had been — a sentence that was true when there was one step and
     /// became a confident wrong number the moment there were four.
     /// </remarks>
-    public sealed record RateLimited(string Reason = "", int Attempts = 1) : ReviewerOutcome;
+    public sealed record RateLimited(string Reason = "", int Attempts = 1) : ReviewerOutcome
+    {
+        /// <summary>
+        /// What the limited launch consumed, when its adapter knows (<see cref="RateLimitVerdict.Usage"/>): <see cref="Core.Findings.Usage.None"/> for a limit read
+        /// off text, which says nothing of the money — and a structured report's own for one that does, so a spent launch keeps <c>notCaptured</c> rather than a zero.
+        /// </summary>
+        public Usage Usage { get; init; } = Usage.None;
+
+        protected override Usage OwnUsage => Usage;
+    }
 
     /// <summary>
     /// The process never ran: the CLI is not installed, or the configured path is wrong. Its own
@@ -245,6 +254,26 @@ public abstract record ReviewerOutcome
     public sealed record StoodDown(string Reason) : ReviewerOutcome;
 
     private ReviewerOutcome() { }
+}
+
+/// <summary>
+/// What an adapter says about a launch that ran to its end: rate limited or not, with the reason a limited one carries and the usage
+/// it consumed (<see cref="IReviewerRuntime.RateLimited"/>).
+/// </summary>
+/// <param name="Limited">Whether the launch was rate limited.</param>
+/// <param name="Reason">The sentence that says which limit — what <see cref="RateLimit.Hopeless"/> reads; empty when not limited.</param>
+/// <param name="Usage">What the limited launch consumed: <see cref="Usage.None"/> for a limit read off text, the adapter's own for a structured one.</param>
+public sealed record RateLimitVerdict(bool Limited, string Reason, Usage Usage)
+{
+    /// <summary>Not rate limited.</summary>
+    public static RateLimitVerdict No { get; } = new(false, string.Empty, Usage.None);
+
+    /// <summary>Rate limited, said in <paramref name="reason"/>, having consumed <paramref name="usage"/>.</summary>
+    public static RateLimitVerdict Because(string reason, Usage usage) => new(true, reason, usage);
+
+    /// <summary>The ordinary reading, for every adapter that does not classify from a report: the TEXT of the run (<see cref="RateLimit"/>).</summary>
+    public static RateLimitVerdict ByText(ProcessResult result) =>
+        RateLimit.Hit(result) ? Because(RateLimit.Reason(result), Usage.None) : No;
 }
 
 /// <summary>
@@ -974,9 +1003,11 @@ public sealed class ReviewerExecutor(
     /// <summary>A launch that ran to its end, judged: rate limited, failed (or disowned), or answered.</summary>
     private static ReviewerLaunch Classified(ReviewerInvocation invocation, ProcessResult result)
     {
-        if (RateLimit.Hit(result))
+        // Asked of the adapter: the text of the run by default (every vendor but one), a structured report's fields for a vendor that has one.
+        var verdict = invocation.Adapter?.RateLimited(invocation, result) ?? RateLimitVerdict.ByText(result);
+        if (verdict.Limited)
         {
-            return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty, result);
+            return new ReviewerLaunch(new ReviewerOutcome.RateLimited(verdict.Reason) { Usage = verdict.Usage }, null, verdict.Usage, string.Empty, result);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run

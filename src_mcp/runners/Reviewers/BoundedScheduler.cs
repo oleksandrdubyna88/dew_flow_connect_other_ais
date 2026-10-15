@@ -187,6 +187,13 @@ public sealed class BoundedScheduler(
         }
     }
 
+    /// <summary>
+    /// The cap one provider's limiter is made with: ONE for an adapter that asks to launch one at a time (<see cref="IReviewerRuntime.LaunchesOneAtATime"/>
+    /// — Kimi, until M-K14), else the scheduler's per-provider cap. Pure.
+    /// </summary>
+    internal static int CapFor(ReviewerWork work, int perProviderCap) =>
+        work.Invocation.Adapter is { LaunchesOneAtATime: true } ? 1 : perProviderCap;
+
     /// <param name="onProgress">
     /// Called as each reviewer is queued, starts and ends. Invoked from the fan-out's threads, so
     /// the handler must be thread-safe and quick — a slow one delays the reviewer it reports on.
@@ -210,9 +217,8 @@ public sealed class BoundedScheduler(
         var global = _global;
         var perProvider = work
             .Where(w => !w.Invocation.IsOnEngine)
-            .Select(w => w.Invocation.Provider)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(p => p, p => Limiter(_perProvider, p, perProviderCap), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(w => w.Invocation.Provider, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => Limiter(_perProvider, group.Key, CapFor(group.First(), perProviderCap)), StringComparer.OrdinalIgnoreCase);
         try
         {
             foreach (var w in work)

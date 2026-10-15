@@ -14,13 +14,13 @@ namespace CoaiMcp.Tests;
 public sealed class OnlyARuntimeThatAsksGetsASanitisedSnapshotTests
 {
     [Fact]
-    public void OnlyVibe_AmongTheShippedReviewerRuntimes_AsksForASnapshot()
+    public void OnlyVibeAndKimi_AmongTheShippedReviewerRuntimes_AskForASnapshot()
     {
         var runtimes = ReviewerRuntimeSelector.Default.Providers.Select(provider => ReviewerRuntimeSelector.Default.Find(provider)!).ToList();
 
         runtimes.Should().NotBeEmpty();
-        runtimes.Where(runtime => runtime.NeedsASanitisedSnapshot).Should().ContainSingle()
-            .Which.Should().BeOfType<VibeRuntime>("Vibe reads only its cwd and loads its configuration from it (D6)");
+        // Vibe reads only its cwd and loads its configuration from it (D6); Kimi loads a project .kimi-code, AGENTS.md and .mcp.json from it (E4.4, RESULTS section 12).
+        runtimes.Where(runtime => runtime.NeedsASanitisedSnapshot).Select(runtime => runtime.GetType()).Should().BeEquivalentTo([typeof(VibeRuntime), typeof(Runners.Kimi.KimiRuntime)]);
     }
 
     [Fact]

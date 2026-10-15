@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Snapshots;
 using CoaiMcp.Runners.Vibe;
 
@@ -6,7 +7,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// A round's own scratch folder, deleted when the round ends: the sanitised snapshot of its tree for a runtime that asks
-/// for one (D6 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>) and the coai-owned homes its Vibe reviewers run on (D17).
+/// for one (D6 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>) and the coai-owned homes its Vibe (D17) and Kimi (D19) reviewers run on.
 /// </summary>
 /// <remarks>
 /// <para><b>A <c>coai-answers-*</c> folder under the temp directory</b>, so a crash leaves nothing the six-hour scratch
@@ -78,6 +79,9 @@ internal sealed class RoundScratch : IDisposable
         new(Path.Combine(Path.GetTempPath(), $"coai-answers-{Guid.NewGuid().ToString("N")[..12]}"), new RoundTree.NotMade(), note,
             keepsAHome ? VibeHomes.ReserveOneShot(homesRoot, note) : OneShotReservation.None.Instance);
 
+    /// <summary>A scratch at a path somebody chose (a test's own folder, never the system temp), not made yet — the same object <see cref="Reserve"/> makes.</summary>
+    internal static RoundScratch At(string directory, Action<string> note) => new(directory, new RoundTree.NotMade(), note);
+
     /// <summary>This scratch with the round's snapshot outcome.</summary>
     public RoundScratch With(SnapshotOutcome outcome) => new(Directory, outcome switch
     {
@@ -115,7 +119,7 @@ internal sealed class RoundScratch : IDisposable
     {
         try
         {
-            if (System.IO.Directory.Exists(Directory))
+            if (System.IO.Directory.Exists(Directory) && KimiHomesDisposed())
             {
                 GitScratch.DeleteEvenIfReadOnly(Directory);
             }
@@ -124,6 +128,25 @@ internal sealed class RoundScratch : IDisposable
         {
             _note($"the round's scratch folder {Directory} could not be deleted ({e.Message}); the scratch sweep takes it");
         }
+    }
+
+    /// <summary>
+    /// D19's order for the Kimi homes this scratch KNOWS it holds (E4.4 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>, S4.15): every
+    /// <c>kh-*</c> home has its <c>credentials</c> junction removed by its own name, the person's folder verified, under no live tree — BEFORE the
+    /// shared deleter, which then meets no link. A stop is noted and the scratch is KEPT whole (the sweep's rule, <c>ConsultantHomeSweep</c>):
+    /// deleting "the rest" would unlink the junction under a Kimi that is still running — its next refresh would write the rotated token into a
+    /// folder it re-creates inside coai's home and sign the person out. The six-hour scratch sweep finishes it once the tree has ended.
+    /// </summary>
+    private bool KimiHomesDisposed()
+    {
+        var stopped = false;
+        KimiHome.DisposeAllUnder(Directory, said =>
+        {
+            stopped = true;
+            _note($"the round's scratch {Directory} is kept: {said}");
+        });
+
+        return !stopped;
     }
 }
 

@@ -37,6 +37,9 @@ public sealed class KimiAcpProfile : IAcpProfile
     /// </summary>
     public static readonly string[] Exclusions = ["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".agents/agents", ".mcp.json", ".git"];
 
+    /// <summary>The name of the spent-allowance failure — the field of the shim's report that <c>KimiRuntime</c> classifies a rate limit from, never the text.</summary>
+    public const string BalanceSpent = "balance_spent";
+
     /// <summary>The sentences measured on 2026-10-12 (RESULTS §2), the specific one first.</summary>
     private static readonly AcpKnownFailure[] Failures =
     [
@@ -52,7 +55,7 @@ public sealed class KimiAcpProfile : IAcpProfile
             AcpFailureKind.Refused),
         new(
             "insufficient balance",
-            "balance_spent",
+            BalanceSpent,
             "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset",
             AcpFailureKind.Spent),
     ];

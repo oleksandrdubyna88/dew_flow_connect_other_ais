@@ -48,6 +48,23 @@ public static class VendorDiagnosis
 {
     private static readonly (string Marker, string Sentence, DiagnosisKind Kind)[] Known =
     [
+        // Kimi (E4.4 of todo/PLAN_vibe_and_kimi_runtimes_E4.md): the markers are the NAMES the `coai-mcp --ask-acp` shim writes — it files a known failure
+        // as `<name>: <reason> — <cure>` and ends a session that does not offer the model as `model_not_offered` — never a phrase of Kimi's own trace, which
+        // is not ours to match (the report's reads and tool titles carry any word at all). The shim's cures are measured sentences (RESULTS section 2).
+        ("not_signed_in:",
+            "Kimi is not signed in on this machine — run `kimi login` once in a terminal, as the user coai runs as, and try again " +
+            "(coai links that sign-in into its own home; it never signs in for you).",
+            DiagnosisKind.Refused),
+        ("subscription_model:",
+            "the Kimi Code plan does not include the model this row asks for — pick one the plan has (kimi-code/k3-256k answered on the measured plan) " +
+            "or upgrade the plan.",
+            DiagnosisKind.Refused),
+        ("balance_spent:",
+            "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset.",
+            DiagnosisKind.Refused),
+        ("model_not_offered",
+            "the Kimi session does not offer this model — pick one the plan has (the shim's message lists what the session offered).",
+            DiagnosisKind.Refused),
         // Google retired Gemini Code Assist for individuals on 2026-08-31. The CLI fails inside
         // `_doSetupUser`, BEFORE any model is reached, so it looks like anything you please.
         ("migrate to the Antigravity suite",
@@ -303,6 +320,10 @@ public static class VendorDiagnosis
             ("vibe", true) => "install Mistral's own CLI: curl -LsSf https://mistral.ai/vibe/install.sh | bash",
             ("vibe", false) =>
                 "install it with uv: uv tool install mistral-vibe (no uv yet: powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\")",
+            // Moonshot's own getting-started page (read 2026-10-14, E4.5): its script per OS, and Git for Windows first — Kimi runs its shell through Git Bash.
+            ("kimi", true) => "install Kimi Code's own CLI: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
+            ("kimi", false) =>
+                "install Kimi Code's own CLI (it needs Git for Windows first: winget install Git.Git): irm https://code.kimi.com/kimi-code/install.ps1 | iex",
             ("claude", _) => "install it with: npm install -g @anthropic-ai/claude-code",
             _ => null,
         };

@@ -24,6 +24,12 @@ public static class KimiEnvironment
 
     public const string ModelFlag = "--model";
 
+    /// <summary>The absolute <c>kimi</c> the shim starts — resolved by the runtime in the unredirected parent, never re-derived inside the redirected shim (deviation 7 of the E4 plan).</summary>
+    public const string ExecutableFlag = "--executable";
+
+    /// <summary>The lock folder the shim's tree hold lives in — <see cref="KimiCredentialsLock.Root"/> of the runtime that started it.</summary>
+    public const string LocksFlag = "--locks";
+
     private const string ProfileVariable = "USERPROFILE";
 
     private const string HomeNameVariable = "HOME";

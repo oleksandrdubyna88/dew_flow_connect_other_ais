@@ -47,7 +47,7 @@ internal static class AskAcpMode
     internal const int BadRequest = 65; // EX_DATAERR — a known mode refusing its arguments; never 64
     internal const int Unavailable = 69; // EX_UNAVAILABLE — ended before an answer: usage not captured
     internal const int Failed = 70; // EX_SOFTWARE — the agent's own failure
-    internal const int Spent = 75; // EX_TEMPFAIL — a known spent-allowance sentence
+    internal const int Spent = KimiReport.SpentExit; // EX_TEMPFAIL (75) — a known spent-allowance sentence; declared where KimiRuntime reads it
     internal const int Protocol = 76; // EX_PROTOCOL — the stream itself failed
     internal const int Refused = 77; // EX_NOPERM — a known sign-in or plan refusal
 
@@ -63,7 +63,7 @@ internal static class AskAcpMode
     private const string Mode = "--ask-acp";
 
     /// <summary>The lock folder the tree hold lives in — <see cref="KimiCredentialsLock.Root"/> of the runtime that started this shim.</summary>
-    private const string LocksFlag = "--locks";
+    private const string LocksFlag = KimiEnvironment.LocksFlag;
 
     /// <param name="args">The argv from the mode on: <c>--profile</c>, <c>--model</c>, <c>--cwd</c>, <c>--deadline-seconds</c>, an optional <c>--executable</c> (a row's configured path), and for a profile that needs a home <c>--home</c>, <c>--persons-bin</c> and <c>--locks</c>.</param>
     /// <param name="stdin">The prompt, read to its end.</param>
@@ -260,7 +260,7 @@ internal static class AskAcpMode
 
     /// <summary>A configured path is the whole answer; otherwise the profile's own.</summary>
     private static string Executable(IReadOnlyDictionary<string, string> flags, IAcpProfile profile) =>
-        flags.GetValueOrDefault("--executable", string.Empty) is { Length: > 0 } configured ? configured : profile.DefaultExecutable;
+        flags.GetValueOrDefault(KimiEnvironment.ExecutableFlag, string.Empty) is { Length: > 0 } configured ? configured : profile.DefaultExecutable;
 
     /// <summary>The given seconds — already checked by <see cref="Refusal"/> — or the default.</summary>
     private static TimeSpan Deadline(IReadOnlyDictionary<string, string> flags) =>
@@ -353,12 +353,12 @@ internal static class AskAcpMode
 
     internal static string EndWord(AcpEnd end) => end switch
     {
-        AcpEnd.Answered => "answered",
-        AcpEnd.NotStarted => "not_started",
+        AcpEnd.Answered => KimiReport.AnsweredWord,
+        AcpEnd.NotStarted => KimiReport.NotStartedWord,
         AcpEnd.AgentFailed => "agent_failed",
         AcpEnd.Deadline => "deadline",
         AcpEnd.Protocol => "protocol",
-        AcpEnd.ModelNotOffered => "model_not_offered",
+        AcpEnd.ModelNotOffered => KimiReport.ModelNotOfferedWord,
         _ => "cancelled",
     };
 

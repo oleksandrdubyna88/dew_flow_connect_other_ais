@@ -87,8 +87,10 @@ internal sealed class KimiFixture : IDisposable
         """;
 
     /// <summary>The places for an owned root of this fixture, resolved the way the runtime resolves them: from an injected environment and a real file test.</summary>
-    public KimiPlaces Places(string rootName = "kh-x") =>
-        KimiPlaces.Resolve(Path.Combine(Folder, "owned", rootName), HostKind.Windows, Env, Profile, File.Exists);
+    public KimiPlaces Places(string rootName = "kh-x") => PlacesAt(Path.Combine(Folder, "owned", rootName));
+
+    /// <summary>The places for an owned root ANYWHERE (a runtime picks its own: <c>kh-</c> + a hash, inside the round's scratch), resolved the same way.</summary>
+    public KimiPlaces PlacesAt(string ownedRoot) => KimiPlaces.Resolve(ownedRoot, HostKind.Windows, Env, Profile, File.Exists);
 
     /// <summary>The bytes of the <c>config.toml</c> coai writes for this person and <paramref name="model"/> — what a launch's validation compares the home's against.</summary>
     public byte[] ExpectedConfig(string model = KimiModels.Default)

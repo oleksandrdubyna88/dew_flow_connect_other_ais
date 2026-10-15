@@ -49,8 +49,6 @@ public static class KimiLaunch
                 $"every confinement number coai has — the write refusals, the owned home's inventory, the OS-home redirect (research/RESULTS_kimi_confinement.md) — is {string.Join(", ", KimiAcpProfile.MeasuredVersions)}'s",
                 "re-measure the sign-in hold with `node scripts/probe-kimi-tree-hold.mjs` (the confinement probe, scripts/probe-kimi-confinement.mjs, still has to be re-plumbed to the shim's flags — E4.5)");
 
-    private const string InstallFallback = "install Kimi Code: https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started";
-
     /// <summary>What the checks before the turn concluded: a refusal, or the config bytes the home must hold.</summary>
     private sealed record Prepared(string Refusal, byte[] Expected)
     {
@@ -241,7 +239,7 @@ public static class KimiLaunch
         }
         catch (Win32Exception e)
         {
-            return (string.Empty, $"'{places.Executable}' could not be started: {e.Message} — {VendorDiagnosis.InstallCure("kimi") ?? InstallFallback}");
+            return (string.Empty, $"'{places.Executable}' could not be started: {e.Message} — {VendorDiagnosis.InstallCure("kimi")}");
         }
     }
 

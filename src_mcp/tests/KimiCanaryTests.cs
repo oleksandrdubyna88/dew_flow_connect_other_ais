@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CoaiMcp.Acp;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
@@ -88,10 +89,13 @@ public sealed class KimiCanaryTests : IDisposable
     }
 
     /// <summary>The person's config with a MALFORMED row — an unterminated string on the <c>api_key</c> line, and a model block whose capabilities line is broken.</summary>
+    private static string BrokenConfig() =>
+        KimiFixture.OwnerConfig().Replace($"api_key = \"{KimiFixture.ApiKeyCanary}\"", $"api_key = \"{KimiFixture.ApiKeyCanary}")
+            + "\n[models.\"kimi-code/k3\"]\nprovider = \"managed:kimi-code\"\nmodel = \"k3\"\nmax_context_size = 262144\ncapabilities = [ \"a\", \n";
+
     private async Task MalformedConfigsAsync()
     {
-        var broken = KimiFixture.OwnerConfig().Replace($"api_key = \"{KimiFixture.ApiKeyCanary}\"", $"api_key = \"{KimiFixture.ApiKeyCanary}")
-            + "\n[models.\"kimi-code/k3\"]\nprovider = \"managed:kimi-code\"\nmodel = \"k3\"\nmax_context_size = 262144\ncapabilities = [ \"a\", \n";
+        var broken = BrokenConfig();
         var slot = KimiPersonsConfig.Read(broken, "your config.toml");
         var block = KimiModelBlocks.For("kimi-code/k3", broken, ((BlocksLoad.Loaded)KimiModelBlocks.Builtin).Blocks);
         See("answers", Describe(slot));
@@ -257,6 +261,7 @@ public sealed class KimiCanaryTests : IDisposable
         await MalformedConfigsAsync();
         await EndingsAsync();
         await SweepBeatAsync();
+        await RoundRecordsAsync();
 
         // The shim: the agent asks for the credentials by their real path and through the owned junction, and echoes the replies.
         var places = _person.Places("kh-happy");
@@ -282,6 +287,7 @@ public sealed class KimiCanaryTests : IDisposable
         From("files").First().Should().MatchRegex("\\.lock", "the lock file names were listed");
         From("files").First().Should().Contain(".tree.lock", "the shim's own hold file was made under the --locks folder and listed");
         From("note").Should().Contain(text => text.Contains("--cwd"), "the shim's note collector caught its own sentence");
+        AssertTheRoundsRecordsWereCaught();
         report.GetProperty("reads").GetArrayLength().Should().Be(2);
         report.GetProperty("reads").EnumerateArray().Should().OnlyContain(read => !read.GetProperty("served").GetBoolean() && read.GetProperty("reason").GetString()!.Length > 0,
             "both reads of the sign-in are refused with a type-named reason, never bytes");
@@ -289,6 +295,72 @@ public sealed class KimiCanaryTests : IDisposable
         _seen.Where(entry => entry.Text.Contains(KimiFixture.RefreshCanary, StringComparison.Ordinal)).Should().BeEmpty("the refresh-token canary appears in nothing coai writes");
         _seen.Where(entry => entry.Text.Contains(KimiFixture.ApiKeyCanary, StringComparison.Ordinal)).Should().BeEmpty("the api-key canary appears in nothing coai writes");
         _seen.Where(entry => entry.Text.Contains("CANARY-", StringComparison.Ordinal)).Should().BeEmpty();
+    }
+
+    // ---------- E4.4: S2.45 re-run through the round's records and the reviewer line ----------
+
+    private KimiRuntime Runtime() => new("kimi", HostKind.Windows, new KimiSeams(_person.PlacesAt, () => ("coai-mcp.exe", [])));
+
+    /// <summary>One reviewer launch through the real adapter and executor; what it ENDED as is collected the four ways the round writes it down.</summary>
+    private async Task<ReviewerOutcome> RecordAsync(ScriptedKimi launcher, string model = KimiModels.Default)
+    {
+        var settings = new ReviewerSettings("kimi") { Model = model, OwnedScratch = Path.Combine(_person.Folder, "round", Guid.NewGuid().ToString("N")[..8]), Timeout = TimeSpan.FromMinutes(5) };
+        var worktree = Directory.CreateDirectory(Path.Combine(_person.Folder, "worktree")).FullName;
+        var invocation = Runtime().Build(RoleCatalog.ArchitectureRole, "review this", worktree, Path.Combine(_person.Folder, "s.json"), _person.Folder, settings);
+
+        var outcome = await new ReviewerExecutor(launcher).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+        See("line", ReviewerSummaryFactory.Describe(outcome));
+        See("ledger", ReviewerSummaryFactory.DescribeWhole(outcome));
+        See("warning", outcome.Warning);
+        See("record", outcome.ToString());
+
+        return outcome;
+    }
+
+    /// <summary>The reviewer line, the ledger text, the warning and the outcome record — through every ending a Kimi reviewer has.</summary>
+    private async Task RoundRecordsAsync()
+    {
+        await RecordAsync(new ScriptedKimi());
+        await RecordAsync(new ScriptedKimi(version: "2.2.0"));
+        await RecordAsync(new ScriptedKimi(), model: "moonshot-ai/kimi-k2.6");
+        await RecordAsync(new ScriptedKimi(_ => KimiShimScripts.Ended(75, AcpEnd.AgentFailed, "insufficient balance", failure: "balance_spent", stderr: "balance_spent: insufficient balance — the Kimi allowance is spent (D14)")));
+        await RecordAsync(new ScriptedKimi(_ => KimiShimScripts.Ended(77, AcpEnd.AgentFailed, "Authentication required", failure: "not_signed_in", stderr: "not_signed_in: Authentication required — run `kimi login`")));
+        await RecordAsync(new ScriptedKimi(_ => KimiShimScripts.Ended(69, AcpEnd.NotStarted, "another Kimi started on this sign-in is still running", stderr: "another Kimi started on this sign-in is still running")));
+        await RecordAsync(new ScriptedKimi(_ => KimiShimScripts.Ended(65, AcpEnd.ModelNotOffered, "the agent's session offers a for 'model'; 'b' is not one of them", stderr: "the agent's session offers a for 'model'; 'b' is not one of them")));
+        File.WriteAllText(_person.PersonsConfig, BrokenConfig());
+        try
+        {
+            await RecordAsync(new ScriptedKimi(), model: "kimi-code/k3");
+        }
+        finally
+        {
+            File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig());
+        }
+    }
+
+    private void AssertTheRoundsRecordsWereCaught()
+    {
+        // Liveness, one per collector: a collector that caught nothing proves nothing.
+        From("line").Should().Contain(text => text.Contains("not on the Kimi Code plan"), "the reviewer line caught the model refusal");
+        From("line").Should().Contain(text => text.Contains("still running"), "and the busy sign-in");
+        From("line").Should().Contain(text => text.Contains("kimi login"), "and the diagnosed sign-in refusal");
+        From("line").Should().Contain(text => text.Contains("does not offer this model"), "and the model the session does not offer");
+        From("line").Should().Contain(text => text.Contains("capabilities") && text.Contains("fix the block"), "and the malformed block's refusal, naming the KEY and the cure");
+        From("ledger").Should().Contain(text => text.Contains("rate limited"), "the ledger text caught the spent allowance");
+        From("warning").Should().Contain(text => text.Contains("is not a version coai has measured"), "the warning collector caught the unmeasured version");
+        From("record").Should().Contain(text => text.Contains("NotStarted") && text.Contains("not on the Kimi Code plan"), "the outcome records were caught");
+    }
+
+    [Fact]
+    public async Task TheDetector_SeesVendorTextRelayedIntoTheRoundsRecords()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+
+        await RecordAsync(new ScriptedKimi(_ => new ProcessResult(70, string.Empty, $"agent printed its own file: {KimiFixture.RefreshCanary}", TimedOut: false)));
+
+        From("line").Should().Contain(text => text.Contains(KimiFixture.RefreshCanary),
+            "what a vendor's process prints is relayed by the reviewer line, outside the pin (decision 12) — and the detector sees it, so the pin above is not blind");
     }
 
     [Fact]
