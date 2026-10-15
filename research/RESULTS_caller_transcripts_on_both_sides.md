@@ -5,7 +5,7 @@
 > [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 
 - **Subject:** `dew_flow_connect_other_ais` at `6159b7f4` (origin/main when E1 started).
-- **Harnesses:** `scripts/export-code-rounds.py` (one read-only query per store) and `scripts/measure-caller-transcripts.mjs`
+- **Harnesses:** `scripts/export-code-rounds.py` (one read-only query per store; `COAI_EXPORT_DIR=<folder> py -3 scripts/export-code-rounds.py <db> rounds-win.json 2026-09-30`, the output a bare file name) and `scripts/measure-caller-transcripts.mjs`
   (counts only — never a value that could carry text).
 - **Sides:** Windows (`%LOCALAPPDATA%\coai-mcp`, `~/.claude` of the operator) and WSL (`~/.local/share/coai-mcp`, the WSL
   `~/.claude`), each measured from inside itself.

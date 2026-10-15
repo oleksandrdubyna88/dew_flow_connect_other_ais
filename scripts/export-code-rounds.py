@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 r"""Exports the code rounds of one coai store, read-only, as JSON (E1.S2 of PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md).
 
-    py -3     scripts/export-code-rounds.py <dataDir>\coai.db <out.json> <since yyyy-mm-dd>     (Windows)
-    python3   scripts/export-code-rounds.py <dataDir>/coai.db <out.json> <since yyyy-mm-dd>     (WSL)
+    COAI_EXPORT_DIR=<folder> py -3     scripts/export-code-rounds.py <dataDir>\coai.db <name.json> <since yyyy-mm-dd>     (Windows)
+    COAI_EXPORT_DIR=<folder> python3   scripts/export-code-rounds.py <dataDir>/coai.db <name.json> <since yyyy-mm-dd>     (WSL)
 
 One query, no logic beyond it: every CodeReview round that started on or after <since>, joined to its gate session's repo. It
 exists because WSL's Node 20 has no `node:sqlite`, and ONE exporter for both sides beats two. The database is opened with
@@ -10,11 +10,12 @@ exists because WSL's Node 20 has no `node:sqlite`, and ONE exporter for both sid
 (UTF-8, LF, a JSON array) holds session ids and repository paths: keep it OUTSIDE the repository.
 
 On Windows `python3` is the Microsoft Store alias stub ("Python was not found"); use `py -3`.
-The output must resolve (symlinks and ".." followed) inside an allowed folder: the current directory, the system temp folder, or a folder
-named in COAI_EXPORT_ALLOWED_DIRS (a list separated by os.pathsep; the WSL run that writes into the Windows temp folder through /mnt/c
-sets it). The store must exist, be a regular file and be named *.db.
-Exit: 0 written - 65 bad arguments, a store that is not an existing *.db file, an output outside the allowed folders, or an output that is
-the store itself / named like a store file (nothing is touched) - 74 the store could not be read or the output not written. The output is written to a temp file in its folder and renamed over `out` only after the dump
+The output argument is a bare FILE NAME, never a path: its folder comes from the environment variable COAI_EXPORT_DIR (resolved with
+realpath; it must be an existing directory) or, when that is not set, from the current directory. The store must exist, be a regular file and
+be named *.db.
+Exit: 0 written - 65 bad arguments, a store that is not an existing *.db file, an output argument that is not a bare name, an export folder
+that is not an existing directory, or an output that is the store itself / named like a store file (nothing is touched) - 74 the store could
+not be read or the output not written. The output is written to a temp file in its folder and renamed over the target only after the dump
 succeeded, so a failed export leaves an existing output as it was.
 """
 import json
@@ -28,7 +29,7 @@ from pathlib import Path
 # An output named like a store file is refused outright: the arguments are positional, and a swapped pair would otherwise let
 # open(out, "w") truncate the live store after the read-only query succeeded.
 STORE_SUFFIXES = (".db", ".sqlite", ".sqlite3", "-wal", "-shm", "-journal")
-ALLOWED_DIRS_ENV = "COAI_EXPORT_ALLOWED_DIRS"
+EXPORT_DIR_ENV = "COAI_EXPORT_DIR"
 
 QUERY = (
     "SELECT r.session_id, r.number, r.started_utc, r.completed_utc, r.status, r.caller, r.caller_vendor, s.repo_path "
@@ -37,24 +38,18 @@ QUERY = (
 )
 
 
-def allowed_bases() -> list[str]:
-    """Folders an output may live in, resolved: the working directory, the temp folder, and whatever the environment names."""
-    named = [part for part in os.environ.get(ALLOWED_DIRS_ENV, "").split(os.pathsep) if part]
-    return [os.path.normcase(os.path.realpath(base)) for base in [os.getcwd(), tempfile.gettempdir(), *named]]
+def output_name_refusal(arg: str) -> str:
+    """Why `arg` is not a bare file name, or an empty string. The folder is never part of the argument."""
+    if arg in ("", ".", "..") or re.search(r"[\\/:]", arg) or os.path.basename(arg) != arg:
+        return "the output must be a bare file name; its folder comes from " + EXPORT_DIR_ENV + " (or the current directory)"
+    return ""
 
 
-def is_inside(path: str, base: str) -> bool:
-    try:
-        return os.path.commonpath([base, path]) == base
-    except ValueError:  # different drives
-        return False
-
-
-def resolve_output(raw: str) -> "Path | None":
-    """The output path with symlinks and ".." resolved (its own letter case kept), when it lies inside an allowed folder; else None."""
-    resolved = os.path.realpath(raw)
-    folded = os.path.normcase(resolved)
-    return Path(resolved) if any(is_inside(folded, base) for base in allowed_bases()) else None
+def export_directory() -> "Path | None":
+    """The folder outputs go to, from trusted sources only: COAI_EXPORT_DIR (realpath) or the current directory; None if it is not a directory."""
+    named = os.environ.get(EXPORT_DIR_ENV, "")
+    directory = os.path.realpath(named) if named else os.getcwd()
+    return Path(directory) if os.path.isdir(directory) else None
 
 
 def store_refusal(db: Path) -> str:
@@ -97,13 +92,14 @@ def export(db: Path, out: Path, since: str) -> int:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3 or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", argv[2]):
-        print("usage: export-code-rounds.py <coai.db> <out.json> <since yyyy-mm-dd>", file=sys.stderr)
+        print("usage: [COAI_EXPORT_DIR=<folder>] export-code-rounds.py <coai.db> <name.json> <since yyyy-mm-dd>", file=sys.stderr)
         return 65
     db = Path(argv[0])
-    reason = store_refusal(db)
-    out = resolve_output(argv[1]) if not reason else None
-    if not reason and out is None:
-        reason = "the output must lie inside the current directory, the temp folder or a folder named in " + ALLOWED_DIRS_ENV
+    reason = store_refusal(db) or output_name_refusal(argv[1])
+    directory = None if reason else export_directory()
+    if not reason and directory is None:
+        reason = EXPORT_DIR_ENV + " must name an existing directory"
+    out = directory / os.path.basename(argv[1]) if directory is not None else None  # basename at the join: the folder is never taken from the argument
     reason = reason or refusal_for(db, out)
     if reason:
         print(f"refused: {reason}", file=sys.stderr)

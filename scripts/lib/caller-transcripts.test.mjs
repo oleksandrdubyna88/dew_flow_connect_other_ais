@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { compareOrdinal } from './ordinal.mjs';
@@ -395,8 +395,10 @@ function seedStore(path) {
   assert.equal(made.status, 0, made.stderr);
 }
 
-const exporter = (...args) => spawnSync(python[0], [...python[1], '-I', EXPORTER, ...args], { encoding: 'utf8' });
-/** The exporter with its own cwd and environment, to place the allowed folders (cwd, the temp folder, COAI_EXPORT_ALLOWED_DIRS) where the test wants them. */
+/** The exporter the documented way: the output is a bare NAME and its folder comes from COAI_EXPORT_DIR. */
+const exporter = (db, out, ...rest) => spawnSync(python[0], [...python[1], '-I', EXPORTER, db, basename(out), ...rest],
+  { encoding: 'utf8', env: { ...process.env, COAI_EXPORT_DIR: dirname(out) } });
+/** The exporter with its own cwd and environment and the raw arguments, to test where the output goes and what is refused. */
 const exporterIn = (options, ...args) => spawnSync(python[0], [...python[1], '-I', EXPORTER, ...args], { encoding: 'utf8', ...options });
 
 test('theExporterWritesOnlyCodeRoundsSinceTheDayAsLfUtf8', { skip: !python }, () => {
@@ -474,28 +476,58 @@ test('theExporterOpensOnlyAnExistingRegularDbFile', { skip: !python }, () => {
   assert.equal(existsSync(join(root, 'o1.json')) || existsSync(join(root, 'o2.json')), false);
 });
 
-test('theExporterWritesOnlyInsideTheCwdTheTempFolderOrAFolderTheEnvironmentNames', { skip: !python }, () => {
+test('theExporterTakesABareOutputNameAndRefusesAnythingWithAFolderInIt', { skip: !python }, () => {
   const { root } = fresh();
   const db = join(root, 'coai.db');
   seedStore(db);
-  const here = join(root, 'cwd');
-  const temp = join(root, 'temp');
-  const elsewhere = join(root, 'elsewhere');
-  for (const dir of [here, temp, elsewhere]) mkdirSync(dir);
-  const env = { ...process.env, TMP: temp, TEMP: temp, TMPDIR: temp };
-  delete env.COAI_EXPORT_ALLOWED_DIRS;
-  const outside = join(elsewhere, 'rounds.json');
-  const refused = exporterIn({ cwd: here, env }, db, outside, '2026-09-30');
-  assert.equal(refused.status, 65, refused.stderr);
-  assert.match(refused.stderr, /COAI_EXPORT_ALLOWED_DIRS/);
-  assert.equal(existsSync(outside), false, 'nothing was written outside');
-  const dotted = exporterIn({ cwd: here, env }, db, join(here, '..', 'elsewhere', 'rounds.json'), '2026-09-30');
-  assert.equal(dotted.status, 65, 'a .. that climbs out of the cwd is resolved before the check');
-  assert.equal(exporterIn({ cwd: here, env }, db, join(here, 'rounds.json'), '2026-09-30').status, 0, 'the cwd is allowed');
-  assert.equal(exporterIn({ cwd: here, env }, db, join(temp, 'rounds.json'), '2026-09-30').status, 0, 'the temp folder is allowed');
-  const named = exporterIn({ cwd: here, env: { ...env, COAI_EXPORT_ALLOWED_DIRS: elsewhere } }, db, outside, '2026-09-30');
-  assert.equal(named.status, 0, named.stderr);
-  assert.ok(existsSync(outside), 'a folder the environment names is allowed');
+  const env = { ...process.env, COAI_EXPORT_DIR: root };
+  for (const arg of [join(root, 'o.json'), 'sub/o.json', '../o.json', '..', '.', '', 'C:\\x\\o.json', 'a\\b.json', 'C:o.json']) {
+    const ran = exporterIn({ cwd: root, env }, db, arg, '2026-09-30');
+    assert.equal(ran.status, 65, JSON.stringify(arg) + ' ' + ran.stderr);
+    assert.match(ran.stderr, /bare file name/);
+  }
+  assert.deepEqual(readdirSync(root).sort(compareOrdinal), ['coai.db', 'projects'], 'nothing was written');
+});
+
+test('theExporterRefusesAnExportFolderThatIsNotAnExistingDirectory', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  seedStore(db);
+  const aFile = join(root, 'plain.txt');
+  writeFileSync(aFile, 'x');
+  for (const dir of [aFile, join(root, 'absent')]) {
+    const ran = exporterIn({ cwd: root, env: { ...process.env, COAI_EXPORT_DIR: dir } }, db, 'o.json', '2026-09-30');
+    assert.equal(ran.status, 65, ran.stderr);
+    assert.match(ran.stderr, /existing directory/);
+  }
+  assert.equal(existsSync(join(root, 'o.json')), false);
+});
+
+test('aBareNameIsWrittenIntoTheExportFolderAndWithoutOneIntoTheCwd', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  seedStore(db);
+  const cwd = join(root, 'cwd');
+  const named = join(root, 'named');
+  for (const dir of [cwd, named]) mkdirSync(dir);
+  const env = { ...process.env };
+  delete env.COAI_EXPORT_DIR;
+  const viaEnv = exporterIn({ cwd, env: { ...env, COAI_EXPORT_DIR: named } }, db, 'rounds.json', '2026-09-30');
+  assert.equal(viaEnv.status, 0, viaEnv.stderr);
+  assert.ok(existsSync(join(named, 'rounds.json')) && !existsSync(join(cwd, 'rounds.json')), 'into COAI_EXPORT_DIR, not the cwd');
+  const viaCwd = exporterIn({ cwd, env }, db, 'rounds.json', '2026-09-30');
+  assert.equal(viaCwd.status, 0, viaCwd.stderr);
+  assert.ok(existsSync(join(cwd, 'rounds.json')), 'without the variable, into the cwd');
+});
+
+test('aFullPathAsTheOutputIsRefusedSoASwappedPairCannotReachTheStore', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  seedStore(db);
+  const before = readFileSync(db);
+  const ran = spawnSync(python[0], [...python[1], '-I', EXPORTER, db, db, '2026-09-30'], { encoding: 'utf8' });
+  assert.equal(ran.status, 65, ran.stderr);
+  assert.deepEqual(readFileSync(db), before, 'the store is untouched');
 });
 
 test('theExporterRefusesAMissingStoreWithoutCreatingOne', { skip: !python }, () => {
