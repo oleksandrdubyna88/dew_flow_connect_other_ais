@@ -1,6 +1,6 @@
 # PLAN — E1 stories: the spike measures both sides and cuts the fixtures
 
-> Status: **plan only, nothing implemented yet, 2026-10-14.** Epic E1 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **in progress, 2026-10-15: S1-S3 and S5 done; S4 open on one item, `/clear` (needs an attended session).** Epic E1 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: no product code and no schema step. A results file under `research/`, two measuring scripts under `scripts/`
 > with their `node --test` tests, sanitised fixtures under `src_mcp/tests/fixtures/caller-transcripts/`, one C# guard
@@ -182,8 +182,9 @@ written — the prediction precedes every observation, including an exploratory 
     order; no structural key matches `^k\d+$`, so a rename cannot collide with a kept key. Below a renamed key nothing is
     allowlisted any more — every string under it is the sentinel and its keys are renamed in turn.
   - **Ids**: every `uuid`/`hexid`/`msgid`-shaped allowlisted value is remapped through ONE map per fixture
-    (deterministic: `sha256(salt + original)` formatted back into the same shape; the salt is per fixture and
-    committed). The SAME map renames files (`<sessionId>.jsonl`, `<sessionId>/subagents/agent-<agentId>.jsonl|.meta.json`),
+    (deterministic: `sha256(salt + original)` formatted back into the same shape; the salt is per fixture, at least 32
+    random characters, and is NOT committed: it is kept beside the real case specs outside the repository, because a committed salt
+    would let anyone holding an original id confirm it in a fixture; the cutter refuses a shorter one). The SAME map renames files (`<sessionId>.jsonl`, `<sessionId>/subagents/agent-<agentId>.jsonl|.meta.json`),
     so `toolUseId` ↔ `tool_use.id`, `parentAgentId` ↔ `agentId`, `tool_use_id` ↔ `id` still join.
   - **Paths** (`cwd`, `file_path`, `notebook_path`): a `--repo <real-prefix>=<fixture-root>` mapping per repository
     (e.g. `D:/rsd/_wt/x=D:/fixture/repo-a`, `/home/<u>/src/y=/fixture/repo-b`); match is case-insensitive on Windows-style
