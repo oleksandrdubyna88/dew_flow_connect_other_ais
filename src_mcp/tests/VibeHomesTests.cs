@@ -106,6 +106,22 @@ public sealed class VibeHomesTests : IDisposable
         Directory.EnumerateFileSystemEntries(target).Should().BeEmpty("nothing was made through the link");
     }
 
+    /// <summary>A junction whose target is gone: `Directory.Exists` is false for it, which used to make the sweep silent about it.</summary>
+    [Fact]
+    public void CoaiVhADanglingJunction_IsSaid_NotSweptInSilence()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "a junction whose target is gone");
+        var target = Directory.CreateDirectory(_root.At("gone-soon")).FullName;
+        var vh = Path.Combine(_root, VibeHomes.OneShotFolder);
+        SnapshotTestKit.LinkNow(vh, target);
+        Directory.Delete(target);
+        var warnings = new List<string>();
+
+        VibeHomes.SweepOneShot(_root, Now + TimeSpan.FromDays(1), warnings.Add).Should().Be(0);
+
+        warnings.Should().ContainSingle().Which.Should().Contain(vh).And.Contain("link");
+    }
+
     [Fact]
     public void AnEmptyRoot_ReservesNothing_AndSweepsNothing()
     {

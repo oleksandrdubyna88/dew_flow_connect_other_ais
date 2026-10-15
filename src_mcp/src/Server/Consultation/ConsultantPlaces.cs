@@ -150,16 +150,27 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         }
 
         var pin = ((PrivateFolderOutcome.Opened)opened).Held;
-        var homes = PrivateFolder.PathOf(homesRoot, runtime.HomesFolder);
-        var folder = ConsultantHomes.ConversationFolder(homesRoot, runtime.HomesFolder, consultationId);
-        if (MadeThrough(homes, folder) is { Length: > 0 } link)
+
+        // The pin is the homes folder's handle: given back on EVERY way out that does not move it into a place — a link, a throw
+        // while the folder is made, a cancellation while the folder's turn is waited for.
+        try
+        {
+            var homes = PrivateFolder.PathOf(homesRoot, runtime.HomesFolder);
+            var folder = ConsultantHomes.ConversationFolder(homesRoot, runtime.HomesFolder, consultationId);
+            if (MadeThrough(homes, folder) is { Length: > 0 } link)
+            {
+                pin.Dispose();
+
+                return new ConsultantPlace.Refused($"{link} is a link, and a conversation's folder is never made or used through one");
+            }
+
+            return await HeldAsync(new Turned(folder, runtime.NeedsASanitisedSnapshot ? repo : string.Empty, ceiling, pin), ct);
+        }
+        catch
         {
             pin.Dispose();
-
-            return new ConsultantPlace.Refused($"{link} is a link, and a conversation's folder is never made or used through one");
+            throw;
         }
-
-        return await HeldAsync(new Turned(folder, runtime.NeedsASanitisedSnapshot ? repo : string.Empty, ceiling, pin), ct);
     }
 
     /// <summary>One turn's folder, the live tree to copy into it (empty: no copy), the turn's ceiling, and the pinned handle of the homes folder above it.</summary>

@@ -109,7 +109,18 @@ internal sealed class RosterBuilder(
             return scratch;
         }
 
-        var made = await new Runners.Snapshots.ReviewSnapshots(launcher).MakeAsync(new Runners.Snapshots.SnapshotSource.Pinned(worktreePath), scratch.Directory, ct);
+        Runners.Snapshots.SnapshotOutcome made;
+        try
+        {
+            made = await new Runners.Snapshots.ReviewSnapshots(launcher).MakeAsync(new Runners.Snapshots.SnapshotSource.Pinned(worktreePath), scratch.Directory, ct);
+        }
+        catch
+        {
+            // The engine disposes a scratch it was HANDED; this one never was, so its reservation would stay locked until a restart.
+            scratch.Dispose();
+            throw;
+        }
+
         if (made is Runners.Snapshots.SnapshotOutcome.Refused refused)
         {
             log.Warning("the round's sanitised snapshot was refused: {Reason}", refused.Reason);

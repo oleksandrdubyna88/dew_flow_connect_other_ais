@@ -81,4 +81,28 @@ public sealed class PrivateFolderTests : IDisposable
         offenders.Should().BeEmpty("a Path.Combine with the homes root or a coai-* folder belongs in PrivateFolder.PathOf/Open (D7)");
         ProductionSources.Files().Select(Slashed).Should().Contain(file => file.EndsWith(theDoor, StringComparison.Ordinal), "the scan really sees the type");
     }
+
+    /// <summary>
+    /// Wider than the `Path.Combine` census: a file that spells a folder under the root through the helpers (`PathOf`, `OneShotIn`,
+    /// `ConversationFolder`) must also ENTER it through `PrivateFolder.Open`. The one file that only DEFINES a name (`ConsultantHomes`) is
+    /// the exemption, named.
+    /// </summary>
+    [Fact]
+    public void EveryFileThatSpellsAFolderUnderTheHomesRoot_AlsoOpensItThroughPrivateFolder()
+    {
+        string[] spellings = ["PrivateFolder.PathOf(", "OneShotIn(", "ConversationFolder("];
+        string[] definersOfAName = ["runners/Consultation/ConsultantHomes.cs"];
+        static string Slashed(string file) => file.Replace(Path.DirectorySeparatorChar, '/');
+
+        var offenders = ProductionSources.Files()
+            .Where(file => file.EndsWith(".cs", StringComparison.Ordinal) && !Slashed(file).EndsWith("runners/Files/PrivateFolder.cs", StringComparison.Ordinal))
+            .Where(file => !definersOfAName.Any(one => Slashed(file).EndsWith(one, StringComparison.Ordinal)))
+            .Where(file => spellings.Any(spelling => ProductionSources.CodeOf(file).Contains(spelling, StringComparison.Ordinal))
+                && !ProductionSources.CodeOf(file).Contains("PrivateFolder.Open(", StringComparison.Ordinal))
+            .ToList();
+
+        offenders.Should().BeEmpty("a file that names a folder under the homes root must enter it through PrivateFolder.Open (D7)");
+        ProductionSources.Files().Count(file => file.EndsWith(".cs", StringComparison.Ordinal) && spellings.Any(spelling => ProductionSources.CodeOf(file).Contains(spelling, StringComparison.Ordinal)))
+            .Should().BeGreaterThan(3, "the census really sees the files that spell such a folder");
+    }
 }

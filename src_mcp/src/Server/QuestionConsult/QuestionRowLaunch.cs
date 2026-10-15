@@ -79,6 +79,9 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 {
     public const string ScratchPrefix = "coai-question-";
 
+    /// <summary>Makes a row's scratch folder; a test's seam for a folder that cannot be made.</summary>
+    internal Func<string> MakeScratch { get; init; } = static () => Directory.CreateTempSubdirectory(ScratchPrefix).FullName;
+
     /// <summary>The empty folder a home-keeping runtime's none row stands in, beside its home inside the row's folder.</summary>
     private const string EmptyName = "cwd";
 
@@ -101,11 +104,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             return Ended(start, RowOutcomes.Refused, refusedHome.Sentence, started.Elapsed, Usage.None);
         }
 
-        var scratch = NeedsAFolder(input.Row) ? Directory.CreateTempSubdirectory(ScratchPrefix).FullName : string.Empty;
+        // Made INSIDE the try: when making it throws, the one-shot reservation above is still given back in `finally`.
+        var scratch = string.Empty;
         using var row = CancellationTokenSource.CreateLinkedTokenSource(ct);
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
         {
+            scratch = NeedsAFolder(input.Row) ? MakeScratch() : string.Empty;
             using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
             if (place.Refusal.Length > 0)
             {

@@ -100,6 +100,12 @@ public static class VibeHomes
         var vh = PrivateFolder.PathOf(root, OneShotFolder);
         if (!Directory.Exists(vh))
         {
+            // A junction whose target is gone is not a directory either, and is still not a thing to leave unsaid.
+            if (OwnedPaths.IsLinkIfThere(vh))
+            {
+                warn($"one-shot Vibe homes: {vh} is a link to nothing, and no folder is swept through one");
+            }
+
             return 0;
         }
 
