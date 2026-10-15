@@ -425,6 +425,8 @@ internal sealed class RoundEngine(
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
             _settings.StopLocalWhenQuiet ? StandDown.For(work) : null);
+            // A plan that did not reach a reviewer whole is a failed reviewer, and everything below reads `results`.
+            results = PlanIncomplete.Fold(stage.Stage, planText, results);
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
             // The deadline is reported only when IT is what ended the round: `roundClock` fired and

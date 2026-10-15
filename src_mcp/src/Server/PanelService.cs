@@ -648,9 +648,10 @@ public sealed class PanelService
                 // older conventions pin may carry only some of the tier, and a round that matched
                 // none of it must not read like a round that matched all of it.
                 _log.Information(
-                    "context for review: plan {PlanBytes} bytes; rules {RulesBytes} bytes, "
+                    "context for review: plan {PlanBytes} bytes (id {TextId}); rules {RulesBytes} bytes, "
                     + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
                     System.Text.Encoding.UTF8.GetByteCount(planText),
+                    DocumentRules.ArtifactIdOf(planText),
                     rules.Bytes,
                     rules.MatchedCount(StageRules.Plan),
                     StageRules.Plan.Length,
@@ -675,7 +676,7 @@ public sealed class PanelService
                     _roster.BuildWork(
                         roles, workingDir,
                         RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
-                            + $"## The plan under review\n\n{planText}",
+                            + PlanSection.Compose(planText, string.Empty),
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
