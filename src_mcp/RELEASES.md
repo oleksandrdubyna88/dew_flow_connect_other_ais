@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.56.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.55.0...mcp-v0.56.0) (2026-10-15)
+
+
+### Features
+
+* **e1:** caller transcripts measured on both sides, sanitised fixtures and their guard ([#828](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/828)) ([509b9b0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/509b9b007a0fd32e949f81add323a218229447c6))
+* **e2:** every code round records the size of its change, and each reviewer's effort ([#829](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/829)) ([4baba7b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4baba7b217910a63d5b296b98208a98b8ba46ab4))
+
+
+### Bug Fixes
+
+* **vibe:** a Vibe home stays under MAX_PATH, survives its second turn, says what refused it, and lives in a private folder ([#823](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/823)) ([5d8a24d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5d8a24da559024fa5c18d5289ac3956cf8fb9afd))
+
 ## [0.55.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.54.0...mcp-v0.55.0) (2026-10-15)
 
 
