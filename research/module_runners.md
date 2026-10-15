@@ -1557,6 +1557,21 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
 - **`GitScratch.DeleteEvenIfReadOnly`** (`runners/Files/GitScratch.cs`) — moved out of `PanelService` (git marks
   object files read-only, and `Directory.Delete` refuses them); the check deletes and sweeps its scratch repositories
   with it.
+- **Junctions and link-safe disposal** (`runners/Files/Junctions.cs`, `LinkTargetLostException.cs`; E4.1 of
+  `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). `Junctions.Make(host, link, target)` makes a directory junction from an owned
+  home to the person's folder by `DeviceIoControl(FSCTL_SET_REPARSE_POINT)` over a hand-laid `REPARSE_DATA_BUFFER` (the
+  `CreateFileW` import is `HandleRead`'s, shared) — no `cmd.exe`, no quoting of the person's profile path, no privilege.
+  `Refusal` answers first, and `Make` then reads the link back (`Target`, one level, never chased; `SameFolder` ignores case
+  and a trailing separator) and removes a link that reads back as anything else. Refused before anything is made: any host
+  but Windows (the D18 sentence), a target that is not a local `X:/` path (UNC, `wsl$`, relative), over 32 000 characters,
+  missing, itself a link, or a link path that already exists. A failed call removes the empty folder it made.
+  `GitScratch.DeleteEvenIfReadOnly` deletes a folder's links first, reads the entry names of a link's target through its own
+  reparse data before and after the unlink, and a name that is gone throws `LinkTargetLostException` (an `IOException`)
+  naming it — the walk stops there and nothing more is deleted. Callers: the six-hour sweep (`PanelService.PruneOldScratchDirs`,
+  new `warn`) and the question row's scratch now say it; D20's consultant home sweep already warns on any `IOException` and now
+  deletes a conversation folder's files last, so a stopped deletion leaves the folder still its own; the tests' `TempDir`
+  re-throws it. This check is the SECOND belt: `KimiHome.Dispose` (E4.2) unlinks `credentials` first where the caller knows
+  it holds a Kimi home.
 - **`ConsultantRoles.Check`** = `consult-check`, the LEDGER role of a check; the launch itself still carries `consult`
   — it is the same turn a consultation makes.
 - **`ConsultantLimitation.SnippetWarning`** — the agy allow-rule snippet's warning (a prefix rule is not read-only)

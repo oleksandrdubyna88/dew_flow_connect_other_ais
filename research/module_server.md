@@ -7133,7 +7133,10 @@ folder's turn or any home's turn in it is held (`VibeHomeTurns.TryTake`, zero wa
 never by a stamp). Before the delete the process's snapshot of it is released (its bytes back to the budget); the delete is
 `GitScratch.DeleteEvenIfReadOnly`, which unlinks a junction by its own name and never walks through it — so a Kimi home's
 `credentials` junction goes and the person's folder keeps every file (Kimi's own junction-first-and-verify disposal is S4's,
-in its home's owner; this sweep is the backstop). A folder that cannot be listed, read or removed is logged and skipped —
+in its home's owner; this sweep is the backstop). The deleter also checks, around each unlink, that the folder the link pointed
+at lost nothing — a lost name throws `LinkTargetLostException`, the walk stops, the sweep warns with the name, and because a
+conversation folder's own files (its stamp, in particular) are deleted LAST the folder stays recognisably this store's and the
+next beat finishes it (E4.1 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). A folder that cannot be listed, read or removed is logged and skipped —
 never the reason the sweep fails. `close_consult` removes the conversation's folders at once (`ConsultantHomeSweep.RemoveNow`,
 under the repository lock) instead of leaving them to the beat. The bound: while a server runs, a home outlives its
 conversation by at most `ConsultIdle` + one beat (15 min + 60 s by default); a killed host's homes go at the next start.
