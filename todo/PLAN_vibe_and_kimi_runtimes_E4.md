@@ -1,7 +1,9 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
 > Status: **E4.1 implemented 2026-10-15 (feat/kimi-runtime); E4.2–E4.5 not started.** Stories written 2026-10-14; the two
-> cornerstones' scenarios and briefs written by Fable 2026-10-14. E4.2 is a `model: fable` spec — a coder may start it; E4.3–E4.5 are Opus's.
+> cornerstones' scenarios and briefs written by Fable 2026-10-14; E4.2 amended by Fable 2026-10-15 (the junction risk
+> consultation 7de9430b and the E4.1 review folded in: decisions 9–13, brief §15–§17, S2.41–S2.46). E4.2 is a `model: fable`
+> spec — a coder may start it; E4.3–E4.5 are Opus's.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) — §4 **S4**, its code half (the
 > measurement half is done: [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md) §1–§26). Decisions
@@ -391,9 +393,12 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
    the shim (E4.3) calls `KimiPlaces.ForShim(flags["--home"], flags["--persons-bin"])` and NEVER
    `KimiAcpProfile.InstalledExecutable`, `SpecialFolder.UserProfile` or its own `KIMI_CODE_HOME` — inside the shim
    `USERPROFILE` IS `os/`. **The shim's flags, pinned here for E4.3 and E4.4:** `--home <owned ROOT>` (the folder holding
-   `home/` and `os/`; `KIMI_CODE_HOME` is `<root>/home`), `--persons-bin <folder>`, and `--executable <absolute kimi>`
-   (a flag already). The tool folders need no flag: they travel in the shim's own `PATH`, which the same builder made,
-   and `BuiltPath` is idempotent — the agent's `PATH` is the shim's `PATH` re-prefixed with nothing new.
+   `home/` and `os/`; `KIMI_CODE_HOME` is `<root>/home`), `--persons-bin <folder>`, `--executable <absolute kimi>`
+   (a flag already), and — added 2026-10-15 with decision 10 — `--locks <KimiCredentialsLock.Root>`, so the shim never
+   derives the lock folder from `LocalApplicationData` inside the redirected environment (what `GetFolderPath` answers
+   under a redirected `USERPROFILE` is the kind of question this decision exists to never ask). The tool folders need no
+   flag: they travel in the shim's own `PATH`, which the same builder made, and `BuiltPath` is idempotent — the agent's
+   `PATH` is the shim's `PATH` re-prefixed with nothing new.
 5. **The junction's preconditions, make and read-back are E4.1's `Junctions`** — this story calls
    `Junctions.Make(host, <root>/home/credentials, <persons home>/credentials)` and `Junctions.Target`, and adds nothing
    of its own.
@@ -408,6 +413,109 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
 8. **The root may hold more than `home/` and `os/`.** S5's conversation folder (`coai-kimi/<id>`) is a root that also
    holds `tree/`, `coai-conversation.txt` and `coai-turn.lock`; Kimi never reads the root (`KIMI_CODE_HOME` is `root/home`,
    the OS home `root/os`), so the validation judges `home/` whole and `os/` empty, and the root only for being a link.
+
+**Decisions 9–13 (Fable, 2026-10-15) — the junction risk consultation 7de9430b and the E4.1 Opus review, each verified
+against the E4.1 code before it was taken; deviation 18 of §"Where the parent plan and the code disagree".**
+
+9. **The lock key is the credentials folder's IDENTITY as the kernel names it, not its spelling** (consultation (a),
+   taken, amended). Brief §9 as written hashed `Junctions`' normalised path — `Path.GetFullPath` plus a trimmed separator
+   (`Junctions.cs:292`), which folds `..` and `/` but NOT case (`C:\Users\x` and `c:\users\X` hash apart), not an 8.3
+   spelling (`RUNNER~1` on a CI runner), and not an ancestor link (`D:\kimi\credentials` reached through a junction
+   `D:\kimi` → `C:\Users\x\.kimi-code` is the same folder with a different hash) — two servers given two spellings of
+   one sign-in would hold two locks and race the refresh. The key is now the FINAL PATH of the opened folder handle:
+   `HandleRead.CanonicalDirectory(target)` (`HandleRead.cs:211-224`, `GetFinalPathNameByHandleW` on a directory handle
+   opened with `FILE_FLAG_BACKUP_SEMANTICS`, the `\\?\` prefix stripped), made `internal` and shared — the one primitive
+   this repository already trusts to say what a handle really names (reuse-first, move 1), and the kernel spells it with
+   each component's ON-DISK casing and long name, every link on the way resolved. `ToUpperInvariant` on top as the belt
+   (the drive letter, and a volume whose `$UpCase` table folds what the kernel's cache did not). SHA-256 of that, lower
+   hex, first 16, `.lock`. Two handles to one folder give one final path, which is the "same target only by handle
+   identity" the consultation asked for, expressed as the path the lock file is named by. **Rejected:** keying by volume
+   serial + file index (`GetFileInformationByHandle`) — a second import for the same identity, 64-bit where ReFS ids are
+   128 (`FileIdInfo` would be a third), and a lock folder nobody can read; the final path answers (a) AND decision 13's
+   question with one open. **Fail closed:** a folder the platform cannot name by its handle (the call fails, or the
+   path is longer than the buffer) gets no key — `Hold.Unusable` with the cause, and `KimiLaunch` refuses: `the Kimi
+   sign-in folder {target} cannot be named by its handle, so coai cannot key its lock — refused (D19)`. Never a silent
+   fall-back to the spelling: a key that is sometimes identity and sometimes spelling is two keys.
+10. **A running Kimi tree HOLDS the sign-in, kernel-owned, until the last process of it is gone** (consultation (b),
+    taken — by an inherited handle, not a job object). Verified: `HeldFile.Take` opens the lock without
+    `FileShare.Inheritable` (`HeldFile.cs:48`), so the server's gate dies with the server; `ProcessLauncher.Started`
+    starts every child with redirected pipes (`ProcessLauncher.cs:215-220`), which on Windows is `CreateProcess` with
+    `bInheritHandles = true` — every INHERITABLE handle of the starter is inherited, nothing is restricted (no
+    `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, no job object anywhere in the runners); and `kimi acp` exits on stdin EOF, not on
+    its parent's death. So today a coai-mcp killed mid-turn (the editor closes, the MCP client ends it, a crash) leaves
+    the shim and its `kimi` alive and REFRESHING — and the kernel has already released the gate, so the next coai-mcp's
+    launch takes it and a second refresher joins the first: M-K14's race, the one D19's serialisation exists to avoid,
+    reachable by a restart. **The rule:** two files per target, one duty each. The GATE (`<key>.lock`, brief §9 as
+    specified) serialises LAUNCHERS and stays the server's, non-inheritable, as S2.25–S2.28 pin. The TREE HOLD
+    (`<key>.tree.lock`) is taken by the SHIM — `coai-mcp --ask-acp`, the process whose only child is `kimi` — with
+    `FileShare.Inheritable`, immediately before `AcpTransport.Start` and kept until the agent has `Exited`; `kimi`
+    inherits the handle at its start (the launcher's redirected start, above), so the file stays locked while EITHER the
+    shim or the agent lives — a shim that died under its agent, an agent that outlived the executor's tree kill (finding
+    G: a grandchild whose parent exited is missed by `Kill(entireProcessTree)`), a server that crashed over both. A
+    second shim on the same sign-in waits in its `TakeWithin` loop, inside its own deadline (the row's timeout, as D19
+    states for this wait), and exits 69 at the deadline with the sentence `another Kimi started on this sign-in is still
+    running ({path} is held) — it ends when its agent does; the turn is given up`. No handle leaks sideways: the shim
+    starts nothing but `kimi`, and `kimi`'s own children (`rg`, `fd`) hold it only while they run. **Why not the gate
+    itself made inheritable:** the gate is held by the SERVER across the whole turn, and every child the server starts
+    in that window — another provider's CLI, `git`, the creds probe — would inherit and hold it until it exits; a
+    codex review started beside a Kimi launch would then extend the Kimi lock by its own minutes, for the same server's
+    next launch too. **Why not a job object with `KILL_ON_JOB_CLOSE`:** it ends the tree the moment the server dies,
+    which is the one moment a `kimi` may be between the refresh request and writing the rotated pair — the kill loses
+    the rotation and signs the person out, where the inherited hold lets the orphan finish its refresh cleanly and
+    merely makes the next launch wait; it is three imports against one flag; and it is the Windows twin of the Unix
+    process-group teardown §0 puts outside this epic. **Residual, stated:** a tree ended by the executor's own timeout
+    kill (`KillTree`) or by a power cut at that same instant loses the rotation exactly as the person's own `kimi`
+    would; `kimi login` cures it, and M-K14's grace-window answer decides whether the window matters. The person's own
+    interactive `kimi` remains the stated race (D19 (ii)).
+11. **The teardown's TOCTOU stays a stated limit — and the teardown now refuses to run under a LIVE tree**
+    (consultation (c), limit confirmed; one addition). The limit as E4.1 recorded it is real: `DeleteEvenIfReadOnly`
+    checks `IsLink(dir)` (`GitScratch.cs:57`) and enumerates by path (`:65`); a real folder swapped for a junction in
+    between is entered, and `KimiHome.Dispose` (brief §14) cannot close it from outside — there is no managed
+    enumeration by handle, and the NT call that does it is out of scope. The reasoning that makes it a limit rather than
+    a gap: the only process that can swap a folder inside coai's owned root is a same-user process, which can open the
+    person's `credentials` directly — coai runs with the person's own rights and is no deputy to confuse; Kimi itself
+    never makes a link (§18's inventory is data only); and the teardown runs with no launch on the home (the home's
+    turn, D20's `coai-turn.lock`). **What was not a limit but a gap, found while confirming it:** the sweep or the
+    round's scratch can dispose a home whose `kimi` is still alive — the orphan of decision 10, or a survivor of the
+    tree kill — and unlinking `credentials` under a live `kimi` makes its next refresh write the rotated pair into a
+    `credentials/` it re-creates as a REAL folder inside coai's home, leaving the person's file with the token the
+    server just retired: a sign-out. So `KimiHome.Dispose` step (1) gains, before the unlink: when `Junctions.IsLocal
+    (target)` (E4.1's rule — never open a planted non-local target on a sweep beat), `HeldFile.Probe(TreePathFor(target))`
+    → `Held` → `Stopped("a Kimi started on the sign-in {target} is still running (its tree hold {path} is held) — {root}
+    is kept until it ends")`, nothing unlinked; `Unknown` (the lock folder unusable) → proceed, because no launch could
+    have been granted on an unusable lock folder (decision 9), so nothing lives on it. A kept home is retried by the next
+    beat (the sweep) or the next scratch sweep (the round) — the tree ends when `kimi` does.
+12. **A canary token in the sign-in never appears in anything coai writes** (E4.1 review, taken as a pin). What coai
+    reads of the person's is the config's slot (`KimiPersonsConfig`: `type`, `base_url`, `storage`, `key` — a slot
+    NAME, `oauth/kimi-code-env-x`, not a token — `oauth_host`) and the `credentials` folder's entry NAMES (E4.1's
+    `Look`, brief §14's `before`/`after`); it never opens a credentials file. The surfaces where a token could still
+    travel are every sentence this story composes (refusals, `Stopped`, `LinkTargetLostException`, the version warning),
+    the lock file names, the rendered `config.toml`, and the shim's report (`AskAcpMode.Report`, `AskAcpMode.cs:184-208`:
+    `answer`, `reason`, `reads[].path/reason`, `toolCalls[].title`) with its stderr. The report's `reads` carry a path and
+    a type-named reason, never bytes (`HandleRead.cs:86-87`), and a read of the credentials path — spelled directly or
+    through the owned home's junction — is outside the snapshot root and refused by the boundary; what the AGENT then
+    says is the vendor's text, so the canary's claim is bounded honestly: a token reaches the agent's answer only if coai
+    served it, and S2.45's control arm proves the detector sees a served canary when one is served. E4.4 re-runs the same
+    canary through the round's records and the reviewer line once the runtime exists (its coder adds the row beside S4.15).
+13. **The credentials target's ANCESTORS may be links — admitted, resolved, and refused only when the resolution
+    leaves the local drives** (E4.1 review M5, decided; consultation (e)). `Junctions.Chained` (`Junctions.cs:155-157`)
+    asks only whether the TARGET is a link, and that stays the rule for the last component: a junction to a junction
+    reads back one level (`Target` never chases), so the read-back could not prove what was made. An ancestor link is a
+    different thing: `C:\Users` relocated to another drive by junction, a profile on a mounted volume, a `KIMI_CODE_HOME`
+    that is itself a junction — common, legitimate, the person's own doing in their own trust domain, and exactly what
+    their own `kimi` runs through. Refusing them would refuse real machines for no threat that a same-user link maker
+    does not already have. What an ancestor link CAN do that the spelling hides is point off the local drives: a
+    directory SYMLINK (Developer Mode) under `C:\…` to `\\server\share` passes `LocalDrive`'s check of `target[..3]`
+    (`:67-71`) and E4.1's deleter would then list the target through it on every sweep. So `Junctions.Refusal` gains ONE
+    check after `Chained`, at launch time only: `Resolved(target)` — the final path of decision 9's open (`canonical`
+    seam for tests); empty → `{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi
+    sign-in really is — refused (D19)`; not `IsLocalDrivePath` → `{target} resolves to {final}, which is not a local
+    drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link
+    the sign-in from there (D19)`. The one open connects out ONCE, at launch, through a link the person made in their own
+    profile — not on every sweep beat from a link anyone could plant in scratch, which is why E4.1's deleter keeps its
+    spelling-only `IsLocal` and this check lives in the maker. The owned home's junction keeps the SPELLING as its
+    target (one level, D19), so a person who retargets their own ancestor junction between two launches lands where
+    their own `kimi` now lands; the lock key (decision 9) follows the folder either way.
 
 **BRIEF** (new files under `src_mcp/runners/Kimi/`, the folder E4.4's `KimiRuntime` joins).
 
@@ -523,12 +631,26 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
      rather than started on a home nobody checked.
    - `static string HomeFor(string scratch, string provider, string role)` → `scratch/kh-<10 hex>` with `VibeRuntime.Short`
      made `internal` and called (one hash rule, two prefixes).
-9. **`KimiCredentialsLock.cs`** — `public static string Root { get; set; }` (decision 1), `static string PathFor(string
-   target)` (SHA-256 of the `Junctions`-normalised target, lower hex `[..16]`, + `.lock`), `static async Task<Hold>
-   TakeAsync(string target, CancellationToken ct)`: `Directory.CreateDirectory(Root)`; loop `await Task.Run(() =>
-   HeldFile.TakeWithin(PathFor(target), Slice), ct)` → `Taken` returned, `Unusable` returned at once, `Busy` loops;
-   `Slice = TimeSpan.FromSeconds(1)`. `KimiLaunch` turns `Unusable` into `the Kimi sign-in lock {path} cannot be taken
-   ({cause}) — fix the folder's permissions`.
+9. **`KimiCredentialsLock.cs`** — `public static string Root { get; set; }` (decision 1). **The key** (decision 9):
+   `static string KeyFor(string target)` → `canonical = HandleRead.CanonicalDirectory(target)` (made `internal`, §16);
+   empty → empty (no key); else SHA-256 of `canonical.ToUpperInvariant()` (UTF-8), lower hex `[..16]`. `static string
+   PathFor(string target)` → `Root/<key>.lock`, and `static string TreePathFor(string target)` → `Root/<key>.tree.lock`
+   — both EMPTY when there is no key (a caller that gets an empty path refuses; it never hashes the spelling instead).
+   `internal static Func<string, string> Canonical` seam (test only; the product's is `HandleRead.CanonicalDirectory`).
+   **The gate** (the server's): `static async Task<Hold> TakeAsync(string target, CancellationToken ct)`: no key →
+   `Unusable(new IOException("cannot be named by its handle"))` at once; `Directory.CreateDirectory(Root)`; loop
+   `await Task.Run(() => HeldFile.TakeWithin(PathFor(target), Slice), ct)` → `Taken` returned, `Unusable` returned at
+   once, `Busy` loops; `Slice = TimeSpan.FromSeconds(1)`. `KimiLaunch` turns `Unusable` into `the Kimi sign-in lock
+   {path} cannot be taken ({cause}) — fix the folder's permissions`, and the no-key cause into decision 9's sentence.
+   **The tree hold** (the shim's, decision 10): `static Hold HoldTree(string target, TimeSpan within)` →
+   `HeldFile.TakeWithin(TreePathFor(target), within, inheritable: true)` (§15) — synchronous on purpose: the shim takes
+   it right before `AcpTransport.Start` and must not yield between the take and the start; `Busy` after `within` is the
+   shim's 69 with decision 10's sentence; `Unusable` its 65. The shim's `target` is `Junctions.Target(<root>/home/credentials)`
+   — the link's own reparse data, no environment, no profile (decision 4) — and its `Root` is the `--locks` flag.
+   `static LockProbe TreeProbe(string target)` → `HeldFile.Probe(TreePathFor(target))` (`Unknown` when there is no key)
+   — what `KimiHome.Dispose` asks (§14). *[E4.3: the shim calls `HoldTree` with what is left of its deadline, keeps the
+   stream in its `Attempt` until `Exited` completes, and disposes it in its `finally`; `--locks` joins the pinned flags
+   of decision 4. E4.4: `KimiRuntime` passes `--locks KimiCredentialsLock.Root` on the shim's request.]*
 10. **`KimiLaunch.cs`** — constants `HomeVariable = "KIMI_CODE_HOME"`, `NoUpdateVariable = "KIMI_CODE_NO_AUTO_UPDATE"`,
     `NoUpdateOn = "1"`, `HomeFlag = "--home"`, `PersonsBinFlag = "--persons-bin"`, `ModelFlag = "--model"`,
     `VersionTimeout = 60 s`:
@@ -583,7 +705,8 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
     version's plugin files are admitted by name only", "re-run `node scripts/vibe-home-manifest.mjs --write` and `node
     scripts/probe-vibe-confinement.mjs` with this Vibe to measure it")` — byte-identical to today's output.
 13. **Docs**: `research/module_runners.md` — a *Kimi* unit beside the Vibe one (the places resolved once, the tools
-    rule, the config render and its readers, the validation list, the environment, the two locks and their order, the
+    rule, the config render and its readers, the validation list, the environment, the gate and the tree hold — their
+    keys, who takes which, their order, and what survives a crash (decisions 9–10) — the disposal's tree probe, the
     shared warning builder, the junction-first disposal); `shared/kimi-model-blocks.json` documented where the Vibe
     manifest is (the csproj comment and the module doc); `research/module_tests.md` rows for the classes below; the
     parent plan's §4 S4 block records deviations 9–12 when the story lands (its text stays the plan's until then). E4.3
@@ -592,7 +715,10 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
     #817, accepted 2026-10-14: belt and braces over E4.1's in-deleter check). `public abstract record Disposal {
     Clean(bool LinkWasThere); Stopped(string Reason) }` (closed). `static Disposal Dispose(string root, Action<string>
     warn)`, in this order and no other: (1) `link = root/home/credentials`; when `OwnedPaths.IsLinkIfThere(link)`:
-    `target = Junctions.Target(link)` (read from the link's OWN reparse data, never by walking into it); `before` = the
+    `target = Junctions.Target(link)` (read from the link's OWN reparse data, never by walking into it); **then, when
+    `Junctions.IsLocal(target)` (added 2026-10-15, decision 11): `KimiCredentialsLock.TreeProbe(target)` → `Held` →
+    `Stopped("a Kimi started on the sign-in {target} is still running (its tree hold {path} is held) — {root} is kept
+    until it ends")` with NOTHING unlinked; `Unknown` or `Free` → on;** `before` = the
     target's direct entry names and their count (empty and unverified when the target cannot be listed);
     `Directory.Delete(link, recursive: false)`; `IsLinkIfThere(link) || Directory.Exists(link)` after → `Stopped("{link}
     still exists after its unlink — nothing was deleted")`; `after` read the same way; a name of `before` absent from
@@ -611,6 +737,25 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
     `RoundScratch.Delete` calls `KimiHome.DisposeAllUnder(Directory, _note)` before its deleter — wired by E4.4 (its
     bracketed note and S4.15), the primitive and its tests are this story's; the question row's `finally` and the
     consultant check — S5's. `KimiRuntime`'s own probe home holds no junction and stays on the bare deleter.
+15. **`HeldFile.Take` widened, not copied** (decision 10; `HeldFile.cs:41-55`, `:87-100`): `Take(string path, bool
+    inheritable = false)` and `TakeWithin(string path, TimeSpan within, bool inheritable = false)` — the share mode is
+    `FileShare.None | (inheritable ? FileShare.Inheritable : 0)`; `FileShare.Inheritable` is not a share mode but the
+    `bInheritHandle` of the handle's security attributes, so the open stays exclusive. Every existing caller keeps the
+    default. The remarks gain a paragraph: *an inheritable hold is held by every process that inherits the handle until
+    the last of them is gone — the property the Kimi tree hold wants (decision 10 of E4.2), and the reason it is never
+    the default: a .NET child started with redirected streams inherits EVERY inheritable handle of its starter.*
+16. **`HandleRead.CanonicalDirectory` made `internal`** (decision 9; `HandleRead.cs:211-224`) and called by
+    `KimiCredentialsLock.KeyFor` and `Junctions.Resolved` — never a second `GetFinalPathNameByHandleW` import. Its
+    remark gains: *also the identity a Kimi sign-in's lock is keyed by, and what the junction maker asks to see where a
+    target really is (E4.2 decisions 9 and 13).* The non-Windows arm (`WorktreePaths.Real`) is never reached by these
+    two callers (D18), and is left as it is.
+17. **`Junctions.Refusal` gains `Resolved`** (decision 13), after `Chained` and before `Taken`, with the `canonical`
+    seam alongside `driveType` (`internal static string Refusal(host, link, target, driveType, canonical)`; the public
+    overload passes `HandleRead.CanonicalDirectory`): empty → the "cannot be named by its handle" sentence;
+    `!IsLocalDrivePath(canonical, driveType)` → the "resolves to {final}" sentence. `Make` calls the widened `Refusal`.
+    The remarks gain: *an ancestor of the target may be a link (a relocated profile is one); the target itself may not,
+    and where the ancestors lead must still be a local drive.* S1.3's chained row stays red as it is; CC of `Refusal`
+    unchanged (one more lambda in the array).
 
 **SCENARIOS.** Every fake person's home is a folder INSIDE the test's own `TempDir.For("testsToDelete-kimi-…")`, holding
 `config.toml` (the owner's shape: the managed provider, its OAuth slot, a `moonshot-ai` row with an `api_key`, a
@@ -619,7 +764,9 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
 `KimiPlaces.Resolve` is given an `env` function and a `fileExists` over that folder. Classes: `KimiPersonsConfigTests`,
 `KimiConfigRenderTests`, `KimiModelBlocksTests`, `CodexConfigFileTests` (extended), `KimiToolsTests`, `KimiPlacesTests`,
 `KimiHomeTests`, `KimiLaunchControlTests` (a `FakeKimi` launcher in the `FakeVibe` shape), `KimiCredentialsLockTests`,
-`VersionWarningsTests`. Red first; a missing class is a COMPILE red — stub, then watch the behavioural red named here.
+`VersionWarningsTests`, `KimiCanaryTests` (S2.45). Red first; a missing class is a COMPILE red — stub, then watch the
+behavioural red named here. No test here holds a lock, a junction or a canary anywhere but under its own
+`testsToDelete-` folders (`KimiCredentialsLock.Root` is pointed at one for the test's duration and restored in `finally`).
 
 | # | Given | When | Then | Expected red today |
 |---|---|---|---|---|
@@ -663,6 +810,12 @@ validation before every launch; the built environment (`ProcessEnvironment.Minim
 | S2.38 `AHomeWhoseJunctionIsGone_OrWhoseCredentialsIsReal_GoesWhole` (Theory) | the link removed beforehand; `credentials` a real folder holding a read-only copy | `Dispose` | `Clean(LinkWasThere: false)`; the root gone; the fake person's folder untouched | — |
 | S2.39 `TheSweepsKimiPath_DisposesJunctionFirst_AndKeepsTheFolderOnALoss` (`ConsultantHomeSweepTests`) | an orphaned `coai-kimi/<id>` past the window whose `home/credentials` is a junction to the test's `persons/`; `GitScratch.AfterUnlink` a recorder; a second arm with `KimiHome.AfterUnlink` deleting a target file | `ConsultantHomeSweep.Sweep` | the folder gone, the recorder never invoked, `persons/` intact; the loss arm: `warn` holds the `Stopped` sentence, the folder KEPT with its lock file, the next beat (seam off) removes it | the recorder invoked; the loss arm: the folder gone |
 | S2.40 `DisposeAllUnder_FindsTheFolderItselfAndEveryKhChild` | a folder holding `home/credentials` (a junction), `kh-aaaaaaaaaa/home/credentials` (a junction), `kh-bbbbbbbbbb/` (no link), `vh-cccccccccc/` and `tree/` | `DisposeAllUnder` | answers 3; both junctions gone first (the recorder never invoked), both targets intact; `vh-*` and `tree/` left for the caller's deleter | — |
+| S2.41 `TheLockKey_IsTheFoldersIdentity_NotItsSpelling` (`KimiCredentialsLockTests`, Windows; Theory — decision 9) | the test's `persons/credentials`; the rows: upper-cased whole; a trailing `\`; forward slashes; a `..` segment (`persons\x\..\credentials`); `alias\credentials` where `alias` is a junction (`DirectoryLink`) in the test's folder to `persons` (an ANCESTOR link) | `PathFor(row)`, `TreePathFor(row)`; then `TakeAsync(row)` while `TakeAsync(persons\credentials)` is held | every row's path equals the canonical spelling's; the second `TakeAsync` is still waiting after 1.5 s and completes after the first's `Dispose` (S2.27's shape) | *Expected PathFor("…\ALIAS\credentials") to be "…\<key of persons\credentials>.lock" but found "…\<another key>.lock"* — the `..` row alone is green today (`GetFullPath` folds it) |
+| S2.42 `AFolderThatCannotBeNamedByItsHandle_IsRefused_NeverKeyedBySpelling` | the `Canonical` seam answering empty | `KeyFor`, `PathFor`, `TakeAsync`; `KimiLaunch.TakeAsync` through `FakeKimi` | empty, empty, `Unusable` whose cause says "named by its handle"; `Refused` with decision 9's sentence; `fake.Started` empty; `Root` holds no file | *Expected Hold to be Unusable but found Taken* — a lock file named by the spelling's hash exists under `Root` |
+| S2.43 `TheTreeHold_OutlivesItsOpener_WhileAChildLives` (`KimiCredentialsLockTests`, Windows — decision 10) | `HoldTree(target, 1 s)` taken by the TEST (it plays the shim); `FakeCli.exe` started through `ProcessLauncher` (the redirected start that inherits) with `FAKECLI_SLEEP_MS=30000`; then the test's own stream DISPOSED (the shim "died") | `TreeProbe(target)`; `HoldTree(target, 1 s)`; then the child ended by ITS OWN `Process` handle (`Kill`, never by image name) and awaited; the probe and the hold again | `Held`; `Busy`; after the kill `Free` and `Taken`. **Control arm:** the same with the GATE (`TakeAsync`, non-inheritable): after the dispose the probe of `PathFor` is `Free` while the child still lives — the gate alone would have let a second launch in | *Expected TreeProbe to be Held because the sleeping child inherited the hold, but found Free* |
+| S2.44 `ADisposalUnderALiveTree_IsStopped_AndTheHomeIsKept` (`KimiHomeTests` + an arm in `ConsultantHomeSweepTests` — decision 11) | S2.15's home; its target's `TreePathFor` held by the test (a plain `HeldFile.Take`); the sweep arm: an orphaned `coai-kimi/<id>` past the window on the same target | `KimiHome.Dispose(root, warn)`; `ConsultantHomeSweep.Sweep` | `Stopped` naming "still running", the target and the `.tree.lock` path; the junction STILL a link to the target, `config.toml` present, the target's two files intact; the sweep's `warn` holds the sentence and the folder is KEPT; the hold released → the next `Dispose` / `Sweep` is `Clean` / removes it | *Expected Stopped but found Clean(LinkWasThere: true)* — the root gone under the live tree |
+| S2.45 `NothingOfTheSignIn_EverAppearsInWhatCoaiWrites` (`KimiCanaryTests`, Windows — decision 12; the `ARowsSystemPromptLeavesNoTraceTests` shape) | the fake person's `credentials/kimi-code-env-x.json` holds `"refresh_token": "CANARY-REFRESH-7f3a0c keep my sign-in private"`; a Serilog test sink collecting every line and property | the whole story through every ending: `Resolve` → `Made` → `Refusal` → `TakeAsync` (`FakeKimi`, the happy launch and each refusal row of S2.25) → `Dispose`, a `Stopped` disposal (S2.37's seam), a `LinkTargetLostException` (S1.7's seam), a `Busy` gate and an `Unusable` one; and one shim turn (`AskAcpMode.RunAsync` with `FakeAcpAgent`) whose agent asks `fs/read_text_file` for the credentials file by its real path AND through `<root>/home/credentials/…` and echoes whatever it is given | every string any call answered, every exception message, every log line and property, both lock file names, the home's `config.toml` bytes, the report JSON and the shim's stderr: none contains `CANARY-REFRESH-7f3a0c`; the report's two `reads` are `served: false` with a type-named reason. **Control arm:** the same agent asking for `notes.md` INSIDE the snapshot root, written with the canary → `served: true` and the canary in `answer` — the detector sees a served canary | a pin: green from the first run is the expected outcome; its red, if ever, reads *Expected <surface> not to contain "CANARY-REFRESH-7f3a0c" but found it in <where>*; the control arm's red (*Expected answer to contain the canary*) means the detector is blind and the pin is void |
+| S2.46 `AnAncestorLink_IsAdmitted_AndOneThatLeavesTheLocalDrives_IsRefused` (`JunctionsTests`, Windows; Theory — decision 13) | `alias` a junction in the test's folder to `persons`; target `alias\credentials` (the ancestor is the link; the target is a real folder); a second row through the `canonical` seam answering `\\server\share\x\credentials`; a third answering empty | `Junctions.Refusal`, `Make`, `Target(link)` | row 1: empty, made, `Target` IS the `alias` spelling (one level — never resolved into the junction's own target), `File.ReadAllBytes(link\kimi-code.json)` the bytes, the person's folder whole after `DirectoryLink.Remove`; row 2: the "resolves to \\server\share…" sentence, nothing at `link`; row 3: the "cannot be named by its handle" sentence, nothing at `link`. S1.3's chained row (the TARGET a junction) still refused | rows 2 and 3: *Expected refusal to contain "resolves to" but found ""* — admitted today; row 1 green today (pins the admission) |
 
 **Review focus (Opus).** (1) Nothing in `KimiLaunch`, `KimiHome`, `KimiPlaces.ForShim` reads `SpecialFolder.UserProfile`,
 `Environment.GetEnvironmentVariable` or `KimiAcpProfile.InstalledExecutable` — grep the diff; the only environment read
@@ -676,7 +829,34 @@ admitted. (7) Vibe's warning byte-identical — the existing test untouched and 
 walk will want to grow — keep it in `Judge`-sized methods. (9) No test touches `~/.kimi-code`; every junction target is
 inside the test's `testsToDelete-` folder. (10) `KimiHome.Dispose`'s order is the code's order — the unlink before any
 read of the tree, the verification before `GitScratch`, a `Stopped` that leaves `config.toml` in place; the sweep's
-`Removed` returns false on a `Stopped` while its lock file is still held.
+`Removed` returns false on a `Stopped` while its lock file is still held. (11) The lock key is NEVER the spelling: an
+empty canonical path ends in `Unusable` and a refusal, not in a hash of `GetFullPath` (grep `PathFor` for a fallback).
+(12) `FileShare.Inheritable` appears in exactly one call, `HoldTree`'s, and the gate's `TakeAsync` never passes it; the
+shim takes the tree hold IMMEDIATELY before `AcpTransport.Start` with no `await` between, and disposes it after
+`Exited`. (13) `Dispose`'s tree probe runs only under `Junctions.IsLocal(target)` and before the unlink; `Unknown`
+proceeds, `Held` stops with nothing unlinked. (14) S2.45 has its control arm, and its collector covers the Serilog
+sink's PROPERTIES, not only rendered messages.
+
+**Consultation 7de9430b — what was taken and what was not** (Fable, 2026-10-15; each hypothesis verified against
+`Junctions.cs`, `GitScratch.cs`, `HandleRead.cs`, `HeldFile.cs`, `ProcessLauncher.cs` before adopting):
+- *(a) case-fold and normalise the lock path; alias through an ancestor link only by handle identity* — **taken,
+  amended**: the key is the handle's final path (`HandleRead.CanonicalDirectory`, upper-cased, hashed), which IS the
+  handle identity spelled as a path; volume serial + file index was rejected (a second import for the same identity,
+  128-bit ids on ReFS); fail closed when the handle cannot be named (decision 9, S2.41–S2.42).
+- *(b) a killed lock owner leaves a refreshing orphan; the lock must survive the owner* — **taken**: a second,
+  inheritable tree hold taken by the shim and inherited by `kimi`, kernel-released when the last of them dies; the
+  gate stays the server's and non-inheritable; a job object rejected (kills mid-refresh, three imports, the epic's
+  out-of-scope teardown twin); the kill-mid-refresh window stated as the residual (decision 10, S2.43).
+- *(c) the deleter's TOCTOU — does the Kimi teardown need more* — **limit confirmed** with its reasoning (same-user
+  swapper, no privilege boundary, Kimi makes no links); but the confirmation found a real gap beside it — a teardown
+  under a LIVE orphan `kimi` turns its next refresh into a sign-out — closed by the tree probe before the unlink
+  (decision 11, S2.44).
+- *(d) a credential leaking through the shim's report* — **taken as a pin** with an honest bound: the report carries
+  paths and type-named reasons, never bytes; a canary in the sign-in never appears in anything coai writes; the agent's
+  own text is the vendor's, so the control arm proves the detector rather than the vendor (decision 12, S2.45).
+- *(e) the target's ancestors must be link-free* — **rejected as a refusal, taken as a resolution**: a relocated profile
+  is an ancestor junction on an ordinary machine; the ancestors are admitted, the final path is resolved once at launch,
+  and only a resolution off the local drives (a symlink to UNC under `C:\`) is refused (decision 13, S2.46).
 
 **Docs.** As brief §13.
 
@@ -1137,6 +1317,15 @@ D18 still refuses a Kimi REVIEW there.
     about 4 090 characters, not the 32 000 the brief named (review M2).
 17. **S1.14 uses two `TempDir`s** (E4.1, accepted): the person's folder must outlive the home's deletion to be looked at, and
     `TempDir.Dispose` removes its folder whole. Both are `testsToDelete-…` folders of the one test.
+18. **The sign-in lock is TWO files, keyed by the folder's final path, and the running tree holds one of them** (Fable,
+    E4.2 decisions 9–11, 13; the junction risk consultation 7de9430b and the E4.1 review, 2026-10-15). D19 says "a named
+    mutex keyed by the hash of the credentials target, taken in `KimiLaunch.TakeAsync`"; what is built is the server's
+    gate (`<key>.lock`, taken there) PLUS the shim's inheritable tree hold (`<key>.tree.lock`, inherited by `kimi`, so a
+    tree orphaned by a crashed server still holds the sign-in until it ends), the key being `GetFinalPathNameByHandle`'s
+    spelling of the folder rather than the path as given; `KimiHome.Dispose` refuses to unlink under a held tree hold;
+    and the credentials target's ancestors may be links, refused only when the resolution leaves the local drives
+    (D19's "must not itself be a link" stays for the target). The shim gains a third pinned flag, `--locks`. To be
+    recorded in the parent's D19 at promotion, with deviation 9.
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
@@ -1150,8 +1339,8 @@ temp file and rename), and ignores a link's own name when it points at its paren
 
 - [x] E4.1 and E4.2 have SCENARIOS and BRIEF written by Fable before their coders start (2026-10-14); the ledger line in
       the parent reads `Cornerstones: 2 of 2`.
-- [ ] Deviations 9–12 of §"Where the parent plan and the code disagree" are written into the parent's D19 / D20 and its
-      §4 S4 block when E4.1 and E4.2 land, and again at promotion.
+- [ ] Deviations 9–12 and 18 of §"Where the parent plan and the code disagree" are written into the parent's D19 / D20 and
+      its §4 S4 block when E4.1 and E4.2 land, and again at promotion.
 - [ ] Every scenario of E4.3–E4.5 (and Fable's for E4.1–E4.2) is a test that was watched red with the expected message,
       then green; both suites green; `dotnet format --verify-no-changes` clean; generators current.
 - [ ] No test made a junction outside its own `testsToDelete-` folder; every test leftover is named `testsToDelete-…`.
