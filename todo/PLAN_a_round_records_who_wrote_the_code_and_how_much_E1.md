@@ -90,7 +90,7 @@ written — the prediction precedes every observation, including an exploratory 
     exists because WSL's Node 20 has no `node:sqlite`, and ONE exporter for both sides beats two.
   - `scripts/lib/caller-transcripts.mjs` — pure functions over parsed lines and directory listings.
   - `scripts/measure-caller-transcripts.mjs` — CLI:
-    `node scripts/measure-caller-transcripts.mjs --rounds <rounds.json> --projects <dir> [--largest <n>] [--runs <n>]`;
+    `node scripts/measure-caller-transcripts.mjs --rounds <rounds.json> --projects <dir> [--largest <n>] [--runs <n>] [--day <yyyy-mm-dd>]`;
     exit 0 ok, 65 bad arguments / unreadable input (never 64 — the family reading of 64). Prints one JSON line.
   - `scripts/lib/caller-transcripts.test.mjs`.
 - **Brief.**
@@ -114,7 +114,9 @@ written — the prediction precedes every observation, including an exploratory 
     parent §16 D7), then over the `--largest n` (default 1) biggest SESSIONS: bytes and lines, then
     `--runs` (default 7) timed passes each of (a) parse every line, (b) day-gated: skip lines lacking the day substring
     of a one-day window before parsing (the `AgentLog.Days`/`Mentions` approach, `AgentLog.cs:103-112,157-173`); report
-    the first (cold) run apart and p50 of the rest. Record `process.version` and the platform: this is Node's time, not
+    the first (cold) run apart and p50 of the rest. The gate's day is `--day` when given, else the UTC day holding the
+    most lines of that session (ties → the earliest) — so the gated pass parses a real day's share, never an empty one;
+    the day used and the share of lines it kept are printed in the JSON. Record `process.version` and the platform: this is Node's time, not
     the C# reader's, and the results file must say so (measurement rule 3).
   - **Torn last line**: a line that does not parse is counted (`unparseable`) and skipped, never fatal.
   - Read files shared (`fs.openSync` read-only); never write under `--projects`; never open anything under
@@ -161,7 +163,9 @@ written — the prediction precedes every observation, including an exploratory 
     `agentId`, `uuid`, `parentUuid`, `isSidechain`, `version`, `cwd` (rewritten), `effort`, `requestedModel`;
     `message.id`, `message.model`, `message.role`, `message.usage.*` (the four terms; other usage keys are numbers and
     may stay); `message.content[].type`, `message.content[].id`, `message.content[].name`,
-    `message.content[].tool_use_id`, `message.content[].input.file_path` / `.notebook_path` (rewritten),
+    `message.content[].tool_use_id`, `message.content[].is_error` (`bool` — E3's §3.4 reads it to tell a refused
+    `Agent` call and a refused write; without it the `refused-agent-call` fixture would carry it under a `k<n>` key),
+    `message.content[].input.file_path` / `.notebook_path` (rewritten),
     `message.content[].input.subagent_type`, `message.content[].input.model`, `message.content[].input.run_in_background`;
     meta `agentType`, `toolUseId`, `spawnDepth`, `parentAgentId`, `requestShape`, `model`. NOT allowed, explicitly:
     `description`, `prompt`, `command`, `content` as a string, `thinking`, `signature`, `toolUseResult`, `gitBranch`,
@@ -172,6 +176,11 @@ written — the prediction precedes every observation, including an exploratory 
     `snapshot.trackedFileBackups` is the known case: its keys are real file paths). A test cuts a fixture whose object key is
     `secret.txt` and asserts the key is absent from the output and the sentinel guard finds nothing. Unknown keys are not an
     error — they are sentinelled and their names counted on stderr, so a new Claude Code field is visible.
+    **The closed key set is derived, not listed twice**: it is every segment of every `allowlist.json` path (`message`,
+    `content`, `input`, `usage`, `file_path`, …; `[]` is an array marker, not a key), so a structural container such as
+    `input` keeps its name and the dotted paths still match. A renamed key is `k<n>`, numbered per object in input
+    order; no structural key matches `^k\d+$`, so a rename cannot collide with a kept key. Below a renamed key nothing is
+    allowlisted any more — every string under it is the sentinel and its keys are renamed in turn.
   - **Ids**: every `uuid`/`hexid`/`msgid`-shaped allowlisted value is remapped through ONE map per fixture
     (deterministic: `sha256(salt + original)` formatted back into the same shape; the salt is per fixture and
     committed). The SAME map renames files (`<sessionId>.jsonl`, `<sessionId>/subagents/agent-<agentId>.jsonl|.meta.json`),
@@ -221,8 +230,10 @@ written — the prediction precedes every observation, including an exploratory 
   `research/README.md`'s table. Raw harness outputs and the case selection stay OUTSIDE the repository (the session's
   scratch directory): they carry the operator's session ids and real paths.
 - **Brief.**
-  - **Per side**: `python3 scripts/export-code-rounds.py <dataDir>/coai.db <scratch>/rounds-<side>.json 2026-09-30`
-    (Windows `%LOCALAPPDATA%\coai-mcp`, WSL `~/.local/share/coai-mcp`); then
+  - **Per side**: `<py> scripts/export-code-rounds.py <dataDir>/coai.db <scratch>/rounds-<side>.json 2026-09-30`
+    (Windows: `<py>` = `py -3`, `%LOCALAPPDATA%\coai-mcp` — on Windows `python3` resolves to the Microsoft Store alias
+    stub, which prints "Python was not found" (measured 2026-10-15); WSL: `<py>` = `python3`,
+    `~/.local/share/coai-mcp`); then
     `node scripts/measure-caller-transcripts.mjs --rounds … --projects ~/.claude/projects --largest 1 --runs 7`. The WSL
     run happens INSIDE WSL (`wsl.exe -e bash -lc …`), reading WSL's store and WSL's transcripts — never across the drvfs
     boundary. Run under `node .agents/conventions/tools/low-priority.mjs` on a machine not otherwise loaded, or say what
@@ -255,7 +266,10 @@ written — the prediction precedes every observation, including an exploratory 
     derived — provenance, not ids.
   - Name the subject sha, the harness paths, the date, both Claude Code version sets (measurement rule 6).
 - **Tests.** None of its own; S2's and S3's suites are re-run on the commit used, and the run is named.
-- **Done when.** Every Q has both sides or a stated reason one is missing; Q4's four probes observed; the README row
+- **Done when.** Every Q has both sides. A side may be missing ONLY where the Q cannot be observed on that side by
+  its nature (e.g. Q4's running MCP child's environment on Windows), said in that Q's row; a run that failed, or a WSL
+  that was unavailable, is not such a reason — E1 then stays open, and no consumer treats that Q as settled until the
+  missing side is measured. Q4's four probes observed; the README row
   exists; the case selection covers every case listed in S5; a hand-read of three rounds per side confirms the
   harness's coverage verdicts (measurement rule 2 — a metric is checked before it is reported).
 - **Depends on.** E1.S1, E1.S2. (S3 is not needed to measure.)
@@ -299,7 +313,10 @@ written — the prediction precedes every observation, including an exploratory 
 - **Brief (the test).** Reads `allowlist.json` and `manifest.json` from `AppContext.BaseDirectory/fixtures/caller-transcripts`
   (copied by `CoaiMcp.Tests.csproj:36`). `System.Text.Json` walk; for every string leaf: if its path is allowlisted,
   it must satisfy its `shape` (and a `fixture-path` must start with a manifest fixture root); otherwise it must equal
-  the sentinel. Object keys must not contain `/`, `\` or `:`. No file contains `\r`. Every meta's `toolUseId` joins
+  the sentinel. Every object key is in the closed key set derived from `allowlist.json` (the same rule as S3's cutter —
+  every segment of every allowlisted path) or matches `^k\d+$`; any other key fails, whatever its characters — a
+  key `alice` or `user@example.com` is as much a leak as `D:/x.cs`, and a hand edit or a cutter regression must not
+  pass. No file contains `\r`. Every meta's `toolUseId` joins
   an `Agent` `tool_use.id` in its main file and every `parentAgentId` names an agent file — EXCEPT where the manifest's
   `serves` declares the break (`missing-child-transcripts`). The manifest's `counts` equal what the files contain.
   The case list above is held by the test and compared BOTH ways with the manifest: a missing case and an unlisted
@@ -308,6 +325,7 @@ written — the prediction precedes every observation, including an exploratory 
 - **Test scenarios** (`CoaiMcp.Tests.exe --filter-class "*ACallerTranscriptFixtureCarriesNoTextTests"`, never
   `dotnet test`):
   - `EveryStringOffTheAllowlistIsTheSentinel` · `EveryAllowlistedStringHasItsShape` ·
+    `EveryObjectKeyIsStructuralOrRenamed` ·
     `EveryPathLivesUnderAFixtureRoot` · `NoFixtureCarriesACarriageReturn` ·
     `EveryChildJoinsItsParentUnlessTheCaseIsTheBreak` · `TheManifestCountsWhatTheFilesHold` ·
     `EveryRequiredCaseHasAFixtureAndNoFixtureIsUnlisted`.
@@ -315,11 +333,11 @@ written — the prediction precedes every observation, including an exploratory 
     sanitiser that dropped every field would otherwise pass the negative tests).
 - **Break-its** (on a COPY of one fixture in the test output folder, or the committed file restored at once; never by
   loosening the test, the allowlist or the cutter's refusals): put a word into a `description` → red; put
-  `C:/Users/someone/x.cs` into a `file_path` → red (shape); add a CRLF line → red; delete one case directory → red; add
-  an unlisted case → red. Report each red message.
+  `C:/Users/someone/x.cs` into a `file_path` → red (shape); rename one `k<n>` key to `alice` → red (key set); add a
+  CRLF line → red; delete one case directory → red; add an unlisted case → red. Report each red message.
 - **Done when.** The class is green through the MTP executable after
   `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4`; the whole `CoaiMcp.Tests.exe` run is green; the
-  five break-its were seen red for the right reason; every fixture file was opened and read by the Opus reviewer before
+  six break-its were seen red for the right reason; every fixture file was opened and read by the Opus reviewer before
   the commit (this is a public repository — a fixture is published data); `git diff --stat` attributes the bulk to
   fixture data, not code.
 - **Depends on.** E1.S3 (the cutter and `allowlist.json`), E1.S4 (the selection; Q9's key sets).
@@ -344,10 +362,11 @@ written — the prediction precedes every observation, including an exploratory 
 - [ ] S1: the predictions were committed in the same epic commit but WRITTEN before any harness read a transcript; Q5's
       Windows figure is marked as already observed.
 - [ ] S2, S3: `node --test "scripts/**/*.test.mjs"` green on Windows and in WSL; break-its seen red.
-- [ ] S4: both sides observed; Q4's probes observed live; three rounds per side hand-checked against the harness; the
+- [ ] S4: both sides observed (a side missing only where the Q is unobservable there by nature — never a failed run);
+      Q4's probes observed live; three rounds per side hand-checked against the harness; the
       results file names sha, harnesses, date, versions, and what it does not settle; its `research/README.md` row exists.
 - [ ] S5: every required case has a fixture with provenance; `ACallerTranscriptFixtureCarriesNoTextTests` green through
-      `CoaiMcp.Tests.exe`; its five break-its seen red; the fixtures are LF by `.gitattributes`.
+      `CoaiMcp.Tests.exe`; its six break-its seen red; the fixtures are LF by `.gitattributes`.
 - [ ] No product code, no schema step; E1 marks no cornerstone (the parent's ledger: `3 of 3 — E2.S1, E3.S4, E4.S2`).
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean (this document gets its own `todo/README.md` row — written
       by whoever commits the epic, not by this document's author).
