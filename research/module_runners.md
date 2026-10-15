@@ -1560,18 +1560,27 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
 - **Junctions and link-safe disposal** (`runners/Files/Junctions.cs`, `LinkTargetLostException.cs`; E4.1 of
   `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). `Junctions.Make(host, link, target)` makes a directory junction from an owned
   home to the person's folder by `DeviceIoControl(FSCTL_SET_REPARSE_POINT)` over a hand-laid `REPARSE_DATA_BUFFER` (the
-  `CreateFileW` import is `HandleRead`'s, shared) — no `cmd.exe`, no quoting of the person's profile path, no privilege.
-  `Refusal` answers first, and `Make` then reads the link back (`Target`, one level, never chased; `SameFolder` ignores case
-  and a trailing separator) and removes a link that reads back as anything else. Refused before anything is made: any host
-  but Windows (the D18 sentence), a target that is not a local `X:/` path (UNC, `wsl$`, relative), over 32 000 characters,
-  missing, itself a link, or a link path that already exists. A failed call removes the empty folder it made.
+  `CreateFileW` import is `HandleRead`'s, shared) — no `cmd.exe`, no quoting of the person's profile path, no privilege; its
+  bytes equal `mklink /J`'s (`fsutil reparsepoint query`, compared by a test). `Refusal` answers first, and `Make` then reads
+  the link back (`Target`, one level, never chased; `SameFolder` ignores case and a trailing separator) and removes a link that
+  reads back as anything else. Refused before anything is made: any host but Windows (the D18 sentence), a target that is not a
+  local `X:/` path on a non-network drive (UNC, `wsl$`, device paths, relative, a mapped drive), longer than the reparse
+  buffer can hold (about 4 090 characters — the 16 KiB bound, checked by arithmetic before any disk access), missing or a file,
+  itself a link, or a link path that already exists. A failed call removes the empty folder it made, and says so when it cannot.
   `GitScratch.DeleteEvenIfReadOnly` deletes a folder's links first, reads the entry names of a link's target through its own
-  reparse data before and after the unlink, and a name that is gone throws `LinkTargetLostException` (an `IOException`)
-  naming it — the walk stops there and nothing more is deleted. Callers: the six-hour sweep (`PanelService.PruneOldScratchDirs`,
-  new `warn`) and the question row's scratch now say it; D20's consultant home sweep already warns on any `IOException` and now
-  deletes a conversation folder's files last, so a stopped deletion leaves the folder still its own; the tests' `TempDir`
-  re-throws it. This check is the SECOND belt: `KimiHome.Dispose` (E4.2) unlinks `credentials` first where the caller knows
-  it holds a Kimi home.
+  reparse data before and after the unlink — **only when `Junctions.IsLocal` says the target is on a local drive** (reading a
+  share connects out, and Windows sends NTLM; reading a mapped drive waits out the SMB timeout) — and a name still gone after
+  one re-listing 200 ms later (a Kimi refresh rotates a file by temp file and rename) throws `LinkTargetLostException` (an
+  `IOException`) naming it: the walk stops there and nothing more is deleted. A link pointing at its own parent does not count
+  its own name. Callers: the six-hour sweep (`PanelService.PruneOldScratchDirs`, new `warn`; `SweepOne`) and the question row's
+  scratch (`QuestionRowLaunch.RemoveScratch`) now say it; D20's consultant home sweep already warns on any `IOException` and
+  now deletes a conversation folder's files last, so a stopped deletion leaves the folder still its own; the tests' `TempDir`
+  re-throws it (a re-throw inside an unwinding `using` hides the original failure). This check is the SECOND belt:
+  `KimiHome.Dispose` (E4.2) unlinks `credentials` first where the caller knows it holds a Kimi home. **Stated limit** (risk
+  consultation 7de9430b, 2026-10-15): the deleter's link checks are path checks at one moment — a directory swapped for a
+  junction between `IsLink(dir)` and the enumeration can still be entered; closing it needs handle-based deletion
+  (`FILE_FLAG_OPEN_REPARSE_POINT`), out of this story, and a same-user process able to swap folders in coai's scratch could
+  equally touch the credentials directly.
 - **`ConsultantRoles.Check`** = `consult-check`, the LEDGER role of a check; the launch itself still carries `consult`
   — it is the same turn a consultation makes.
 - **`ConsultantLimitation.SnippetWarning`** — the agy allow-rule snippet's warning (a prefix rule is not read-only)

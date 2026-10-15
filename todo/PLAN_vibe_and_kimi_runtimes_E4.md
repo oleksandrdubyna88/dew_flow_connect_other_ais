@@ -1,7 +1,7 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
-> Status: **stories written 2026-10-14; the two cornerstones' scenarios and briefs written by Fable 2026-10-14; nothing
-> implemented yet.** E4.1 and E4.2 are `model: fable` specs — a coder may start them; E4.3–E4.5 are Opus's.
+> Status: **E4.1 implemented 2026-10-15 (feat/kimi-runtime); E4.2–E4.5 not started.** Stories written 2026-10-14; the two
+> cornerstones' scenarios and briefs written by Fable 2026-10-14. E4.2 is a `model: fable` spec — a coder may start it; E4.3–E4.5 are Opus's.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) — §4 **S4**, its code half (the
 > measurement half is done: [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md) §1–§26). Decisions
@@ -1119,6 +1119,32 @@ D18 still refuses a Kimi REVIEW there.
     `[models."<id>"]` block that is on another provider, or that coai cannot read whole, refuses with a cure instead of
     falling silently to the pinned table. And the shim takes TWO place flags, `--home <root>` and `--persons-bin`
     (E4.2 decision 4), where D19 and E4.3's first draft said `--home` alone.
+
+13. **E4.1 deleted links first** (coder, accepted by the Opus review 2026-10-15): `GitScratch.DeleteEvenIfReadOnly` deletes a
+    folder's links before its other entries (`LinksFirst`) — S1.7's "`config.toml` STILL EXISTS" cannot hold otherwise, since
+    `config.toml` sorts before `credentials`. The guarantee is **per folder**: entries sorted before the link's ANCESTORS (sibling
+    `kh-*` folders, answer files in a round scratch) are already gone when the walk stops.
+14. **`ConsultantHomeSweep.DeleteAllBut` deletes files last** (E4.1, accepted): the conversation's stamp
+    (`coai-conversation.txt`) is a file, and deleting it before the directory that failed made a stopped folder read as another
+    store's and wait out the foreign-folder age; S1.8's "the next Sweep removes it" needs the stamp to survive a stop.
+15. **S1.10's verdict** (E4.1, accepted): .NET's `Directory.Delete(tree, recursive: true)` on Windows unlinks a junction by its
+    own name and never enters it (the target's files keep bytes AND attribute), then THROWS `UnauthorizedAccessException`
+    ("Access to the path 'credentials' is denied") and leaves the emptied parent folders. The three raw sites (`Escalations.cs`,
+    `ReviewTreeRoot.cs`, `WorktreeManager.cs`) swallow it and stay as they are, pinned by S1.11 (whose scan now also catches
+    `DirectoryInfo.Delete(true)` and `Directory.Delete(path, <any flag but a literal false>)`).
+16. **The length check precedes the existence check in `Junctions.Refusal`** (E4.1, accepted), so a 33 000-character target gets
+    the number rather than "does not exist"; and the bound is the REAL one — the two names must fit the reparse buffer's 16 KiB,
+    about 4 090 characters, not the 32 000 the brief named (review M2).
+17. **S1.14 uses two `TempDir`s** (E4.1, accepted): the person's folder must outlive the home's deletion to be looked at, and
+    `TempDir.Dispose` removes its folder whole. Both are `testsToDelete-…` folders of the one test.
+
+**Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
+moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
+that needs handle-based deletion (`FILE_FLAG_OPEN_REPARSE_POINT`), which is out of this story; a same-user process able to swap
+folders in coai's scratch could equally touch the credentials directly. Also from the review: the deleter READS a link's target
+only when `Junctions.IsLocal` says it is on a local drive (no share, device path, relative name or mapped network drive — reading
+one connects out or waits out the SMB timeout), re-lists once after 200 ms before reporting a loss (a Kimi refresh rotates by
+temp file and rename), and ignores a link's own name when it points at its parent.
 
 ## Definition of Done (this epic)
 
