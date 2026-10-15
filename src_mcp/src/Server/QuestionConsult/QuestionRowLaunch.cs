@@ -270,7 +270,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             {
                 // A turn that THREW has only the launches that landed before it, and the last of those may have exited
                 // cleanly — its own outcome would read "ok" for a turn that never answered (code round, codex).
-                Record(input, ended ? Outcome(landed[^1]) : Interrupted, Share(consultant, ConsultantTurn.UsageOf(consultant, landed), billed), clock.Elapsed,
+                Record(input, invocation.Model, ended ? Outcome(landed[^1]) : Interrupted, Share(consultant, ConsultantTurn.UsageOf(consultant, landed), billed), clock.Elapsed,
                     ended ? ConsultantTurnBooks.StatedResetOf(landed[^1]) : string.Empty);
             }
         }
@@ -382,9 +382,9 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// <remarks>The whole <see cref="Usage"/>, not its three scalars: the cached count and the not-captured / no-price
     /// markers belong on the line too (PR #692, CodeRabbit). And the reset a refused turn STATED (epic 5's code round of
     /// todo/PLAN_every_round_is_counted.md) — empty for an answer, an interrupted turn, and a refusal that named no time.</remarks>
-    private void Record(RowLaunchInput input, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
+    private void Record(RowLaunchInput input, string ranOn, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
         ledger.RecordJob(
-            string.Empty, input.Row.Provider.Provider, input.Settings.Model, ConsultantRoles.Question,
+            string.Empty, input.Row.Provider.Provider, ModelRan.Of(ranOn, input.Settings.Model), ConsultantRoles.Question,
             outcome, elapsed, usage, UsageKinds.Question, "Question", resetsUtc);
 
     private void Remove(string scratch) => RemoveScratch(scratch, log);

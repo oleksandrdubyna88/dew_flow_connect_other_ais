@@ -246,8 +246,12 @@ internal sealed class ConsultantCheckTurn(
         }
 
         var ready = (ConsultantPreparation.Ready)prepared;
+        var launch = turn.Runtime.Build(ready.Launch);
+        // The turn is billed under the model that ran: a row that names none runs on its adapter's default (decision 75). A check that ends before this
+        // point, or by an exception outside this turn, is billed on the row's own model — it never built a launch to learn another from.
+        turn = turn with { Row = turn.Row with { Model = ModelRan.Of(launch.Model, turn.Row.Model) } };
         var turned = await ConsultantTurn.RunAsync(
-            executor, turn.Runtime, turn.Runtime.Build(ready.Launch), t => ChangesSinceAsync(before, turn.Scratch.Repo, t), turn.Launched.Add, ct);
+            executor, turn.Runtime, launch, t => ChangesSinceAsync(before, turn.Scratch.Repo, t), turn.Launched.Add, ct);
         var changes = turned.Breached ? turned.ChangesBeforeFollowUp : await ChangesSinceAsync(before, turn.Scratch.Repo, ct);
         var broken = Broken(changes, canary == Fingerprint(turn.Scratch.CanaryPath) ? string.Empty : turn.Scratch.CanaryPath);
 
