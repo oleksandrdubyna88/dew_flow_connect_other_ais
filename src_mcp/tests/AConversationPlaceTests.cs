@@ -22,7 +22,7 @@ public sealed class AConversationPlaceTests : IDisposable
 
     private readonly TempDir _dir = TempDir.For("coai-answers-place-");
 
-    private string Homes => _dir.At("local");
+    private string Homes => Directory.CreateDirectory(_dir.At("local")).FullName;
 
     private string Store => ConversationFolder.StoreOf(_dir.At("data"));
 

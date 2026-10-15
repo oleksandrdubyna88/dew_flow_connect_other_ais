@@ -25,5 +25,5 @@ public static class ConsultantHomes
 
     /// <summary>A conversation's folder: <paramref name="root"/> / <paramref name="homes"/> / <paramref name="consultationId"/>.</summary>
     public static string ConversationFolder(string root, string homes, string consultationId) =>
-        Path.Combine(root, homes, consultationId);
+        Path.Combine(Files.PrivateFolder.PathOf(root, homes), consultationId);
 }

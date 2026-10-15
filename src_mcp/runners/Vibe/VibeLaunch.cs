@@ -249,9 +249,18 @@ public static class VibeLaunch
     private static string FirstOf(params Func<string>[] checks) =>
         checks.Select(check => check()).FirstOrDefault(said => said.Length > 0) ?? string.Empty;
 
-    /// <summary>The home made when it is not there yet — an owned home starts empty.</summary>
+    /// <summary>
+    /// The home made when it is not there yet — an owned home starts empty — INSIDE a folder that already exists (D7): the folder a
+    /// home lives in is made by whoever owns it (a reservation under the private `coai-vh`, a conversation's folder), and a chain
+    /// created from here could make a folder anywhere a request named.
+    /// </summary>
     private static string HomeMade(string home)
     {
+        if (Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(home)) is not { Length: > 0 } parent || !Directory.Exists(parent))
+        {
+            return $"the coai-owned Vibe home {home} has no folder above it to live in ({Path.GetDirectoryName(home)}), and coai makes only the home, never the chain above one";
+        }
+
         try
         {
             Directory.CreateDirectory(home);

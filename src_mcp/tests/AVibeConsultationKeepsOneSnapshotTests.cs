@@ -26,7 +26,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     private const string Session = PlayedVibe.Session;
 
     /// <summary>The homes root, inside the scenario's data directory — removed with it, and never the machine's own local data.</summary>
-    private string Homes => Path.Combine(_data, "homes");
+    private string Homes => Directory.CreateDirectory(Path.Combine(_data, "homes")).FullName;
 
     private static readonly IReadOnlyDictionary<string, ConsultantChoice> OnVibe = new Dictionary<string, ConsultantChoice>
     {

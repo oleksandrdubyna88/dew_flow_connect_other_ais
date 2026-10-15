@@ -142,16 +142,28 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// <summary>The conversation's own folder — never through a link — held, stamped and, when asked, holding the copy.</summary>
     private async Task<ConsultantPlace> OwnedAsync(IConsultantRuntime runtime, string consultationId, string repo, TimeSpan ceiling, CancellationToken ct)
     {
-        var homes = Path.Combine(homesRoot, runtime.HomesFolder);
-        var folder = ConsultantHomes.ConversationFolder(homesRoot, runtime.HomesFolder, consultationId);
+        // The homes folder under the root is entered through the one type that makes it private or refuses it (D7).
+        var opened = PrivateFolder.Open(homesRoot, runtime.HomesFolder, note);
+        if (opened is PrivateFolderOutcome.Refused refused)
+        {
+            return new ConsultantPlace.Refused(refused.Sentence);
+        }
 
-        return MadeThrough(homes, folder) is { Length: > 0 } link
-            ? new ConsultantPlace.Refused($"{link} is a link, and a conversation's folder is never made or used through one")
-            : await HeldAsync(new Turned(folder, runtime.NeedsASanitisedSnapshot ? repo : string.Empty, ceiling), ct);
+        var pin = ((PrivateFolderOutcome.Opened)opened).Held;
+        var homes = PrivateFolder.PathOf(homesRoot, runtime.HomesFolder);
+        var folder = ConsultantHomes.ConversationFolder(homesRoot, runtime.HomesFolder, consultationId);
+        if (MadeThrough(homes, folder) is { Length: > 0 } link)
+        {
+            pin.Dispose();
+
+            return new ConsultantPlace.Refused($"{link} is a link, and a conversation's folder is never made or used through one");
+        }
+
+        return await HeldAsync(new Turned(folder, runtime.NeedsASanitisedSnapshot ? repo : string.Empty, ceiling, pin), ct);
     }
 
-    /// <summary>One turn's folder, the live tree to copy into it (empty: no copy), and the turn's ceiling.</summary>
-    private sealed record Turned(string Folder, string CopyOf, TimeSpan Ceiling);
+    /// <summary>One turn's folder, the live tree to copy into it (empty: no copy), the turn's ceiling, and the pinned handle of the homes folder above it.</summary>
+    private sealed record Turned(string Folder, string CopyOf, TimeSpan Ceiling, IDisposable Pin);
 
     /// <summary>Why a runtime that keeps a conversation folder has none here — no homes root, or no homes folder named — or empty.</summary>
     private string Unconfigured(IConsultantRuntime runtime) =>
@@ -193,6 +205,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
             if (!moved)
             {
                 turn.Dispose();
+                turned.Pin.Dispose();
             }
         }
     }
@@ -210,8 +223,8 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
             var stamping = new Stamping(turned.Folder, store, turned.Ceiling);
 
             return turned.CopyOf.Length == 0
-                ? HomeOnly(turned.Folder, stamping, [taken.Stream, turn])
-                : Placed(await ConversationSnapshots.FreshAsync(Maker, turned.Folder, turned.CopyOf, ct), stamping, [taken.Stream, turn]);
+                ? HomeOnly(turned.Folder, stamping, [taken.Stream, turn, turned.Pin])
+                : Placed(await ConversationSnapshots.FreshAsync(Maker, turned.Folder, turned.CopyOf, ct), stamping, [taken.Stream, turn, turned.Pin]);
         }
         catch
         {

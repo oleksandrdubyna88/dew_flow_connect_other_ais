@@ -90,18 +90,25 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
         var request = VibeLaunch.Built(
             new ProcessRequest(
                 settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
-                Arguments(worktreePath, ExportFolder(outputDir, role, Guid.NewGuid()), settings.Timeout),
+                Arguments(worktreePath, ExportFolder(OwnedOr(settings, outputDir), role, Guid.NewGuid()), settings.Timeout),
                 worktreePath)
             {
                 StdIn = prompt,
                 Timeout = settings.Timeout,
             },
-            HomeFor(settings.OwnedScratch.Length > 0 ? settings.OwnedScratch : outputDir, Provider, role),
+            HomeFor(OwnedOr(settings, outputDir), Provider, role),
             model);
 
         // No effort and no tier: neither is measured taking effect on Vibe (shared/feature-availability.json), so none is sent.
         return new ReviewerInvocation(Provider, role, request, string.Empty, this, Model: model);
     }
+
+    /// <summary>
+    /// The folder the home AND the attempt's export live in: the owned folder (a round's one-shot folder, short and private, D7),
+    /// else the launch's own. The export is the whole conversation, so it does not go to TEMP when a private folder is owned; it is
+    /// a sibling of the home, outside what the home check walks.
+    /// </summary>
+    private static string OwnedOr(ReviewerSettings settings, string outputDir) => settings.OwnedScratch.Length > 0 ? settings.OwnedScratch : outputDir;
 
     /// <summary>
     /// The <c>providers</c> probe's <c>--version</c>, in the launch control's BUILT environment on a coai-owned home made

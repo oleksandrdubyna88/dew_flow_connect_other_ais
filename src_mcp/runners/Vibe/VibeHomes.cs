@@ -26,7 +26,7 @@ public static class VibeHomes
     public const string LockName = "coai-turn.lock";
 
     /// <summary><c>&lt;root&gt;\coai-vh\&lt;id&gt;</c> — pure.</summary>
-    public static string OneShotIn(string root, string id) => Path.Combine(root, OneShotFolder, id);
+    public static string OneShotIn(string root, string id) => PrivateFolder.PathOf(PrivateFolder.PathOf(root, OneShotFolder), id);
 
     /// <summary>
     /// A new one-shot folder under <paramref name="root"/>, made, owned and locked — <see cref="OneShotReservation.None"/> for an
@@ -52,19 +52,36 @@ public static class VibeHomes
 
     private static OneShotReservation Reserved(string root, Action<string> warn)
     {
-        var vh = Path.Combine(root, OneShotFolder);
-        if (OwnedPaths.IsLinkIfThere(vh))
+        // The folder under the root is entered through the one type that makes it private or refuses it (D7).
+        var opened = PrivateFolder.Open(root, OneShotFolder, warn);
+        if (opened is PrivateFolderOutcome.Refused refused)
         {
-            return new OneShotReservation.Refused($"{vh} is a link, and Vibe's homes are never made through one — delete the link, or choose another Vibe homes folder in ConnectOtherAIs (COAI_CONSULTANT_HOMES)");
+            return new OneShotReservation.Refused(refused.Sentence);
         }
 
-        Directory.CreateDirectory(vh);
+        var pin = ((PrivateFolderOutcome.Opened)opened).Held;
         var folder = OneShotIn(root, Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(folder);
+        if (HeldFile.Take(Path.Combine(folder, LockName)) is not Hold.Taken taken)
+        {
+            pin.Dispose();
 
-        return HeldFile.Take(Path.Combine(folder, LockName)) is Hold.Taken taken
-            ? new OneShotReservation.Reserved(new OneShotHome(folder, taken.Stream, warn))
-            : new OneShotReservation.Refused($"{folder} could not be locked for its owner, so no Vibe home was made there");
+            return new OneShotReservation.Refused($"{folder} could not be locked for its owner, so no Vibe home was made there");
+        }
+
+        return new OneShotReservation.Reserved(new OneShotHome(folder, new Pins(taken.Stream, pin), warn));
+    }
+
+    /// <summary>The lock and the folder's pinned handle, given back together.</summary>
+    private sealed class Pins(params IDisposable[] held) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var one in held)
+            {
+                one.Dispose();
+            }
+        }
     }
 
     /// <summary>
@@ -80,15 +97,25 @@ public static class VibeHomes
             return 0;
         }
 
-        var vh = Path.Combine(root, OneShotFolder);
-        if (OwnedPaths.IsLinkIfThere(vh))
+        var vh = PrivateFolder.PathOf(root, OneShotFolder);
+        if (!Directory.Exists(vh))
         {
-            warn($"one-shot Vibe homes: {vh} is a link, and nothing is swept through one");
+            return 0;
+        }
+
+        // A folder that is not private (a link, a foreign owner) is said and nothing is swept through it.
+        var opened = PrivateFolder.Open(root, OneShotFolder, warn);
+        if (opened is PrivateFolderOutcome.Refused refused)
+        {
+            warn($"one-shot Vibe homes: nothing is swept — {refused.Sentence}");
 
             return 0;
         }
 
-        return Directory.Exists(vh) ? Listed(vh, warn).Count(entry => SweptOne(entry, cutoffUtc, warn)) : 0;
+        using (((PrivateFolderOutcome.Opened)opened).Held)
+        {
+            return Listed(vh, warn).Count(entry => SweptOne(entry, cutoffUtc, warn));
+        }
     }
 
     private static List<string> Listed(string vh, Action<string> warn)

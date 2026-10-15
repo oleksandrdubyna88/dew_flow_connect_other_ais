@@ -92,6 +92,17 @@ public sealed class VibeRuntimeTests : IDisposable
         invocation.Model.Should().Be(VibeModels.Default);
     }
 
+    /// <summary>D7 of the plan: the export (the whole conversation) lives in the attempt's own folder, beside the home — never in TEMP when a home folder is owned.</summary>
+    [Fact]
+    public void TheExport_LivesBesideTheHome_InTheOwnedFolder_OrInTheLaunchsOwnFolderWhenThereIsNone()
+    {
+        var owned = Built().Request;
+        var none = Built(new ReviewerSettings("vibe")).Request;
+
+        Path.GetDirectoryName(After(owned.Arguments, "--output-dir")).Should().Be(@"C:\Temp\coai-answers-r", "a sibling of the home, outside what the home check walks");
+        Path.GetDirectoryName(After(none.Arguments, "--output-dir")).Should().Be(_out.Path);
+    }
+
     [Fact]
     public void TheHome_IsOnePerReviewer_InTheRoundsScratch_OrTheLaunchsOwnFolderWhenThereIsNone()
     {
@@ -124,7 +135,7 @@ public sealed class VibeRuntimeTests : IDisposable
 
         After(retry.Request.Arguments, "--output-dir").Should().NotBe(After(first.Request.Arguments, "--output-dir"))
             .And.NotBe(After(again.Request.Arguments, "--output-dir"), "a retry never reads a stale export (D7)");
-        Path.GetDirectoryName(After(retry.Request.Arguments, "--output-dir")).Should().Be(_out.Path, "inside the launch's own coai-answers-* folder");
+        Path.GetDirectoryName(After(retry.Request.Arguments, "--output-dir")).Should().Be(@"C:\Temp\coai-answers-r", "beside the owned home, in the folder the first launch's export was in");
         After(retry.Request.Arguments, "--time-limit").Should().Be("90");
     }
 

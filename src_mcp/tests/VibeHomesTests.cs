@@ -45,7 +45,7 @@ public sealed class VibeHomesTests : IDisposable
         VibeHomes.SweepOneShot(_root, Now - TimeSpan.FromHours(6), warnings.Add).Should().Be(1);
 
         Directory.Exists(folder).Should().BeFalse("older than the cutoff and its lock free: removed, a read-only plugin folder or not");
-        warnings.Should().BeEmpty();
+        warnings.Should().NotContain(said => !said.StartsWith("made ", StringComparison.Ordinal), "only the one line about the folder being made private (a temp root passes its ACL down)");
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class VibeHomesTests : IDisposable
         VibeHomes.SweepOneShot(_root, Now - TimeSpan.FromHours(6), warnings.Add).Should().Be(0);
 
         File.Exists(target.At("precious.txt")).Should().BeTrue("the target of the link is untouched");
-        warnings.Should().ContainSingle().Which.Should().Contain(link).And.Contain("link");
+        warnings.Where(said => !said.StartsWith("made ", StringComparison.Ordinal)).Should().ContainSingle().Which.Should().Contain(link).And.Contain("link");
     }
 
     [Fact]

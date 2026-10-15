@@ -47,6 +47,20 @@ internal sealed class RoundScratch : IDisposable
     /// </summary>
     public string HomeFolder => Homes is OneShotReservation.Reserved reserved ? reserved.Home.Folder : Directory;
 
+    /// <summary>
+    /// <see cref="HomeFolder"/>, made when it is the round's own scratch folder (no reservation): the launch control makes a home
+    /// inside a folder that exists and never the chain above it (D7), so a home-keeping reviewer's parent is made here, once.
+    /// </summary>
+    public string MadeHomeFolder()
+    {
+        if (Homes is not OneShotReservation.Reserved && Directory.Length > 0)
+        {
+            System.IO.Directory.CreateDirectory(Directory);
+        }
+
+        return HomeFolder;
+    }
+
     /// <summary>The sentence the home-keeping rows are refused with, or empty.</summary>
     public string HomesRefusal => Homes is OneShotReservation.Refused refused ? refused.Sentence : string.Empty;
 

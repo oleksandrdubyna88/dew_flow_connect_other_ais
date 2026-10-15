@@ -162,6 +162,21 @@ public sealed class VibeLaunchControlTests : IDisposable
         vibe.Started.Should().BeEmpty("not even `--version` ran");
     }
 
+    /// <summary>D7 of the plan, item 5: coai makes the folder a home lives in (under a private folder) before it asks; the launch control never makes the chain above one.</summary>
+    [Fact]
+    public async Task AHomeWhoseParentDoesNotExist_IsRefused_AndNoChainIsMade()
+    {
+        var parent = Path.Combine(_scratch, "not-made", "either");
+        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), Path.Combine(parent, "h"), "glm-5-3");
+        var vibe = new FakeVibe();
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, request, _out.At("export"), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain(parent).And.Contain("never the chain above");
+        Directory.Exists(Path.Combine(_scratch, "not-made")).Should().BeFalse();
+        vibe.Started.Should().BeEmpty();
+    }
+
     /// <summary>C6: what turn 1 leaves in a measured Vibe's home - two EMPTY folders the manifest never named - must not refuse the repair that follows.</summary>
     [Fact]
     public async Task ARepair_OnTheHomeTurnOneLeft_IsHeldNotRefused_OnAMeasuredVibe()

@@ -81,7 +81,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         var work = Directory.CreateDirectory(_dir.At("work")).FullName;
 
         return new VibeRuntime("vibe", HostKind.Windows).Build(RoleCatalog.ArchitectureRole, "review this", work, _dir.At("s.json"), _dir,
-            new ReviewerSettings("vibe") { ExecutablePath = FakeCliExe, Model = "glm-5-3", OwnedScratch = _dir.At("round"), Timeout = TimeSpan.FromSeconds(60) });
+            new ReviewerSettings("vibe") { ExecutablePath = FakeCliExe, Model = "glm-5-3", OwnedScratch = Directory.CreateDirectory(_dir.At("round")).FullName, Timeout = TimeSpan.FromSeconds(60) });
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
         await new ReviewerExecutor(_launcher).RunAsync(Invocation(), ct: TestContext.Current.CancellationToken);
 
-        Directory.GetDirectories(_dir, "vx-*").Should().BeEmpty("D7: each attempt's export folder is deleted once read");
+        Directory.GetDirectories(_dir.At("round"), "vx-*").Should().BeEmpty("D7: each attempt's export folder (beside the owned home) is deleted once read");
     }
 
     [Fact]

@@ -453,7 +453,7 @@ internal sealed class RosterBuilder(
             // config.toml is switched off from the next round on.
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             // Only VibeRuntime reads it: the round's own folder, for one coai-owned home per reviewer (D17).
-            OwnedScratch = scratch.HomeFolder,
+            OwnedScratch = runtime.KeepsAHome ? scratch.MadeHomeFolder() : scratch.Directory,
         };
         var told = WithLocalEngine(settings, provider, _settings);
 

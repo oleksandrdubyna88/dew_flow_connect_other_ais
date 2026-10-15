@@ -37,7 +37,7 @@ public sealed class ConsultantHomeSweepTests : IAsyncLifetime
     private readonly List<string> _deleted = [];
     private ConsultationStore _store = null!;
 
-    private string Homes => _dir.At("local");
+    private string Homes => Directory.CreateDirectory(_dir.At("local")).FullName;
 
     private string Data => _dir.At("data");
 
