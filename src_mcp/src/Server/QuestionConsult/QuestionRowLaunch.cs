@@ -74,7 +74,7 @@ internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnly
 /// </remarks>
 /// <param name="launcher">What a codex row's release is asked through before it launches (<see cref="TierProbedAsync"/>).</param>
 /// <param name="homesRoot">Where a home-keeping row's one-shot home is reserved (<c>PanelSettings.ConsultantHomesRoot</c>, D1 of
-/// <c>todo/PLAN_vibe_live_round_fixes.md</c>); empty — settings built by hand — keeps the home in the row's own scratch folder.</param>
+/// <c>research/PLAN_vibe_live_round_fixes.md</c>); empty — settings built by hand — keeps the home in the row's own scratch folder.</param>
 public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger ledger, Serilog.ILogger log, Runners.Processes.IProcessLauncher launcher, string homesRoot = "")
 {
     public const string ScratchPrefix = "coai-question-";

@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A wrong <c>COAI_CONSULTANT_HOMES</c> is said at startup, with the stored value, as a structured setting problem the Settings page
-/// marks (D7 and D8 of <c>todo/PLAN_vibe_live_round_fixes.md</c>): the extension takes the server's word for this setting, so a
+/// marks (D7 and D8 of <c>research/PLAN_vibe_live_round_fixes.md</c>): the extension takes the server's word for this setting, so a
 /// server that said nothing left a missing folder unmarked until a Vibe launch was refused.
 /// </summary>
 public sealed class TheVibeHomesRootIsJudgedAtStartupTests : IDisposable

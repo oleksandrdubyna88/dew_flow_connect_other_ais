@@ -233,7 +233,7 @@ public abstract record ReviewerOutcome
     /// </summary>
     /// <param name="Reason">The sentence the person reads.</param>
     /// <param name="ByLaunchControl">True when the adapter's launch control refused the launch (D5 of
-    /// <c>todo/PLAN_vibe_live_round_fixes.md</c>): the CLI is installed and coai's own check said no, so a consultation names
+    /// <c>research/PLAN_vibe_live_round_fixes.md</c>): the CLI is installed and coai's own check said no, so a consultation names
     /// it <c>launch-refused</c>, never <c>cli-not-found</c>.</param>
     public sealed record NotStarted(string Reason, bool ByLaunchControl = false) : ReviewerOutcome;
 

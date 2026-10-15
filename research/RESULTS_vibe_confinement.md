@@ -649,7 +649,7 @@ belongs beside it when the rounds are re-run after the fixes.
 
 ## 27. A Vibe home deeper than 102 characters loses the turn — three live runs through coai-mcp 0.54.0, and the limit probed (2026-10-15)
 
-The plan these feed is [PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) (defects 1–3). Windows 11,
+The plan these feed is [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) (defects 1–3). Windows 11,
 `LongPathsEnabled = 0`, `vibe` 2.26.1, the RELEASED coai-mcp 0.54.0, scratch data directories, the owner's sign-in (the
 OS keyring, §12). Paths are written `%TEMP%`, `%LOCALAPPDATA%` or `<scratch>`; the profile name is `abcde` here.
 
@@ -694,13 +694,13 @@ file relies on, not the documents.
 
 ## 28. M-V17 — why a question row spent 2.2 M input tokens, and which Vibe flag ends such a run (2026-10-15)
 
-> Measured by a scout for [PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) §6 (M-V17). Every
+> Measured by a scout for [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) §6 (M-V17). Every
 > number is copied here: the `testsToDelete-` evidence folders will be swept. Paths are written `%TEMP%`, `%USERPROFILE%`
 > or `<scratch>`; the question and context are described by shape, not quoted.
 
 **Question.** What did Vibe do for 299 s and 2 233 164 input tokens on a `disk` question row (`vibe-disk`,
 `mistral-medium-3.5`), and does Vibe offer a flag that ends such a run WITH an export and a readable outcome?
-(`todo/PLAN_vibe_live_round_fixes.md` §1 defect 4, §6 M-V17; D6.)
+(`research/PLAN_vibe_live_round_fixes.md` §1 defect 4, §6 M-V17; D6.)
 
 **The run that looped (found, not reconstructed).** Record `fc27ef18…` of the earlier 0.54.0 scout, kept in that scout's
 scratch `COAI_DATA_DIR`: status `failed`, row `vibe-disk`, `seconds 298.9`, `tokensIn 2233164`, `tokensOut 13804`,
@@ -1008,3 +1008,99 @@ B1 7 158, 7 459; C1 7 214, 7 678, 7 898, 8 076, 8 205, 8 394, 8 605, 8 926, 9 44
 copy of the 0.54.0 server), `%TEMP%\testsToDelete-vibe-qloop-help\` (the two `--help` outputs), `D:\testsToDelete-vibe-qloop-t1\`
 (the server's `TEMP`), the short homes `C:\t\vq0`–`vq5` (and the folder `C:\t`) and `C:\testsToDelete-vq6`–`vq8`. The
 owner's `%USERPROFILE%\.vibe` was not used.
+
+## 29. The live Vibe checks on the released coai-mcp 0.56.0 — a plan round, a two-turn consult and a question row, all answered (2026-10-15)
+
+> Re-run of the three live runs of §27 and the question row of §28, on the RELEASED server that carries the fixes of PR #823
+> ([PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) §10, last row: "one live Vibe round, one two-turn
+> `consult` and one question row through the built server on Windows, each answered, recorded in RESULTS"). Every number is
+> copied here: the `testsToDelete-` evidence folders will be swept. Paths are written `%TEMP%`, `%USERPROFILE%`,
+> `<scratch>`, `<root>`; no profile name, key or e-mail appears.
+
+**Question.** Does a Vibe home now stay under the short root and under the MAX_PATH budget; does the second turn of a
+conversation start; does a launch-control refusal stop being reported as a missing CLI; and does a question row carry
+`--max-turns 20`? **Answer: yes to all four, n = 1 per run, no failure of any kind.**
+
+### 29.1 Setup
+
+| What | Value |
+|---|---|
+| Server | `coai-mcp-0.56.0-win-x64.zip` from the release `mcp-v0.56.0` (`gh release download … -p 'coai-mcp-0.56.0-win-x64.zip*'` into a fresh `<scratch>\dl`), checked with `sha256sum -c` against the release's `.sha256` (`ae3493f1…e452`, OK; it is the digest `gh` lists for the asset) before it was unpacked. The release HAD its win-x64 asset, so nothing was built |
+| Data | `COAI_DATA_DIR=<scratch>\data`, `<scratch>` = `%TEMP%\testsToDelete-vibe-live056-<6 hex>`; no `settings.json`; every inherited `COAI_*` variable removed from the server's environment (the environment wins over the file) |
+| Homes root | `COAI_CONSULTANT_HOMES=C:\testsToDelete-vh056` (22 characters), made by hand before the first start; coai made `coai-vh` and `coai-vibe` inside it |
+| Temp | the server's `TEMP` = `TMP` = `<scratch>\tmp` — LONGER than a default TEMP on purpose: a home that still sat under TEMP would have been 40 characters deeper than in §27 |
+| Rows | one reviewer row `{"id":"vibe","runtime":"vibe","model":"mistral-medium-3.5"}`; `COAI_CONSULTANTS` maps every caller kind to it; one question row `vibe-disk` (`question-disk`, `mistral-medium-3.5`), `COAI_QCONSULT_ROOTS` = the scratch repo, `COAI_QCONSULT_MODE=off`, `COAI_CONSULT_TURNS=3`, `COAI_LOG_LEVEL=debug` |
+| Vibe | `vibe` 2.26.1 (`%USERPROFILE%\.local\bin\vibe.exe`, uv tool), `LongPathsEnabled = 0`, the owner's Mistral sign-in from the OS keyring (§12). `VIBE_HOME` was always set by the product to a folder under the short root; `%USERPROFILE%\.vibe` was not used (it was not hashed this time). Never `--trust`, never `--add-dir` |
+| Repository | a scratch `git init` (`<scratch>\repo`): `main` = `README.md`, `src/slug.js`, a test, `docs/inside.txt` (one line, marker word `PELICAN`) and `docs/second.txt` (marker word `GROVE`); branch `feat/slug-max-length` adds a 1.5 KB `docs/PLAN_slug_max_length.md` |
+| Client | a node MCP stdio client written for this run, not committed (the shape of §26's and of `scripts/live-consult-all.mjs`): `initialize`, then `tools/call`, one server start per run. Beside it, two read-only watchers: a 300 ms `lstat` walk of `C:\testsToDelete-vh056` (every folder and the longest path that existed at a poll) and a 500 ms listing of the `python`/`vibe` processes' command lines (to read the real argv) |
+
+**What the log gave.** At `debug` the server writes a line `reviewer vibe/PlanCritique argv: …` for a REVIEW launch only. A
+consult turn and a question row log no argv, so their argv is the process command line the watcher read (the version probe
+carries no `--time-limit`, so the filter did not match it).
+
+**A mishap of the harness, recorded because it is evidence.** The first start passed `COAI_CONSULTANT_HOMES` with a TAB where
+`\t` of `C:\testsToDelete-…` should be (a shell heredoc ate the backslash). The server refused the round before any launch:
+`review_plan` answered "… PlanCritique could not go to vibe: the Vibe homes folder … must be a full local path, not a network
+share or a `\\?\` path — name a short local folder of your own in ConnectOtherAIs (COAI_CONSULTANT_HOMES)", and
+`server-notices.jsonl` holds an `unrecognised-setting` and a `refused` line with the same sentence. 0 tokens, 3.2 s, no
+Vibe process. It is not a product defect; it shows that D7's root check names the setting and is not a `cli-not-found`.
+Then the client was rewritten and the three runs below were made from a clean start.
+
+### 29.2 The three runs
+
+| | 1. Review round | 2. Two-turn consult | 3. Question row |
+|---|---|---|---|
+| Tool | `open` + `review_plan` (the plan, verbatim) | `consult` (turn 1) + `consult` with the same `consultationId` (turn 2) + `close_consult` | `ask_consultants` (`vibe-disk`, `question-disk`) |
+| Answered | **yes** — verdict `proceed`, "all 1 reviewers answered", 4 findings (1 Blocking, 2 Major, 1 Minor; 3 gating) | **yes, both turns** — turn 1 an advice; turn 2 `5417`, the number planted in turn 1 (`memory: vendorRemembers`) | **yes** — `status: answered`, "1 of 1 consultant(s) answered" |
+| Failure kind | none | none (`failureKind ""`, `failureCure ""`, no `confinement`) | none |
+| Wall time | 84.6 s for the call (reviewer 83.7 s) | turn 1 **17.4 s** (server 15.4 s), turn 2 **11.0 s** (server 10.8 s) | 17.0 s for the call (row 16.1 s) |
+| Tokens in / out (the usage ledger) | **8 145 / 11 730** | turn 1 **16 503 / 652**, turn 2 **9 696 / 126** (the record's `billed`: 26 199 / 778) | **15 119 / 780** |
+| `VIBE_HOME`, as made by the product | `<root>\coai-vh\<8 hex>\<6 hex>` = **46** characters | `<root>\coai-vibe\<32 hex>\h` = **67** characters | `<root>\coai-vh\<8 hex>\h` = **41** characters |
+| Longest path seen under the root | 181 (a persisted `chunks\<64 hex>.json`) | 202 (the same file, 134 below the home) | 176 (the same) |
+| Deepest write if it were Vibe's `.tmp` (home + 1 + 156) | 203 | 224 | 198 |
+| Home gone afterwards | **yes** — the root held only an empty `coai-vh` | **yes, after `close_consult`** (recorded `abandoned`) — only the empty `coai-vh` and `coai-vibe` were left; during the run the watcher saw `…\<32 hex>\{h, tree, vx-<10 hex>, vx-<10 hex>}` | **yes** — only the empty `coai-vh` and `coai-vibe` |
+| Argv (`-p --output json --agent plan --enabled-tools read_file --workdir <…>` and) | `--time-limit 589` (the debug log line of the launch says 590) `--output-dir <root>\coai-vh\<8 hex>\vx-<10 hex>`; **no `--max-turns`** (a review is not capped, D6) | `--time-limit 590 --max-turns 20 --output-dir <…>\vx-<10 hex>` on turn 1; the same plus **`--resume <session uuid>`** on turn 2; `--workdir` = the conversation's `tree` | `--time-limit 290 --max-turns 20 --output-dir <root>\coai-vh\<8 hex>\vx-<10 hex>`; `--workdir` = the row's `tree` in the scratch TEMP |
+
+Every number in "Wall time" and "Tokens" is the one the server wrote: the usage ledger (`usage.jsonl`) lines are `role
+PlanCritique` / `consult` / `consult` / `question`, each `outcome ok`, `costUsd null` (a subscription's price is not
+reported). The ledger line of the round carries `cliVersion "vibe 2.26.1"`. Total spent: **49 463 input, 13 288 output**
+tokens on the owner's subscription (the first, refused start spent none).
+
+- **The home length is what D1's table says**: 22 + 24 = 46 for the round (`\coai-vh\<8>\<6>`), 22 + 45 = 67 for the
+  conversation (`\coai-vibe\<32>\h`), 22 + 19 = 41 for the row and the check; all well under the budget of 102, and none of
+  them under TEMP. The deepest transient path (§27: 156 characters below the home) would be 203, 224 and 198 characters —
+  under the 259 of §27.
+- **The second turn started** (defect 2). The home of turn 1 held the two empty folders of §27 (`plugins\data\<id>\…`,
+  `plugins\tmp\`) and turn 2 launched on it with `--resume`, answered, and kept the context. In 0.54.0 the same step was
+  refused 2 of 2 times and reported as `cli-not-found`.
+- **No `cli-not-found`, and no refusal of any kind** was recorded in the ledger, the consultation record, the notices or
+  the server log of the three runs. (The only refusal of the whole session is the harness one above, which is a plain
+  sentence naming the setting, not a missing CLI.)
+- **The cap is on the argv where D6 puts it**: `--max-turns 20` on both consult turns and on the question row, and on no
+  review launch. The row spent 15 119 input tokens against the 2 233 164 of §28's loop
+  (the question named two files that exist in the granted root).
+- **The question row answered correctly** from the copy coai made: `PELICAN` in `…\tree\snapshot-<8 hex>\docs\inside.txt`,
+  `GROVE` in `…\docs\second.txt`. `questionsLeft: 9`.
+- **Nothing was left in the round's scratch**: §26's read-only `skills\*` folders that no sweep could delete are gone — the
+  homes are under the short root and the root held nothing after each run. What the scratch TEMP kept is four EMPTY folders,
+  `coai-answers-<8>.<3>` ×2 and `coai-repair-<8>.<3>` ×2 (the six-hour sweep's ordinary material, as in §26), and the
+  scratch `data` (the records).
+
+### 29.3 What this does not show
+
+- n = 1 per run, one profile name of 5 characters: the length budget's refusal for a long profile name or a long homes root
+  was not exercised live (it has tests, PLAN §4 A), only the three launches that fit.
+- The review round was a PLAN round; a code round and a `resolve` were not run (the DoD row asks for "one live Vibe round").
+  The findings were left unresolved in the scratch session.
+- The conversation's folder is kept until `close_consult` or the sweep by design (D20); the check that it is deleted is the
+  `close_consult` one above. A consultant check (`ConsultantCheck`, the panel's) was not run: it is a panel action.
+- `LongPathsEnabled = 1` and a `\\?\` home are still M-V18 and were not measured.
+- `%USERPROFILE%\.vibe` was not hashed before and after (§26 did); the product's homes were the only `VIBE_HOME` set.
+
+### 29.4 Evidence (to be swept; every number above is copied here)
+
+`%TEMP%\testsToDelete-vibe-live056-<6 hex>\` (`dl\` = the zip and its `.sha256`, `bin\` = the unpacked 0.56.0 server, `data\` = the
+server's data directory with `usage.jsonl`, `consultations\`, `server-notices.jsonl`, `tmp\` = the server's `TEMP`, `repo\` = the
+scratch repository, `work\` = the client and the three `out-<step>\result.json` with every reply, the server's `stderr` and
+the watchers' lists) and the homes root `C:\testsToDelete-vh056\` (empty: `coai-vh`, `coai-vibe`). The owner's coai
+installation, its data folder and its running servers were not used.

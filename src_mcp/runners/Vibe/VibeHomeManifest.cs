@@ -33,7 +33,7 @@ public sealed record VibeHomeManifest(string PinnedPrefix, IReadOnlyList<string>
     private const string Resource = "CoaiMcp.Runners.vibe-home-manifest.json";
 
     /// <summary>
-    /// Globs of FOLDERS that are admitted — and no file under them (D4 of <c>todo/PLAN_vibe_live_round_fixes.md</c>): a plugin's
+    /// Globs of FOLDERS that are admitted — and no file under them (D4 of <c>research/PLAN_vibe_live_round_fixes.md</c>): a plugin's
     /// per-session data, where Vibe adopts runtime code without re-checking it, so only its empty folders are Vibe's own. Absent
     /// in an older manifest, so it loads as none.
     /// </summary>

@@ -1,20 +1,31 @@
 # PLAN — a Vibe home stays under MAX_PATH, survives its second turn, and a refusal says what it is
 
-> Status: **code implemented on branch `fix/vibe-home-short-path`, 2026-10-15 (D1–D8 and scenarios A–F, K built red-first; D7 per the
-> security review). Open: the DoD's live Vibe round, two-turn consult and question row through the built server, and the plan's promotion
-> to `research/` once they are recorded.** The plan was revised the same day after the plan gate, an independent review and the M-V17
-> measurement — see §11. Scope: every Vibe home site (`src_mcp/runners/Vibe/`,
+> Status: **IMPLEMENTED, 2026-10-15** (PR #823; released mcp 0.56.0 / extension 0.76.0; live checks [RESULTS §29](RESULTS_vibe_confinement.md)).
+>
+> **What shipped differently from the plan** is recorded in §11 (the plan gate, the independent review, the code gate, the first CI run,
+> the security review of D7, the PR review) — read it before trusting a section above it; this status line does not copy it.
+>
+> **Open tail, stated as it stands:**
+>
+> - **M-V18** (long paths ON, a `\\?\` home, 8.3 names) is a follow-up measurement that nothing waits for: it is now the plan
+>   [PLAN_vibe_long_paths_measured.md](../todo/PLAN_vibe_long_paths_measured.md). Until it is measured the budget on Windows has no exemption.
+> - **The cause of the question row's loop** (a row cannot list its folders, and `--enabled-tools read_file` leaves `bash`,
+>   `run_typescript` and `search_tool_functions` callable) is NOT cured here — D6 only caps the loss at 20 turns. Its plan is
+>   [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
+> - **What the live checks of RESULTS §29 did not cover:** n = 1 per run, one profile name of 5 characters; a plan round only — no
+>   code round and no `resolve`; no consultant check (a panel action); the long-profile / long-root refusal was not exercised live
+>   (it has tests, §4 A). The DoD boxes of §10 other than the live round and M-V18's extraction were not re-ticked by this promotion;
+>   their evidence is PR #823's own gates and CI, not a new run.
+>
+> Scope: every Vibe home site (`src_mcp/runners/Vibe/`,
 > `src_mcp/src/Server/Rounds/`, `src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs`,
 > `src_mcp/src/Server/Consultation/`), the home validation's admitted names (`shared/vibe-home-manifest.json`,
 > `scripts/vibe-home-manifest.mjs`), the consult failure kinds (`src_mcp/runners/Consultation/`,
 > `shared/consult-failure-kinds.json`, `src_vs_code/src/consultantHealth.ts`), one extension setting for the homes root,
-> and a turn cap on Vibe consultant launches (measured, RESULTS §28). One more measurement (M-V18, §6) is a follow-up
-> nothing here waits for; the cure of the loop's cause is extracted
-> ([PLAN_a_vibe_row_is_told_what_its_folders_hold.md](PLAN_a_vibe_row_is_told_what_its_folders_hold.md)). One pull
-> request, branch `fix/vibe-home-short-path`.
+> and a turn cap on Vibe consultant launches (measured, RESULTS §28). Built on branch `fix/vibe-home-short-path`, one pull request.
 >
-> Parent: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (D17 — the owned home, D20 — the conversation
-> home sweep). Evidence: [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §22, §24, §26, and the
+> Parent: [PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) (D17 — the owned home, D20 — the conversation
+> home sweep). Evidence: [RESULTS_vibe_confinement.md](RESULTS_vibe_confinement.md) §22, §24, §26, and the
 > three live runs of 2026-10-15 summarised in §1 below (their folder is a `testsToDelete-` folder and will be swept, so
 > the numbers this plan rests on are copied here).
 
@@ -101,7 +112,7 @@ sentence below is ~550.
 for two markers — one inside the granted root, one in a file OUTSIDE it — ran to Vibe's own `--time-limit 300` (exit 3,
 `outcome: deadline`) with 2 233 164 tokens in / 13 804 out (record `fc27ef18…`); a narrower question on the same root
 answered in 33 s and ~15 000 tokens. Something looped at the owner's expense. M-V17 measured what
-([RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §28, 2026-10-15): not the outside path (0 of 7
+([RESULTS_vibe_confinement.md](RESULTS_vibe_confinement.md) §28, 2026-10-15): not the outside path (0 of 7
 runs named it) — **the row cannot LIST its granted folder** (`bash` is denied, `read_file` on a folder fails with
 `[Errno 13]`, no list tool is enabled), so it guesses file names with `read_file` (`tool_failed`, "File not found"),
 from request 29 eleven guesses a request through `run_typescript`; every request resends the whole history (96 % of it
@@ -292,7 +303,7 @@ the flag's own unit (gate G3):
   its folders hold (a listing of the snapshot coai made) — and the side finding (`bash`, `run_typescript`,
   `search_tool_functions` callable despite `--enabled-tools read_file`) are unmeasured, each needs arms of its own, and the
   second is a confinement question: both are extracted into
-  [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
+  [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
 
 **D7 — SECURITY — coai's folders under the homes root are private to the person, through ONE type** (implemented per the security review
 of 2026-10-15, ACCEPT-WITH-CHANGES). The root may be a folder the person picks (D8), and a folder at a drive's root inherits
@@ -494,7 +505,7 @@ write `%LOCALAPPDATA%`: every homes root in a test is a `testsToDelete-` folder.
 
 ### M-V17 — the question row that spent 2.2 M tokens, before any cap
 
-> **MEASURED 2026-10-15 — [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §28.** H1 did not hold as
+> **MEASURED 2026-10-15 — [RESULTS_vibe_confinement.md](RESULTS_vibe_confinement.md) §28.** H1 did not hold as
 > worded (0 of 7 runs named the outside path); a new H4 held — the row cannot list its folder and guesses names. Arms C
 > (`--max-turns 10`) and D (`--max-tokens 60000`) were each 3 of 3 with exit 3, an export and `outcome: turn_limit` /
 > `token_limit`; arm B needed 2 requests; spent 740 616 input tokens (96 % cached), 1.19 USD. The decision table below
@@ -590,7 +601,7 @@ the session written and resumed, the home validation still passing (does `\\?\` 
 8. **D8** (the extension setting, its census row, its page field, its five help lines).
 9. Docs (§3's last row), `plan-lifecycle.mjs`, the whole suites.
 10. M-V17 is done (RESULTS §28). M-V18 is a follow-up; the loop's cause is
-    [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
+    [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
 
 ## 9. Not in scope
 
@@ -623,9 +634,9 @@ the session written and resumed, the home validation still passing (does `\\?\` 
       runs and the MAX_PATH probe — and §28 — M-V17 — were written with this plan's revision.)
 - [ ] Every Vibe consultant launch (question row, conversation turn, consultant check) carries `--max-turns 20` and no
       review does; a `turn_limit` outcome reaches the person as coai's sentence with the usage read (K1–K6).
-- [ ] M-V18 extracted into a fresh `todo/` plan when this plan is promoted (it is a follow-up, nothing here waits for it).
-- [ ] One live Vibe round, one two-turn `consult` and one question row through the built server on Windows, each
-      answered, recorded in RESULTS (the parent plan's DoD row this fix unblocks).
+- [x] M-V18 extracted into a fresh `todo/` plan when this plan is promoted (it is a follow-up, nothing here waits for it) -> [PLAN_vibe_long_paths_measured.md](../todo/PLAN_vibe_long_paths_measured.md).
+- [x] One live Vibe round, one two-turn `consult` and one question row through the built server on Windows, each
+      answered, recorded in RESULTS (the parent plan's DoD row this fix unblocks) -> [RESULTS §29](RESULTS_vibe_confinement.md) (released 0.56.0, n = 1 per run).
 
 ## 11. Gate and review — what changed (2026-10-15)
 
@@ -689,6 +700,6 @@ blocking findings and a set of minor ones. Each, and where it landed:
   §4 K; §6 marked measured; build order 7; DoD. The loop's CAUSE (no listing) and the side finding (`bash`,
   `run_typescript`, `search_tool_functions` callable despite `--enabled-tools read_file`) are NOT in this pull request:
   both are unmeasured cures, the second a confinement question → extracted to
-  [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
+  [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
 - **RESULTS §27** written now as well (the three live runs and the free MAX_PATH probe), so the evidence outlives its
   `testsToDelete-` folders.

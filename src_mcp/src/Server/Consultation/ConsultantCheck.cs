@@ -207,7 +207,7 @@ internal sealed class ConsultantCheckTurn(
             return Failed(turn.Checking, turn.Row, new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure), Usage.None, turn.Clock.Elapsed);
         }
 
-        // The consultant's home, short and under the homes root (D1 of todo/PLAN_vibe_live_round_fixes.md), owned for this one turn.
+        // The consultant's home, short and under the homes root (D1 of research/PLAN_vibe_live_round_fixes.md), owned for this one turn.
         var homes = turn.Runtime.HomesFolder.Length > 0 ? VibeHomes.ReserveOneShot(settings.ConsultantHomesRoot, warn) : OneShotReservation.None.Instance;
         if (homes is OneShotReservation.Refused refused)
         {
