@@ -237,6 +237,7 @@ public sealed class ARoundSizeIsAPartitionTests
         var size = Partition(["1 0 A.cs"], ["1 0 a.cs"]);
 
         size.State.Should().Be(ScopeState.NumstatsDisagree);
+        size.Cells.Should().BeEmpty("an unavailable scope has no cells");
     }
 
     [Fact]

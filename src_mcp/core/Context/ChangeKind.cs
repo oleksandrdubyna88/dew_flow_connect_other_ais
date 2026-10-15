@@ -45,8 +45,9 @@ public static class ChangeKind
     public static string Of(string path)
     {
         var parts = path.Split('/');
+        var (dirs, name) = (parts[..^1], parts[^1]);
 
-        return Rules.First(rule => rule.Holds(parts[..^1], parts[^1])).Kind;
+        return Rules.First(rule => rule.Holds(dirs, name)).Kind;
     }
 
     private static bool InSegment(string[] dirs, string[] words) => dirs.Any(d => words.Contains(d, StringComparer.OrdinalIgnoreCase));

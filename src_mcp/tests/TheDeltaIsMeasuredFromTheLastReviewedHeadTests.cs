@@ -163,11 +163,17 @@ public sealed class TheDeltaIsMeasuredFromTheLastReviewedHeadTests
 
         var offenders = units
             .SelectMany(u => u.GetMethods(all).Cast<MethodBase>().Concat(u.GetConstructors(all)))
-            .Where(m => !m.IsSpecialName && !m.IsPrivate)
+            // Constructors are always IsSpecialName, so the filter names the compiler's operators (op_Equality ...) instead.
+            .Where(m => !m.IsPrivate && !m.Name.StartsWith("op_", StringComparison.Ordinal) && !IsRoundSizesOwnPrimaryConstructor(m))
             .Where(m => m.GetParameters().Count(p => !p.ParameterType.IsByRef && sizeTypes.Any(t => t.IsAssignableFrom(p.ParameterType))) > 1)
             .Select(m => $"{m.DeclaringType!.Name}.{m.Name}")
             .ToList();
 
         offenders.Should().BeEmpty("a delta is a head-to-head range; nothing in this unit may subtract two sizes");
     }
+
+    /// <summary>The one constructor allowed two sizes: <c>RoundSize(Whole, Delta, Origin)</c>, which holds both scopes side by side and subtracts neither.</summary>
+    private static bool IsRoundSizesOwnPrimaryConstructor(MethodBase m) =>
+        m is ConstructorInfo && m.DeclaringType == typeof(RoundSize)
+        && m.GetParameters().Select(p => p.Name).SequenceEqual(["Whole", "Delta", "Origin"]);
 }
