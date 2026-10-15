@@ -1,0 +1,33 @@
+{
+  "callerSessionId": "3ad21edc-0062-4fd4-8187-528d0ad8ee21",
+  "gateSessions": [
+    {
+      "id": "174c6c7a-96e5-4223-bf50-52899fefc3ce",
+      "repoPath": "D:/fixture/repo-a",
+      "openedUtc": "2000-01-01T00:00:00.000Z",
+      "rounds": [
+        {
+          "number": 1,
+          "startedUtc": "2000-01-01T00:00:01.000Z",
+          "completedUtc": "2000-01-01T00:00:02.000Z",
+          "status": "done",
+          "headSha": "b8a416504014d943f6aec733f28564c03cc613af"
+        }
+      ]
+    },
+    {
+      "id": "aa46168e-5d7b-4097-9683-9bfb34fb2391",
+      "repoPath": "D:/fixture/repo-a",
+      "openedUtc": "2000-01-01T00:00:03.000Z",
+      "rounds": [
+        {
+          "number": 1,
+          "startedUtc": "2000-01-01T00:00:06.000Z",
+          "completedUtc": "2000-01-01T00:00:11.000Z",
+          "status": "done",
+          "headSha": "0d6405a97d077d0396e355afa36449af571a6e61"
+        }
+      ]
+    }
+  ]
+}
