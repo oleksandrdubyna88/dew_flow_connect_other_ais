@@ -4036,17 +4036,24 @@ already passed the 102-character limit or were changed to a `testsToDelete-vh-*`
 | plugins/data glob | `AFileDirectlyUnderThePluginDataFolder_IsRefusedOnBothChecks`, the parity test | `…holds logs/session/plugins/data/stray.json, which is not one of the files Vibe 9.9.9 unpacks` (the shape check admitted it by place) |
 | exception-path leaks | `ACancellationWhileTheFoldersTurnIsWaitedFor_GivesTheHomesFoldersHandleBack`, `ARowWhoseScratchFolderCannotBeMade_LeavesNoFolderUnderCoaiVh` (a `MakeScratch` seam), `ASnapshotCancelledWhileItIsMade_GivesTheRoundsOneShotFolderBack` | `The process cannot access the file because it is being used by another process` (the pinned folder); a surviving `coai-vh\<8>` folder, twice |
 | the structural test | `EveryFileThatSpellsAFolderUnderTheHomesRoot_AlsoOpensItThroughPrivateFolder` | green from the start (no offender); it asserts it sees more than three spelling files |
-| dangling `coai-vh` | `CoaiVhADanglingJunction_IsSaid_NotSweptInSilence` | the refusal did not say "link" (on Windows a dangling junction was already said, via `PrivateFolder`; the symlink case is covered in the code) |
+| dangling `coai-vh` | `CoaiVhADanglingJunction_IsSaid_NotSweptInSilence` | the refusal did not say "link" (on Windows a dangling junction was already said, via `PrivateFolder`; the symlink case now runs on Linux too, in the same test) |
 
 Deviation recorded: **B3** (a lock held by another server) is tested with a second open of the same `HeldFile` in the SAME process, not by a child
 process — the exclusive open is the kernel's, so the second opener sees the same refusal, but it is not a second process.
 
+### PR #823 review round (SonarCloud gate + CodeRabbit) — what was added, and its first red
+
+| Item | Test | First red |
+|---|---|---|
+| B1 the pinned `coai-vh` handle leaked when making the home threw | `VibeHomesTests.WhenMakingTheHomeFolderThrows_ThePinnedCoaiVhHandleIsReleased_…` (a spy pin through `OneShotSteps`), `…_TheRealHandleIsLetGo_SoCoaiVhCanBeRenamed` (Windows: the real handle), `…ThrowsSomethingElse…`, `WhenTheLockCannotBeTaken_…` | `Expected pin.Released to be True because a handle nobody holds is a handle nobody will ever let go of, but found False.`; Windows: `Did not expect any exception because nothing holds coai-vh any more, but found System.IO.IOException: The process cannot access the file because it is being used by another process.` |
+| A1/A2 the Windows rules, on any OS | `PrivateAclTests` (the wanted DACL is exactly ours; ten ways of not being; owner rule; reset / inherit; exposure; every sentence), `PrivateFolderWindowsDecisionTests` (the flow through a fake `IFolderShell` over real folders: create, ours, foreign owner, re-ACL and walk, a link never entered, a refused or stubborn re-ACL, a swapped final path, a failed open, the handle given back on every refusal) | a refactor with the same behaviour, so no red of its own: the Windows leg (`PrivateFolderWindowsTests`, real handles and ACLs) ran green against the new shell, plus `TheNativeShell_ReadsARealFoldersAclAsFacts_AndNamesASid` and `TheWantedFacts_RoundTripThroughTheSystem_AsExactlyOurs` for the seam between the system and the facts |
+| A2 Linux-reachable branches | `VibeHomesTests` (an unlistable and an unremovable folder, an undeletable home, a dangling link on every OS, the lock refusal), `VibePathBudgetTests.UsingABudget_…`, `ConsultantHomeSweepTests.RemoveNow_…`, `PrivateFolderTests.AConversationOnARootWhoseHomesFolderIsALink_…`, `AVibeQuestionRowReadsACopyOfItsRootsTests` (`…HomesRootDoesNotExist…`, `…RefusedAtItsCopy_GivesItsOneShotFolderBack`), `ConsultantCheckTests` (`AVibeCheckWhoseHomesRootDoesNotExist_…`, `…EndsWithoutAnAnswer_LeavesNoFolderUnder…`) | coverage tests of existing behaviour: green when written; the Linux run (a container of `mcr.microsoft.com/dotnet/sdk:10.0-noble`, `dotnet-coverage` as the workflow runs it) is the evidence |
 ### Code gate of 2026-10-15 — four findings accepted
 
 | Finding | Test | First red |
 |---|---|---|
 | `LaunchTurn.Refused` had a default cause | `ARefusalStatesItsCauseTests` (a stub adapter through the real executor and the classifier) | `AMissingCliRefusal_StaysCliNotFound`: `Expected outcome to be False, but found True` with the cause ignored |
-| the walk did not check a child's owner | `TheOwnerRule_RefusesAChildOwnedBySomeoneElse_ByName_…` (a bare `FileSecurity`, no elevation); `E5b_…` (a SYSTEM-owned child; skips unless elevated) | `Expected PrivateFolder.OwnerProblem(…) "" to contain "C:\homes\coai-vibe\id\h\transcript.jsonl"` |
+| the walk did not check a child's owner | `AChildOwnedBySomeoneElse_IsRefusedByName_…` in `PrivateAclTests` (plain facts, no elevation, any OS); `E5b_…` (a SYSTEM-owned child; skips unless elevated) | `Expected PrivateFolder.OwnerProblem(…) "" to contain "C:\homes\coai-vibe\id\h\transcript.jsonl"` |
 | file-search advice on every consultant launch | `ATurnLimit_…` (now neutral), `TheFileSearchAdvice_IsOfferedForACapStop_AndForNothingElse`, the question-row and consult scenarios | `Did not expect runtime.WhyItFailed(…) to contain "list a folder"`; `Expected consultant.QuestionRowAdvice(capped) "" to contain "name them exactly"` |
 | a classifier per entry in the manifest script | none (a refactor with the same output): `scripts/lib/vibe.test.mjs` stays green | — |
 
