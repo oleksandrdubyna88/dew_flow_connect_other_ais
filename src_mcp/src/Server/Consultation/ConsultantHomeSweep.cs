@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Vibe;
 
 namespace CoaiMcp.Server;
@@ -46,6 +47,10 @@ public sealed record HomeSweepInputs(string HomesRoot, string Store, Func<string
 /// walked; the deleter (<see cref="GitScratch.DeleteEvenIfReadOnly"/>) unlinks a link inside by its own name. These are
 /// checks by path at one moment: a folder swapped for a link between the check and the delete is not seen — they narrow
 /// that race, they do not close it (no deletion here is by handle).</para>
+/// <para><b>A Kimi home is disposed junction-first, and never under a live tree</b> (E4.2 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>, brief
+/// section 14): before anything of a folder is deleted, <see cref="KimiHome.DisposeAllUnder"/> removes the <c>credentials</c> junction of its home
+/// and of every <c>kh-*</c> child by its own name and verifies the person's folder lost nothing; a stop — the person's folder lost a name, or a
+/// Kimi tree is still alive on the home — is said, and the folder is KEPT this beat with its lock file.</para>
 /// <para><b>Never the reason a sweep fails</b>: a folder that cannot be listed, read or removed is said in the log and
 /// skipped, and the next beat tries again.</para>
 /// </remarks>
@@ -212,6 +217,11 @@ public static class ConsultantHomeSweep
                     }
 
                     ConversationSnapshots.Release(folder);
+                    if (!KimiHomesDisposed(folder))
+                    {
+                        return false;
+                    }
+
                     DeleteAllBut(folder, Path.Combine(folder, ConversationFolder.LockName));
                 }
 
@@ -223,6 +233,23 @@ public static class ConsultantHomeSweep
             {
                 turns.ForEach(turn => turn.Dispose());
             }
+        }
+
+        /// <summary>
+        /// D19's order for a Kimi home, wherever the sweep KNOWS it holds one (E4.2 brief section 14): the folder's own home and every
+        /// <c>kh-*</c> child have their <c>credentials</c> junction removed by its own name, the person's folder verified, under no live
+        /// tree — before anything else of the folder is deleted. A stop is said and the folder is KEPT this beat; the next one finishes it.
+        /// </summary>
+        private bool KimiHomesDisposed(string folder)
+        {
+            var stopped = false;
+            KimiHome.DisposeAllUnder(folder, said =>
+            {
+                stopped = true;
+                warn($"consultant homes: {folder} is kept this beat: {said}");
+            });
+
+            return !stopped;
         }
 
         /// <summary>
