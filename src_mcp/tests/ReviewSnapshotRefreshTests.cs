@@ -239,4 +239,101 @@ public sealed class ReviewSnapshotRefreshTests : IAsyncLifetime
         _budget.Count.Should().Be(0);
         Directory.GetDirectories(_scratch).Should().BeEmpty("no root, no partial, no moved-aside copy");
     }
+
+    // ---------- one path across servers: the conversation's root is a NAME, not only an object (S3) ----------
+
+    /// <summary>
+    /// A conversation's snapshot root is fixed by the conversation (<c>coai-vibe/&lt;id&gt;/tree</c>), so a server that starts
+    /// again finds the tree its predecessor left there: <c>MakeAtAsync</c> builds the new copy COMPLETE beside it and swaps
+    /// it in under the same path — the resumed session's folder (§22 B/E) — or, refused, leaves the old tree whole.
+    /// </summary>
+    [Fact]
+    public async Task MakeAt_PublishesAtTheGivenRoot_AndOverATreeLeftThere_ReplacesItWhole()
+    {
+        var root = _scratch.At("conversation", "tree");
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "left-by-the-last-server.txt"), "stale", TestContext.Current.CancellationToken);
+        var made = await SnapshotTestKit.Snapshots(_launcher, null, _budget).MakeAtAsync(Live, root, TestContext.Current.CancellationToken);
+
+        using var snapshot = made.Should().BeOfType<SnapshotOutcome.Made>().Which.Snapshot;
+        snapshot.Root.Should().Be(root, "the path is the conversation's, whichever server made the tree");
+        SnapshotTestKit.TextAt(snapshot, "changing.txt").Should().Be("turn 1");
+        File.Exists(Path.Combine(root, "left-by-the-last-server.txt")).Should().BeFalse("the tree is the live one, whole — never a mix");
+        Directory.GetDirectories(_scratch.At("conversation")).Should().ContainSingle("no partial and no moved-aside copy is left beside it");
+
+        await Write("changing.txt", "turn 2");
+        (await RefreshedAsync(snapshot, Live)).Holds("changing.txt").Should().BeTrue();
+        SnapshotTestKit.TextAt(snapshot, "changing.txt").Should().Be("turn 2", "and it refreshes in place like any snapshot");
+    }
+
+    [Fact]
+    public async Task MakeAt_ThatIsRefused_LeavesTheTreeAlreadyThere()
+    {
+        var root = _scratch.At("conversation", "tree");
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "previous.txt"), "the previous turn's", TestContext.Current.CancellationToken);
+
+        var made = await SnapshotTestKit.Snapshots(_launcher, SnapshotOptions.Default with { MaxFiles = 1 }, _budget)
+            .MakeAtAsync(Live, root, TestContext.Current.CancellationToken);
+
+        made.Should().BeOfType<SnapshotOutcome.Refused>().Which.Reason.Should().Contain("1");
+        File.ReadAllText(Path.Combine(root, "previous.txt")).Should().Be("the previous turn's", "a refusal publishes nothing");
+        _budget.Held.Should().Be(0);
+    }
+
+    /// <summary>
+    /// R3 of the S3 risk consultation: the install rename AND the rollback can both fail, and the refusal said "the previous
+    /// snapshot stands" over a root that held nothing. The sentence is now true in every branch — and the stable path
+    /// recovers: the next <c>MakeAtAsync</c> publishes a fresh copy at it.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshWhoseInstallAndRollbackBothFail_SaysTheSnapshotIsMissing_AndMakeAtRecoversThePath()
+    {
+        var maker = SnapshotTestKit.Snapshots(_launcher, null, _budget);
+        using var snapshot = await SnapshotTestKit.MadeAsync(maker, Live, _scratch);
+        var root = snapshot.Root;
+        // The first rename (the old tree aside) succeeds; every rename INTO the root fails — the install and the rollback.
+        maker.Mover = (string from, string to, out string why) =>
+        {
+            if (string.Equals(to, root, StringComparison.OrdinalIgnoreCase))
+            {
+                why = "the test refuses every rename into the root";
+                return false;
+            }
+
+            Directory.Move(from, to);
+            why = string.Empty;
+            return true;
+        };
+        await Write("changing.txt", "turn 2");
+
+        var refused = await RefusedAsync(snapshot, Live);
+
+        Directory.Exists(root).Should().BeFalse("the fixture took the old tree aside and let nothing back in");
+        refused.Should().Contain("no snapshot at").And.NotContain("the previous snapshot stands",
+            "a refusal must not say the old tree stands over a root that holds nothing");
+        var again = await SnapshotTestKit.Snapshots(_launcher, null, _budget).MakeAtAsync(Live, root, TestContext.Current.CancellationToken);
+        using var recovered = again.Should().BeOfType<SnapshotOutcome.Made>("a restart's MakeAtAsync recovers the conversation's path").Which.Snapshot;
+        recovered.Root.Should().Be(root);
+        SnapshotTestKit.TextAt(recovered, "changing.txt").Should().Be("turn 2");
+    }
+
+    /// <summary>
+    /// R2: a snapshot is never made under a parent that is a link — a conversation's <c>&lt;id&gt;</c> folder redirected to
+    /// somewhere else before <c>MakeAtAsync</c> runs is refused, and nothing is written where the link points.
+    /// </summary>
+    [Fact]
+    public async Task MakeAt_UnderAParentThatIsALink_IsRefused_AndWritesNothingThere()
+    {
+        var elsewhere = Directory.CreateDirectory(_scratch.At("elsewhere")).FullName;
+        var parent = _scratch.At("conversation");
+        await DirectoryLink.MakeAsync(_launcher, parent, elsewhere);
+
+        var made = await SnapshotTestKit.Snapshots(_launcher, null, _budget)
+            .MakeAtAsync(Live, Path.Combine(parent, "tree"), TestContext.Current.CancellationToken);
+
+        made.Should().BeOfType<SnapshotOutcome.Refused>().Which.Reason.Should().Contain("is a link");
+        Directory.EnumerateFileSystemEntries(elsewhere).Should().BeEmpty("nothing is written through the link");
+        DirectoryLink.Remove(parent);
+    }
 }

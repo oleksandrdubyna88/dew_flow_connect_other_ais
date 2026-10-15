@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -23,7 +24,8 @@ namespace CoaiMcp.Runners.Vibe;
 /// <para><b>A home of coai's own and a built environment</b> (D17): <c>VIBE_HOME</c> is a coai-owned folder — one per
 /// reviewer of a round, inside the round's own scratch folder (<see cref="ReviewerSettings.OwnedScratch"/>) — and the child
 /// is given <see cref="ProcessEnvironment.Minimal"/> plus exactly <c>VIBE_HOME</c>, <c>VIBE_CLI=python</c> (§3: the
-/// Python CLI, the measured one) and <c>VIBE_ACTIVE_MODEL</c> (§17: it takes effect under the minimal environment).
+/// Python CLI, the measured one), <c>VIBE_ACTIVE_MODEL</c> (§17: it takes effect under the minimal environment) and
+/// <c>PYTHONUTF8=1</c> (§26: without it a character outside the console's code page killed the run with exit 2).
 /// Nothing is inherited: an MCP server supplied only through a <c>VIBE_*</c> variable starts under an empty home (§22 A).
 /// Before every launch <see cref="TakeTurnAsync"/> checks all of it (<see cref="VibeLaunch"/>).</para>
 /// <para><b>The prompt on stdin, the answer from <c>--output json</c>, usage from <c>--output-dir</c></b> (D7): a 33 KB
@@ -128,11 +130,17 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
     /// <c>--trust</c>, never <c>--add-dir</c>, never the prompt.
     /// </summary>
     internal static IReadOnlyList<string> Arguments(string workdir, string exportFolder, TimeSpan timeout) =>
+        Arguments(workdir, exportFolder, timeout, ConfinementPlanner.VibeReadOnly);
+
+    /// <summary>
+    /// The same argv with the read-only pair a question row's PLAN gave (<see cref="ConfinementPlanner"/> — the one place a
+    /// row's sandbox is decided); every other launch passes <see cref="ConfinementPlanner.VibeReadOnly"/>, the same words.
+    /// </summary>
+    internal static IReadOnlyList<string> Arguments(string workdir, string exportFolder, TimeSpan timeout, IReadOnlyList<string> readOnly) =>
     [
         "-p",
         "--output", "json",
-        "--agent", "plan",
-        "--enabled-tools", "read_file",
+        .. readOnly,
         "--workdir", workdir,
         "--time-limit", TimeLimit(timeout).ToString(System.Globalization.CultureInfo.InvariantCulture),
         "--output-dir", exportFolder,

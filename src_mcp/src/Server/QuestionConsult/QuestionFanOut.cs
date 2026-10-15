@@ -200,13 +200,23 @@ public sealed class QuestionFanOut(
         // A CLI row is given no outline (A9 names the api rows): building one cost every question six seconds before
         // ANY row launched (S4b item 11).
         var looking = WithLookup(row);
-        return new RowInput.Launch(looking, QuestionPrompt.Compose(new QuestionPromptInput(
-            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty,
-            row.Prompt.Capability == Capability.Disk ? looking.Plan.Grant.Roots : [], input.Nonce)
+        var toolbox = looking.Runtime is AntigravityConsultant agy ? agy.LookupToolbox : string.Empty;
+
+        return CliLaunch(looking, roots => QuestionPrompt.Compose(new QuestionPromptInput(
+            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty, roots, input.Nonce)
         {
-            Toolbox = looking.Runtime is AntigravityConsultant agy ? agy.LookupToolbox : string.Empty,
+            Toolbox = toolbox,
         }));
     }
+
+    /// <summary>
+    /// A CLI row's launch, its prompt composed over the roots it is told: a disk row its roots — or, standing in a COPY of
+    /// them (Vibe, D6), the copies' paths, which its launch makes; never the originals it cannot read (M-V11).
+    /// </summary>
+    private static RowInput.Launch CliLaunch(RowAdmission.Admitted looking, Func<IReadOnlyList<string>, string> composed) =>
+        looking.Plan.Cwd == CwdKind.Snapshot
+            ? new RowInput.Launch(looking, composed([])) { NamingCopies = composed }
+            : new RowInput.Launch(looking, composed(looking.Plan.Grant.Capability == Capability.Disk ? looking.Plan.Grant.Roots : []));
 
     /// <summary>
     /// An antigravity DISK row, able to ask coai to list and search its granted roots — it cannot do either itself in plan
@@ -279,6 +289,7 @@ public sealed class QuestionFanOut(
         {
             // The same comparison the breach is decided by, asked before a silent row is continued (ConsultantTurn).
             ChangesSoFar = t => ChangesAsync(watched, t),
+            PromptNaming = launch.NamingCopies,
         };
         var settled = await _launch.RunAsync(input, start, ct);
         // Persisted as it settles, so the sidebar sees per-model progress (S2 acceptance 2).
@@ -481,7 +492,11 @@ public sealed class QuestionFanOut(
 /// </summary>
 public abstract record RowInput
 {
-    public sealed record Launch(RowAdmission.Admitted Row, string Prompt) : RowInput;
+    public sealed record Launch(RowAdmission.Admitted Row, string Prompt) : RowInput
+    {
+        /// <summary>For a row standing in a copy of its roots: the prompt naming the copies (<see cref="RowLaunchInput.PromptNaming"/>).</summary>
+        public Func<IReadOnlyList<string>, string> NamingCopies { get; init; } = RowLaunchInput.NamesNoCopies;
+    }
 
     /// <summary>An api <c>none</c> row: composed with the outline when it arrives — the other rows do not wait for it.</summary>
     public sealed record AfterOutline(RowAdmission.Admitted Row, Func<string, Launch> Compose) : RowInput;

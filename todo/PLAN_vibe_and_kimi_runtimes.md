@@ -4,10 +4,13 @@
 > `--ask-acp` Kimi shim shipped in coai-mcp 0.51.0 (#785), and the Vibe home manifest (D17) on branch
 > `feat/vibe-kimi-runtimes` (`shared/vibe-home-manifest.json`, RESULTS_vibe_confinement.md §24). S2 is BUILT on the same
 > branch — server (`VibeRuntime`, the launch control, the round's snapshot) and extension (the preset, the models, the
-> buttons, the older-server gate) — unreleased, its live product rounds not yet recorded. S4's MEASUREMENT half is done
+> buttons, the older-server gate) — unreleased, its live product rounds not yet recorded. S3 is BUILT on the stacked
+> branch `feat/vibe-consultant` — `VibeConsultant`, the conversation's one snapshot and home under `coai-vibe/<id>`, the
+> question row's copies of its granted roots, the D20 home sweep, the three `runtime-capabilities.json` rows (web
+> `unmeasured`) — unreleased, its live `consult` and question row not yet run. S4's MEASUREMENT half is done
 > (RESULTS_kimi_confinement.md §3–§15: 74 launches through the shipped shim, 2026-10-13); two cells contradicted the plan,
 > so S4's code half and S5 were re-planned the same day around D19 — a coai-owned `KIMI_CODE_HOME` whose `credentials/` is a
-> junction to the person's — and `KimiRuntime` is not written.** Open: S2's live rounds and release, S3, S4's code half
+> junction to the person's — and `KimiRuntime` is not written.** Open: S2's live rounds and release, S3's live consult and question row and release, S4's code half
 > (gated on D19's cells, §5), S5. Re-planned 2026-10-12 after M-V11 (D6: a sanitised snapshot of the tree replaces the
 > empty working folder). Scope: `src_mcp` (two new reviewer runtimes and two consultants), `shared/*.json` seeds and their
 > generated TypeScript, `src_vs_code` (runtime lists, presets, install, the catalog model card), docs. Chat, the Team server
@@ -269,7 +272,18 @@ against the code or a run before it went in here — the question consultant had
     `logs/`); a `config.toml` declaring hooks, MCP servers or agents, a `hooks.toml`, an `agents/` or `tools/` folder, a
     non-empty trust list, or a link anywhere in it refuses the launch with the path named. Turns sharing a home are serialised.
   - **The environment.** Built, never inherited: `ProcessEnvironment.Minimal` for the platform, plus exactly
-    `VIBE_HOME`, `VIBE_CLI=python` and `VIBE_ACTIVE_MODEL`. No other `VIBE_*` reaches the child (RESULTS §22 A).
+    `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL` and — **amended 2026-10-13** — `PYTHONUTF8=1`. No other `VIBE_*`
+    reaches the child (RESULTS §22 A). *The amendment's evidence (RESULTS_vibe_confinement.md §26, the first live plan
+    round through coai-mcp 0.53.0):* under the three-variable environment CPython 3.14 on Windows writes cp1252 to a pipe
+    (`sys.stdout.encoding cp1252`, UTF-8 mode off), `--output json` echoes the conversation, and a `→` in the review
+    killed the run with exit 2 after 131 s and 18 092 paid output tokens; with `PYTHONUTF8=1` the same turn exited 0 and
+    answered `a → b` (n = 1 per arm). `PYTHONIOENCODING` is not added: narrower, unmeasured, and subsumed by UTF-8 mode.
+    The one builder (`VibeLaunch.Built`) sets it on every path — reviewer, retry and repair, consult, question row,
+    consultant check, the `providers` probe — and the launch control admits exactly that set; the probe scripts build the
+    same (`scripts/lib/vibe.mjs` `BUILT_FIXED`, held to the product's by `VibePrintsUtf8OnEveryPathTests`). A run that
+    exits non-zero is NOT read from its export even when the export holds an answer: the prevention is the variable, a
+    real exit 2 (the Rust CLI's usage error, §3) must stay a failure, and the export's message shape is unmeasured — the
+    encoding crash is named instead (`VendorDiagnosis`: "codec can't encode character").
   - **The CLI.** `vibe` is two CLIs, and a GrowthBook flag cached in the home flipped this account from the Python CLI to a
     Rust CLI between two launches; the Rust CLI refuses `--time-limit` and `--output-dir` (exit 2) and is unmeasured
     (RESULTS §3). `VIBE_CLI=python` pins the measured one. If a later Vibe drops the Python CLI, the launch fails with
@@ -459,6 +473,10 @@ against the code or a run before it went in here — the question consultant had
     (15 min + 60 s by default); a host killed mid-conversation leaves its homes until the next server start, when the start
     sweep removes them. What this does not do: run while no coai-mcp runs — a machine that never starts the server again
     keeps the leftovers, which is the bound the record store itself has.
+  - **As built (S3, hardened before its gate):** the window rules run only on folders this server's store stamped, and never
+    while the folder's last turn neither ended nor passed its own ceiling; an `asking` record past that ceiling counts as
+    over; a folder another store stamped, or nobody, is left until 7 days unwritten; the cross-process turn lock
+    (`coai-turn.lock`) is taken before anything is deleted — see S3's notes in §4.
   Tests (§5): an orphaned `coai-kimi/<id>` with no record, older than the window, whose junction points at a folder holding
   a file → the home and the junction gone, the file untouched; the same home younger than the window → kept; a live
   conversation's home (record open, written now) → kept; a closed record's home → gone on the beat; a home whose turn is held
@@ -587,6 +605,47 @@ question-consultant row, and a resumed turn reports its usage right.
   root refuses; the prompt names only snapshot paths; the row's home and snapshot are gone after success, refusal and
   cancellation.
 - Docs: `module_server.md` consultant sections, `module_core.md`.
+- *Built 2026-10-13 on `feat/vibe-consultant` (stacked on S1+S2), unreleased; the live `consult` and question row are owed
+  after the release.* What shipped differently from the bullets above, and why:
+  - **The snapshot's stable path is a NAME, not only an object.** A conversation's snapshot is `coai-vibe/<id>/tree`
+    beside its home `coai-vibe/<id>/vh-…` (the home is not the conversation folder itself, because the home's shape check
+    refuses anything Vibe does not write — the copy cannot live inside it). A process-wide registry
+    (`ConversationSnapshots`) refreshes it in place; a turn after a restart (or a settings reload's new service) uses the
+    new `ReviewSnapshots.MakeAtAsync`, which builds beside and swaps in at the same path — so §22's "one stable path"
+    holds across servers, not only within one.
+  - **A refused refresh refuses the TURN** (before the launch, the conversation still open), rather than launching on the
+    previous tree: the consultant is promised the live tree.
+  - **The adapter declares its homes folder** (`IConsultantRuntime.HomesFolder`, `ConsultantHomes.Vibe`) — the bullets named
+    only the snapshot capability; a runtime that keeps a home on every consultant path needed a second declared fact, never
+    a vendor name. The homes root is `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application
+    data), EMPTY in hand-built settings, so no test makes or sweeps a home in the machine's own folder.
+  - **The question row's copies are a new `CwdKind.Snapshot`** the planner decides (not a branch in the row's launch), and
+    the prompt naming the copies is composed by the fan-out and called by the launch (`RowLaunchInput.PromptNaming`) once
+    the copies exist. A home-keeping runtime's `none` row stands in an empty `cwd` folder BESIDE its home in the row's
+    folder, so a cwd never holds its own home.
+  - **Also wired, not in the bullets:** the consultant CHECK (`--check-consultant`) gets the same one-shot copy and home —
+    without it a Vibe check would have failed on the missing `Workdir`. `close_consult` removes the conversation's folder at
+    once (`ConsultantHomeSweep.RemoveNow`), the beat being the backstop.
+  - **D20's deleter landed early:** `GitScratch.DeleteEvenIfReadOnly` unlinks every link in place and never enters one (red
+    first: it cleared the target's read-only attribute through a junction and then failed on it). D19's Kimi-specific
+    disposal — the junction removed FIRST by name and the person's folder VERIFIED after — stays S4's, in `KimiHome`; the
+    sweep is runtime-neutral and already safe for a Kimi home's shape (its test plants one).
+  - **The sweep keeps an `asking` record's home** whatever its stamps (a turn in flight; the record pass settles an orphan
+    first), beside the plan's "skipped while its turn is held".
+  - **Measurement-led:** `vibe × web` is `unmeasured` (no Vibe cell exercises the web), so the planner refuses it; the
+    shared "unmeasured" refusal now names the record the refusing row cites (`CapabilityMatrix.RecordOf` and its TS twin,
+    read off `resultRef`) — research/RESULTS_vibe_confinement.md for Vibe, the first run's words unchanged for the rest.
+  - **Help, five languages:** the question consultant article says what a Vibe row reads (none: an empty folder; disk: a
+    copy of each folder), that its web prompt is disabled, that it runs on Windows only (D18) and that a folder outside a
+    Git repository is refused. The consult article lists no runtimes, so it is unchanged.
+  - **Hardened before the S3 gate (2026-10-13; plan round P0/P1, risk consultation ee1eecf4 R1–R4).** Each conversation folder
+    carries a stamp (`coai-conversation.txt`: the owning store, the last turn's start, ceiling and end) and a cross-process
+    turn lock (`coai-turn.lock`); the sweep touches only its own store's folders (another's after 7 days unwritten), takes
+    every lock with no wait and asks its rules again under them, never removes a folder whose turn did not end inside its
+    ceiling (a killed server's Vibe child runs at most its `--time-limit` < the timeout < the ceiling), counts an `asking`
+    record past that ceiling as over, and refuses a homes or conversation folder that is a link (path checks: they narrow a
+    swap race, they do not close it). A question row refuses a granted root that is, or lies below, a link up to its work
+    tree's top. A refused snapshot swap says when the root is left EMPTY, and the next turn recovers the path.
 
 **S4 — Kimi measured, then a Kimi reviewer row over ACP.** The owner signed in on 2026-10-12, so S4 is no longer blocked.
 Decisions D1, D6 (the snapshot with Kimi's exclusions), D8b (the Kimi arm = D19), D9, D10 (the ACP model option, the curated
@@ -696,6 +755,10 @@ every refusal.
   lapses, and by D20's home sweep on the beat and at server start when its conversation is closed, unknown to the store or
   idle past `ConsultIdle` (§7). The conversation's turns on one home are serialised; its launches share the per-credentials
   gate with the reviewers (D19) until M-K14.
+- **The consultant check (`--check-consultant`) for Kimi** (found while building S3, 2026-10-13): `ConsultantCheckTurn` gives
+  a place only to a runtime that asks for a snapshot, and Kimi declares a home (`HomesFolder`) with its own snapshot need —
+  give the check a ONE-SHOT owned home (junction and all, D19) inside its scratch, disposed junction-first, with its own test;
+  `ConsultantPlaces` already allocates a home for a runtime that declares one without a snapshot (S3, `0003e207`).
 - `consultant-limitations.json` rows per side.
 - Question consultant: `RuntimeCapabilities.Runtimes`, a `ConfinementPlanner` arm for `kimi` (snapshot for `disk`, empty
   folder for `none`; `Read` bounded by the shim, `Grep`/`Glob` not — so `disk` is written `unconfined`, D15; the `~/.agents/*`

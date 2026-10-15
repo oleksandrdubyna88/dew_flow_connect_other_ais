@@ -35,6 +35,42 @@ public static class VibeHomeTurns
         return new Turn(key, entry);
     }
 
+    /// <summary>
+    /// The home's turn if nobody holds it NOW — never a wait. The consultant home sweep's question (D20): a home whose turn
+    /// is held is a live launch, judged by the lock and never by a stamp, and is skipped this beat.
+    /// </summary>
+    /// <remarks>
+    /// Vendor-free, like the rest of this class: the sweep asks it of a conversation's folder and of every home in it,
+    /// whichever CLI's they are (D19: Kimi's homes share this, never a copy of it).
+    /// </remarks>
+    public static bool TryTake(string home, out IDisposable turn)
+    {
+        var key = Path.GetFullPath(home);
+        var entry = Join(key);
+        if (entry.Gate.Wait(0))
+        {
+            turn = new Turn(key, entry);
+
+            return true;
+        }
+
+        Leave(key);
+        turn = NotTaken.Instance;
+
+        return false;
+    }
+
+    /// <summary>What <see cref="TryTake"/> hands back when it took nothing: disposing it gives nothing back.</summary>
+    private sealed class NotTaken : IDisposable
+    {
+        public static NotTaken Instance { get; } = new();
+
+        public void Dispose()
+        {
+            // Nothing was taken.
+        }
+    }
+
     /// <summary>Whether <paramref name="home"/> has a holder or a waiter now — for a test that a finished turn leaves nothing behind.</summary>
     internal static bool Held(string home)
     {

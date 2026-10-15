@@ -47,6 +47,15 @@ public sealed record ConsultantLaunch(
     /// caller, never by <c>Build</c>, which is pure. Required then, ignored otherwise.
     /// </summary>
     public string ScratchDir { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Where a launch that must not stand in the checkout stands instead: the root of a coai-owned SANITISED SNAPSHOT (D6
+    /// of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>) — the conversation's one stable copy of the live tree for the stuck
+    /// consultant, refreshed in place before each turn; a question row's copy of its granted roots for a plan that stands
+    /// in <c>Snapshot</c>. Made by the caller, never by <c>Build</c>. Empty for every adapter that does not ask for one
+    /// (<see cref="IConsultantRuntime.NeedsASanitisedSnapshot"/>), whose launch is unchanged.
+    /// </summary>
+    public string Workdir { get; init; } = string.Empty;
 }
 
 /// <summary>What <see cref="IConsultantRuntime.PrepareAsync"/> concluded: a launch ready to build, or a refusal.</summary>
@@ -197,6 +206,18 @@ public interface IConsultantRuntime : IAnsweringRuntime
     /// the service. False by default, so every consultant shipped before Vibe and Kimi keeps the checkout as its cwd.
     /// </remarks>
     bool NeedsASanitisedSnapshot => false;
+
+    /// <summary>
+    /// The folder, under the person's local application data, that this CLI's coai-owned CONVERSATION homes live in —
+    /// <see cref="ConsultantHomes.Vibe"/> for Vibe (D17) — or empty for a CLI that runs on the person's own home.
+    /// </summary>
+    /// <remarks>
+    /// A runtime that names one is handed a coai-owned folder of its own on every consultant path, in
+    /// <see cref="ReviewerSettings.OwnedScratch"/>: a conversation's is <c>&lt;local data&gt;/&lt;this&gt;/&lt;consultation id&gt;</c>,
+    /// kept across its turns (the session a resume needs lives in it) and swept with the conversation (D20); a question
+    /// row's is the row's own scratch folder, gone with the row. Declared by the adapter, never decided by a vendor name.
+    /// </remarks>
+    string HomesFolder => string.Empty;
 
     /// <summary>
     /// A second launch that CONTINUES this turn's first, when the first answered nothing in a way only

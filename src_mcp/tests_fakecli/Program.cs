@@ -70,7 +70,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_EXPORT_TEXT   — Vibe's `--output-dir <folder>`: this text is written there as export.json (D7 of
 //                           todo/PLAN_vibe_and_kimi_runtimes.md); {{env:NAME}} in it is the value NAME had in THIS child
 //   FAKECLI_RECORD_ENV    — a file this launch writes every environment variable NAME it was started with into, one per
-//                           line, and the VALUE of each VIBE_* — what crossed the process boundary, not what a dictionary said
+//                           line, and the VALUE of each VIBE_* and PYTHON* — what crossed the process boundary, not what a dictionary said
 //   FAKECLI_HOME_WRITE    — a path relative to this child's VIBE_HOME, written as a file: a Vibe that leaves something in
 //                           its home the next launch's check must refuse
 //
@@ -562,7 +562,9 @@ static class VibeShape
         }
 
         File.WriteAllLines(envRecord, Environment.GetEnvironmentVariables().Keys.Cast<string>().Order(StringComparer.Ordinal)
-            .Select(name => name.StartsWith("VIBE_", StringComparison.Ordinal) ? $"{name}={Environment.GetEnvironmentVariable(name)}" : name));
+            .Select(name => name.StartsWith("VIBE_", StringComparison.Ordinal) || name.StartsWith("PYTHON", StringComparison.Ordinal)
+                ? $"{name}={Environment.GetEnvironmentVariable(name)}"
+                : name));
     }
 
     private static void WriteIntoTheHome(string? homeWrite)

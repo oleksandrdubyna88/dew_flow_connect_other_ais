@@ -47,7 +47,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { SYSTEM32, files, fwd, minimalWindowsEnv, run, vibeArgs } from './lib/vibe.mjs';
+import { SYSTEM32, builtEnv as builtEnvFor, files, fwd, minimalWindowsEnv, run, vibeArgs } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -131,8 +131,8 @@ function trustWithVibe(home, paths) {
 /** The curated default model (D10) — what the built environment names when a row names none. */
 const BUILT_MODEL = 'mistral-medium-3.5';
 
-/** D17's BUILT environment for `home`: MinimalWindows plus exactly the three VIBE_* names coai sets. */
-const builtEnv = (home) => ({ ...minimalWindowsEnv(), VIBE_HOME: home, VIBE_CLI: 'python', VIBE_ACTIVE_MODEL: BUILT_MODEL });
+/** D17's BUILT environment for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built), on the curated default model. */
+const builtEnv = (home) => builtEnvFor(home, BUILT_MODEL);
 
 /** Every cached plugin package in `home` that carries a plugin.json — after one turn, Vibe's built-in package (§24). */
 function builtInPackages(home) {
@@ -435,7 +435,8 @@ const ARMS = {
 // The shipped flag set, with an arm's deviations, is lib/vibe.mjs's vibeArgs().
 
 function childEnv(spec) {
-  const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli };
+  // UTF-8 mode with the CLI pin (§26): without it a character outside cp1252 in an answer kills the run with exit 2.
+  const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli, PYTHONUTF8: '1' };
   if (spec.replaceEnv) return { ...spec.replaceEnv, ...pin };
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which vibe inherits through coai.
   const env = { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...(spec.env ?? {}), ...pin };

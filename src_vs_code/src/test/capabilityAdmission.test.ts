@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -150,11 +150,21 @@ test('the words are the file’s words, and a word outside them is refused rathe
   }
 });
 
+test('an unmeasured pair names the record its row cites: the Vibe probe for vibe, the first run for the rest, unchanged', () => {
+  const vibe = admit('vibe', 'web').reason;
+  assert.ok(vibe.includes('a measured cell in research/RESULTS_vibe_confinement.md is what admits it'), vibe);
+  assert.ok(!vibe.includes('RESULTS_question_consultant_capabilities.md'), 'no cell of that run could admit a Vibe pair');
+  assert.equal(admit('api', 'web').reason,
+    "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
+    + 'research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability');
+});
+
 test('a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one', () => {
   assert.match(admit('api', 'web').reason, /not been measured/u);
   assert.match(admit('api', 'web').reason, /RESULTS_question_consultant_capabilities\.md/u);
   assert.match(admit('antigravity', 'web').reason, /cannot fetch a page headless/u);
-  assert.match(admit('gemini', 'none').reason, /claude, codex, antigravity, local, api/u);
+  assert.match(admit('gemini', 'none').reason, /claude, codex, antigravity, local, api, vibe/u);
+  assert.match(admit('vibe', 'web').reason, /not been measured/u, 'no Vibe cell exercises the web (S3 of PLAN_vibe_and_kimi_runtimes.md)');
   assert.match(admit('claude', 'shell').reason, /none, disk, web/u);
 });
 
@@ -162,4 +172,5 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
   assert.match(admit('codex', 'web').caveat, /can read this machine/u);
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
+  assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');
 });

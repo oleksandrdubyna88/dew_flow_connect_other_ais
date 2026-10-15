@@ -74,6 +74,9 @@ public abstract record ReviewerOutcome
     /// </remarks>
     public string Warning { get; init; } = string.Empty;
 
+    /// <summary>The CLI release the launch control asked before the first launch (<see cref="LaunchTurn.CliVersion"/>) — what the ledger line names; empty when none was asked.</summary>
+    public string CliVersion { get; init; } = string.Empty;
+
     /// <summary>What the launch this outcome describes reported: an answer's, an unparseable one's; nothing for a run that never finished.</summary>
     protected virtual Usage OwnUsage => Usage.None;
 
@@ -562,7 +565,7 @@ public sealed class ReviewerExecutor(
         var spent = System.Diagnostics.Stopwatch.StartNew();
         var first = await RunOnceAsync(invocation, ct);
 
-        return (await ConcludedAsync(invocation, repair, first, spent, ct)) with { Warning = first.Warning };
+        return (await ConcludedAsync(invocation, repair, first, spent, ct)) with { Warning = first.Warning, CliVersion = first.CliVersion };
     }
 
     /// <summary>The reviewer's outcome once its first launch has run: that launch's own, or after its one repair.</summary>
@@ -800,15 +803,22 @@ public sealed class ReviewerExecutor(
 
     /// <summary>What one launch came to, read: a terminal outcome, or the parsed review with what the run said beside it.</summary>
     private sealed record OneLaunch(
-        ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied, string Warning);
+        ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied, string Warning)
+    {
+        /// <summary>The CLI release its launch control asked (<see cref="LaunchTurn.CliVersion"/>), or empty.</summary>
+        public string CliVersion { get; init; } = string.Empty;
+    }
 
     private async Task<OneLaunch> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         var launch = await LaunchAsync(invocation, ct);
 
         return launch.Terminal is not null
-            ? new(launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty, launch.Warning)
-            : new(null, Cited(ParseAnswer(launch.Answer, invocation.Provider), invocation.Citations), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied, launch.Warning);
+            ? new(launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty, launch.Warning) { CliVersion = launch.CliVersion }
+            : new(null, Cited(ParseAnswer(launch.Answer, invocation.Provider), invocation.Citations), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied, launch.Warning)
+            {
+                CliVersion = launch.CliVersion,
+            };
     }
 
     /// <summary>
@@ -879,7 +889,7 @@ public sealed class ReviewerExecutor(
 
         return turn.Refusal.Length > 0
             ? new ReviewerLaunch(new ReviewerOutcome.NotStarted(turn.Refusal), null, Usage.None, string.Empty)
-            : (await LaunchTakenAsync(invocation, ct)) with { Warning = turn.Warning };
+            : (await LaunchTakenAsync(invocation, ct)) with { Warning = turn.Warning, CliVersion = turn.CliVersion };
     }
 
     /// <summary>The launch, once its turn is taken: started, then judged — killed, rate limited, failed, or read.</summary>
@@ -1082,4 +1092,7 @@ public sealed record ReviewerLaunch(
 {
     /// <summary>What the adapter's launch control warned about this launch (<see cref="LaunchTurn.Warning"/>) — or empty.</summary>
     public string Warning { get; init; } = string.Empty;
+
+    /// <summary>The CLI release the adapter's launch control asked for this launch (<see cref="LaunchTurn.CliVersion"/>) — or empty.</summary>
+    public string CliVersion { get; init; } = string.Empty;
 }

@@ -97,6 +97,13 @@ public static class VendorDiagnosis
             "the installed Vibe started its Rust CLI, which coai has not measured and which takes no --time-limit — coai pins " +
             "VIBE_CLI=python, so this Vibe may no longer ship the Python CLI: install a Vibe version coai has qualified.",
             DiagnosisKind.UnknownOption),
+        // Measured 2026-10-13 (research/RESULTS_vibe_confinement.md §26, the first live round through 0.53.0): Vibe's Python
+        // wrote its --output json to a pipe in the console's code page and died, exit 2, on a character outside it — after the
+        // review was paid for. coai launches Vibe in Python's UTF-8 mode since (VibeLaunch.Built), so this means it did not.
+        ("codec can't encode character",
+            "the CLI's Python wrote its output in the console's code page and stopped on a character outside it — coai launches " +
+            "Vibe with PYTHONUTF8=1, so a coai-mcp older than that, or a launch that lost the variable, ran it: update coai-mcp.",
+            DiagnosisKind.BrokenInstall),
         ("command not found",
             "the CLI is not on this machine's PATH — set an explicit executable path for this vendor.",
             DiagnosisKind.NotOnPath),

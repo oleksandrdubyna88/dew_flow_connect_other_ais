@@ -101,7 +101,8 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         seen.Should().NotContain(line => line.StartsWith("VIBE_MCP_SERVERS", StringComparison.Ordinal), "the parent's VIBE_* never reaches the child");
         // Less what the child's OWN runtime writes at start (macOS CoreFoundation's __CF_USER_TEXT_ENCODING) — the one
         // allowance every child-environment test shares, macOS only; the launcher passes none of it.
-        seen.Where(line => !line.StartsWith("VIBE_", StringComparison.Ordinal)).Except(ChildEnvironmentTests.SetByTheChildItself)
+        seen.Should().Contain("PYTHONUTF8=1", "§26: UTF-8 mode crosses the process boundary, so a non-cp1252 answer prints");
+        seen.Where(line => !line.StartsWith("VIBE_", StringComparison.Ordinal) && line != "PYTHONUTF8=1").Except(ChildEnvironmentTests.SetByTheChildItself)
             .Should().OnlyContain(name => ProcessEnvironment.Minimal.Contains(name), "nothing but the minimal set is inherited");
     }
 

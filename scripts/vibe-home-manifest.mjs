@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { files, minimalWindowsEnv, run, vibeArgs } from './lib/vibe.mjs';
+import { builtEnv as builtEnvFor, files, run, vibeArgs } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -80,8 +80,8 @@ const classOf = (path) => (path.startsWith(PINNED_PREFIX) ? 'pinned' : VARYING_R
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const inventory = (home) => files(home).map((path) => ({ path, sha256: sha256(join(home, path)), bytes: readFileSync(join(home, path)).length }));
 
-/** The built environment of D17, for `home`. */
-const builtEnv = (home) => ({ ...minimalWindowsEnv(), VIBE_HOME: home, VIBE_CLI: 'python', VIBE_ACTIVE_MODEL: MODEL });
+/** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
+const builtEnv = (home) => builtEnvFor(home, MODEL);
 
 function launch(label, args, home, cwd, input = '') {
   console.error(`[manifest] ${label} …`);
