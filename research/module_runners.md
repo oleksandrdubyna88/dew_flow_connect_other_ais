@@ -3169,7 +3169,7 @@ prompt mode cannot carry a review prompt (`-p` takes it only as an argument, ove
 CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runners/Acp/` behind one profile interface
 (`IAcpProfile`, one module per vendor; `KimiAcpProfile` the only one today); the process half is the one-shot mode
 `coai-mcp --ask-acp` (`src_mcp/src/Acp/AskAcpMode.cs`), the third self-invocation shim after `--ask-local` and
-`--ask-api`. `KimiRuntime` above it (E4.4, *The Kimi reviewer* below) builds its request and reads its report; the extension's row is E4.5's.
+`--ask-api`. `KimiRuntime` above it (E4.4, *The Kimi reviewer* below) builds its request and reads its report; the extension's row (E4.5) is in [module_extension.md](module_extension.md), *Kimi Code on the panel's side*.
 
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
 `ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
@@ -3248,6 +3248,11 @@ one place where `KimiPlaces`, `KimiEnvironment` and `KimiCredentialsLock` meet t
   what came BEFORE the mark and `AcpUsageLine.Parse` reads `Session total: N input, M output` out of what came after (thousands commas, culture-invariant; a number no
   `long` holds, `no LLM calls yet` and silence are all "not captured", 0 and `notCaptured: true`). A failure, a hang or a deadline during the second prompt never
   changes the first one's end, answer or exit.
+- **The shim's words** (E4.5, the E4.4 review's M3). The flags on the shim's argv (`--home`, `--persons-bin`, `--model`, `--executable`, `--locks`), the three end words
+  (`answered`, `not_started`, `model_not_offered`) and the spent exit (75) are `AcpWords` (`src_mcp/runners/Acp/AcpWords.cs`): `AskAcpMode` writes them for ANY profile and a profile's
+  runtime (`KimiRuntime`) reads them from the same place, where they used to be imported from `KimiEnvironment` and `KimiReport`. No value changed. `KimiAcpProfile.BalanceSpent`
+  stays with the profile: it is the failure NAME that profile defines for a known sentence. Still Kimi-named inside the generic shim: `KimiCredentialsLock.RootFor` (the lock-folder
+  naming, ruling 2) and the `Kimi*` hold in `KimiShimHold` — reached only through the profile's `Hold` member.
 
 ```mermaid
 sequenceDiagram
@@ -3543,8 +3548,8 @@ flowchart LR
   `RateLimit.Hopeless` stops the ladder, D14) and carries the report's usage; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
   exit 77 with a trace that names `src/quota.cs` and a tool titled `check rate limit` included — is an ordinary `NonZeroExit`, one launch. Exit **69** is also "another
   Kimi holds the sign-in past the deadline" (report `not_started`, the sentence on stderr and in `reason`); exit **65** also covers `model_not_offered` and an
-  unusable hold. The exit and end words are shared with the shim (`KimiReport.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared where they are
-  READ, as `ApiRuntime.EndedBeforeAnAnswerExit` is.
+  unusable hold. The exit and end words are shared with the shim (`AcpWords.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared in a profile-neutral unit both read, as
+  `ApiRuntime.EndedBeforeAnAnswerExit` is (they sat in `KimiReport` until E4.5 moved them — see *The shim's words* below).
 - **One Kimi launch at a time, in one lane.** `IReviewerRuntime.LaunchesOneAtATime` (default false; Kimi true — D19, until M-K14) makes
   `BoundedScheduler.CapFor(work, perProviderCap)` give the limiter a cap of ONE, and `LaneOf(work)` key that limiter by the ADAPTER's kind, not by the provider id: what it protects is the
   machine's one rotating sign-in, so two Kimi rows with different ids (or a settings reload that builds a new adapter) share the lane (E4.4 review M1). Every other vendor keeps its
@@ -3556,8 +3561,8 @@ flowchart LR
 - **Registered** in `ReviewerRuntimeSelector.Default`, `RuntimeNames` and `Named("kimi", vendorId)`, and in `MachineOnlyRuntimes` (D12: the Team server derives its accepted set as
   `RuntimeNames` minus that one, so it refuses a `kimi` row by name). `shared/feature-availability.json` names it: effort and thinking `unmeasured` (the k3 models announce
   `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; NOT a consultant, NOT in `runtime-capabilities.json` (S5 — a runtime may not enter it without its
-  own `ConfinementPlanner` arm). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them), with no preset, models, colour, terminal or
-  install yet — those are E4.5's.
+  own `ConfinementPlanner` arm). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
+  described in [module_extension.md](module_extension.md).
 - **Diagnosis.** `VendorDiagnosis.Known` carries the four NAMES the shim writes (`not_signed_in:`, `subscription_model:`, `balance_spent:`, `model_not_offered`) — the shim files a
   known failure as `<name>: <reason> — <cure>` on stderr — never a phrase of Kimi's trace. `InstallCure("kimi")` is Moonshot's own: `irm https://code.kimi.com/kimi-code/install.ps1 | iex`
   (Git for Windows first, `winget install Git.Git`) on Windows, `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash` on Linux and macOS (read 2026-10-14).

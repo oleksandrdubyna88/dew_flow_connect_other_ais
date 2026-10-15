@@ -1,6 +1,7 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
-> Status: **E4.1–E4.4 implemented 2026-10-15 (feat/kimi-runtime); E4.5 not started.** Stories written 2026-10-14; the two
+> Status: **E4.1–E4.5 implemented 2026-10-15 (feat/kimi-runtime, #817); the live checks are open** (the buttons run for real on Windows and in WSL, the live plan/code round with a
+> Kimi row — E4.5's "Done when" and this epic's Definition of Done). Stories written 2026-10-14; the two
 > cornerstones' scenarios and briefs written by Fable 2026-10-14; E4.2 amended by Fable 2026-10-15 (the junction risk
 > consultation 7de9430b and the E4.1 review folded in: decisions 9–13, brief §15–§17, S2.41–S2.46; revised the same day
 > after the Opus review of f1983923 — B1–B3, M1–M4 taken, E4.3 gains S3.14–S3.17). E4.2 is a `model: fable` spec — a
@@ -1231,6 +1232,8 @@ mode `none`, `kimi` not a consultant); `KIMI_RUNTIME_SINCE` must name the first 
 
 `model: opus` spec (this document) · Sonnet codes · Opus reviews.
 
+*[E4.5 as built, 2026-10-15: every brief item is done — see the extension's half in [module_extension.md](../research/module_extension.md), *Kimi Code on the panel's side*, and what differs from the text below in items 58–66 (§ "What the E4.5 coder built differently"). Not done: the live checks of "Done when" (item 65), the confinement probe's cells on the new plumbing (item 62).]*
+
 *[E4.4 as built, 2026-10-15: the server runs `kimi` and names it in `RuntimeNames`; the seeds (`shared/feature-availability.json`, the two generated TS files) and brief item 1's `RUNTIMES` + both `package.json` enums are DONE (deviation 50) — E4.5 adds `CLI_RUNTIMES` and the rest; `probe-kimi-confinement.mjs` is stale against the shim (item 12); the server's `providers` card for a Kimi row shows `KimiLaunch.VersionWarning`'s sentence.]*
 
 **Goal.** In the extension, Kimi is a runtime a person adds from the catalog's preset, picks a curated model for, sees
@@ -1635,6 +1638,39 @@ one Kimi launch at a time, every launch through the one control, the round's scr
 57. **DEFERRED, not done (review M3, M5).** M3: the generic ACP shim's constants (`KimiEnvironment.LocksFlag`, `KimiReport.*Word`, `KimiAcpProfile.BalanceSpent`, the exit codes) still live in Kimi classes
     though the shim is vendor-neutral — move them to a neutral ACP unit in E4.5 or later. M5: `VendorDiagnosis.InstallCure("kimi")` has no macOS-specific line; PR #823 already fixes it on another branch,
     so the merge reconciles it.
+
+**What the E4.5 coder built differently from the brief as written (2026-10-15), each with its reason.** Items 58–66; none weakens a ruling (the buttons install only what the
+projects and Moonshot publish, a Kimi row never reaches a server that cannot run it, an unmeasured version warns and runs).
+
+58. **A failed tool step `throw`s a sentence that names the tool, where brief §6 said `return`.** `return` inside the harness's `Invoke-Expression` ends only that expression's scope,
+    and what it does to a line TYPED into a terminal is not something this repository has measured; `throw` is what `vibeWindowsInstallRuns.test.ts` already proved ends the rest
+    of a typed line in Windows PowerShell 5.1 and pwsh 7 alike, and it says why (`ripgrep could not be set up by winget; nothing after it was run`). The words avoid "install" —
+    `fromOfficialSources` reads every step and refuses one that says it and no verb reads. Seen: the line stops after a failed `fd` step with Moonshot's step not reached, in both shells.
+59. **`KIMI_RUNTIME_SINCE = '0.56.0'`, not the brief's 0.54.0 or 0.55.0.** The brief was written when 0.53.0 was the newest release. `origin/main`'s manifest (fetched 2026-10-15) says
+    `src_mcp` 0.55.0 — tag `mcp-v0.55.0`, 2026-10-15 — and 0.54.0 was released 2026-10-14, both WITHOUT the Kimi stories; a server released without the runtime refuses the row by name, so
+    the earliest release that can carry it is the next minor. This branch's own `.release-please-manifest.json` (0.53.0) is behind `main`. If another minor ships before #817, raise it.
+60. **S5.1 and S5.13 were green from the start, and S5.5's first draft was green by luck.** S5.1: `kimi` has been in `RUNTIMES` since E4.4 (deviation 50), so the parser could not
+    rewrite it; S5.13: the card's version warning is runtime-neutral, which is what the scenario pins. S5.5: `kimi` alone hashes to slot 11 by chance, so the test also places it among
+    six strangers (where it moved to slot 0 until it was anchored). The `vendorColour.test.ts` anchor lists gained `kimi` and went red on their own (*stranger-4 took a colour reserved for an anchored kind*).
+61. **`VERBS` entries all name the list they draw from (`admitted`) and how many arguments a step may carry (`most`).** The brief gave only `admitted: 'wingetIds'` for the new
+    entry; but "a second id in one step" (S5.9's `winget install --id sharkdp.fd --id Git.Git`) is two ADMITTED ids, which `every(...)` alone accepts, so the winget entry carries `most: 1`
+    (npm and uv: `Infinity`, unchanged). The step with a bare second id (`winget install sharkdp.fd Git.Git`) is refused the same way.
+62. **The probe was re-plumbed, not re-run.** `shimArgs` sends `--home <root>`, `--persons-bin`, `--locks`; homes are `<root>/home` beside an empty `<root>/os`; a shim turn runs in the
+    runtime's environment. The plumbing is proved by `scripts/lib/kimi-shim.test.mjs` — the argv against the shim's `--help` and ONE dry-run turn of the built shim with no `kimi` and no
+    sign-in, refused at the hold — and no paid arm ran. Two arms vary what the shim now fixes (no update pin, no OS-home redirect) and are refused by name (`shimRefusal`) instead of
+    being run as something else; the pre-D19 shim arms that measured the person's REAL home have no owned root and record "launch failed" (the product no longer does that); M-K5's two
+    turns share one owned home. So the "stale" header is gone but no version joins `MeasuredVersions`: the cells have not been re-run on this plumbing, and the unmeasured-version warning
+    now says "re-run `scripts/probe-kimi-confinement.mjs` (a paid run) and `scripts/probe-kimi-tree-hold.mjs`".
+63. **M3 is done, except `BalanceSpent`.** `AcpWords` holds the five flag names, the three end words and the spent exit that `AskAcpMode` writes for any profile; `BalanceSpent` stays with
+    `KimiAcpProfile` (the failure name THAT profile defines). `KimiCredentialsLock.RootFor` and `KimiShimHold` are still Kimi-named inside the generic shim, reached through the
+    profile's `Hold` member — a later change if a second profile needs a home. M5 is still the merge's (#823).
+64. **No CHANGELOG line (brief §11).** The extension's `CHANGELOG.md` is narrative and has no unreleased section (as deviations 41 and 52), and the mcp release guard
+    (`changelog-names-the-release.mjs`) wants the `## Server <version>` heading written in the release PR once the version is decided.
+65. **The "Done when" live checks were NOT run.** The Windows install button was not pressed on a machine without `kimi` (nor into a `testsToDelete-` `KIMI_INSTALL_DIR`) and not in WSL:
+    this story's constraints forbade running any installer or touching WSL. What stands in their place: the line parsed by PowerShell's own parser and RUN against stand-ins for `winget`,
+    `irm`, `iex` and the three tools, in both shells (`kimiWindowsInstallRuns.test.ts`). They stay on the epic's open list.
+66. **The server-side tail E4.5 left alone:** `VendorDiagnosis.InstallCure("kimi")` still has no macOS-specific line (review M5, merged with #823), and `scripts/live-kimi-runtime-compat.mjs`
+    (Vibe has one) was not written — the claim that a released 0.55.0 refuses a kimi row by name is inferred from Vibe's measurement against 0.52.0, not measured.
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
