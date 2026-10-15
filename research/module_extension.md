@@ -12825,3 +12825,5 @@ The failure word `launch-refused` ("Refused by coai's launch check") joined `con
 The box shows the server's word: `consultantView.ts` draws the shared path mark (`pathMark.ts`) beside *Vibe homes folder* from
 `state.pathFindings`, where `agreed()` turns the server's `COAI_CONSULTANT_HOMES` problem into a finding on `coai.vibeHomesDirectory`
 (place `consultants/consultant`, owner, consequence and cure in `pathFindings.ts`).
+
+`settingsShape.ts` passed the lint's 800-line limit; its `COAI_CONSULTANTS` rule (which callers cross, in which shape, with the catalog row beside a bare-id reference) moved whole into `consultantsWire.ts` (`consultantsEnv`, `catalogRowOnTheWire`), and `envBlock` merges its answer. `aCliPathOfTheOtherSideIsSkipped.test.ts` counts the definition's one-value resolution there now.

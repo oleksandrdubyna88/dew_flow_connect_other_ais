@@ -112,7 +112,7 @@ const ONE_VALUE_RESOLUTIONS: Readonly<Record<string, { readonly count: number; r
   'chatPresets.ts': { count: 1, why: 'a chat preset holds one CLI path' },
   'claudeCli.ts': { count: 1, why: 'a consultant definition\'s path — the rows go through executableOf' },
   'qconsultSettings.ts': { count: 1, why: 'a question row\'s own definition' },
-  'settingsShape.ts': { count: 1, why: 'a consultant definition on COAI_CONSULTANTS' },
+  'consultantsWire.ts': { count: 1, why: 'a consultant definition on COAI_CONSULTANTS (moved out of settingsShape.ts, which was past the line limit of the lint)' },
   'pathFamily.ts': { count: 1, why: 'its declaration' },
 };
 
@@ -157,8 +157,8 @@ test('every one-value resolution is a legacy definition\'s — a catalog row res
 });
 
 test('the scan still sees a resolved read and an unresolved one — a pattern that matched nothing would pass forever', () => {
-  const shape = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'settingsShape.ts'), 'utf8');
-  assert.ok((shape.match(RESOLVED) ?? []).length > 0, 'settingsShape.ts resolves a definition\'s read, and the scan sees it');
+  const shape = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'consultantsWire.ts'), 'utf8');
+  assert.ok((shape.match(RESOLVED) ?? []).length > 0, 'consultantsWire.ts resolves a definition\'s read, and the scan sees it');
   assert.ok(rawReads(path.join(__dirname, '..', '..', 'src', 'setupTab.ts')) > 0, 'the vendor-keys table\'s path is a raw read the scan sees');
   assert.ok(oneValueResolutions(path.join(__dirname, '..', '..', 'src', 'claudeCli.ts')) > 0, 'a definition\'s one-value resolution is seen too');
 });
