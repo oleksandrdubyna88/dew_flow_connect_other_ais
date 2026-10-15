@@ -87,7 +87,11 @@ written — the prediction precedes every observation, including an exploratory 
     `SELECT r.session_id, r.number, r.started_utc, r.completed_utc, r.status, r.caller, r.caller_vendor, s.repo_path
     FROM rounds r JOIN sessions s ON s.id = r.session_id WHERE r.stage = 'CodeReview' AND r.started_utc >= ?`;
     writes JSON to a path argument with `newline='\n'`, `ensure_ascii=False`, UTF-8. No logic beyond the query — it
-    exists because WSL's Node 20 has no `node:sqlite`, and ONE exporter for both sides beats two.
+    exists because WSL's Node 20 has no `node:sqlite`, and ONE exporter for both sides beats two. The arguments are
+    positional, so it REFUSES (exit 65, nothing touched) an output that is the store itself (same path, a hard link or a
+    symlink to it) or is named like a store file (`.db`, `.sqlite`, `-wal`, `-shm`, `-journal`): a swapped pair would
+    otherwise truncate the live store after the read-only query succeeded. The output goes through a temp file in its folder
+    and is renamed over the target only after the dump succeeded. (Added after the E1 code gate.)
   - `scripts/lib/caller-transcripts.mjs` — pure functions over parsed lines and directory listings.
   - `scripts/measure-caller-transcripts.mjs` — CLI:
     `node scripts/measure-caller-transcripts.mjs --rounds <rounds.json> --projects <dir> [--largest <n>] [--runs <n>] [--day <yyyy-mm-dd>]`;
@@ -134,7 +138,9 @@ written — the prediction precedes every observation, including an exploratory 
     `file_path`, `cwd`, `gitBranch`) carries a marker `ZZ-MARK-<n>`; the printed JSON contains no `ZZ-MARK`. Positive
     twin in the same file: the same tree produces non-zero counts in every section (testing.md, *a file full of
     negative assertions needs one positive*).
-  - CLI: missing `--rounds` → exit 65 with a usage line on stderr; a valid run → exit 0, one JSON line on stdout.
+  - CLI: missing `--rounds` → exit 65 with a usage line on stderr; a valid run → exit 0, one JSON line on stdout. Progress
+    (`reading caller sessions k/n`, `timing session i/n: <pass> run r/R`) goes to stderr as counts only (added after the code gate:
+    a 650 MB session takes half a minute per pass and a silent run looks hung).
 - **Break-its** (mutate the lib only; restore after): drop the grouping by `message.id` → the three-line test goes red;
   print a `file_path` in the Q8 section → `noFieldValueReachesTheReport` goes red.
 - **Done when.** Tests green under `node --test "scripts/**/*.test.mjs"` on Windows and inside WSL (Node 20 — no API
@@ -201,6 +207,15 @@ written — the prediction precedes every observation, including an exploratory 
   - Output: LF, keys in input order, one line per input line, `JSON.stringify` without spaces — as Claude Code writes.
   - The cutter NEVER reads `~/.claude/sessions` and never copies any file it was not named; it refuses (exit 65) an
     output directory outside `src_mcp/tests/fixtures/caller-transcripts/` unless `--out-anywhere` (tests use temp dirs).
+  - **Added after the E1 code gate.** Every `--repo` destination and `--other-root` must be `D:/fixture/repo-<a-z>`,
+    `D:/fixture/other` or `D:/fixture/scratch` (drive letter optional) — refused before any input is read, so a real folder
+    name cannot be typed into a fixture. The sum of a session's files may not exceed `--max-input-mb` (default 256 MiB,
+    above the 229 MB largest session cut; the cutter parses everything whole before the window applies): refused up front.
+    Expected failures (usage, a refusal, a file that is not valid JSON) are returned values, not exceptions; the unexpected
+    is explained without its message (an fs message names the operator's path): `ENOENT` "does not exist" (74), `EACCES`/
+    `EPERM` "permission denied" (74), `EISDIR`, `ENOSPC`, not-valid-JSON (65). The allowlist's `version` is a closed list of
+    the measured Claude Code versions (2.1.283-2.1.300), so a new release is a deliberate edit of the allowlist and of the
+    C# guard's hash pin.
 - **Test scenarios** (`node --test`, synthetic inputs in temp dirs):
   - `everyStringOffTheAllowlistBecomesTheSentinel` — markers in prompt, `thinking`, `signature`, `toolUseResult`,
     `Bash.command`, `description`, `gitBranch` → none survive; the line count and the key order are unchanged.
