@@ -75,7 +75,7 @@ public static class KimiLaunch
         var prepared = Prepare(host, request, places);
         if (prepared.Refusal.Length > 0)
         {
-            return LaunchTurn.Refused(prepared.Refusal);
+            return LaunchTurn.Refused(prepared.Refusal, RefusalCause.LaunchControl);
         }
 
         var turn = await VibeHomeTurns.TakeAsync(places.OwnedRoot, ct);
@@ -84,7 +84,7 @@ public static class KimiLaunch
         {
             turn.Dispose();
 
-            return LaunchTurn.Refused(LockRefusal((Hold.Unusable)gate, places.Credentials));
+            return LaunchTurn.Refused(LockRefusal((Hold.Unusable)gate, places.Credentials), RefusalCause.LaunchControl);
         }
 
         return await InsideAsync(places, request, prepared.Expected, new Attempt(turn, taken.Stream), launcher, ct);
@@ -130,14 +130,16 @@ public static class KimiLaunch
         var asked = await VersionAsync(places, request, launcher, ct);
         var after = asked.Refusal.Length > 0 ? asked.Refusal : KimiHome.Refusal(places, expected);
 
-        return after.Length > 0 ? Given(attempt, after) : LaunchTurn.Holding(attempt, WarningFor(asked.Version), "kimi " + asked.Version);
+        return after.Length > 0
+            ? Given(attempt, after, asked.CliMissing && asked.Refusal.Length > 0 ? RefusalCause.CliMissing : RefusalCause.LaunchControl)
+            : LaunchTurn.Holding(attempt, WarningFor(asked.Version), "kimi " + asked.Version);
     }
 
-    private static LaunchTurn Given(IDisposable attempt, string refusal)
+    private static LaunchTurn Given(IDisposable attempt, string refusal, RefusalCause cause = RefusalCause.LaunchControl)
     {
         attempt.Dispose();
 
-        return LaunchTurn.Refused(refusal);
+        return LaunchTurn.Refused(refusal, cause);
     }
 
     /// <summary>
@@ -224,7 +226,7 @@ public static class KimiLaunch
     }
 
     /// <summary>The installed Kimi's version, asked in the launch's own built environment on the owned home — or why it could not be.</summary>
-    private static async Task<(string Version, string Refusal)> VersionAsync(KimiPlaces places, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
+    private static async Task<VersionAnswer> VersionAsync(KimiPlaces places, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
     {
         try
         {
@@ -234,14 +236,17 @@ public static class KimiLaunch
             var version = VersionWarnings.VersionIn(asked.StdOut);
 
             return asked.ExitCode == 0 && version.Length > 0
-                ? (version, string.Empty)
-                : (string.Empty, $"`{places.Executable} --version` answered no version (exit {asked.ExitCode}): {OneLine(asked.StdOut + " " + asked.StdErr)}");
+                ? new VersionAnswer(version, string.Empty)
+                : new VersionAnswer(string.Empty, $"`{places.Executable} --version` answered no version (exit {asked.ExitCode}): {OneLine(asked.StdOut + " " + asked.StdErr)}");
         }
         catch (Win32Exception e)
         {
-            return (string.Empty, $"'{places.Executable}' could not be started: {e.Message} — {VendorDiagnosis.InstallCure("kimi")}");
+            return new VersionAnswer(string.Empty, $"'{places.Executable}' could not be started: {e.Message} — {VendorDiagnosis.InstallCure("kimi")}", CliMissing: true);
         }
     }
+
+    /// <summary>The asked version, or why there is none — and whether the reason is that the OS could not start the CLI at all (a missing CLI, not a refusal).</summary>
+    private sealed record VersionAnswer(string Version, string Refusal, bool CliMissing = false);
 
     /// <summary>Why the gate could not be taken: the key sentence when the folder cannot be named by its handle, else the lock's own.</summary>
     private static string LockRefusal(Hold.Unusable unusable, string target) =>

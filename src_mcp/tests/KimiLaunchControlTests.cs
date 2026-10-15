@@ -295,6 +295,7 @@ public sealed class KimiLaunchControlTests : IDisposable
         var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().Contain(row == "exit" ? "answered no version (exit 1)" : "could not be started").And.Contain(row == "exit" ? "boom" : "https://code.kimi.com/kimi-code/install.ps1");
+        turn.CliMissing.Should().Be(row == "cannot start", "a Kimi the OS cannot start is cli-not-found with the install cure (PLAN_vibe_live_round_fixes D5), one that started and answered nothing is the launch control's own verdict");
         VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse();
         HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse();
     }

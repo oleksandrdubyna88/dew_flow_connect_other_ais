@@ -80,7 +80,7 @@ internal sealed class RoundScratch : IDisposable
             keepsAHome ? VibeHomes.ReserveOneShot(homesRoot, note) : OneShotReservation.None.Instance);
 
     /// <summary>A scratch at a path somebody chose (a test's own folder, never the system temp), not made yet — the same object <see cref="Reserve"/> makes.</summary>
-    internal static RoundScratch At(string directory, Action<string> note) => new(directory, new RoundTree.NotMade(), note);
+    internal static RoundScratch At(string directory, Action<string> note) => new(directory, new RoundTree.NotMade(), note, OneShotReservation.None.Instance);
 
     /// <summary>This scratch with the round's snapshot outcome.</summary>
     public RoundScratch With(SnapshotOutcome outcome) => new(Directory, outcome switch

@@ -136,7 +136,7 @@ public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams) : IRe
         var root = KimiEnvironment.FlagOf(request, AcpWords.HomeFlag);
         if (root.Length == 0)
         {
-            return Task.FromResult(LaunchTurn.Refused($"this Kimi launch names no owned home ({AcpWords.HomeFlag}) and is refused (D19)"));
+            return Task.FromResult(LaunchTurn.Refused($"this Kimi launch names no owned home ({AcpWords.HomeFlag}) and is refused (D19)", RefusalCause.LaunchControl));
         }
 
         return KimiLaunch.TakeAsync(host, request, PlacesOf(root, KimiEnvironment.FlagOf(request, AcpWords.ExecutableFlag)), launcher, ct);
