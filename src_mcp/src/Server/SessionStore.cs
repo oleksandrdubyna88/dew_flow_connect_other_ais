@@ -192,6 +192,15 @@ public sealed record RoundRecord(
     /// </remarks>
     public CallerDeclaration? Caller { get; init; }
 
+    /// <summary>What a code round changed, by scope, coverage and kind — null when no size was recorded.</summary>
+    /// <remarks>
+    /// <b>Nullable, and NOT normalised on the way in</b>, exactly as <see cref="Caller"/> is: a round written before the
+    /// field, a plan round and a skipped round say nothing about a size, and a getter that materialised an empty one
+    /// would turn "not recorded" into a zero-line change the next time the session was saved. The delta predecessor
+    /// rule reads the predecessor's <c>Size.Whole.From</c>.
+    /// </remarks>
+    public Core.Context.RoundSize? Size { get; init; }
+
     /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
     /// </summary>
