@@ -1,6 +1,6 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
-> Status: **E4.1–E4.2 implemented 2026-10-15 (feat/kimi-runtime); E4.3–E4.5 not started.** Stories written 2026-10-14; the two
+> Status: **E4.1–E4.3 implemented 2026-10-15 (feat/kimi-runtime); E4.4–E4.5 not started.** Stories written 2026-10-14; the two
 > cornerstones' scenarios and briefs written by Fable 2026-10-14; E4.2 amended by Fable 2026-10-15 (the junction risk
 > consultation 7de9430b and the E4.1 review folded in: decisions 9–13, brief §15–§17, S2.41–S2.46; revised the same day
 > after the Opus review of f1983923 — B1–B3, M1–M4 taken, E4.3 gains S3.14–S3.17). E4.2 is a `model: fable` spec — a
@@ -1081,11 +1081,18 @@ added join both exclusion lists.
 | S3.17 `MEASURED with real Kimi 2.1.1 — the hold's lifetime` (`scripts/probe-kimi-confinement.mjs`, a new cell M-K15, 3 runs each arm; recorded in `research/RESULTS_kimi_confinement.md`, review B3) | the shipped shim with `--locks`, the owner's sign-in | arm 1: a normal answered turn; arm 2: the shim killed by its handle mid-turn (the probe's own `kill`), `kimi` left to itself | arm 1: both files `Free` within ~2 s of the shim's exit; arm 2: both `Held` while `kimi` lives, and `Free` within ~2 s of `kimi`'s own exit (EOF on its stdin) — and NOTHING else of Kimi's (a helper, an updater) holds them afterwards. **If arm 2 shows a holder after `kimi` is gone, the hold ships as a WARNING on the next launch's card, not as a gate, until the holder is named** | UNKNOWN — the measurement IS the scenario; until it is recorded decision 10 reads "unmeasured" and the hold does not gate |
 
 **Done when** every scenario is green, the whole C# suite is green, `dotnet format --verify-no-changes` is clean, the
-shim's `--help` text and `.agents/PROJECT.md` name `--home`, and no exit path returns 64.
+shim's `--help` text names `--home` (and `.agents/PROJECT.md` — see deviation 42), and no exit path returns 64.
+
+**Implemented 2026-10-15** (S3.1–S3.17, carries (a)–(d); the tests and the reds they were seen as are in `research/module_tests.md`, the shim in
+`research/module_runners.md`, M-K15 in `research/RESULTS_kimi_confinement.md` §27). The deviations from the brief as written are 34–42 of §"Where the parent
+plan and the code disagree"; the one that matters to E4.4: **`KimiRuntime` must pass `--executable` absolute and all three place flags**, and the shim's
+report now carries the session's tokens (`usage.tokensIn`/`tokensOut`, `notCaptured` false) and the end word `model_not_offered` (exit 65).
 
 ## E4.4 — `KimiRuntime`: registered, classified from its report, serialised in the round, diagnosed, seeded
 
 `model: opus` spec (this document) · Sonnet codes · Opus reviews.
+
+*[E4.3 as built, 2026-10-15: the shim takes `--home <owned root>`, `--persons-bin <folder>` and `--locks <KimiCredentialsLock.Root>` and refuses (65) a Kimi turn without any of them; `--executable` must be the absolute `kimi` (the profile's default reads `SpecialFolder.UserProfile`, which is the redirected `os/` inside the shim); it builds the agent's environment itself, so the request E4.4 hands it need carry only the shim's own built environment and `PATH`; exit 69 now also means "another Kimi holds the sign-in past the deadline" (report `not_started`, a sentence on stderr), and 65 also covers a model the session does not offer (`end: model_not_offered`, the list on stderr) — both are the shim's words, not text for a classifier to match; `usage.tokensIn`/`tokensOut` are real totals when `notCaptured` is false.]*
 
 **Goal.** A Kimi row on the server: the adapter that builds the shim's request (E4.3) through the launch control
 (E4.2), reads the answer and usage from the shim's REPORT, classifies a failure from the report's structured fields and
@@ -1516,6 +1523,47 @@ guarantee, each is a shape or a seam. Every scenario S2.1–S2.46 is a test (the
     (`Junctions.IsLocal`) before any read, so a UNC home is never connected to, and S2.25's UNC row now runs through `TakeAsync` (it replaces
     deviation 23's omission). M4: the version probe is built from the launch request's own PATH (`KimiEnvironment.PathOf`), so one PATH source
     feeds both. M5: S2.45's malformed rows assert the refusal names the KEY (`capabilities`) and the cure and never the line.
+
+**What the E4.3 coder built differently from the brief as written (2026-10-15), each with its reason.** Items 34–42; none weakens a ruling (the hold gates, is
+taken immediately before `AskAsync` and disposed after it, and is taken only under `--locks`).
+
+34. **The profile seam takes the `AcpAsk`, and the hold is a profile member.** `IAcpProfile` gained four DEFAULT members — `NeedsAHome`, `AgentRequest(AcpAsk)`,
+    `AgentRefusal(ProcessRequest, AcpAsk)`, `Hold(AcpAsk, TimeSpan)` — so a stand-in profile changes nothing. The brief's `AgentRequest(executable, cwd, home)` cannot carry
+    E4.2's second place flag, `--persons-bin`, so `AcpAsk` carries `Home` and `PersonsBin`. The hold returns a closed union (`AcpHolding`: `Held`, `Busy`, `Unusable`) and Kimi's
+    body is `KimiShimHold` (the target from the junction's own reparse data, then `HoldTree`); `AskAcpMode` calls only `KimiCredentialsLock.RootFor` itself (ruling 2) and names
+    the flag constants. `AcpTransport.Start` takes the `ProcessRequest`.
+35. **The agent's request is refused twice**, on purpose: `AskAcpMode` asks first (65 and the `not_started` report, before any hold is taken — S3.3 needs the exit to say
+    "refused", which an `AcpEnd.NotStarted` alone cannot) and `AcpClient` asks again (`NotStarted`; a client never starts a request its profile refuses). The
+    environment refusal cannot fire in the product — the shim builds the request it checks — so it is a belt, tested with a stand-in profile.
+36. **The fake agent answers `/usage` itself.** The brief said an absent `usageReply` runs the normal script; that replays every tool call, permission and read for each
+    answered turn and doubles the traces of about forty existing tests, so a `/usage` prompt with no `usageReply` is a bare `end_turn` (a real agent answers it itself, M-K2).
+    Existing tests moved with the code and are named in `module_tests.md`: three read `.First()` of the prompts, two announce the model they ask for, `AcpTransport.Start` takes a
+    request, and the two real-binary scenarios of `AskAcpShimScenarioTests` now run on an owned home — Windows-only, because the shim refuses a Kimi turn on any other host
+    (it cannot key the lock, D18); the stdin-EOF-is-complete check on Linux and macOS is `AskAcpModeTests`' in-process one. The fake agent finds its script beside its working
+    folder (`<cwd>/../agent.json`) when the environment names none: the built environment carries no `FAKECLI_*`.
+37. **The hold's wait is the whole deadline, synchronous, and the turn gets what is left.** `Hold(ask, ask.Deadline)` blocks the shim's thread in `HeldFile.TakeWithin` (no `await`
+    between the take and the start is the ruling); a caller's cancellation does not interrupt it — the executor's kill of the shim does — and `AskAsync` is given
+    `ask.Deadline` minus what the wait took.
+38. **`AcpUsageLine` is a static `Regex` with a one-second match timeout, not `[GeneratedRegex]`** (that needs `partial`, which the coding style forbids for a split; a timeout
+    reads as "not captured"). The usage bound is `AcpClient.DefaultUsageBound` (15 s) with a constructor parameter, so S3.9's hang case runs in a second, not fifteen.
+39. **M-K15 is its own script**, `scripts/probe-kimi-tree-hold.mjs`, not a cell of `probe-kimi-confinement.mjs`: that script's shim arms predate E4.3's flags and its homes are
+    `KIMI_CODE_HOME` folders, where the product's is `<root>/home` beside an empty `<root>/os`. **Its shim arms no longer run as written** — a Kimi turn without `--home`,
+    `--persons-bin` and `--locks` is 65 — and re-plumbing `shimArgs` and the home layout is E4.4/E4.5's before the next full probe run (the cells are history; §16–§26 stand).
+40. **The measurement held and found `device_id`** (RESULTS §27). S3.17's condition ("if arm 2 shows a holder after `kimi` is gone, the hold ships as a warning") did not occur: both
+    files follow the last process that inherited them, 6 of 6 cut launches, three with an `rg` running; the hold GATES. The run also showed Kimi writing `device_id` into the owned
+    home when a launch's token refresh rotates the sign-in (2 of 2 such launches, none of 13 others), which E4.2's allowlist (S2.17 listed it as forbidden) would have refused on the
+    home's NEXT launch — every retry and every later turn of a conversation. `KimiHome` admits it as a file now (`KimiHomeTests`: the row moved from the forbidden list to the
+    inventory, red first); `region` and `migrations-effort.json` stay forbidden. This changes a reviewed E4.2 scenario; it is a separate commit so the owner can drop it.
+41. **What carry (b)'s child proves.** On Windows .NET's `Environment.GetFolderPath` does not follow `USERPROFILE`, so a redirected variable alone would not change a wrongly written
+    shim's answer; `TheShimReadsNoEnvironment_InAChildWithARedirectedProfile` therefore redirects every variable a place could be read from (`USERPROFILE`, `HOME`, `HOMEDRIVE`/`HOMEPATH`,
+    `APPDATA`, `LOCALAPPDATA`, `KIMI_CODE_HOME`, `KIMI_INSTALL_DIR`) to a decoy folder and asserts what the shim must therefore have got from its argv: the hold at the owned junction's keys under
+    `--locks`, the owned home in the agent's environment, and the decoy still empty. `CHANGELOG` was not edited: it is generated by release-please (`src_mcp/RELEASES.md`).
+
+42. **`.agents/PROJECT.md` was NOT edited** (the brief's item 7 asked for its `--ask-acp` line). The file is in the rules bundle's base, and the bundle is exactly at
+    its 80 000-byte budget: with 150 bytes added `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` failed (*Expected MountRulesOf(bundle).Where(RuleOrder.IsTier) to be a
+    collection with 8 item(s) … contains 1 item(s) less*) and passed again with the file as it was. The shim's contract lives where it can grow — the type's remarks in
+    `AskAcpMode.cs`, the `--help` text, `research/module_runners.md` — and the one-shot-mode list in PROJECT.md already names `--ask-acp`. Making room in the base (or raising
+    the budget) is a decision for whoever owns `research/RESULTS_rules_selection_budget.md`.
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing

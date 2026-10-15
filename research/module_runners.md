@@ -3174,7 +3174,7 @@ CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runner
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
 `ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
-`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.git`; the known sentences: the subscription `401`
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences: the subscription `401`
 (`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
 D14 `insufficient balance` (`balance_spent`).
 
@@ -3219,6 +3219,54 @@ has the codex standing; the boundary covers `Read` and the instruction-file sear
 what the branch could supply, and the question-consultant `disk` standing for `kimi` will be `unconfined` (S5). ACP
 `mode: plan` changes nothing here (§2.4). Kimi's session store under `~/.kimi-code/sessions` is a permitted vendor write.
 
+**What E4.3 adds (2026-10-15, `todo/PLAN_vibe_and_kimi_runtimes_E4.md`).** A profile that `NeedsAHome` (Kimi) runs only on an owned home, and the shim is the
+one place where `KimiPlaces`, `KimiEnvironment` and `KimiCredentialsLock` meet the agent:
+
+- **The three place flags.** `--home <owned root>` (must exist), `--persons-bin <folder>`, `--locks <folder>`: a Kimi turn without one is 65 naming it,
+  before anything is read or started. They arrive on the argv because inside this process `USERPROFILE` IS the owned `os/` — the shim reads no
+  location from any environment (`KimiPlaces.ForShim`; `AKimiShimScenarioTests.TheShimReadsNoEnvironment_InAChildWithARedirectedProfile` proves it in a CHILD
+  whose `USERPROFILE`, `HOME`, `APPDATA`, `LOCALAPPDATA`, `KIMI_CODE_HOME` and `KIMI_INSTALL_DIR` all name a decoy folder: the hold is still taken at the keys of
+  the owned junction's target under `--locks`, and the decoy stays empty). `--executable` is still the caller's to pass absolute — without it the
+  profile's default reads `SpecialFolder.UserProfile`, which is what E4.4 must never leave to the redirected shim.
+- **The agent's environment is built, never inherited.** `IAcpProfile.AgentRequest(ask)` (default: the inherited request, so a stand-in works) is, for Kimi,
+  `KimiEnvironment.Built` on `ForShim(--home, --persons-bin)`: the minimal names plus the seven; `AgentRefusal` is `KimiEnvironment.Refusal` on that request, asked
+  before the hold (65, report `not_started`) and again by `AcpClient` (a request its profile refuses never starts a process). `AcpTransport.Start` takes the
+  `ProcessRequest`, nothing else.
+- **The tree hold GATES** (E4.2 decision 10). `AskAcpMode` points `KimiCredentialsLock.RootFor` at `--locks` for the whole turn, takes `profile.Hold` — for
+  Kimi `KimiShimHold`: the target read from the junction's own reparse data, then `HoldTree` — IMMEDIATELY before `AcpClient.AskAsync` (no `await` between;
+  the wait is synchronous and bounded by the turn's deadline, which then shrinks by what it cost) and disposes it once `AskAsync` has returned, by which time
+  the client's `finally` has ended the agent. `AcpHolding` is a closed union: `Held`, `Busy` (exit **69**, "another Kimi started on this sign-in is still running (<path> is
+  held) — it ends when its agent does; the turn is given up", report `not_started`, the agent never started) and `Unusable` (exit **65**). There is no warning-only fallback, and a profile that
+  needs no home takes no hold — so no test host ever holds an inheritable handle.
+- **The model is checked in the session** (D10, `AcpMessages.AnnouncedValues`): after `session/new` the `model` option's announced values must contain the asked
+  model, else the turn ends `model_not_offered` (65) with the list — before `set_config_option` and before any prompt is spent. A session that announces no `model`
+  option at all is the same refusal ("offers no 'model' option").
+- **`/usage` after an answer** (D15, M-K2: ~2 s, no model call). Only after `end_turn`: the answer's length is marked, `/usage` is sent as a second `session/prompt`
+  on the same session under its own bound (`AcpClient.DefaultUsageBound`, 15 s, linked to the turn's token so never longer than what is left of it), the answer is
+  what came BEFORE the mark and `AcpUsageLine.Parse` reads `Session total: N input, M output` out of what came after (thousands commas, culture-invariant; a number no
+  `long` holds, `no LLM calls yet` and silence are all "not captured", 0 and `notCaptured: true`). A failure, a hang or a deadline during the second prompt never
+  changes the first one's end, answer or exit.
+
+```mermaid
+sequenceDiagram
+  participant R as KimiRuntime (E4.4)
+  participant S as coai-mcp --ask-acp
+  participant L as KimiCredentialsLock
+  participant A as kimi acp
+  R->>S: argv --home --persons-bin --locks ... , prompt on stdin
+  S->>S: refuse a missing flag (65), then AgentRefusal of the built request (65)
+  S->>L: RootFor(--locks) for the whole turn
+  S->>L: HoldTree(target of home/credentials, root) - Busy past the deadline: 69, Unusable: 65
+  S->>A: start in the BUILT environment (inherits both hold files)
+  A-->>S: session/new: configOptions model values
+  Note over S: asked model not among them: model_not_offered (65), nothing set or spent
+  S->>A: set_config_option, prompt
+  A-->>S: end_turn
+  S->>A: /usage (own bound)
+  A-->>S: Session total: N input, M output
+  Note over S,A: tree kill by pid, then the hold disposed, then the report
+```
+
 **Lifecycle.** The shim reads its stdin to EOF — `ProcessLauncher` closes stdin after writing the prompt, so EOF means
 "complete", never cancel — and only then starts the agent, whose own stdin stays open for the replies; stdout and
 stderr are drained concurrently. The client has its own deadline (`--deadline-seconds`, under the row's timeout).
@@ -3262,17 +3310,18 @@ The report on stdout carries the same bounded lists and both counts; the answer 
 
 **Exit codes** (never 64 — `.agents/PROJECT.md`): **0** answered (`stopReason: end_turn`); **65** declined before the
 agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, a `--deadline-seconds` outside 1..86400,
-an empty prompt); **69** ended before an
-answer — not started, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
+an empty prompt; for Kimi no `--home` / `--persons-bin` / `--locks`, an agent request that is not coai's own environment, a hold that cannot be
+taken, a model the session does not offer); **69** ended before an
+answer — not started, another Kimi holds the sign-in past the deadline, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
 failure — a JSON-RPC error to a client request, or a `stopReason` other than `end_turn`; **75** a known spent sentence;
 **76** (EX_PROTOCOL) the stream broke — output closed or the process gone before answering, not listening, over the
 answer ceiling; **77** a known sign-in or plan sentence.
 
 **The stdout shape**, one JSON object on EVERY exit (the future `KimiRuntime.ReadAnswer`/`ReadUsage` read it as
 `ApiRuntime` reads the api shim's line): `answer`, `end` (`answered` | `not_started` | `agent_failed` | `deadline` |
-`protocol` | `cancelled`), `stopReason`, `reason`, `sessionId`, `failure` (only when a known sentence matched), `usage`
-in the api shim's field names — `tokensIn`/`tokensOut` 0 with `notCaptured: true`, because ACP reports context tokens
-with no split (D15; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
+`protocol` | `cancelled` | `model_not_offered`), `stopReason`, `reason`, `sessionId`, `failure` (only when a known sentence matched), `usage`
+in the api shim's field names — `tokensIn`/`tokensOut` the session's totals from `/usage` asked after an answered turn (E4.3, M-K2; `notCaptured: true` and 0 when
+it could not be had — never a guessed number; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
 the trace: `refusals` (`tool`, `kind`, `option`), `toolCalls` (`id`, `title`, `kind`, `status`), `reads` (`path`,
 `served`, `reason`), and `droppedTraceEntries` — how many entries the three caps dropped, 0 when none.
 
@@ -3303,8 +3352,8 @@ sequenceDiagram
   S-->>P: one JSON object on stdout; exit 0 / 65 / 69 / 70 / 75 / 76 / 77 — never 64
 ```
 
-Tests: `AcpClientTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpShimScenarioTests`
-(the REAL binary through the real launcher) — listed in [module_tests.md](module_tests.md). The scripted agent is the
+Tests: `AcpClientTests`, `AcpClientUsageTests`, `AcpUsageLineTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpModelAndUsageTests`, `AskAcpShimScenarioTests`
+(the REAL binary through the real launcher) and `AKimiShimScenarioTests` (the real binary on an owned home: the built environment, the hold seen from inside the agent, busy, unusable, no environment read) — listed in [module_tests.md](module_tests.md). The scripted agent is the
 fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
 
 ### The first live round's two defects, fixed (2026-10-13 — research/RESULTS_vibe_confinement.md §26)
@@ -3418,7 +3467,7 @@ flowchart LR
   reader) else the pinned entry of `shared/kimi-model-blocks.json` (embedded; `KimiModels.Curated` IS its ids, the first is the default).
 - **The home check** (`KimiHome.Refusal`, before AND after `--version`) is an allowlist: `home/` holds only the `credentials` junction
   (must point at the person's folder, never descended), the one `config.toml` (compared as BYTES), Kimi's own data folders and files
-  (RESULTS §18) and an EMPTY `workspace-trust`; `bin/`, `mcp.json`, `skills/`, `AGENTS.md`, any link and any unlisted name refuse by name.
+  (RESULTS §18), the `device_id` file Kimi writes when a launch's token refresh rotates the sign-in (RESULTS §27) and an EMPTY `workspace-trust`; `bin/`, `mcp.json`, `skills/`, `AGENTS.md`, any link and any unlisted name refuse by name.
   `os/` must exist and be empty. The root may hold more (S5's `tree/`, `coai-turn.lock`, `coai-tree.lock`): it is judged only for being a link.
 - **Two locks per sign-in** (`KimiCredentialsLock`, under `<LocalApplicationData>/coai-mcp/kimi-locks/`, never under `coai-kimi/` where the D20
   sweep walks, never in temp). The key is SHA-256 of the UPPER-cased FINAL PATH of the opened folder handle (`HandleRead.FinalDirectory`):
@@ -3427,7 +3476,7 @@ flowchart LR
   slices inside the row's timeout, held by the `LaunchTurn` until the launch is read (the home's turn first, the gate second, released in
   reverse). The TREE HOLD (`<key>.tree.lock` + `<root>/coai-tree.lock`, the SHIM's, `FileShare.Inheritable`) is taken immediately before
   the agent starts: `kimi` inherits it, so the sign-in stays held while EITHER lives — a coai-mcp killed over a still-refreshing `kimi`
-  must not let a second refresher in. UNMEASURED: whether `kimi`'s own children inherit it and can outlive it (E4.3's S3.14 and S3.17).
+  must not let a second refresher in. MEASURED by E4.3 (M-K15, RESULTS §27): both files are Held while `kimi` lives and Free in the poll it is gone in, 6 of 6 cut launches, three with an `rg` running — nothing of Kimi's outlived it, so the hold GATES.
   The per-home file is waited for 500 ms (`HomeWait`): a disposal's `HomeProbe` opens it exclusively for an instant. The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
   rotation, exactly as the person's own `kimi` would; `kimi login` cures it (M-K14 decides whether a grace is needed).
 - **Disposal** (`KimiHome.Dispose`; refused through a link — a root or `home/` that is itself a link answers `Stopped` from `Dispose` and is skipped by `DisposeAllUnder`, left to the deleter that removes the link by its own name): (1) the per-HOME hold probed (`Held` or `Unknown` stop with nothing unlinked and nothing outside coai's tree
