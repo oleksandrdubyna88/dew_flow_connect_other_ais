@@ -9,9 +9,9 @@ namespace CoaiMcp.Runners.Kimi;
 /// <summary>
 /// Everything a Kimi launch is checked against and built with before it starts — the ONE launch control every Kimi launch path goes
 /// through (D8b, D10, D17, D18, D19 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>; E4.2 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>).
-/// STUB (red first): the launch itself is not built yet.
+/// This file: the pure checks and the built environment; <c>KimiLaunch.Take.cs</c>: the launch itself.
 /// </summary>
-public static class KimiLaunch
+public static partial class KimiLaunch
 {
     public const string HomeVariable = "KIMI_CODE_HOME";
 
@@ -139,10 +139,6 @@ public static class KimiLaunch
     /// row's card — or empty for a measured one (or when nothing printed a version).
     /// </summary>
     public static string VersionWarning(string printed) => WarningFor(VersionWarnings.VersionIn(printed));
-
-    /// <summary>STUB (red first).</summary>
-    public static Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct) =>
-        Task.FromResult(LaunchTurn.Free);
 
     private static string WarningFor(string version) =>
         version.Length == 0 || KimiAcpProfile.MeasuredVersions.Contains(version)
