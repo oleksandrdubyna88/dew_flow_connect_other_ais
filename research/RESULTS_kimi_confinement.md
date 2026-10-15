@@ -553,7 +553,12 @@ Not measured: **M-K14**, the refresh race (later, per the owner — the serialis
 `~/.kimi-code/bin` is NOT on `PATH` (it is here); which of `USERPROFILE`/`HOME`/`HOMEDRIVE`/`HOMEPATH` Kimi reads (all four
 redirected together); whether the server registers a device (no `device_id` ever existed in an owned home and Kimi wrote none);
 the preflight under the TUI; a launch with a model id outside the curated list on an owned home; the owned home's size over a
-long session; Linux and WSL (D18).
+long session; Linux and WSL (D18). Added 2026-10-15 (E4.2 decisions 9–10 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`):
+**M-K15**, the inheritable tree hold's lifetime — whether anything of Kimi's (a helper, an updater, `rg`) inherits the shim's
+lock handle and outlives `kimi` (E4.3's S3.17 measures it; until then the hold is "unmeasured" and does not gate); whether
+`kimi` refreshes its token unasked, at idle or near the 900 s expiry (M-K14's question, which decides whether the tree kill at
+every turn's end can cut a refresh); and a sign-in folder on a volume with no drive letter (an admin VHD mount), which
+`GetFinalPathNameByHandle` may not name — refused fail-closed by E4.2, unmeasured.
 
 ## 26. What this changes in the plan (for the plan's owner to decide)
 
