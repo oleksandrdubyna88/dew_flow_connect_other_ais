@@ -200,6 +200,7 @@ const usageOf = (message) => USAGE_TERMS.map((term) => (isObject(message.usage) 
  */
 export function summariseMessages(groups) {
   const out = { ids: 0, lines: 0, maxLinesPerId: 0, idsWithSeveralLines: 0, linesWithoutUsage: 0, differing: 0, lastHoldsMax: 0, lastLacksMax: 0, differingByTerm: newTable() };
+  const spans = [];
   for (const lines of groups) {
     out.ids += 1;
     out.lines += lines.length;
@@ -207,13 +208,28 @@ export function summariseMessages(groups) {
     out.linesWithoutUsage += lines.filter((line) => line.usage.every((value) => value === null)).length;
     if (lines.length < 2) continue;
     out.idsWithSeveralLines += 1;
+    spans.push(spanMs(lines));
     const differs = USAGE_TERMS.map((term, at) => new Set(lines.map((line) => line.usage[at])).size > 1);
     if (!differs.some(Boolean)) continue;
     out.differing += 1;
     USAGE_TERMS.forEach((term, at) => differs[at] && bump(out.differingByTerm, term));
     bump(out, lastLineHoldsMaximum(lines) ? 'lastHoldsMax' : 'lastLacksMax');
   }
-  return { ...out, differingByTerm: sortedObject(out.differingByTerm) };
+  return { ...out, differingByTerm: sortedObject(out.differingByTerm), spanMs: summariseSpans(spans) };
+}
+
+/** Milliseconds between the first and the last line of one message id (lines without a readable timestamp are left out). */
+function spanMs(lines) {
+  const times = lines.map((line) => line.t).filter((t) => !Number.isNaN(t));
+  return times.length < 2 ? 0 : Math.max(...times) - Math.min(...times);
+}
+
+/** Counts and quantiles of the per-id spans (Q4 follow-up: lines of ONE message are not written together). Numbers only. */
+function summariseSpans(spans) {
+  const sorted = [...spans].sort((a, b) => a - b);
+  const at = (q) => (sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]);
+  const over = (ms) => sorted.filter((span) => span > ms).length;
+  return { ids: sorted.length, p50: at(0.5), p99: at(0.99), max: at(1), over1s: over(1000), over10s: over(10000), over60s: over(60000), over1h: over(3600000) };
 }
 
 function lastLineHoldsMaximum(lines) {

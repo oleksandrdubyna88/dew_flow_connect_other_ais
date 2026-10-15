@@ -66,6 +66,16 @@ test('aMessageWhoseUsageGrowsReportsWhichLineHoldsTheMaximum', () => {
   assert.deepEqual(messages.differingByTerm, { output_tokens: 2 });
 });
 
+test('theSpanOfAMessageIsTheTimeBetweenItsFirstAndLastLine', () => {
+  const { projects } = fresh();
+  put(join(projects, 'slug', `${SESSION}.jsonl`), jsonl(
+    assistant({ id: 'msg_1', at: '2026-10-01T10:00:00Z' }), assistant({ id: 'msg_1', at: '2026-10-01T10:00:02Z' }),
+    assistant({ id: 'msg_2', at: '2026-10-01T10:00:03Z' }), assistant({ id: 'msg_2', at: '2026-10-01T12:00:03Z' }),
+    assistant({ id: 'msg_3', at: '2026-10-01T10:00:04Z' })));
+  const { spanMs } = run([round(SESSION, '2026-10-01T09:00:00Z')], projects).messages;
+  assert.deepEqual(spanMs, { ids: 2, p50: 7200000, p99: 7200000, max: 7200000, over1s: 2, over10s: 1, over60s: 1, over1h: 1 }, 'a single-line id has no span and is not counted');
+});
+
 test('whenTwoLinesShareATimestampFileOrderDecidesWhichIsLast', () => {
   const { projects } = fresh();
   put(join(projects, 'slug', `${SESSION}.jsonl`), jsonl(

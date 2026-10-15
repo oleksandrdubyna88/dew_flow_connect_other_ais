@@ -505,10 +505,20 @@ test('unknownKeysAreSentinelledAndCountedByTheirParentPath', () => {
 // ---- the CLI --------------------------------------------------------------------------------------------------------
 const runCli = (args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
 
+test('theCliRefusesAShortSaltBecauseAGuessableSaltLetsAnOriginalIdBeConfirmed', () => {
+  const src = writeSession(scratch('in'));
+  for (const salt of ['s', 'x'.repeat(31)]) {
+    const r = runCli(['--session-file', src, '--out', scratch('out'), '--out-anywhere', '--salt', salt]);
+    assert.equal(r.status, 2, 'a usage error');
+    assert.match(r.stderr, /at least 32 characters/);
+  }
+  assert.equal(runCli(['--session-file', src, '--out', scratch('out'), '--out-anywhere', '--salt', 'x'.repeat(32)]).status, 0);
+});
+
 test('theCliRefusesAnOutputDirectoryOutsideTheFixtureFolderWithExit65', () => {
   const src = writeSession(scratch('in'));
   const out = join(scratch('refused'), 'case');
-  const r = runCli(['--session-file', src, '--out', out, '--salt', 's', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a']);
+  const r = runCli(['--session-file', src, '--out', out, '--salt', '0123456789abcdef0123456789abcdef-test-salt', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a']);
   assert.equal(r.status, 65, r.stderr);
   assert.deepEqual(readdirSync(dirname(out)), [], 'nothing was written');
 });
@@ -516,7 +526,7 @@ test('theCliRefusesAnOutputDirectoryOutsideTheFixtureFolderWithExit65', () => {
 test('theCliCutsWithOutAnywhereAndPrintsCountsOnlyAndRefusesANonEmptyOutput', () => {
   const src = writeSession(scratch('in'));
   const out = join(scratch('anywhere'), 'case');
-  const args = ['--session-file', src, '--out', out, '--out-anywhere', '--salt', 's', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a',
+  const args = ['--session-file', src, '--out', out, '--out-anywhere', '--salt', '0123456789abcdef0123456789abcdef-test-salt', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a',
     '--repo', '/home/someone/src/y=/fixture/repo-b', '--from', T(0), '--to', T(10), '--drop-meta', AGENT_NESTED];
   const r = runCli(args);
   assert.equal(r.status, 0, r.stderr);
@@ -531,7 +541,7 @@ test('theCliCutsWithOutAnywhereAndPrintsCountsOnlyAndRefusesANonEmptyOutput', ()
 test('theCliRefusesAnOutputDirectoryThatEscapesThroughDotDot', () => {
   const src = writeSession(scratch('in'));
   const sneaky = `${join(here, '..', '..', 'src_mcp', 'tests', 'fixtures', 'caller-transcripts')}/../escape-case`;
-  const r = runCli(['--session-file', src, '--out', sneaky, '--salt', 's']);
+  const r = runCli(['--session-file', src, '--out', sneaky, '--salt', '0123456789abcdef0123456789abcdef-test-salt']);
   assert.equal(r.status, 65, r.stderr);
 });
 
@@ -564,7 +574,7 @@ test('aCaseSpecWritesRoundsAndRegistryOnTheSameClockAndUnderTheSameIdMap', () =>
 
 test('aCaseWithoutATranscriptIsJustItsRoundsAndRegistryThroughTheSanitiser', () => {
   const out = scratch('nt');
-  const cli = spawnSync(process.execPath, [CLI, '--case-spec', writeSpec(CASE_SPEC()), '--out', out, '--salt', 's', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a', '--out-anywhere'], { encoding: 'utf8' });
+  const cli = spawnSync(process.execPath, [CLI, '--case-spec', writeSpec(CASE_SPEC()), '--out', out, '--salt', '0123456789abcdef0123456789abcdef-test-salt', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a', '--out-anywhere'], { encoding: 'utf8' });
   assert.equal(cli.status, 0, cli.stderr);
   assert.deepEqual(readAll(out).map((f) => f.file), ['rounds.json', 'sessions/4242.json']);
   assert.ok(!readAll(out).some((f) => f.text.includes('2026')));

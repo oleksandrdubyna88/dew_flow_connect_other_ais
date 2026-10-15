@@ -25,6 +25,7 @@ import { Refusal, assertOutputAllowed, cutCaseWithoutTranscript, cutSession, loa
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = join(repoRoot, 'src_mcp', 'tests', 'fixtures', 'caller-transcripts');
+const MIN_SALT_LENGTH = 32;
 const VALUE_FLAGS = new Set(['--session-file', '--out', '--salt', '--repo', '--other-root', '--from', '--to', '--drop-agent-file', '--drop-meta', '--include-agent', '--case-spec', '--allowlist']);
 const camel = (flag) => flag.slice(2).replace(/-(\w)/g, (_, c) => c.toUpperCase());
 
@@ -47,6 +48,7 @@ function parseArgs(argv) {
     else opts[camel(flag)] = value;
   }
   for (const required of ['--out', '--salt']) if (!opts[camel(required)]) throw new Error(`${required} is required`);
+  if (opts.salt.length < MIN_SALT_LENGTH) throw new Error(`--salt must be at least ${MIN_SALT_LENGTH} characters (random hex, kept OUTSIDE the repository): a short or guessable salt lets anyone holding an original id confirm it in a fixture`);
   if (!opts.sessionFile && !opts.caseSpec) throw new Error('--session-file or --case-spec is required');
   assertUtcInstant('--from', opts.from);
   assertUtcInstant('--to', opts.to);
