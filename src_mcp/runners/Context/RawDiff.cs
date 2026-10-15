@@ -15,7 +15,10 @@ public static class RawDiff
     private const int Fields = 5;
 
     /// <summary>One raw record's meta line, read: whether it touches a gitlink, and how many path tokens follow it.</summary>
-    private sealed record Entry(bool Gitlink, int Paths);
+    private sealed record Entry(bool Gitlink, int Paths)
+    {
+        public int Count => Gitlink ? 1 : 0;
+    }
 
     /// <summary>
     /// The number of entries whose old or new mode is a gitlink — 0 for an empty diff, which is a measurement — or null when
@@ -27,12 +30,13 @@ public static class RawDiff
         var gitlinks = 0;
         for (var at = 0; at < tokens.Length;)
         {
-            if (Read(tokens[at]) is not { } entry)
+            // The entry, and every path token it requires, must be there: a stream cut before a path is no stream.
+            if (Read(tokens[at]) is not { } entry || at + entry.Paths >= tokens.Length)
             {
                 return null;
             }
 
-            gitlinks += entry.Gitlink ? 1 : 0;
+            gitlinks += entry.Count;
             at += 1 + entry.Paths;
         }
 
@@ -43,13 +47,23 @@ public static class RawDiff
     {
         var fields = meta.Split(' ');
 
-        return meta.StartsWith(':') && fields.Length == Fields
-            ? new Entry(IsGitlink(fields), PathsOf(fields[Fields - 1]))
+        return meta.StartsWith(':') && fields.Length == Fields && PathsOf(fields[Fields - 1]) is > 0 and var paths
+            ? new Entry(IsGitlink(fields), paths)
             : null;
     }
 
     private static bool IsGitlink(string[] fields) => fields[0][1..] == GitlinkMode || fields[1] == GitlinkMode;
 
-    /// <summary>A rename or a copy names two paths; every other status names one.</summary>
-    private static int PathsOf(string status) => status is ['R' or 'C', ..] ? 2 : 1;
+    /// <summary>
+    /// A rename or a copy names two paths; every other status names one. A status git does not print — a letter outside
+    /// <c>ACDMRTUX</c>, or anything but digits after it (the similarity score) — is no entry at all (0 paths = refused).
+    /// </summary>
+    private static int PathsOf(string status) =>
+        status is [var letter, .. var score] && IsStatus(letter, score)
+            ? (letter is 'R' or 'C' ? 2 : 1)
+            : 0;
+
+    private static bool IsStatus(char letter, ReadOnlySpan<char> score) => Letters.Contains(letter) && !score.ContainsAnyExceptInRange('0', '9');
+
+    private const string Letters = "ACDMRTUX";
 }

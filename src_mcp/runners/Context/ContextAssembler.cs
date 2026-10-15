@@ -453,8 +453,11 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         }
 
         var range = $"{from}..{sha}";
-        var filtered = await CountedAsync(repoPath, range, excludes, timeout, ct);
-        var unfiltered = await CountedAsync(repoPath, range, [], timeout, ct);
+        // Independent once the ancestry is known, so asked together.
+        var filteredAsked = CountedAsync(repoPath, range, excludes, timeout, ct);
+        var unfilteredAsked = CountedAsync(repoPath, range, [], timeout, ct);
+        await Task.WhenAll(filteredAsked, unfilteredAsked);
+        var (filtered, unfiltered) = (await filteredAsked, await unfilteredAsked);
 
         return filtered.Failed || unfiltered.Failed
             ? DeltaNumstats.Unavailable(ScopeState.GitFailed)

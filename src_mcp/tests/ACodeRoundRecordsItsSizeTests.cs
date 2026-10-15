@@ -427,14 +427,18 @@ public sealed class ACodeRoundRecordsItsSizeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ACancelledRound_StillCancels()
+    public async Task ASizingThatOutlastsItsDeadline_DoesNotTouchTheRound()
     {
-        var (collected, shaped, sha) = await TheDiffOfHead();
-        var cancelling = Sabotage(Unfiltered, () => throw new OperationCanceledException());
+        var control = await RunTheFirstRound(Branch, OneMajor);
+        var stuck = new Delaying(_launcher, args => Unfiltered(args) || Raw(args), RoundSizer.SizeTotalTimeout * 3);
 
-        var act = () => Measure(cancelling, collected, shaped, sha);
+        var stalled = await RunTheFirstRound(Branch, OneMajor, stuck);
 
-        await act.Should().ThrowAsync<OperationCanceledException>("the round token propagates — a size is never a reason to swallow a cancel");
+        var size = Sized(stalled.Latest.Size);
+        size.Whole.State.Should().Be(ScopeState.GitFailed, "the whole sizing has one deadline of its own, and the numstat was still running");
+        stalled.Latest.Gitlinks.Should().BeNull("and so was the gitlink count");
+        stalled.Verdict.Should().Be(control.Verdict, "a size that ran out of time is not a reason for a different verdict");
+        stalled.Findings.Should().Be(control.Findings);
     }
 
     [Fact]
@@ -534,6 +538,20 @@ public sealed class ACodeRoundRecordsItsSizeTests : IAsyncLifetime
             reply.GetProperty("verdict").GetString()!,
             reply.GetProperty("findings").GetRawText(),
             new SessionStore(data).Load(_repo, branch)!.Rounds.Last(r => r.Stage == Code));
+    }
+
+    /// <summary>The real launcher, except that the git call <paramref name="hits"/> picks is held for <paramref name="hold"/> first (honouring the token).</summary>
+    private sealed class Delaying(IProcessLauncher inner, Func<IReadOnlyList<string>, bool> hits, TimeSpan hold) : IProcessLauncher
+    {
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            if (request.Executable == "git" && hits(request.Arguments))
+            {
+                await Task.Delay(hold, ct);
+            }
+
+            return await inner.RunAsync(request, ct);
+        }
     }
 
     /// <summary>The real launcher, except that the git call <paramref name="hits"/> picks is answered by <paramref name="answer"/>.</summary>

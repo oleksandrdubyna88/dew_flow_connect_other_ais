@@ -1,6 +1,6 @@
 # PLAN — E2 stories: a code round records the size of its change, and each reviewer's effort
 
-> Status: **plan only, nothing implemented yet, 2026-10-15** (plan gate passed and its findings applied; the §S1.9 item 14
+> Status: **E2.S1–S5 implemented on feat/round-size-e2r, 2026-10-15 (code gate good_enough, findings applied); promoted with the parent (§9)** (the plan gate passed and its findings were applied; the §S1.9 item 14
 > amendment confirmed by Fable 2026-10-15, with row 0 (`unavailable: no merge base`) added — ContextAssembler.cs:457-462). Epic E2 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: `src_mcp` only — `runners/Context` (counted numstats, the delta numstat), new pure units in `core/Context`,
@@ -984,15 +984,15 @@ code is in; S5 needs only S3; S4 is last. The epic lands as ONE commit on its ow
 
 ## 9. Definition of Done — epic E2
 
-- [ ] E2.S1's spec written by Fable and committed into its section before its code; C1 matches it; the parent's ledger line
+- [x] E2.S1's spec written by Fable and committed into its section before its code; C1 matches it; the parent's ledger line
       reads `Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2`.
-- [ ] E2.S1–E2.S5 landed, each with its scenarios green and its break-its red-then-green, recorded in the story's summary.
-- [ ] A code round records its size by scope, coverage and kind; binaries carry no line count anywhere (record, row, JSON);
+- [x] E2.S1–E2.S5 landed, each with its scenarios green and its break-its red-then-green, recorded in the story's summary.
+- [x] A code round records its size by scope, coverage and kind; binaries carry no line count anywhere (record, row, JSON);
       the delta is a head-to-head numstat or a named `unavailable` state; a skipped round is never a predecessor.
-- [ ] `reviewers.effort` persisted; a step-21 database opens at 22; a pre-step round reads *not recorded*; read-only
+- [x] `reviewers.effort` persisted; a step-21 database opens at 22; a pre-step round reads *not recorded*; read-only
       `--log` and `--round-counts` on a step-21 file answer and leave it at 21.
-- [ ] No size failure changed a round's outcome (S4's scenario).
-- [ ] `CoaiMcp.Tests.exe` green as a whole; `node .agents/conventions/tools/plan-lifecycle.mjs` clean (this document has its
+- [x] No size failure changed a round's outcome (S4's scenario).
+- [x] `CoaiMcp.Tests.exe` green as a whole; `node .agents/conventions/tools/plan-lifecycle.mjs` clean (this document has its
       own `todo/README.md` row); `research/module_server.md` describes step 22, the size step and the `--log` field.
 - [ ] This document is promoted with the parent plan, not before.
 
@@ -1027,3 +1027,5 @@ code is in; S5 needs only S3; S4 is last. The epic lands as ONE commit on its ow
    `PanelService.cs` as call-site-only. S3 and S5 put the writer and the reader in new files.
 9. For E7.S3 (Fable, 2026-10-15): a backfilled size must take `Whole.From` from `rounds.base_ref`, never recompute
    `merge-base(main, sha)` today — a branch since merged into main gives `merge-base = sha` and a zero whole.
+10. E7's backfill must call `RoundChangesTable.Record` inside a transaction (gate finding, 2026-10-15): the method deletes the
+    round's rows and inserts them again, and only `RoundsDb.RecordRound` wraps it in one today.

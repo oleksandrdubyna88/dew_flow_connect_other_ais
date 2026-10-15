@@ -47,4 +47,27 @@ public sealed class TheGitlinksOfARawDiffAreCountedTests
     [InlineData("not a raw diff at all")]
     [InlineData(":160000 160000 only-three-fields M\0libs/sub\0")]
     public void TextThatIsNotARawDiff_IsNoCount(string raw) => RawDiff.GitlinkCount(raw).Should().BeNull("a count from a stream that does not parse would be a guess");
+
+    [Fact]
+    public void AGitlinkRecordWhoseStreamEndsBeforeItsPath_IsMalformed_NotACount()
+    {
+        var cut = $":160000 160000 {Sha} {Other} M\0";
+
+        RawDiff.GitlinkCount(cut).Should().BeNull("a record that lost its path is a cut stream — a count from it would be a guess");
+    }
+
+    [Fact]
+    public void ARenameWithOnlyOnePath_IsMalformed()
+    {
+        var cut = $":160000 160000 {Sha} {Other} R100\0libs/old\0";
+
+        RawDiff.GitlinkCount(cut).Should().BeNull("a rename or copy names two paths");
+    }
+
+    [Fact]
+    public void AStatusThatIsNotOneOfGitsLetters_IsMalformed()
+    {
+        RawDiff.GitlinkCount(Entry("160000", "160000", "Z", "libs/sub")).Should().BeNull();
+        RawDiff.GitlinkCount(Entry("160000", "160000", "Mx", "libs/sub")).Should().BeNull("a score after the letter is digits only");
+    }
 }

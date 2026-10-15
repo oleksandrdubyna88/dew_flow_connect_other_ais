@@ -56,27 +56,53 @@ public static class ChangePartition
         IReadOnlyList<CountedChange> unfiltered,
         IReadOnlyCollection<string> elided)
     {
-        var claims = unfiltered.Select(u => Match(filtered, u)).OfType<CountedChange>().ToList();
+        var claims = Claims(new Reviewable(filtered), unfiltered);
+        var paths = filtered.Select(f => f.Change.Path).ToHashSet(StringComparer.Ordinal);
 
-        return filtered.Any(f => !claims.Any(c => ReferenceEquals(c, f))) ? "a reviewable file is not in the unfiltered numstat"
-            : filtered.Any(f => claims.Count(c => ReferenceEquals(c, f)) > 1) ? "two unfiltered records match one reviewable file"
-            : elided.Any(e => !filtered.Any(f => f.Change.Path == e)) ? "an elided path is not a reviewable file"
+        return filtered.Any(f => !claims.ContainsKey(f)) ? "a reviewable file is not in the unfiltered numstat"
+            : claims.Values.Any(n => n > 1) ? "two unfiltered records match one reviewable file"
+            : elided.Any(e => !paths.Contains(e)) ? "an elided path is not a reviewable file"
             : string.Empty;
     }
 
+    /// <summary>How many unfiltered records claim each reviewable record — by reference, never by value (two records can be equal).</summary>
+    private static Dictionary<CountedChange, int> Claims(Reviewable reviewable, IReadOnlyList<CountedChange> unfiltered)
+    {
+        var claims = new Dictionary<CountedChange, int>(ReferenceEqualityComparer.Instance);
+        foreach (var match in unfiltered.Select(reviewable.Match).OfType<CountedChange>())
+        {
+            claims[match] = claims.GetValueOrDefault(match) + 1;
+        }
+
+        return claims;
+    }
+
     /// <summary>
-    /// The reviewable record of one unfiltered record, or none: by its own path, else by the old name a rename into an
-    /// excluded folder leaves in the filtered numstat, else by the rename the filtered numstat paired and the
-    /// unfiltered one did not (git skips rename detection past its limit) — which the caller reports, never files.
+    /// The reviewable numstat, indexed once per call so that finding the twin of an unfiltered record is a lookup — the first
+    /// record in list order wins on every key, exactly as a scan from the front would answer.
     /// </summary>
-    private static CountedChange? Match(IReadOnlyList<CountedChange> filtered, CountedChange u) =>
-        ByPath(filtered, u.Change.Path) ?? ByPath(filtered, u.Change.RenamedFrom) ?? ByRenamedFrom(filtered, u.Change.Path);
+    private sealed class Reviewable
+    {
+        private readonly Dictionary<string, CountedChange> _byPath = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, CountedChange> _byOldName = new(StringComparer.Ordinal);
 
-    private static CountedChange? ByPath(IReadOnlyList<CountedChange> filtered, string path) =>
-        filtered.FirstOrDefault(f => f.Change.Path == path);
+        public Reviewable(IReadOnlyList<CountedChange> filtered)
+        {
+            foreach (var record in filtered)
+            {
+                _byPath.TryAdd(record.Change.Path, record);
+                _byOldName.TryAdd(record.Change.RenamedFrom, record);
+            }
+        }
 
-    private static CountedChange? ByRenamedFrom(IReadOnlyList<CountedChange> filtered, string path) =>
-        filtered.FirstOrDefault(f => f.Change.RenamedFrom == path);
+        /// <summary>
+        /// The reviewable record of one unfiltered record, or none: by its own path, else by the old name a rename into an
+        /// excluded folder leaves in the filtered numstat, else by the rename the filtered numstat paired and the
+        /// unfiltered one did not (git skips rename detection past its limit) — which the caller reports, never files.
+        /// </summary>
+        public CountedChange? Match(CountedChange u) =>
+            _byPath.GetValueOrDefault(u.Change.Path) ?? _byPath.GetValueOrDefault(u.Change.RenamedFrom) ?? _byOldName.GetValueOrDefault(u.Change.Path);
+    }
 
     private static IEnumerable<Placed> Placements(
         IReadOnlyList<CountedChange> filtered,
@@ -84,8 +110,9 @@ public static class ChangePartition
         IReadOnlyCollection<string> elided)
     {
         var elidedPaths = new HashSet<string>(elided, StringComparer.Ordinal);
+        var reviewable = new Reviewable(filtered);
 
-        return unfiltered.Select(u => Place(u, Match(filtered, u), elidedPaths));
+        return unfiltered.Select(u => Place(u, reviewable.Match(u), elidedPaths));
     }
 
     /// <summary>

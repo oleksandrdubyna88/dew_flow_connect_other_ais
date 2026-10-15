@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using CoaiMcp.Core.Outlining;
 
@@ -25,8 +26,8 @@ public static class ChangeKind
     /// <summary>The order cells are written and compared in — the report's default denominator first.</summary>
     public static readonly ImmutableArray<string> All = [Code, Test, Docs, Config, Unknown];
 
-    private static readonly string[] TestSegments = ["test", "tests", "__tests__"];
-    private static readonly string[] DocsSegments = ["research", "todo", "docs"];
+    private static readonly FrozenSet<string> TestSegments = FrozenSet.ToFrozenSet(["test", "tests", "__tests__"], StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> DocsSegments = FrozenSet.ToFrozenSet(["research", "todo", "docs"], StringComparer.OrdinalIgnoreCase);
     private static readonly string[] TestInfixes = [".test.", ".spec."];
     private static readonly string[] DocsSuffixes = [".md", ".txt"];
     private static readonly string[] ConfigSuffixes = [".json", ".yml", ".yaml", ".toml", ".props", ".targets", ".csproj", ".slnx", ".config"];
@@ -50,7 +51,7 @@ public static class ChangeKind
         return Rules.First(rule => rule.Holds(dirs, name)).Kind;
     }
 
-    private static bool InSegment(string[] dirs, string[] words) => dirs.Any(d => words.Contains(d, StringComparer.OrdinalIgnoreCase));
+    private static bool InSegment(string[] dirs, FrozenSet<string> words) => dirs.Any(words.Contains);
 
     private static bool EndsWithAny(string name, string[] suffixes) =>
         suffixes.Any(s => name.EndsWith(s, StringComparison.OrdinalIgnoreCase));

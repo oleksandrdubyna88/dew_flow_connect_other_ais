@@ -22,6 +22,9 @@ internal sealed record MeasuredSize(RoundSize? Size, int? Gitlinks);
 /// </remarks>
 internal static class RoundSizer
 {
+    /// <summary>The deadline of the WHOLE sizing — every scope together — after which the unfinished scopes read git-failed and the round goes on.</summary>
+    internal static readonly TimeSpan SizeTotalTimeout = TimeSpan.FromSeconds(15);
+
     private const string WholeScope = "whole";
     private const string DeltaScope = "delta";
 
@@ -34,12 +37,17 @@ internal static class RoundSizer
         ShapedDiff shaped,
         IReadOnlyList<RoundRecord> earlier,
         Serilog.ILogger log,
-        CancellationToken ct)
+        CancellationToken ct,
+        TimeSpan? total = null)
     {
         var watch = Stopwatch.StartNew();
         var predecessor = DeltaPredecessor.Choose(earlier, collected.ComparedAgainst);
+        // The sizing's OWN deadline, linked to the round token so a cancelled round still stops it — but a token of its own, so
+        // that its expiry is told apart from the round's cancellation (see GuardedAsync).
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(total ?? SizeTotalTimeout);
         var measured = collected.Kind == DiffBase.MergeBase
-            ? await MeasureRangeAsync(context, repoPath, sha, collected, shaped, predecessor, log, ct)
+            ? await MeasureRangeAsync(context, repoPath, sha, collected, shaped, predecessor, log, new Limits(ct, budget.Token))
             : WithoutAMergeBase(collected.ComparedAgainst, predecessor);
         Report(log, measured, watch.ElapsedMilliseconds);
 
@@ -52,6 +60,10 @@ internal static class RoundSizer
             ScopeSize.Unavailable(ScopeState.NoMergeBase, against),
             ScopeSize.Unavailable(ScopeState.NoMergeBase, predecessor.Sha)), null);
 
+    /// <summary>The two tokens a sizing answers to: the ROUND's, which propagates, and the sizing's own total deadline, which does not.</summary>
+    private readonly record struct Limits(CancellationToken Round, CancellationToken Total);
+
+    /// <summary>The whole scope, the delta and the gitlink count are independent, so they run side by side.</summary>
     private static async Task<MeasuredSize> MeasureRangeAsync(
         ContextAssembler context,
         string repoPath,
@@ -60,19 +72,20 @@ internal static class RoundSizer
         ShapedDiff shaped,
         Predecessor predecessor,
         Serilog.ILogger log,
-        CancellationToken ct)
+        Limits limits)
     {
         var elided = shaped.Elided.Select(e => e.Path).ToList();
-        var whole = await GuardedAsync(
-            () => WholeAsync(context, repoPath, sha, collected, elided, log, ct),
-            ScopeSize.Unavailable(ScopeState.GitFailed, collected.ComparedAgainst), log);
-        var delta = await GuardedAsync(
-            () => DeltaAsync(context, repoPath, sha, predecessor, elided, log, ct),
-            ScopeSize.Unavailable(ScopeState.GitFailed, predecessor.Sha), log);
-        var gitlinks = await GuardedAsync(
-            () => context.GitlinksAsync(repoPath, collected.ComparedAgainst, sha, ct), (int?)null, log);
+        var whole = GuardedAsync(
+            () => WholeAsync(context, repoPath, sha, collected, elided, log, limits.Total),
+            ScopeSize.Unavailable(ScopeState.GitFailed, collected.ComparedAgainst), log, limits);
+        var delta = GuardedAsync(
+            () => DeltaAsync(context, repoPath, sha, predecessor, elided, log, limits.Total),
+            ScopeSize.Unavailable(ScopeState.GitFailed, predecessor.Sha), log, limits);
+        var gitlinks = GuardedAsync(
+            () => context.GitlinksAsync(repoPath, collected.ComparedAgainst, sha, limits.Total), (int?)null, log, limits);
+        await Task.WhenAll(whole, delta, gitlinks);
 
-        return new MeasuredSize(new RoundSize(whole, delta), gitlinks);
+        return new MeasuredSize(new RoundSize(await whole, await delta), await gitlinks);
     }
 
     private static async Task<ScopeSize> WholeAsync(
@@ -131,14 +144,19 @@ internal static class RoundSizer
         return partition;
     }
 
-    /// <summary>One size call's failure is that scope's state, not the round's: everything but a cancellation is caught, logged without a path.</summary>
-    private static async Task<T> GuardedAsync<T>(Func<Task<T>> measure, T fallback, Serilog.ILogger log)
+    /// <summary>
+    /// One scope's failure is that scope's state, not the round's: everything is caught and logged without a path — except a
+    /// cancellation of the ROUND, which propagates. A cancellation that is NOT the round's is the sizing's own total deadline
+    /// (or a call that gave up), and the unfinished scope reads <c>fallback</c>; the wait itself is bounded too, so a launcher
+    /// that ignores its token cannot hold the sizing past the deadline.
+    /// </summary>
+    private static async Task<T> GuardedAsync<T>(Func<Task<T>> measure, T fallback, Serilog.ILogger log, Limits limits)
     {
         try
         {
-            return await measure();
+            return await measure().WaitAsync(limits.Total);
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (Exception e) when (e is not OperationCanceledException || !limits.Round.IsCancellationRequested)
         {
             log.Warning("a round's size could not be measured: {Failure}", e.GetType().Name);
 

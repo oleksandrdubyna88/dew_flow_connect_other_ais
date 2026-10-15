@@ -1,6 +1,6 @@
 # PLAN — a round records who wrote the code under review, and how big the change was
 
-> Status: **plan only, nothing implemented yet, 2026-10-14.** Revised the same day after the question
+> Status: **plan only for the epics not yet built; epic E2 (the size, its schema step and `--log`) is implemented on feat/round-size-e2r, 2026-10-15.** Revised the same day after the question
 > consultant's advice (§10), and again after the seven stories documents (§16). Scope: `src_mcp` — the code round's
 > numstat (`runners/Context`), a new text-free caller-transcript reader beside `Store/AgentLog.cs`, attribution in
 > `core/Authors/`, appended schema steps, the round's

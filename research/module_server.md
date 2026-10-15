@@ -1630,15 +1630,27 @@ first:** when `collected.Kind != DiffBase.MergeBase` (unrelated or truncated his
 scopes are `unavailable: no merge base` and no git process runs. A `base unknown`/`base moved` predecessor becomes the delta's
 state with no git call. Changed submodule pointers are counted from `git diff --raw -z` (`ContextAssembler.GitlinksAsync`,
 `RawDiff.GitlinkCount`: an entry whose old or new mode is `160000`) — the numstat shows a submodule as one line, and its own
-edits are outside any size. The result rides `RoundWork.Size` / `RoundWork.Gitlinks` (beside `BaseRef`) to the finished
-record's `with` in `RoundEngine` (`Size`, `Gitlinks`); `RecordRound` reads them from the record, as it reads `Caller`. A plan,
-document or feature round leaves both null. **Best-effort:** every size git call runs under `SizeGitTimeout` (10 s); any
-exception but a cancellation becomes `unavailable: git failed` for the scope it hit (one Warning, exception type only, no
-path); a `ChangePartition.Disagreement` is the state `unavailable: numstats disagree` with its fixed sentence logged once at
-Warning; a failed `--raw` leaves `Gitlinks` null and the size untouched. One Information line per round: whole files/lines by
-coverage, the delta state, gitlinks, elapsed ms. Cost, measured on the test repo with a chosen predecessor under a loaded
-machine: 5 git processes (unfiltered numstat, `--raw`, is-ancestor, two delta numstats), p50 52 ms each, ≈ 330 ms in all —
-the delta's three about 155 ms of it.
+edits are outside any size. The parse is strict: a record whose path token(s) are missing (a cut stream), a status letter
+outside `ACDMRTUX` or a non-digit score makes the whole answer *no count* (null), never a smaller number; a rename or copy
+needs two paths. **Stated limit:** under a user's `diff.ignoreSubmodules=all` git prints no submodule entries, so the count
+can read 0 for a range that moved a pointer — it is a measurement of what git showed. The result rides `RoundWork.Size` /
+`RoundWork.Gitlinks` (beside `BaseRef`) to the finished record's `with` in `RoundEngine` (`Size`, `Gitlinks`); `RecordRound`
+reads them from the record, as it reads `Caller`. A plan, document or feature round leaves both null. **Best-effort and
+bounded:** every size git call runs under `SizeGitTimeout` (10 s), and the whole sizing under ONE deadline of its own,
+`RoundSizer.SizeTotalTimeout` (15 s) — a token linked to the round's but separate from it, with the wait itself bounded
+(`WaitAsync`) so a launcher that ignores its token cannot hold the sizing. The whole scope (unfiltered numstat), the delta
+(is-ancestor first, then its two numstats together) and the gitlink count run **concurrently** (`Task.WhenAll`). On expiry
+the unfinished scopes read `unavailable: git failed` and the round goes on; an `OperationCanceledException` raised while the
+ROUND's token is cancelled propagates, any other (the deadline's, a call giving up) is a failed scope. Any other exception
+becomes `unavailable: git failed` for the scope it hit (one Warning, exception type only, no path); a
+`ChangePartition.Disagreement` is the state `unavailable: numstats disagree` with its fixed sentence logged once at Warning;
+a failed `--raw` leaves `Gitlinks` null and the size untouched. The partition itself is linear: `ChangePartition` indexes the
+reviewable numstat once per call (path and old-name dictionaries, claims counted by reference), so a 20 000-record range
+partitions in about a tenth of a second where the scanning form took 10 s (`APartitionOfAHugeRangeIsLinearTests`). One
+Information line per round: whole files/lines by coverage, the delta state, gitlinks, elapsed ms. Cost, measured on the test
+repo with a chosen predecessor under a loaded machine, before the calls ran together: 5 git processes (unfiltered numstat,
+`--raw`, is-ancestor, two delta numstats), p50 52 ms each, ≈ 330 ms in all; run side by side the elapsed time is the longest
+chain (is-ancestor, then the numstats), about two calls.
 
 ### What the gate found in this half (2026-09-03)
 
