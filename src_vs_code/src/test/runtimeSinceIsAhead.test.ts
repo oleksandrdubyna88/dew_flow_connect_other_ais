@@ -64,6 +64,8 @@ function refusal(runtime: string, since: string, released: string, section: stri
     + 'and the version gate stays silent on exactly the server that refuses the row. Set it to the next minor AFTER the newest release main will cut.';
 }
 
+// reads-another-program: a positive claim about the release manifest — the newest RELEASED src_mcp is a fact written by the release PR, and a
+// manifest that stops holding it fails the assertion below loudly (nothing is derived from it).
 const releasedMcp = (JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, string>)['src_mcp']!;
 
 test('every runtime in RUNTIME_SINCE is either ahead of the newest released coai-mcp or named in its release', () => {

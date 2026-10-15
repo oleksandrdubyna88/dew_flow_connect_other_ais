@@ -333,7 +333,9 @@ public sealed class KimiHomeTests : IDisposable
         var home = KimiHome.HomeFor(@"C:\scratch", "kimi", "architecture");
 
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
-        Path.GetFileName(home)[3..].Should().Be(Path.GetFileName(Runners.Vibe.VibeRuntime.HomeFor(@"C:\scratch", "kimi", "architecture"))[3..]);
+        // One hash, two prefixes — and, since #823 cut a Vibe home to six hex for MAX_PATH, two TRUNCATIONS of it: Kimi's ten hex begin with Vibe's six.
+        var vibe = Path.GetFileName(Runners.Vibe.VibeRuntime.HomeFor(@"C:\scratch", "kimi", "architecture"));
+        Path.GetFileName(home)[3..].Should().StartWith(vibe).And.HaveLength(10);
         Path.GetDirectoryName(home).Should().Be(@"C:\scratch");
     }
 
