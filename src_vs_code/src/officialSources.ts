@@ -22,9 +22,19 @@ export const OFFICIAL_SOURCES = {
     // Astral's installer for uv, the one Mistral's README gives as the Windows prerequisite (and the one Mistral's own
     // install.sh runs on Linux and macOS, at a pinned version).
     'https://astral.sh/uv/',
+    // Moonshot's own installer scripts for Kimi Code (getting-started page, read 2026-10-14): the domain AND the path. Not
+    // cdn.kimi.com, which no command names — the 302 from code.kimi.com is the publisher's own business.
+    'https://code.kimi.com/kimi-code/',
   ],
   /** What `npm install -g`, `uv tool install` and `uv tool upgrade` may be handed — by the package's full name. */
   packages: ['@openai/codex', '@google/gemini-cli', '@anthropic-ai/claude-code', 'mistral-vibe'],
+  /**
+   * What `winget install --id` may be handed — the Windows Kimi line provisions what Kimi needs, from the projects' own
+   * winget packages (verified 2026-10-14 by `winget show --id <id> -e`; todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5 §6):
+   * Git for Windows (Kimi runs its shell through Git Bash), ripgrep (BurntSushi's own build, 15.2.0) and fd (David Peter's
+   * own, 10.5.0). Their installers are the projects' own GitHub release assets — nobody's repackaging.
+   */
+  wingetIds: ['Git.Git', 'BurntSushi.ripgrep.MSVC', 'sharkdp.fd'],
 } as const;
 
 const URL_IN_A_COMMAND = /https?:\/\/[^\s"'|;)]+/gu;
@@ -39,10 +49,22 @@ const STEP_BREAK = /;|&&|\|\||\||\{|\}|\r?\n/u;
  * which npm reads as ALIASES of other code. uv: `name` or `name==1.2.3`, and no flag at all — `--from`, `--with`,
  * `--index-url` each bring in code from somewhere else.</p>
  */
-const VERBS: readonly { readonly words: readonly [string, string]; readonly flags: readonly string[]; readonly spec: RegExp }[] = [
-  { words: ['npm', 'install'], flags: ['-g', '--global'], spec: /^(.+?)(?:@(?:latest|\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?))?$/u },
-  { words: ['tool', 'install'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u },
-  { words: ['tool', 'upgrade'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u },
+const VERBS: readonly {
+  readonly words: readonly [string, string];
+  readonly flags: readonly string[];
+  readonly spec: RegExp;
+  /** Which list of {@link OFFICIAL_SOURCES} the verb's arguments are drawn from. */
+  readonly admitted: 'packages' | 'wingetIds';
+  /** The most arguments one step may carry — one for winget, whose second id is a second thing to install. */
+  readonly most: number;
+}[] = [
+  { words: ['npm', 'install'], flags: ['-g', '--global'], spec: /^(.+?)(?:@(?:latest|\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?))?$/u, admitted: 'packages', most: Infinity },
+  { words: ['tool', 'install'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u, admitted: 'packages', most: Infinity },
+  { words: ['tool', 'upgrade'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u, admitted: 'packages', most: Infinity },
+  // winget: an exact id from the list, and no flag that points the install at anything else. --source, --manifest,
+  // --location, -v / --version and a second id are each refused by construction: the argument is then neither a flag listed
+  // here nor an id of the list, or there is more than one. --id itself is a flag here; its value is the one argument.
+  { words: ['winget', 'install'], flags: ['--id', '-e', '--exact', '--accept-source-agreements', '--accept-package-agreements', '--silent', '-h'], spec: /^([A-Za-z0-9][A-Za-z0-9.+-]*)$/u, admitted: 'wingetIds', most: 1 },
 ];
 
 /** A word that means "install something" — a step carrying one that no verb above reads is refused, not skipped. */
@@ -107,7 +129,12 @@ function unknownInstall(words: readonly string[]): number {
 function packagesAfter(words: readonly string[], verb: Verb): number {
   const args = words.filter((word) => !verb.flags.includes(word));
 
-  return args.length > 0 && args.every((arg) => isOfficialPackage(arg, verb.spec)) ? args.length : -1;
+  return admitted(args, verb) ? args.length : -1;
+}
+
+/** Whether a step's non-flag arguments are all the verb's to install, and no more of them than it may carry. */
+function admitted(args: readonly string[], verb: Verb): boolean {
+  return args.length > 0 && args.length <= verb.most && args.every((arg) => isOfficialPackage(arg, verb));
 }
 
 /** Where a verb's two words stand together in a step, or -1. */
@@ -115,8 +142,8 @@ function verbAt(words: readonly string[], verb: readonly [string, string]): numb
   return words.findIndex((word, index) => word === verb[0] && words[index + 1] === verb[1]);
 }
 
-function isOfficialPackage(arg: string, spec: RegExp): boolean {
-  const name = spec.exec(arg)?.[1] ?? '';
+function isOfficialPackage(arg: string, verb: Verb): boolean {
+  const name = verb.spec.exec(arg)?.[1] ?? '';
 
-  return (OFFICIAL_SOURCES.packages as readonly string[]).includes(name);
+  return (OFFICIAL_SOURCES[verb.admitted] as readonly string[]).includes(name);
 }

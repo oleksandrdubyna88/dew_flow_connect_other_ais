@@ -32,6 +32,10 @@ const NPM_PACKAGE: Record<string, string> = {
   codex: '@openai/codex',
   gemini: '@google/gemini-cli',
   claude: '@anthropic-ai/claude-code',
+  // The version SOURCE only: Moonshot's installer script is what installs, and its binaries are the same release line as this
+  // package (the 2.1.1 manifest's `tag` is `@moonshot-ai/kimi-code@2.1.1`; `code.kimi.com/kimi-code/latest` and npm's `latest`
+  // both answered 2.2.0 on 2026-10-14). `vendorTerminal.ts`'s PACKAGE has no kimi, so the update command is never npm.
+  kimi: '@moonshot-ai/kimi-code',
 };
 
 /**

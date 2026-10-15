@@ -10,7 +10,7 @@ import { compareVersions } from './coaiInstall';
  * 0.44.0 it refuses the row by name; measured 2026-10-13 against the released 0.52.0, a vibe row comes back from
  * `--providers` as `unavailable`, "not one this build of coai-mcp runs". Neither reviews with it, so the row is withheld
  * from the file — not merely greyed on the card — while every other row still crosses, and the card says why. One
- * table, one arm per runtime, so the next runtime (Kimi, S4) is a line here rather than a second gate beside the
+ * table, one arm per runtime, so the next runtime (Kimi, S4, joined 2026-10-15) is a line here rather than a second gate beside the
  * first.</p>
  *
  * <p>Pure and `vscode`-free. It imports only from `apiRuntime.ts` and `coaiInstall.ts`, never from `vendors.ts`, which
@@ -27,10 +27,26 @@ import { compareVersions } from './coaiInstall';
  */
 export const VIBE_RUNTIME_SINCE = '0.53.0';
 
+/**
+ * The first `coai-mcp` that knows `runtime: "kimi"`: the release that carries E4.1–E4.5 of
+ * todo/PLAN_vibe_and_kimi_runtimes_E4.md (the junction-safe home, the shim's flags, `KimiRuntime`, this story).
+ *
+ * <p><b>Which version, and why.</b> release-please bumps the minor for a `feat` below 1.0, and the newest RELEASED
+ * `src_mcp` on `main` when this was written (2026-10-15) is 0.55.0 (tag `mcp-v0.55.0`; `.release-please-manifest.json`
+ * on `main` says so — this branch's own copy, 0.53.0, is behind it). A server that is released WITHOUT the runtime
+ * refuses a kimi row by name ("not one this build of coai-mcp runs"), as every server since 0.44.0 does, so the earliest
+ * release that can carry it is the next minor: 0.56.0. The plan's brief (0.54.0 or 0.55.0) was written when 0.53.0 was the
+ * newest; both have since been released without Kimi. Set too LOW this stays quiet on exactly the server that would
+ * refuse the row; set too high it only holds a row back from a server that could run it. <b>Whoever cuts the release keeps
+ * it level with the tag</b> — if another minor ships first, raise this to the one that carries these stories.</p>
+ */
+export const KIMI_RUNTIME_SINCE = '0.56.0';
+
 /** Every runtime some released server does not know, with the release that first knows it. */
 const RUNTIME_SINCE: Readonly<Record<string, string>> = {
   api: API_RUNTIME_SINCE,
   vibe: VIBE_RUNTIME_SINCE,
+  kimi: KIMI_RUNTIME_SINCE,
 };
 
 /**

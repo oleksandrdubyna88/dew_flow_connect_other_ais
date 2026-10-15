@@ -131,7 +131,8 @@ test('a command is official only when EVERY source it fetches and EVERY package 
 test('the admitted sources are exactly these — a new one is a decision, made here in the open', () => {
   // Astral's host joined on 2026-10-13 for the one-press Windows install: it is the uv installer Mistral's README gives
   // as the Windows prerequisite, and the one Mistral's own install.sh runs elsewhere (pinned, its checksum checked).
-  assert.deepEqual([...OFFICIAL_SOURCES.urls], ['https://antigravity.google/', 'https://mistral.ai/vibe/', 'https://astral.sh/uv/']);
+  // Moonshot's path joined on 2026-10-15 for Kimi Code (kimiWindowsInstall.test.ts holds the whole list with its winget ids).
+  assert.deepEqual([...OFFICIAL_SOURCES.urls], ['https://antigravity.google/', 'https://mistral.ai/vibe/', 'https://astral.sh/uv/', 'https://code.kimi.com/kimi-code/']);
   assert.deepEqual([...OFFICIAL_SOURCES.packages], ['@openai/codex', '@google/gemini-cli', '@anthropic-ai/claude-code', 'mistral-vibe']);
 });
 
