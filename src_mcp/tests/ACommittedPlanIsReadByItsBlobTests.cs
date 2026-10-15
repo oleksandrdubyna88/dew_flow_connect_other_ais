@@ -40,10 +40,12 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
             await _git.StageBlobAsync("bom.md", [0xEF, 0xBB, 0xBF, .. "bom text\n"u8]);
             await _git.StageBlobAsync("bad.md", [.. "abc "u8, 0xFF, 0xFE, .. " def\n"u8]);
             await _git.StageBlobAsync("empty.md", []);
+            // FF FE + UTF-16LE "plan\n": the launcher's decoder detects the BOM and decodes it WITHOUT a U+FFFD.
+            await _git.StageBlobAsync("utf16.md", [0xFF, 0xFE, .. "plan\n"u8.ToArray().SelectMany(b => new byte[] { b, 0 })]);
             await _git.StageBlobAsync("blank.md", "  \n\t\n"u8.ToArray());
             await _git.StageBlobAsync("big.md", Encoding.ASCII.GetBytes(new string('x', 263169) + "\n"));
             await _git.StageBlobAsync("lfs.md", Encoding.ASCII.GetBytes(Pointer));
-            await _git.StageBlobAsync("replacement.md", Encoding.UTF8.GetBytes("café � end\n"));
+            await _git.StageBlobAsync("replacement.md", Encoding.UTF8.GetBytes("caf\u00e9 \uFFFD end\n"));
             await _git.StageBlobAsync("todo/PLAN x.md", "a plan\n"u8.ToArray());
             await _git.StageBlobAsync("d/a.md", "a\n"u8.ToArray());
             await _git.StageBlobAsync("d/b.md", "b\n"u8.ToArray());
@@ -116,7 +118,13 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
             ? new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true)
             : null);
 
+        var failingAndCut = new Watching(fixture.Launcher, request => request.Arguments.Contains("cat-file")
+            ? new ProcessResult(128, string.Empty, "fatal", TimedOut: false, Truncated: true)
+            : null);
+
         RefusedBy(await ReadAsync(failing, "plan.md")).Should().Contain("git fsck");
+        RefusedBy(await ReadAsync(failingAndCut, "plan.md")).Should().Contain("git fsck").And.NotContain("cut short",
+            "a cut capture of a command that FAILED is a failed command, and its cure is not a re-run");
         RefusedBy(await ReadAsync(hung, "plan.md")).Should().Contain("within 30 s");
     }
 
@@ -124,6 +132,14 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
     public async Task AnInvalidUtf8Blob_IsNotUtf8()
     {
         RefusedBy(await ReadAsync(fixture.Launcher, "bad.md")).Should().Contain("not UTF-8").And.Contain("'bad.md'");
+    }
+
+    [Fact]
+    public async Task AUtf16Blob_IsToldToSaveAsUtf8_NotToRerun()
+    {
+        var read = await ReadAsync(fixture.Launcher, "utf16.md");
+
+        RefusedBy(read).Should().Contain("differs from the blob").And.Contain("UTF-16").And.Contain("save it as UTF-8");
     }
 
     [Fact]
@@ -164,7 +180,7 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
     {
         var read = await ReadAsync(fixture.Launcher, "replacement.md");
 
-        read.Should().BeOfType<PlanRead.Accepted>().Which.Text.Should().Be("café � end\n");
+        read.Should().BeOfType<PlanRead.Accepted>().Which.Text.Should().Be("caf\u00e9 \uFFFD end\n");
     }
 
     [Theory]
@@ -187,6 +203,21 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
     {
         RefusedBy(await ReadAsync(fixture.Launcher, "d/")).Should().Contain("names 2 entries");
         RefusedBy(await ReadAsync(fixture.Launcher, "todo/")).Should().Contain("git listed 'todo/PLAN x.md' for 'todo/'");
+    }
+
+    [Theory]
+    [InlineData("../outside.md", "climbs out")]
+    [InlineData("/etc/x", "is absolute")]
+    [InlineData("C:\\x", "names a drive")]
+    [InlineData("", "names no file")]
+    public async Task APathOutsideTheRepository_GetsThePathCure_AndStartsNoProcess(string path, string why)
+    {
+        var watching = new Watching(fixture.Launcher);
+
+        var read = await ReadAsync(watching, path);
+
+        RefusedBy(read).Should().Contain(why).And.Contain("relative to the repository root").And.NotContain("git fsck");
+        watching.Ran.Should().BeEmpty();
     }
 
     [Fact]

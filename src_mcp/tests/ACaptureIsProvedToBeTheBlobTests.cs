@@ -58,10 +58,10 @@ public sealed class ACaptureIsProvedToBeTheBlobTests
     {
         var blob = new byte[] { 0xEF, 0xBB, 0xBF, 0xEF, 0xBB, 0xBF, (byte)'x' };
 
-        var verdict = BlobProof.Prove("﻿x", GitId(blob), blob.Length);
+        var verdict = BlobProof.Prove("\uFEFFx", GitId(blob), blob.Length);
 
         var proved = verdict.Should().BeOfType<ProofVerdict.Proved>().Subject;
-        proved.Text.Should().Be("﻿x");
+        proved.Text.Should().Be("\uFEFFx");
         proved.BomDropped.Should().BeTrue();
     }
 
@@ -69,7 +69,7 @@ public sealed class ACaptureIsProvedToBeTheBlobTests
     public void ALiteralReplacementCharacter_IsProvedLikeAnyOtherCharacter()
     {
         // A VALID blob can hold U+FFFD (EF BF BD). The id matches, so the character is evidence of nothing.
-        const string text = "café � end\n";
+        const string text = "caf\u00e9 \uFFFD end\n";
         var blob = Encoding.UTF8.GetBytes(text);
 
         var verdict = BlobProof.Prove(text, GitId(blob), blob.Length);
@@ -81,7 +81,7 @@ public sealed class ACaptureIsProvedToBeTheBlobTests
     public void ALossyDecode_IsNotUtf8()
     {
         // `abc \xFF\xFE def\n` (11 bytes) decodes to two U+FFFD and re-encodes to 15 bytes: neither id matches.
-        var verdict = BlobProof.Prove("abc �� def\n", BadOid, 11);
+        var verdict = BlobProof.Prove("abc \uFFFD\uFFFD def\n", BadOid, 11);
 
         verdict.Should().BeOfType<ProofVerdict.Refused>().Which.Sentence.Should().Contain("not UTF-8");
     }
@@ -93,6 +93,18 @@ public sealed class ACaptureIsProvedToBeTheBlobTests
 
         verdict.Should().BeOfType<ProofVerdict.Refused>().Which.Sentence
             .Should().Contain("differs from the blob").And.Contain("10 bytes").And.Contain("11 declared");
+    }
+
+    [Fact]
+    public void AUtf16Capture_DiffersFromTheBlob_AndTheCureIsUtf8()
+    {
+        // FF FE + UTF-16LE "plan\n" is 12 bytes; the decoder hands back "plan\n" with no replacement character.
+        var blob = new byte[] { 0xFF, 0xFE, (byte)'p', 0, (byte)'l', 0, (byte)'a', 0, (byte)'n', 0, (byte)'\n', 0 };
+
+        var verdict = BlobProof.Prove("plan\n", GitId(blob), blob.Length);
+
+        verdict.Should().BeOfType<ProofVerdict.Refused>().Which.Sentence
+            .Should().Contain("differs from the blob").And.Contain("UTF-16/UTF-32").And.Contain("save it as UTF-8");
     }
 
     [Fact]

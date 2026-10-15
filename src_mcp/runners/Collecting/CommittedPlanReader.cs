@@ -1,3 +1,4 @@
+using CoaiMcp.Core;
 using CoaiMcp.Core.Collecting;
 using CoaiMcp.Core.Rounds;
 
@@ -35,9 +36,10 @@ public static class CommittedPlanReader
     public static async Task<PlanRead> ReadAsync(
         GitHistory git, string repoPath, string sha, string canonicalPath, CancellationToken ct)
     {
-        if (!GitHistory.IsCommitish(sha))
+        var unreadable = Unreadable(sha, canonicalPath);
+        if (unreadable.Length > 0)
         {
-            return new PlanRead.Refused(NotSha1(sha));
+            return new PlanRead.Refused(unreadable);
         }
 
         var listing = await git.EntryAtAsync(repoPath, sha, canonicalPath, ct);
@@ -108,6 +110,19 @@ public static class CommittedPlanReader
         return answer.Truncated
             ? $"{what} was cut short — an incomplete read; nothing was reviewed; re-run, and if it repeats report it"
             : string.Empty;
+    }
+
+    /// <summary>What makes a read impossible before any process: a commit that is not 40 hex, or a path that is not in the repository.</summary>
+    private static string Unreadable(string sha, string path)
+    {
+        if (!GitHistory.IsCommitish(sha))
+        {
+            return NotSha1(sha);
+        }
+
+        var why = RepoPaths.WhyNotRelative(path);
+
+        return why.Length > 0 ? $"'{path}' {why} — pass a path relative to the repository root, as committed (todo/PLAN_x.md)" : string.Empty;
     }
 
     private static string NotSha1(string sha) =>
