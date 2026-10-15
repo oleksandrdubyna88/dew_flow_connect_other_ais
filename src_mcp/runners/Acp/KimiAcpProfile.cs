@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 
@@ -29,9 +30,12 @@ public sealed class KimiAcpProfile : IAcpProfile
     /// <summary>
     /// The names refused at every depth: both spellings Kimi searches for its instructions (<c>AGENTS.md</c>,
     /// <c>agents.md</c>, and <c>.kimi-code/AGENTS.md</c> through its folder), Vibe's folder and the shared
-    /// exclusions of the sanitised snapshot (D6) — so the boundary refuses what the snapshot leaves out.
+    /// exclusions of the sanitised snapshot (D6) — so the boundary refuses what the snapshot leaves out. M-K9 (e) added two
+    /// (RESULTS section 21): <c>.agents/agents</c> (a sub-agent root Kimi loads from disk, a PATH suffix like <c>.agents/skills</c>) and
+    /// <c>.mcp.json</c> (the file Kimi starts MCP servers from when the folder is trusted). The latter is a NAME, so it is refused at every
+    /// depth — the parent plan says "project-root", and the stricter reading is what a name entry does.
     /// </summary>
-    public static readonly string[] Exclusions = ["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".git"];
+    public static readonly string[] Exclusions = ["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".agents/agents", ".mcp.json", ".git"];
 
     /// <summary>The sentences measured on 2026-10-12 (RESULTS §2), the specific one first.</summary>
     private static readonly AcpKnownFailure[] Failures =
@@ -67,6 +71,24 @@ public sealed class KimiAcpProfile : IAcpProfile
     public string DefaultExecutable => InstalledExecutable;
 
     public IReadOnlyList<string> Arguments => ["acp"];
+
+    /// <summary>Kimi runs only on an owned home and only under the tree hold (D19, E4.2 decision 10): <c>--home</c>, <c>--persons-bin</c> and <c>--locks</c>.</summary>
+    public bool NeedsAHome => true;
+
+    /// <summary>
+    /// <c>kimi acp</c> in the BUILT environment (D19) — the minimal names and the seven the launch control builds, never the shim's own. The
+    /// person's paths are the two the runtime passed on the argv (<see cref="KimiPlaces.ForShim"/>); nothing is read from this process's environment
+    /// but the <c>PATH</c> to keep.
+    /// </summary>
+    public ProcessRequest AgentRequest(AcpAsk ask) => KimiEnvironment.Built(new ProcessRequest(ask.Executable, Arguments, ask.Cwd), PlacesOf(ask));
+
+    /// <summary>The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named.</summary>
+    public string AgentRefusal(ProcessRequest request, AcpAsk ask) => KimiEnvironment.Refusal(request, PlacesOf(ask));
+
+    /// <summary>The sign-in's tree hold and the home's (<see cref="KimiShimHold"/>), taken immediately before the agent starts.</summary>
+    public AcpHolding Hold(AcpAsk ask, TimeSpan within) => KimiShimHold.Taken(PlacesOf(ask), within);
+
+    private static KimiPlaces PlacesOf(AcpAsk ask) => KimiPlaces.ForShim(ask.Home, ask.PersonsBin);
 
     /// <summary>The <c>session/new</c> config option that carries the model id (<c>kimi-code/k3-256k</c>, …).</summary>
     public string ModelOptionId => "model";

@@ -92,6 +92,26 @@ public sealed class ReviewSnapshotTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheTwoNamesMK9eAdded_AreAbsent_AndNamedInTheManifest()
+    {
+        await WriteAsync(".agents/agents/x.md", "sub-agent");
+        await WriteAsync(".agents/PROJECT.md", "kept: not a sub-agent root");
+        await WriteAsync(".mcp.json", "{}");
+        await WriteAsync("sub/.mcp.json", "{}");
+        await _repo.CommitAsync("the M-K9 (e) names");
+
+        using var snapshot = await MadeAsync(Pinned);
+
+        foreach (var gone in new[] { ".agents/agents/x.md", ".mcp.json", "sub/.mcp.json" })
+        {
+            SnapshotTestKit.Has(snapshot, gone).Should().BeFalse($"{gone} is excluded (RESULTS section 21)");
+        }
+
+        SnapshotTestKit.TextAt(snapshot, ".agents/PROJECT.md").Should().Be("kept: not a sub-agent root");
+        snapshot.Manifest.Excluded.Should().BeEquivalentTo([".agents/agents/x.md", ".mcp.json", "sub/.mcp.json"], "an excluded path is named, never silently lost");
+    }
+
+    [Fact]
     public async Task TheExcludedNames_AreMatchedByTheDestinationsCaseRule()
     {
         await WriteAsync("nested/Agents.MD", "orders in another case");

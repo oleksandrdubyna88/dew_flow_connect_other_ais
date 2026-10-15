@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Processes;
+
 namespace CoaiMcp.Runners.Acp;
 
 /// <summary>
@@ -33,6 +35,28 @@ public interface IAcpProfile
 
     /// <summary>The failure sentences this vendor is known to write, each with its name and its cure.</summary>
     IReadOnlyList<AcpKnownFailure> KnownFailures { get; }
+
+    /// <summary>
+    /// Whether the agent runs only on an owned home the launch hands the shim (<c>--home</c>, <c>--persons-bin</c>) and only under the tree
+    /// hold on the sign-in (<c>--locks</c>) — a shim without them is refused 65 (E4.3). False by default: a stand-in needs none.
+    /// </summary>
+    bool NeedsAHome => false;
+
+    /// <summary>
+    /// The request that starts the agent. By default the executable, <see cref="Arguments"/> and the working folder, inheriting this
+    /// process's environment as every ACP agent did before a home existed; a profile that needs a home builds the whole environment
+    /// itself (D19) and never inherits.
+    /// </summary>
+    ProcessRequest AgentRequest(AcpAsk ask) => new(ask.Executable, Arguments, ask.Cwd);
+
+    /// <summary>Why this request must not start the agent — or empty. Asked before anything is held or started; a sentence is the shim's 65.</summary>
+    string AgentRefusal(ProcessRequest request, AcpAsk ask) => string.Empty;
+
+    /// <summary>
+    /// The hold on the sign-in the agent's tree keeps, taken immediately before the agent starts, for as long as <paramref name="within"/>
+    /// allows. Synchronous on purpose: nothing may yield between the take and the start (decision 10). By default there is nothing to hold.
+    /// </summary>
+    AcpHolding Hold(AcpAsk ask, TimeSpan within) => AcpHolding.Nothing;
 }
 
 /// <summary>What a known failure means for the launch: the account cannot have this (a sign-in or a plan), or it is spent.</summary>

@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Kimi;
 
 namespace CoaiMcp.Acp;
 
@@ -18,17 +20,24 @@ namespace CoaiMcp.Acp;
 /// closes stdin (<c>WriteStdInAsync</c>), so the prompt is read whole here before the agent is started; the agent's
 /// own stdin stays open for the replies for as long as the turn runs.</para>
 /// <para><b>Exit codes are the contract.</b> 0 answered; 65 a request this shim will not make — no profile, an
-/// unknown one, no model, no folder, an empty prompt — and <b>never 64</b>, which means "this binary has never heard
-/// of that mode" (<c>.agents/PROJECT.md</c>); 69 ended before an answer — the agent could not be started, the
-/// deadline struck, or the caller cancelled — read by the parent as "usage not captured"; 70 the agent refused or
+/// unknown one, no model, no folder, an empty prompt, a profile that needs a home without <c>--home</c>/<c>--persons-bin</c>/<c>--locks</c>, an agent
+/// request that is not coai's own environment, a hold that cannot be taken, a model the session does not offer — and <b>never 64</b>, which means "this binary has never heard
+/// of that mode" (<c>.agents/PROJECT.md</c>); 69 ended before an answer — the agent could not be started, another
+/// Kimi still holds the sign-in past the deadline, the deadline struck, or the caller cancelled — read by the parent as "usage not captured"; 70 the agent refused or
 /// failed in its own words; 75 a known SPENT sentence (an allowance, D14); 76 (EX_PROTOCOL) the stream broke — the
 /// agent closed its output early, stopped listening, or wrote something that is not an answer; 77 a known REFUSED
 /// sentence — not signed in, or a plan without the model (the 401 of RESULTS §2).</para>
+/// <para><b>A profile that needs a home (Kimi) runs only on one</b> (D19, E4.3): <c>--home</c> is the coai-owned ROOT holding <c>home/</c> and <c>os/</c>,
+/// <c>--persons-bin</c> the person's tool folder, <c>--locks</c> the lock folder — all three arrive on the argv because inside this process
+/// <c>USERPROFILE</c> is the owned <c>os/</c>, and the person's paths are never asked of an environment. The agent is started in an environment
+/// built from scratch (<see cref="IAcpProfile.AgentRequest"/>), never by inheritance. <b>The tree hold GATES</b> (decision 10 of E4.2): it is taken
+/// immediately before <see cref="AcpClient.AskAsync"/> — nothing awaited between — and disposed once that has returned; another tree still holding
+/// the sign-in past the deadline is exit 69 with the reason in a sentence, a hold that cannot be taken exit 65. There is no warning-only fallback.</para>
 /// <para><b>The stdout shape</b> (<see cref="Report"/>) is printed on EVERY exit, so a failed turn's trace and usage
 /// cross the process boundary as an answered one's do: <c>answer</c>, <c>end</c>, <c>stopReason</c>, <c>reason</c>,
 /// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>usage</c> in the api shim's
-/// field names — <c>tokensIn</c>/<c>tokensOut</c> are 0 with <c>notCaptured: true</c>, because ACP reports context
-/// tokens with no split (D15); <c>contextUsed</c>/<c>contextSize</c> carry the last <c>usage_update</c> when one
+/// field names — <c>tokensIn</c>/<c>tokensOut</c> are the session's totals from <c>/usage</c>, asked after an answered turn (D15, M-K2), or 0 with
+/// <c>notCaptured: true</c> when it could not be had — never a guessed number; <c>contextUsed</c>/<c>contextSize</c> carry the last <c>usage_update</c> when one
 /// came — and the trace: <c>refusals</c> (tool, kind, option), <c>toolCalls</c> (id, title, kind, status) and
 /// <c>reads</c> (path, served, reason).</para>
 /// </remarks>
@@ -50,7 +59,10 @@ internal static class AskAcpMode
 
     private const string Mode = "--ask-acp";
 
-    /// <param name="args">The argv from the mode on: <c>--profile</c>, <c>--model</c>, <c>--cwd</c>, <c>--deadline-seconds</c>, and an optional <c>--executable</c> (a row's configured path).</param>
+    /// <summary>The lock folder the tree hold lives in — <see cref="KimiCredentialsLock.Root"/> of the runtime that started this shim.</summary>
+    private const string LocksFlag = "--locks";
+
+    /// <param name="args">The argv from the mode on: <c>--profile</c>, <c>--model</c>, <c>--cwd</c>, <c>--deadline-seconds</c>, an optional <c>--executable</c> (a row's configured path), and for a profile that needs a home <c>--home</c>, <c>--persons-bin</c> and <c>--locks</c>.</param>
     /// <param name="stdin">The prompt, read to its end.</param>
     /// <param name="note">Stderr: the refusal or the reason, as sentences.</param>
     /// <param name="output">Stdout: the one JSON object.</param>
@@ -82,7 +94,7 @@ internal static class AskAcpMode
     {
         var cwd = flags.GetValueOrDefault("--cwd", string.Empty);
         var model = flags.GetValueOrDefault("--model", string.Empty);
-        if (Refusal(flags, cwd, model) is { Length: > 0 } refused)
+        if (Refusal(profile, flags, cwd, model) is { Length: > 0 } refused)
         {
             note(refused);
 
@@ -97,8 +109,68 @@ internal static class AskAcpMode
             return BadRequest;
         }
 
-        var ask = new AcpAsk(Executable(flags, profile), Path.GetFullPath(cwd), model, prompt, Deadline(flags));
-        var outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask, ct);
+        var ask = new AcpAsk(
+            Executable(flags, profile), Path.GetFullPath(cwd), model, prompt, Deadline(flags),
+            flags.GetValueOrDefault(KimiEnvironment.HomeFlag, string.Empty), flags.GetValueOrDefault(KimiEnvironment.PersonsBinFlag, string.Empty));
+        using var rooted = LocksScope(flags);
+
+        return await AskedAsync(profile, ask, note, output, ct);
+    }
+
+    /// <summary>The lock folder the turn's holds live in, for the whole turn — the <c>--locks</c> flag, never a folder derived from a profile this process does not have.</summary>
+    private static IDisposable LocksScope(IReadOnlyDictionary<string, string> flags) =>
+        flags.GetValueOrDefault(LocksFlag, string.Empty) is { Length: > 0 } locks ? KimiCredentialsLock.RootFor(locks) : Unscoped.Instance;
+
+    /// <summary>
+    /// The agent's request refused, else the hold taken, else the turn run under it. The hold is taken IMMEDIATELY before
+    /// <see cref="AcpClient.AskAsync"/> with nothing awaited between (so no other launch can slip between the take and the start) and disposed
+    /// once that has returned, by which time its <c>finally</c> has ended the agent. The turn gets what is left of the deadline after the wait.
+    /// </summary>
+    private static async Task<int> AskedAsync(IAcpProfile profile, AcpAsk ask, Action<string> note, TextWriter output, CancellationToken ct)
+    {
+        if (profile.AgentRefusal(profile.AgentRequest(ask), ask) is { Length: > 0 } refused)
+        {
+            return await NotStartedAsync(refused, BadRequest, note, output);
+        }
+
+        var waiting = Stopwatch.StartNew();
+        var holding = profile.Hold(ask, ask.Deadline);
+        if (holding is not AcpHolding.Held held)
+        {
+            var (sentence, exit) = Declined(holding);
+
+            return await NotStartedAsync(sentence, exit, note, output);
+        }
+
+        AcpOutcome outcome;
+        using (held.Hold)
+        {
+            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = ask.Deadline - waiting.Elapsed }, ct);
+        }
+
+        return await ReportedAsync(profile, outcome, note, output);
+    }
+
+    /// <summary>What a hold that was not taken comes to: another tree holding on past the deadline is an end before an answer (69); a hold that cannot be taken at all is a request this shim will not make (65).</summary>
+    private static (string Sentence, int Exit) Declined(AcpHolding holding) => holding switch
+    {
+        AcpHolding.Busy busy => (busy.Sentence, Unavailable),
+        AcpHolding.Unusable unusable => (unusable.Sentence, BadRequest),
+        _ => (string.Empty, Ok),
+    };
+
+    /// <summary>A turn that never started an agent, said as every other end is: the report on stdout, the sentence on stderr, the exit.</summary>
+    private static async Task<int> NotStartedAsync(string sentence, int exit, Action<string> note, TextWriter output)
+    {
+        note(sentence);
+        await output.WriteLineAsync(Report(AcpOutcome.NotStarted(sentence), AcpDiagnosis.None));
+
+        return exit;
+    }
+
+    /// <summary>The report printed, the exit made from the outcome.</summary>
+    private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, Action<string> note, TextWriter output)
+    {
         var diagnosis = AcpDiagnosis.Of(outcome.Reason + "\n" + outcome.StdErr, profile.KnownFailures);
         await output.WriteLineAsync(Report(outcome, diagnosis));
 
@@ -106,8 +178,8 @@ internal static class AskAcpMode
     }
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
-    internal static string Refusal(IReadOnlyDictionary<string, string> flags, string cwd, string model) =>
-        new[] { FolderRefusal(cwd), ModelRefusal(model), DeadlineRefusal(flags) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
+    internal static string Refusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags, string cwd, string model) =>
+        new[] { FolderRefusal(cwd), ModelRefusal(model), DeadlineRefusal(flags), PlacesRefusal(profile, flags) }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
 
     private static string FolderRefusal(string cwd) =>
         cwd.Length == 0 || !Directory.Exists(cwd)
@@ -131,6 +203,34 @@ internal static class AskAcpMode
             ? $"{Mode}: --deadline-seconds must be a whole number from 1 to {MaxDeadlineSeconds} — '{given}' is not"
             : string.Empty;
     }
+
+    /// <summary>
+    /// A profile that needs a home (<see cref="IAcpProfile.NeedsAHome"/>) is refused without the three places the runtime resolved once in the
+    /// unredirected parent: the owned root (which must exist), the person's tool folder, the lock folder. Inside this process none of them can be
+    /// found again — the environment is the redirected one.
+    /// </summary>
+    private static string PlacesRefusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags)
+    {
+        if (!profile.NeedsAHome)
+        {
+            return string.Empty;
+        }
+
+        return new[]
+        {
+            HomeRefusal(flags.GetValueOrDefault(KimiEnvironment.HomeFlag, string.Empty)),
+            NamedRefusal(flags, KimiEnvironment.PersonsBinFlag, "the person's tool folder, the first entry of the agent's PATH"),
+            NamedRefusal(flags, LocksFlag, "the lock folder the tree hold lives in"),
+        }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
+    }
+
+    private static string HomeRefusal(string home) =>
+        home.Length == 0 || !Directory.Exists(home)
+            ? $"{Mode} needs {KimiEnvironment.HomeFlag} <the coai-owned root holding home/ and os/>" + (home.Length == 0 ? string.Empty : $" — '{home}' is not an existing folder")
+            : string.Empty;
+
+    private static string NamedRefusal(IReadOnlyDictionary<string, string> flags, string flag, string what) =>
+        flags.GetValueOrDefault(flag, string.Empty).Length == 0 ? $"{Mode} needs {flag} <{what}>" : string.Empty;
 
     private static bool HoldableSeconds(string given) =>
         int.TryParse(given, out var seconds) && seconds >= 1 && seconds <= MaxDeadlineSeconds;
@@ -165,9 +265,9 @@ internal static class AskAcpMode
         return EndExit(outcome.End);
     }
 
-    /// <summary>Whether a known failure names the end — never one the clock or the caller decided, whatever the agent said.</summary>
+    /// <summary>Whether a known failure names the end — never one the clock, the caller or this shim decided, whatever the agent said.</summary>
     private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
-        diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled);
+        diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled or AcpEnd.ModelNotOffered);
 
     /// <summary>A known failure's exit: a spent allowance, or a refusal.</summary>
     private static int DiagnosedExit(AcpFailureKind kind) => kind == AcpFailureKind.Spent ? Spent : Refused;
@@ -177,6 +277,7 @@ internal static class AskAcpMode
     {
         AcpEnd.AgentFailed => Failed,
         AcpEnd.Protocol => Protocol,
+        AcpEnd.ModelNotOffered => BadRequest,
         _ => Unavailable,
     };
 
@@ -190,7 +291,7 @@ internal static class AskAcpMode
             ["stopReason"] = outcome.StopReason,
             ["reason"] = outcome.Reason,
             ["sessionId"] = outcome.SessionId,
-            ["usage"] = UsageObject(outcome.Usage),
+            ["usage"] = UsageObject(outcome),
             ["refusals"] = new JsonArray([.. outcome.Refusals.Select(r => (JsonNode?)new JsonObject { ["tool"] = r.Tool, ["kind"] = r.Kind, ["option"] = r.Option })]),
             ["toolCalls"] = new JsonArray([.. outcome.ToolCalls.Select(t => (JsonNode?)new JsonObject { ["id"] = t.Id, ["title"] = t.Title, ["kind"] = t.Kind, ["status"] = t.Status })]),
             ["reads"] = new JsonArray([.. outcome.Reads.Select(r => (JsonNode?)new JsonObject { ["path"] = r.Path, ["served"] = r.Served, ["reason"] = r.Reason })]),
@@ -207,14 +308,21 @@ internal static class AskAcpMode
         return report.ToJsonString();
     }
 
-    /// <summary>The api shim's usage field names, so one reader serves both: unknown tokens, plus the context numbers when reported.</summary>
-    private static JsonObject UsageObject(AcpUsage usage)
+    /// <summary>The api shim's usage field names, so one reader serves both: the session's token totals when <c>/usage</c> gave them (unknown is <c>notCaptured</c> and 0, never a guess), plus the context numbers when reported.</summary>
+    private static JsonObject UsageObject(AcpOutcome outcome)
     {
-        var tokens = new JsonObject { ["tokensIn"] = 0, ["tokensOut"] = 0, ["tokensCached"] = 0, ["tokensReasoning"] = 0, ["notCaptured"] = true };
-        if (usage.Captured)
+        var tokens = new JsonObject
         {
-            tokens["contextUsed"] = usage.ContextUsed;
-            tokens["contextSize"] = usage.ContextSize;
+            ["tokensIn"] = outcome.Tokens.In,
+            ["tokensOut"] = outcome.Tokens.Out,
+            ["tokensCached"] = 0,
+            ["tokensReasoning"] = 0,
+            ["notCaptured"] = !outcome.Tokens.Captured,
+        };
+        if (outcome.Usage.Captured)
+        {
+            tokens["contextUsed"] = outcome.Usage.ContextUsed;
+            tokens["contextSize"] = outcome.Usage.ContextSize;
         }
 
         return tokens;
@@ -227,6 +335,17 @@ internal static class AskAcpMode
         AcpEnd.AgentFailed => "agent_failed",
         AcpEnd.Deadline => "deadline",
         AcpEnd.Protocol => "protocol",
+        AcpEnd.ModelNotOffered => "model_not_offered",
         _ => "cancelled",
     };
+
+    /// <summary>The scope of a turn with no lock folder to point at: nothing to restore.</summary>
+    private sealed class Unscoped : IDisposable
+    {
+        public static readonly Unscoped Instance = new();
+
+        public void Dispose()
+        {
+        }
+    }
 }

@@ -185,7 +185,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     // ---------- S2.43 ----------
 
     /// <summary>The shim as a child: <c>held &lt;grandchild pid&gt;</c> on stdout once it has taken <paramref name="mode"/>'s lock.</summary>
-    private static async Task<(Process Shim, Process Grandchild)> StartShimAsync(string mode, string locks, string target, string home)
+    internal static async Task<(Process Shim, Process Grandchild)> StartShimAsync(string mode, string locks, string target, string home)
     {
         var exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
         var shim = Process.Start(new ProcessStartInfo(exe, ["tree-hold", mode, locks, target, home]) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false })!;
@@ -232,7 +232,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
         return true;
     }
 
-    private static async Task EndAsync(Process process)
+    internal static async Task EndAsync(Process process)
     {
         if (!process.HasExited)
         {

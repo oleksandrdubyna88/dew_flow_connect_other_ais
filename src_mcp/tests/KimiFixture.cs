@@ -90,6 +90,28 @@ internal sealed class KimiFixture : IDisposable
     public KimiPlaces Places(string rootName = "kh-x") =>
         KimiPlaces.Resolve(Path.Combine(Folder, "owned", rootName), HostKind.Windows, Env, Profile, File.Exists);
 
+    /// <summary>The bytes of the <c>config.toml</c> coai writes for this person and <paramref name="model"/> — what a launch's validation compares the home's against.</summary>
+    public byte[] ExpectedConfig(string model = KimiModels.Default)
+    {
+        var slot = ((SlotRead.Found)KimiPersonsConfig.ReadFile(PersonsConfig)).Slot;
+        var block = ((BlockRead.Found)KimiModelBlocks.For(model, File.ReadAllText(PersonsConfig), ((BlocksLoad.Loaded)KimiModelBlocks.Builtin).Blocks)).Block;
+
+        return KimiConfig.Bytes(KimiConfig.Render(slot, block));
+    }
+
+    /// <summary>The places for <paramref name="rootName"/>, with the owned home MADE: the <c>credentials</c> junction to this person's folder and the one <c>config.toml</c>.</summary>
+    public KimiPlaces MadeHome(string rootName = "kh-x", string model = KimiModels.Default)
+    {
+        var places = Places(rootName);
+        var made = KimiHome.Made(HostKind.Windows, places, ExpectedConfig(model));
+        if (made.Length > 0)
+        {
+            throw new InvalidOperationException(made);
+        }
+
+        return places;
+    }
+
     /// <summary>The environment of a person who set nothing but a PATH holding their own bin.</summary>
     public string? Env(string name) => name switch
     {

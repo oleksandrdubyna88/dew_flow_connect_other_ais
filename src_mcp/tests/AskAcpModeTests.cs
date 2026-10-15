@@ -139,7 +139,7 @@ public sealed class AskAcpModeTests
 
         await RunAsync(agent, prompt: prompt);
 
-        agent.Received("session/prompt").Single().GetProperty("params").GetProperty("prompt")[0].GetProperty("text").GetString()
+        agent.Received("session/prompt").First().GetProperty("params").GetProperty("prompt")[0].GetProperty("text").GetString()
             .Should().Be(prompt, "stdin EOF means the prompt is complete — never cancel");
     }
 
@@ -216,6 +216,80 @@ public sealed class AskAcpModeTests
 
         code.Should().Be(69, Stderr);
         Report().GetProperty("end").GetString().Should().Be("not_started");
+    }
+
+    // ---------- E4.3: the home, the refusal of the agent's request, the lock folder ----------
+
+    /// <summary>The real `kimi` profile with its flags — and an executable that does not exist, so a test that is RED today fails on an assertion and never starts the person's own Kimi.</summary>
+    private Task<int> KimiAsync(TempDir folder, params string[] flags) =>
+        AskAcpMode.RunAsync(
+            ["--ask-acp", "--profile", "kimi", "--model", "kimi-code/k3", "--cwd", folder.Path, "--executable", folder.At("no-such-kimi.exe"), .. flags],
+            new StringReader("say hello"), _stderr.Add, _stdout);
+
+    [Fact]
+    public async Task ATurnWithoutAHome_IsRefused65()
+    {
+        using var folder = TempDir.For("testsToDelete-kimi-shim-");
+
+        var code = await KimiAsync(folder);
+
+        code.Should().Be(65, "a Kimi turn without --home would run on the person's own home and environment (D19): " + Stderr);
+        Stderr.Should().Contain("--home");
+        _stdout.ToString().Should().BeEmpty("a refused request prints no report — nothing was started");
+    }
+
+    [Fact]
+    public async Task AHomeThatIsNotThere_AndAMissingPersonsBin_AreRefused65_EachNamed()
+    {
+        using var folder = TempDir.For("testsToDelete-kimi-shim-");
+        Directory.CreateDirectory(folder.At("root"));
+
+        var absent = await KimiAsync(folder, "--home", folder.At("nowhere"), "--persons-bin", folder.At("bin"));
+        var noBin = await KimiAsync(folder, "--home", folder.At("root"));
+
+        new[] { absent, noBin }.Should().AllBeEquivalentTo(65);
+        Stderr.Should().Contain("nowhere").And.Contain("--persons-bin");
+    }
+
+    [Fact]
+    public async Task AnAgentEnvironmentThatIsNotCoais_IsRefusedBeforeStart()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+        const string sentence = "the os/ folder is missing — this agent request is refused (D19)";
+
+        var code = await AskAcpMode.RunAsync(
+            ["--ask-acp", "--profile", "fake", "--model", "m-1", "--cwd", agent.Cwd], new StringReader("say hello"), _stderr.Add, _stdout, [agent.Profile(agentRefusal: sentence)]);
+
+        code.Should().Be(65, Stderr);
+        Stderr.Should().Contain(sentence);
+        Report().GetProperty("end").GetString().Should().Be("not_started");
+        File.Exists(agent.Log).Should().BeFalse("the agent never started, so it never wrote its log");
+    }
+
+    [Fact]
+    public async Task AKimiProfileWithoutLocks_IsRefused65()
+    {
+        using var folder = TempDir.For("testsToDelete-kimi-shim-");
+        Directory.CreateDirectory(folder.At("root"));
+        Directory.CreateDirectory(folder.At("bin"));
+
+        var code = await KimiAsync(folder, "--home", folder.At("root"), "--persons-bin", folder.At("bin"));
+
+        code.Should().Be(65, "no --locks: the hold that keeps two refreshers apart cannot be taken, and there is no warning-only fallback: " + Stderr);
+        Stderr.Should().Contain("--locks");
+    }
+
+    [Fact]
+    public async Task AFakeProfileWithoutLocks_RunsItsTurn_AndTakesNoHold()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+        using var locks = TempDir.For("testsToDelete-kimi-locks-");
+        using var rooted = CoaiMcp.Runners.Kimi.KimiCredentialsLock.RootFor(locks.Path);
+
+        var code = await RunAsync(agent);
+
+        code.Should().Be(0, Stderr);
+        Directory.EnumerateFileSystemEntries(locks.Path).Should().BeEmpty("a stand-in profile has no sign-in to hold, so the lock folder is never even made into");
     }
 
     [Fact]

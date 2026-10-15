@@ -106,7 +106,10 @@ if (args is ["acp-agent", var acpScript])
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScript);
 }
 
-if (args is ["acp"] && Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT") is { Length: > 0 } acpScriptFromEnv)
+// The script comes from the environment, else from beside the working folder (`<cwd>/../agent.json`): a launch that builds the
+// agent's environment from scratch (E4.3, the Kimi shim) carries no FAKECLI_* variable, and the fake agent's folder is the one place the
+// test and the agent both already know.
+if (args is ["acp"] && (Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT") is { Length: > 0 } named ? named : CoaiMcp.FakeCli.AcpAgent.ScriptBesideTheWorkFolder()) is { Length: > 0 } acpScriptFromEnv)
 {
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
 }

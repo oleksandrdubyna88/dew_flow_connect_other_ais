@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Processes;
 using FluentAssertions;
 using Xunit;
 
@@ -22,7 +23,7 @@ public sealed class AcpSessionTraceTests
             .Select(static i => FakeAcpAgent.ToolCall($"t{i}", "Grep", "search", "completed"))
             .Append(FakeAcpAgent.Chunk("x"));
         using var agent = new FakeAcpAgent(steps);
-        using var transport = AcpTransport.Start(FakeAcpAgent.FakeCliExe, agent.Profile().Arguments, agent.Cwd);
+        using var transport = AcpTransport.Start(new ProcessRequest(FakeAcpAgent.FakeCliExe, agent.Profile().Arguments, agent.Cwd));
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var session = new AcpSession(transport, new FolderReadBoundary(agent.Cwd, []), deadline.Token);
         try

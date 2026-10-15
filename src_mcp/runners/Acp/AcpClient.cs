@@ -1,18 +1,25 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Acp;
 
 /// <summary>
-/// One turn against an ACP agent, from its start to its end: <c>initialize</c> → <c>session/new</c> →
-/// <c>session/set_config_option</c> (the model) → <c>session/prompt</c>, with every reverse request answered
-/// meanwhile, and the agent's tree gone before this returns — whichever way it returns.
+/// One turn against an ACP agent, from its start to its end: <c>initialize</c> → <c>session/new</c> → the model found among what
+/// the session announced → <c>session/set_config_option</c> (the model) → <c>session/prompt</c> → (answered) <c>/usage</c>, with every
+/// reverse request answered meanwhile, and the agent's tree gone before this returns — whichever way it returns.
 /// </summary>
 /// <remarks>
 /// <para><b>The order is the finding.</b> The model is set BEFORE the prompt because a session comes up on the
 /// vendor's own default, and on this plan that default was a model the plan does not include: the prompt failed
 /// with a 401 (<c>research/RESULTS_kimi_confinement.md</c> §2). The vendor says which option carries the model
 /// (<see cref="IAcpProfile.ModelOptionId"/>); the client only insists on the order.</para>
+/// <para><b>The model is looked for in the session first</b> (D10, E4.3): a session announces the values of its model option, and an asked
+/// model that is not among them is refused with the list — <see cref="AcpEnd.ModelNotOffered"/> — before it is set, because the agent's own
+/// answer to a model it lacks is a bare <c>-32603</c> (RESULTS §22).</para>
+/// <para><b>The agent's request comes from the profile</b> (<see cref="IAcpProfile.AgentRequest"/>), and so does the right to start it
+/// (<see cref="IAcpProfile.AgentRefusal"/>): a profile that builds its own environment (D19) is never started by inheritance, and a request
+/// it refuses never starts a process.</para>
 /// <para><b>Its own deadline, under the caller's.</b> Reaching it ends the turn with a reason the parent can read
 /// (<see cref="AcpEnd.Deadline"/>); being killed by the parent would leave the round guessing — the same rule
 /// the local and api shims follow.</para>
@@ -21,10 +28,19 @@ namespace CoaiMcp.Runners.Acp;
 /// session exists, stdin closed, a short wait, the tree kill by pid, the wait. A test with a fake agent that spawns
 /// a heartbeat grandchild checks both pids are gone on each of those paths.</para>
 /// </remarks>
-public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
+public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound)
 {
+    /// <summary>The prompt that asks the agent for the session's token totals — its own command, answered without a model call.</summary>
+    private const string UsagePrompt = "/usage";
+
     /// <summary>The prompt's <c>stopReason</c> that IS an answer. Everything else is the agent stopping short.</summary>
     public const string EndTurn = "end_turn";
+
+    /// <summary>
+    /// How long the follow-up <c>/usage</c> may take (M-K2 measured 2-3 s): its own short bound, under what is left of the turn's
+    /// deadline. A usage that cannot be had in this time is not captured; it never delays or changes the answer.
+    /// </summary>
+    public static readonly TimeSpan DefaultUsageBound = TimeSpan.FromSeconds(15);
 
     /// <summary>
     /// The longest deadline a turn may be given — a day. A review is minutes; a value the clock cannot hold at all
@@ -33,21 +49,27 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
     /// </summary>
     public static readonly TimeSpan MaxDeadline = TimeSpan.FromDays(1);
 
+    public AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
+        : this(profile, boundary, DefaultUsageBound)
+    {
+    }
+
     public async Task<AcpOutcome> AskAsync(AcpAsk ask, CancellationToken ct = default)
     {
-        if (ask.Deadline <= TimeSpan.Zero || ask.Deadline > MaxDeadline)
+        var request = profile.AgentRequest(ask);
+        if (Refusal(ask, request) is { Length: > 0 } refused)
         {
-            return NotStarted(ask, $"a deadline of {ask.Deadline.TotalSeconds:F0}s is outside 1..{MaxDeadline.TotalSeconds:F0} seconds, so nothing was started");
+            return AcpOutcome.NotStarted(refused);
         }
 
         AcpTransport transport;
         try
         {
-            transport = AcpTransport.Start(ask.Executable, profile.Arguments, ask.Cwd);
+            transport = AcpTransport.Start(request);
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
-            return NotStarted(ask, $"could not start `{ask.Executable}`: {e.Message}");
+            return AcpOutcome.NotStarted($"could not start `{ask.Executable}`: {e.Message}");
         }
 
         using (transport)
@@ -56,61 +78,125 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
         }
     }
 
+    /// <summary>Why nothing may be started: a deadline the clock cannot hold, else the profile's own refusal of this request (D19) — or empty.</summary>
+    private string Refusal(AcpAsk ask, ProcessRequest request) =>
+        ask.Deadline <= TimeSpan.Zero || ask.Deadline > MaxDeadline
+            ? $"a deadline of {ask.Deadline.TotalSeconds:F0}s is outside 1..{MaxDeadline.TotalSeconds:F0} seconds, so nothing was started"
+            : profile.AgentRefusal(request, ask);
+
     /// <summary>
     /// The turn. Everything after the start is inside the one <c>try</c> whose <c>finally</c> ends the agent — the
-    /// clock, the pump, the four requests — so nothing that throws can leave the child running.
+    /// clock, the pump, the requests — so nothing that throws can leave the child running.
     /// </summary>
     private async Task<AcpOutcome> TurnAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var session = new AcpSession(transport, boundary, deadline.Token);
-        var sessionId = string.Empty;
-        var (end, reason, stop) = (AcpEnd.Answered, string.Empty, string.Empty);
+        Ended ended;
         try
         {
             deadline.CancelAfter(ask.Deadline);
             session.Pump();
-            await session.CallAsync("initialize", AcpMessages.Initialize());
-            sessionId = AcpMessages.Text(await session.CallAsync("session/new", AcpMessages.NewSession(ask.Cwd)), "sessionId");
-            if (sessionId.Length == 0)
-            {
-                // Without an id there is no session to configure or prompt — and a request sent with an empty one
-                // would be answered by whatever the agent does with it (finding 6 of the security review).
-                throw new AcpProtocolException("session/new answered with no sessionId — nothing to configure or prompt");
-            }
-
-            await session.CallAsync("session/set_config_option", AcpMessages.SetConfigOption(sessionId, profile.ModelOptionId, ask.Model));
-            stop = AcpMessages.Text(await session.CallAsync("session/prompt", AcpMessages.Prompt(sessionId, ask.Prompt)), "stopReason");
-            (end, reason) = Stopped(stop);
+            ended = await ConverseAsync(session, ask);
         }
         catch (Exception e) when (e is AcpAgentException or AcpProtocolException or OperationCanceledException)
         {
-            (end, reason) = Failed(e, ct.IsCancellationRequested, ask.Deadline);
+            ended = Ended.Of(Failed(e, ct.IsCancellationRequested, ask.Deadline));
         }
         finally
         {
-            await transport.EndAsync(() => GracefulAsync(session, sessionId));
+            await transport.EndAsync(() => GracefulAsync(session));
             await SettledAsync(session.Reading);
         }
 
         return new AcpOutcome(
-            end, session.Answer, reason, stop, sessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads, transport.StdErr, transport.Pid,
-            session.DroppedTraceEntries, session.TruncatedTraceFields);
+            ended.End, Cut(session.Answer, ended.AnswerChars), ended.Reason, ended.Stop, session.SessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads,
+            transport.StdErr, transport.Pid, session.DroppedTraceEntries, session.TruncatedTraceFields)
+        {
+            Tokens = ended.Tokens,
+        };
     }
+
+    /// <summary><c>initialize</c>, <c>session/new</c>, the model found among what the session announced (D10) — and only then the prompt.</summary>
+    private async Task<Ended> ConverseAsync(AcpSession session, AcpAsk ask)
+    {
+        await session.CallAsync("initialize", AcpMessages.Initialize());
+        var created = await session.CallAsync("session/new", AcpMessages.NewSession(ask.Cwd));
+        session.SessionId = AcpMessages.Text(created, "sessionId");
+        if (session.SessionId.Length == 0)
+        {
+            // Without an id there is no session to configure or prompt — and a request sent with an empty one
+            // would be answered by whatever the agent does with it (finding 6 of the security review).
+            throw new AcpProtocolException("session/new answered with no sessionId — nothing to configure or prompt");
+        }
+
+        return NotOffered(created, ask) is { Length: > 0 } why ? Ended.Of((AcpEnd.ModelNotOffered, why)) : await PromptedAsync(session, ask);
+    }
+
+    /// <summary>
+    /// Why the asked model cannot be set — the session does not offer it, or offers no such option at all — or empty. Found out in the
+    /// session's own announcement, before <c>set_config_option</c> and before a prompt is spent: the agent's own answer to a model it lacks
+    /// is a bare <c>-32603</c> (RESULTS §22).
+    /// </summary>
+    private string NotOffered(JsonElement created, AcpAsk ask)
+    {
+        var offered = AcpMessages.AnnouncedValues(created, profile.ModelOptionId);
+
+        return offered.Count == 0 ? $"the agent's session offers no '{profile.ModelOptionId}' option, so '{ask.Model}' cannot be set"
+            : offered.Contains(ask.Model, StringComparer.Ordinal) ? string.Empty
+            : $"the agent's session offers {string.Join(", ", offered)} for '{profile.ModelOptionId}'; '{ask.Model}' is not one of them";
+    }
+
+    /// <summary>The model set, the prompt sent — and, when it was answered, the session's tokens asked for.</summary>
+    private async Task<Ended> PromptedAsync(AcpSession session, AcpAsk ask)
+    {
+        await session.CallAsync("session/set_config_option", AcpMessages.SetConfigOption(session.SessionId, profile.ModelOptionId, ask.Model));
+        var stop = AcpMessages.Text(await session.CallAsync("session/prompt", AcpMessages.Prompt(session.SessionId, ask.Prompt)), "stopReason");
+        var (end, reason) = Stopped(stop);
+        var ended = new Ended(end, reason, stop);
+
+        return end == AcpEnd.Answered ? await UsageAsync(session, ended) : ended;
+    }
+
+    /// <summary>
+    /// <c>/usage</c> on the SAME session, after an answer only (D15, M-K2: the agent answers it itself in about two seconds, no model call).
+    /// The answer is what arrived BEFORE it; the reply is what arrived after, read by <see cref="AcpUsageLine"/>. Whatever goes wrong here —
+    /// an error, a broken stream, the bound, the turn's own deadline — leaves the turn's end, answer and exit exactly as they were and the
+    /// tokens unknown: the second prompt is never a reason for the first to fail.
+    /// </summary>
+    private async Task<Ended> UsageAsync(AcpSession session, Ended answered)
+    {
+        var mark = session.Answer.Length;
+        var kept = answered with { AnswerChars = mark };
+        try
+        {
+            await session.CallAsync("session/prompt", AcpMessages.Prompt(session.SessionId, UsagePrompt)).WaitAsync(usageBound);
+
+            return kept with { Tokens = AcpUsageLine.Parse(After(session.Answer, mark)) };
+        }
+        catch (Exception e) when (e is AcpAgentException or AcpProtocolException or OperationCanceledException or TimeoutException)
+        {
+            return kept;
+        }
+    }
+
+    private static string After(string answer, int mark) => mark < answer.Length ? answer[mark..] : string.Empty;
+
+    private static string Cut(string answer, int chars) => chars < answer.Length ? answer[..chars] : answer;
 
     /// <summary>
     /// The graceful step before the kill: <c>session/cancel</c> when a session exists, then at most the grace for the
     /// agent to answer what is still pending (an answered turn has nothing pending and waits for nothing). The agent
     /// is alive throughout — its stdin stays open — so the kill that follows still finds its children.
     /// </summary>
-    private static async Task GracefulAsync(AcpSession session, string sessionId)
+    private static async Task GracefulAsync(AcpSession session)
     {
-        if (sessionId.Length == 0)
+        if (session.SessionId.Length == 0)
         {
             return;
         }
 
-        await session.NotifyAsync("session/cancel", AcpMessages.Cancel(sessionId));
+        await session.NotifyAsync("session/cancel", AcpMessages.Cancel(session.SessionId));
         await session.WaitUntilQuietAsync(AcpTransport.GraceWait);
     }
 
@@ -157,16 +243,12 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary)
         return (AcpEnd.AgentFailed, $"the agent stopped with `{said}` rather than an answer");
     }
 
-    private static AcpOutcome NotStarted(AcpAsk ask, string why) => new(
-        AcpEnd.NotStarted,
-        string.Empty,
-        why,
-        string.Empty,
-        string.Empty,
-        AcpUsage.Unknown,
-        [],
-        [],
-        [],
-        string.Empty,
-        0);
+    /// <summary>How a turn ended, as far as the conversation got: what the outcome is made from, apart from the trace.</summary>
+    /// <param name="AnswerChars">How much of the session's answer is the turn's: all of it unless <c>/usage</c> was asked, whose reply follows it.</param>
+    private sealed record Ended(AcpEnd End, string Reason, string Stop, int AnswerChars = int.MaxValue)
+    {
+        public AcpTokens Tokens { get; init; } = AcpTokens.Unknown;
+
+        public static Ended Of((AcpEnd End, string Reason) ending) => new(ending.End, ending.Reason, string.Empty);
+    }
 }

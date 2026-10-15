@@ -49,14 +49,17 @@ public sealed record SnapshotOptions
 /// <remarks>
 /// <para>What the reviewed branch could use to configure the CLI that reads it: <c>.vibe</c> (hooks, agents, tools, an
 /// MCP server), <c>.agents/skills</c> (skills), <c>AGENTS.md</c> in both spellings and <c>.kimi-code</c> (Kimi's project
-/// instructions and config, D15), and <c>.git</c> itself. An entry with a separator is a PATH suffix (<c>.agents/skills</c>
-/// matches <c>x/.agents/skills/one.md</c> and not <c>.agents/PROJECT.md</c>); one without is a NAME at any depth.</para>
+/// instructions and config, D15), and <c>.git</c> itself. M-K9 (e) added two (<c>research/RESULTS_kimi_confinement.md</c> section 21):
+/// <c>.agents/agents</c> (a sub-agent root Kimi loads from disk) and <c>.mcp.json</c> (the MCP file Kimi starts servers from when the
+/// folder is trusted). An entry with a separator is a PATH suffix (<c>.agents/skills</c>
+/// matches <c>x/.agents/skills/one.md</c> and not <c>.agents/PROJECT.md</c>); one without is a NAME at any depth — so <c>.mcp.json</c> is left
+/// out at every depth, the stricter reading of the parent plan's "project-root".</para>
 /// <para>One shared default set rather than one per vendor: a Vibe launch gains nothing from seeing Kimi's config, and
 /// the list is a parameter so a runtime that needs more can pass its own.</para>
 /// </remarks>
 public sealed record SnapshotExclusions(IReadOnlyList<string> Names)
 {
-    public static SnapshotExclusions Default { get; } = new([".git", ".vibe", ".agents/skills", ".kimi-code", "AGENTS.md", "agents.md"]);
+    public static SnapshotExclusions Default { get; } = new([".git", ".vibe", ".agents/skills", ".agents/agents", ".mcp.json", ".kimi-code", "AGENTS.md", "agents.md"]);
 
     /// <summary>The first exclusion <paramref name="relativePath"/> (forward slashes) meets at any depth, or empty.</summary>
     /// <remarks>

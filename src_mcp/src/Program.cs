@@ -2438,14 +2438,19 @@ internal static class Program
         [--timeout-seconds 60]` reads the vault (COAI_CREDS_KEY), lists GET /models and runs the
         request matrix a dialect is written from; prints status codes, model ids, refused fields and
         token counts — vendor text redacted and capped, the key never. 65 bad arguments, 78 no vault.
-        `--ask-acp --profile <kimi> --model <id> --cwd <folder> [--deadline-seconds n] [--executable <path>]`
+        `--ask-acp --profile <kimi> --model <id> --cwd <folder> [--deadline-seconds n] [--executable <path>]
+        --home <owned root> --persons-bin <folder> --locks <folder>` (the last three for a profile that needs a home — Kimi)
         runs ONE turn of an ACP agent (`kimi acp`) as this process's child, the prompt read from stdin to
         its end: every permission request refused, reads served only from inside --cwd and never for a
-        vendor instruction file, the model set before the prompt. Prints one JSON object on stdout on
-        every exit — answer, end, usage (context tokens, no split), refusals, tool calls, reads. Exits
-        0 answered, 65 refused before the agent starts, 69 ended before an answer (not started, the
-        deadline, cancelled), 70 the agent failed, 75 a known spent sentence, 76 the stream broke,
-        77 a known sign-in or plan refusal.
+        vendor instruction file, the model checked against the session's own list and set before the
+        prompt. The agent starts in an environment built from --home (never inherited) and under a hold
+        on the sign-in (--locks) that makes a second Kimi on it wait. Prints one JSON object on stdout
+        on every exit — answer, end, usage (the session's tokens from /usage, else notCaptured), refusals,
+        tool calls, reads. Exits 0 answered, 65 refused before the agent starts (a bad argument, a Kimi
+        without --home/--persons-bin/--locks, an environment that is not coai's, a model the session
+        does not offer, a hold that cannot be taken), 69 ended before an answer (not started, another
+        Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed, 75 a known spent
+        sentence, 76 the stream broke, 77 a known sign-in or plan refusal.
         `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
         JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
         older shape, which carries every listed round's findings inline.

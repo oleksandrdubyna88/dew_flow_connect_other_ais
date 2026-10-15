@@ -177,13 +177,7 @@ public sealed class KimiCanaryTests : IDisposable
         File.SetAttributes(file, FileAttributes.ReadOnly);
     }
 
-    private byte[] Expected()
-    {
-        var slot = ((SlotRead.Found)KimiPersonsConfig.ReadFile(_person.PersonsConfig)).Slot;
-        var block = ((BlockRead.Found)KimiModelBlocks.For(KimiModels.Default, File.ReadAllText(_person.PersonsConfig), ((BlocksLoad.Loaded)KimiModelBlocks.Builtin).Blocks)).Block;
-
-        return KimiConfig.Bytes(KimiConfig.Render(slot, block));
-    }
+    private byte[] Expected() => _person.ExpectedConfig();
 
     /// <summary>One sweep beat over an orphaned Kimi conversation whose person's folder loses a name during the unlink: the loss is a warning.</summary>
     private async Task SweepBeatAsync()
@@ -218,18 +212,39 @@ public sealed class KimiCanaryTests : IDisposable
         await Task.CompletedTask;
     }
 
-    /// <summary>One shim turn over a fake agent that asks for the sign-in's file by its real path AND through the owned home's junction, and says back whatever it is given.</summary>
+    /// <summary>
+    /// One shim turn over a fake agent that asks for the sign-in's file by its real path AND through the owned home's junction, and says back
+    /// whatever it is given — the REAL <c>coai-mcp --ask-acp --profile kimi</c> in a child process, so the tree hold is ACTUALLY taken (E4.3, carry (a)
+    /// of the plan: E4.2's arm ran in-process with flags the shim did not read yet, and a test host never holds an inheritable handle). The
+    /// agent probes both lock files from inside the tree and says so; the child's stdout and stderr are the report and the notes.
+    /// </summary>
     private async Task<JsonElement> ShimTurnAsync(KimiPlaces places, params string[] reads)
     {
-        using var agent = new FakeAcpAgent([.. reads, FakeAcpAgent.Chunk("done")]);
-        var output = new StringWriter();
-        var code = await AskAcpMode.RunAsync(
-            ["--ask-acp", "--profile", "fake", "--model", "m-1", "--cwd", agent.Cwd, "--deadline-seconds", "30", "--home", places.OwnedRoot, "--locks", Locks],
-            new StringReader("say hello"), line => See("note", line), output, [agent.Profile()], TestContext.Current.CancellationToken);
-        code.Should().Be(0);
-        See("report", output.ToString());
+        using var agent = new FakeAcpAgent([.. reads, FakeAcpAgent.Chunk("done")], FakeAcpAgent.Models("kimi-code/k3"));
+        var tree = KimiCredentialsLock.TreePathFor(_person.Credentials);
+        var home = Path.Combine(places.OwnedRoot, KimiCredentialsLock.HomeHoldName);
+        agent.WithFields(agent.EnvField(tree, home));
+        var request = new ProcessRequest(
+            ServerBinary.Path,
+            [
+                "--ask-acp", "--profile", "kimi", "--executable", FakeAcpAgent.FakeCliExe, "--model", "kimi-code/k3", "--cwd", agent.Cwd,
+                "--deadline-seconds", "60", "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin, "--locks", Locks,
+            ],
+            agent.Cwd)
+        {
+            StdIn = "say hello",
+            Timeout = TimeSpan.FromMinutes(2),
+        };
 
-        return JsonDocument.Parse(output.ToString()).RootElement.Clone();
+        var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0, result.StdErr);
+        See("report", result.StdOut);
+        See("note", result.StdErr);
+        File.ReadAllLines(agent.EnvFile).Where(line => line.StartsWith("PROBE ", StringComparison.Ordinal)).Select(line => line[^4..]).Should()
+            .Equal(["Held", "Held"], "the arm ran UNDER the tree hold: the agent saw the sign-in's file and the home's both held");
+
+        return JsonDocument.Parse(result.StdOut).RootElement.Clone();
     }
 
     [Fact]
@@ -265,6 +280,7 @@ public sealed class KimiCanaryTests : IDisposable
         From("warn").Should().Contain(text => text.Contains("kimi-code.json") && text.Contains("kept this beat"), "the sweep's loss sentence was caught");
         From("config").Single().Should().Contain(KimiFixture.SlotKey, "the config collector holds the rendered config");
         From("files").First().Should().MatchRegex("\\.lock", "the lock file names were listed");
+        From("files").First().Should().Contain(".tree.lock", "the shim's own hold file was made under the --locks folder and listed");
         From("note").Should().Contain(text => text.Contains("--cwd"), "the shim's note collector caught its own sentence");
         report.GetProperty("reads").GetArrayLength().Should().Be(2);
         report.GetProperty("reads").EnumerateArray().Should().OnlyContain(read => !read.GetProperty("served").GetBoolean() && read.GetProperty("reason").GetString()!.Length > 0,

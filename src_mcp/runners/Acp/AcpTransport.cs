@@ -80,12 +80,11 @@ internal sealed class AcpTransport : IDisposable
     /// <summary>What the agent wrote on stderr, bounded.</summary>
     public string StdErr => _stderr.ToString();
 
-    /// <summary>Starts the agent. Throws what <see cref="Process.Start()"/> throws when it cannot — the caller names that.</summary>
+    /// <summary>Starts the agent exactly as <paramref name="request"/> says — the profile's request (<see cref="IAcpProfile.AgentRequest"/>), whose environment this class never touches. Throws what <see cref="Process.Start()"/> throws when it cannot — the caller names that.</summary>
     /// <remarks>Started by <see cref="ProcessLauncher.Started"/>, the one place a child is built — its resolver, its
     /// UTF-8 streams without a byte-order mark (three stray bytes before the first JSON line would be a parse error on
     /// the agent's side) and its environment rule are the launcher's, not a copy.</remarks>
-    public static AcpTransport Start(string executable, IReadOnlyList<string> arguments, string cwd) =>
-        new(ProcessLauncher.Started(new ProcessRequest(executable, arguments, cwd)));
+    public static AcpTransport Start(ProcessRequest request) => new(ProcessLauncher.Started(request));
 
     /// <summary>
     /// The next line the agent wrote — or null at the end of its output, which is the one fact a reader must see.

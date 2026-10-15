@@ -79,6 +79,21 @@ internal static class AcpMessages
 
     public static JsonObject FileContent(string text) => new() { ["content"] = text };
 
+    /// <summary>
+    /// The values <c>session/new</c> announced for one config option: <c>configOptions: [{ id, options: [{ value, name }] }]</c>
+    /// (the shape the probe read, RESULTS §10). Empty when the result carries no such option, or none of its options has a value —
+    /// the caller reads "no list" and "an empty list" as the same refusal, which is what they are.
+    /// </summary>
+    public static IReadOnlyList<string> AnnouncedValues(JsonElement sessionResult, string optionId) =>
+        Child(sessionResult, "configOptions") is { ValueKind: JsonValueKind.Array } options
+            ? [.. options.EnumerateArray().Where(option => Text(option, "id") == optionId).SelectMany(Values)]
+            : [];
+
+    private static IEnumerable<string> Values(JsonElement option) =>
+        Child(option, "options") is { ValueKind: JsonValueKind.Array } offered
+            ? offered.EnumerateArray().Select(value => Text(value, "value")).Where(value => value.Length > 0)
+            : [];
+
     /// <summary>A string property, or empty — the agent's optional fields are read without a null in the caller.</summary>
     public static string Text(JsonElement element, string name) =>
         Child(element, name) is { ValueKind: JsonValueKind.String } value ? value.GetString() ?? string.Empty : string.Empty;

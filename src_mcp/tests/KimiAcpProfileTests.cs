@@ -21,7 +21,15 @@ public sealed class KimiAcpProfileTests
     [Fact]
     public void TheExclusionsAreBothSpellingsOfTheInstructionFile_AndTheSnapshotsOwn()
     {
-        _profile.ExcludedNames.Should().BeEquivalentTo(["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".git"]);
+        _profile.ExcludedNames.Should().BeEquivalentTo(["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".agents/agents", ".mcp.json", ".git"],
+            "M-K9 (e) added the sub-agent root and the MCP file (RESULTS section 21)");
+    }
+
+    [Fact]
+    public void TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut()
+    {
+        CoaiMcp.Runners.Snapshots.SnapshotExclusions.Default.Names.Should().BeEquivalentTo(_profile.ExcludedNames,
+            "the boundary refuses what the snapshot leaves out, no more and no less (D6)");
     }
 
     [Fact]
