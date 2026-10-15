@@ -318,8 +318,10 @@ entry into `<root>\coai-*` goes through `PrivateFolder` (`src_mcp/runners/Files/
   `IOException`, so the folder cannot be renamed or swapped while it is held.
 - **Below `coai-*`** no ACL checks: `<8>` is created fresh; the link checks stay; `VibeLaunch.HomeMade` refuses a home whose parent does not
   exist instead of creating the chain. A Vibe export (the whole conversation) lives beside the home in the owned folder, not in TEMP.
-- **Off Windows** the same type: `0700` on create; an existing folder must not be a symlink and must have no group or other bits (refused
-  naming the mode); the owner uid is not checked (a stated limit).
+- **Off Windows** the same type: `0700` on create; an existing folder must not be a symlink; one with a group or other bit is MIGRATED as the
+  same case is on Windows: `chmod 0700` (it succeeds only for the owner or root, so success IS the owner check), the mode read back and required
+  clean, one line logged ("made {path} private; mode {old} until now"); a chmod that fails refuses it, naming the mode. No child walk: a 0700
+  parent blocks traversal by others, and a normal user has no bypass-traverse privilege.
 - **Limits:** a local administrator and SYSTEM are outside the threat model; the root and everything above it belong to the person;
   re-ACLing does not undo contents planted while the folder was wide (the per-launch home check judges those; the log says the
   transcripts were readable until now); a `coai-vh` pre-created by another user on a C:\-style root cannot be deleted by the victim — choose another folder.
@@ -436,7 +438,7 @@ below is then the assertion, never a compile error.
 | E6 | `ForConversationAsync` and the sweep on a root whose `coai-vibe` is a junction: Refused, 0 swept, a warning. | the conversation started |
 | E7 | With an Opened handle held, `Directory.Move` throws `IOException`. | `Expected a <IOException> to be thrown … but no exception was thrown` (until the handle asked for a data right) |
 | E8 | A missing root: Refused with the "does not exist" sentence, nothing created. | Opened (the folder was created) |
-| E9 | Unix legs: `Open` creates 0700; a pre-existing 0755 is Refused naming 755. | — |
+| E9 | Unix legs: `Open` creates 0700; a pre-existing 0755 folder of the test user's is made 0700 and Opened, one line naming 755. The refusal (a folder somebody else owns) cannot be made without root, so it is tested through the pure `UnixVerdict` (chmod throws / leaves bits). | stub that refused every wide folder: `Expected type to be … Opened, but found … Refused` |
 
 ### K. A Vibe consultant launch stops at 20 turns and says why (defect 4, D6)
 
@@ -623,6 +625,7 @@ the session written and resumed, the home validation still passing (does `\\?\` 
 ## 11. Gate and review — what changed (2026-10-15)
 
 - **Code gate 2026-10-15: 4 findings accepted, 1 rejected — partial is LibraryImport's.** Accepted: `LaunchTurn.Refused` takes a required `RefusalCause` (no default); the descendant walk refuses a child whose OWNER is not the person or Administrators (the limit sentence it replaced said a planted child keeps its owner); `turn_limit` / `token_limit` say only that the cap stopped the launch before it answered, and the file-search guidance is the question row's alone (`IConsultantRuntime.QuestionRowAdvice`); the manifest script builds one classifier per inventory. Deviation: the owner test on a real SYSTEM-owned child (E5b) skips unless elevated, like E5; its rule is tested on a bare descriptor.
+- **First CI run, 2026-10-15:** the Windows job passed; Linux (22) and macOS (21) failed on D7's Unix leg, which REFUSED a pre-existing 0755 folder where Windows re-ACLs it - a parity defect of the product (fixtures made `coai-vh` with `CreateDirectory`). Unix now migrates a wide folder of the person's (chmod 0700 = the owner check, read back, one log line) and refuses only when chmod fails. One Linux-only test spelled the Windows install cure; the cure is per OS. The real verification is the next CI run (no Linux or macOS here).
 - **Review round, 2026-10-15 (an Opus judge and a cadence consultant): FIX.** D7: ONE handle is opened (with a data right and, when it can,
   WRITE_DAC), verified, re-ACLed and HELD (the first version verified one handle and held another, opened by path); after a re-ACL every
   descendant is walked — links never entered — and reset to inherit (propagation leaves explicit entries and protected DACLs), only when the

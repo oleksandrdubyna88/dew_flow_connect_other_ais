@@ -248,7 +248,10 @@ public sealed class VibeLaunchControlTests : IDisposable
         var failure = ConsultFailures.Classify(new CodexConsultant(new CodexRuntime()), launch, "vibe", new ConsultFailure.Timeout());
 
         failure.Kind.Should().Be(kind);
-        (failure.Cure.Contains("uv tool install mistral-vibe", StringComparison.Ordinal)).Should().Be(kind == "cli-not-found");
+        // The install cure is PER OS (VendorDiagnosis.InstallCure): `uv tool install mistral-vibe` on Windows, Mistral's own script on Linux and
+        // macOS - a test that spelled the Windows one failed on every Linux leg although the classification was right.
+        var installCure = VendorDiagnosis.InstallCure("vibe")!;
+        failure.Cure.Contains(installCure, StringComparison.Ordinal).Should().Be(kind == "cli-not-found", "only a CLI that is not there is told to install it");
     }
 
     [Theory]

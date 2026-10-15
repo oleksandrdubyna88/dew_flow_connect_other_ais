@@ -46,8 +46,9 @@ public abstract record PrivateFolderOutcome
 /// protected DACL stays. So after a re-ACL every descendant is walked (a link is never entered or touched) and reset to inherit,
 /// and a child that cannot be is refused by name. The walk runs only when the parent itself needed the re-ACL — a parent that is
 /// already private is not walked on later opens (a stated limit: whoever could have planted a wide child there could not have).</para>
-/// <para><b>Unix.</b> Created <c>0700</c>; an existing one must not be a symlink and must have no group or other bits, else
-/// it is refused naming its mode. The owner uid is not checked.</para>
+/// <para><b>Unix.</b> Created <c>0700</c>; an existing one must not be a symlink. One with a group or other bit is MIGRATED as on
+/// Windows: chmod 0700 (which only its owner or root can do — success is the owner check), the mode read back and required clean, one line
+/// logged; a chmod that fails refuses it, naming the mode. No walk of the children: a 0700 parent stops anyone else traversing it.</para>
 /// <para><b>Limits, stated.</b> A local administrator and SYSTEM are outside the threat model. Re-ACLing does not undo contents
 /// planted while the folder was wide — the per-launch home check judges those. A child whose OWNER is not the person or Administrators
 /// refuses the folder by name (the walk checks each child's owner), because an owner holds an implicit WRITE_DAC and could widen the
@@ -75,7 +76,7 @@ public static partial class PrivateFolder
         {
             return OperatingSystem.IsWindows()
                 ? Windows.Open(root, name, note ?? (static _ => { }))
-                : Unix.Open(PathOf(root, name));
+                : Unix.Open(PathOf(root, name), note ?? (static _ => { }));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
         {
@@ -118,36 +119,76 @@ public static partial class PrivateFolder
         }
     }
 
+    /// <summary>The Unix judgement over a mode and what chmod does, as a pure function (the real chmod is handed in).</summary>
+    internal static PrivateFolderOutcome UnixVerdict(string path, UnixFileMode mode, Func<UnixFileMode> makePrivate, Action<string> note) =>
+        Unix.Judged(path, mode, makePrivate, note);
+
     private static class Unix
     {
         private const UnixFileMode Wider = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
             | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
 
         [UnsupportedOSPlatform("windows")]
-        public static PrivateFolderOutcome Open(string path)
+        public static PrivateFolderOutcome Open(string path, Action<string> note)
         {
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
 
-            return Verdict(path);
+            return Verdict(path, note);
         }
 
         [UnsupportedOSPlatform("windows")]
-        private static PrivateFolderOutcome Verdict(string path)
+        private static PrivateFolderOutcome Verdict(string path, Action<string> note)
         {
             if (new DirectoryInfo(path).LinkTarget is not null)
             {
                 return new PrivateFolderOutcome.Refused($"{path} is a link, and Vibe's homes are never made through one — delete the link, or choose another Vibe homes folder in {Setting}");
             }
 
-            var mode = File.GetUnixFileMode(path);
+            return Judged(path, File.GetUnixFileMode(path), () => MadePrivate(path), note);
+        }
 
-            return (mode & Wider) == 0
-                ? new PrivateFolderOutcome.Opened(new NothingHeld(), path)
-                : new PrivateFolderOutcome.Refused($"{path} is not private to you (mode {Convert.ToString((int)mode, 8)}) — coai keeps Vibe's homes, their transcripts and its copies of your tree only in a folder only you can open; "
-                    + $"delete it, or choose another Vibe homes folder in {Setting}");
+        /// <summary>chmod 0700 and read the mode back — what a wide folder of the person's own is migrated with.</summary>
+        [UnsupportedOSPlatform("windows")]
+        private static UnixFileMode MadePrivate(string path)
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            return File.GetUnixFileMode(path);
+        }
+
+        /// <summary>
+        /// A folder with no group or other bit is the person's. A wider one is MIGRATED, as the same case is on Windows (a folder of the
+        /// person's with a wrong DACL is re-ACLed): chmod 0700 succeeds only for its owner or root, so its success IS the owner check;
+        /// the mode is read back and must be clean; one line says what it was. A chmod that fails (EPERM — somebody else's folder) or
+        /// leaves bits behind refuses the folder, naming the mode. There is no walk of the children, unlike Windows: a 0700 parent
+        /// stops anyone else traversing it, and Unix has no bypass-traverse privilege for a normal user.
+        /// </summary>
+        internal static PrivateFolderOutcome Judged(string path, UnixFileMode mode, Func<UnixFileMode> makePrivate, Action<string> note)
+        {
+            if ((mode & Wider) == 0)
+            {
+                return new PrivateFolderOutcome.Opened(new NothingHeld(), path);
+            }
+
+            try
+            {
+                if ((makePrivate() & Wider) == 0)
+                {
+                    note($"made {path} private; mode {Convert.ToString((int)mode, 8)} until now");
+
+                    return new PrivateFolderOutcome.Opened(new NothingHeld(), path);
+                }
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+            {
+                // Not the owner: refused below, with the mode it has.
+            }
+
+            return new PrivateFolderOutcome.Refused($"{path} is not private to you (mode {Convert.ToString((int)mode, 8)}) — coai keeps Vibe's homes, their transcripts and its copies of your tree only in a folder only you can open; "
+                + $"delete it, or choose another Vibe homes folder in {Setting}");
         }
     }
 

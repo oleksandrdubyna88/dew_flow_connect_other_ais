@@ -45,21 +45,83 @@ public sealed class PrivateFolderTests : IDisposable
         PrivateFolder.Open(root, "coai-vh").Should().BeOfType<PrivateFolderOutcome.Refused>().Which.Sentence.Should().Contain("local");
     }
 
+    private const UnixFileMode Private = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
+    /// <summary>
+    /// E9 on a real Unix file system: a missing folder is made 0700, and a pre-existing 0755 folder of the test user's is MIGRATED —
+    /// chmod 0700, Opened, one line saying what the mode was — as the same case is re-ACLed on Windows. (The refusal needs a folder
+    /// somebody else owns, which a test without root cannot make: it is covered through the seam below.)
+    /// </summary>
     [Fact]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public void E9_OnUnix_AFolderIsMade0700_AndAWiderOneIsRefused_NamingItsMode()
+    public void E9_OnUnix_AFolderIsMade0700_AndAWiderOneOfOursIsMigrated()
     {
         Assert.SkipUnless(!OperatingSystem.IsWindows(), "the Windows legs are E1–E8");
-        using var held = Opened(PrivateFolder.Open(_root, "coai-vh")).Held;
-        File.GetUnixFileMode(Path.Combine(_root, "coai-vh")).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var notes = new List<string>();
+        using (Opened(PrivateFolder.Open(_root, "coai-vh", notes.Add)).Held)
+        {
+            File.GetUnixFileMode(Path.Combine(_root, "coai-vh")).Should().Be(Private);
+            notes.Should().BeEmpty("a folder made private says nothing");
+        }
+
         var wide = Directory.CreateDirectory(Path.Combine(_root, "coai-vibe"));
         File.SetUnixFileMode(wide.FullName, (UnixFileMode)0b111_101_101);
 
-        var refused = PrivateFolder.Open(_root, "coai-vibe").Should().BeOfType<PrivateFolderOutcome.Refused>().Subject;
+        using var held = Opened(PrivateFolder.Open(_root, "coai-vibe", notes.Add)).Held;
 
-        refused.Sentence.Should().Contain("755").And.Contain("COAI_CONSULTANT_HOMES");
+        File.GetUnixFileMode(wide.FullName).Should().Be(Private);
+        notes.Should().ContainSingle().Which.Should().Contain(wide.FullName).And.Contain("made").And.Contain("755");
     }
 
+    [Fact]
+    public void TheUnixRule_AFolderOfOurOwnThatIsWide_IsMigratedAndSaysSo()
+    {
+        var notes = new List<string>();
+
+        var outcome = PrivateFolder.UnixVerdict("/homes/coai-vh", (UnixFileMode)0b111_101_101, () => Private, notes.Add);
+
+        outcome.Should().BeOfType<PrivateFolderOutcome.Opened>();
+        notes.Should().ContainSingle().Which.Should().Contain("/homes/coai-vh").And.Contain("made").And.Contain("private").And.Contain("755");
+    }
+
+    [Fact]
+    public void TheUnixRule_APrivateFolder_IsOpenedWithoutTouchingIt()
+    {
+        var touched = false;
+        var notes = new List<string>();
+
+        var outcome = PrivateFolder.UnixVerdict("/homes/coai-vh", Private, () =>
+        {
+            touched = true;
+
+            return Private;
+        }, notes.Add);
+
+        outcome.Should().BeOfType<PrivateFolderOutcome.Opened>();
+        touched.Should().BeFalse("no chmod for a folder that is already private");
+        notes.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(IOException))]
+    public void TheUnixRule_AFolderSomebodyElseOwns_ChmodFails_AndItIsRefusedNamingTheMode(Type failure)
+    {
+        var outcome = PrivateFolder.UnixVerdict("/homes/coai-vh", (UnixFileMode)0b111_101_101, () => throw (Exception)Activator.CreateInstance(failure, "EPERM")!, _ => { });
+
+        outcome.Should().BeOfType<PrivateFolderOutcome.Refused>().Which.Sentence.Should().Contain("755").And.Contain("not private to you").And.Contain("COAI_CONSULTANT_HOMES");
+    }
+
+    [Fact]
+    public void TheUnixRule_AChmodThatLeavesBitsBehind_IsRefused_NotTrusted()
+    {
+        var notes = new List<string>();
+
+        var outcome = PrivateFolder.UnixVerdict("/homes/coai-vh", (UnixFileMode)0b111_101_101, () => (UnixFileMode)0b111_101_000, notes.Add);
+
+        outcome.Should().BeOfType<PrivateFolderOutcome.Refused>().Which.Sentence.Should().Contain("755");
+        notes.Should().BeEmpty("nothing was made private, so nothing is said to have been");
+    }
 
     /// <summary>
     /// The one door: no production code combines a path with the homes root or a <c>coai-*</c> folder name except

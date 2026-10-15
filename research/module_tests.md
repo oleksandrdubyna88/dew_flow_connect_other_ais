@@ -4049,3 +4049,10 @@ process — the exclusive open is the kernel's, so the second opener sees the sa
 | the walk did not check a child's owner | `TheOwnerRule_RefusesAChildOwnedBySomeoneElse_ByName_…` (a bare `FileSecurity`, no elevation); `E5b_…` (a SYSTEM-owned child; skips unless elevated) | `Expected PrivateFolder.OwnerProblem(…) "" to contain "C:\homes\coai-vibe\id\h\transcript.jsonl"` |
 | file-search advice on every consultant launch | `ATurnLimit_…` (now neutral), `TheFileSearchAdvice_IsOfferedForACapStop_AndForNothingElse`, the question-row and consult scenarios | `Did not expect runtime.WhyItFailed(…) to contain "list a folder"`; `Expected consultant.QuestionRowAdvice(capped) "" to contain "name them exactly"` |
 | a classifier per entry in the manifest script | none (a refactor with the same output): `scripts/lib/vibe.test.mjs` stays green | — |
+
+### First CI run (2026-10-15) — the Unix leg of D7
+
+| Finding | Test | First red |
+|---|---|---|
+| Unix refused a pre-existing 0755 folder (22 Linux and 21 macOS failures, all fixtures made with `CreateDirectory`) | `TheUnixRule_…` (pure `UnixVerdict`: migrated and said, private untouched, chmod fails refused naming 755, chmod leaving bits refused); `E9_OnUnix_…` (Unix only) | `Expected type to be … Opened, but found … Refused` (stub refusing every wide folder). **Verified on Windows only; the next CI run is the real check on Linux and macOS.** |
+| Linux: `TheKind_…(2, cli-not-found)` spelled the Windows install cure | the same test, now comparing with `VendorDiagnosis.InstallCure("vibe")` | `Expected boolean to be True, but found False` (CI) |
