@@ -1,0 +1,19 @@
+{
+  "callerSessionId": "13389a71-62fa-49fb-acb3-753ffa890d2c",
+  "gateSessions": [
+    {
+      "id": "c8f62c22-62ef-4c89-a4d9-9b939a863f8b",
+      "repoPath": "D:/fixture/repo-a",
+      "openedUtc": "2000-01-01T00:00:00.000Z",
+      "rounds": [
+        {
+          "number": 1,
+          "startedUtc": "2000-01-01T00:00:03.000Z",
+          "completedUtc": "2000-01-01T00:00:06.000Z",
+          "status": "done",
+          "headSha": "6226959982c3eba56135e4e230b270d5467d5198"
+        }
+      ]
+    }
+  ]
+}

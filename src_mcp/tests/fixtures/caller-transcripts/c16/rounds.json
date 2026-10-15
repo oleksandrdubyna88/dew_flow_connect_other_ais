@@ -1,0 +1,26 @@
+{
+  "callerSessionId": "c180a85d-de68-42b5-bebc-ccc4165b7065",
+  "gateSessions": [
+    {
+      "id": "2624b6f1-c315-4b87-bef9-75da2787c074",
+      "repoPath": "D:/fixture/repo-a",
+      "openedUtc": "2000-01-01T00:00:00.000Z",
+      "rounds": [
+        {
+          "number": 1,
+          "startedUtc": "2000-01-01T00:00:01.000Z",
+          "completedUtc": "2000-01-01T00:00:02.000Z",
+          "status": "done",
+          "headSha": "635978ae50ca351836c3a26b397283576e7d84bd"
+        },
+        {
+          "number": 3,
+          "startedUtc": "2000-01-01T00:00:05.000Z",
+          "completedUtc": "2000-01-01T00:00:10.000Z",
+          "status": "done",
+          "headSha": "bfe62b0e62f91e028cd254afc8cf980eec43e500"
+        }
+      ]
+    }
+  ]
+}
