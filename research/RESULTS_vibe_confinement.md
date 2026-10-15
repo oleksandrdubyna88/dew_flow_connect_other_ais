@@ -649,7 +649,7 @@ belongs beside it when the rounds are re-run after the fixes.
 
 ## 27. A Vibe home deeper than 102 characters loses the turn — three live runs through coai-mcp 0.54.0, and the limit probed (2026-10-15)
 
-The plan these feed is [PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) (defects 1–3). Windows 11,
+The plan these feed is [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) (defects 1–3). Windows 11,
 `LongPathsEnabled = 0`, `vibe` 2.26.1, the RELEASED coai-mcp 0.54.0, scratch data directories, the owner's sign-in (the
 OS keyring, §12). Paths are written `%TEMP%`, `%LOCALAPPDATA%` or `<scratch>`; the profile name is `abcde` here.
 
@@ -694,13 +694,13 @@ file relies on, not the documents.
 
 ## 28. M-V17 — why a question row spent 2.2 M input tokens, and which Vibe flag ends such a run (2026-10-15)
 
-> Measured by a scout for [PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) §6 (M-V17). Every
+> Measured by a scout for [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) §6 (M-V17). Every
 > number is copied here: the `testsToDelete-` evidence folders will be swept. Paths are written `%TEMP%`, `%USERPROFILE%`
 > or `<scratch>`; the question and context are described by shape, not quoted.
 
 **Question.** What did Vibe do for 299 s and 2 233 164 input tokens on a `disk` question row (`vibe-disk`,
 `mistral-medium-3.5`), and does Vibe offer a flag that ends such a run WITH an export and a readable outcome?
-(`todo/PLAN_vibe_live_round_fixes.md` §1 defect 4, §6 M-V17; D6.)
+(`research/PLAN_vibe_live_round_fixes.md` §1 defect 4, §6 M-V17; D6.)
 
 **The run that looped (found, not reconstructed).** Record `fc27ef18…` of the earlier 0.54.0 scout, kept in that scout's
 scratch `COAI_DATA_DIR`: status `failed`, row `vibe-disk`, `seconds 298.9`, `tokensIn 2233164`, `tokensOut 13804`,
@@ -1012,7 +1012,7 @@ owner's `%USERPROFILE%\.vibe` was not used.
 ## 29. The live Vibe checks on the released coai-mcp 0.56.0 — a plan round, a two-turn consult and a question row, all answered (2026-10-15)
 
 > Re-run of the three live runs of §27 and the question row of §28, on the RELEASED server that carries the fixes of PR #823
-> ([PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) §10, last row: "one live Vibe round, one two-turn
+> ([PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) §10, last row: "one live Vibe round, one two-turn
 > `consult` and one question row through the built server on Windows, each answered, recorded in RESULTS"). Every number is
 > copied here: the `testsToDelete-` evidence folders will be swept. Paths are written `%TEMP%`, `%USERPROFILE%`,
 > `<scratch>`, `<root>`; no profile name, key or e-mail appears.

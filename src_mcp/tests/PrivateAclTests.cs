@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The Windows rules of <see cref="PrivateFolder"/> (D7 of <c>todo/PLAN_vibe_live_round_fixes.md</c>) as pure functions of a DACL:
+/// The Windows rules of <see cref="PrivateFolder"/> (D7 of <c>research/PLAN_vibe_live_round_fixes.md</c>) as pure functions of a DACL:
 /// what a private folder's DACL is, whether a given one is that, who could use a folder that is not, and every refusal sentence.
 /// Nothing here needs Windows — the facts are plain values — so these run on Linux too, which is where SonarCloud measures them.
 /// </summary>

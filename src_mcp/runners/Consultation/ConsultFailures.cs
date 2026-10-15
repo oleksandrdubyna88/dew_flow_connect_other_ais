@@ -111,7 +111,7 @@ public static class ConsultFailures
     /// <summary>
     /// What an exit with nothing recognised said, in the scheduler's precedence (`ReviewerSummaryFactory.Because`): a stderr line that
     /// ANNOUNCES a failure first — a vendor writing `error:` means it — then what the adapter recovered (Vibe's export outcome as
-    /// coai's sentence, D6 of todo/PLAN_vibe_live_round_fixes.md), which beats a stderr line that announces nothing (a label such as
+    /// coai's sentence, D6 of research/PLAN_vibe_live_round_fixes.md), which beats a stderr line that announces nothing (a label such as
     /// `Stopped: turn_limit`).
     /// </summary>
     private static string Told(ReviewerOutcome.NonZeroExit exit, string said) =>

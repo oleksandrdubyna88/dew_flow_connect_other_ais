@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The one-shot homes' folder, its owner and its sweep (D1, D3 of <c>todo/PLAN_vibe_live_round_fixes.md</c>; scenarios A12 and B1–B5).
+/// The one-shot homes' folder, its owner and its sweep (D1, D3 of <c>research/PLAN_vibe_live_round_fixes.md</c>; scenarios A12 and B1–B5).
 /// Every root is a <c>testsToDelete-vh-*</c> folder, never the machine's own.
 /// </summary>
 public sealed class VibeHomesTests : IDisposable

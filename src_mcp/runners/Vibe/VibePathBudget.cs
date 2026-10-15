@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Vibe;
 
 /// <summary>
 /// How deep Vibe writes below its home, against the longest path the platform lets a process write (D2 of
-/// <c>todo/PLAN_vibe_live_round_fixes.md</c>) — the one adapter for these numbers
+/// <c>research/PLAN_vibe_live_round_fixes.md</c>) — the one adapter for these numbers
 /// (<c>.agents/conventions/common/platform-limits.md</c> §1).
 /// </summary>
 /// <remarks>

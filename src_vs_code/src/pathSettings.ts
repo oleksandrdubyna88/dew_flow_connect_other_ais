@@ -82,7 +82,7 @@ export const QCONSULT_ROOTS: PathSetting = {
 /**
  * Where coai keeps Mistral Vibe's homes (`coai-vh`, `coai-vibe`) — drawn on the Consultants page beside the Vibe rows. The server
  * judges it (a full local path that exists; coai makes its folders there private) and the extension relays its answer, so the
- * value is a folder the person made, short and local (D8 of `todo/PLAN_vibe_live_round_fixes.md`).
+ * value is a folder the person made, short and local (D8 of `research/PLAN_vibe_live_round_fixes.md`).
  */
 export const VIBE_HOMES: PathSetting = {
   id: 'coai.vibeHomesDirectory', setting: 'coai.vibeHomesDirectory', kind: 'folder', mustExist: true, saidBy: 'server',

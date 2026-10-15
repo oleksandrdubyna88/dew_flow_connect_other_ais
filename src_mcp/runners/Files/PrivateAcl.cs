@@ -45,7 +45,7 @@ internal sealed record AclFacts(Sid Owner, bool Protected, bool DaclPresent, IRe
 
 /// <summary>
 /// The Windows half of <see cref="PrivateFolder"/> as pure functions of <see cref="AclFacts"/> (D7 of
-/// <c>todo/PLAN_vibe_live_round_fixes.md</c>): what the DACL must be, whether a given one is that, who could use a folder that is
+/// <c>research/PLAN_vibe_live_round_fixes.md</c>): what the DACL must be, whether a given one is that, who could use a folder that is
 /// not private, and every sentence a refusal says. Nothing here touches a handle, a file or the platform — the native shell
 /// (<c>PrivateFolderWindowsNative</c>) only turns the system's descriptors into facts and back — so each rule runs, and is tested,
 /// on any OS.

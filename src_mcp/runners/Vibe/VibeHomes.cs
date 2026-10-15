@@ -4,7 +4,7 @@ namespace CoaiMcp.Runners.Vibe;
 
 /// <summary>
 /// Where a one-shot Vibe launch keeps its home — a round's reviewers, a question row, a consultant check — and how that home
-/// is owned, held and swept (D1 and D3 of <c>todo/PLAN_vibe_live_round_fixes.md</c>).
+/// is owned, held and swept (D1 and D3 of <c>research/PLAN_vibe_live_round_fixes.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>One short root, never TEMP</b> (D1): <c>&lt;root&gt;\coai-vh\&lt;8 hex&gt;</c>, the root being the consultant homes
