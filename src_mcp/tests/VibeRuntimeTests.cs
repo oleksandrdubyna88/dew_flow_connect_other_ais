@@ -18,13 +18,19 @@ public sealed class VibeRuntimeTests : IDisposable
 {
     private readonly TempDir _out = TempDir.For("coai-answers-vibe-");
 
-    public void Dispose() => _out.Dispose();
+    private readonly TempDir _owned = TempDir.For("testsToDelete-vh-owned-");
+
+    public void Dispose()
+    {
+        _out.Dispose();
+        _owned.Dispose();
+    }
 
     private const string Snapshot = @"C:\Temp\coai-answers-x\snapshot-1";
 
     private ReviewerInvocation Built(ReviewerSettings? settings = null, string prompt = "review this\nall of it") =>
         new VibeRuntime("vibe", HostKind.Windows).Build(RoleCatalog.ArchitectureRole, prompt, Snapshot, "C:/s.json", _out,
-            settings ?? new ReviewerSettings("vibe") { Model = "glm-5-3", Timeout = TimeSpan.FromMinutes(10), OwnedScratch = @"C:\Temp\coai-answers-r" });
+            settings ?? new ReviewerSettings("vibe") { Model = "glm-5-3", Timeout = TimeSpan.FromMinutes(10), OwnedScratch = _owned.Path });
 
     private static string After(IReadOnlyList<string> args, string flag) => args[args.ToList().IndexOf(flag) + 1];
 
@@ -61,7 +67,7 @@ public sealed class VibeRuntimeTests : IDisposable
             "§26: UTF-8 mode is part of the built set");
         request.Environment[VibeLaunch.CliVariable].Should().Be("python", "§3: the Rust CLI refuses the shipped flags and is unmeasured");
         request.Environment[VibeLaunch.ModelVariable].Should().Be("glm-5-3");
-        request.Environment[VibeLaunch.HomeVariable].Should().StartWith(@"C:\Temp\coai-answers-r");
+        request.Environment[VibeLaunch.HomeVariable].Should().StartWith(_owned.Path);
     }
 
     [Fact]
@@ -99,7 +105,7 @@ public sealed class VibeRuntimeTests : IDisposable
         var owned = Built().Request;
         var none = Built(new ReviewerSettings("vibe")).Request;
 
-        Path.GetDirectoryName(After(owned.Arguments, "--output-dir")).Should().Be(@"C:\Temp\coai-answers-r", "a sibling of the home, outside what the home check walks");
+        Path.GetDirectoryName(After(owned.Arguments, "--output-dir")).Should().Be(_owned.Path, "a sibling of the home, outside what the home check walks");
         Path.GetDirectoryName(After(none.Arguments, "--output-dir")).Should().Be(_out.Path);
     }
 
@@ -109,7 +115,7 @@ public sealed class VibeRuntimeTests : IDisposable
         var withScratch = Built().Request.Environment[VibeLaunch.HomeVariable]!;
         var without = Built(new ReviewerSettings("vibe")).Request.Environment[VibeLaunch.HomeVariable]!;
 
-        Path.GetDirectoryName(withScratch).Should().Be(@"C:\Temp\coai-answers-r");
+        Path.GetDirectoryName(withScratch).Should().Be(_owned.Path);
         Path.GetDirectoryName(without).Should().Be(_out.Path);
         Path.GetFileName(withScratch).Length.Should().BeLessThan(16, "a deep home broke on a >260-character path");
         VibeRuntime.HomeFor("x", "vibe", "Architecture").Should().Be(VibeRuntime.HomeFor("x", "vibe", "Architecture"))
@@ -135,7 +141,7 @@ public sealed class VibeRuntimeTests : IDisposable
 
         After(retry.Request.Arguments, "--output-dir").Should().NotBe(After(first.Request.Arguments, "--output-dir"))
             .And.NotBe(After(again.Request.Arguments, "--output-dir"), "a retry never reads a stale export (D7)");
-        Path.GetDirectoryName(After(retry.Request.Arguments, "--output-dir")).Should().Be(@"C:\Temp\coai-answers-r", "beside the owned home, in the folder the first launch's export was in");
+        Path.GetDirectoryName(After(retry.Request.Arguments, "--output-dir")).Should().Be(_owned.Path, "beside the owned home, in the folder the first launch's export was in");
         After(retry.Request.Arguments, "--time-limit").Should().Be("90");
     }
 
