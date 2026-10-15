@@ -117,8 +117,10 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
     /// <summary>Output forms the cutter produces for remapped ids: lowercase hex after the prefix, so a typed word cannot pass as an id.</summary>
     private static readonly IReadOnlyDictionary<string, Regex> IdOutputForms = new Dictionary<string, Regex>
     {
-        ["msgid"] = new(@"^msg_[0-9a-f]{8,64}\z"), ["toolid"] = new(@"^toolu_[0-9a-f]{8,80}\z"),
-        ["uuid"] = new(@"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z"), ["hexid"] = new(@"^[0-9a-f]{8,64}\z"),
+        ["msgid"] = new(@"^msg_[0-9a-f]{8,64}\z"),
+        ["toolid"] = new(@"^toolu_[0-9a-f]{8,80}\z"),
+        ["uuid"] = new(@"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z"),
+        ["hexid"] = new(@"^[0-9a-f]{8,64}\z"),
     };
 
     // ---- the allowlist, read as the cutter reads it ------------------------------------------------------------------
@@ -164,19 +166,31 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         .Select(d => new Case(NameOfDir(Path.GetFileName(d)), d, Directory.GetFiles(d, "*", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(d, f).Replace('\\', '/')).OrderBy(f => f, StringComparer.Ordinal).ToList())).ToList();
 
-    private static bool IsCaseFile(string f) => f == "rounds.json" || MainFilePath().IsMatch(f) || AgentFilePath().IsMatch(f) || MetaFilePath().IsMatch(f) || RegistryFilePath().IsMatch(f);
+    private static readonly Regex[] CaseFilePatterns = [MainFilePath(), AgentFilePath(), MetaFilePath(), RegistryFilePath()];
+
+    private static bool IsCaseFile(string f) => f == "rounds.json" || CaseFilePatterns.Any(r => r.IsMatch(f));
 
     // ---- the manifest ------------------------------------------------------------------------------------------------
     private sealed record ManifestCase(string Name, string Dir, string Serves, string Provenance, string Version, string Side, string PathStyle, bool HasTranscript, bool BreaksJoin,
         IReadOnlyList<string> FixtureRoots, int AssistantLines, int DistinctMessageIds, int AgentFiles, int Metas, int AgentToolUses);
 
-    private static readonly Node ManifestSchema = new Obj(new Dictionary<string, Node> { ["cases"] = new Arr(new Obj(new Dictionary<string, Node>
+    private static readonly Node ManifestSchema = new Obj(new Dictionary<string, Node>
     {
-        ["name"] = new Str("enum-cases"), ["dir"] = new Str("enum-dirs"), ["serves"] = new Str("free"), ["provenance"] = new Str("free"), ["side"] = new Str("enum:windows|wsl"),
-        ["hasTranscript"] = new Bool(), ["pathStyle"] = new Str("enum:none|slash|backslash|backslash+slash"), ["version"] = new Str("manifest-version"),
-        ["breaksJoin"] = new Bool(), ["fixtureRoots"] = new Arr(new Str("fixture-root")),
-        ["counts"] = new Obj(new Dictionary<string, Node> { ["assistantLines"] = new Num(), ["distinctMessageIds"] = new Num(), ["agentFiles"] = new Num(), ["metas"] = new Num(), ["agentToolUses"] = new Num() }),
-    })) });
+        ["cases"] = new Arr(new Obj(new Dictionary<string, Node>
+        {
+            ["name"] = new Str("enum-cases"),
+            ["dir"] = new Str("enum-dirs"),
+            ["serves"] = new Str("free"),
+            ["provenance"] = new Str("free"),
+            ["side"] = new Str("enum:windows|wsl"),
+            ["hasTranscript"] = new Bool(),
+            ["pathStyle"] = new Str("enum:none|slash|backslash|backslash+slash"),
+            ["version"] = new Str("manifest-version"),
+            ["breaksJoin"] = new Bool(),
+            ["fixtureRoots"] = new Arr(new Str("fixture-root")),
+            ["counts"] = new Obj(new Dictionary<string, Node> { ["assistantLines"] = new Num(), ["distinctMessageIds"] = new Num(), ["agentFiles"] = new Num(), ["metas"] = new Num(), ["agentToolUses"] = new Num() }),
+        }))
+    });
 
     private static IReadOnlyList<ManifestCase> LoadManifest()
     {
@@ -213,11 +227,16 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         ["callerSessionId"] = new Str("uuid"),
         ["gateSessions"] = new Arr(new Obj(new Dictionary<string, Node>
         {
-            ["id"] = new Str("uuid"), ["repoPath"] = new Str("fixture-path"), ["openedUtc"] = new Str("iso-utc"),
+            ["id"] = new Str("uuid"),
+            ["repoPath"] = new Str("fixture-path"),
+            ["openedUtc"] = new Str("iso-utc"),
             ["rounds"] = new Arr(new Obj(new Dictionary<string, Node>
             {
-                ["number"] = new Num(), ["startedUtc"] = new Str("iso-utc"), ["completedUtc"] = new Str("iso-utc"),
-                ["status"] = new Str("enum:done|running|failed|cancelled"), ["headSha"] = new Str("sha40"),
+                ["number"] = new Num(),
+                ["startedUtc"] = new Str("iso-utc"),
+                ["completedUtc"] = new Str("iso-utc"),
+                ["status"] = new Str("enum:done|running|failed|cancelled"),
+                ["headSha"] = new Str("sha40"),
             })),
         })),
     });
@@ -226,21 +245,38 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 
     private sealed record Ctx(Allowlist List, IReadOnlyList<string> Roots, IReadOnlyCollection<string> CaseNames, long MaxCount);
 
-    private static IEnumerable<string> Validate(Ctx ctx, JsonElement element, Node node, string path)
-    {
-        return node switch
-        {
-            Obj obj => ValidateObject(ctx, element, obj, path),
-            Arr arr => element.ValueKind != JsonValueKind.Array ? [$"'{path}' is not an array"] : element.EnumerateArray().SelectMany((e, i) => Validate(ctx, e, arr.Item, $"{path}[{i}]")).ToList(),
-            Str str => element.ValueKind != JsonValueKind.String ? [$"'{path}' is not a string"] : ValidateString(ctx, element.GetString()!, str.Shape, path),
-            Num => element.ValueKind == JsonValueKind.Number && Count.IsMatch(element.GetRawText()) ? [] : [$"'{path}' is not a non-negative integer"],
-            Bool => element.ValueKind is JsonValueKind.True or JsonValueKind.False ? [] : [$"'{path}' is not a boolean"],
-            _ => [$"'{path}': unknown schema node"],
-        };
-    }
+    private delegate IEnumerable<string> SchemaValidator(Ctx ctx, JsonElement element, Node node, string path);
 
-    private static IEnumerable<string> ValidateObject(Ctx ctx, JsonElement element, Obj obj, string path)
+    /// <summary>One validator per node kind (a table, not a switch: each stays a small method).</summary>
+    private static readonly IReadOnlyDictionary<Type, SchemaValidator> SchemaValidators = new Dictionary<Type, SchemaValidator>
     {
+        [typeof(Obj)] = ValidateObject,
+        [typeof(Arr)] = ValidateArray,
+        [typeof(Str)] = ValidateStringNode,
+        [typeof(Num)] = ValidateNumberNode,
+        [typeof(Bool)] = ValidateBoolNode,
+    };
+
+    private static IEnumerable<string> Validate(Ctx ctx, JsonElement element, Node node, string path) =>
+        SchemaValidators.TryGetValue(node.GetType(), out var validator) ? validator(ctx, element, node, path) : [$"'{path}': unknown schema node"];
+
+    private static IEnumerable<string> ValidateArray(Ctx ctx, JsonElement element, Node node, string path) =>
+        element.ValueKind != JsonValueKind.Array
+            ? [$"'{path}' is not an array"]
+            : element.EnumerateArray().SelectMany((e, i) => Validate(ctx, e, ((Arr)node).Item, $"{path}[{i}]")).ToList();
+
+    private static IEnumerable<string> ValidateStringNode(Ctx ctx, JsonElement element, Node node, string path) =>
+        element.ValueKind != JsonValueKind.String ? [$"'{path}' is not a string"] : ValidateString(ctx, element.GetString()!, ((Str)node).Shape, path);
+
+    private static IEnumerable<string> ValidateNumberNode(Ctx ctx, JsonElement element, Node node, string path) =>
+        element.ValueKind == JsonValueKind.Number && Count.IsMatch(element.GetRawText()) ? [] : [$"'{path}' is not a non-negative integer"];
+
+    private static IEnumerable<string> ValidateBoolNode(Ctx ctx, JsonElement element, Node node, string path) =>
+        element.ValueKind is JsonValueKind.True or JsonValueKind.False ? [] : [$"'{path}' is not a boolean"];
+
+    private static IEnumerable<string> ValidateObject(Ctx ctx, JsonElement element, Node node, string path)
+    {
+        var obj = (Obj)node;
         if (element.ValueKind != JsonValueKind.Object) return [$"'{path}' is not an object"];
         var present = element.EnumerateObject().ToList();
         var unknown = present.Where(p => !obj.Members.ContainsKey(p.Name)).Select(p => $"'{path}' carries the unknown member '{Clip(p.Name)}'");
@@ -249,20 +285,29 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         return unknown.Concat(missing).Concat(children).ToList();
     }
 
-    private static IEnumerable<string> ValidateString(Ctx ctx, string value, string shape, string path)
+    /// <summary>The shapes only the side files use (everything else is an allowlist shape): a table, so the check is one lookup.</summary>
+    private static readonly IReadOnlyDictionary<string, Func<Ctx, string, bool>> SideFileShapes = new Dictionary<string, Func<Ctx, string, bool>>
     {
-        var ok = shape switch
-        {
-            "free" => true,
-            "enum-cases" => ctx.CaseNames.Contains(value),
-            "enum-dirs" => RequiredDirs.Values.Contains(value),
-            "sha40" => ShaForty().IsMatch(value),
-            "manifest-version" => value == "none" || Accepts(ctx.List, "version", value, ctx.Roots),
-            "fixture-root" => FixtureRoot.IsMatch(value),
-            _ => Accepts(ctx.List, shape, value, ctx.Roots),
-        };
-        return ok ? [] : [$"'{path}' is '{Clip(value)}', which is not a {shape}"];
-    }
+        ["free"] = AnyText,
+        ["enum-cases"] = IsCaseName,
+        ["enum-dirs"] = IsCaseDir,
+        ["sha40"] = IsShaForty,
+        ["manifest-version"] = IsManifestVersion,
+        ["fixture-root"] = IsFixtureRoot,
+    };
+
+    private static bool AnyText(Ctx ctx, string value) => true;
+    private static bool IsCaseName(Ctx ctx, string value) => ctx.CaseNames.Contains(value);
+    private static bool IsCaseDir(Ctx ctx, string value) => RequiredDirs.Values.Contains(value);
+    private static bool IsShaForty(Ctx ctx, string value) => ShaForty().IsMatch(value);
+    private static bool IsManifestVersion(Ctx ctx, string value) => value == "none" || Accepts(ctx.List, "version", value, ctx.Roots);
+    private static bool IsFixtureRoot(Ctx ctx, string value) => FixtureRoot.IsMatch(value);
+
+    private static bool SideFileShapeAccepts(Ctx ctx, string shape, string value) =>
+        SideFileShapes.TryGetValue(shape, out var accepts) ? accepts(ctx, value) : Accepts(ctx.List, shape, value, ctx.Roots);
+
+    private static IEnumerable<string> ValidateString(Ctx ctx, string value, string shape, string path) =>
+        SideFileShapeAccepts(ctx, shape, value) ? [] : [$"'{path}' is '{Clip(value)}', which is not a {shape}"];
 
     // ---- the transcript walk -----------------------------------------------------------------------------------------
     private static string Clip(string text) => text.Length <= 60 ? text : text[..60] + "...";
@@ -275,54 +320,111 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 
     private static bool RelativeMapped(string value) => !value.StartsWith('/') && !value.Contains(':') && value.Replace('\\', '/').Split('/').All(Segment.IsMatch);
 
-    private static bool Accepts(Allowlist list, string shape, string value, IReadOnlyList<string> roots)
+    private static bool IsFixturePath(string value, IReadOnlyList<string> roots) => UnderRoot(value, roots) || RelativeMapped(value);
+    private static bool IsSyntheticInstant(string value, IReadOnlyList<string> roots) => SyntheticInstant().IsMatch(value);
+
+    /// <summary>The allowlist shapes that are not a regex or a vocabulary: judged by the guard's own rules.</summary>
+    private static readonly IReadOnlyDictionary<string, Func<string, IReadOnlyList<string>, bool>> BuiltinShapes = new Dictionary<string, Func<string, IReadOnlyList<string>, bool>>
     {
-        if (value == list.Sentinel) return true;
-        if (shape == "fixture-path") return UnderRoot(value, roots) || RelativeMapped(value);
-        if (shape == "iso-utc") return SyntheticInstant().IsMatch(value);
-        if (shape.StartsWith("enum:", StringComparison.Ordinal)) return shape[5..].Split('|').Contains(value);
-        if (list.Vocabularies.TryGetValue(shape, out var vocabulary)) return vocabulary.Builtin.Contains(value) || vocabulary.Rewritten.IsMatch(value);
-        return list.Shapes.TryGetValue(shape, out var re) && re.IsMatch(value) && (!IdOutputForms.TryGetValue(shape, out var form) || form.IsMatch(value));
+        ["fixture-path"] = IsFixturePath,
+        ["iso-utc"] = IsSyntheticInstant,
+    };
+
+    private static bool EnumAccepts(string shape, string value) => shape[5..].Split('|').Contains(value);
+
+    private static bool VocabularyAccepts(Vocabulary vocabulary, string value) => vocabulary.Builtin.Contains(value) || vocabulary.Rewritten.IsMatch(value);
+
+    private static bool IdFormAccepts(string shape, string value) => !IdOutputForms.TryGetValue(shape, out var form) || form.IsMatch(value);
+
+    private static bool PatternAccepts(Allowlist list, string shape, string value) =>
+        list.Shapes.TryGetValue(shape, out var re) && re.IsMatch(value) && IdFormAccepts(shape, value);
+
+    private static bool ShapeAccepts(Allowlist list, string shape, string value, IReadOnlyList<string> roots)
+    {
+        if (BuiltinShapes.TryGetValue(shape, out var builtin)) return builtin(value, roots);
+        if (shape.StartsWith("enum:", StringComparison.Ordinal)) return EnumAccepts(shape, value);
+        return list.Vocabularies.TryGetValue(shape, out var vocabulary) ? VocabularyAccepts(vocabulary, value) : PatternAccepts(list, shape, value);
     }
+
+    private static bool Accepts(Allowlist list, string shape, string value, IReadOnlyList<string> roots) =>
+        value == list.Sentinel || ShapeAccepts(list, shape, value, roots);
 
     /// <summary>Every violation in one JSON value; <paramref name="locked"/> is true below a renamed key, where nothing is allowlisted any more.</summary>
-    private static IEnumerable<string> Walk(Ctx ctx, JsonElement element, string path, bool locked)
+    private delegate IEnumerable<string> JsonWalker(Ctx ctx, JsonElement element, string path, bool locked);
+
+    /// <summary>One walker per JSON value kind that can carry a violation (null, true and false cannot).</summary>
+    private static readonly IReadOnlyDictionary<JsonValueKind, JsonWalker> Walkers = new Dictionary<JsonValueKind, JsonWalker>
     {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Object => element.EnumerateObject().SelectMany(p => WalkProperty(ctx, p, path, locked)).ToList(),
-            JsonValueKind.Array => element.EnumerateArray().SelectMany(e => Walk(ctx, e, path + "[]", locked)).ToList(),
-            JsonValueKind.String => CheckString(ctx, element.GetString()!, path, locked),
-            JsonValueKind.Number => CheckNumber(ctx, element, path, locked),
-            _ => [],
-        };
+        [JsonValueKind.Object] = WalkObject,
+        [JsonValueKind.Array] = WalkArray,
+        [JsonValueKind.String] = WalkString,
+        [JsonValueKind.Number] = WalkNumber,
+    };
+
+    private static IEnumerable<string> Walk(Ctx ctx, JsonElement element, string path, bool locked) =>
+        Walkers.TryGetValue(element.ValueKind, out var walker) ? walker(ctx, element, path, locked) : [];
+
+    private static IEnumerable<string> WalkObject(Ctx ctx, JsonElement element, string path, bool locked) =>
+        element.EnumerateObject().SelectMany(p => WalkProperty(ctx, p, path, locked)).ToList();
+
+    private static IEnumerable<string> WalkArray(Ctx ctx, JsonElement element, string path, bool locked) =>
+        element.EnumerateArray().SelectMany(e => Walk(ctx, e, path + "[]", locked)).ToList();
+
+    private static IEnumerable<string> WalkString(Ctx ctx, JsonElement element, string path, bool locked) => CheckString(ctx, element.GetString()!, path, locked);
+
+    private static IEnumerable<string> WalkNumber(Ctx ctx, JsonElement element, string path, bool locked) => CheckNumber(ctx, element, path, locked);
+
+    private static bool IsStructural(Ctx ctx, string name, bool locked) => !locked && ctx.List.KeptKeys.Contains(name);
+
+    private static string ChildPath(string path, string name) => path.Length == 0 ? name : path + "." + name;
+
+    /// <summary>Below a renamed key, or one that is not structural, nothing is allowlisted any more.</summary>
+    private static bool LocksBelow(Ctx ctx, string name, bool locked) => locked || Renamed.IsMatch(name) || !IsStructural(ctx, name, locked);
+
+    private static IEnumerable<string> KeyViolation(Ctx ctx, string name, string path, bool locked) =>
+        Renamed.IsMatch(name) || IsStructural(ctx, name, locked) ? [] : [$"key '{Clip(name)}' under '{path}' is neither a structural key nor k<n>"];
+
+    private static IEnumerable<string> WalkProperty(Ctx ctx, JsonProperty property, string path, bool locked) =>
+        KeyViolation(ctx, property.Name, path, locked).Concat(Walk(ctx, property.Value, ChildPath(path, property.Name), LocksBelow(ctx, property.Name, locked))).ToList();
+
+    private static IEnumerable<string> CheckSentinel(Ctx ctx, string value, string path) =>
+        value == ctx.List.Sentinel ? [] : [$"'{path}' is '{Clip(value)}', not the sentinel"];
+
+    private static string ShapeMessage(string shape, string path, string value) =>
+        shape == "iso-utc" ? $"'{path}' is '{Clip(value)}', which is not on the synthetic clock" : $"'{path}' is '{Clip(value)}', which is not a {shape}";
+
+    private static IEnumerable<string> CheckShaped(Ctx ctx, string value, string path, string shape) =>
+        Accepts(ctx.List, shape, value, ctx.Roots) ? [] : [ShapeMessage(shape, path, value)];
+
+    private static bool IsAllowlisted(Ctx ctx, string path, bool locked, out string shape)
+    {
+        shape = string.Empty;
+        return !locked && ctx.List.Fields.TryGetValue(path, out shape!);
     }
 
-    private static IEnumerable<string> WalkProperty(Ctx ctx, JsonProperty property, string path, bool locked)
+    private static IEnumerable<string> CheckString(Ctx ctx, string value, string path, bool locked) =>
+        IsAllowlisted(ctx, path, locked, out var shape) ? CheckShaped(ctx, value, path, shape) : CheckSentinel(ctx, value, path);
+
+    private static bool IsIntPath(Ctx ctx, string path, bool locked) => !locked && ctx.List.Fields.TryGetValue(path, out var shape) && shape == "int";
+
+    private static long CountLimit(Ctx ctx, string path) => path == "spawnDepth" ? 10 : ctx.MaxCount;
+
+    private static IEnumerable<string> MagnitudeViolation(Ctx ctx, string raw, string path)
     {
-        var renamed = Renamed.IsMatch(property.Name);
-        var structural = !locked && ctx.List.KeptKeys.Contains(property.Name);
-        var childPath = path.Length == 0 ? property.Name : path + "." + property.Name;
-        var own = !renamed && !structural ? [$"key '{Clip(property.Name)}' under '{path}' is neither a structural key nor k<n>"] : Array.Empty<string>();
-        return own.Concat(Walk(ctx, property.Value, childPath, locked || renamed || !structural)).ToList();
+        var limit = CountLimit(ctx, path);
+        return long.Parse(raw) <= limit ? [] : [$"'{path}' is {Clip(raw)}, a real magnitude: a count is a rank and never exceeds {limit}"];
     }
 
-    private static IEnumerable<string> CheckString(Ctx ctx, string value, string path, bool locked)
+    private static IEnumerable<string> NumberViolation(Ctx ctx, string raw, string path, bool locked)
     {
-        if (locked || !ctx.List.Fields.TryGetValue(path, out var shape)) return value == ctx.List.Sentinel ? [] : [$"'{path}' is '{Clip(value)}', not the sentinel"];
-        if (shape == "iso-utc" && !Accepts(ctx.List, shape, value, ctx.Roots)) return [$"'{path}' is '{Clip(value)}', which is not on the synthetic clock"];
-        return Accepts(ctx.List, shape, value, ctx.Roots) ? [] : [$"'{path}' is '{Clip(value)}', which is not a {shape}"];
+        if (!IsIntPath(ctx, path, locked)) return [$"'{path}' holds the number {Clip(raw)} where only 0 is allowed"];
+        return Count.IsMatch(raw) ? MagnitudeViolation(ctx, raw, path) : [$"'{path}' is {Clip(raw)}, not a non-negative integer"];
     }
 
     private static IEnumerable<string> CheckNumber(Ctx ctx, JsonElement number, string path, bool locked)
     {
         var raw = number.GetRawText();
-        if (raw == "0") return [];
-        var isInt = !locked && ctx.List.Fields.TryGetValue(path, out var shape) && shape == "int";
-        if (!isInt) return [$"'{path}' holds the number {Clip(raw)} where only 0 is allowed"];
-        if (!Count.IsMatch(raw)) return [$"'{path}' is {Clip(raw)}, not a non-negative integer"];
-        var limit = path == "spawnDepth" ? 10 : ctx.MaxCount;
-        return long.Parse(raw) <= limit ? [] : [$"'{path}' is {Clip(raw)}, a real magnitude: a count is a rank and never exceeds {limit}"];
+        return raw == "0" ? [] : NumberViolation(ctx, raw, path, locked);
     }
 
     private static IEnumerable<string> TranscriptViolations(Allowlist list, Case c, IReadOnlyList<string> roots)
@@ -423,31 +525,41 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         LoadCases().Where(c => ManifestOf(manifest, c.Name).BreaksJoin).Should().OnlyContain(c => c.Metas.Count() != c.AgentFiles.Count(), "a case that declares the break must actually contain it");
     }
 
-    private static IEnumerable<string> JoinProblems(Case c, bool breaksJoin)
+    private static HashSet<string> LaunchedAgentCalls(Case c) => c.TranscriptFiles.SelectMany(f => c.Lines(f)).SelectMany(d => ContentBlocks(d.RootElement))
+        .Where(b => Prop(b, "name") == "Agent").Select(b => Prop(b, "id")).ToHashSet();
+
+    private static HashSet<string> AgentFileIds(Case c) => c.AgentFiles.Select(f => Path.GetFileNameWithoutExtension(f)["agent-".Length..]).ToHashSet();
+
+    private static HashSet<string> MetaIds(Case c) => c.Metas.Select(f => Path.GetFileName(f)["agent-".Length..^".meta.json".Length]).ToHashSet();
+
+    /// <summary>What one meta must join: its launching Agent call, and (for a nested agent) its parent's file.</summary>
+    private static IEnumerable<string> MetaProblems(Case c, string meta, ISet<string> launched, ISet<string> agentIds)
     {
-        var launched = c.TranscriptFiles.SelectMany(f => c.Lines(f)).SelectMany(d => ContentBlocks(d.RootElement))
-            .Where(b => Prop(b, "name") == "Agent").Select(b => Prop(b, "id")).ToHashSet();
-        var agentIds = c.AgentFiles.Select(f => Path.GetFileNameWithoutExtension(f)["agent-".Length..]).ToHashSet();
-        var metaIds = c.Metas.Select(f => Path.GetFileName(f)["agent-".Length..^".meta.json".Length]).ToHashSet();
-        var problems = new List<string>();
-        foreach (var meta in c.Metas)
-        {
-            using var doc = JsonDocument.Parse(c.Read(meta));
-            if (!launched.Contains(Prop(doc.RootElement, "toolUseId"))) problems.Add($"{c.Name}/{meta}: toolUseId joins no Agent tool_use");
-            var parent = Prop(doc.RootElement, "parentAgentId");
-            if (parent.Length > 0 && !agentIds.Contains(parent)) problems.Add($"{c.Name}/{meta}: parentAgentId names no agent file");
-        }
-        if (!breaksJoin)
-        {
-            problems.AddRange(metaIds.Except(agentIds).Select(id => $"{c.Name}: meta of agent {Clip(id)} has no file"));
-            problems.AddRange(agentIds.Except(metaIds).Select(id => $"{c.Name}: agent file {Clip(id)} has no meta"));
-        }
-        return problems;
+        using var doc = JsonDocument.Parse(c.Read(meta));
+        var parent = Prop(doc.RootElement, "parentAgentId");
+        var noCall = launched.Contains(Prop(doc.RootElement, "toolUseId")) ? [] : new[] { $"{c.Name}/{meta}: toolUseId joins no Agent tool_use" };
+        var noParent = parent.Length > 0 && !agentIds.Contains(parent) ? new[] { $"{c.Name}/{meta}: parentAgentId names no agent file" } : [];
+        return noCall.Concat(noParent).ToList();
     }
 
+    /// <summary>A meta without its file, or a file without its meta: what a case that is NOT the break may not have.</summary>
+    private static IEnumerable<string> PartnerProblems(Case c) =>
+        MetaIds(c).Except(AgentFileIds(c)).Select(id => $"{c.Name}: meta of agent {Clip(id)} has no file")
+            .Concat(AgentFileIds(c).Except(MetaIds(c)).Select(id => $"{c.Name}: agent file {Clip(id)} has no meta")).ToList();
+
+    private static IEnumerable<string> JoinProblems(Case c, bool breaksJoin)
+    {
+        var launched = LaunchedAgentCalls(c);
+        var agentIds = AgentFileIds(c);
+        var metas = c.Metas.SelectMany(meta => MetaProblems(c, meta, launched, agentIds)).ToList();
+        return breaksJoin ? metas : metas.Concat(PartnerProblems(c)).ToList();
+    }
+
+    private static JsonElement Member(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value : default;
+
     private static IEnumerable<JsonElement> ContentBlocks(JsonElement line) =>
-        line.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.Object && m.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.Array
-            ? c.EnumerateArray().ToList() : [];
+        Member(Member(line, "message"), "content") is { ValueKind: JsonValueKind.Array } content ? content.EnumerateArray().ToList() : [];
 
     /// <summary>The string value of a property, or the empty string when it is absent or not a string (no null leaves this method).</summary>
     private static string Prop(JsonElement element, string name) =>
@@ -455,17 +567,32 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 
     [Fact]
     public void TheManifestCountsWhatTheFilesHold() =>
-        Violations((_, c, m) => CountProblems(c, m)).Should().BeEmpty();
+        Violations((l, c, m) => CountProblems(l, c, m)).Should().BeEmpty();
 
-    private static IEnumerable<string> CountProblems(Case c, ManifestCase m)
+    /// <summary>The ids of a case's assistant lines, sentinel included: a line whose id failed its shape carries the sentinel there.</summary>
+    private static IReadOnlyList<string> AssistantIds(Case c) => c.TranscriptFiles.SelectMany(f => c.Lines(f)).Select(d => d.RootElement)
+        .Where(l => Prop(l, "type") == "assistant").Select(a => Prop(a.GetProperty("message"), "id")).Where(i => i.Length > 0).ToList();
+
+    private static IEnumerable<string> CountProblems(Allowlist list, Case c, ManifestCase m)
     {
         var lines = c.TranscriptFiles.SelectMany(f => c.Lines(f)).Select(d => d.RootElement).ToList();
         var assistants = lines.Where(l => Prop(l, "type") == "assistant").ToList();
-        var ids = assistants.Select(a => Prop(a.GetProperty("message"), "id")).Where(i => i.Length > 0).ToHashSet();
+        var ids = AssistantIds(c).Where(i => i != list.Sentinel).ToHashSet(); // the sentinel is what a failed id became, not a message
         var agentCalls = lines.SelectMany(ContentBlocks).Count(b => Prop(b, "type") == "tool_use" && Prop(b, "name") == "Agent");
         var actual = (assistants.Count, ids.Count, c.AgentFiles.Count(), c.Metas.Count(), agentCalls);
         var expected = (m.AssistantLines, m.DistinctMessageIds, m.AgentFiles, m.Metas, m.AgentToolUses);
         return actual == expected ? [] : [$"{c.Name}: counts (assistant, ids, agent files, metas, Agent calls) are {actual} but the manifest says {expected}"];
+    }
+
+    [Fact]
+    public void DistinctMessageIdsNeverCountTheSentinelAFailedIdBecame()
+    {
+        var list = LoadAllowlist();
+        var manifest = LoadManifest();
+        var withSentinelId = LoadCases().Where(c => AssistantIds(c).Contains(list.Sentinel)).ToList();
+        withSentinelId.Should().NotBeEmpty("synthetic assistant lines whose id failed the msg_ shape exist in the fixtures (they are why this rule exists)");
+        withSentinelId.Where(c => ManifestOf(manifest, c.Name).DistinctMessageIds != AssistantIds(c).Where(i => i != list.Sentinel).Distinct().Count())
+            .Select(c => c.Name).Should().BeEmpty("a failed id is not a shared message id: the manifest counts the real ones only");
     }
 
     [Fact]

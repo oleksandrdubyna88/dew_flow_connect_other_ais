@@ -16,7 +16,7 @@
    ],
    "counts": {
     "assistantLines": 12,
-    "distinctMessageIds": 6,
+    "distinctMessageIds": 5,
     "agentFiles": 1,
     "metas": 1,
     "agentToolUses": 1
@@ -104,7 +104,7 @@
    ],
    "counts": {
     "assistantLines": 15,
-    "distinctMessageIds": 7,
+    "distinctMessageIds": 6,
     "agentFiles": 1,
     "metas": 2,
     "agentToolUses": 3
@@ -171,7 +171,7 @@
    ],
    "counts": {
     "assistantLines": 2,
-    "distinctMessageIds": 2,
+    "distinctMessageIds": 1,
     "agentFiles": 1,
     "metas": 1,
     "agentToolUses": 1
