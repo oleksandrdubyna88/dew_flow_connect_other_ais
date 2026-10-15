@@ -1,5 +1,26 @@
 # Changelog
 
+## Server 0.55.0 — 2026-10-15
+
+**Added: `--round-counts` carries a `gauge` block.** For each vendor gauge window it gives the rounds per 1 % of quota.
+This is the same derivation the Team server uses: rounds counted between two readings of the same window, divided by the
+rise in percent, averaged over the last ten usable intervals. An interval where the window reset, the percent did not
+rise, or a reading is stale or missing is never used, so the figure is never 0 and never ∞. This machine does not read a
+gauge itself yet, so the local answer is always *not read on this machine*. An older extension reads the answer
+unchanged.
+
+**Changed: a launch that ends its child on an answer contains the child's whole tree.** This is the launcher half of the
+Team server's gauge reader. While such a child runs, its descendants are listed every 200 ms and recorded as they
+appear. When the answer comes or the deadline passes, the whole tree is killed. Each recorded member is then confirmed
+gone by pid and start time. When the child exits by itself, what was seen is killed and confirmed. If an unlisted
+process still holds the child's pipes after that, the launch says so instead of reporting a clean end. Other launches
+are unchanged.
+
+**Fixed: a killed process that its parent has not reaped is no longer counted as alive on Linux.** A zombie keeps its
+`/proc` entry until it is reaped, which can be for ever. A thread-group leader still counts as alive while any of its
+threads runs. Descendants are matched by start time too, so a process listed under a reused parent number is never
+taken as a child.
+
 ## Server 0.54.0 — 2026-10-14
 
 **Fixed: a Vibe review no longer dies on a character outside the Windows code page.** Vibe's Python wrote cp1252 to
