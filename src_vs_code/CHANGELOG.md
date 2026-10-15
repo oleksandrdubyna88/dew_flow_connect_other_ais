@@ -1,5 +1,24 @@
 # Changelog
 
+## Extension 0.75.0 — 2026-10-15
+
+**Added: Vendor gauges on the Team server tab.** For each vendor whose account the server reads after a job (today:
+codex), the tab shows the vendor's own figures, one line per window it reports — for example
+`codex (weekly): 37 % used · resets Thu 07:00 · seen 12 min ago`. A window the vendor does not report is not drawn.
+*stale* means a later reading failed and these are the last figures it gave. After the reset time has passed with no
+newer reading, the line says *reset time passed; availability unverified* — a recovery is never inferred from the clock.
+Beside each window: **rounds per 1 %**, or *unavailable* with the reason, or *hidden* for codex, whose account can also
+be used outside coai. Needs Team server 0.13.0; an older server shows no gauge, never a zero.
+
+**Added: the model card shows the same reading** for a row that runs on a Team server, and names the server. A local
+codex card says the gauge is not read on this machine.
+
+**Added: an optional subscription price per vendor account** (Setup › Team servers). It turns the weekly rounds-per-1 %
+figure into a share of a flat plan per round, shown only beside that weekly figure and hidden whenever the figure is.
+It is an estimate of a share, never a bill.
+
+Help for all of this is in all five languages.
+
 ## Server 0.55.0 — 2026-10-15
 
 **Added: `--round-counts` carries a `gauge` block.** For each vendor gauge window it gives the rounds per 1 % of quota.
