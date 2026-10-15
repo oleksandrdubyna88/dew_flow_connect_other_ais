@@ -1,6 +1,7 @@
 # PLAN — The plan gate reads the committed plan itself
 
-> Status: **plan only, nothing implemented yet, 2026-10-15.** Scope: `review_plan` (`src_mcp/src/Tools.cs`,
+> Status: **plan only, nothing implemented yet, 2026-10-15 — plan gate `proceed` and split into two epics the same day
+> (§ Epics), after the question consultant was asked.** Scope: `review_plan` (`src_mcp/src/Tools.cs`,
 > `PanelService.ReviewPlanAsync`), one widening of `GitHistory`, a new committed-plan reader, the round record (session
 > file + one `rounds` column), the plan prompt's end line, and one display line in the extension's rounds log.
 >
@@ -164,3 +165,87 @@ No directory, cache or long-lived process is added; the reader's five git proces
 - [ ] The tool description is corrected (no checkout) and says how to use the new argument; server instructions still pass their budget test.
 - [ ] T1–T21 green; B1–B9 each observed red with the named test, then green.
 - [ ] `module_server.md`, `module_extension.md`, `architecture.md` updated; `node .agents/conventions/tools/plan-lifecycle.mjs` clean; this plan promoted.
+
+## Epics
+
+Two epics, each on its own branch and ONE pull request, the coai gate once per epic; cornerstone quota ⌈2·2/5⌉ = 1.
+Stories live in `todo/PLAN_the_plan_gate_reads_the_committed_plan_E<n>.md`, one document per epic, written by Opus when
+the epic starts (`subagent-models.md`, pipeline step 3) and linked under its epic here in the same commit (the both-sides
+rule). Fable named the cornerstone AREA; Opus marks the story within the quota and keeps the ledger. **This split amends
+§6:** "one PR, five commits" becomes one PR per epic — E1 is §6's commits 1–3 and the session-file half of commit 4; E2 is
+the schema half of commit 4 and commit 5. Every commit still lands green on its own.
+
+*Consultant (gpt-6-astra), 2026-10-15, used for this split, each claim checked against the code:* two epics, not three —
+the reader, the refusals, the pin, the sentinel's prompt marker AND its fold, the session-file record, `status`, the tool
+description and the server docs are one unit of value (a caller can review a committed plan safely, and the round says what
+it reviewed), useful on its own; the column, `--log` and the extension line are exposure of a record that already exists
+and ship second. No docs-only epic: the description fix (D15) is part of E1's usability, since a caller learns
+`committedPlan` from it. The consultant's fallback (sentinel first, committed file second, reporting third) is kept as the
+cut if E1's stories document finds E1 too large: D12 stands alone on `planText` rounds. **One correction to the
+consultant's grouping:** the extension's rounds log reads the SESSION FILE, not the database (`roundsLog.ts:20,501` maps
+`SessionFile` records), so its display line depends on E1's record only and never on E2's column; it stays in E2 because
+it is display, and so that E1 ships nothing in `src_vs_code`. Riskiest: a read that is wrong with no symptom — a lossy
+decode, a truncation the flag missed, a BOM — recorded under a blob id it does not match; the area holds exactly that.
+
+Cornerstones: 0 of 1 — area named under E1, story to be marked by Opus
+
+### E1 — Review a committed plan safely, and record what was reviewed (§6 steps 1–4) · L · depends on nothing
+
+- **Stories.** `todo/PLAN_the_plan_gate_reads_the_committed_plan_E1.md` — written when the epic starts.
+- **Goal.** §2 items 1–3, 5 and 6, and the session-file half of 4: a caller names a committed plan, the server reads it
+  from the object database at the one pinned commit, proves the capture whole, refuses every wrong read before a round is
+  consumed, every reviewer gets it whole, a reviewer that says it did not is not counted as answering, and the round's
+  record in the session file says what was reviewed. `planText` callers see only the two new prompt lines.
+- **Scope.** `GitHistory` widened (§6 step 1: `GitAnswer.Truncated` set from `ProcessResult.Truncated` at
+  `GitHistory.cs:264-274`; `EntryAtAsync`, `BlobAsync`, `RootAndHeadAsync`, `PathStatusAsync`, revisions behind
+  `IsCommitish`); the pure helpers in `core/` and `CommittedPlanReader.ReadAsync` in `runners/Collecting/` with §4's order
+  (D5–D9); `Tools.cs` — `string? planText = null`, `committedPlan`, `expectedCommit` (D1, D4), the corrected description
+  (D15, "plus a read-only checkout" removed at `Tools.cs:90`); `ReviewPlanAsync` becomes `async`, refuses both/neither
+  (D2), resolves the tip once through `ResolveShaAsync` inside the `Error(...)` catch (D3, precedent `PanelService.cs:484`),
+  checks `expectedCommit`, and passes `Head = sha` on `StageRun` (`StageRun.cs:99`); the prompt's source line, the D12
+  instruction and `END OF PLAN <TextId>` (§5) with the `context for review` log line; the D12 fold rebinding `results`
+  between `RunAllAsync` and `ReviewerSummaryFactory.From` (`RoundEngine.cs:434`) into `ReviewerOutcome.Unparseable`
+  (`ReviewerExecutor.cs:201`); `PlanSource` as a nullable, non-normalised `RoundRecord` member (D10, the `Caller`
+  precedent `SessionStore.cs:193`), `StageRun.PlanSource`, the stamp beside `Sha`/`CadenceNote` (`RoundEngine.cs:483-490`),
+  none on a `SkippedOrOwed` round, and the `ServerJsonContext` registration — so `status` (`SessionAnswer.Rounds`,
+  `ServerJsonContext.cs:143-151`) shows it with no new member; `research/module_server.md` for the tool and the record.
+  Not in E1: any `rounds` column, `--log`, anything in `src_vs_code`.
+- **Stories list (T/B).** The reader and its refusals: T2, T3, T4, T5, T6, T7, T8, T9, T16, T18, T21 · the arguments and
+  the pin: T10, T11, T12, T20 · the prompt and the fold: T1, T14, T15, T19 · the record: T13's session-file and `status`
+  assertions. Break-its B1–B9, all of them — every one mutates E1 code.
+- **Done when.** T1–T12, T14–T16, T18–T21 and T13's session/`status` half green as the MTP executable; B1–B9 each
+  observed red with its named test, then green; `TheInstructionsFitWhatAClientKeepsTests` still green (D15 touched the
+  description only); a `planText` round's prompt is byte-identical to today's plus the two new lines; the server's
+  `review_plan` schema publishes `planText`, `committedPlan` and `expectedCommit` as optional; `module_server.md` updated.
+- **Cornerstone AREA.** The reader's integrity proof — §4 steps 3–5 as one unit: the `ls-tree -z` entry rules (mode, type,
+  size, exactly one entry), the `Truncated` refusal, and the blob-id recomputation with its BOM and U+FFFD order (D5–D7).
+  Every other failure in this plan has a symptom a person can see — a refusal sentence, a reviewer line, a visible
+  `PLAN_INCOMPLETE` finding when the fold is missing (B6 goes red on a verdict, not on silence). This one has none: a
+  capture that is not the blob, accepted and recorded under the blob's id, is reviewed as the plan and reads as the plan
+  for ever. The fold was considered and not chosen: its two failure modes are both visible (a blocking finding, or an
+  answered count that T15/T19 pin), and it rides on the finding schema the gate already parses.
+
+### E2 — Expose plan provenance in history and the rounds log (§6 steps 4–5) · S · depends on E1 (the record it projects and shows)
+
+- **Stories.** `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md` — written when the epic starts.
+- **Goal.** §2 item 4's second half: `--log` and the extension's rounds log show what each plan round reviewed; a database
+  from before the step and a session file from before E1 read as *not recorded*, never as empty.
+- **Scope.** The schema step (D11) — `ALTER TABLE rounds ADD COLUMN plan_source TEXT NOT NULL DEFAULT ''` appended after
+  `TheRoundsKey` (`Schema.cs:603-616`), **its number taken at merge** (step 22 if this lands before the size and authors
+  plans' steps, later otherwise; whichever PR merges second renumbers); the projection write in `RecordRoundRow`
+  (`RoundsDb.cs:841-867`) from `record.PlanSource`, `''` when null; `LoggedRound` gains a trailing `PlanSource? PlanSource
+  = null` (`RoundsQuery.cs:27`) read only under `HasColumn(db, "rounds", "plan_source")` (`RoundsQuery.cs:895`); `--log`
+  emits it; `rounds.ts` gains the optional `planSource` type and `roundsLog.ts` one detail line (D16), nothing when the
+  field is absent; `research/module_extension.md` and `architecture.md` § the `--log` seam (one more field, same rule).
+  **No backfill, decided:** a plan round completed between E1's merge and E2's carries `PlanSource` in its session file
+  and in `status`, and reads `''` in the database — *not recorded*, by the absent ≠ empty rule D10 already states. Rounds
+  have no startup re-projection today (consultations do, `PanelService.cs:159`); building the first one for the rounds
+  of one dev window between two merges is machinery larger than the gap, and the session file keeps the fact.
+- **Stories list (T/B).** T13's `--log` row and "a DB without the column reads `null`" assertions; T17; two break-its of
+  its own, named here because none of B1–B9 touches E2 code: **B10** drop the `HasColumn` guard → T13's step-21 database
+  read goes red; **B11** render the line for an absent `planSource` → T17's "shows nothing" case goes red.
+- **Done when.** A step-21 database opens at the new step and a read-only `--log` on a step-21 file still answers; a round
+  recorded before the step reads *not recorded* in `--log`; a round recorded after it shows commit, path, blob and bytes;
+  `bundledPage.test.ts` shows the line for a round with `planSource` and nothing without; B10 and B11 observed red then
+  green; `CoaiMcp.Tests.exe` and `npm test` green; the step number checked against `main` at merge; both documents of this
+  plan promoted together.
