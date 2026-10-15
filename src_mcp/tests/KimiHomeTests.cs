@@ -110,6 +110,7 @@ public sealed class KimiHomeTests : IDisposable
     [
         "cache/query-store/cluster.meta.json", "logs/kimi-code.log", "session_index.jsonl", "sessions/.index-dirty/a.b",
         "sessions/wd_x_y/session_z/agents/main/wire.jsonl", "workspaces.json", "user-history/h", "file-history/f", "telemetry/t", "updates/latest.json",
+        "device_id", // Kimi writes it when a launch's token refresh rotates the sign-in (M-K15, RESULTS section 27)
     ];
 
     [Fact]
@@ -135,7 +136,7 @@ public sealed class KimiHomeTests : IDisposable
     public static TheoryData<string> Forbidden => new()
     {
         "mcp.json", "tui.toml", "skills/s/SKILL.md", "agents/a.md", "AGENTS.md", "agents.md", "hooks.toml", "hooks/h", "plugins/p", "themes/t",
-        "local.toml", "device_id", "region", "migrations-effort.json", "statusline.json", "workspace-trust/wd_x", "notes.txt", "cache/x/link",
+        "local.toml", "region", "migrations-effort.json", "statusline.json", "workspace-trust/wd_x", "notes.txt", "cache/x/link",
     };
 
     [Theory]

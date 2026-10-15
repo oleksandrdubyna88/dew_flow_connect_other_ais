@@ -27,7 +27,8 @@ public abstract record Disposal
 /// <para><b>The check is the <c>VibeHome</c> walk with one rule inverted.</b> Vibe's home is checked against what Vibe writes; Kimi's
 /// against what Kimi 2.1.1 writes into its home (research/RESULTS_kimi_confinement.md section 18): the folders <c>cache</c>,
 /// <c>logs</c>, <c>sessions</c>, <c>user-history</c>, <c>file-history</c>, <c>telemetry</c>, <c>updates</c>; the files
-/// <c>session_index.jsonl</c> and <c>workspaces.json</c>; <c>workspace-trust</c> only EMPTY. Everything else is refused by name — an
+/// <c>session_index.jsonl</c> and <c>workspaces.json</c>, and — found by E4.3's live measurement (M-K15, research/RESULTS_kimi_confinement.md section 27) —
+/// <c>device_id</c>, which Kimi writes when a launch's token refresh rotates the sign-in; <c>workspace-trust</c> only EMPTY. Everything else is refused by name — an
 /// allowlist, so a <c>mcp.json</c>, a <c>hooks.toml</c>, <c>skills/</c>, <c>AGENTS.md</c> or a name nobody listed never reaches a
 /// launch. At <c>credentials</c> the rule inverts: it must be a link to the person's folder and is never descended. Reads only; never
 /// follows a link; a read failure refuses rather than starting on a home nobody checked. The root may hold more than <c>home/</c> and
@@ -48,7 +49,7 @@ public static class KimiHome
 
     private static readonly string[] AdmittedFolders = ["cache", "logs", "sessions", "user-history", "file-history", "telemetry", "updates"];
 
-    private static readonly string[] AdmittedFiles = ["session_index.jsonl", "workspaces.json"];
+    private static readonly string[] AdmittedFiles = ["session_index.jsonl", "workspaces.json", "device_id"];
 
     private static readonly AsyncLocal<Action<string>?> _afterUnlink = new();
 
