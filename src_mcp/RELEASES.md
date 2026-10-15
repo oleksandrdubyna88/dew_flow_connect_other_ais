@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.55.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.54.0...mcp-v0.55.0) (2026-10-15)
+
+
+### Features
+
+* the Team server reads each vendor's quota gauge under the slot's lease, and the extension shows it and when the quota comes back (round counter E6) ([#790](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/790)) ([e68dd2e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e68dd2e370213d64f5bca62e95263bdfd484ee63))
+
 ## [0.54.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.53.0...mcp-v0.54.0) (2026-10-14)
 
 
