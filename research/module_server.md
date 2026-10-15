@@ -1577,6 +1577,45 @@ flowchart LR
 Still in `PanelService` and still over the ceiling: the document stage's entry points, the resolve path
 and the scratch sweeps — steps 5–7 of the same plan.
 
+## The plan gate reads a committed plan (2026-10-16, `todo/PLAN_the_plan_gate_reads_the_committed_plan_E1.md`)
+
+A caller can name a COMMITTED plan file instead of pasting it. The server reads the blob at ONE commit, proves the
+text is that blob, and refuses every wrong read before a round number is taken. The reader is
+`runners/Collecting/CommittedPlanReader.cs`; its pure parts are in `core/`.
+
+```mermaid
+flowchart TD
+    A["PlanPath.Check: trim, backslash to slash, relative, no trailing slash, not a credential name"] --> B["rev-parse --show-toplevel HEAD"]
+    B --> C["ls-tree -l -z, TreeEntries.Parse, PlanEntry.Pick: mode, type, size, one entry, same path"]
+    C -->|accepted only| D["cat-file blob oid"]
+    D --> E["CaptureGate: not Ran, not Ok, Truncated"]
+    E --> F["BlobProof.Prove: SHA-1 of the re-encoded text equals the oid, or BOM plus text does"]
+    F --> G["empty and LFS test on the PROVED text"]
+    G --> H{"HEAD is the commit?"}
+    H -->|yes| I["status --porcelain=v1 -z of the path: edited or staged is refused"]
+    H -->|no| J["Note: the working tree was not compared"]
+    I --> K["Accepted: PlanSource, Text, Note"]
+    J --> K
+```
+
+- **Accepted if and only if the text re-encodes to the blob id.** The launcher decodes stdout as UTF-8 and DROPS a
+  leading BOM (measured), so a BOM blob matches only over `EF BB BF` + the bytes. A literal U+FFFD in a valid blob
+  matches the first id and is accepted; U+FFFD is looked for only after both ids fail. UTF-16/UTF-32 blobs decode
+  without a replacement character and are refused as "differs from the blob", with the cure "save it as UTF-8".
+- **The mode decides before the type**: a committed symlink's `ls-tree` type is `blob`, only mode `120000` says link.
+  Directory, symlink, submodule, odd mode, empty, over `DocumentRules.MaxBytes` and "path differs" (a trailing slash
+  lists what is UNDER a directory) are refused from the entry alone — no `cat-file` runs.
+- **A cut capture is refused on the flag alone** (`GitAnswer.Truncated`), even when the id would match. Order of the
+  gate: did it finish, did it succeed, was it whole — a cut capture of a command that failed is a failed command.
+- **A SHA-256 repository is refused first** (its blob ids are SHA-256; the proof is SHA-1 only): pass `planText` there.
+- **The checkout guard** (`git status`, compared through the clean filters) runs only when HEAD IS the commit read. A
+  checkout written with CRLF under `core.autocrlf=true` is clean. A file re-saved with a different size AFTER the commit
+  is reported as modified by git before it hashes anything (measured: a CRLF rewrite of an LF file under autocrlf), so
+  such a file is refused as "uncommitted". Blind spots, said not fixed: `skip-worktree` / `assume-unchanged` paths read
+  as clean; a branch checked out in ANOTHER worktree is "not compared".
+- **Credential-shaped names** use the one table in `CredentialFiles` and the one sentence
+  (`CredentialFiles.NamedSentence`, shared with `review_feature`'s `planPath`).
+
 ## Flow of one stage
 
 **All three stages are judged against written rules.** The code stage collects from the round's

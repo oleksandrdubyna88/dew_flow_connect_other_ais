@@ -1,6 +1,7 @@
 using CoaiMcp.Core;
 using CoaiMcp.Core.Collecting;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Consultation;
 
 namespace CoaiMcp.Runners.Collecting;
 
@@ -28,11 +29,86 @@ public abstract record PlanRead
 /// can never be a plan); <c>cat-file</c> fetches the blob; the capture is refused when the launcher cut it, then proved
 /// against the id (<see cref="BlobProof"/>); only the PROVED text is tested for emptiness and for being an LFS pointer.
 /// Each read is refused before its words are trusted: a cut capture of a command that failed is still a failed command.</para>
-/// <para>The path arrives already canonical and the guards around the checkout (credential shapes, a clean working
-/// copy) are the caller's; this reads the OBJECT and never the working tree.</para>
+/// <para><see cref="ReadAsync"/> is that proof over an already-canonical path and reads the OBJECT only.
+/// <see cref="ReadGuardedAsync"/> is what a caller names a plan by: it canonicalises the path and refuses a bad or
+/// credential-shaped one before any process, finds the repository root and HEAD, and — when HEAD IS the commit being
+/// read — refuses a plan that is edited or staged in the working tree, because the reviewers would read the commit while
+/// the caller believed they read the edit. When HEAD is another commit the working tree says nothing about this one, so
+/// nothing is compared and the note says so.</para>
+/// <para>Two blind spots, said rather than fixed: a path marked <c>skip-worktree</c> or <c>assume-unchanged</c> (a sparse
+/// checkout) reads as clean, and a branch checked out in ANOTHER worktree than <c>repoPath</c> is "not compared" — true,
+/// since that tree is not this one. A caller that must assert WHICH commit it reviewed passes <c>expectedCommit</c>.</para>
 /// </remarks>
 public static class CommittedPlanReader
 {
+    public static async Task<PlanRead> ReadGuardedAsync(
+        GitHistory git, string repoPath, string sha, string path, CancellationToken ct)
+    {
+        var check = PlanPath.Check(path);
+        var refusal = check.Refusal.Length > 0 ? check.Refusal : ShaRefusal(sha);
+
+        return refusal.Length > 0
+            ? new PlanRead.Refused(refusal)
+            : await PlacedAsync(git, repoPath, sha, check.Path, ct);
+    }
+
+    /// <summary>Where the checkout's root is and what HEAD is — then the proof, then (when HEAD is the commit) the status.</summary>
+    private static async Task<PlanRead> PlacedAsync(GitHistory git, string repoPath, string sha, string path, CancellationToken ct)
+    {
+        var placed = Place(await git.RootAndHeadAsync(repoPath, ct));
+        if (placed.Refusal.Length > 0)
+        {
+            return new PlanRead.Refused(placed.Refusal);
+        }
+
+        var read = await ReadAsync(git, repoPath, sha, path, ct);
+
+        return read is PlanRead.Accepted accepted ? await CleanAsync(git, placed, sha, accepted, ct) : read;
+    }
+
+    private static async Task<PlanRead> CleanAsync(GitHistory git, Placement placed, string sha, PlanRead.Accepted accepted, CancellationToken ct)
+    {
+        if (!placed.Head.Equals(sha, StringComparison.OrdinalIgnoreCase))
+        {
+            return accepted with { Note = NotCompared(placed.Head, sha) };
+        }
+
+        var dirt = Dirt(await git.PathStatusAsync(placed.Root, accepted.Source.Path, ct), accepted.Source.Path);
+
+        return dirt.Length > 0 ? new PlanRead.Refused(dirt) : accepted;
+    }
+
+    /// <summary>The sentence for an edited or staged path, or empty. Staged first: it is the one a plain <c>git commit</c> does not cover.</summary>
+    private static string Dirt(GitAnswer status, string path)
+    {
+        var gate = CaptureGate(status, $"asking whether '{path}' is edited");
+        if (gate.Length > 0)
+        {
+            return gate;
+        }
+
+        var entries = PorcelainReader.Read(status.Out);
+
+        return entries.Count == 0 ? string.Empty
+            : entries[0].Code[0] != ' ' ? $"'{path}' has staged changes — the reviewers read the commit, not your edit; commit them (git commit) and call again"
+            : $"'{path}' has uncommitted changes in the working tree — the reviewers read the commit, not your edit; commit them and call again";
+    }
+
+    private static Placement Place(GitAnswer answer)
+    {
+        var gate = CaptureGate(answer, "finding the repository root and HEAD");
+        var lines = answer.Lines;
+
+        return gate.Length > 0 ? new Placement(string.Empty, string.Empty, gate)
+            : lines.Count == 2 ? new Placement(lines[0], lines[1], string.Empty)
+            : new Placement(string.Empty, string.Empty, $"git rev-parse answered {lines.Count} lines for the root and HEAD, not 2 — report it with the git version");
+    }
+
+    private static string NotCompared(string head, string sha) =>
+        $"the working tree was not compared: HEAD is {Short(head)} and the plan was read at {Short(sha)}";
+
+    private sealed record Placement(string Root, string Head, string Refusal);
+
     public static async Task<PlanRead> ReadAsync(
         GitHistory git, string repoPath, string sha, string canonicalPath, CancellationToken ct)
     {
@@ -124,6 +200,8 @@ public static class CommittedPlanReader
 
         return why.Length > 0 ? $"'{path}' {why} — pass a path relative to the repository root, as committed (todo/PLAN_x.md)" : string.Empty;
     }
+
+    private static string ShaRefusal(string sha) => GitHistory.IsCommitish(sha) ? string.Empty : NotSha1(sha);
 
     private static string NotSha1(string sha) =>
         $"commit {sha} is {sha.Length} hex characters — committedPlan reads SHA-1 repositories (40-hex ids) only; for a SHA-256 repository pass planText";
