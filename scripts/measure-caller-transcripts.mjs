@@ -9,13 +9,22 @@
 // many of the biggest SESSIONS (a main file plus its `subagents/` folder) are timed; `--runs` (default 7) is the number of
 // timed passes of each of a full parse and a day-gated parse; `--day` is the UTC day the gate keeps (default: the day holding
 // most of that session's lines). Prints ONE JSON line: counts, booleans, durations, version strings, model ids and key names
-// — never a value that could carry text. Reads only; writes nothing, under `--projects` or anywhere; never opens
+// — never a value that could carry text. Progress ("reading caller sessions k/n", "timing session i/n: <pass> run r/R") goes to stderr as counts only. Reads only; writes nothing, under `--projects` or anywhere; never opens
 // `~/.claude/sessions`. The time is NODE's, on this machine: not the C# reader's (measurement.md rule 3).
 //
 // Exit codes: 0 ok · 65 bad arguments or unreadable input (never 64: that is the family's "no such mode"). Run it on a machine
 // you are not also loading, or say what else ran: the first pass of each kind is only as cold as the OS file cache is.
 import { readFileSync } from 'node:fs';
 import { isDay, measure } from './lib/caller-transcripts.mjs';
+
+const READ_EVERY = 5;
+/** Progress lines on STDERR (counts only); stdout stays the single JSON result. Reading is reported every few sessions and at the end. */
+function reportProgress(step) {
+  if (step.phase === 'read' && step.done % READ_EVERY !== 0 && step.done !== step.of) return;
+  const line = step.phase === 'read' ? `reading caller sessions ${step.done}/${step.of}` : `timing session ${step.session}/${step.of}: ${step.pass} run ${step.run}/${step.runs}`;
+  process.stderr.write(`${line}
+`);
+}
 
 const FLAGS = new Set(['--rounds', '--projects', '--largest', '--runs', '--day']);
 const usage = 'usage: measure-caller-transcripts.mjs --rounds <rounds.json> --projects <dir> [--largest <n>] [--runs <n>] [--day <yyyy-mm-dd>]';
@@ -51,7 +60,7 @@ function main(argv) {
   if (parsed.refusal) return refuse(parsed.refusal);
   const read = readRounds(parsed.options.rounds);
   if (read.refusal) return refuse(read.refusal);
-  process.stdout.write(`${JSON.stringify(measure({ ...parsed.options, rounds: read.rounds, projectsDir: parsed.options.projects }))}\n`);
+  process.stdout.write(`${JSON.stringify(measure({ ...parsed.options, rounds: read.rounds, projectsDir: parsed.options.projects, progress: reportProgress }))}\n`);
   return 0;
 }
 

@@ -4,7 +4,7 @@
 // WSL's Node 20 runs it too, so no API newer than Node 20 appears in the .mjs files.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
@@ -284,6 +284,18 @@ test('noFieldValueReachesTheReport', () => {
   assert.equal(ran.stdout.trim().split('\n').length, 1, 'one JSON line');
 });
 
+test('progressGoesToStderrAsCountsOnlyWhileStdoutStaysOneJsonLine', () => {
+  const { projects, rounds } = markedTree();
+  const ran = spawnSync(process.execPath, [CLI, '--rounds', rounds, '--projects', projects, '--runs', '2'], { encoding: 'utf8' });
+  assert.equal(ran.status, 0, ran.stderr);
+  assert.match(ran.stderr, /reading caller sessions 1\/1/);
+  assert.match(ran.stderr, /timing session 1\/1: full parse run 2\/2/);
+  assert.match(ran.stderr, /timing session 1\/1: day-gated parse run 2\/2/);
+  assert.doesNotMatch(ran.stderr, /ZZ-MARK|slug|rounds\.json|testsToDelete/u, 'progress names no value and no path');
+  assert.equal(ran.stdout.trim().split('\n').length, 1, 'stdout is still the single JSON result');
+  JSON.parse(ran.stdout);
+});
+
 test('theSameTreeProducesNonZeroCountsInEverySection', () => {
   const { projects, rounds } = markedTree();
   const report = run(JSON.parse(readFileSync(rounds, 'utf8')), projects);
@@ -401,6 +413,51 @@ test('theExporterWritesOnlyCodeRoundsSinceTheDayAsLfUtf8', { skip: !python }, ()
   assert.equal(rows[0].repo_path, '/home/\u00fcn\u00ef/repo');
   assert.ok(bytes.toString('utf8').includes('\u00fcn\u00ef'), 'non-ASCII survives unescaped');
   assert.deepEqual(readFileSync(db), before, 'the store is untouched');
+});
+
+test('theExporterRefusesAnOutputThatIsTheStoreItselfAndLeavesTheStoreIntact', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  seedStore(db);
+  const before = readFileSync(db);
+  const swapped = exporter(db, db, '2026-09-30'); // the arguments swapped: the "output" would truncate the live store
+  assert.equal(swapped.status, 65, swapped.stderr);
+  assert.match(swapped.stderr, /same file/);
+  assert.deepEqual(readFileSync(db), before, 'the store is byte-for-byte untouched');
+  const link = join(root, 'looks-like-output.json');
+  linkSync(db, link); // a second name for the same file
+  const linked = exporter(db, link, '2026-09-30');
+  assert.equal(linked.status, 65, linked.stderr);
+  assert.deepEqual(readFileSync(db), before, 'still untouched through a hard link');
+});
+
+test('theExporterRefusesAnOutputNamedLikeAStoreFile', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  seedStore(db);
+  for (const name of ['copy.db', 'copy.sqlite', 'coai.db-wal', 'coai.db-shm', 'COPY.DB']) {
+    const ran = exporter(db, join(root, name), '2026-09-30');
+    assert.equal(ran.status, 65, name + ' ' + ran.stderr);
+    assert.equal(existsSync(join(root, name)), false, name + ' was not created');
+  }
+});
+
+test('theExporterWritesThroughATempFileAndLeavesNothingBehind', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  const out = join(root, 'rounds.json');
+  seedStore(db);
+  writeFileSync(out, 'previous');
+  assert.equal(exporter(db, out, '2026-09-30').status, 0);
+  assert.deepEqual(readdirSync(root).sort(), ['coai.db', 'projects', 'rounds.json'], 'no temp file is left in the output folder');
+  assert.ok(JSON.parse(readFileSync(out, 'utf8')).length > 0);
+  const empty = join(root, 'empty.db');
+  assert.equal(pythonRun('import sqlite3, sys\nsqlite3.connect(sys.argv[1]).close()', empty).status, 0);
+  writeFileSync(out, 'previous');
+  const failed = exporter(empty, out, '2026-09-30'); // no tables: the query fails
+  assert.equal(failed.status, 74);
+  assert.equal(readFileSync(out, 'utf8'), 'previous', 'a failed export leaves an existing output as it was');
+  assert.deepEqual(readdirSync(root).sort(), ['coai.db', 'empty.db', 'projects', 'rounds.json']);
 });
 
 test('theExporterRefusesAMissingStoreWithoutCreatingOne', { skip: !python }, () => {

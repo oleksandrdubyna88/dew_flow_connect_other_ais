@@ -590,7 +590,7 @@ const round1 = (value) => (value === null ? null : Math.round(value * 10) / 10);
 const summariseRuns = (durations) => ({ firstRunMs: round1(durations[0]), p50OfRestMs: round1(percentile(durations.slice(1), 0.5)), runs: durations.length });
 
 /** Times a full parse and a day-gated parse over one profiled session; both reported as first run apart, then p50 of the rest. */
-export function timeSession(profile, runs, day) {
+export function timeSession(profile, runs, day, progress = () => {}) {
   const gate = day !== '' ? day : busiestDay(profile.days);
   const kept = profile.days[gate] ?? 0;
   const full = [];
@@ -599,7 +599,9 @@ export function timeSession(profile, runs, day) {
   let parsedGated;
   for (let at = 0; at < runs; at += 1) {
     const a = stopwatch(() => parsePass(profile.files, ''));
+    progress({ phase: 'time', pass: 'full parse', run: at + 1, runs });
     const b = stopwatch(() => parsePass(profile.files, gate));
+    progress({ phase: 'time', pass: 'day-gated parse', run: at + 1, runs });
     full.push(a.ms);
     gated.push(b.ms);
     parsedFull = a.result;
@@ -622,21 +624,26 @@ export function timeSession(profile, runs, day) {
 
 /**
  * `rounds`: rows from the exporter (`caller`, `caller_vendor`, `started_utc`). Reads under `projectsDir` only. Returns one
- * plain object of counts, booleans, durations and shape-checked names.
+ * plain object of counts, booleans, durations and shape-checked names. `progress` is called with counts only
+ * (`{ phase: 'read', done, of }`, `{ phase: 'time', session, of, pass, run, runs }`) so a caller can tell a long run is alive; it never
+ * receives a name, a path or a value.
  */
-export function measure({ rounds, projectsDir, largest = 1, runs = 7, day = '' }) {
+export function measure({ rounds, projectsDir, largest = 1, runs = 7, day = '', progress = () => {} }) {
   const index = indexProjects(projectsDir);
   const rows = rounds.filter(isObject);
   const aggregate = newAggregate();
   const ends = new Map();
   let fileIndex = 0;
   const callers = new Set(rows.map((round) => round.caller).filter(isSessionId).map((id) => id.toLowerCase()));
+  let done = 0;
   for (const id of callers) {
     for (const entry of index.sessions.get(id) ?? []) {
       const folded = foldSession(aggregate, describeSession(entry), fileIndex);
       fileIndex += folded.files;
       ends.set(id, [...(ends.get(id) ?? []), folded.mainEnd]);
     }
+    done += 1;
+    progress({ phase: 'read', done, of: callers.size });
   }
   const all = [...index.sessions.values()].flat().map(describeSession);
   const biggest = [...all].sort((a, b) => b.bytes - a.bytes).slice(0, largest);
@@ -649,6 +656,6 @@ export function measure({ rounds, projectsDir, largest = 1, runs = 7, day = '' }
     coverage: summariseCoverage(rows, (id) => ends.get(id) ?? []),
     ...renderAggregate(aggregate),
     sizes: { ...summariseSizes(all), nonSessionJsonl: index.otherJsonl },
-    largest: biggest.map((description) => timeSession(profileSession(description), runs, day)),
+    largest: biggest.map((description, at) => timeSession(profileSession(description), runs, day, (step) => progress({ ...step, session: at + 1, of: biggest.length }))),
   };
 }
