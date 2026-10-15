@@ -388,4 +388,71 @@ public sealed class JunctionsTests : IDisposable
             scope.Dispose();
         }
     }
+
+    // ---------- E4.2 S2.46: an ANCESTOR of the target may be a link (decision 13) ----------
+
+    /// <summary>A person's <c>credentials</c> reached through an ancestor junction (<c>alias</c> → <c>persons</c>): the shape of a relocated profile.</summary>
+    private string ThroughAnAncestorLink()
+    {
+        var persons = _dir.At("persons");
+        Directory.CreateDirectory(Path.Combine(persons, "credentials"));
+        var secret = Path.Combine(persons, "credentials", "kimi-code.json");
+        File.WriteAllBytes(secret, Token);
+        File.SetAttributes(secret, FileAttributes.ReadOnly);
+        var alias = _dir.At("alias");
+        Junctions.Make(HostKind.Windows, alias, persons).Should().BeEmpty("the fixture's ancestor link");
+
+        return Path.Combine(alias, "credentials");
+    }
+
+    [Fact]
+    public void AnAncestorThatIsALink_IsAdmitted_AndTheJunctionKeepsTheSpelling()
+    {
+        OnWindows();
+        var target = ThroughAnAncestorLink();
+
+        Junctions.Refusal(HostKind.Windows, Link, target).Should().BeEmpty("a relocated profile is an ordinary machine");
+        Junctions.Make(HostKind.Windows, Link, target).Should().BeEmpty();
+
+        Junctions.Target(Link).Should().Be(target, "one level — never resolved into the ancestor junction's own target");
+        File.ReadAllBytes(Path.Combine(Link, "kimi-code.json")).Should().Equal(Token);
+        DirectoryLink.Remove(Link);
+        File.ReadAllBytes(Path.Combine(_dir.At("persons"), "credentials", "kimi-code.json")).Should().Equal(Token);
+        File.GetAttributes(Path.Combine(_dir.At("persons"), "credentials", "kimi-code.json")).HasFlag(FileAttributes.ReadOnly).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnAncestorWhoseResolutionLeavesTheLocalDrives_IsRefused_AndNothingIsMade()
+    {
+        OnWindows();
+        var target = ThroughAnAncestorLink();
+
+        var refusal = Junctions.Make(HostKind.Windows, Link, target, Junctions.Target, _ => { }, _ => @"\\server\share\x\credentials");
+
+        refusal.Should().Contain("resolves to").And.Contain(@"\\server\share\x\credentials").And.Contain("not a local drive path");
+        NothingIsAt(Link).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ATargetThatCannotBeNamedByItsHandle_IsRefused_AndNothingIsMade()
+    {
+        OnWindows();
+        var target = ThroughAnAncestorLink();
+
+        var refusal = Junctions.Make(HostKind.Windows, Link, target, Junctions.Target, _ => { }, _ => string.Empty);
+
+        refusal.Should().Contain("cannot be named by its handle on this host").And.Contain("refused (D19)");
+        NothingIsAt(Link).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ATargetThatItselfIsALink_StaysRefused()
+    {
+        OnWindows();
+        Person("secret.json");
+        var viaLink = _dir.At("target-is-link");
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), viaLink, Target);
+
+        Junctions.Refusal(HostKind.Windows, Link, viaLink).Should().Contain("is itself a link");
+    }
 }

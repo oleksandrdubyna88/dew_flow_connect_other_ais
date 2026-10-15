@@ -19,6 +19,10 @@ namespace CoaiMcp.Runners.Files;
 /// the command. <c>DeviceIoControl(FSCTL_SET_REPARSE_POINT)</c> takes the path as UTF-16 bytes, starts no process and needs
 /// no privilege — a mount point is unprivileged where a symbolic link needs Developer Mode. The read-back after making it
 /// is what makes the maker provable whichever way it was made.</para>
+/// <para><b>An ancestor of the target may be a link; the target itself may not</b> (E4.2 decision 13): a relocated profile is an
+/// ordinary machine, so <see cref="Refusal(HostKind, string, string)"/> admits it, asks the kernel where the target really is
+/// (<c>HandleRead.FinalDirectory</c>) and refuses only a resolution that leaves the local drives. The junction keeps the SPELLING
+/// as its target — one level.</para>
 /// <para><b>Windows only</b> (D18): on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
 /// <para>Nothing Kimi-specific lives here: no config, no launch — only the shape of a link into somebody else's folder.</para>
 /// </remarks>
@@ -43,6 +47,10 @@ public static partial class Junctions
 
     /// <summary>The seam of the drive type, so a test can make a drive look like a mapped network one.</summary>
     internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType) =>
+        Refusal(host, link, target, driveType, HandleRead.FinalDirectory);
+
+    /// <summary>The seam of the final path as well, so a test can make an ancestor link lead off the local drives.</summary>
+    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final) =>
         new Func<string>[]
         {
             () => WindowsOnly(host),
@@ -50,6 +58,7 @@ public static partial class Junctions
             () => Length(target),
             () => Missing(target),
             () => Chained(target),
+            () => Resolved(target, driveType, final),
             () => Taken(link),
         }
         .Select(check => check())
@@ -98,9 +107,13 @@ public static partial class Junctions
         Make(host, link, target, readBack, RemoveFolder);
 
     /// <summary>The seam of the removal as well, so a test can make taking the half-made link back out fail.</summary>
-    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove)
+    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove) =>
+        Make(host, link, target, readBack, remove, HandleRead.FinalDirectory);
+
+    /// <summary>The seam of the final path as well, so a test can make the target look like it resolves off the local drives.</summary>
+    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove, Func<string, string> final)
     {
-        var refusal = Refusal(host, link, target, DriveTypeOf);
+        var refusal = Refusal(host, link, target, DriveTypeOf, final);
 
         return refusal.Length > 0 ? refusal : Verified(link, target, readBack, remove, Built(link, target, remove));
     }
@@ -155,6 +168,24 @@ public static partial class Junctions
     private static string Chained(string target) => SnapshotLinks.IsLink(target)
         ? $"{target} is itself a link, and coai never chains links (D19)"
         : string.Empty;
+
+    /// <summary>
+    /// Where the target REALLY is, asked of the kernel through an opened handle: an ANCESTOR of the target may be a link (a
+    /// relocated profile is one — admitted, the person's own doing, exactly what their own <c>kimi</c> runs through), but where the
+    /// ancestors lead must still be a local drive. A directory symlink under <c>C:\…</c> to <c>\\server\share</c> passes
+    /// <see cref="LocalDrive"/>'s look at the spelling and would be listed on every sweep. Empty answer: the platform cannot name it,
+    /// so coai cannot tell where the sign-in is (E4.2 decision 13).
+    /// </summary>
+    private static string Resolved(string target, Func<string, DriveType> driveType, Func<string, string> final)
+    {
+        var resolved = final(target);
+
+        return resolved.Length == 0
+            ? $"{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)"
+            : IsLocalDrivePath(resolved, driveType)
+                ? string.Empty
+                : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19)";
+    }
 
     private static string Taken(string link)
     {

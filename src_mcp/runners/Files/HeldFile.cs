@@ -20,6 +20,12 @@ namespace CoaiMcp.Runners.Files;
 /// and not across the WSL/Windows 9P boundary, where a Windows process and a WSL process opening one file
 /// through <c>\\wsl$</c> do not see each other's lock. Every lock here guards state on ONE side, so the
 /// boundary is never crossed by a writer.</para>
+/// <para><b>An inheritable hold is held by every process that inherits the handle</b> until the last of them is gone — the property
+/// the Kimi tree hold wants (decision 10 of E4.2, <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>), and the reason it is never the
+/// default: .NET's non-shell <c>Process.Start</c> passes <c>bInheritHandles = TRUE</c> and no handle list, so EVERY child started
+/// while the hold is open inherits it, redirected or not — which is also why no TEST ever holds one in the test host (S2.43 holds it
+/// in a child). <see cref="FileShare.Inheritable"/> is not a share mode but the <c>bInheritHandle</c> of the handle's security
+/// attributes, so the open stays exclusive.</para>
 /// </remarks>
 public static class HeldFile
 {
@@ -38,11 +44,11 @@ public static class HeldFile
     /// other <see cref="IOException"/> is the share-mode refusal a held file answers with — on Windows a sharing
     /// violation, on Unix the advisory <c>flock</c> .NET takes.
     /// </remarks>
-    public static Hold Take(string path)
+    public static Hold Take(string path, bool inheritable = false)
     {
         try
         {
-            return new Hold.Taken(new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+            return new Hold.Taken(new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, inheritable ? FileShare.None | FileShare.Inheritable : FileShare.None));
         }
         catch (Exception e) when (e is UnauthorizedAccessException or DirectoryNotFoundException or PathTooLongException)
         {
@@ -84,12 +90,12 @@ public static class HeldFile
     /// passed — so a reader's momentary probe is waited out, while a real holder (who holds for minutes) still
     /// refuses. An unusable file is answered at once: waiting does not make it openable.
     /// </summary>
-    public static Hold TakeWithin(string path, TimeSpan within)
+    public static Hold TakeWithin(string path, TimeSpan within, bool inheritable = false)
     {
         var until = DateTime.UtcNow + within;
         while (true)
         {
-            var hold = Take(path);
+            var hold = Take(path, inheritable);
             if (hold is not Hold.Busy || DateTime.UtcNow >= until)
             {
                 return hold;
