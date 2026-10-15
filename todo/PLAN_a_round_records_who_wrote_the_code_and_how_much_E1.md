@@ -286,7 +286,7 @@ written — the prediction precedes every observation, including an exploratory 
   S3's tool from S4's selection (or derived and labelled so), and a C# test that fails the build the moment any fixture
   carries a non-sentinel string, a path outside a fixture root, a broken join, a CR byte, or a case goes missing.
 - **Scope.**
-  - `src_mcp/tests/fixtures/caller-transcripts/<case>/` — `projects/<slug>/<sessionId>.jsonl`,
+  - `src_mcp/tests/fixtures/caller-transcripts/<case>/` (shipped as SHORT folders `c01`-`c20`; the human case name and its folder are in `manifest.json`, because no tracked path may exceed 160 characters relative to the repository root — a git worktree under a long folder fails past Windows' 260) — `projects/<slug>/<sessionId>.jsonl`,
     `projects/<slug>/<sessionId>/subagents/agent-<id>.jsonl|.meta.json`, optional `sessions/<pid>.json` (a registry
     entry WRITTEN by hand from allowlisted fields only — never cut from the real registry), and `rounds.json`.
   - `src_mcp/tests/fixtures/caller-transcripts/manifest.json` — per case: `name`, `serves` (the plan section and row it

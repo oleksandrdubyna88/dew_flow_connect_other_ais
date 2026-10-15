@@ -2,6 +2,7 @@
  "cases": [
   {
    "name": "background-agent-across-round-start",
+   "dir": "c01",
    "serves": "a background agent launched before a round starts is still writing after it",
    "provenance": "cut",
    "side": "windows",
@@ -23,6 +24,7 @@
   },
   {
    "name": "message-as-several-lines",
+   "dir": "c02",
    "serves": "one message id spans several lines whose usage grows; the figure to take is the maximum over its lines",
    "provenance": "cut",
    "side": "windows",
@@ -44,6 +46,7 @@
   },
   {
    "name": "message-last-line-below-max",
+   "dir": "c03",
    "serves": "a message whose last line does not hold the largest usage: the figure to take is the maximum, never the last line",
    "provenance": "derived: cut, the first and last line of one message swapped their usage",
    "side": "windows",
@@ -65,6 +68,7 @@
   },
   {
    "name": "meta-without-model",
+   "dir": "c04",
    "serves": "a launch without a model argument writes a meta without one",
    "provenance": "cut",
    "side": "windows",
@@ -86,6 +90,7 @@
   },
   {
    "name": "missing-child-transcripts",
+   "dir": "c05",
    "serves": "an agent meta without its file, and an Agent call with neither meta nor file",
    "provenance": "derived: cut, agent files and metas dropped",
    "side": "windows",
@@ -107,6 +112,7 @@
   },
   {
    "name": "model-switch-in-window",
+   "dir": "c06",
    "serves": "the caller changes model inside a round window",
    "provenance": "derived: cut, the model id of every assistant message after the first changed",
    "side": "windows",
@@ -129,6 +135,7 @@
   },
   {
    "name": "nested-agents",
+   "dir": "c07",
    "serves": "an agent launched from another agent (depth 2) carries its parent id",
    "provenance": "cut, agent files clipped to the window",
    "side": "windows",
@@ -150,6 +157,7 @@
   },
   {
    "name": "no-effort-lines",
+   "dir": "c08",
    "serves": "assistant lines without an effort field",
    "provenance": "cut; the only assistant lines without an effort field are synthetic ones",
    "side": "windows",
@@ -171,6 +179,7 @@
   },
   {
    "name": "no-evidence-two-repositories",
+   "dir": "c09",
    "serves": "two gate sessions in two repositories and a transcript with no write",
    "provenance": "cut",
    "side": "windows",
@@ -193,6 +202,7 @@
   },
   {
    "name": "persistence-off",
+   "dir": "c10",
    "serves": "a caller that ran without session persistence: a registry entry and rounds, no transcript",
    "provenance": "derived: no transcript, rounds file and registry entry written by hand",
    "side": "windows",
@@ -213,6 +223,7 @@
   },
   {
    "name": "refused-agent-call",
+   "dir": "c11",
    "serves": "an Agent call refused by the model guard: an error result, no meta, no file",
    "provenance": "derived: cut, an agent dropped and its result marked as an error",
    "side": "windows",
@@ -234,6 +245,7 @@
   },
   {
    "name": "registry-and-variable-disagree",
+   "dir": "c12",
    "serves": "the registry session id differs from the id of the transcript",
    "provenance": "derived: cut, registry entry written by hand with another session id",
    "side": "windows",
@@ -256,6 +268,7 @@
   },
   {
    "name": "replay-same-round-twice",
+   "dir": "c13",
    "serves": "the same round listed twice must not be counted twice",
    "provenance": "derived: cut, rounds file shaped for the case",
    "side": "windows",
@@ -278,6 +291,7 @@
   },
   {
    "name": "resumed-agent",
+   "dir": "c14",
    "serves": "an agent resumed after a round started keeps writing under its original id",
    "provenance": "cut, agent file kept whole",
    "side": "windows",
@@ -299,6 +313,7 @@
   },
   {
    "name": "second-gate-session-same-caller",
+   "dir": "c15",
    "serves": "the same caller opens a second gate session in one repository",
    "provenance": "derived: cut, rounds file shaped for the case",
    "side": "windows",
@@ -321,6 +336,7 @@
   },
   {
    "name": "skipped-round-between-recorded",
+   "dir": "c16",
    "serves": "rounds 1 and 3 are recorded, round 2 is not",
    "provenance": "derived: cut, rounds file shaped for the case",
    "side": "windows",
@@ -343,6 +359,7 @@
   },
   {
    "name": "two-repositories-one-session",
+   "dir": "c17",
    "serves": "one caller session writes into two repositories, one gate session each",
    "provenance": "cut, agent files clipped to the window",
    "side": "windows",
@@ -365,6 +382,7 @@
   },
   {
    "name": "work-before-open",
+   "dir": "c18",
    "serves": "the caller wrote before the gate session was opened",
    "provenance": "cut, agent files clipped to the window",
    "side": "windows",
@@ -386,6 +404,7 @@
   },
   {
    "name": "write-into-submodule-and-scratchpad",
+   "dir": "c19",
    "serves": "one write lands in a submodule of the gated repository, one in the scratchpad",
    "provenance": "derived: cut, one repository write moved into a submodule path",
    "side": "windows",
@@ -408,6 +427,7 @@
   },
   {
    "name": "writes-only-elsewhere",
+   "dir": "c20",
    "serves": "the only write in the window is a scratch file outside the gated repository",
    "provenance": "cut",
    "side": "windows",

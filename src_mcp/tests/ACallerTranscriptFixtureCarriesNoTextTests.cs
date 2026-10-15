@@ -60,6 +60,41 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         ["refused-agent-call"] = ("an Agent call refused by the model guard: an error result, no meta, no file", "derived: cut, an agent dropped and its result marked as an error"),
     };
 
+    /// <summary>
+    /// The folder of each case: SHORT, because a fixture path must stay under Windows' 260 characters when a checkout lives in a long
+    /// folder (the coai server's review worktree is about 71 characters deep and git adds ".lock"). The human name lives in the manifest.
+    /// Pinned here so a folder cannot be renamed, added or dropped without this list changing in the same diff.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> RequiredDirs = new Dictionary<string, string>
+    {
+        ["background-agent-across-round-start"] = "c01",
+        ["message-as-several-lines"] = "c02",
+        ["message-last-line-below-max"] = "c03",
+        ["meta-without-model"] = "c04",
+        ["missing-child-transcripts"] = "c05",
+        ["model-switch-in-window"] = "c06",
+        ["nested-agents"] = "c07",
+        ["no-effort-lines"] = "c08",
+        ["no-evidence-two-repositories"] = "c09",
+        ["persistence-off"] = "c10",
+        ["refused-agent-call"] = "c11",
+        ["registry-and-variable-disagree"] = "c12",
+        ["replay-same-round-twice"] = "c13",
+        ["resumed-agent"] = "c14",
+        ["second-gate-session-same-caller"] = "c15",
+        ["skipped-round-between-recorded"] = "c16",
+        ["two-repositories-one-session"] = "c17",
+        ["work-before-open"] = "c18",
+        ["write-into-submodule-and-scratchpad"] = "c19",
+        ["writes-only-elsewhere"] = "c20",
+    };
+
+    private static string NameOfDir(string dir) => RequiredDirs.Where(p => p.Value == dir).Select(p => p.Key).DefaultIfEmpty(dir).First();
+
+    /// <summary>A fixture path, relative to the repository root, may not exceed this: about 71 (worktree root) + 160 + 5 (".lock") stays well under 260.</summary>
+    private const int MaxRelativePathLength = 160;
+    private const string FixtureRootFromRepo = "src_mcp/tests/fixtures/caller-transcripts/";
+
     private static readonly string Root = Path.Combine(AppContext.BaseDirectory, "fixtures", "caller-transcripts");
     private static readonly Regex Renamed = RenamedKey();
     private static readonly Regex Segment = MappedSegment();
@@ -126,18 +161,18 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
     }
 
     private static IReadOnlyList<Case> LoadCases() => Directory.GetDirectories(Root).OrderBy(d => d, StringComparer.Ordinal)
-        .Select(d => new Case(Path.GetFileName(d), d, Directory.GetFiles(d, "*", SearchOption.AllDirectories)
+        .Select(d => new Case(NameOfDir(Path.GetFileName(d)), d, Directory.GetFiles(d, "*", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(d, f).Replace('\\', '/')).OrderBy(f => f, StringComparer.Ordinal).ToList())).ToList();
 
     private static bool IsCaseFile(string f) => f == "rounds.json" || MainFilePath().IsMatch(f) || AgentFilePath().IsMatch(f) || MetaFilePath().IsMatch(f) || RegistryFilePath().IsMatch(f);
 
     // ---- the manifest ------------------------------------------------------------------------------------------------
-    private sealed record ManifestCase(string Name, string Serves, string Provenance, string Version, string Side, string PathStyle, bool HasTranscript, bool BreaksJoin,
+    private sealed record ManifestCase(string Name, string Dir, string Serves, string Provenance, string Version, string Side, string PathStyle, bool HasTranscript, bool BreaksJoin,
         IReadOnlyList<string> FixtureRoots, int AssistantLines, int DistinctMessageIds, int AgentFiles, int Metas, int AgentToolUses);
 
     private static readonly Node ManifestSchema = new Obj(new Dictionary<string, Node> { ["cases"] = new Arr(new Obj(new Dictionary<string, Node>
     {
-        ["name"] = new Str("enum-cases"), ["serves"] = new Str("free"), ["provenance"] = new Str("free"), ["side"] = new Str("enum:windows|wsl"),
+        ["name"] = new Str("enum-cases"), ["dir"] = new Str("enum-dirs"), ["serves"] = new Str("free"), ["provenance"] = new Str("free"), ["side"] = new Str("enum:windows|wsl"),
         ["hasTranscript"] = new Bool(), ["pathStyle"] = new Str("enum:none|slash|backslash|backslash+slash"), ["version"] = new Str("manifest-version"),
         ["breaksJoin"] = new Bool(), ["fixtureRoots"] = new Arr(new Str("fixture-root")),
         ["counts"] = new Obj(new Dictionary<string, Node> { ["assistantLines"] = new Num(), ["distinctMessageIds"] = new Num(), ["agentFiles"] = new Num(), ["metas"] = new Num(), ["agentToolUses"] = new Num() }),
@@ -149,7 +184,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         return doc.RootElement.GetProperty("cases").EnumerateArray().Select(c =>
         {
             var counts = c.GetProperty("counts");
-            return new ManifestCase(c.GetProperty("name").GetString()!, c.GetProperty("serves").GetString()!, c.GetProperty("provenance").GetString()!,
+            return new ManifestCase(c.GetProperty("name").GetString()!, c.GetProperty("dir").GetString()!, c.GetProperty("serves").GetString()!, c.GetProperty("provenance").GetString()!,
                 c.GetProperty("version").GetString()!, c.GetProperty("side").GetString()!, c.GetProperty("pathStyle").GetString()!, c.GetProperty("hasTranscript").GetBoolean(),
                 c.GetProperty("breaksJoin").GetBoolean(), c.GetProperty("fixtureRoots").EnumerateArray().Select(r => r.GetString()!).ToList(),
                 counts.GetProperty("assistantLines").GetInt32(), counts.GetProperty("distinctMessageIds").GetInt32(), counts.GetProperty("agentFiles").GetInt32(),
@@ -220,6 +255,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         {
             "free" => true,
             "enum-cases" => ctx.CaseNames.Contains(value),
+            "enum-dirs" => RequiredDirs.Values.Contains(value),
             "sha40" => ShaForty().IsMatch(value),
             "manifest-version" => value == "none" || Accepts(ctx.List, "version", value, ctx.Roots),
             "fixture-root" => FixtureRoot.IsMatch(value),
@@ -482,9 +518,26 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
     public void TheFixtureRootHoldsExactlyTheAllowlistTheManifestAndTheRequiredCases()
     {
         var entries = new DirectoryInfo(Root).EnumerateFileSystemInfos().Select(e => e.Name).ToList();
-        var expected = RequiredCases.Keys.Concat(["allowlist.json", "manifest.json"]).ToList();
+        var expected = RequiredDirs.Values.Concat(["allowlist.json", "manifest.json"]).ToList();
         entries.Except(expected).Should().BeEmpty("a stray file at the fixture root (a case spec with real values, a draft, a note) would be published with the rest");
         expected.Except(entries).Should().BeEmpty("the root lacks a required entry");
+    }
+
+    [Fact]
+    public void EveryCaseSitsInItsPinnedShortFolderAndTheManifestSaysWhich()
+    {
+        RequiredDirs.Keys.Except(RequiredCases.Keys).Concat(RequiredCases.Keys.Except(RequiredDirs.Keys)).Should().BeEmpty("the folder list and the case list are the same set");
+        RequiredDirs.Values.Should().OnlyHaveUniqueItems();
+        LoadManifest().Where(m => !RequiredDirs.TryGetValue(m.Name, out var dir) || dir != m.Dir).Select(m => m.Name).Should().BeEmpty("the manifest names the pinned folder of each case");
+    }
+
+    [Fact]
+    public void NoFixturePathIsLongerThan160Characters()
+    {
+        var tooLong = Directory.GetFiles(Root, "*", SearchOption.AllDirectories)
+            .Select(f => FixtureRootFromRepo + Path.GetRelativePath(Root, f).Replace('\\', '/'))
+            .Where(p => p.Length > MaxRelativePathLength).Select(p => $"{p.Length}: {Clip(p)}").ToList();
+        tooLong.Should().BeEmpty($"a path over {MaxRelativePathLength} characters relative to the repository root breaks 'git worktree add' on Windows when the checkout sits in a long folder");
     }
 
     // ---- the relations the cases exist for: a regeneration that loses one must fail, not pass vacuously -------------------
