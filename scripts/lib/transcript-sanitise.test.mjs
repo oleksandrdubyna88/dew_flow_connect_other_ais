@@ -9,6 +9,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { cutSession, createSanitiser, loadAllowlist } from './transcript-sanitise.mjs';
+import { compareOrdinal } from './ordinal.mjs';
 import * as sanitise from './transcript-sanitise.mjs'; // names the fixes add are reached through here: a missing one fails ITS test, not the whole file
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -123,7 +124,7 @@ function cut(sessionFile, overrides = {}) {
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true, recursive: true }).filter((e) => e.isFile())
-    .map((e) => join(e.parentPath ?? e.path, e.name)).sort();
+    .map((e) => join(e.parentPath ?? e.path, e.name)).sort(compareOrdinal);
 }
 const readAll = (dir) => walk(dir).map((f) => ({ file: relative(dir, f).replaceAll('\\', '/'), text: readFileSync(f, 'utf8') }));
 const jsonLines = (text) => text.split('\n').filter(Boolean).map((l) => JSON.parse(l));
@@ -391,7 +392,7 @@ test('aPathInAFileRewritesUnderTheRepositoryRootsAndTheOutputSlugIsFixtureDerive
   const main = files.find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file));
   assert.match(main.file, /^projects\/D--fixture-repo-a\//, 'the slug is derived from the rewritten cwd');
   const cwds = new Set(files.filter((f) => f.file.endsWith('.jsonl')).flatMap((f) => jsonLines(f.text)).map((l) => l.cwd).filter(Boolean));
-  assert.deepEqual([...cwds].sort(), ['/fixture/repo-b', 'D:\\fixture\\repo-a']);
+  assert.deepEqual([...cwds].sort(compareOrdinal), ['/fixture/repo-b', 'D:\\fixture\\repo-a']);
   const edit = jsonLines(main.text).flatMap((l) => l.message?.content ?? []).find((c) => c.name === 'Edit');
   assert.match(edit.input.file_path, /^D:\\fixture\\repo-a\\p\d+\\p\d+\.cs$/);
 });
@@ -436,7 +437,7 @@ test('aResumedAgentKeepsItsLaterLines', () => {
     .map((f) => jsonLines(f.text)).find((ls) => ls.length === 3);
   assert.ok(withLate, 'the agent launched in the window keeps the line it wrote at minute 55');
   const stamps = withLate.map((l) => l.timestamp);
-  assert.equal(stamps.at(-1), [...stamps].sort().at(-1), 'the resumed line is the last, on the synthetic clock');
+  assert.equal(stamps.at(-1), [...stamps].sort(compareOrdinal).at(-1), 'the resumed line is the last, on the synthetic clock');
   assert.ok(stamps.every((t) => t.startsWith('2000-01-01')));
 });
 
@@ -460,6 +461,19 @@ test('aDroppedAgentFileLeavesItsMetaAndADroppedMetaLeavesItsFile', () => {
   assert.ok(names.some((n) => n.includes(mapped(AGENT_NESTED)) && n.endsWith('.jsonl')));
   assert.ok(!names.some((n) => n.includes(mapped(AGENT_NESTED)) && n.endsWith('.meta.json')));
   assert.equal(summary.joinBreaks, 0, 'the meta still joins its launching tool_use');
+});
+
+test('agentFilesAreDiscoveredInOrdinalOrderSoTheirPathNumbersDoNotDependOnTheDirectory', () => {
+  // two agents created in the REVERSE of their id order: the one whose id sorts first must meet its path segments first (lower p<n>)
+  const src = writeSession(scratch('in'));
+  const sub = join(dirname(src), SESSION, 'subagents');
+  const write = (id, file) => writeFileSync(join(sub, `agent-${id}.jsonl`), jl([{ type: 'assistant', timestamp: T(5), agentId: id,
+    message: { id: `msg_${id}`, role: 'assistant', content: [{ type: 'tool_use', id: `toolu_${id}`, name: 'Write', input: { file_path: `D:/rsd/_wt/x/${file}.md` } }] } }]));
+  write(AGENT_B, 'second-file');
+  write(AGENT_A, 'first-file');
+  const { outDir } = cut(src);
+  const numberIn = (id) => Number(/\/p(\d+)\.md/.exec(readAll(outDir).find((f) => f.file.endsWith(`agent-${sanitiser().sanitiseValue({ agentId: id }).agentId}.jsonl`)).text)?.[1]);
+  assert.ok(numberIn(AGENT_A) < numberIn(AGENT_B), 'aaaa… sorts before bbbb…, so its file is met first');
 });
 
 test('clipAgentsKeepsOnlyTheWindowsLinesOfEveryAgentFileAndTheDefaultKeepsThemWhole', () => {

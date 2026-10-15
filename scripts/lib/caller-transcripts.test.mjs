@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { compareOrdinal } from './ordinal.mjs';
 import { busiestDay, classifyPath, classifyRound, isSessionId, measure, percentile, safeModel, safeVersion } from './caller-transcripts.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -318,7 +319,7 @@ test('theSameTreeProducesNonZeroCountsInEverySection', () => {
 
 test('theHarnessWritesNothingUnderTheProjectsFolder', () => {
   const { projects, rounds } = markedTree();
-  const snapshot = () => readdirSync(projects, { recursive: true }).sort().map((name) => `${name}:${statSync(join(projects, name)).mtimeMs}:${statSync(join(projects, name)).size}`);
+  const snapshot = () => readdirSync(projects, { recursive: true }).sort(compareOrdinal).map((name) => `${name}:${statSync(join(projects, name)).mtimeMs}:${statSync(join(projects, name)).size}`);
   const before = snapshot();
   assert.equal(spawnSync(process.execPath, [CLI, '--rounds', rounds, '--projects', projects, '--runs', '1'], { encoding: 'utf8' }).status, 0);
   assert.deepEqual(snapshot(), before);
@@ -395,6 +396,8 @@ function seedStore(path) {
 }
 
 const exporter = (...args) => spawnSync(python[0], [...python[1], '-I', EXPORTER, ...args], { encoding: 'utf8' });
+/** The exporter with its own cwd and environment, to place the allowed folders (cwd, the temp folder, COAI_EXPORT_ALLOWED_DIRS) where the test wants them. */
+const exporterIn = (options, ...args) => spawnSync(python[0], [...python[1], '-I', EXPORTER, ...args], { encoding: 'utf8', ...options });
 
 test('theExporterWritesOnlyCodeRoundsSinceTheDayAsLfUtf8', { skip: !python }, () => {
   const { root } = fresh();
@@ -449,7 +452,7 @@ test('theExporterWritesThroughATempFileAndLeavesNothingBehind', { skip: !python 
   seedStore(db);
   writeFileSync(out, 'previous');
   assert.equal(exporter(db, out, '2026-09-30').status, 0);
-  assert.deepEqual(readdirSync(root).sort(), ['coai.db', 'projects', 'rounds.json'], 'no temp file is left in the output folder');
+  assert.deepEqual(readdirSync(root).sort(compareOrdinal), ['coai.db', 'projects', 'rounds.json'], 'no temp file is left in the output folder');
   assert.ok(JSON.parse(readFileSync(out, 'utf8')).length > 0);
   const empty = join(root, 'empty.db');
   assert.equal(pythonRun('import sqlite3, sys\nsqlite3.connect(sys.argv[1]).close()', empty).status, 0);
@@ -457,14 +460,50 @@ test('theExporterWritesThroughATempFileAndLeavesNothingBehind', { skip: !python 
   const failed = exporter(empty, out, '2026-09-30'); // no tables: the query fails
   assert.equal(failed.status, 74);
   assert.equal(readFileSync(out, 'utf8'), 'previous', 'a failed export leaves an existing output as it was');
-  assert.deepEqual(readdirSync(root).sort(), ['coai.db', 'empty.db', 'projects', 'rounds.json']);
+  assert.deepEqual(readdirSync(root).sort(compareOrdinal), ['coai.db', 'empty.db', 'projects', 'rounds.json']);
+});
+
+test('theExporterOpensOnlyAnExistingRegularDbFile', { skip: !python }, () => {
+  const { root } = fresh();
+  const notDb = join(root, 'coai.sqlite');
+  seedStore(notDb);
+  assert.equal(exporter(notDb, join(root, 'o1.json'), '2026-09-30').status, 65, 'a store must be named *.db');
+  const folder = join(root, 'folder.db');
+  mkdirSync(folder);
+  assert.equal(exporter(folder, join(root, 'o2.json'), '2026-09-30').status, 65, 'a folder named *.db is not a store');
+  assert.equal(existsSync(join(root, 'o1.json')) || existsSync(join(root, 'o2.json')), false);
+});
+
+test('theExporterWritesOnlyInsideTheCwdTheTempFolderOrAFolderTheEnvironmentNames', { skip: !python }, () => {
+  const { root } = fresh();
+  const db = join(root, 'coai.db');
+  seedStore(db);
+  const here = join(root, 'cwd');
+  const temp = join(root, 'temp');
+  const elsewhere = join(root, 'elsewhere');
+  for (const dir of [here, temp, elsewhere]) mkdirSync(dir);
+  const env = { ...process.env, TMP: temp, TEMP: temp, TMPDIR: temp };
+  delete env.COAI_EXPORT_ALLOWED_DIRS;
+  const outside = join(elsewhere, 'rounds.json');
+  const refused = exporterIn({ cwd: here, env }, db, outside, '2026-09-30');
+  assert.equal(refused.status, 65, refused.stderr);
+  assert.match(refused.stderr, /COAI_EXPORT_ALLOWED_DIRS/);
+  assert.equal(existsSync(outside), false, 'nothing was written outside');
+  const dotted = exporterIn({ cwd: here, env }, db, join(here, '..', 'elsewhere', 'rounds.json'), '2026-09-30');
+  assert.equal(dotted.status, 65, 'a .. that climbs out of the cwd is resolved before the check');
+  assert.equal(exporterIn({ cwd: here, env }, db, join(here, 'rounds.json'), '2026-09-30').status, 0, 'the cwd is allowed');
+  assert.equal(exporterIn({ cwd: here, env }, db, join(temp, 'rounds.json'), '2026-09-30').status, 0, 'the temp folder is allowed');
+  const named = exporterIn({ cwd: here, env: { ...env, COAI_EXPORT_ALLOWED_DIRS: elsewhere } }, db, outside, '2026-09-30');
+  assert.equal(named.status, 0, named.stderr);
+  assert.ok(existsSync(outside), 'a folder the environment names is allowed');
 });
 
 test('theExporterRefusesAMissingStoreWithoutCreatingOne', { skip: !python }, () => {
   const { root } = fresh();
   const db = join(root, 'absent.db');
   const ran = exporter(db, join(root, 'out.json'), '2026-09-30');
-  assert.equal(ran.status, 74);
+  assert.equal(ran.status, 65, ran.stderr);
+  assert.match(ran.stderr, /existing file named/);
   assert.equal(existsSync(db), false, 'mode=ro must not create the database');
   assert.equal(existsSync(join(root, 'out.json')), false);
 });

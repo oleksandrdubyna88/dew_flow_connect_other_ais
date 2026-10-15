@@ -249,7 +249,9 @@ written — the prediction precedes every observation, including an exploratory 
   - **Per side**: `<py> scripts/export-code-rounds.py <dataDir>/coai.db <scratch>/rounds-<side>.json 2026-09-30`
     (Windows: `<py>` = `py -3`, `%LOCALAPPDATA%\coai-mcp` — on Windows `python3` resolves to the Microsoft Store alias
     stub, which prints "Python was not found" (measured 2026-10-15); WSL: `<py>` = `python3`,
-    `~/.local/share/coai-mcp`); then
+    `~/.local/share/coai-mcp`). The exporter writes only inside the current directory, the system temp folder or a folder named in
+    `COAI_EXPORT_ALLOWED_DIRS` (the Windows run into `%TEMP%` needs nothing; the WSL run that writes into the Windows temp folder through
+    `/mnt/c/...` sets `COAI_EXPORT_ALLOWED_DIRS=/mnt/c/.../Temp`), and opens only an existing `*.db` file — anything else exits 65; then
     `node scripts/measure-caller-transcripts.mjs --rounds … --projects ~/.claude/projects --largest 1 --runs 7`. The WSL
     run happens INSIDE WSL (`wsl.exe -e bash -lc …`), reading WSL's store and WSL's transcripts — never across the drvfs
     boundary. Run under `node .agents/conventions/tools/low-priority.mjs` on a machine not otherwise loaded, or say what

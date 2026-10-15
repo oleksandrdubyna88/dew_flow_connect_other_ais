@@ -11,6 +11,7 @@ import { closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { StringDecoder } from 'node:string_decoder';
+import { compareOrdinal } from './ordinal.mjs';
 
 export const USAGE_TERMS = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -40,11 +41,11 @@ export const newTable = () => Object.create(null);
 const bump = (table, key, by = 1) => {
   table[key] = (table[key] ?? 0) + by;
 };
-export const sortedObject = (table) => Object.fromEntries(Object.entries(table).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+export const sortedObject = (table) => Object.fromEntries(Object.entries(table).sort(([a], [b]) => compareOrdinal(a, b)));
 const addName = (set, key) => {
   if (set.size < NAME_CAP || set.has(key)) set.add(key);
 };
-const namesOf = (set) => [...set].sort();
+const namesOf = (set) => [...set].sort(compareOrdinal);
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** Nearest-rank percentile of numbers; `null` (unknown, not zero) when there are none. */

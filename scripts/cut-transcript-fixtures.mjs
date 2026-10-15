@@ -83,7 +83,7 @@ function readJson(path, what) {
 
 /** Everything that can be refused, in the order that keeps real input unread as long as possible. */
 function load(opts) {
-  const rootsOk = [...opts.repos.map((r) => r.to), ...(opts.otherRoot === undefined ? [] : [opts.otherRoot])].map(checkFixtureRoot).find((r) => !r.ok);
+  const rootsOk = [...opts.repos.map((r) => r.to), ...(opts.otherRoot === undefined ? [] : [opts.otherRoot])].map((root) => checkFixtureRoot(root)).find((r) => !r.ok);
   if (rootsOk) return refused(rootsOk.refusal);
   const out = resolve(opts.out);
   const allowed = opts.outAnywhere ? { ok: true } : checkOutputAllowed(out, fixtureRoot);

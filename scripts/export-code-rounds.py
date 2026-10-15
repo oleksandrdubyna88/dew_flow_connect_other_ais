@@ -10,8 +10,11 @@ exists because WSL's Node 20 has no `node:sqlite`, and ONE exporter for both sid
 (UTF-8, LF, a JSON array) holds session ids and repository paths: keep it OUTSIDE the repository.
 
 On Windows `python3` is the Microsoft Store alias stub ("Python was not found"); use `py -3`.
-Exit: 0 written - 65 bad arguments, or an output that is the store itself / named like a store file (nothing is touched) - 74 the store
-could not be read or the output not written. The output is written to a temp file in its folder and renamed over `out` only after the dump
+The output must resolve (symlinks and ".." followed) inside an allowed folder: the current directory, the system temp folder, or a folder
+named in COAI_EXPORT_ALLOWED_DIRS (a list separated by os.pathsep; the WSL run that writes into the Windows temp folder through /mnt/c
+sets it). The store must exist, be a regular file and be named *.db.
+Exit: 0 written - 65 bad arguments, a store that is not an existing *.db file, an output outside the allowed folders, or an output that is
+the store itself / named like a store file (nothing is touched) - 74 the store could not be read or the output not written. The output is written to a temp file in its folder and renamed over `out` only after the dump
 succeeded, so a failed export leaves an existing output as it was.
 """
 import json
@@ -25,12 +28,40 @@ from pathlib import Path
 # An output named like a store file is refused outright: the arguments are positional, and a swapped pair would otherwise let
 # open(out, "w") truncate the live store after the read-only query succeeded.
 STORE_SUFFIXES = (".db", ".sqlite", ".sqlite3", "-wal", "-shm", "-journal")
+ALLOWED_DIRS_ENV = "COAI_EXPORT_ALLOWED_DIRS"
 
 QUERY = (
     "SELECT r.session_id, r.number, r.started_utc, r.completed_utc, r.status, r.caller, r.caller_vendor, s.repo_path "
     "FROM rounds r JOIN sessions s ON s.id = r.session_id "
     "WHERE r.stage = 'CodeReview' AND r.started_utc >= ? ORDER BY r.started_utc, r.id"
 )
+
+
+def allowed_bases() -> list[str]:
+    """Folders an output may live in, resolved: the working directory, the temp folder, and whatever the environment names."""
+    named = [part for part in os.environ.get(ALLOWED_DIRS_ENV, "").split(os.pathsep) if part]
+    return [os.path.normcase(os.path.realpath(base)) for base in [os.getcwd(), tempfile.gettempdir(), *named]]
+
+
+def is_inside(path: str, base: str) -> bool:
+    try:
+        return os.path.commonpath([base, path]) == base
+    except ValueError:  # different drives
+        return False
+
+
+def resolve_output(raw: str) -> "Path | None":
+    """The output path with symlinks and ".." resolved (its own letter case kept), when it lies inside an allowed folder; else None."""
+    resolved = os.path.realpath(raw)
+    folded = os.path.normcase(resolved)
+    return Path(resolved) if any(is_inside(folded, base) for base in allowed_bases()) else None
+
+
+def store_refusal(db: Path) -> str:
+    """Why `db` is not a store we will open, or an empty string."""
+    if db.suffix.lower() != ".db" or not db.is_file():
+        return "the store must be an existing file named *.db"
+    return ""
 
 
 def refusal_for(db: Path, out: Path) -> str:
@@ -68,12 +99,17 @@ def main(argv: list[str]) -> int:
     if len(argv) != 3 or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", argv[2]):
         print("usage: export-code-rounds.py <coai.db> <out.json> <since yyyy-mm-dd>", file=sys.stderr)
         return 65
-    reason = refusal_for(Path(argv[0]), Path(argv[1]))
+    db = Path(argv[0])
+    reason = store_refusal(db)
+    out = resolve_output(argv[1]) if not reason else None
+    if not reason and out is None:
+        reason = "the output must lie inside the current directory, the temp folder or a folder named in " + ALLOWED_DIRS_ENV
+    reason = reason or refusal_for(db, out)
     if reason:
         print(f"refused: {reason}", file=sys.stderr)
         return 65
     try:
-        count = export(Path(argv[0]), Path(argv[1]), argv[2])
+        count = export(db, out, argv[2])
     except (sqlite3.Error, OSError) as error:
         print(f"export failed: {type(error).__name__}", file=sys.stderr)
         return 74

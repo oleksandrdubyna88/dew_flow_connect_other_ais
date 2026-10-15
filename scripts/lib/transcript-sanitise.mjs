@@ -30,6 +30,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { compareOrdinal } from './ordinal.mjs';
 
 /**
  * Expected failures are VALUES (the family's rule): a function that can be told "no" by its inputs returns `{ ok: true, value }` or
@@ -115,7 +116,7 @@ export function checkFixtureRoot(text) {
 /** Every --repo destination and the --other-root, checked BEFORE any input is read. */
 function checkRoots(repos, otherRoot) {
   const roots = [...repos.map((r) => r.to), ...(otherRoot === undefined ? [] : [otherRoot])];
-  return roots.map(checkFixtureRoot).find((r) => !r.ok) ?? accept(roots.length);
+  return roots.map((root) => checkFixtureRoot(root)).find((r) => !r.ok) ?? accept(roots.length);
 }
 
 /** One sanitiser per fixture: its id map, path map and counters are the fixture's. */
@@ -408,7 +409,7 @@ function launchLines(wanted, allLines) {
 function discoverAgents(subagentsDir) {
   const found = new Map();
   let skipped = 0;
-  const names = existsSync(subagentsDir) ? readdirSync(subagentsDir).sort() : [];
+  const names = existsSync(subagentsDir) ? readdirSync(subagentsDir).sort(compareOrdinal) : [];
   for (const name of names) {
     const m = AGENT_FILE.exec(name);
     if (!m) { skipped++; continue; }
