@@ -4297,3 +4297,12 @@ built shim is LOCAL ONLY — it needs Windows and a shim already built at `src_m
 The scenarios that start the REAL shim (`AKimiShimScenarioTests`, `AskAcpShimScenarioTests`, `AKimiReviewerRunsThroughTheShimTests`, `KimiCanaryTests`) skip while a real `kimi` of the person's runs on the machine
 (`TheOwnersKimi`): the shim now rightly waits for it, and the scenario would only wait out its deadline. NOT covered: a person starting `kimi` after the agent is running; the real toolhelp listing reading a
 `kimi.exe` (the host-listing test checks only this process).
+
+### A live round's two findings — decision 75 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md` (2026-10-16)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `TheLedgerNamesTheModelThatRanTests` (3) | a Kimi row and a Vibe row with no model are ledgered on the default the adapter ran; a named model is kept; an adapter that names none falls back to the row's, and a CLI on its own default stays empty | *Expected RecordedModel(invocation, rowsModel: "") to be "kimi-code/k3-256k" … but "" has a length of 0* (and "mistral-medium-3.5" for Vibe) |
+| `AKimiLaunchIsLoggedTests` (4) | one Debug line per launch: exit, end, failure name, usage captured or not, "no report" for a stdout that is none; never the answer | *Expected sink.Lines to contain 1 item(s) because one Debug line per Kimi launch … but found 0: {empty}.* (4 of 4) |
+
+NOT fixed: the Vibe consultant and question-row ledger lines still take the row's model (a separate call site).

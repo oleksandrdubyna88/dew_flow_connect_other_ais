@@ -1722,6 +1722,18 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
     own), and a person's Kimi that refreshes in the seconds between the last poll and the agent's start. The scenario tests that start the REAL shim (`TheOwnersKimi`) now skip while a real `kimi` runs on the
     machine, since the shim would rightly wait for it. Also in this change: `runInventory` of the probe builds its steps without mutation (`withStep`, `inventoryStep` — the immutability rule), red first.
 
+75. **The live round's two findings** (a scout's plan and code rounds with a real Kimi row, RESULTS_kimi_confinement.md §28: 4 of 4 launches answered, the sign-in names survived).
+    (a) **The ledger's `model` was EMPTY for every Kimi launch** while the reviewer states carried `kimi-code/k3-256k`. The row's model was empty; `KimiRuntime.Build` resolved `KimiModels.Default` into
+    `ReviewerInvocation.Model`; `RoundEngine` handed the ledger `ModelOf(provider)` — the ROW's. `UsageLedger.Record` now writes the invocation's model when it names one and the row's otherwise. **Affected:**
+    Kimi and Vibe (`VibeRuntime.Build` resolves `VibeModels.Default` the same way — its reviewer lines had the same gap, fixed by the same line). Every other adapter copies the row's model into the invocation, so
+    nothing changes for them; a CLI that runs on its own default still names none and the line stays empty rather than inventing one. **Not fixed, said so:** the Vibe CONSULTANT and question-row paths
+    (`ConsultantTurnBooks.Billed`, `QuestionRowLaunch.Record`) hand \`RecordJob\` the row's model, not the invocation's, so an empty-model Vibe row there still ledgers "" — a separate call site, Vibe's, outside this branch's scope.
+    Kimi is no consultant yet (S5). Red first: *Expected RecordedModel(invocation, rowsModel: "") to be "kimi-code/k3-256k" … but "" has a length of 0* (and Vibe's the same).
+    (b) **A SUCCESS left no trace of the shim's exit or `end`.** \`KimiRuntime\` now writes one Debug line per launch through the adapter's Serilog logger (primary-constructor parameter; the three-argument constructor
+    takes the process's own): "Kimi launch kimi/<role> on <model>: exit 0, end answered, usage captured" — plus ", failure <name>" when the report names one, "usage not captured", or "no report (stdout was not
+    the shim's)". Written from \`RateLimited\`, which the executor asks once per launch, before the exit is judged; it carries no answer, prompt or reason (vendor and person text). Red first:
+    *Expected sink.Lines to contain 1 item(s) because one Debug line per Kimi launch … but found 0* (4 of 4). The ledger and the round record are unchanged: the log is where a live check reads it.
+
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
 that needs handle-based deletion (`FILE_FLAG_OPEN_REPARSE_POINT`), which is out of this story; a same-user process able to swap

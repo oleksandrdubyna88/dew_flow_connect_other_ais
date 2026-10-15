@@ -3263,6 +3263,7 @@ one place where `KimiPlaces`, `KimiEnvironment` and `KimiCredentialsLock` meet t
   can still refresh; a server named `dotnet` is not recognised by name, so its other shims' trees count as foreign (wait, then busy: safe) while this shim's own is recognised by pid. **Not covered:** a person
   who STARTS `kimi` after coai's agent is already running, and one that refreshes in the seconds between the last poll and the agent's start. The profile takes the watch in its constructor (a test hands in a fake list);
   the tests that start the real shim skip while a real `kimi` runs on the machine (`TheOwnersKimi`).
+- **What a Kimi launch leaves in the records** (decision 75). The ledger line's `model` is the model that RAN: `UsageLedger.Record` prefers the invocation's (the adapter's resolved default — Kimi's `kimi-code/k3-256k`, Vibe's) over the row's, which is empty for a row that names none; other adapters copy the row's, so nothing changes for them. And one Debug line per launch — `Kimi launch <provider>/<role> on <model>: exit N, end <end>[, failure <name>], usage captured|not captured` (or `no report`) — is written by `KimiRuntime.RateLimited`, the one per-launch read the executor makes before judging the exit: the only trace of a success's exit code and `end`. No answer, prompt or reason in it.
 
 ```mermaid
 sequenceDiagram

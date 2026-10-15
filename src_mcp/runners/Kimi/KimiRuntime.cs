@@ -37,9 +37,15 @@ public sealed record KimiSeams(Func<string, KimiPlaces> PlacesFor, Func<(string 
 /// <para><b>Classified from the report, never from text</b> (<see cref="KimiReport"/>): a spent balance is exit 75 with the report's
 /// <c>failure: balance_spent</c> and nothing else; every other exit is an ordinary failure whatever words its trace holds.</para>
 /// </remarks>
-public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams) : IReviewerRuntime
+public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams, Serilog.ILogger log) : IReviewerRuntime
 {
     private const string DeadlineFlag = "--deadline-seconds";
+
+    /// <summary>The adapter with the process's own logger (the host configures it before anything is built).</summary>
+    public KimiRuntime(string id, HostKind host, KimiSeams seams)
+        : this(id, host, seams, Serilog.Log.ForContext<KimiRuntime>())
+    {
+    }
 
     /// <summary>The adapter for this machine's host.</summary>
     public KimiRuntime(string id = "kimi")
@@ -210,10 +216,32 @@ public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams) : IRe
     public RateLimitVerdict RateLimited(ReviewerInvocation invocation, ProcessResult result)
     {
         var report = KimiReport.Parse(result.StdOut);
+        Said(invocation, result, report);
 
         return result.ExitCode == AcpWords.SpentExit && report.Failure == KimiAcpProfile.BalanceSpent
             ? RateLimitVerdict.Because(SpentReason(report), report.Usage)
             : RateLimitVerdict.No;
+    }
+
+    /// <summary>
+    /// The one Debug line a Kimi launch leaves (decision 75 of the E4 plan): the shim's exit, the report's `end`, its failure name if any, and whether the usage was captured —
+    /// what a live check needs to confirm exit 0 and `answered`, which no other record of a SUCCESS carries. Written from here because the executor asks this adapter
+    /// to classify every launch exactly once, before judging the exit. Never the answer, the prompt or the reason: those are vendor and person text.
+    /// </summary>
+    private void Said(ReviewerInvocation invocation, ProcessResult result, KimiReport report)
+    {
+        if (!report.Readable)
+        {
+            log.Debug("Kimi launch {Provider}/{Role} on {Model}: exit {Exit}, no report (stdout was not the shim's)", invocation.Provider, invocation.Role, invocation.Model, result.ExitCode);
+
+            return;
+        }
+
+        log.Debug(
+            "Kimi launch {Provider}/{Role} on {Model}: exit {Exit}, end {End}{FailureText}, usage {UsageText}",
+            invocation.Provider, invocation.Role, invocation.Model, result.ExitCode, report.End,
+            report.Failure.Length > 0 ? ", failure " + report.Failure : string.Empty,
+            report.Usage.NotCaptured ? "not captured" : "captured");
     }
 
     private static string SpentReason(KimiReport report)
