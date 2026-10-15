@@ -181,7 +181,7 @@ public static class GitScratch
     /// missing reported: a Kimi refresh rotates a credentials file by temp file and rename, so a name can be absent for a moment
     /// that is not a loss.
     /// </summary>
-    private static List<string> StillMissing(string target, Held before, bool isDirectory)
+    internal static List<string> StillMissing(string target, Held before, bool isDirectory)
     {
         var missing = Missing(before, Look(target, isDirectory));
         if (missing.Count == 0)
