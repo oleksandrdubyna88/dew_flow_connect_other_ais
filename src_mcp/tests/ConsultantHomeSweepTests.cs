@@ -152,6 +152,36 @@ public sealed class ConsultantHomeSweepTests : IAsyncLifetime
         TheSecretIsUntouched();
     }
 
+    /// <summary>E4.1 S1.8: the person's folder lost a file during the unlink — the sweep SAYS so, leaves the folder, and the next beat finishes.</summary>
+    [Fact]
+    public async Task TheSweepSaysALoss_AndGoesOn()
+    {
+        var lost = Path.Combine(Persons, "kimi-code.json");
+        await File.WriteAllBytesAsync(lost, Token, TestContext.Current.CancellationToken);
+        var folder = Home(ConsultantHomes.Kimi, ConsultationStore.NewId(), Window * 2);
+        var junction = Path.Combine(folder, "vh-0123456789", "credentials");
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), junction, Persons);
+        Aged(folder, Window * 2);
+        GitScratch.AfterUnlink = _ => File.Delete(lost);
+        try
+        {
+            Sweep().Should().Be(0, "a folder whose deletion stopped is not counted as removed");
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        _said.Should().ContainSingle(said => said.Contains("kimi-code.json") && said.Contains(Persons), "the loss is a warning with the name, never silence");
+        Directory.Exists(folder).Should().BeTrue("the folder is left for the next beat");
+
+        Aged(folder, Window * 2);
+
+        Sweep().Should().Be(1, "the link is gone already, so the next beat finds nothing to lose and finishes");
+        Directory.Exists(folder).Should().BeFalse();
+        File.ReadAllBytes(Secret).Should().Equal(Token);
+    }
+
     [Fact]
     public void AnOrphanedVibeHome_PastTheWindow_IsGone_AndOneInsideTheWindowIsKept()
     {

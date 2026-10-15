@@ -134,4 +134,98 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
 
         Directory.Exists(home).Should().BeFalse("read-only folders go with their tree");
     }
+
+    /// <summary>
+    /// E4.1 S1.7: the person's folder lost a file while its link was being removed — the deletion STOPS with the name, and
+    /// what the home still held is still there (the sign-in is the person's; a second loss is not made worse by a sweep that
+    /// goes on).
+    /// </summary>
+    [Fact]
+    public async Task ALinkWhoseTargetLostAName_StopsTheDeletion_AndSaysWhich()
+    {
+        var other = Path.Combine(Target, "kimi-code.json");
+        await File.WriteAllBytesAsync(other, Token, TestContext.Current.CancellationToken);
+        var home = await HomeWithALinkAsync("credentials");
+        await File.WriteAllTextAsync(Path.Combine(home, "config.toml"), "[loop_control]", TestContext.Current.CancellationToken);
+        GitScratch.AfterUnlink = _ => File.Delete(other);
+        try
+        {
+            var delete = () => GitScratch.DeleteEvenIfReadOnly(home);
+
+            var thrown = delete.Should().Throw<LinkTargetLostException>().Which;
+            thrown.Message.Should().Contain("kimi-code.json").And.Contain(Target);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        File.Exists(Path.Combine(home, "config.toml")).Should().BeTrue("nothing more was deleted once the loss was seen");
+        File.Exists(Path.Combine(home, "sessions", "index.jsonl")).Should().BeTrue();
+        OwnedPaths.IsLinkIfThere(Path.Combine(home, "credentials")).Should().BeFalse("the link itself is gone");
+        Directory.Exists(Path.Combine(home, "credentials")).Should().BeFalse();
+        TheTargetIsUntouched();
+    }
+
+    /// <summary>E4.1 S1.9: a link whose target is gone, and a link to a FILE, are removed whole and their targets kept.</summary>
+    [Theory]
+    [InlineData("dangling-junction")]
+    [InlineData("file-symlink")]
+    public async Task ADanglingLink_AndAFileLink(string kind)
+    {
+        var tree = _dir.At("tree");
+        Directory.CreateDirectory(tree);
+        var link = Path.Combine(tree, "credentials");
+        if (kind == "dangling-junction")
+        {
+            var gone = _dir.At("gone");
+            Directory.CreateDirectory(gone);
+            await DirectoryLink.MakeAsync(new ProcessLauncher(), link, gone);
+            Directory.Delete(gone);
+        }
+        else
+        {
+            try
+            {
+                File.CreateSymbolicLink(link, Secret);
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+            {
+                Assert.Skip($"this OS refuses to make a file symbolic link without privilege: {e.Message}");
+            }
+        }
+
+        GitScratch.DeleteEvenIfReadOnly(tree);
+
+        Directory.Exists(tree).Should().BeFalse();
+        TheTargetIsUntouched();
+    }
+
+    /// <summary>
+    /// E4.1 S1.10: .NET's own recursive delete does not enter a junction either — which is what keeps the three raw
+    /// recursive deletes left in product code (an escalation's plan folder, two git worktrees) safe, and the reason S1.11
+    /// pins that list.
+    /// </summary>
+    [Fact]
+    public async Task DotNetsRecursiveDelete_DoesNotEnterAJunction()
+    {
+        var tree = _dir.At("tree");
+        var link = Path.Combine(tree, "a", "credentials");
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), link, Target);
+
+        try
+        {
+            Directory.Delete(tree, recursive: true);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // MEASURED 2026-10-14 on Windows (the red of this scenario): .NET unmounts the junction by its own name and then
+            // throws "Access to the path 'credentials' is denied" on the way out, leaving the emptied parent folders. It does
+            // not enter the link — which is the only property the three raw sites need, and what is asserted below.
+        }
+
+        OwnedPaths.IsLinkIfThere(link).Should().BeFalse("the junction itself is removed, by its own name");
+        TheTargetIsUntouched();
+    }
 }

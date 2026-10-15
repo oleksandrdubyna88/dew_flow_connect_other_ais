@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 /// scope ends, whether the test passed, failed or threw. Eleven classes in this suite created one
 /// and deleted it nowhere at all, which is a leak on every single run; the rest do it by hand in
 /// <c>Dispose</c>, which is the same thing written out forty times.</para>
-/// <para><b>It never throws on the way out.</b> A delete loses a race whenever something still holds
+/// <para><b>It does not throw on the way out — except when a link's target lost a file.</b> A delete loses a race whenever something still holds
 /// a file open — a spawned CLI, a SQLite handle, a reader mid-poll — and a leftover temp directory
 /// is not a failing test. What catches those leftovers is <see cref="TempDirsAreSwept"/>, which runs
 /// once per assembly; this only means there are far fewer for it to find.</para>
@@ -44,9 +44,10 @@ public sealed class TempDir : IDisposable
             // §26), and a link unlinked by its own name, never entered.
             Runners.Files.GitScratch.DeleteEvenIfReadOnly(Path);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException && e is not Runners.Files.LinkTargetLostException)
         {
-            // Somebody still holds a file in it, or it is already gone. Neither is a test result.
+            // Somebody still holds a file in it, or it is already gone. Neither is a test result. A folder a LINK pointed at
+            // that lost a file is: it propagates (E4.1 of PLAN_vibe_and_kimi_runtimes_E4.md) — a lost target is a failing test.
         }
     }
 }

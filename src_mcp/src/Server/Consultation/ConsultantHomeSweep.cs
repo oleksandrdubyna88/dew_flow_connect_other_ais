@@ -225,10 +225,17 @@ public static class ConsultantHomeSweep
             }
         }
 
-        /// <summary>Every entry of the folder but the held lock file — a directory or a link by the deleter, a file as a file.</summary>
+        /// <summary>
+        /// Every entry of the folder but the held lock file — a directory or a link by the deleter, a file as a file. Files LAST: the
+        /// conversation's stamp is one, and a deletion that stops at a directory (a link whose target lost a file,
+        /// <see cref="LinkTargetLostException"/>) must leave the folder still recognisably this store's, so the next beat finishes
+        /// it instead of waiting out the foreign-folder age.
+        /// </summary>
         private void DeleteAllBut(string folder, string held)
         {
-            foreach (var entry in Directory.EnumerateFileSystemEntries(folder).Where(entry => !string.Equals(entry, held, StringComparison.OrdinalIgnoreCase)))
+            foreach (var entry in Directory.EnumerateFileSystemEntries(folder)
+                .Where(entry => !string.Equals(entry, held, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(File.Exists))
             {
                 if (Directory.Exists(entry) || OwnedPaths.IsLinkIfThere(entry))
                 {

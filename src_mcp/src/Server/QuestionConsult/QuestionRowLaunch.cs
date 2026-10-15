@@ -399,6 +399,10 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             // The shared deleter: a home's read-only files go too, and a link in the folder is unlinked, never entered.
             Runners.Files.GitScratch.DeleteEvenIfReadOnly(scratch);
         }
+        catch (Runners.Files.LinkTargetLostException e)
+        {
+            log.Warning("a question row's scratch directory at {Path} was not removed: a folder a link in it pointed at lost a file — {Reason}", scratch, e.Message);
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             log.Debug("a question row's scratch directory at {Path} could not be removed yet: {Reason}", scratch, e.Message);

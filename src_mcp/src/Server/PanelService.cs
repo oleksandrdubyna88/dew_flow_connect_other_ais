@@ -120,7 +120,7 @@ public sealed class PanelService
         // The roster is dealt from the same settings, keys and prompts, and asks this service only
         // what it also answers for the round's exclusion sentence: can a vendor run, and on what.
         _roster = new RosterBuilder(
-            settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, () => PruneOldAnswerDirs(settings.ConsultantHomesRoot), log);
+            settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, () => PruneOldAnswerDirs(settings.ConsultantHomesRoot, log), log);
 
         // The orders a round carries, read by the engine for its reply and by the cadence check before a
         // code round; and the engine every stage runs through. The engine is handed what only this service
@@ -1377,7 +1377,9 @@ public sealed class PanelService
     /// rounds starting in the same millisecond should produce ONE walk, and a compare-and-swap on a
     /// <c>DateTime</c> is not a thing this runtime offers without a struct wider than a word.
     /// </remarks>
-    internal static void PruneOldAnswerDirs(string homesRoot)
+    internal static void PruneOldAnswerDirs(string homesRoot) => PruneOldAnswerDirs(homesRoot, Serilog.Log.Logger);
+
+    internal static void PruneOldAnswerDirs(string homesRoot, Serilog.ILogger log)
     {
         lock (SweepLock)
         {
@@ -1390,9 +1392,9 @@ public sealed class PanelService
             _sweptUtc = now;
         }
 
-        PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-6));
+        PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-6), warn: loss => log.Warning("scratch sweep: {Loss}", loss));
         // The one-shot Vibe homes (D3 of todo/PLAN_vibe_live_round_fixes.md): never a folder somebody still holds.
-        VibeHomes.SweepOneShot(homesRoot, DateTime.UtcNow.AddHours(-6), warning => Serilog.Log.Warning("{Note}", warning));
+        VibeHomes.SweepOneShot(homesRoot, DateTime.UtcNow.AddHours(-6), warning => log.Warning("{Note}", warning));
     }
 
     private static readonly System.Threading.Lock SweepLock = new();
@@ -1418,9 +1420,13 @@ public sealed class PanelService
     /// <para><paramref name="except"/> is for the test sweep, which matches <c>coai-*</c> on a ten-minute
     /// window and must leave the product's own working directories alone — a live chat's can sit for an
     /// hour with nothing written into it (<c>shared/temp-sweep.json</c>).</para>
+    /// <para><paramref name="warn"/> hears the one failure that is never "fine": a folder a link in a scratch pointed at — a Kimi
+    /// home's <c>credentials</c> — lost a file while the link was removed, and the deletion stopped
+    /// (<see cref="Runners.Files.LinkTargetLostException"/>, E4.1 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>). The product
+    /// passes its logger; the test sweep passes nothing.</para>
     /// </remarks>
     internal static void PruneOldScratchDirs(
-        string tempRoot, DateTime cutoff, IReadOnlyList<string>? prefixes = null, IReadOnlyList<string>? except = null)
+        string tempRoot, DateTime cutoff, IReadOnlyList<string>? prefixes = null, IReadOnlyList<string>? except = null, Action<string>? warn = null)
     {
         try
         {
@@ -1436,6 +1442,12 @@ public sealed class PanelService
                     {
                         DeleteEvenIfReadOnly(dir);
                     }
+                }
+                catch (Runners.Files.LinkTargetLostException e)
+                {
+                    // A folder a link in the scratch pointed at lost a file during the unlink, and the deletion stopped (E4.1 of
+                    // PLAN_vibe_and_kimi_runtimes_E4.md): the one IOException that is never "fine" — said, not swallowed.
+                    warn?.Invoke(e.Message);
                 }
                 catch (IOException)
                 {
@@ -1761,7 +1773,7 @@ public sealed class PanelService
     /// for ever (plan gate, codex, 2026-10-12). One sweep, two callers; the throttle is the same static clock, so a beat a
     /// minute after a round's build walks nothing.
     /// </remarks>
-    public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot);
+    public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot, _log);
 
     /// <summary>
     /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers
