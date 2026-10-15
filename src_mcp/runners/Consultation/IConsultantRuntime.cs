@@ -197,7 +197,7 @@ public interface IConsultantRuntime : IAnsweringRuntime
     /// <summary>
     /// What a QUESTION ROW's failure report adds, beyond the launch's own reason, about `reason` — the vendor's sentence for why the launch
     /// stopped. Empty for every vendor but one: only a question has files it was meant to name, so a conversation turn or a check, which
-    /// reports the same stop, never carries this advice (D6 of <c>todo/PLAN_vibe_live_round_fixes.md</c>).
+    /// reports the same stop, never carries this advice (D6 of <c>research/PLAN_vibe_live_round_fixes.md</c>).
     /// </summary>
     string QuestionRowAdvice(string reason) => string.Empty;
 

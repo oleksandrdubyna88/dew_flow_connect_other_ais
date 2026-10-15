@@ -3396,7 +3396,7 @@ fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
   person's profile — through `ReviewerLaunch` and `ReviewerOutcome.CliVersion` to the line's `cliVersion`, when the row's
   own options carry none (`UsageLedger.VersionedBy`).
 
-## A Vibe home stays under MAX_PATH, is private to the person, and a consultant launch is capped (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+## A Vibe home stays under MAX_PATH, is private to the person, and a consultant launch is capped (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
 Four defects of the first live runs (RESULTS §27, §28), fixed together:
 

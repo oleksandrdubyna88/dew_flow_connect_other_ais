@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.76.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.75.0...extension-v0.76.0) (2026-10-15)
+
+
+### Features
+
+* **e2:** every code round records the size of its change, and each reviewer's effort ([#829](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/829)) ([4baba7b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4baba7b217910a63d5b296b98208a98b8ba46ab4))
+
+
+### Bug Fixes
+
+* **vibe:** a Vibe home stays under MAX_PATH, survives its second turn, says what refused it, and lives in a private folder ([#823](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/823)) ([5d8a24d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5d8a24da559024fa5c18d5289ac3956cf8fb9afd))
+
 ## [0.75.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.74.0...extension-v0.75.0) (2026-10-15)
 
 

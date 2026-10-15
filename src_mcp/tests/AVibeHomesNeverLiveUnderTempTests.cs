@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// No Vibe home lives under TEMP any more (D1 of <c>todo/PLAN_vibe_live_round_fixes.md</c>, A6/A7): a TEMP of any length — the
+/// No Vibe home lives under TEMP any more (D1 of <c>research/PLAN_vibe_live_round_fixes.md</c>, A6/A7): a TEMP of any length — the
 /// person's, a CI runner's — cannot push Vibe's deepest write past Windows' path limit, because the homes live under the
 /// homes root. A round's reservation is a folder holding its lock, and takes a read-only plugin folder with it when it ends.
 /// </summary>

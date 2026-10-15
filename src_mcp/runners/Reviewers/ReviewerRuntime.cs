@@ -405,7 +405,7 @@ public interface IReviewerRuntime
 
     /// <summary>
     /// Whether every launch of this adapter writes a session into a coai-owned home (Vibe's <c>VIBE_HOME</c>, D17) — so a round
-    /// reserves a short one-shot folder for its homes (<c>VibeHomes</c>, D1 of <c>todo/PLAN_vibe_live_round_fixes.md</c>) when a
+    /// reserves a short one-shot folder for its homes (<c>VibeHomes</c>, D1 of <c>research/PLAN_vibe_live_round_fixes.md</c>) when a
     /// runnable row uses it. False by default: every other runtime writes nothing of a home.
     /// </summary>
     bool KeepsAHome => false;

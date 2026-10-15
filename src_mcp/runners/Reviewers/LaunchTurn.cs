@@ -42,7 +42,7 @@ public sealed class LaunchTurn : IDisposable
     public static LaunchTurn Free => new(string.Empty, null);
 
     /// <summary>Do not start it — the sentence names what was found and what cures it.</summary>
-    /// <param name="cause">REQUIRED, with no default: every caller states WHY (D5 of <c>todo/PLAN_vibe_live_round_fixes.md</c>). A default
+    /// <param name="cause">REQUIRED, with no default: every caller states WHY (D5 of <c>research/PLAN_vibe_live_round_fixes.md</c>). A default
     /// would make an adapter's refusal read as coai's own launch check saying no to an installed CLI, whatever it really was.</param>
     public static LaunchTurn Refused(string reason, RefusalCause cause) => new(reason, null, cliMissing: cause == RefusalCause.CliMissing);
 

@@ -1393,7 +1393,7 @@ public sealed class PanelService
         }
 
         PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-6), warn: loss => log.Warning("scratch sweep: {Loss}", loss));
-        // The one-shot Vibe homes (D3 of todo/PLAN_vibe_live_round_fixes.md): never a folder somebody still holds.
+        // The one-shot Vibe homes (D3 of research/PLAN_vibe_live_round_fixes.md): never a folder somebody still holds.
         VibeHomes.SweepOneShot(homesRoot, DateTime.UtcNow.AddHours(-6), warning => log.Warning("{Note}", warning));
     }
 

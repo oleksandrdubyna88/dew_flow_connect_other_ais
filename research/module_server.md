@@ -7247,7 +7247,7 @@ step after the release, recorded then in research/RESULTS_vibe_confinement.md an
   m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
   starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).
 
-## Where the Vibe homes are made, owned and swept (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+## Where the Vibe homes are made, owned and swept (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
 - **The homes root** is `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else the local application data). The extension's
   *Vibe homes folder* setting `coai.vibeHomesDirectory` writes it into the settings file; the environment still wins. It must be a full

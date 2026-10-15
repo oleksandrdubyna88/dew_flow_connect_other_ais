@@ -1,5 +1,5 @@
 // node --test scripts/lib/vibe.test.mjs — the manifest script's listing and classifier (D4, C8 of
-// todo/PLAN_vibe_live_round_fixes.md). Runs nothing of Vibe's; makes folders only under this user's own temp folder, and
+// research/PLAN_vibe_live_round_fixes.md). Runs nothing of Vibe's; makes folders only under this user's own temp folder, and
 // removes them. The rules below are the script's own constants, so a rule the C# side holds and the script forgot fails here.
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';

@@ -359,7 +359,7 @@ public static class VibeLimits
 {
     /// <summary>
     /// The most assistant turns — one model request each — a Vibe CONSULTANT launch (a question row, a conversation turn, a
-    /// consultant check) may take: <c>--max-turns 20</c> (D6 of <c>todo/PLAN_vibe_live_round_fixes.md</c>).
+    /// consultant check) may take: <c>--max-turns 20</c> (D6 of <c>research/PLAN_vibe_live_round_fixes.md</c>).
     /// </summary>
     /// <remarks>
     /// Measured in research/RESULTS_vibe_confinement.md §28: a question row that cannot list its folder guesses file names, one

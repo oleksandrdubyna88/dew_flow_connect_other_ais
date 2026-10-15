@@ -12809,7 +12809,7 @@ an UNAVAILABLE row, while a warned Vibe is done and available.
   no warning"), the two no-warning guards green throughout; 7 of 7 green after. The help test was written after the
   help: its teeth — the Spanish label changed in the compiled output → `the es article does not name the card's line`.
 
-## The Vibe homes folder setting (2026-10-15, D8 of `todo/PLAN_vibe_live_round_fixes.md`)
+## The Vibe homes folder setting (2026-10-15, D8 of `research/PLAN_vibe_live_round_fixes.md`)
 
 `coai.vibeHomesDirectory` (a string, default empty = the server's own default) is the folder coai keeps Mistral Vibe's homes under. It is
 drawn on **Settings › Consultants › Consultant** (`consultantView.ts` `vibeHomesField`, a plain text box saved through the ordinary
