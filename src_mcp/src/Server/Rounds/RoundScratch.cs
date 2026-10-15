@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Snapshots;
+using CoaiMcp.Runners.Vibe;
 
 namespace CoaiMcp.Server;
 
@@ -22,15 +23,32 @@ internal sealed class RoundScratch : IDisposable
     private readonly Action<string> _note;
     private int _disposed;
 
-    private RoundScratch(string directory, RoundTree tree, Action<string> note)
+    private RoundScratch(string directory, RoundTree tree, Action<string> note, OneShotReservation homes)
     {
         Directory = directory;
         Tree = tree;
         _note = note;
+        Homes = homes;
     }
 
     /// <summary>No scratch at all: every launch keeps today's directories, and a runtime that needs a snapshot is left out.</summary>
-    public static RoundScratch None { get; } = new(string.Empty, new RoundTree.NotMade(), static _ => { });
+    public static RoundScratch None { get; } = new(string.Empty, new RoundTree.NotMade(), static _ => { }, OneShotReservation.None.Instance);
+
+    /// <summary>
+    /// The round's reservation under <c>&lt;homes root&gt;/coai-vh</c> (D1): its folder holds the reviewers' Vibe homes and their
+    /// exports, short whatever TEMP is. <see cref="OneShotReservation.None"/> when no row keeps a home or no root is configured
+    /// (settings built by hand); <see cref="OneShotReservation.Refused"/> leaves the home-keeping rows out of the round with its sentence.
+    /// </summary>
+    public OneShotReservation Homes { get; }
+
+    /// <summary>
+    /// What a home-keeping reviewer is handed as <c>OwnedScratch</c>: the reserved one-shot folder, or — with none — this scratch
+    /// folder itself, made so the home has a parent (the way homes lived before the reservation).
+    /// </summary>
+    public string HomeFolder => Homes is OneShotReservation.Reserved reserved ? reserved.Home.Folder : Directory;
+
+    /// <summary>The sentence the home-keeping rows are refused with, or empty.</summary>
+    public string HomesRefusal => Homes is OneShotReservation.Refused refused ? refused.Sentence : string.Empty;
 
     /// <summary>The folder's path — empty for <see cref="None"/>.</summary>
     public string Directory { get; }
@@ -38,9 +56,13 @@ internal sealed class RoundScratch : IDisposable
     /// <summary>The round's snapshot, its refusal, or that none was asked for.</summary>
     public RoundTree Tree { get; }
 
-    /// <summary>A path for a new round's scratch, not made yet.</summary>
-    public static RoundScratch Reserve(Action<string> note) =>
-        new(Path.Combine(Path.GetTempPath(), $"coai-answers-{Guid.NewGuid().ToString("N")[..12]}"), new RoundTree.NotMade(), note);
+    /// <summary>
+    /// A path for a new round's scratch, not made yet — and, when <paramref name="keepsAHome"/> (a runnable row's runtime writes a
+    /// session into a home), its one-shot folder under <paramref name="homesRoot"/>, made now and locked until <see cref="Dispose"/>.
+    /// </summary>
+    public static RoundScratch Reserve(Action<string> note, string homesRoot = "", bool keepsAHome = false) =>
+        new(Path.Combine(Path.GetTempPath(), $"coai-answers-{Guid.NewGuid().ToString("N")[..12]}"), new RoundTree.NotMade(), note,
+            keepsAHome ? VibeHomes.ReserveOneShot(homesRoot, note) : OneShotReservation.None.Instance);
 
     /// <summary>This scratch with the round's snapshot outcome.</summary>
     public RoundScratch With(SnapshotOutcome outcome) => new(Directory, outcome switch
@@ -48,12 +70,17 @@ internal sealed class RoundScratch : IDisposable
         SnapshotOutcome.Made made => new RoundTree.Made(made.Snapshot),
         SnapshotOutcome.Refused refused => new RoundTree.Refused(refused.Reason),
         _ => throw new InvalidOperationException("the union is closed"),
-    }, _note);
+    }, _note, Homes);
 
     /// <summary>The snapshot disposed (its bytes given back), then the whole folder deleted — best effort, said when it fails.</summary>
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 1 || Directory.Length == 0)
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+        {
+            return;
+        }
+
+        if (Directory.Length == 0)
         {
             return;
         }
@@ -64,6 +91,10 @@ internal sealed class RoundScratch : IDisposable
         }
 
         Delete();
+        if (Homes is OneShotReservation.Reserved reserved)
+        {
+            reserved.Home.Dispose();
+        }
     }
 
     private void Delete()

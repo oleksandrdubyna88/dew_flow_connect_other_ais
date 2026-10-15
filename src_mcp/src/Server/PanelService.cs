@@ -5,6 +5,7 @@ using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Runners.Worktrees;
 using CoaiMcp.Store;
 
@@ -119,7 +120,7 @@ public sealed class PanelService
         // The roster is dealt from the same settings, keys and prompts, and asks this service only
         // what it also answers for the round's exclusion sentence: can a vendor run, and on what.
         _roster = new RosterBuilder(
-            settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, PruneOldAnswerDirs, log);
+            settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, () => PruneOldAnswerDirs(settings.ConsultantHomesRoot), log);
 
         // The orders a round carries, read by the engine for its reply and by the cadence check before a
         // code round; and the engine every stage runs through. The engine is handed what only this service
@@ -1373,7 +1374,7 @@ public sealed class PanelService
     /// rounds starting in the same millisecond should produce ONE walk, and a compare-and-swap on a
     /// <c>DateTime</c> is not a thing this runtime offers without a struct wider than a word.
     /// </remarks>
-    private static void PruneOldAnswerDirs()
+    internal static void PruneOldAnswerDirs(string homesRoot)
     {
         lock (SweepLock)
         {
@@ -1387,6 +1388,8 @@ public sealed class PanelService
         }
 
         PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-6));
+        // The one-shot Vibe homes (D3 of todo/PLAN_vibe_live_round_fixes.md): never a folder somebody still holds.
+        VibeHomes.SweepOneShot(homesRoot, DateTime.UtcNow.AddHours(-6), warning => Serilog.Log.Warning("{Note}", warning));
     }
 
     private static readonly System.Threading.Lock SweepLock = new();
@@ -1755,7 +1758,7 @@ public sealed class PanelService
     /// for ever (plan gate, codex, 2026-10-12). One sweep, two callers; the throttle is the same static clock, so a beat a
     /// minute after a round's build walks nothing.
     /// </remarks>
-    public void SweepScratch() => PruneOldAnswerDirs();
+    public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot);
 
     /// <summary>
     /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers

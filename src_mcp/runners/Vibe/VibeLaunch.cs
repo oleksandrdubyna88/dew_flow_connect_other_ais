@@ -34,7 +34,7 @@ public static class VibeModels
 /// launch).
 /// </summary>
 /// <remarks>
-/// In order: the host (D18), the built environment (D17), the model (D10), the home (created when absent, a link refused),
+/// In order: the host (D18), the built environment (D17), the path budget (D2: a home Vibe would die in is never made), the model (D10), the home (created when absent, a link refused),
 /// the home's TURN (taken before anything reads the home), the installed Vibe's version (asked in the same built
 /// environment), the manifest entry for that version, and the home against it. Every refusal is a sentence naming what
 /// was found and its cure; a refusal after the turn was taken gives the turn back.
@@ -158,11 +158,12 @@ public static class VibeLaunch
     /// The whole check, in order, ending holding the home's turn — or a refusal with nothing held. <paramref name="exportFolder"/>
     /// is the attempt's own, deleted when the turn is given back (D7: no export outlives its read).
     /// </summary>
-    public static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, string exportFolder, IProcessLauncher launcher, CancellationToken ct)
+    public static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, string exportFolder, IProcessLauncher launcher, VibePathBudget budget, CancellationToken ct)
     {
         var before = FirstOf(
             () => HostRefusal(host, request.Executable),
             () => EnvironmentRefusal(request),
+            () => budget.Refusal(Value(request, HomeVariable)),
             () => ModelRefusal(Value(request, ModelVariable)),
             () => HomeMade(Value(request, HomeVariable)));
         if (before.Length > 0)

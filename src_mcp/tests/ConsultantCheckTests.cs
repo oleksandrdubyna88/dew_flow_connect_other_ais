@@ -499,8 +499,10 @@ public sealed class ConsultantCheckTests : IDisposable
         {
             AnswerFor = seen => $"marker: {seen.Files["CHECK.md"].Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT",
         };
+        using var homes = TempDir.For("testsToDelete-vh-check-");
         var settings = Settings() with
         {
+            ConsultantHomesRoot = homes,
             Consultants = new Dictionary<string, ConsultantChoice>
             {
                 [CallerIdentity.Claude] = new("mistral", Model: "glm-5-3", Runtime: "vibe", ExecutablePath: PlayedVibe.Exe),
@@ -514,8 +516,12 @@ public sealed class ConsultantCheckTests : IDisposable
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
         var turn = vibe.Turns.Should().ContainSingle().Subject;
         turn.Request.WorkingDirectory.Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
-        turn.Request.Environment[Runners.Vibe.VibeLaunch.HomeVariable].Should().Contain($"{Path.DirectorySeparatorChar}own{Path.DirectorySeparatorChar}");
-        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy and the home go with the check's scratch");
+        var home = turn.Request.Environment[Runners.Vibe.VibeLaunch.HomeVariable]!;
+        home.Should().StartWith(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "D1: under the short homes root, never under TEMP");
+        Path.GetFileName(home).Should().Be("h");
+        home.Length.Should().BeLessThanOrEqualTo(102, "A10: the check's home fits the Windows budget");
+        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
+        Directory.EnumerateFileSystemEntries(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
     }
 
     /// <summary>The real launcher, recording the consultant's prompt and the two words its scratch held at that moment.</summary>

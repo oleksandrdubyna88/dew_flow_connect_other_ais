@@ -103,7 +103,7 @@ internal sealed class RosterBuilder(
     internal async Task<RoundScratch> ScratchAsync(
         Runners.Processes.IProcessLauncher launcher, Stage stage, string worktreePath, bool readsCheckout, CancellationToken ct)
     {
-        var scratch = RoundScratch.Reserve(note => log.Warning("{Note}", note));
+        var scratch = RoundScratch.Reserve(note => log.Warning("{Note}", note), _settings.ConsultantHomesRoot, HomeKeepingRowRuns());
         if (!SnapshotWanted(stage, readsCheckout))
         {
             return scratch;
@@ -117,6 +117,9 @@ internal sealed class RosterBuilder(
 
         return scratch.With(made);
     }
+
+    /// <summary>A runnable row whose runtime writes a session into a coai-owned home — the round then reserves its one-shot folder (D1).</summary>
+    private bool HomeKeepingRowRuns() => _settings.Providers.Where(_canRun).Any(p => _runtimeFor(p)?.KeepsAHome == true);
 
     /// <summary>A checkout this stage mounts, and a runnable row serving it on a runtime that must not start in it.</summary>
     private bool SnapshotWanted(Stage stage, bool readsCheckout) =>
@@ -400,7 +403,9 @@ internal sealed class RosterBuilder(
     /// round's empty folder, the "none" workspace) there is nothing of the branch's to keep it from, and it starts there.
     /// </summary>
     internal static LaunchPlace PlaceFor(IReviewerRuntime runtime, string launchDir, bool hasCheckout, RoundScratch scratch) =>
-        runtime.NeedsASanitisedSnapshot && hasCheckout ? InTheSnapshot(scratch.Tree) : new LaunchPlace.At(launchDir, CitedAsWritten.Instance);
+        runtime.KeepsAHome && scratch.HomesRefusal.Length > 0 ? new LaunchPlace.Refused(scratch.HomesRefusal)
+        : runtime.NeedsASanitisedSnapshot && hasCheckout ? InTheSnapshot(scratch.Tree)
+        : new LaunchPlace.At(launchDir, CitedAsWritten.Instance);
 
     /// <summary>The round's snapshot as a launch directory — or why there is none to give.</summary>
     private static LaunchPlace InTheSnapshot(RoundTree tree) => tree switch
@@ -448,7 +453,7 @@ internal sealed class RosterBuilder(
             // config.toml is switched off from the next round on.
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             // Only VibeRuntime reads it: the round's own folder, for one coai-owned home per reviewer (D17).
-            OwnedScratch = scratch.Directory,
+            OwnedScratch = scratch.HomeFolder,
         };
         var told = WithLocalEngine(settings, provider, _settings);
 

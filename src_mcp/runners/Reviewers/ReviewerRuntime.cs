@@ -404,6 +404,13 @@ public interface IReviewerRuntime
     bool NeedsASanitisedSnapshot => false;
 
     /// <summary>
+    /// Whether every launch of this adapter writes a session into a coai-owned home (Vibe's <c>VIBE_HOME</c>, D17) — so a round
+    /// reserves a short one-shot folder for its homes (<c>VibeHomes</c>, D1 of <c>todo/PLAN_vibe_live_round_fixes.md</c>) when a
+    /// runnable row uses it. False by default: every other runtime writes nothing of a home.
+    /// </summary>
+    bool KeepsAHome => false;
+
+    /// <summary>
     /// Asked by the executor immediately before EVERY launch of this adapter's — the first, a retry, a repair, a follow-up,
     /// a consultation's turn, a question row: may it start now? <see cref="LaunchTurn.Free"/> by default.
     /// </summary>

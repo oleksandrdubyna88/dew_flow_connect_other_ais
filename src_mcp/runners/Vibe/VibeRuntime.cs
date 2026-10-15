@@ -38,8 +38,15 @@ namespace CoaiMcp.Runners.Vibe;
 /// the export's <c>active_model</c> (<see cref="Disowned"/>) — an alias Vibe does not know exits 0 on its routed default
 /// (§11).</para>
 /// </remarks>
-public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
+public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget = null) : IReviewerRuntime
 {
+    /// <summary>
+    /// Resolved ONCE, where the adapter is made: the PROCESS's platform budget (<see cref="VibePathBudget.ForThisProcess"/>), not
+    /// the <paramref name="host"/> a test injects — so a test that builds a Windows adapter on ubuntu is not judged by a Windows
+    /// limit. A test passes <see cref="VibePathBudget.None"/>, or a budget of its own.
+    /// </summary>
+    private readonly VibePathBudget _budget = budget ?? VibePathBudget.ForThisProcess;
+
     /// <summary>The adapter for this machine's host.</summary>
     public VibeRuntime(string id = "vibe")
         : this(id, HostKinds.Current)
@@ -61,6 +68,9 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
 
     /// <summary>D6: Vibe reads only its working folder (§10, §16), and loads its configuration from it — so a copy.</summary>
     public bool NeedsASanitisedSnapshot => true;
+
+    /// <summary>D17: every launch writes a session into a coai-owned <c>VIBE_HOME</c>.</summary>
+    public bool KeepsAHome => true;
 
     /// <summary><see cref="DefaultExecutable"/> for a given host, profile and file test — pure.</summary>
     /// <remarks>
@@ -155,14 +165,21 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
     /// §4), from the vendor and the role, so a repair or a retry of the same reviewer starts on the home its first launch left.
     /// </summary>
     internal static string HomeFor(string scratch, string provider, string role) =>
-        Path.Combine(scratch, "vh-" + Short($"{provider}/{role}"));
+        Path.Combine(scratch, Short($"{provider}/{role}", 6));
+
+    /// <summary>
+    /// A consultant's home inside its owned folder: <c>h</c>. One Vibe lives in a conversation's folder, a question row's or a
+    /// check's, so the provider/role hash <see cref="HomeFor"/> makes would buy nothing there — and every character counts
+    /// against <see cref="VibePathBudget"/>.
+    /// </summary>
+    internal static string ConsultantHome(string owned) => Path.Combine(owned, "h");
 
     /// <summary>One attempt's export folder, in the launch's own directory — a fresh name every attempt.</summary>
     internal static string ExportFolder(string outputDir, string role, Guid attempt) =>
-        Path.Combine(outputDir, "vx-" + Short($"{role}/{attempt:N}"));
+        Path.Combine(outputDir, "vx-" + Short($"{role}/{attempt:N}", 10));
 
-    private static string Short(string text) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..10];
+    private static string Short(string text, int length) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..length];
 
     /// <summary>
     /// The launch as it starts: <c>--time-limit</c> from the timeout this launch actually has (a repair's and a retry's are
@@ -188,7 +205,7 @@ public sealed class VibeRuntime(string id, HostKind host) : IReviewerRuntime
 
     /// <summary>The one launch control (D8b, D10, D17, D18) — <see cref="VibeLaunch.TakeAsync"/>.</summary>
     public Task<LaunchTurn> TakeTurnAsync(ReviewerInvocation invocation, IProcessLauncher launcher, CancellationToken ct) =>
-        VibeLaunch.TakeAsync(host, invocation.Request, ExportFolderOf(invocation), launcher, ct);
+        VibeLaunch.TakeAsync(host, invocation.Request, ExportFolderOf(invocation), launcher, _budget, ct);
 
     /// <summary>The last assistant message of <c>--output json</c>'s array (D7).</summary>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) => VibeStdout.Answer(result.StdOut);

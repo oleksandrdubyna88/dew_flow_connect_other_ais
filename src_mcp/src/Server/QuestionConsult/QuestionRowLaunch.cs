@@ -5,6 +5,7 @@ using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Vibe;
 
 namespace CoaiMcp.Server;
 
@@ -72,7 +73,9 @@ internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnly
 /// is in <c>shared/temp-sweep.json</c>'s never-swept list so a test sweep leaves a live row's alone.</para>
 /// </remarks>
 /// <param name="launcher">What a codex row's release is asked through before it launches (<see cref="TierProbedAsync"/>).</param>
-public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger ledger, Serilog.ILogger log, Runners.Processes.IProcessLauncher launcher)
+/// <param name="homesRoot">Where a home-keeping row's one-shot home is reserved (<c>PanelSettings.ConsultantHomesRoot</c>, D1 of
+/// <c>todo/PLAN_vibe_live_round_fixes.md</c>); empty — settings built by hand — keeps the home in the row's own scratch folder.</param>
+public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger ledger, Serilog.ILogger log, Runners.Processes.IProcessLauncher launcher, string homesRoot = "")
 {
     public const string ScratchPrefix = "coai-question-";
 
@@ -91,8 +94,14 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// </remarks>
     public async Task<QuestionRowRecord> RunAsync(RowLaunchInput input, QuestionRowRecord start, CancellationToken ct)
     {
-        var scratch = NeedsAFolder(input.Row) ? Directory.CreateTempSubdirectory(ScratchPrefix).FullName : string.Empty;
         var started = Stopwatch.StartNew();
+        var homes = KeepsAHome(input.Row) ? VibeHomes.ReserveOneShot(homesRoot, note => log.Information("question row: {Note}", note)) : OneShotReservation.None.Instance;
+        if (homes is OneShotReservation.Refused refusedHome)
+        {
+            return Ended(start, RowOutcomes.Refused, refusedHome.Sentence, started.Elapsed, Usage.None);
+        }
+
+        var scratch = NeedsAFolder(input.Row) ? Directory.CreateTempSubdirectory(ScratchPrefix).FullName : string.Empty;
         using var row = CancellationTokenSource.CreateLinkedTokenSource(ct);
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
@@ -103,7 +112,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
                 return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None);
             }
 
-            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, place), row.Token), start, started, row.Token);
+            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, row.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -118,6 +127,20 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         finally
         {
             Remove(scratch);
+            Release(homes);
+        }
+    }
+
+    /// <summary>The row's one-shot folder when one was reserved, else its own scratch folder — where the home and the export live.</summary>
+    private static string HomeFolderOf(OneShotReservation homes, string scratch) =>
+        homes is OneShotReservation.Reserved reserved ? reserved.Home.Folder : scratch;
+
+    /// <summary>The one-shot folder given back — on an answer, a refusal and a cancellation alike.</summary>
+    private static void Release(OneShotReservation homes)
+    {
+        if (homes is OneShotReservation.Reserved reserved)
+        {
+            reserved.Home.Dispose();
         }
     }
 
@@ -137,16 +160,16 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// The row's launch: its prompt naming what it reads, and — for a home-keeping runtime — its home in the row's folder
     /// and an EMPTY folder beside it to stand in, so a none row's cwd never holds its own home.
     /// </summary>
-    private static ConsultantLaunch Launch(RowLaunchInput input, string scratch, ConsultantPlace place) =>
-        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, scratch), input.SchemaFile)
+    private static ConsultantLaunch Launch(RowLaunchInput input, string scratch, string homeFolder, ConsultantPlace place) =>
+        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
         {
             Confinement = new LaunchConfinement.Planned(input.Row.Plan),
             ScratchDir = KeepsAHome(input.Row) ? Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName : scratch,
             Workdir = place.Workdir,
         };
 
-    private static ReviewerSettings Owning(RowLaunchInput input, string scratch) =>
-        KeepsAHome(input.Row) ? input.Settings with { OwnedScratch = scratch } : input.Settings;
+    private static ReviewerSettings Owning(RowLaunchInput input, string homeFolder) =>
+        KeepsAHome(input.Row) ? input.Settings with { OwnedScratch = homeFolder } : input.Settings;
 
     private static bool KeepsAHome(RowAdmission.Admitted row) => row.Runtime.HomesFolder.Length > 0;
 

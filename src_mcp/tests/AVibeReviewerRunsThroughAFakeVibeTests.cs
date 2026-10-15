@@ -162,7 +162,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
-    private PanelService Service(string data)
+    private PanelService Service(string data, string homes = "")
     {
         var catalog = RoleComposition.Compose([
             new RoleEntry(RoleCatalog.ConventionsRole, Active: false),
@@ -178,6 +178,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
                 DataDir = data,
                 CodeWorkspace = "worktree",
                 ReviewerTimeout = TimeSpan.FromSeconds(60),
+                ConsultantHomesRoot = homes,
             },
             VaultKeys.None("no vault in tests"), default, _launcher, Logger.None, Noticing.None);
     }
@@ -192,8 +193,10 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
         var (repo, data) = await RepositoryAsync();
         var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
-        Steer(Clean, recordDir: record);
-        var service = Service(data);
+        var homes = Directory.CreateDirectory(_dir.At("homes")).FullName;
+        var env = _dir.At("env.txt");
+        Steer(Clean, recordDir: record, envRecord: env);
+        var service = Service(data, homes);
         await service.OpenAsync(repo, "feature");
         var planned = await service.ReviewPlanAsync(repo, "feature", Scope);
         await service.ResolveAsync(repo, "feature", "[]");
@@ -209,7 +212,12 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             "the code round's Vibe reviewer started in the round's sanitised snapshot").Subject;
         codeLaunch.Should().NotStartWith(repo);
         Directory.Exists(codeLaunch).Should().BeFalse("the snapshot went with the round");
-        Directory.Exists(Path.GetDirectoryName(codeLaunch)).Should().BeFalse("and so did the round's scratch, the Vibe homes in it");
+        Directory.Exists(Path.GetDirectoryName(codeLaunch)).Should().BeFalse("and so did the round's scratch");
+        // A8: the home the child was given is under the homes root's coai-vh, short enough for Vibe's deepest write, and gone with the round.
+        var vibeHome = (await File.ReadAllLinesAsync(env, TestContext.Current.CancellationToken)).Single(line => line.StartsWith("VIBE_HOME=", StringComparison.Ordinal))["VIBE_HOME=".Length..];
+        vibeHome.Should().StartWith(Path.Combine(homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "D1: never under TEMP");
+        vibeHome.Length.Should().BeLessThanOrEqualTo(102, "the Windows budget's longest home");
+        Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the round's homes folder was deleted when the round ended");
     }
 
     /// <summary>

@@ -61,7 +61,7 @@ public sealed class QuestionFanOut(
     QuestionOutlineCache? outlines = null,
     Func<string, string, CancellationToken, Task<string>>? buildOutline = null)
 {
-    private readonly QuestionRowLaunch _launch = new(executor, ledger, log, launcher);
+    private readonly QuestionRowLaunch _launch = new(executor, ledger, log, launcher, panel.ConsultantHomesRoot);
 
     /// <summary>How often the heartbeat is rewritten — the store's thirty seconds, or a test's seam (D14 d).</summary>
     private readonly TimeSpan _heartbeatEvery = heartbeatEvery ?? QuestionConsultStore.HeartbeatEvery;

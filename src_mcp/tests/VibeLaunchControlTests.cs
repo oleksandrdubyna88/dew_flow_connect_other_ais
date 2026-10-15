@@ -146,6 +146,22 @@ public sealed class VibeLaunchControlTests : IDisposable
         vibe.Started.Should().BeEmpty();
     }
 
+    /// <summary>A4: a home that would pass Windows' limit is refused before the home is made or any process starts.</summary>
+    [Fact]
+    public async Task AHomeThatWouldPassTheWindowsLimit_IsRefused_BeforeTheHomeIsMade_AndNothingStarts()
+    {
+        using var padded = TempDir.For("testsToDelete-vh-budget-");
+        var home = Path.Combine(padded, new string('p', Math.Max(1, 120 - padded.Path.Length - 1)));
+        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), home, "glm-5-3");
+        var vibe = new FakeVibe();
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, request, _out.At("export"), vibe, VibePathBudget.Windows, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("120 characters long").And.Contain("COAI_CONSULTANT_HOMES");
+        Directory.Exists(home).Should().BeFalse("refused before the home was made");
+        vibe.Started.Should().BeEmpty("not even `--version` ran");
+    }
+
     /// <summary>C6: what turn 1 leaves in a measured Vibe's home - two EMPTY folders the manifest never named - must not refuse the repair that follows.</summary>
     [Fact]
     public async Task ARepair_OnTheHomeTurnOneLeft_IsHeldNotRefused_OnAMeasuredVibe()
@@ -156,7 +172,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "data", "193149ad-d8e5-069e-8f34-aece24b2623d", "vibe"));
         Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "tmp"));
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), new FakeVibe(), TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), new FakeVibe(), VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().BeEmpty();
     }
@@ -183,7 +199,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         var vibe = new FakeVibe { VersionThrows = new Win32Exception(nativeError, "the OS said so") };
         var invocation = Invocation();
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().Contain("the OS said so");
         turn.CliMissing.Should().Be(cliMissing);
@@ -199,7 +215,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         var vibe = new FakeVibe { VersionPrints = "no version here" };
         var invocation = Invocation();
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.CliMissing.Should().BeFalse("a CLI that started is installed");
         turn.Refusal.Should().Contain("uv tool install --force mistral-vibe").And.Contain("this coai is older than that Vibe");
