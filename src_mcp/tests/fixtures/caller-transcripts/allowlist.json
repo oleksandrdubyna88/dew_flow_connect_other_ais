@@ -1,0 +1,61 @@
+{
+  "sentinel": "COAI-FIXTURE-SENTINEL",
+  "notes": "The ONE list of structural fields in a caller-transcript fixture, read by scripts/cut-transcript-fixtures.mjs and by the C# guard. Every string leaf is the sentinel unless its dotted path is listed here AND its value satisfies the shape; the sentinel itself is valid at ANY string position (a value that failed its shape was replaced by it). Booleans and nulls are kept; a number is kept only at a path whose shape is int, every other number is 0. Paths are dotted, [] marks an array element. An object key survives only if it is a segment of some path below (the closed key set); every other key is k<n>, numbered per object, and nothing under a renamed key is allowlisted. A shape is the regex in shapes (anchored with ^ and $; .NET callers use \\z for the end anchor), enum:<a|b|..>, int, bool, a vocabulary (the value is in its builtin list or matches its rewritten regex: mcp tool names are mcp__s<n>__t<n>, a non-builtin agent type is custom-<n>), or fixture-path: a fixture root (compared with the separators folded) followed by segments that each match ^p[0-9]+([.][a-z0-9]{1,5})?$ (every segment below a root is a mapped p<n> plus at most a short extension; an unmapped absolute path is <other-root>/p<n>, an unmapped relative one is only such segments).",
+  "shapes": {
+    "uuid": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    "hexid": "^[0-9a-f]{8,64}$",
+    "msgid": "^msg_[0-9A-Za-z]{8,64}$",
+    "toolid": "^toolu_[0-9A-Za-z_]{8,80}$",
+    "iso-utc": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]{1,9})?Z$",
+    "model-id": "^((claude|gpt|gemini|glm|kimi|qwen|deepseek|mistral|llama|grok)-[a-z0-9][a-z0-9._-]*([\\[][0-9a-z]+[\\]])?|<synthetic>)$",
+    "alias": "^(opus|sonnet|haiku|fable|inherit|default|best|opusplan)([\\[][0-9a-z]+[\\]])?$",
+    "model-ref": "^(((claude|gpt|gemini|glm|kimi|qwen|deepseek|mistral|llama|grok)-[a-z0-9][a-z0-9._-]*)|opus|sonnet|haiku|fable|inherit|default|best|opusplan)([\\[][0-9a-z]+[\\]])?$",
+    "version": "^[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?$"
+  },
+  "vocabularies": {
+    "tool-name": {
+      "builtin": ["Agent", "Task", "Bash", "BashOutput", "KillShell", "PowerShell", "Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "NotebookRead", "Glob", "Grep", "LS", "TodoWrite", "WebFetch", "WebSearch", "Skill", "SlashCommand", "ToolSearch", "AskUserQuestion", "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree", "Monitor", "TaskCreate", "TaskGet", "TaskList", "TaskOutput", "TaskStop", "TaskUpdate", "SendMessage", "SubagentHandback", "ScheduleWakeup", "CronCreate", "CronDelete", "CronList", "Workflow", "Artifact", "ArtifactComments", "ArtifactData", "ListMcpResourcesTool", "ReadMcpResourceTool"],
+      "rewritten": "^mcp__s[0-9]+__t[0-9]+$"
+    },
+    "agent-type": {
+      "builtin": ["general-purpose", "Explore", "Plan", "claude", "statusline-setup", "claude-code-guide"],
+      "rewritten": "^custom-[0-9]+$"
+    }
+  },
+  "fields": [
+    { "path": "type", "shape": "enum:user|assistant|system|summary|queue-operation|file-history-snapshot|attachment|progress|last-prompt|custom-title|ai-title|agent-name|pr-link|permission-mode|mode" },
+    { "path": "timestamp", "shape": "iso-utc" },
+    { "path": "sessionId", "shape": "uuid" },
+    { "path": "agentId", "shape": "hexid" },
+    { "path": "uuid", "shape": "uuid" },
+    { "path": "parentUuid", "shape": "uuid" },
+    { "path": "isSidechain", "shape": "bool" },
+    { "path": "version", "shape": "version" },
+    { "path": "cwd", "shape": "fixture-path" },
+    { "path": "effort", "shape": "enum:low|medium|high|xhigh|max" },
+    { "path": "requestedModel", "shape": "model-ref" },
+    { "path": "message.id", "shape": "msgid" },
+    { "path": "message.model", "shape": "model-id" },
+    { "path": "message.role", "shape": "enum:user|assistant" },
+    { "path": "message.usage.input_tokens", "shape": "int" },
+    { "path": "message.usage.output_tokens", "shape": "int" },
+    { "path": "message.usage.cache_creation_input_tokens", "shape": "int" },
+    { "path": "message.usage.cache_read_input_tokens", "shape": "int" },
+    { "path": "message.content[].type", "shape": "enum:text|thinking|redacted_thinking|tool_use|tool_result|server_tool_use|image|document" },
+    { "path": "message.content[].id", "shape": "toolid" },
+    { "path": "message.content[].name", "shape": "tool-name" },
+    { "path": "message.content[].tool_use_id", "shape": "toolid" },
+    { "path": "message.content[].is_error", "shape": "bool" },
+    { "path": "message.content[].input.file_path", "shape": "fixture-path" },
+    { "path": "message.content[].input.notebook_path", "shape": "fixture-path" },
+    { "path": "message.content[].input.subagent_type", "shape": "agent-type" },
+    { "path": "message.content[].input.model", "shape": "alias" },
+    { "path": "message.content[].input.run_in_background", "shape": "bool" },
+    { "path": "agentType", "shape": "agent-type" },
+    { "path": "toolUseId", "shape": "toolid" },
+    { "path": "spawnDepth", "shape": "int" },
+    { "path": "parentAgentId", "shape": "hexid" },
+    { "path": "requestShape", "shape": "enum:background|foreground" },
+    { "path": "model", "shape": "alias" }
+  ]
+}
