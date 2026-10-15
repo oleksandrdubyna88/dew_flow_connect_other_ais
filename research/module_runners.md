@@ -3386,3 +3386,63 @@ flowchart TD
 - **M-V18 note (2026-10-15, the judge).** `VibePathBudget` measures `Path.GetFullPath`, which keeps 8.3 short names as written. If Vibe's interpreter resolves the real path, a folder named `RUNNER~1` is longer than the budget counted. M-V18 must measure that before the budget is relaxed or trusted at its edge.
 - **`LaunchTurn.Refused` states its cause** (code gate 2026-10-15): `RefusalCause { LaunchControl, CliMissing }` is REQUIRED, so an adapter's refusal never reads as coai's own launch check by default (Kimi's launch will call it too); `ReviewerExecutor` maps only `LaunchControl` to `NotStarted.ByLaunchControl`.
 - **Install cure is per OS** (`VendorDiagnosis.InstallCure`: `uv tool install mistral-vibe` on Windows, Mistral's script on Linux), so `VibeLaunchControlTests.TheKind_…` compares with the platform's own cure instead of spelling the Windows one. Fixed after: the default was `OperatingSystem.IsLinux()`, which gave macOS the Windows commands (uv, and Google's PowerShell line) although the vendors' scripts serve Linux and macOS; `InstallCure(runtime, HostKind)` is the seam, and only Windows gets the uv and PowerShell forms (`EveryHostButWindows_GetsTheVendorsShellScript`, first red: the `MacOs` case got `install it with uv…`).
+
+## The Kimi home, its sign-in locks and its launch control — `src_mcp/runners/Kimi/` (2026-10-15, E4.2 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
+
+Kimi runs on the person's LIVE sign-in: a coai-owned `KIMI_CODE_HOME` whose `credentials` is a junction to the person's own folder
+(D19). Kimi's refresh token ROTATES, so two refreshers sign the person out, and a deleter that walks the junction deletes the sign-in.
+This unit is the library the shim (E4.3) and `KimiRuntime` (E4.4) call. Nothing here starts `kimi acp`; it checks, builds and holds.
+
+```mermaid
+flowchart LR
+  P[KimiPlaces.Resolve<br/>real profile, once, in the parent] --> L[KimiLaunch.TakeAsync]
+  L --> A[before the turn: host, tools, model, environment,<br/>person's slot, credentials folder, model block, render, KimiHome.Made]
+  A --> T[VibeHomeTurns.TakeAsync root] --> G[KimiCredentialsLock.TakeAsync gate]
+  G --> V[KimiHome.Refusal -> kimi --version in the BUILT environment -> KimiHome.Refusal]
+  V --> H[LaunchTurn.Holding: warning when the version is unmeasured]
+  S[shim, E4.3] -->|HoldTree, inheritable| K[(kimi inherits the hold)]
+  D[KimiHome.Dispose] -->|HomeProbe free?| U[unlink junction -> verify the person's names -> GitScratch]
+```
+
+- **`KimiPlaces`** resolves every path ONCE, in the unredirected parent, from an injected `env`, the REAL profile and a file test:
+  `PersonsHome` (`KIMI_CODE_HOME` else `~/.kimi-code`), `PersonsBin` (`KIMI_INSTALL_DIR` else the same, plus `/bin`), the tool
+  folders, the absolute `kimi`. `ForShim(root, personsBin)` reads NO environment — inside the shim `USERPROFILE` IS the owned `os/`.
+  The shim's three place flags are `--home <owned root>`, `--persons-bin` and (new) `--locks <KimiCredentialsLock.Root>`.
+- **Tools.** `KimiTools`: `rg` and `fd` must each be found in the person's `bin` or on the parent's `PATH` (the name, then each `PATHEXT`
+  suffix — `ExecutableResolver.In`, shared), else the launch is refused before any process with the two winget commands. They are
+  NEVER admitted into the home by hash (the owned home holds no code); the built `PATH` begins with the person's `bin`, then the folder of
+  each tool found elsewhere, then the parent's entries (`KimiLaunch.BuiltPath`, idempotent).
+- **The config is RENDERED, never copied** (`KimiConfig`, byte for byte the probe's rung 3; LF, no BOM; a value needing an escape is a
+  refusal naming the KEY). The slot is READ (`KimiPersonsConfig`: type must be `kimi`, storage must be `file`), the model block is the
+  person's own `[models."id"]` when whole and on `managed:kimi-code` (`CodexConfigFile.TableValue/TableStrings/HasTable`, the one
+  reader) else the pinned entry of `shared/kimi-model-blocks.json` (embedded; `KimiModels.Curated` IS its ids, the first is the default).
+- **The home check** (`KimiHome.Refusal`, before AND after `--version`) is an allowlist: `home/` holds only the `credentials` junction
+  (must point at the person's folder, never descended), the one `config.toml` (compared as BYTES), Kimi's own data folders and files
+  (RESULTS §18) and an EMPTY `workspace-trust`; `bin/`, `mcp.json`, `skills/`, `AGENTS.md`, any link and any unlisted name refuse by name.
+  `os/` must exist and be empty. The root may hold more (S5's `tree/`, `coai-turn.lock`, `coai-tree.lock`): it is judged only for being a link.
+- **Two locks per sign-in** (`KimiCredentialsLock`, under `<LocalApplicationData>/coai-mcp/kimi-locks/`, never under `coai-kimi/` where the D20
+  sweep walks, never in temp). The key is SHA-256 of the UPPER-cased FINAL PATH of the opened folder handle (`HandleRead.FinalDirectory`):
+  one sign-in, one key, whatever the spelling (case, 8.3, `..`, an ancestor junction). A folder the kernel cannot name has NO key and
+  takes no lock — never the spelling. The GATE (`<key>.lock`, the server's, non-inheritable) serialises launchers, waited for in one-second
+  slices inside the row's timeout, held by the `LaunchTurn` until the launch is read (the home's turn first, the gate second, released in
+  reverse). The TREE HOLD (`<key>.tree.lock` + `<root>/coai-tree.lock`, the SHIM's, `FileShare.Inheritable`) is taken immediately before
+  the agent starts: `kimi` inherits it, so the sign-in stays held while EITHER lives — a coai-mcp killed over a still-refreshing `kimi`
+  must not let a second refresher in. UNMEASURED: whether `kimi`'s own children inherit it and can outlive it (E4.3's S3.14 and S3.17).
+  The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
+  rotation, exactly as the person's own `kimi` would; `kimi login` cures it (M-K14 decides whether a grace is needed).
+- **Disposal** (`KimiHome.Dispose`): (1) the per-HOME hold probed (`Held` or `Unknown` stop with nothing unlinked and nothing outside coai's tree
+  opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
+  (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
+  1–3 on a folder's own home and every `kh-*` child and leaves the rest to the caller's deleter; the D20 sweep calls it under its locks
+  (a stop keeps the folder this beat), the round's scratch will (E4.4). **Stated limit:** the deleter's link checks are path checks at one
+  moment; closing the swap needs handle-based deletion, and a same-user process able to swap folders in coai's tree could touch the
+  credentials directly.
+- **An ancestor of the credentials target may be a link** (a relocated profile); the target itself may not. `Junctions.Refusal` asks the
+  kernel where the target really is and refuses only a resolution that leaves the local drives.
+- **The built environment** (`KimiLaunch.Built`): not inherited, `ProcessEnvironment.Minimal`, exactly seven names — `KIMI_CODE_HOME`,
+  `KIMI_CODE_NO_AUTO_UPDATE=1`, `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH` (all into the owned `os/`) and `PATH`; `EnvironmentRefusal` admits
+  exactly what `Built` makes. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is warned about and run (`VersionWarnings`, the one
+  builder, Vibe's sentence unchanged); a version-less or unstartable one is refused.
+- **Nothing of the sign-in is ever written by coai:** it reads only the slot's NAME and `type`/`base_url`/`storage`/`oauth_host` and the credentials
+  folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
+  sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.

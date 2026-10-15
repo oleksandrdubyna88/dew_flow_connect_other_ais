@@ -31,8 +31,8 @@ public static partial class KimiLaunch
     /// home's shape, the installed version in the same built environment on the owned home, the shape AGAIN (the <c>--version</c>
     /// process is Kimi's own and runs on the home), and the verdict — an unmeasured version is a warning, never a refusal (the owner's
     /// decision of 2026-10-13).</para>
-    /// <para>Never reads <c>SpecialFolder.UserProfile</c> or an environment variable of its own: every path arrives in
-    /// <paramref name="places"/>, resolved once in the unredirected parent (decision 4).</para>
+    /// <para>Never reads <c>SpecialFolder.UserProfile</c> or a location from the environment: every path arrives in
+    /// <paramref name="places"/>, resolved once in the unredirected parent (decision 4). The one environment read is <see cref="Built(ProcessRequest, KimiPlaces)"/>'s fallback to this process's <c>PATH</c> — a list to keep, never a place to find.</para>
     /// </remarks>
     public static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct)
     {

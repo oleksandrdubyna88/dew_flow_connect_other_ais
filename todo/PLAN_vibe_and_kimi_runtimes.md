@@ -712,6 +712,11 @@ Cornerstones: 2 of 2 — E4.1 (junction-safe ownership), E4.2 (`KimiHome` + `Kim
 (Q = ⌈2·5/5⌉ = 2). S4's code half is split into stories in
 [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md) (2026-10-14) — E4.1 and E4.2 are `model: fable`.*
 
+*E4.2 landed 2026-10-15 (feat/kimi-runtime) with four deviations from D19 as written in this plan, each recorded with its reason in the E4
+plan's "where the parent plan and the code disagree" (items 9, 11, 12 and 18): the cross-process gate is a `HeldFile` lock and not a named mutex;
+`rg` and `fd` are found before the launch and never admitted into the home; the person's slot must be `type = "kimi"` with `storage = "file"`;
+the sign-in lock is two files keyed by the folder's final path, with the running tree holding one of them. This text stays the plan's until promotion.*
+
 *The measurement half — DONE 2026-10-13.* `scripts/probe-kimi-confinement.mjs` → `research/RESULTS_kimi_confinement.md`
 §3–§15: cells M-K1…M-K10 and M-K8b, 74 launches, each ACP arm through the shipped `coai-mcp --ask-acp` (so the probe
 measured the shipped client, not a copy) but two — M-K5's `session/load` turn and M-K7's bare `session/new`, which the

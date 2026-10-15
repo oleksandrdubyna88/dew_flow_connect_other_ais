@@ -1,6 +1,6 @@
 # PLAN — S4's code half, split into stories: a Kimi Code reviewer row over ACP
 
-> Status: **E4.1 implemented 2026-10-15 (feat/kimi-runtime); E4.2–E4.5 not started.** Stories written 2026-10-14; the two
+> Status: **E4.1–E4.2 implemented 2026-10-15 (feat/kimi-runtime); E4.3–E4.5 not started.** Stories written 2026-10-14; the two
 > cornerstones' scenarios and briefs written by Fable 2026-10-14; E4.2 amended by Fable 2026-10-15 (the junction risk
 > consultation 7de9430b and the E4.1 review folded in: decisions 9–13, brief §15–§17, S2.41–S2.46; revised the same day
 > after the Opus review of f1983923 — B1–B3, M1–M4 taken, E4.3 gains S3.14–S3.17). E4.2 is a `model: fable` spec — a
@@ -1445,6 +1445,60 @@ D18 still refuses a Kimi REVIEW there.
     refreshes unasked; and the credentials target's ancestors may be links, refused only when the resolution leaves the
     local drives (D19's "must not itself be a link" stays for the target). The shim gains a third pinned flag, `--locks`.
     To be recorded in the parent's D19 at promotion, with deviation 9.
+
+**What the E4.2 coder built differently from the spec as written (2026-10-15), each with its reason.** Items 19–32; none changes a
+guarantee, each is a shape or a seam. Every scenario S2.1–S2.46 is a test (the exceptions are items 28 and 29).
+
+19. **`KimiCredentialsLock.RootFor` is `public`, not `internal`.** The shim lives in another assembly (`CoaiMcp`), and so does the fake CLI
+    that plays it in S2.43; neither has `InternalsVisibleTo`, and the shim must set the lock root from `--locks` for its async flow anyway.
+    `Final` (the seam of the key's folder naming) stays `internal`, per async flow (`AsyncLocal`) like `GitScratch.AfterUnlink`.
+20. **`HoldTree` answers a new closed union `TreeHolding` (`Taken(TreeHold)` / `Busy` / `Unusable`), not `Hold`.** `Hold` wraps ONE
+    `FileStream` and has a private constructor; the tree hold is two. `TreeHold` is a class (it owns two streams and disposes them once), not
+    the spec's record.
+21. **`DisposeAllUnder` does steps (1)–(3) of `Dispose` only** (the per-home probe, the junction unlinked by name, the person's folder
+    verified) on the folder itself and on each `kh-*` child, and leaves the rest of each folder to the caller's deleter. As written ("`Dispose` on
+    the folder itself, then on every direct child") the first call would delete the whole folder, so S2.40's "`vh-*` and `tree/` left for the
+    caller's deleter" and the children it was about to visit could not both hold. `Dispose` is steps (1)–(3) plus the deleter.
+22. **`Dispose`'s verification reuses `GitScratch.Look` and a now-`internal` `GitScratch.StillMissing`** (the 200 ms settle re-list included)
+    instead of a second reader; the spec's "a count below `before`'s" is subsumed by the names (a lower count with every name present cannot
+    happen), and an unlistable target is unverified, as in E4.1.
+23. **S2.25's UNC row is not driven through `TakeAsync`.** Reading a UNC person's `config.toml` would connect out (NTLM) in the test; the UNC
+    refusal is `Junctions`' (S1.3). Two rows replace it that the spec lists elsewhere: a credentials folder that is itself a link, and an absent one.
+24. **`KimiLaunch` is a `partial` class in two files** (`KimiLaunch.cs`: the pure checks and the built environment; `KimiLaunch.Take.cs`: the
+    launch), each method at CC ≤ 4 and each file under 250 lines. `KimiModels.RefusalFor(model, curated)` is the one sentence builder both
+    `ModelRefusal` and the table's "no pinned entry" arm call.
+25. **`KimiLaunch.Built` has a pure overload taking the parent `PATH`** (`Built(request, places, parentPath)`); the two-argument form is the
+    brief's (the request's own `PATH`, else this process's). That fallback is the one environment read in `KimiLaunch` and it contradicts review
+    focus (1) ("the only environment read is `KimiPlaces.Resolve`'s injected `env`") — the brief and the focus disagree; the brief's behaviour is kept,
+    it reads a `PATH` to KEEP and never a location to find, and E4.4 can pass the parent's `PATH` explicitly through the overload.
+26. **`ExecutableResolver.In(directory, candidates, isWindows, exists)` is `internal`** (brief §3's "extract it if it is extractable");
+    `KimiTools` calls it with its own candidates (the name, then each `PATHEXT` suffix, then the platform defaults when `PATHEXT` is empty).
+    `KimiTools` also owns the two winget command strings (`RipgrepInstall`, `FdInstall`), which the home's `bin/` sentence quotes too.
+27. **`KimiModelBlocks.Parse` also refuses a table with a duplicate id or an id outside `kimi-code/`** — a table that could not be one-to-one with
+    `Curated` is broken, not merely odd. **`KimiModelBlocks.For`** reads the person's block through `CodexConfigFile.TableValue`, so a malformed
+    line elsewhere in the file is never parsed and never quoted (decision 12).
+28. **S2.43's grandchild is the fake CLI's `sleep 30000` verb**, started by the `tree-hold` child (`tests_fakecli/TreeHoldVerb.cs`), so no
+    `FAKECLI_*` variable is needed on the grandchild. The first draft's single probe right after the kill read `Held` for a reason that proved
+    nothing (handle rundown lags a process exit); the test now asserts `Held` at every probe for 1.5 s. S2.27's two-launch ordering is tested
+    twice: at the lock (`KimiCredentialsLockTests`) and through the control (`KimiLaunchControlTests`).
+29. **S2.45's shim turn runs `AskAcpMode.RunAsync` with `--locks` and `--home` flags the shim does not yet read** (E4.3 wires them), so the turn
+    exercises the report and the boundary but takes no tree hold; the lock names, the per-home file name and the rendered config are collected
+    directly. The fake ACP agent gained an `"echo": true` read option (the reply said back as its own message) so the control arm can show a
+    served canary reaching the answer.
+30. **`Junctions.Refusal` and `Make` gain the `final` seam as extra overloads**, as brief §17 says; `Resolved` is asked after `Chained` and before
+    `Taken`, and the existing `Refusal(host, link, target, driveType)` internal overload now delegates.
+31. **`KimiHome.Made` returns the sentence for a root, `home/` or `os/` that is a link before creating anything**, and a fresh home's
+    junction refusal is prefixed `the Kimi sign-in could not be linked: `. The `KimiHome.Prefix` is `kh-` and `HomeFor` calls `VibeRuntime.Short`
+    (made `internal`), one hash rule and two prefixes. Nothing renames `VibeHomeTurns` (proposed, not done: it is keyed by any owned root and a
+    rename touches the sweep and `ConsultantPlaces` for a name alone — `OwnedHomeTurns` would be the name).
+32. **S2.14 does not set this process's `USERPROFILE`.** The spec asks for `Environment.SetEnvironmentVariable("USERPROFILE", …)` for the test's
+    duration; `[Collection]` only serialises tests inside one collection, so the redirected value would be visible to every parallel test that
+    reads the profile — the first whole-suite run failed two process-spawning scenarios (`QuestionRowOnAgyScenarioTests`, `AskHumanScenarioTests`;
+    each green alone) with that test in the suite, one with `SQLite Error 14: unable to open database file` (a data directory derived from the
+    profile; the other, `fake-cli: unknown verb`, is the known process-global `FAKECLI_MODE` hazard, so the link to this test is suspected, not
+    proved). `ForShim_ReadsNoEnvironment` now proves the shape: `ForShim` has no environment parameter and every value is one of its two arguments
+    or empty. A real proof of "reads no environment" belongs in a child process (E4.3's shim test, which runs the real shim with a redirected
+    `USERPROFILE`).
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing

@@ -8,9 +8,8 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// The person's paths, resolved ONCE in the unredirected parent and carried down (E4.2 decision 4 and brief section 2,
 /// S2.13–S2.14): honouring Kimi's own <c>KIMI_CODE_HOME</c> and <c>KIMI_INSTALL_DIR</c>, and — for the shim, whose
-/// <c>USERPROFILE</c> IS the owned <c>os/</c> folder — reading no environment at all.
+/// <c>USERPROFILE</c> IS the owned <c>os/</c> folder — reading no environment at all (proved by the shape: no parameter to read one from, every value one of the two arguments or empty; a test that pointed this process's <c>USERPROFILE</c> elsewhere would race every parallel test that reads it).
 /// </summary>
-[Collection("fakecli-env")]
 public sealed class KimiPlacesTests
 {
     private static Func<string, string?> Env(Dictionary<string, string> values) => name => values.GetValueOrDefault(name);
@@ -77,18 +76,7 @@ public sealed class KimiPlacesTests
         using var os = TempDir.For("testsToDelete-kimi-shimenv-");
         var root = Path.Combine(os, "owned", "kh-x");
         var bin = Path.Combine(os, "bin");
-        var marker = Path.Combine(os, "THE-REDIRECTED-PROFILE");
-        var before = Environment.GetEnvironmentVariable("USERPROFILE");
-        Environment.SetEnvironmentVariable("USERPROFILE", marker);
-        KimiPlaces places;
-        try
-        {
-            places = KimiPlaces.ForShim(root, bin);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("USERPROFILE", before);
-        }
+        var places = KimiPlaces.ForShim(root, bin);
 
         places.Home.Should().Be(Path.Combine(root, "home"));
         places.Os.Should().Be(Path.Combine(root, "os"));
@@ -97,6 +85,6 @@ public sealed class KimiPlacesTests
         places.ToolsRefusal.Should().BeEmpty();
         places.ToolFolders.Should().BeEmpty();
         places.PersonsHome.Should().BeEmpty("the shim reads the sign-in folder from the owned junction's own reparse data");
-        places.ToString().Should().NotContain("THE-REDIRECTED-PROFILE", "nothing is derived from the profile");
+        places.OwnedRoot.Should().Be(root, "every value is one of the two arguments or empty — there is nothing to derive from a profile");
     }
 }
