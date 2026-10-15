@@ -182,13 +182,16 @@ public static class VibeLaunch
             throw;
         }
 
-        return inside.Refusal.Length > 0 ? Given(turn, inside.Refusal) : LaunchTurn.Holding(new Attempt(turn, exportFolder), inside.Warning, inside.CliVersion);
+        return inside.Refusal.Length > 0 ? Given(turn, inside) : LaunchTurn.Holding(new Attempt(turn, exportFolder), inside.Warning, inside.CliVersion);
     }
 
     /// <summary>What the check inside the turn concluded: a refusal, or a go — with a warning when the version was not measured.</summary>
     internal sealed record HomeVerdict(string Refusal, string Warning)
     {
         public static HomeVerdict Refuse(string refusal) => new(refusal, string.Empty);
+
+        /// <summary>True when the refusal is a Vibe that is not THERE to start (D5): the one verdict that is a missing CLI.</summary>
+        public bool CliMissing { get; init; }
 
         /// <summary>The release the check asked, as the ledger names it (<c>vibe 2.26.1</c>) — empty until it was asked.</summary>
         public string CliVersion { get; init; } = string.Empty;
@@ -218,17 +221,27 @@ public static class VibeLaunch
             return HomeVerdict.Refuse(shape);
         }
 
-        var version = await VersionAsync(request, launcher, ct);
-        var after = FirstOf(() => version.Refusal, () => VibeHome.Refusal(home, manifest));
+        return AfterTheVersion(manifest, home, await VersionAsync(request, launcher, ct));
+    }
+
+    /// <summary>The version's own refusal first (carrying whether the CLI was missing), then the home again, then the entry.</summary>
+    private static HomeVerdict AfterTheVersion(VibeHomeManifest manifest, string home, VersionAnswer version)
+    {
+        if (version.Refusal.Length > 0)
+        {
+            return HomeVerdict.Refuse(version.Refusal) with { CliMissing = version.CliMissing };
+        }
+
+        var after = VibeHome.Refusal(home, manifest);
 
         return after.Length > 0 ? HomeVerdict.Refuse(after) : Verdict(manifest, home, version.Version) with { CliVersion = Named(version.Version) };
     }
 
-    private static LaunchTurn Given(IDisposable turn, string refusal)
+    private static LaunchTurn Given(IDisposable turn, HomeVerdict inside)
     {
         turn.Dispose();
 
-        return LaunchTurn.Refused(refusal);
+        return LaunchTurn.Refused(inside.Refusal, inside.CliMissing);
     }
 
     /// <summary>The first non-empty sentence of the checks, run in order — later ones are not asked.</summary>
@@ -251,7 +264,7 @@ public static class VibeLaunch
     }
 
     /// <summary>The installed Vibe's version, asked in the launch's own built environment — or why it could not be.</summary>
-    private static async Task<(string Version, string Refusal)> VersionAsync(ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
+    private static async Task<VersionAnswer> VersionAsync(ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
     {
         try
         {
@@ -259,14 +272,35 @@ public static class VibeLaunch
             var version = VersionIn(asked.StdOut);
 
             return asked.ExitCode == 0 && version.Length > 0
-                ? (version, string.Empty)
-                : (string.Empty, $"`{request.Executable} --version` answered no version (exit {asked.ExitCode}): {OneLine(asked.StdOut + " " + asked.StdErr)}");
+                ? new VersionAnswer(version, string.Empty)
+                : new VersionAnswer(string.Empty, NoVersion(request.Executable, asked));
         }
         catch (Win32Exception e)
         {
-            return (string.Empty, $"'{request.Executable}' could not be started: {e.Message} — {VendorDiagnosis.InstallCure("vibe")}");
+            return CouldNotStart(request.Executable, e);
         }
     }
+
+    /// <summary>What `--version` came to: the release, or a refusal — and whether that refusal is a CLI that is not there.</summary>
+    private sealed record VersionAnswer(string Version, string Refusal, bool CliMissing = false);
+
+    /// <summary>
+    /// `--version` STARTED and answered no release (G2): the CLI is installed, so this is not a missing CLI — and the sentence
+    /// carries both cures, because either a broken install or a coai older than that Vibe can cause it.
+    /// </summary>
+    private static string NoVersion(string executable, ProcessResult asked) =>
+        $"`{executable} --version` answered no version (exit {asked.ExitCode}): {OneLine(asked.StdOut + " " + asked.StdErr)} — "
+        + $"run `{executable} --version` by hand: if it fails, reinstall with `uv tool install --force mistral-vibe`; "
+        + "if it prints a version coai cannot read, this coai is older than that Vibe";
+
+    /// <summary>
+    /// The OS refused to start it (G2): only `ERROR_FILE_NOT_FOUND` (2) and `ERROR_PATH_NOT_FOUND` (3) mean there is no CLI there;
+    /// access denied (5), not a valid application (193), a policy block (1260, Smart App Control) mean the file IS there.
+    /// </summary>
+    private static VersionAnswer CouldNotStart(string executable, Win32Exception e) => e.NativeErrorCode is 2 or 3
+        ? new VersionAnswer(string.Empty, $"'{executable}' could not be started: {e.Message} — {VendorDiagnosis.InstallCure("vibe")}", CliMissing: true)
+        : new VersionAnswer(string.Empty, $"'{executable}' could not be started: {e.Message} (error {e.NativeErrorCode}) — the file is there but Windows would not start it; "
+            + "check the row's executable path, and whether a policy on this machine blocks it");
 
     /// <summary>
     /// The home against the manifest entry for <paramref name="version"/>. A MEASURED version has its plugin bytes enforced —

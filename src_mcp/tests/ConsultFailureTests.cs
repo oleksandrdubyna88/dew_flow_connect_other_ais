@@ -5,6 +5,7 @@ using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -63,7 +64,7 @@ public sealed class ConsultFailureTests
     {
         var shared = Shared().GetProperty("kinds").EnumerateArray().Select(kind => kind.GetProperty("word").GetString()!).ToList();
 
-        shared.Should().HaveCount(14, "the plan names fourteen kinds, and a file that did not load names none");
+        shared.Should().HaveCount(15, "the plan names fifteen kinds (launch-refused joined in PLAN_vibe_live_round_fixes.md D5), and a file that did not load names none");
         EveryCase().Select(failure => failure.Kind).Should().BeEquivalentTo(shared, "every case is a word of the shared file, and every word a case");
         Constants().Should().BeEquivalentTo(shared, "and the constants the code names them by are the same words");
         shared.Should().OnlyHaveUniqueItems();
@@ -127,6 +128,35 @@ public sealed class ConsultFailureTests
         var failure = ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NonZeroExit(1, "error: unknown option '--restricted'")), "claude", OwnTimeout);
 
         failure.Should().BeOfType<ConsultFailure.VendorRefused>().Which.Cure.Should().Contain("update the CLI");
+    }
+
+    [Fact]
+    public void ALaunchControlRefusal_IsLaunchRefused_ItsWholeCureReaches_AndNoInstallCureIsOffered()
+    {
+        // D1 of PLAN_vibe_live_round_fixes.md: the REAL refusal a hooks.toml in an owned home earns - its "delete {home}" ends a
+        // sentence ~330 characters long, past the 240 a vendor's words are cut at.
+        using var home = TempDir.For("testsToDelete-vh-refusal-");
+        var owned = home.At(new string('h', 60));
+        Directory.CreateDirectory(owned);
+        File.WriteAllText(Path.Combine(owned, "hooks.toml"), "[[hooks]]\n");
+        var manifest = ((VibeManifestLoad.Loaded)VibeHomeManifest.Builtin).Manifest;
+        var refusal = VibeHome.Refusal(owned, manifest);
+        refusal.Length.Should().BeGreaterThan(300, "the point is a sentence the old cap cut");
+
+        var failure = ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NotStarted(refusal, ByLaunchControl: true)), "vibe", OwnTimeout);
+
+        failure.Kind.Should().Be("launch-refused");
+        failure.What("vibe").Should().Contain($"delete {owned}");
+        failure.Cure.Should().NotContain("uv tool install");
+    }
+
+    [Fact]
+    public void ALaunchRefusalLongerThanAVendorsWords_IsKeptWholeUnderTheTitleLimit()
+    {
+        var long900 = "x " + new string('y', 898);
+
+        ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NotStarted(long900, ByLaunchControl: true)), "vibe", OwnTimeout)
+            .Should().BeOfType<ConsultFailure.LaunchRefused>().Which.Said.Should().Be(long900);
     }
 
     [Fact]
@@ -224,9 +254,9 @@ public sealed class ConsultFailureTests
     [Fact]
     public void EveryFailureNoRetryCures_SaysSo_AndEveryResumableOneDoesNot()
     {
-        // The review's decision, written as the decision: these eight end the consultation, and saying "do
+        // The review's decision, written as the decision: these nine end the consultation, and saying "do
         // not retry" is the honest answer to each; the transients are resumable and must not say it.
-        string[] noRetryCures = ["command-denied", "read-denied", "empty", "quota", "vendor-refused", "cli-not-found", "exit", "conversation-dropped"];
+        string[] noRetryCures = ["command-denied", "read-denied", "empty", "quota", "vendor-refused", "cli-not-found", "launch-refused", "exit", "conversation-dropped"];
 
         foreach (var failure in EveryCase())
         {

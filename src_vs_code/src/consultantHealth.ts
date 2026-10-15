@@ -341,6 +341,7 @@ const FAILURE_LABELS: Readonly<Record<string, string>> = {
   'rate-limited': 'Rate limited',
   'vendor-refused': "Refused by the vendor's CLI",
   'cli-not-found': 'CLI not found',
+  'launch-refused': "Refused by coai's launch check",
   'timeout': 'Timed out',
   'deadline': 'Turn deadline passed',
   'exit': 'CLI exited with an error',

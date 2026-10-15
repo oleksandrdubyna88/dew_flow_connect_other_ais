@@ -139,6 +139,27 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         DirectoryLink.Remove(folder);
     }
 
+    /// <summary>D6 of PLAN_vibe_live_round_fixes.md: a home the launch control refuses is `launch-refused` with its whole cure, never a missing CLI.</summary>
+    [Fact]
+    public async Task AHomeTheLaunchControlRefuses_IsLaunchRefused_AndTheAnswerQuotesTheWholeCure()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var vibe = new PlayedVibe(_launcher, Advice);
+        var service = Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes);
+        var first = await Consult(service, "why is the count wrong");
+        var id = first.GetProperty("consultationId").GetString()!;
+        var home = vibe.Turns.Single().Request.Environment[VibeLaunch.HomeVariable]!;
+        await File.WriteAllTextAsync(Path.Combine(home, "hooks.toml"), "[[hooks]]\n", TestContext.Current.CancellationToken);
+
+        var second = await Consult(service, "and now?", id);
+
+        var said = Refusal(second);
+        said.Should().Contain("(failure: launch-refused)").And.Contain($"delete {home}");
+        said.Should().NotContain("uv tool install");
+        vibe.Turns.Should().HaveCount(1, "the second turn was refused before anything started");
+    }
+
     [Fact]
     public async Task WithNoFolderForHomes_AVibeConsultationIsRefusedByName_AndNothingIsLaunched()
     {

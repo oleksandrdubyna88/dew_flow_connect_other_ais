@@ -19,9 +19,10 @@ public sealed class LaunchTurn : IDisposable
     private readonly IDisposable? _held;
     private bool _given;
 
-    private LaunchTurn(string refusal, IDisposable? held, string warning = "", string cliVersion = "")
+    private LaunchTurn(string refusal, IDisposable? held, string warning = "", string cliVersion = "", bool cliMissing = false)
     {
         Refusal = refusal;
+        CliMissing = cliMissing;
         _held = held;
         Warning = warning;
         CliVersion = cliVersion;
@@ -31,7 +32,12 @@ public sealed class LaunchTurn : IDisposable
     public static LaunchTurn Free => new(string.Empty, null);
 
     /// <summary>Do not start it — the sentence names what was found and what cures it.</summary>
-    public static LaunchTurn Refused(string reason) => new(reason, null);
+    /// <param name="cliMissing">True for the one refusal that IS a missing CLI (the executable is not there to start); every
+    /// other refusal is coai's own launch check saying no to an installed CLI (D5 of <c>todo/PLAN_vibe_live_round_fixes.md</c>).</param>
+    public static LaunchTurn Refused(string reason, bool cliMissing = false) => new(reason, null, cliMissing: cliMissing);
+
+    /// <summary>Whether a refusal is a missing CLI rather than the launch control's own verdict.</summary>
+    public bool CliMissing { get; }
 
     /// <summary>
     /// Start it, and give <paramref name="held"/> back once the launch has been read — with <paramref name="warning"/>, the

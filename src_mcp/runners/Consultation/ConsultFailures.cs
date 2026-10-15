@@ -78,6 +78,8 @@ public static class ConsultFailures
     /// <summary>A launch that ended on a failure of its own — the outcome the executor already named.</summary>
     private static ConsultFailure Ended(ReviewerOutcome terminal, ConsultFailure killedAs, string runtime, bool? linux) => terminal switch
     {
+        // The launch control said no to a CLI that IS installed: its whole sentence (cure last) is kept, not cut at a vendor's 240.
+        ReviewerOutcome.NotStarted { ByLaunchControl: true } n => new ConsultFailure.LaunchRefused(Redaction.SafeText(FirstLine(n.Reason), Redaction.TitleLimit)),
         ReviewerOutcome.NotStarted n => new ConsultFailure.CliNotFound(Safe(n.Reason), InstallCureFor(runtime, linux)),
         // Both are a KILLED launch, and the caller decided from the tokens what killed it (the summary above): the
         // executor's own word for the kill — the launch's budget, or the caller's token (story 3.2 of
