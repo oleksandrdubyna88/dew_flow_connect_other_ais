@@ -287,6 +287,35 @@ jobs:
       - name: Test the bench
         run: ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
 
+  # THE MCP SUITE ON WINDOWS, on every pull request.
+  #
+  # The Vibe path budget, the private-folder DACLs (PrivateFolder) and the junction and read-only-folder cases are Windows facts: on
+  # Linux and macOS their tests skip, so until this job ran them a defect there waited for the owner's machine. The runner is ELEVATED,
+  # so a folder it makes may be owned by Administrators (PrivateFolderWindowsTests.E1 accepts that), and a denial that does not bite an
+  # elevated account skips its test with the reason (the Proven pattern of ConsultFailureScenarioTests). Only the MCP server's suite:
+  # the others have no Windows-only behaviour yet.
+  windows:
+    name: Windows · mcp
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build dew_flow_connect_other_ais.slnx -c Release
+
+      - name: Test
+        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe
+
   extension:
     name: extension · typecheck · test · package
     runs-on: ubuntu-latest

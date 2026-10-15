@@ -18,13 +18,19 @@ public sealed class VibeRuntimeTests : IDisposable
 {
     private readonly TempDir _out = TempDir.For("coai-answers-vibe-");
 
-    public void Dispose() => _out.Dispose();
+    private readonly TempDir _owned = TempDir.For("testsToDelete-vh-owned-");
+
+    public void Dispose()
+    {
+        _out.Dispose();
+        _owned.Dispose();
+    }
 
     private const string Snapshot = @"C:\Temp\coai-answers-x\snapshot-1";
 
     private ReviewerInvocation Built(ReviewerSettings? settings = null, string prompt = "review this\nall of it") =>
         new VibeRuntime("vibe", HostKind.Windows).Build(RoleCatalog.ArchitectureRole, prompt, Snapshot, "C:/s.json", _out,
-            settings ?? new ReviewerSettings("vibe") { Model = "glm-5-3", Timeout = TimeSpan.FromMinutes(10), OwnedScratch = @"C:\Temp\coai-answers-r" });
+            settings ?? new ReviewerSettings("vibe") { Model = "glm-5-3", Timeout = TimeSpan.FromMinutes(10), OwnedScratch = _owned.Path });
 
     private static string After(IReadOnlyList<string> args, string flag) => args[args.ToList().IndexOf(flag) + 1];
 
@@ -61,7 +67,7 @@ public sealed class VibeRuntimeTests : IDisposable
             "§26: UTF-8 mode is part of the built set");
         request.Environment[VibeLaunch.CliVariable].Should().Be("python", "§3: the Rust CLI refuses the shipped flags and is unmeasured");
         request.Environment[VibeLaunch.ModelVariable].Should().Be("glm-5-3");
-        request.Environment[VibeLaunch.HomeVariable].Should().StartWith(@"C:\Temp\coai-answers-r");
+        request.Environment[VibeLaunch.HomeVariable].Should().StartWith(_owned.Path);
     }
 
     [Fact]
@@ -92,13 +98,24 @@ public sealed class VibeRuntimeTests : IDisposable
         invocation.Model.Should().Be(VibeModels.Default);
     }
 
+    /// <summary>D7 of the plan: the export (the whole conversation) lives in the attempt's own folder, beside the home — never in TEMP when a home folder is owned.</summary>
+    [Fact]
+    public void TheExport_LivesBesideTheHome_InTheOwnedFolder_OrInTheLaunchsOwnFolderWhenThereIsNone()
+    {
+        var owned = Built().Request;
+        var none = Built(new ReviewerSettings("vibe")).Request;
+
+        Path.GetDirectoryName(After(owned.Arguments, "--output-dir")).Should().Be(_owned.Path, "a sibling of the home, outside what the home check walks");
+        Path.GetDirectoryName(After(none.Arguments, "--output-dir")).Should().Be(_out.Path);
+    }
+
     [Fact]
     public void TheHome_IsOnePerReviewer_InTheRoundsScratch_OrTheLaunchsOwnFolderWhenThereIsNone()
     {
         var withScratch = Built().Request.Environment[VibeLaunch.HomeVariable]!;
         var without = Built(new ReviewerSettings("vibe")).Request.Environment[VibeLaunch.HomeVariable]!;
 
-        Path.GetDirectoryName(withScratch).Should().Be(@"C:\Temp\coai-answers-r");
+        Path.GetDirectoryName(withScratch).Should().Be(_owned.Path);
         Path.GetDirectoryName(without).Should().Be(_out.Path);
         Path.GetFileName(withScratch).Length.Should().BeLessThan(16, "a deep home broke on a >260-character path");
         VibeRuntime.HomeFor("x", "vibe", "Architecture").Should().Be(VibeRuntime.HomeFor("x", "vibe", "Architecture"))
@@ -124,7 +141,7 @@ public sealed class VibeRuntimeTests : IDisposable
 
         After(retry.Request.Arguments, "--output-dir").Should().NotBe(After(first.Request.Arguments, "--output-dir"))
             .And.NotBe(After(again.Request.Arguments, "--output-dir"), "a retry never reads a stale export (D7)");
-        Path.GetDirectoryName(After(retry.Request.Arguments, "--output-dir")).Should().Be(_out.Path, "inside the launch's own coai-answers-* folder");
+        Path.GetDirectoryName(After(retry.Request.Arguments, "--output-dir")).Should().Be(_owned.Path, "beside the owned home, in the folder the first launch's export was in");
         After(retry.Request.Arguments, "--time-limit").Should().Be("90");
     }
 
@@ -171,6 +188,49 @@ public sealed class VibeRuntimeTests : IDisposable
             "D9: cost_usd is Vibe's list price even on a subscription, and a numeric cost is read as a bill");
         new VibeRuntime().ReadUsage(nulled, Finished).Should().Be(Usage.Unknown, "§18: usage null in 2 of 3 deadline exports — unknown, never zero");
         new VibeRuntime().ReadUsage(missing, Finished).Should().Be(Usage.Unknown);
+    }
+
+    /// <summary>K3: a REVIEW is never capped — it reads a snapshot whose files its prompt names, and a cut review is paid for and lost.</summary>
+    [Fact]
+    public void AReview_AndItsRetryOrRepair_CarryNoTurnCap()
+    {
+        var runtime = new VibeRuntime("vibe", HostKind.Windows);
+        var built = Built();
+
+        built.Request.Arguments.Should().NotContain("--max-turns");
+        runtime.ForLaunch(built).Request.Arguments.Should().NotContain("--max-turns");
+    }
+
+    /// <summary>K4: the cap's outcome is coai's sentence — what happened, why Vibe could not find it, and what to do.</summary>
+    [Fact]
+    public void ATurnLimit_IsSaidAsCoaisCap_AndATokenLimitInTheSameWords()
+    {
+        var turns = WithExport("""{"outcome":"turn_limit","stop_reason":"limit","usage":{"input_tokens":84186,"output_tokens":1395}}""");
+        var tokens = WithExport("""{"outcome":"token_limit","stop_reason":"interrupted","usage":null}""");
+        var deadline = WithExport("""{"outcome":"deadline","stop_reason":null,"usage":null}""");
+        var runtime = new VibeRuntime();
+
+        // Only that coai's cap stopped the launch before it answered: a conversation turn or a check may not be a file question at all.
+        runtime.WhyItFailed(turns, Finished with { ExitCode = 3 }).Should().Contain("20").And.Contain("--max-turns").And.Contain("before it answered")
+            .And.NotContain("list a folder").And.NotContain("name them").And.NotContain("did not find");
+        runtime.WhyItFailed(tokens, Finished with { ExitCode = 3 }).Should().Contain("token").And.Contain("before it answered")
+            .And.NotContain("list a folder").And.NotContain("did not find");
+        runtime.WhyItFailed(deadline, Finished with { ExitCode = 3 }).Should().Contain("time limit", "the deadline's sentence is unchanged");
+    }
+
+    /// <summary>The file-search guidance belongs to the QUESTION ROW's report only (the consultant adapter offers it; nothing else does).</summary>
+    [Fact]
+    public void TheFileSearchAdvice_IsOfferedForACapStop_AndForNothingElse()
+    {
+        Runners.Consultation.IConsultantRuntime consultant = new VibeConsultant(new VibeRuntime());
+        var capped = new VibeRuntime().WhyItFailed(WithExport("""{"outcome":"turn_limit","stop_reason":"limit"}"""), Finished with { ExitCode = 3 });
+        var tokenCapped = new VibeRuntime().WhyItFailed(WithExport("""{"outcome":"token_limit","stop_reason":"interrupted"}"""), Finished with { ExitCode = 3 });
+
+        consultant.QuestionRowAdvice(capped).Should().Contain("name them exactly").And.Contain("Vibe cannot list a folder").And.Contain("§28");
+        consultant.QuestionRowAdvice(tokenCapped).Should().Contain("Vibe cannot list a folder");
+        consultant.QuestionRowAdvice("Vibe stopped at its own time limit").Should().BeEmpty();
+        consultant.QuestionRowAdvice(string.Empty).Should().BeEmpty();
+        ((Runners.Consultation.IConsultantRuntime)new Runners.Consultation.CodexConsultant(new CodexRuntime())).QuestionRowAdvice(capped).Should().BeEmpty("no other adapter has a cap to explain");
     }
 
     [Fact]
@@ -283,7 +343,7 @@ public sealed class VibeLaunchRulesTests
     }
 
     [Theory]
-    [InlineData("python.exe C:\\Users\\strug\\.local\\bin\\vibe 2.26.1\r\n", "2.26.1")]
+    [InlineData("python.exe C:\\Users\\abcde\\.local\\bin\\vibe 2.26.1\r\n", "2.26.1")]
     [InlineData("vibe 2.27.10", "2.27.10")]
     [InlineData("usage: vibe", "")]
     public void TheVersion_IsReadOffWhatVibePrints(string printed, string version)

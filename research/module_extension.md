@@ -12808,3 +12808,22 @@ an UNAVAILABLE row, while a warned Vibe is done and available.
   the warning missing; the rounds-log line; the sidebar's reviewer; `reported.vibe.warning` undefined; "the card draws
   no warning"), the two no-warning guards green throughout; 7 of 7 green after. The help test was written after the
   help: its teeth — the Spanish label changed in the compiled output → `the es article does not name the card's line`.
+
+## The Vibe homes folder setting (2026-10-15, D8 of `todo/PLAN_vibe_live_round_fixes.md`)
+
+`coai.vibeHomesDirectory` (a string, default empty = the server's own default) is the folder coai keeps Mistral Vibe's homes under. It is
+drawn on **Settings › Consultants › Consultant** (`consultantView.ts` `vibeHomesField`, a plain text box saved through the ordinary
+`data-setting` write), listed in the path-settings registry (`pathSettings.ts` `VIBE_HOMES`, wire key `COAI_CONSULTANT_HOMES`, said by the
+server, must exist), kept per side (`OVERLAID_SETTINGS`) and never exported (`configTransfer.ts` `NEVER_TRANSFERRED`).
+`settingsShape.ts` writes it into the server's settings file only when set. Its help is in all five languages: the setup text of *The
+consultant* article (`helpContent.ts`, `helpDe.ts`, `helpEs.ts`, `helpRu.ts`, `helpUk.ts`) and the tooltip `help.ts`
+`vibeHomesDirectory`. It says that the folder holds transcripts AND the copy of the reviewed repository, must be short, local and
+existing, that coai makes its folders there private, and that the old folder's `coai-vibe` and `coai-vh` can be deleted after a change.
+The failure word `launch-refused` ("Refused by coai's launch check") joined `consultantHealth.ts`'s label map together with
+`shared/consult-failure-kinds.json`.
+
+The box shows the server's word: `consultantView.ts` draws the shared path mark (`pathMark.ts`) beside *Vibe homes folder* from
+`state.pathFindings`, where `agreed()` turns the server's `COAI_CONSULTANT_HOMES` problem into a finding on `coai.vibeHomesDirectory`
+(place `consultants/consultant`, owner, consequence and cure in `pathFindings.ts`).
+
+`settingsShape.ts` passed the lint's 800-line limit; its `COAI_CONSULTANTS` rule (which callers cross, in which shape, with the catalog row beside a bare-id reference) moved whole into `consultantsWire.ts` (`consultantsEnv`, `catalogRowOnTheWire`), and `envBlock` merges its answer. `aCliPathOfTheOtherSideIsSkipped.test.ts` counts the definition's one-value resolution there now.

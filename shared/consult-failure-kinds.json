@@ -22,6 +22,7 @@
     { "word": "rate-limited", "label": "Rate limited", "givesTheCallBack": true },
     { "word": "vendor-refused", "label": "Refused by the vendor's CLI", "givesTheCallBack": true },
     { "word": "cli-not-found", "label": "CLI not found", "givesTheCallBack": true },
+    { "word": "launch-refused", "label": "Refused by coai's launch check", "givesTheCallBack": true },
     { "word": "timeout", "label": "Timed out", "givesTheCallBack": true },
     { "word": "deadline", "label": "Turn deadline passed", "givesTheCallBack": true },
     { "word": "exit", "label": "CLI exited with an error", "givesTheCallBack": true },

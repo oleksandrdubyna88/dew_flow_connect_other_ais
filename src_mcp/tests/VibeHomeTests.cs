@@ -60,6 +60,127 @@ public sealed class VibeHomeTests : IDisposable
 
     private string Refusal() => VibeHome.Refusal(_home, Manifest, Entry);
 
+    private const string DataUuid = "193149ad-d8e5-069e-8f34-aece24b2623d";
+
+    private const string SessionId = "4f94d59a-afc4-fe1d-2354-ff6c5e3f799d";
+
+    /// <summary>
+    /// What turn 1 of a conversation adds to §24's inventory (workc4-inv-after-turn1.json, vibe 2.26.1, 77 entries): the
+    /// session store's chunks, generations and journals — all under `unified/*/**` — and the two EMPTY folders the manifest
+    /// never saw, a plugin's per-session data folder and the plugin store's staging folder (PLAN_vibe_live_round_fixes.md §1).
+    /// </summary>
+    private void TheExtrasTurnOneLeaves()
+    {
+        var unified = $"logs/session/unified/{SessionId}/";
+        Write(unified + "chunks/" + new string('a', 64) + ".json", "{}");
+        Write(unified + "chunks/" + new string('b', 64) + ".json", "{}");
+        Write(unified + "meta.json", "{}");
+        Write(unified + "scheduled-loops.json", "[]");
+        Write(unified + "journal/0000000000000022.jsonl", "{}");
+        foreach (var generation in new[] { "0000000000000001", "0000000000000021" })
+        {
+            foreach (var name in new[] { "checkpoint", "manifest", "projection-state", "runtime-state" })
+            {
+                Write($"{unified}generations/{generation}/{name}.json", "{}");
+            }
+        }
+
+        Directory.CreateDirectory(_home.At("logs", "session", "plugins", "data", DataUuid, "vibe"));
+        Directory.CreateDirectory(_home.At("logs", "session", "plugins", "tmp"));
+    }
+
+    [Fact]
+    public void TheHomeATurnOneLeaves_IsAdmittedByTheHashCheck_SoTheSecondTurnStarts()
+    {
+        TheInventoryVibeWrites();
+        TheExtrasTurnOneLeaves();
+
+        Refusal().Should().BeEmpty("the two empty folders are what Vibe 2.26.1 itself made (plugins/data/<session>/vibe and plugins/tmp)");
+    }
+
+    [Fact]
+    public void TheHomeATurnOneLeaves_IsAdmittedByTheShapeCheckToo()
+    {
+        TheInventoryVibeWrites();
+        TheExtrasTurnOneLeaves();
+
+        VibeHome.Refusal(_home, Manifest).Should().BeEmpty();
+    }
+
+    /// <summary>A plugin's `${PLUGIN_DATA}` can hold code Vibe adopts without re-checking it (_materialize.py:220-245): folders only.</summary>
+    [Theory]
+    [InlineData("state.json", "{}")]
+    [InlineData("hooks/hooks.json", "{}")]
+    [InlineData(".mcp.json", """{"mcpServers":{"x":{"command":"y"}}}""")]
+    public void AFileInAPluginsPerSessionData_IsRefusedOnBothChecks(string file, string text)
+    {
+        TheInventoryVibeWrites();
+        TheExtrasTurnOneLeaves();
+        var relative = $"logs/session/plugins/data/{DataUuid}/vibe/{file}";
+        Write(relative, text);
+
+        Refusal().Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
+        VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
+    }
+
+    /// <summary>The glob is `data/**`: a file directly in `plugins/data/` or in a session's folder is as much plugin data as one deeper (it was admitted by place under `data/*/**`).</summary>
+    [Theory]
+    [InlineData("stray.json")]
+    [InlineData("193149ad-d8e5-069e-8f34-aece24b2623d.json")]
+    public void AFileDirectlyUnderThePluginDataFolder_IsRefusedOnBothChecks(string file)
+    {
+        TheInventoryVibeWrites();
+        TheExtrasTurnOneLeaves();
+        var relative = $"logs/session/plugins/data/{file}";
+        Write(relative, "{}");
+
+        Refusal().Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
+        VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
+    }
+
+    [Fact]
+    public void AFileVibeStagesWhileUnpacking_IsAdmittedByName_ButAStarterInItIsStillRefused()
+    {
+        TheInventoryVibeWrites();
+        TheExtrasTurnOneLeaves();
+        const string Staged = "logs/session/plugins/tmp/package-0123456789abcdef-0123456789abcdef/";
+        Write(Staged + "x.partial", "half a file");
+        Refusal().Should().BeEmpty("a reviewer killed mid-unpack leaves files in the staging folder; its retry must not be refused over them");
+        VibeHome.Refusal(_home, Manifest).Should().BeEmpty();
+
+        Write(Staged + "hooks.json", "{}");
+        Refusal().Should().Contain($"holds {Staged}hooks.json,").And.Contain("hook");
+        VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {Staged}hooks.json,").And.Contain("hook");
+    }
+
+    private static string[] ListIn(string text, string name)
+    {
+        var at = text.IndexOf($"const {name} = [", StringComparison.Ordinal);
+        at.Should().BeGreaterThanOrEqualTo(0, $"scripts/vibe-home-manifest.mjs must declare `const {name} = [ … ];`");
+        var close = text.IndexOf("];", at, StringComparison.Ordinal);
+
+        var code = string.Join('\n', text[at..close].Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+        return [.. System.Text.RegularExpressions.Regex.Matches(code, "'([^']+)'").Select(match => match.Groups[1].Value)];
+    }
+
+    [Fact]
+    public void TheShippedManifest_NamesTheStagingFolderAndTheDataFolders_AsTheScriptDoes()
+    {
+        // reads-another-program: scripts/vibe-home-manifest.mjs generates the JSON; its lists are a copy of the C# side's rules.
+        var script = File.ReadAllText(Path.Combine(RepoPaths.Root(), "scripts", "vibe-home-manifest.mjs"));
+        var manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root(), "shared", "vibe-home-manifest.json"))).RootElement;
+        var varying = manifest.GetProperty("varying").EnumerateArray().Select(item => item.GetString()!).ToArray();
+        var folders = manifest.TryGetProperty("varyingFolders", out var list) ? list.EnumerateArray().Select(item => item.GetString()!).ToArray() : [];
+
+        varying.Should().Contain("logs/session/plugins/tmp/**");
+        folders.Should().Equal("logs/session/plugins/data/**");
+        varying.Should().Equal(ListIn(script, "VARYING"), "the JSON's varying is the script's constant verbatim");
+        folders.Should().Equal(ListIn(script, "VARYING_FOLDERS"), "and so is varyingFolders");
+        manifest.GetProperty("versions").EnumerateArray().Single(v => v.GetProperty("version").GetString() == "2.26.1")
+            .GetProperty("deepestChild").GetInt32().Should().Be(156, "134 persisted + 22 for Vibe's atomic-write wrapper (RESULTS §27)");
+    }
+
     [Fact]
     public void AnEmptyHome_IsAdmitted()
     {

@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -56,6 +58,12 @@ public sealed class VibeLaunchControlTests : IDisposable
         /// <summary>What the `--version` process does to the home while it runs — nothing, unless a test says so.</summary>
         public Action<ProcessRequest> WhileTheVersionIsAsked { get; set; } = _ => { };
 
+        /// <summary>When set, `--version` cannot even be started: the OS refuses, with this exception.</summary>
+        public Exception? VersionThrows { get; set; }
+
+        /// <summary>When set, `--version` starts and prints this instead of a release.</summary>
+        public string? VersionPrints { get; set; }
+
         private int _inReview;
 
         public int MostAtOnce { get; private set; }
@@ -68,7 +76,12 @@ public sealed class VibeLaunchControlTests : IDisposable
             if (request.Arguments.SequenceEqual(["--version"]))
             {
                 WhileTheVersionIsAsked(request);
-                return new ProcessResult(0, $"python.exe C:\\Users\\p\\.local\\bin\\vibe {version}\r\n", string.Empty, TimedOut: false);
+                if (VersionThrows is not null)
+                {
+                    throw VersionThrows;
+                }
+
+                return new ProcessResult(0, VersionPrints ?? $"python.exe C:\\Users\\p\\.local\\bin\\vibe {version}\r\n", string.Empty, TimedOut: false);
             }
 
             MostAtOnce = Math.Max(MostAtOnce, Interlocked.Increment(ref _inReview));
@@ -131,6 +144,114 @@ public sealed class VibeLaunchControlTests : IDisposable
 
         outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should().Contain("'nope'").And.Contain("glm-5-3");
         vibe.Started.Should().BeEmpty();
+    }
+
+    /// <summary>A4: a home that would pass Windows' limit is refused before the home is made or any process starts.</summary>
+    [Fact]
+    public async Task AHomeThatWouldPassTheWindowsLimit_IsRefused_BeforeTheHomeIsMade_AndNothingStarts()
+    {
+        using var padded = TempDir.For("testsToDelete-vh-budget-");
+        var home = Path.Combine(padded, new string('p', Math.Max(1, 120 - padded.Path.Length - 1)));
+        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), home, "glm-5-3");
+        var vibe = new FakeVibe();
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, request, _out.At("export"), vibe, VibePathBudget.Windows, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("120 characters long").And.Contain("COAI_CONSULTANT_HOMES");
+        Directory.Exists(home).Should().BeFalse("refused before the home was made");
+        vibe.Started.Should().BeEmpty("not even `--version` ran");
+    }
+
+    /// <summary>D7 of the plan, item 5: coai makes the folder a home lives in (under a private folder) before it asks; the launch control never makes the chain above one.</summary>
+    [Fact]
+    public async Task AHomeWhoseParentDoesNotExist_IsRefused_AndNoChainIsMade()
+    {
+        var parent = Path.Combine(_scratch, "not-made", "either");
+        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), Path.Combine(parent, "h"), "glm-5-3");
+        var vibe = new FakeVibe();
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, request, _out.At("export"), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain(parent).And.Contain("never the chain above");
+        Directory.Exists(Path.Combine(_scratch, "not-made")).Should().BeFalse();
+        vibe.Started.Should().BeEmpty();
+    }
+
+    /// <summary>C6: what turn 1 leaves in a measured Vibe's home - two EMPTY folders the manifest never named - must not refuse the repair that follows.</summary>
+    [Fact]
+    public async Task ARepair_OnTheHomeTurnOneLeft_IsHeldNotRefused_OnAMeasuredVibe()
+    {
+        var invocation = Invocation();
+        var home = HomeOf(invocation);
+        File.WriteAllText(Path.Combine(Directory.CreateDirectory(home).FullName, "vibehistory"), "Hello Vibe!\r\n");
+        Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "data", "193149ad-d8e5-069e-8f34-aece24b2623d", "vibe"));
+        Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "tmp"));
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), new FakeVibe(), VibePathBudget.None, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ARefusal_OfTheLaunchControl_IsMarkedAsTheControlsOwn_ButAMissingExecutableIsNot()
+    {
+        var refused = await new ReviewerExecutor(new FakeVibe()).RunAsync(Invocation(model: "nope"), ct: TestContext.Current.CancellationToken);
+        var missing = await new ReviewerExecutor(new FakeVibe { VersionThrows = new Win32Exception(2) }).RunAsync(Invocation(), ct: TestContext.Current.CancellationToken);
+
+        refused.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.ByLaunchControl.Should().BeTrue("coai's own check said no to an installed CLI");
+        missing.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.ByLaunchControl.Should().BeFalse("a CLI that is not there is the one refusal that IS cli-not-found");
+    }
+
+    /// <summary>G2: only the OS saying the file or its path is not there is a missing CLI; any other refusal is the launch check's.</summary>
+    [Theory]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    [InlineData(5, false)]
+    [InlineData(193, false)]
+    [InlineData(1260, false)]
+    public async Task AVersionThatCannotBeStarted_IsAMissingCliOnlyForErrorTwoOrThree(int nativeError, bool cliMissing)
+    {
+        var vibe = new FakeVibe { VersionThrows = new Win32Exception(nativeError, "the OS said so") };
+        var invocation = Invocation();
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("the OS said so");
+        turn.CliMissing.Should().Be(cliMissing);
+        if (!cliMissing)
+        {
+            turn.Refusal.Should().Contain("Windows would not start it").And.NotContain("uv tool install");
+        }
+    }
+
+    [Fact]
+    public async Task AVersionThatStartedButPrintedNoRelease_IsTheLaunchChecksOwn_AndTheSentenceCarriesBothCures()
+    {
+        var vibe = new FakeVibe { VersionPrints = "no version here" };
+        var invocation = Invocation();
+
+        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+
+        turn.CliMissing.Should().BeFalse("a CLI that started is installed");
+        turn.Refusal.Should().Contain("uv tool install --force mistral-vibe").And.Contain("this coai is older than that Vibe");
+    }
+
+    [Theory]
+    [InlineData(2, "cli-not-found")]
+    [InlineData(1260, "launch-refused")]
+    public async Task TheKind_ARefusedVibeLaunchIsWrittenAs_FollowsWhetherTheCliWasThere(int nativeError, string kind)
+    {
+        var outcome = await new ReviewerExecutor(new FakeVibe { VersionThrows = new Win32Exception(nativeError, "the OS said so") })
+            .RunAsync(Invocation(), ct: TestContext.Current.CancellationToken);
+        var launch = new ReviewerLaunch(outcome, null, Usage.None, string.Empty, new ProcessResult(1, string.Empty, string.Empty, false));
+
+        var failure = ConsultFailures.Classify(new CodexConsultant(new CodexRuntime()), launch, "vibe", new ConsultFailure.Timeout());
+
+        failure.Kind.Should().Be(kind);
+        // The install cure is PER OS (VendorDiagnosis.InstallCure): `uv tool install mistral-vibe` on Windows, Mistral's own script on Linux and
+        // macOS - a test that spelled the Windows one failed on every Linux leg although the classification was right.
+        var installCure = VendorDiagnosis.InstallCure("vibe")!;
+        failure.Cure.Contains(installCure, StringComparison.Ordinal).Should().Be(kind == "cli-not-found", "only a CLI that is not there is told to install it");
     }
 
     [Theory]

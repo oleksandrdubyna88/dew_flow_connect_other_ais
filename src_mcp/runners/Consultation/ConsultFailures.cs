@@ -78,6 +78,8 @@ public static class ConsultFailures
     /// <summary>A launch that ended on a failure of its own — the outcome the executor already named.</summary>
     private static ConsultFailure Ended(ReviewerOutcome terminal, ConsultFailure killedAs, string runtime, bool? linux) => terminal switch
     {
+        // The launch control said no to a CLI that IS installed: its whole sentence (cure last) is kept, not cut at a vendor's 240.
+        ReviewerOutcome.NotStarted { ByLaunchControl: true } n => new ConsultFailure.LaunchRefused(Redaction.SafeText(FirstLine(n.Reason), Redaction.TitleLimit)),
         ReviewerOutcome.NotStarted n => new ConsultFailure.CliNotFound(Safe(n.Reason), InstallCureFor(runtime, linux)),
         // Both are a KILLED launch, and the caller decided from the tokens what killed it (the summary above): the
         // executor's own word for the kill — the launch's budget, or the caller's token (story 3.2 of
@@ -99,12 +101,21 @@ public static class ConsultFailures
 
         return VendorDiagnosis.Classify(said) switch
         {
-            null => new ConsultFailure.Exit(exit.ExitCode, Safe(said)),
+            null => new ConsultFailure.Exit(exit.ExitCode, Safe(Told(exit, said))),
             { Kind: DiagnosisKind.NotOnPath } d => new ConsultFailure.CliNotFound(Safe(said), VendorDiagnosis.InstallCure(runtime, linux) ?? Safe(d.Cure)),
             // The cure is redacted too: the unreachable-engine row carries the endpoint out of the vendor's text.
             var d => new ConsultFailure.VendorRefused(Safe(said), Redaction.SafeText(d.Cure, Redaction.TitleLimit)),
         };
     }
+
+    /// <summary>
+    /// What an exit with nothing recognised said, in the scheduler's precedence (`ReviewerSummaryFactory.Because`): a stderr line that
+    /// ANNOUNCES a failure first — a vendor writing `error:` means it — then what the adapter recovered (Vibe's export outcome as
+    /// coai's sentence, D6 of todo/PLAN_vibe_live_round_fixes.md), which beats a stderr line that announces nothing (a label such as
+    /// `Stopped: turn_limit`).
+    /// </summary>
+    private static string Told(ReviewerOutcome.NonZeroExit exit, string said) =>
+        exit.FailureReason.Length > 0 && !ReviewerSummaryFactory.StderrAnnouncesAFailure(exit.StdErrTail) ? exit.FailureReason : said;
 
     /// <summary>How to put the CLI on this machine — the vendor's own command, or where to point the row.</summary>
     /// <remarks>Public since a claude whose <c>--help</c> could not even be started is refused with it before any launch (the whole-branch review, L).</remarks>

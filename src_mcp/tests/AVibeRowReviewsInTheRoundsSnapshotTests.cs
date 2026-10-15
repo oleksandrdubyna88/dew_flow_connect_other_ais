@@ -46,9 +46,10 @@ public sealed class AVibeRowReviewsInTheRoundsSnapshotTests : IAsyncLifetime
         await _repo.DisposeAsync();
     }
 
-    private PanelService Service(string workspace) =>
+    private PanelService Service(string workspace, string homes = "") =>
         new(new PanelSettings
         {
+            ConsultantHomesRoot = homes,
             DataDir = Path.Combine(Path.GetTempPath(), $"coai-vibesnap-data-{Guid.NewGuid():N}"),
             CodeWorkspace = workspace,
             Providers =
@@ -88,6 +89,26 @@ public sealed class AVibeRowReviewsInTheRoundsSnapshotTests : IAsyncLifetime
         File.Exists(Path.Combine(snapshot.Root, "AGENTS.md")).Should().BeFalse();
         Path.GetDirectoryName(snapshot.Root).Should().Be(scratch.Directory, "the snapshot lives in the round's own scratch");
         vibe.Request.Environment[VibeLaunch.HomeVariable].Should().StartWith(scratch.Directory, "and so does the reviewer's owned home (D17)");
+    }
+
+    /// <summary>The round's one-shot folder is reserved before its snapshot is made; the engine disposes a scratch it was HANDED, so a cancelled snapshot must give the reservation back itself.</summary>
+    [Fact]
+    public async Task ASnapshotCancelledWhileItIsMade_GivesTheRoundsOneShotFolderBack()
+    {
+        using var homes = TempDir.For("testsToDelete-vh-roundcancel-");
+        var service = Service("worktree", homes);
+
+        var making = () => service.Roster.ScratchAsync(new WithdrawnLauncher(), Stage.CodeReview, _repo.Path, readsCheckout: true, TestContext.Current.CancellationToken);
+
+        await making.Should().ThrowAsync<OperationCanceledException>();
+        var vh = Path.Combine(homes, VibeHomes.OneShotFolder);
+        (Directory.Exists(vh) ? Directory.EnumerateFileSystemEntries(vh) : []).Should().BeEmpty("the reservation does not stay locked and made until a restart");
+    }
+
+    /// <summary>A launcher whose every process is cut short by the caller withdrawing.</summary>
+    private sealed class WithdrawnLauncher : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) => throw new OperationCanceledException("the round was withdrawn");
     }
 
     [Fact]

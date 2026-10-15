@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
@@ -60,5 +61,30 @@ public sealed class VibeIsDiagnosedInItsOwnWordsTests
     {
         VendorDiagnosis.InstallCure("vibe", linux: false).Should().Contain("uv tool install mistral-vibe");
         VendorDiagnosis.InstallCure("vibe", linux: true).Should().Be("install Mistral's own CLI: curl -LsSf https://mistral.ai/vibe/install.sh | bash");
+    }
+
+    /// <summary>
+    /// macOS gets the vendor's shell script, never the Windows commands: the default used to be `OperatingSystem.IsLinux()`, which gave a
+    /// Mac `uv tool install` (and Google's PowerShell line) although the comment beside it, and the vendors' docs, say the script serves
+    /// Linux and macOS. The host is passed outright, so this runs on any machine.
+    /// </summary>
+    [Theory]
+    [InlineData(HostKind.MacOs)]
+    [InlineData(HostKind.Linux)]
+    [InlineData(HostKind.Wsl)]
+    public void EveryHostButWindows_GetsTheVendorsShellScript(HostKind host)
+    {
+        VendorDiagnosis.InstallCure("vibe", host).Should().Be("install Mistral's own CLI: curl -LsSf https://mistral.ai/vibe/install.sh | bash");
+        VendorDiagnosis.InstallCure("antigravity", host).Should().Contain("antigravity.google/cli/install.sh").And.NotContain("install.ps1");
+    }
+
+    [Fact]
+    public void Windows_GetsUvAndPowerShell_AndTheBoolSpellingStillMeansWhatItDid()
+    {
+        VendorDiagnosis.InstallCure("vibe", HostKind.Windows).Should().Contain("uv tool install mistral-vibe");
+        VendorDiagnosis.InstallCure("antigravity", HostKind.Windows).Should().Contain("install.ps1");
+        VendorDiagnosis.InstallCure("vibe", linux: true).Should().Be(VendorDiagnosis.InstallCure("vibe", HostKind.Linux));
+        VendorDiagnosis.InstallCure("vibe", linux: false).Should().Be(VendorDiagnosis.InstallCure("vibe", HostKind.Windows));
+        VendorDiagnosis.InstallCure("codex", HostKind.MacOs).Should().Contain("npm install -g @openai/codex", "a cure with no OS in it is the same everywhere");
     }
 }

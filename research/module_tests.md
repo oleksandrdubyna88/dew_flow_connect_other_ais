@@ -4000,3 +4000,68 @@ script (`teeth.py`), its class run, and the file restored — the messages are t
 |---|---|---|
 | `ConfinementPlannerTests` (Vibe) | a Vibe disk plan's `AddDirs` is empty and its `SnapshotSources` are the roots; no Vibe launch's argv carries `--add-dir` or a root, whatever the grant | RED FIRST: *Expected disk.AddDirs to be empty because AddDirs are launch flags, and Vibe is never given --add-dir (D3), but found at least one item {"D:/projects/alpha"}* |
 | `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` | two roots, the second's copy slower than a 1 s budget (`SnapshotOptions.BeforeCopyOf` through the `Maker` seam): the place is refused naming "1 of 2" and the budget, nothing is left under `tree`, the snapshot budget holds no bytes | RED FIRST: *Expected place.Refusal "" to contain "1 of 2"* — then, with the budget applied but the cut-short copy's own refusal winning: *Expected place.Refusal "the snapshot of …\slow was refused: git ls-files … did not answer in time" to contain "1 of 2"* |
+
+## The Vibe live-round fixes (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+
+Every group was run RED before its fix (a stub for a new member, or the fix temporarily reverted where the test was written after it,
+`testing.md` *if the fix already landed*) and then green. The first red message of each:
+
+| Group | Suites | First red |
+|---|---|---|
+| D (a refusal is named, whole) | `ConsultFailureTests`, `VibeLaunchControlTests`, `AVibeConsultationKeepsOneSnapshotTests` | `Expected failure.Kind to be "launch-refused", but found "cli-not-found"`; end to end: `the consultant (mistral) could not be started: the coai-owned Vibe home … holds hooks.toml, … coai refuses to start.(truncated) - (failure: cli-not-found) install it with uv: uv tool install mistral-vibe` |
+| C (a second turn starts) | `VibeHomeTests`, `VibeLaunchControlTests`, `AVibeConsultationKeepsOneSnapshotTests`, `scripts/lib/vibe.test.mjs` | `Expected Refusal() to be empty … but found "the coai-owned Vibe home … holds logs/session/plugins/data/, which is not a folder Vibe writes into its home"`; the same refusal ended turn 2 of a conversation (`launch-refused`); node: `files()` lacked the folders and the classifier answered `unknown` for `admitted-folder` |
+| A (budget and layout) | `VibePathBudgetTests`, `VibeHomesTests`, `AVibeHomesNeverLiveUnderTempTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `ConsultantCheckTests`, `AVibeConsultationKeepsOneSnapshotTests` | stub: `Expected said "" to contain "…"`; with the real budget and the old names: `the coai-owned Vibe home …\vh-9469719504 is 109 characters long` (round at a 55-character profile); a long root: `…is 115 characters long, and Vibe writes 156 characters below it` |
+| B (the sweeps) | `VibeHomesTests` | stub: `Expected directory not to exist` / `Expected VibeHomes.SweepOneShot(…) to be 1, but found 0`; `PanelService.PruneOldAnswerDirs(root)` left the leftover. B5 break-it: adding `coai-vh` to `ConsultantHomes.All` turned `TheConversationHomeSweep_LeavesCoaiVhAlone` red (`Expected … to be 0, but found 1`, the foreign-age rule removed the round's folder) |
+| K (the turn cap) | `VibeConsultantTests`, `VibeRuntimeTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `AVibeConsultationKeepsOneSnapshotTests` | `Expected args.Count(argument => argument == "--max-turns") to be 1, but found 0`; `Expected … to contain "20" … "Vibe ended with outcome: turn_limit"`; end to end: `reason "exit 3: Vibe ended with outcome: turn_limit"`. K3 break-it: a default `maxTurns = 20` on `Arguments` turned the review test red (`--max-turns, 20` in a review's argv) |
+| E (D7, per the security review) | `PrivateFolderTests`, `PrivateFolderWindowsTests` | stub (a plain `CreateDirectory`): `Expected security.AreAccessRulesProtected to be True … but found False`; a missing root: `Expected … Refused, but found … Opened`; E7: `Expected a <System.IO.IOException> to be thrown … but no exception was thrown` until the held handle asked for a data right |
+
+Notes: E5 (an owner set to SYSTEM) needs `SeRestorePrivilege` and skips with its reason on a session that is not elevated; E9 runs on
+the Unix legs only. The structural test `EveryEntryIntoACoaiFolderUnderTheHomesRoot_GoesThroughPrivateFolder` found two real offenders
+while it was written (`VibeHomes`, `RoundScratch`). The `windows` job of `ci.yml` runs the whole MCP suite on a (elevated) Windows
+runner. `VibePathBudget.Using` is the `AsyncLocal` seam for scenarios that drive the real service on a TEMP of any length. The F audit
+of the existing Vibe test classes: none needed `VibePathBudget.None` for its own homes on this machine except the four
+`AVibeConsultationKeepsOneSnapshotTests` scenarios that build a service with a data folder under TEMP (they use `Using`); the rest
+already passed the 102-character limit or were changed to a `testsToDelete-vh-*` homes root.
+
+### Review round of 2026-10-15 (the Opus judge and the cadence consultant) — what was added, and its first red
+
+| Finding | Test | First red |
+|---|---|---|
+| D7 TOCTOU: the held handle was not the verified one | `E10_AFolderRenamedAndReplacedWhileItIsBeingMadePrivate_IsNeverHandedBack` (the `note` callback renames the verified folder and puts a wide one in its place) | `the verified folder was swapped for a wide one during the re-ACL and Open still returned it as private` |
+| a folder somebody holds open for delete | `E10c_…IsRefused` | pins the behaviour (the old verifying handle conflicted too); the first version of the fixture held no DELETE access and proved nothing |
+| re-ACL left explicit and protected children | `E3b`, `E3c` (inheritable entry on the parent), `E3d` (a junction inside: the target's SDDL is unchanged), `E3e` (a second Open of a private parent does not walk — the stated limit) | E3b: `Expected rules… to be a collection with 3 item(s)… contains 1 item(s) more` (the explicit `Everyone`) |
+| E5 never ran (TOKEN_PRIVILEGES layout) | `ThePrivilegeHelper_EnablesAPrivilegeTheTokenHolds_AndPutsItBack` on `SeIncreaseWorkingSetPrivilege`; `TokenPrivilege` restores the previous state; the class is in the non-parallel `process-privileges` collection | `Expected enabled not to be <null>`; E5 itself still skips on a session that is not elevated (here), and runs on the elevated CI runner |
+| a wrong Vibe homes folder was never shown | `TheVibeHomesRootIsJudgedAtStartupTests` (C#); `pathFindings.test.ts` and `consultant.test.ts` (the extension) | `Expected var problem = With(gone).SettingProblems to contain a single item, but the collection is empty`; TS: `vibeHomesFinding does not exist in type ConsultantViewState` |
+| FailureReason inverted the stderr precedence | `AnAnnouncingStderrLine_BeatsTheAdaptersReading_ButALabelDoesNot` | `Expected announced "Vibe stopped at coai's cap…" to contain "the provider refused the request"` |
+| the cap wording asserted a failed search | `ATurnLimit_IsSaidAsCoaisCap_…` (neutral), `EachTurnOfAConversation_CarriesItsOwnCap_SoTheCapResetsPerLaunch` | `Expected … to contain "before it answered"` |
+| CI margin | the Vibe end-to-end classes rerun with TEMP, TMP and TMPDIR at a 55-character `testsToDelete-` folder (the process environment of the exe launched) | 8 failures in 5 classes before (`…is 109 characters long` and `NotStarted`); 0 of 132 after |
+| plugins/data glob | `AFileDirectlyUnderThePluginDataFolder_IsRefusedOnBothChecks`, the parity test | `…holds logs/session/plugins/data/stray.json, which is not one of the files Vibe 9.9.9 unpacks` (the shape check admitted it by place) |
+| exception-path leaks | `ACancellationWhileTheFoldersTurnIsWaitedFor_GivesTheHomesFoldersHandleBack`, `ARowWhoseScratchFolderCannotBeMade_LeavesNoFolderUnderCoaiVh` (a `MakeScratch` seam), `ASnapshotCancelledWhileItIsMade_GivesTheRoundsOneShotFolderBack` | `The process cannot access the file because it is being used by another process` (the pinned folder); a surviving `coai-vh\<8>` folder, twice |
+| the structural test | `EveryFileThatSpellsAFolderUnderTheHomesRoot_AlsoOpensItThroughPrivateFolder` | green from the start (no offender); it asserts it sees more than three spelling files |
+| dangling `coai-vh` | `CoaiVhADanglingJunction_IsSaid_NotSweptInSilence` | the refusal did not say "link" (on Windows a dangling junction was already said, via `PrivateFolder`; the symlink case now runs on Linux too, in the same test) |
+
+Deviation recorded: **B3** (a lock held by another server) is tested with a second open of the same `HeldFile` in the SAME process, not by a child
+process — the exclusive open is the kernel's, so the second opener sees the same refusal, but it is not a second process.
+
+### PR #823 review round (SonarCloud gate + CodeRabbit) — what was added, and its first red
+
+| Item | Test | First red |
+|---|---|---|
+| B1 the pinned `coai-vh` handle leaked when making the home threw | `VibeHomesTests.WhenMakingTheHomeFolderThrows_ThePinnedCoaiVhHandleIsReleased_…` (a spy pin through `OneShotSteps`), `…_TheRealHandleIsLetGo_SoCoaiVhCanBeRenamed` (Windows: the real handle), `…ThrowsSomethingElse…`, `WhenTheLockCannotBeTaken_…` | `Expected pin.Released to be True because a handle nobody holds is a handle nobody will ever let go of, but found False.`; Windows: `Did not expect any exception because nothing holds coai-vh any more, but found System.IO.IOException: The process cannot access the file because it is being used by another process.` |
+| A1/A2 the Windows rules, on any OS | `PrivateAclTests` (the wanted DACL is exactly ours; ten ways of not being; owner rule; reset / inherit; exposure; every sentence), `PrivateFolderWindowsDecisionTests` (the flow through a fake `IFolderShell` over real folders: create, ours, foreign owner, re-ACL and walk, a link never entered, a refused or stubborn re-ACL, a swapped final path, a failed open, the handle given back on every refusal) | a refactor with the same behaviour, so no red of its own: the Windows leg (`PrivateFolderWindowsTests`, real handles and ACLs) ran green against the new shell, plus `TheNativeShell_ReadsARealFoldersAclAsFacts_AndNamesASid` and `TheWantedFacts_RoundTripThroughTheSystem_AsExactlyOurs` for the seam between the system and the facts |
+| A2 Linux-reachable branches | `VibeHomesTests` (an unlistable and an unremovable folder, an undeletable home, a dangling link on every OS, the lock refusal), `VibePathBudgetTests.UsingABudget_…`, `ConsultantHomeSweepTests.RemoveNow_…`, `PrivateFolderTests.AConversationOnARootWhoseHomesFolderIsALink_…`, `AVibeQuestionRowReadsACopyOfItsRootsTests` (`…HomesRootDoesNotExist…`, `…RefusedAtItsCopy_GivesItsOneShotFolderBack`), `ConsultantCheckTests` (`AVibeCheckWhoseHomesRootDoesNotExist_…`, `…EndsWithoutAnAnswer_LeavesNoFolderUnder…`) | coverage tests of existing behaviour: green when written; the Linux run (a container of `mcr.microsoft.com/dotnet/sdk:10.0-noble`, `dotnet-coverage` as the workflow runs it) is the evidence |
+### Code gate of 2026-10-15 — four findings accepted
+
+| Finding | Test | First red |
+|---|---|---|
+| `LaunchTurn.Refused` had a default cause | `ARefusalStatesItsCauseTests` (a stub adapter through the real executor and the classifier) | `AMissingCliRefusal_StaysCliNotFound`: `Expected outcome to be False, but found True` with the cause ignored |
+| the walk did not check a child's owner | `AChildOwnedBySomeoneElse_IsRefusedByName_…` in `PrivateAclTests` (plain facts, no elevation, any OS); `E5b_…` (a SYSTEM-owned child; skips unless elevated) | `Expected PrivateFolder.OwnerProblem(…) "" to contain "C:\homes\coai-vibe\id\h\transcript.jsonl"` |
+| file-search advice on every consultant launch | `ATurnLimit_…` (now neutral), `TheFileSearchAdvice_IsOfferedForACapStop_AndForNothingElse`, the question-row and consult scenarios | `Did not expect runtime.WhyItFailed(…) to contain "list a folder"`; `Expected consultant.QuestionRowAdvice(capped) "" to contain "name them exactly"` |
+| a classifier per entry in the manifest script | none (a refactor with the same output): `scripts/lib/vibe.test.mjs` stays green | — |
+
+### First CI run (2026-10-15) — the Unix leg of D7
+
+| Finding | Test | First red |
+|---|---|---|
+| Unix refused a pre-existing 0755 folder (22 Linux and 21 macOS failures, all fixtures made with `CreateDirectory`) | `TheUnixRule_…` (pure `UnixVerdict`: migrated and said, private untouched, chmod fails refused naming 755, chmod leaving bits refused); `E9_OnUnix_…` (Unix only) | `Expected type to be … Opened, but found … Refused` (stub refusing every wide folder). **Verified on Windows only; the next CI run is the real check on Linux and macOS.** |
+| Linux: `TheKind_…(2, cli-not-found)` spelled the Windows install cure | the same test, now comparing with `VendorDiagnosis.InstallCure("vibe")` | `Expected boolean to be True, but found False` (CI) |

@@ -22,7 +22,7 @@ public sealed class AConversationPlaceTests : IDisposable
 
     private readonly TempDir _dir = TempDir.For("coai-answers-place-");
 
-    private string Homes => _dir.At("local");
+    private string Homes => Directory.CreateDirectory(_dir.At("local")).FullName;
 
     private string Store => ConversationFolder.StoreOf(_dir.At("data"));
 
@@ -79,6 +79,28 @@ public sealed class AConversationPlaceTests : IDisposable
 
         await taking.Should().ThrowAsync<OperationCanceledException>();
         VibeHomeTurns.Held(folder).Should().BeFalse("a turn that never got its place must not keep the folder's in-process turn until a restart");
+    }
+
+    /// <summary>
+    /// The homes folder is pinned (its handle held) before the turn is taken; a cancellation while another turn of the folder is
+    /// being waited for must give that handle back too — a leaked pin would stop the folder from ever being renamed or deleted.
+    /// </summary>
+    [Fact]
+    public async Task ACancellationWhileTheFoldersTurnIsWaitedFor_GivesTheHomesFoldersHandleBack()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the pinned handle is Windows'");
+        var id = ConsultationStore.NewId();
+        var folder = ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Vibe, id);
+        Directory.CreateDirectory(folder);
+        using var busy = await VibeHomeTurns.TakeAsync(folder, TestContext.Current.CancellationToken);
+        using var withdrawn = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+        var taking = () => Places().ForConversationAsync(new VibeConsultant(new VibeRuntime()), id, _dir.At("repo"), Ceiling, withdrawn.Token);
+
+        await taking.Should().ThrowAsync<OperationCanceledException>();
+        var homes = Path.Combine(Homes, ConsultantHomes.Vibe);
+        var moving = () => Directory.Move(homes, homes + "-aside");
+        moving.Should().NotThrow("nothing holds the homes folder open any more");
     }
 
     // ---------- a question row's copies are made inside the row's budget (the #811 checkpoint round) ----------

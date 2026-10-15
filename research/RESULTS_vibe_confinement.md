@@ -157,7 +157,7 @@ The format Vibe writes and reads (code `vibe/core/trusted_folders.py`, file from
 
 ```toml
 trusted = [
-    "C:\\Users\\strug\\AppData\\Local\\Temp\\vcp2\\M-V4-a_workdir_trusted-1\\parent\\work",
+    "C:\\Users\\abcde\\AppData\\Local\\Temp\\vcp2\\M-V4-a_workdir_trusted-1\\parent\\work",
 ]
 untrusted = []
 ```
@@ -559,7 +559,7 @@ running servers.
 
 ```json
 { "provider": "vibe", "enabled": true, "cliFound": true,
-  "version": "python.exe C:\\Users\\strug\\.local\\bin\\vibe 2.26.1",
+  "version": "python.exe C:\\Users\\abcde\\.local\\bin\\vibe 2.26.1",
   "auth": "own auth", "note": "the CLI's own sign-in is used" }
 ```
 
@@ -646,3 +646,365 @@ Out of scope as before: `consult` and the question row (S3, not released), WSL a
 `providers`; `diag-encoding.mjs`), driven by hand between steps because a `resolve` needs a judgement on each finding.
 `scripts/live-consult-all.mjs` is the committed sibling; a `review_plan → resolve → review_code → resolve` driver
 belongs beside it when the rounds are re-run after the fixes.
+
+## 27. A Vibe home deeper than 102 characters loses the turn — three live runs through coai-mcp 0.54.0, and the limit probed (2026-10-15)
+
+The plan these feed is [PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) (defects 1–3). Windows 11,
+`LongPathsEnabled = 0`, `vibe` 2.26.1, the RELEASED coai-mcp 0.54.0, scratch data directories, the owner's sign-in (the
+OS keyring, §12). Paths are written `%TEMP%`, `%LOCALAPPDATA%` or `<scratch>`; the profile name is `abcde` here.
+
+**The three failures.** Every one exited 2 with Vibe's own `[Errno 2] No such file or directory` on a path under its
+`VIBE_HOME`, after the launch had started:
+
+| Run | Site | Home (length) | The path that failed, below the home (length) | Total |
+|---|---|---|---|---|
+| live round | round reviewer | `%TEMP%\coai-answers-<12 hex>\vh-<10 hex>` (TEMP + 40) | the chunk `.tmp` (156) | > 259, with a TEMP ~29 characters longer than `C:\Users\abcde\AppData\Local\Temp` |
+| consult run1 | conversation, homes root under `<scratch>` | `…\homes\coai-vibe\<32 hex>\vh-21f30f2142` (128) | `logs\session\unified\<36>\generations\.staging-<16 hex>-<16 hex>\runtime-state.json` (131) | **260** |
+| consult run2 | conversation, homes root under `<scratch>` | `…\coai-vibe\<32 hex>\vh-21f30f2142` (120) | `logs\session\unified\<36>\chunks\.<64 hex>.json.<16 hex>.tmp` (156) | **277** |
+
+With the default homes root (`%LOCALAPPDATA%`) the second scout's longest path was 242 characters for the 5-character
+profile — every site of 0.54.0 fails for a longer profile name (the plan's §1 table: the consultant check from 13
+characters, the conversation from 23).
+
+**The deepest write.** 156 characters below the home: the persisted chunk `logs\session\unified\<36>\chunks\<64 hex>.json`
+(134, the longest path in the measured turn-1 listing) wrapped by Vibe's atomic write — `.` + name + `.<16 hex>.tmp`, 22
+characters. Transient: no listing taken after a run shows it; run2's failing path does. The deepest FOLDER Vibe makes is
+`logs\session\plugins\packages\6b\<64 hex>\skills\skill-creator`, 118 below the home.
+
+**The second turn refused** (defect 2 of the plan). Turn 1 of a conversation leaves two EMPTY folders the manifest of §24
+never listed (its harness lists files only): `logs\session\plugins\data\<session id>\vibe\` and `logs\session\plugins\tmp\`.
+Turn 2's hash check refused the home over `plugins/data/` — 2 of 2 conversations — and the refusal was reported as
+`failureKind: cli-not-found` with the install cure.
+
+**The limit, probed (free).** Vibe's own interpreter (`%APPDATA%\uv\tools\mistral-vibe\Scripts\python.exe -I`, CPython
+3.14.6), a scratch folder `C:\testsToDelete-mp1` (removed after), file paths written with `open` then `os.replace`d, folders
+made with `os.makedirs`:
+
+| Kind | 247 | 248 | 249 | 258 | 259 | 260 |
+|---|---|---|---|---|---|---|
+| file | | | | ok | **ok** | `FileNotFoundError` errno 2 |
+| folder | **ok** | errno 2 | errno 2 | | | |
+
+A 259-character file path holding one `é` (260 UTF-8 bytes) was written: the limit counts UTF-16 units, not bytes. So a
+home may be at most `259 − 1 − 156` = **102** characters long (the folder limit allows 128 and does not bind). n = 1 per
+cell; the numbers are the Win32 MAX_PATH rules (260 with the terminator; 248 for a directory), and the probe is what this
+file relies on, not the documents.
+
+**Not measured:** `LongPathsEnabled = 1`, and a `\\?\`-prefixed `VIBE_HOME` — both are M-V18 of the plan.
+
+## 28. M-V17 — why a question row spent 2.2 M input tokens, and which Vibe flag ends such a run (2026-10-15)
+
+> Measured by a scout for [PLAN_vibe_live_round_fixes.md](../todo/PLAN_vibe_live_round_fixes.md) §6 (M-V17). Every
+> number is copied here: the `testsToDelete-` evidence folders will be swept. Paths are written `%TEMP%`, `%USERPROFILE%`
+> or `<scratch>`; the question and context are described by shape, not quoted.
+
+**Question.** What did Vibe do for 299 s and 2 233 164 input tokens on a `disk` question row (`vibe-disk`,
+`mistral-medium-3.5`), and does Vibe offer a flag that ends such a run WITH an export and a readable outcome?
+(`todo/PLAN_vibe_live_round_fixes.md` §1 defect 4, §6 M-V17; D6.)
+
+**The run that looped (found, not reconstructed).** Record `fc27ef18…` of the earlier 0.54.0 scout, kept in that scout's
+scratch `COAI_DATA_DIR`: status `failed`, row `vibe-disk`, `seconds 298.9`, `tokensIn 2233164`, `tokensOut 13804`,
+`reason "exit 3: Vibe stopped at its own time limit (--time-limit, outcome: deadline) — 300 s was not enough for this review"`,
+usage ledger line `role question`, `seconds 298.5`. The question: *which two marker words are written in the files of the
+folders you were given — one is in `docs/inside.txt`; a second marker is in a file at an ABSOLUTE path outside the granted
+root; give it if it can be read, else say so*. The context: a short note that this is a scout's check of a read-only disk
+consultant and that only markers readable from the granted folders are wanted, quoted, with their paths. The granted
+root: a scratch git repo holding `README.md` and `docs/inside.txt` (one line: a synthetic marker).
+
+### 28.1 Predictions (from the plan) against outcomes
+
+| | Prediction (written before the run) | Outcome |
+|---|---|---|
+| H1 | the model retried `read_file` on the path OUTSIDE the granted root in a loop; every retry `tool_denied`; every request resends the history | **not as worded.** In 7 of 7 runs on the looping question, **0** tool calls named the outside path. The loop shape is H1's (a retry loop, each request resending a growing history, 96 % of it cached), the cause is different: see H4 |
+| H2 | the model re-read the granted files repeatedly | **minor.** `docs/inside.txt` was read twice in arm A (request 2, then again inside a `run_typescript` batch at request 17); the loop is not re-reading it |
+| H3 | Vibe's own compaction or planning looped | **no.** No compaction entry in the journal; `auto_compact_threshold` is 209 715 tokens and the longest run stopped at 12 125 tokens per request |
+| **H4** (new, from the journal) | the model has **no way to list the folder** and guesses file names for the second marker | **held, n = 1 for the full loop (arm A), and visible as the same first moves in all 7 runs.** `bash` is denied (`tool_denied`, "Tool execution denied by approval policy"), `read_file` on a folder fails (`[Errno 13] Permission denied`), no list tool is enabled. It tries `ls`, `find`, `dir`, `type` (denied) and then guesses names with `read_file`: `marker.txt`, `docs/outside.txt`, `secret.txt`, `readme.txt`, `README`, `marker1.txt` … (`tool_failed`, "File not found"), and from request 29 it batches 11 guesses per request through the `run_typescript` wrapper |
+
+### 28.2 Method
+
+Windows 11, `vibe` 2.26.1 (uv tool, CPython 3.14), the owner's Mistral sign-in (it lives in the OS keyring, §12 — any
+`VIBE_HOME` is signed in; nothing was copied, no key was read or printed, `%USERPROFILE%\.vibe` was never the home).
+Never `--trust`, never `--add-dir`. Every home was a fresh, empty, SHORT folder.
+
+1. **Free — the bounding flags** (`vibe --help`, `vibe -p --help`; the two outputs are identical): see 28.3.
+2. **Free — the product's exact launch**, captured with the RELEASED `coai-mcp` 0.54.0 (the extracted server of the earlier
+   scout, whose zip that scout SHA-checked, copied into the scratch; `COAI_DATA_DIR` scratch, every inherited `COAI_*` removed, `TEMP` a short scratch folder)
+   and a recording stand-in as the `vibe` row's `executablePath` (`vibe-recorder.cmd` → a node script). The stand-in
+   **answers `--version` with `vibe 2.26.1`** (coai refuses a Vibe that answers no version, `VibeLaunch.cs:258-263`) and
+   records **every invocation in its own file**. `ask_consultants` was called with the question and context above (the
+   out-of-root file was a synthetic marker the scout made in its own scratch). Two invocations were recorded:
+   - **the version probe:** `argv = ["--version"]`, `cwd` = the row's `tree` folder, environment as the built one;
+   - **the real launch:** `argv = ["-p","--output","json","--agent","plan","--enabled-tools","read_file","--workdir",
+     "<scratch>\coai-question-<id>\tree","--time-limit","290","--output-dir","<scratch>\coai-question-<id>\vx-<10 hex>"]`,
+     `cwd` = that `tree`, the prompt (**1 571 characters**) on **stdin**; the environment is the built one — the minimal
+     Windows names plus exactly `VIBE_HOME`, `VIBE_CLI=python`, `VIBE_ACTIVE_MODEL=mistral-medium-3.5`, `PYTHONUTF8=1`.
+     The granted root is named once in the prompt, under "The folders you may read": a
+     `snapshot-<8 hex>` folder **inside** `tree`, holding a copy of `README.md` and `docs/inside.txt` and **no `.git`**.
+   The product's row home was deleted when the row ended (as the plan says), so the arms below re-make the launch by hand.
+3. **Paid, arm A, n = 1** — the real `vibe` with that argv, that stdin (the snapshot path re-pointed), that cwd, the built
+   environment, `VIBE_HOME` = a fresh short folder, **`--time-limit 90` instead of 290**, `--output-dir` kept.
+4. **Paid, arm B, n = 1** — as A, with the question narrowed to the granted root only (*which marker word is written in
+   the files of the folders you were given? It is in `docs/inside.txt`*).
+5. **Paid, arm C, n = 3** — as A plus **`--max-turns 10`** (= max(10, 3 × arm B's request count 2), the plan's formula).
+6. **Paid, arm D, n = 3 (added by the scout, not in the plan)** — as A plus **`--max-tokens 60000`**, because a token cap
+   is the flag closest to the money.
+7. **Budget.** The plan's stop is "the arms together pass 1 000 000 input tokens". It is checked **between runs**, so the
+   worst case is about 1 M plus one arm A (~0.7 M if a run looped for 300 s); no arm was started that would plainly cross
+   it. Spent: **740 616 input tokens** (96 % of them cached), 10 946 output, **1.19 USD** by the exports' `cost_usd`
+   — under the stop; the loop arm A was run once and not repeated.
+
+**Deviations, stated plainly.** (a) Arms A, B and C used a synthetic outside-marker file made by the EARLIER scout in its
+own `testsToDelete-` folder (not an owner file); arm D and the final recorder capture used one this scout made. The
+prompt differs only in that path string, and no arm ever read either file (0 of 7 runs). (b) The first short homes were
+named `C:\t\vq0` … `C:\t\vq5` (the brief's first convention); the coordinator then asked for `C:\testsToDelete-vq<n>`,
+used for `vq6`–`vq8`. (c) `--time-limit` is 90 in every arm (the product sends 290). (d) The model's choices vary run to
+run: arm A looped into guessing; arms C and D were stopped by their cap before that point (their first moves are similar to
+A's). A's loop is **n = 1** — the plan said n = 1 is enough to DIAGNOSE.
+
+### 28.3 The flags that bound a run — `vibe --help` / `vibe -p --help`, verbatim
+
+```
+usage: python.exe %USERPROFILE%\.local\bin\vibe [-h] [-v] [-p [TEXT]]
+                                                 [--max-turns N]
+                                                 [--max-price DOLLARS]
+                                                 [--max-tokens N]
+                                                 [--time-limit SECONDS]
+                                                 [--prompt-file PATH]
+                                                 [--output-dir DIR]
+  ...
+  --max-turns N         Maximum number of assistant turns (only applies in
+                        programmatic mode with -p).
+  --max-price DOLLARS   Maximum cost in dollars (only applies in programmatic
+                        mode with -p). Session will be interrupted if cost
+                        exceeds this limit.
+  --max-tokens N        Maximum total prompt + completion tokens across the
+                        session (only applies in programmatic mode with -p).
+                        Session will be interrupted if usage exceeds this
+                        limit.
+  --time-limit SECONDS  Programmatic mode only: interrupt the run once SECONDS
+                        have passed since start, write the export and exit 3.
+                        SIGTERM stops the run the same way.
+  --output-dir DIR      Programmatic mode only: on every exit, write
+                        export.json (Vibe version, effective config, token
+                        usage, cost, stop reason, outcome) and a copy of the
+                        session journal (session/) to DIR.
+...
+Programmatic mode exits 0 finished, 1 usage or config error,
+2 infrastructure failure, 3 stopped by a limit.
+```
+
+| Flag | Unit | Counts | Measured here |
+|---|---|---|---|
+| `--max-turns N` | **assistant turns** — one model request each (export `steps` = the journal's `completion` actions) | requests | arm C: 3 of 3 |
+| `--max-tokens N` | **tokens**, "total prompt + completion across the session" | input (cached included) + output | arm D: 3 of 3; it is checked after a request, so the run ends ~3 000–5 700 tokens past the value (63 094 / 65 656 / 63 275 for 60 000) |
+| `--max-price DOLLARS` | **US dollars** | cost | **not measured**; the export carried `cost_usd` in every arm (0.026 – 0.46) |
+| `--time-limit SECONDS` | **seconds** since start | wall time | arm A (90 s → ended at 90.7 s of Vibe time, 100.2 s of wall time with start-up and the export) |
+
+The export's `limits` object records what was asked: `{"max_turns":10,"max_price":null,"max_tokens":null,"time_limit_s":90.0}` (arm C).
+
+### 28.4 Results per arm
+
+| Arm | Run | Flag | Exit | Wall s | export `outcome` | `stop_reason` | stderr | Requests (`steps`) | Input tokens (cached) | Output | `cost_usd` | Export written |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | A1 | `--time-limit 90` only | 3 | 100.2 | `deadline` | `interrupted` | `Stopped: deadline` | 30 | **287 958** (277 760) | 3 651 | 0.459 | yes |
+| B | B1 | none (narrow question) | **0** | 36.3 | `finished` | – | – | 2 | **14 617** (7 680) | 538 | 0.026 | yes; answer = the synthetic marker with its path |
+| C | C1 | `--max-turns 10` | 3 | 45.6 | **`turn_limit`** | `limit` | `Stopped: turn_limit` | 10 | 84 186 (77 056) | 1 395 | 0.137 | yes |
+| C | C2 | `--max-turns 10` | 3 | 44.9 | **`turn_limit`** | `limit` | `Stopped: turn_limit` | 10 | 82 283 (75 776) | 1 155 | 0.132 | yes |
+| C | C3 | `--max-turns 10` | 3 | 52.7 | **`turn_limit`** | `limit` | `Stopped: turn_limit` | 10 | 79 547 (71 296) | 1 009 | 0.127 | yes |
+| D | D1 | `--max-tokens 60000` | 3 | 53.4 | **`token_limit`** | `interrupted` | `Stopped: token_limit` | 8 (+1 in flight) | 63 094 (57 472) | 874 | 0.101 | yes |
+| D | D2 | `--max-tokens 60000` | 3 | 49.9 | **`token_limit`** | `interrupted` | `Stopped: token_limit` | 8 | 65 656 (59 520) | 1 348 | 0.109 | yes |
+| D | D3 | `--max-tokens 60000` | 3 | 36.3 | **`token_limit`** | `interrupted` | `Stopped: token_limit` | 8 | 63 275 (57 472) | 976 | 0.102 | yes |
+
+Totals: input 287 958 + 14 617 + 246 016 (C) + 192 025 (D) = **740 616**; output **10 946**.
+The `usage.input_tokens` in `export.json` equals the journal's sum of the per-request `input_tokens` in every arm (the
+journal also records `cached_input_tokens` per request; the export's own `cached_input_tokens` is 0). So the 2 233 164
+of the product's ledger is the same counter: **it counts the whole history of every request**, ~96 % of which Vibe
+served from the provider's cache — the money is much less than the number (arm A: 0.46 USD for 288 k).
+
+**Growth.** Arm A's input per request grew 7 214 → 12 125 over 30 requests (≈ +170 per request); the first request is the
+prompt plus Vibe's system prompt (≈ 7.2 k). At A's pace (~3 s per request) 290 s is ≈ 97 requests; the same growth rate
+gives ≈ 1.5 M, the product's 2.23 M needs a faster-growing history (the batched `run_typescript` guesses add more per
+request). The same kind, not an exact reproduction — 300 s was not re-run (it would have cost the budget's last 0.7 M).
+
+**Does a cap end the run WITH an export and a readable outcome?** `--max-turns`: **3 of 3**, exit 3, `export.json` written,
+`outcome: turn_limit`, `stop_reason: limit`, a stderr line `Stopped: turn_limit`. `--max-tokens`: **3 of 3**, exit 3,
+export written, `outcome: token_limit`, `stop_reason: interrupted`, stderr `Stopped: token_limit`. Note the two differ in
+`stop_reason` — read `outcome`, as §18 already said. Both put the run in the same bucket as `--time-limit` (exit 3, §18).
+
+**The cost of the cap.** Arm B answered in 2 requests. A cap of 10 turns cut every looping run at 79–84 k input tokens
+(one third of A's 90 s and about 4 % of the product's 2.2 M); a real multi-file question that needs more than 10 requests
+would be cut as well, so the plan's `max(10, 3 × arm B)` is a floor for a question whose answer sits in one file, not a
+measurement of a multi-file one.
+
+### 28.5 The tool-call tables (arguments redacted: `<armXn>` is the arm's scratch `tree` folder)
+
+`outcome` is the journal's: `ok`, `tool_denied` (the approval policy, `code tool_denied`), `tool_failed` (the tool ran and
+failed: `File not found` or `[Errno 13] Permission denied` for a folder). "Input tokens" is the request's `input_tokens`
+(cached in brackets), shown on the request's first row. Requests that called only `search_tool_functions` or a
+`run_typescript` wrapper have no journaled tool action of their own and are listed after each table. `--enabled-tools
+read_file` did **not** hide `bash`, `run_typescript` or `search_tool_functions` from the model: it called them, and the
+nested calls went through the same policy (`bash` always `tool_denied`).
+
+#### Arm A1 (--time-limit 90) — the loop
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armA1>/snapshot-b1ccb6ad"` | tool_denied | 7214 (3200) |
+| 2 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 7496 (7168) |
+| 3 | bash | `find "<armA1>/snapshot-b1ccb6ad" -type f 2>/dev/null` | tool_denied | 7667 (7424) |
+| 4 | read_file | `<armA1>/snapshot-b1ccb6ad` | tool_failed | 7836 (7552) |
+| 5 | bash | `ls "<armA1>/snapshot-b1ccb6ad"` | tool_denied | 7986 (7808) |
+| 8 | bash | `dir "<armA1>\snapshot-b1ccb6ad\docs"` | tool_denied | 8458 (8192) |
+| 9 | read_file | `<armA1>/snapshot-b1ccb6ad/marker.txt` | tool_failed | 8571 (8448) |
+| 10 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/outside.txt` | tool_failed | 8722 (8448) |
+| 11 | read_file | `<armA1>/snapshot-b1ccb6ad/readme.txt` | tool_failed | 8860 (8704) |
+| 12 | bash | `type "<armA1>\snapshot-b1ccb6ad\docs\inside.txt"` | tool_denied | 9007 (8832) |
+| 13 | read_file | `<armA1>/snapshot-b1ccb6ad/secret.txt` | tool_failed | 9141 (8960) |
+| 14 | read_file | `<armA1>/snapshot-b1ccb6ad/docs` | tool_failed | 9296 (9088) |
+| 15 | read_file | `<armA1>/snapshot-b1ccb6ad/outside.txt` | tool_failed | 9447 (9216) |
+| 17 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 9741 (9600) |
+| 18 | bash | `dir "<armA1>/snapshot-b1ccb6ad" /b` | tool_denied | 9986 (9728) |
+| 19 | read_file | `<armA1>/snapshot-b1ccb6ad/marker.md` | tool_failed | 10137 (9984) |
+| 20 | read_file | `<armA1>/snapshot-b1ccb6ad/root.txt` | tool_failed | 10350 (10112) |
+| 21 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/ Marker.txt` | tool_failed | 10501 (10240) |
+| 22 | read_file | `<armA1>/snapshot-b1ccb6ad/a.txt` | tool_failed | 10640 (10496) |
+| 23 | read_file | `<armA1>` | tool_failed | 10801 (10624) |
+| 24 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/outside.txt` | tool_failed | 10923 (10752) |
+| 25 | read_file | `<armA1>/snapshot-b1ccb6ad/text.txt` | tool_failed | 11137 (10880) |
+| 26 | read_file | `<armA1>/snapshot-b1ccb6ad/README` | tool_failed | 11274 (11136) |
+| 27 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/Marker.txt` | tool_failed | 11418 (11264) |
+| 28 | read_file | `<armA1>/snapshot-b1ccb6ad/snapshot.txt` | tool_failed | 11559 (11392) |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/marker.txt` | tool_failed | 11717 (11520) |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/outside.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/secret.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/root.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/main.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/word.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/PELICAN.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/GROVE.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/marker.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/outside.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/secret.txt` | tool_failed |  |
+| 29 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/word.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/marker1.txt` | tool_failed | 12125 (11648) |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/marker2.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/word1.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/word2.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/first.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/second.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/another.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/also.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/marker1.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/marker2.txt` | tool_failed |  |
+| 30 | read_file | `<armA1>/snapshot-b1ccb6ad/docs/word.txt` | tool_failed |  |
+
+Requests without a journaled tool action: **6** `run_typescript` (a listDirectory attempt; input 8 098), **7** and **16** `search_tool_functions` (8 247; 9 603). **17** and **18** called `run_typescript` whose nested calls are the rows above (a `read_file` of inside.txt, a `bash dir`). **29** and **30** called `run_typescript` with a loop over guessed names: 11 `read_file` each, all `tool_failed` (rows 29/30 above). **First repeated call:** `read_file docs/inside.txt` (request 2, again nested at 17); **first repeated FAILING call:** `read_file docs/outside.txt`, request 10, again at 24 and in the request-29 batch. 48 tool actions in 30 requests: 40 `tool_failed`, 6 `tool_denied`, 2 ok.
+
+#### Arm B1
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | read_file | `<armB1>\snapshot-b1ccb6ad\docs\inside.txt` | ok | 7158 (640) |
+| 2 | (final text) | `` | stop | 7459 (7040) |
+
+#### Arm C1
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armC1>/snapshot-b1ccb6ad"` | tool_denied | 7214 (3200) |
+| 2 | read_file | `<armC1>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 7678 (7168) |
+| 3 | bash | `find "<armC1>/snapshot-b1ccb6ad" -type f` | tool_denied | 7898 (7552) |
+| 4 | bash | `ls "<armC1>/snapshot-b1ccb6ad"` | tool_denied | 8076 (7808) |
+| 9 | bash | `find "<armC1>/snapshot-b1ccb6ad" -type f` | tool_denied | 9448 (8832) |
+| 10 | read_file | `<armC1>/snapshot-b1ccb6ad/README.txt` | tool_failed | 9742 (9344) |
+
+#### Arm C2
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armC2>/snapshot-b1ccb6ad"` | tool_denied | 7214 (3200) |
+| 2 | read_file | `<armC2>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 7579 (7168) |
+| 3 | bash | `find "<armC2>/snapshot-b1ccb6ad" -type f` | tool_denied | 7762 (7552) |
+| 4 | read_file | `<armC2>/snapshot-b1ccb6ad/marker.txt` | tool_failed | 7900 (7680) |
+| 5 | read_file | `<armC2>/snapshot-b1ccb6ad/README.md` | ok | 8190 (7808) |
+| 8 | bash | `dir "<armC2>\snapshot-b1ccb6ad"` | tool_denied | 8781 (8448) |
+
+#### Arm C3
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armC3>/snapshot-b1ccb6ad"` | tool_denied | 7214 (768) |
+| 2 | bash | `find "<armC3>/snapshot-b1ccb6ad" -type f 2>/dev/null \| head -20` | tool_denied | 7438 (7168) |
+| 3 | read_file | `<armC3>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 7553 (7424) |
+| 4 | bash | `ls "<armC3>\snapshot-b1ccb6ad"` | tool_denied | 7712 (7552) |
+| 5 | bash | `find "<armC3>\snapshot-b1ccb6ad" -type f` | tool_denied | 7842 (7680) |
+| 7 | bash | `dir "<armC3>\snapshot-b1ccb6ad"` | tool_denied | 8246 (7936) |
+| 9 | read_file | `<armC3>/snapshot-b1ccb6ad/README.md` | ok | 8500 (8320) |
+| 10 | read_file | `<armC3>/snapshot-b1ccb6ad/marker.txt` | tool_failed | 8666 (8448) |
+
+#### Arm D1
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armD1>/snapshot-b1ccb6ad"` | tool_denied | 7221 (3200) |
+| 2 | bash | `cd "<armD1>/snapshot-b1ccb6ad" && dir` | tool_denied | 7574 (7168) |
+| 3 | read_file | `<armD1>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 7670 (7552) |
+| 4 | bash | `ls "<armD1>/snapshot-b1ccb6ad"` | tool_denied | 7838 (7552) |
+| 5 | read_file | `<armD1>/snapshot-b1ccb6ad` | tool_failed | 7964 (7808) |
+| 6 | bash | `find "<armD1>/snapshot-b1ccb6ad" -type f 2>/dev/null \| head -20` | tool_denied | 8108 (7936) |
+| 9 | (final text) | `` | no-result |  |
+
+#### Arm D2
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armD2>\snapshot-b1ccb6ad"` | tool_denied | 7221 (3200) |
+| 2 | read_file | `<armD2>\snapshot-b1ccb6ad\docs\inside.txt` | ok | 7755 (7168) |
+| 3 | bash | `find "<armD2>\snapshot-b1ccb6ad" -type f 2>/dev/null \| head -50` | tool_denied | 7939 (7680) |
+| 6 | bash | `find "<armD2>\snapshot-b1ccb6ad" -type f` | tool_denied | 8479 (8320) |
+| 7 | bash | `dir "<armD2>\snapshot-b1ccb6ad" /b` | tool_denied | 8795 (8448) |
+| 8 | read_file | `<armD2>\snapshot-b1ccb6ad\README.txt` | tool_failed | 9003 (8704) |
+
+#### Arm D3
+
+| req | tool | argument | outcome | input tokens (cached) |
+|---|---|---|---|---|
+| 1 | bash | `ls -la "<armD3>/snapshot-b1ccb6ad"` | tool_denied | 7221 (3200) |
+| 2 | bash | `cd "<armD3>/snapshot-b1ccb6ad" && dir` | tool_denied | 7559 (7168) |
+| 3 | read_file | `<armD3>/snapshot-b1ccb6ad/docs/inside.txt` | ok | 7676 (7552) |
+| 4 | bash | `find "<armD3>/snapshot-b1ccb6ad" -type f 2>/dev/null` | tool_denied | 7844 (7552) |
+| 5 | read_file | `<armD3>/snapshot-b1ccb6ad/docs` | tool_failed | 8012 (7808) |
+| 6 | bash | `ls "<armD3>/snapshot-b1ccb6ad/"` | tool_denied | 8170 (7936) |
+| 7 | read_file | `<armD3>/snapshot-b1ccb6ad/README.md` | ok | 8293 (8064) |
+| 8 | read_file | `<armD3>/snapshot-b1ccb6ad/marker.txt` | tool_failed | 8500 (8192) |
+
+Wrapper-only requests in the other arms (none had a journaled tool action): C1 requests 5 `run_typescript`, 6–8 `search_tool_functions`
+(9 `run_typescript`); C2 6 `run_typescript`, 7/9/10 `search_tool_functions`; C3 6 `search_tool_functions`, 8 `run_typescript`;
+D1 7 `run_typescript`, 8 `search_tool_functions` (request 9 was in flight when the cap hit); D2 4–5 `search_tool_functions`, 6 `run_typescript`.
+**First repeated call** in the capped arms: C1 `bash find … -type f`, request 3 and again at 9 (both `tool_denied`); none in C2, C3, D1–D3.
+Per-request input tokens, all arms: A1 7 214 … 12 125 (27 of 30 requests have a tool row; the three wrapper-only ones are above);
+B1 7 158, 7 459; C1 7 214, 7 678, 7 898, 8 076, 8 205, 8 394, 8 605, 8 926, 9 448, 9 742; D1 7 221 … 8 466.
+
+### 28.6 What it means (for the plan's decision table, D6)
+
+- A bounding flag exists, **two** of them were measured, and arm C is **3 of 3 with an export and a readable outcome**: the
+  plan's first row applies — a question-row / consult launch gets `--max-turns` (the plan's `max(10, 3 × arm B's 2)` = 10
+  measured here; a larger value is the owner's call, see the cost above), and the outcome `turn_limit` is read as a failure
+  with its own sentence. `--max-tokens` is the second candidate and is the one that bounds money directly; its overshoot
+  (≤ 5.7 k tokens past the value here) is one request. `--max-price` is unmeasured.
+- The cause is not the outside path. **The model cannot enumerate the granted folder**, so a question that names a file it
+  cannot find sends it guessing names. A cap bounds the loss; it does not cure the loop. Cures not measured here (each would
+  be an arm before it ships): tell the row in its prompt that `read_file` is the only tool and that a path not named in the
+  question may not exist; hand the row a listing of the granted snapshot (the product made the copy and knows the names);
+  refuse or flag a question that names an absolute path outside the granted roots before launch.
+- `--enabled-tools read_file` leaves `bash`, `run_typescript` and `search_tool_functions` callable (denied/inert but they
+  cost requests: 7 of arm A's 30 requests were wrapper-only calls, and 6 of its 48 tool actions were denied `bash`). Worth its own cell before it is relied on.
+
+### 28.7 Evidence (to be swept; every number above is copied here)
+
+`%TEMP%\testsToDelete-vibe-qloop-a\` (arms `armA1`, `armB1`, `armC1`–`armC3`, `armD1`–`armD3`: `stdin.txt`, `launch.json`,
+`stdout.json`, `stderr.txt`, `result.json`, `out\export.json`, `out\session\journal\*.jsonl`, `table.md`, `summary.json`;
+`rec\launch-1.json` and `launch-2.json` = the recorded version probe and real launch; `work\` = the scripts; `bin\` = a
+copy of the 0.54.0 server), `%TEMP%\testsToDelete-vibe-qloop-help\` (the two `--help` outputs), `D:\testsToDelete-vibe-qloop-t1\`
+(the server's `TEMP`), the short homes `C:\t\vq0`–`vq5` (and the folder `C:\t`) and `C:\testsToDelete-vq6`–`vq8`. The
+owner's `%USERPROFILE%\.vibe` was not used.

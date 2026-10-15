@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Platform;
+
 namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>What KIND of door a recognised vendor sentence says is closed.</summary>
@@ -280,7 +282,16 @@ public static class VendorDiagnosis
     /// Advice that has been refuted is worse than none.</para>
     /// </remarks>
     public static string? InstallCure(string runtime, bool? linux = null) =>
-        (runtime?.Trim().ToLowerInvariant(), linux ?? OperatingSystem.IsLinux()) switch
+        InstallCure(runtime, linux is { } given ? (given ? HostKind.Linux : HostKind.Windows) : HostKinds.Current);
+
+    /// <summary>
+    /// The same cure for a HOST named outright — the seam a test uses to ask for macOS's without being on one. Only Windows gets the
+    /// PowerShell and uv forms; Linux, WSL and macOS get the vendor's shell script (Google's script handles Linux and macOS, verified
+    /// 2026-09-01; Mistral's is its README's for both). The default used to be <c>OperatingSystem.IsLinux()</c>, which gave macOS the
+    /// Windows commands.
+    /// </summary>
+    public static string? InstallCure(string runtime, HostKind host) =>
+        (runtime?.Trim().ToLowerInvariant(), host != HostKind.Windows) switch
         {
             ("antigravity", true) =>
                 "install Google's own CLI: curl -fsSL https://antigravity.google/cli/install.sh | bash",

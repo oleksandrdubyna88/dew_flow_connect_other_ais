@@ -855,6 +855,14 @@ public static class ReviewerSummaryFactory
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// Whether a stderr tail holds a line that ANNOUNCES a failure (not scaffolding, one of <see cref="Announcements"/>) — the one
+    /// rule that decides whether a vendor's own stderr outranks what its adapter recovered; <see cref="Because"/> and the consult
+    /// failure classification ask the same question rather than keep two lists.
+    /// </summary>
+    internal static bool StderrAnnouncesAFailure(string stdErrTail) =>
+        stdErrTail.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Any(line => !IsScaffolding(line) && Announces(line));
+
+    /// <summary>
     /// Stack frames, source echoes, version banners — and our own shim's progress notes.
     /// </summary>
     /// <remarks>

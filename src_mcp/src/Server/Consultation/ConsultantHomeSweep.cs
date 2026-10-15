@@ -62,7 +62,7 @@ public static class ConsultantHomeSweep
 
         var pass = new Pass(inputs, warn, delete ?? GitScratch.DeleteEvenIfReadOnly);
 
-        return ConsultantHomes.All.Sum(homes => pass.Over(Path.Combine(inputs.HomesRoot, homes)));
+        return ConsultantHomes.All.Sum(pass.Over);
     }
 
     /// <summary>
@@ -79,29 +79,69 @@ public static class ConsultantHomeSweep
         var pass = new Pass(inputs, warn, GitScratch.DeleteEvenIfReadOnly);
         foreach (var homes in ConsultantHomes.All)
         {
-            pass.Settle(ConsultantHomes.ConversationFolder(inputs.HomesRoot, homes, consultationId));
+            pass.SettleOne(homes, consultationId);
         }
     }
 
     private sealed class Pass(HomeSweepInputs inputs, Action<string> warn, Action<string> delete)
     {
-        /// <summary>Every conversation folder of one homes folder; how many went. A homes folder that is a link is refused.</summary>
-        public int Over(string homes)
+        /// <summary>
+        /// Every conversation folder of one homes folder (named <paramref name="name"/> under the root); how many went. A homes
+        /// folder that is not private to the person — a link, a foreign owner — is refused, said, and nothing is swept (D7).
+        /// </summary>
+        public int Over(string name)
         {
-            if (OwnedPaths.IsLinkIfThere(homes))
+            var homes = PrivateFolder.PathOf(inputs.HomesRoot, name);
+            if (!Directory.Exists(homes))
             {
-                warn($"consultant homes: {homes} is a link, and no folder is swept through one");
                 return 0;
             }
 
+            var opened = PrivateFolder.Open(inputs.HomesRoot, name, warn);
+            if (opened is PrivateFolderOutcome.Refused refused)
+            {
+                warn($"consultant homes: no folder is swept — {refused.Sentence}");
+                return 0;
+            }
+
+            using (((PrivateFolderOutcome.Opened)opened).Held)
+            {
+                return Listed(homes);
+            }
+        }
+
+        private int Listed(string homes)
+        {
             try
             {
-                return Directory.Exists(homes) ? Directory.EnumerateDirectories(homes).ToList().Count(Settle) : 0;
+                return Directory.EnumerateDirectories(homes).ToList().Count(Settle);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 warn($"consultant homes: {homes} could not be listed, and the next beat will try again: {e.Message}");
                 return 0;
+            }
+        }
+
+        /// <summary>One conversation's folder under one homes folder, entered through the same refusal as a pass.</summary>
+        public void SettleOne(string name, string consultationId)
+        {
+            var homes = PrivateFolder.PathOf(inputs.HomesRoot, name);
+            if (!Directory.Exists(homes))
+            {
+                return;
+            }
+
+            var opened = PrivateFolder.Open(inputs.HomesRoot, name, warn);
+            if (opened is PrivateFolderOutcome.Refused refused)
+            {
+                warn($"consultant homes: nothing is removed — {refused.Sentence}");
+                return;
+            }
+
+            using (((PrivateFolderOutcome.Opened)opened).Held)
+            {
+                Settle(ConsultantHomes.ConversationFolder(inputs.HomesRoot, name, consultationId));
             }
         }
 

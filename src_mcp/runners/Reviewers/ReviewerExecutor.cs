@@ -231,7 +231,11 @@ public abstract record ReviewerOutcome
     /// test pointed one provider at a missing binary and the exception took the whole ROUND down
     /// instead of one reviewer.
     /// </summary>
-    public sealed record NotStarted(string Reason) : ReviewerOutcome;
+    /// <param name="Reason">The sentence the person reads.</param>
+    /// <param name="ByLaunchControl">True when the adapter's launch control refused the launch (D5 of
+    /// <c>todo/PLAN_vibe_live_round_fixes.md</c>): the CLI is installed and coai's own check said no, so a consultation names
+    /// it <c>launch-refused</c>, never <c>cli-not-found</c>.</param>
+    public sealed record NotStarted(string Reason, bool ByLaunchControl = false) : ReviewerOutcome;
 
     /// <summary>
     /// A local reviewer the round chose NOT to launch, because the cloud reviewers had all answered and
@@ -888,7 +892,7 @@ public sealed class ReviewerExecutor(
         using var turn = invocation.Adapter is { } adapter ? await adapter.TakeTurnAsync(invocation, launcher, ct) : LaunchTurn.Free;
 
         return turn.Refusal.Length > 0
-            ? new ReviewerLaunch(new ReviewerOutcome.NotStarted(turn.Refusal), null, Usage.None, string.Empty)
+            ? new ReviewerLaunch(new ReviewerOutcome.NotStarted(turn.Refusal, ByLaunchControl: !turn.CliMissing), null, Usage.None, string.Empty)
             : (await LaunchTakenAsync(invocation, ct)) with { Warning = turn.Warning, CliVersion = turn.CliVersion };
     }
 

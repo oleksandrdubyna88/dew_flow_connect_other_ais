@@ -37,6 +37,15 @@ public sealed class VibeConsultant(VibeRuntime inner, string vendor = "vibe") : 
     /// <summary>M-V5: per turn.</summary>
     public bool UsageIsCumulative => false;
 
+    /// <summary>
+    /// For a question row only: the cap stopped a launch that cannot list its granted folder (RESULTS §28), so a question that names files
+    /// should name them exactly. A conversation turn or a check reports the same stop without this — it may not be a file question at all.
+    /// </summary>
+    public string QuestionRowAdvice(string reason) =>
+        VibeRuntime.IsACapStop(reason)
+            ? "if the question names files, name them exactly — Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28)"
+            : string.Empty;
+
     /// <summary>D6: a copy of the live tree, never the checkout.</summary>
     public bool NeedsASanitisedSnapshot => true;
 
@@ -56,13 +65,13 @@ public sealed class VibeConsultant(VibeRuntime inner, string vendor = "vibe") : 
         var model = launch.Settings.Model.Length > 0 ? launch.Settings.Model : VibeModels.Default;
         var argv = (string[])
         [
-            .. VibeRuntime.Arguments(Cwd(launch), VibeRuntime.ExportFolder(owned, role, Guid.NewGuid()), launch.Settings.Timeout, ReadOnly(launch)),
+            .. VibeRuntime.Arguments(Cwd(launch), VibeRuntime.ExportFolder(owned, role, Guid.NewGuid()), launch.Settings.Timeout, ReadOnly(launch), VibeLimits.ConsultantTurns),
             .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
         ];
         ConsultantLaunches.MustCarryNoLineBreak(argv);
         var request = VibeLaunch.Built(
             new ProcessRequest(Executable(launch.Settings), argv, Cwd(launch)) { StdIn = launch.Prompt, Timeout = launch.Settings.Timeout },
-            VibeRuntime.HomeFor(owned, vendor, role),
+            VibeRuntime.ConsultantHome(owned),
             model);
 
         return new ReviewerInvocation(

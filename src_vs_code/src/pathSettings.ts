@@ -79,6 +79,17 @@ export const QCONSULT_ROOTS: PathSetting = {
   place: 'consultants/qconsult', wireKey: 'COAI_QCONSULT_ROOTS', noun: 'folder', there: 'its server reads it there', instead: '', asksDisk: true,
 };
 
+/**
+ * Where coai keeps Mistral Vibe's homes (`coai-vh`, `coai-vibe`) — drawn on the Consultants page beside the Vibe rows. The server
+ * judges it (a full local path that exists; coai makes its folders there private) and the extension relays its answer, so the
+ * value is a folder the person made, short and local (D8 of `todo/PLAN_vibe_live_round_fixes.md`).
+ */
+export const VIBE_HOMES: PathSetting = {
+  id: 'coai.vibeHomesDirectory', setting: 'coai.vibeHomesDirectory', kind: 'folder', mustExist: true, saidBy: 'server',
+  place: 'consultants/consultant', wireKey: 'COAI_CONSULTANT_HOMES', noun: 'Vibe homes folder', there: 'its server keeps its Vibe homes there',
+  instead: ' and uses the default, the local application data', asksDisk: false,
+};
+
 /** A reviewer row's CLI — the one scalar path still drawn, on its Models card. */
 export const VENDOR_EXECUTABLE: PathSetting = {
   id: 'coai.vendors[].executablePath', setting: 'coai.vendors', kind: 'file', mustExist: true, saidBy: 'extension',
@@ -99,9 +110,10 @@ export const DATA_DIRECTORY: PathSetting = {
   instead: ' and uses the next choice', asksDisk: false,
 };
 
-/** Every path field this product reads — seven fields in seven settings (2026-10-09). */
+/** Every path field this product reads — eight fields in eight settings (2026-10-15: the Vibe homes folder joined). */
 export const PATH_SETTINGS: readonly PathSetting[] = [
   QCONSULT_ROOTS,
+  VIBE_HOMES,
   VENDOR_EXECUTABLE,
   legacyCli('coai.consultants.*.executablePath', 'coai.consultants'),
   legacyCli('coai.qconsultRows[].executablePath', 'coai.qconsultRows'),

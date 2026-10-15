@@ -3305,3 +3305,60 @@ fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
   before every launch) as `vibe 2.26.1` — never Vibe's raw line, which begins with the interpreter's path under the
   person's profile — through `ReviewerLaunch` and `ReviewerOutcome.CliVersion` to the line's `cliVersion`, when the row's
   own options carry none (`UsageLedger.VersionedBy`).
+
+## A Vibe home stays under MAX_PATH, is private to the person, and a consultant launch is capped (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+
+Four defects of the first live runs (RESULTS §27, §28), fixed together:
+
+```mermaid
+flowchart TD
+  L[VibeLaunch.TakeAsync] --> H[host D18] --> E[built environment D17] --> B[VibePathBudget.Refusal home]
+  B -->|over 102 characters on Windows| R[launch-refused: sentence names the number and COAI_CONSULTANT_HOMES]
+  B -->|fits| M[model D10] --> P[HomeMade: parent must exist] --> T[home turn] --> V[vibe --version] --> C[VibeHome.Refusal shape then hashes]
+  subgraph sites [every home is under one root]
+    RR[round: RoundScratch.Reserve] --> OS[VibeHomes.ReserveOneShot] --> PF[PrivateFolder.Open root coai-vh]
+    QR[question row / check] --> OS
+    CV[conversation: ConsultantPlaces.OwnedAsync] --> PF2[PrivateFolder.Open root coai-vibe]
+  end
+```
+
+- **`VibePathBudget`** (`Vibe/VibePathBudget.cs`) is the one adapter for the path numbers: Windows `FileLimit 259`, `DeepestChild 156`
+  (Vibe writes `logs\session\unified\<36>\chunks\.<64 hex>.json.<16 hex>.tmp` below its home: 134 persisted plus 22 for the atomic
+  write), counted in UTF-16 units. There is no budget off Windows (D18 refuses Vibe there first) and no long-paths exemption (the
+  registry flag is not proof that Vibe's interpreter is long-path aware; M-V18 measures it). It is resolved once in `VibeRuntime`'s
+  constructor from the PROCESS's platform (`ForThisProcess`), with `VibePathBudget.None` for a test and an `AsyncLocal` seam (`Using`)
+  for a scenario that drives the real service. It is checked in `VibeLaunch.TakeAsync` right after the environment, before the home
+  is made or `--version` runs. Home lengths at the default root: round `47 + u` (fits a 55-character profile name), row and check
+  `42 + u` (60), conversation `68 + u` (34).
+- **`VibeHomes`** (`Vibe/VibeHomes.cs`) makes `<root>\coai-vh\<8 hex>` (the pinned `coai-vh` handle is released on EVERY way out of `ReserveOneShot` that does not move it into the home: a refused lock, a throw while the folder is made; `OneShotSteps` / `HomeIo` are the seams a test uses for a folder that cannot be made, listed or removed). `ReserveOneShot` returns an `OneShotReservation` (`None` for an
+  empty root, so settings built by hand keep their old scratch home; `Refused(sentence)`; `Reserved(OneShotHome)`). The `OneShotHome`
+  holds the folder's `coai-turn.lock` and the private folder's handle for its life and deletes the folder on every way out.
+  `SweepOneShot` (called from `PanelService.PruneOldAnswerDirs(homesRoot)`, at most every ten minutes) removes a folder older than six
+  hours under its lock; the lock, not the age, protects a live home across two servers on one root, and a link is never entered.
+  `coai-vh` is a sibling of `coai-vibe` OUTSIDE `ConsultantHomes.All`, so the D20 conversation sweep never judges it. Home names: round
+  `<8>\<6 hex of provider/role>`, row and check `<8>\h`, conversation `<id>\h`. A Vibe export lives beside the home in the same owned
+  folder (`VibeRuntime.OwnedOr`), outside `VibeHome.Refusal`'s walk.
+- **`PrivateFolder`** (`Files/PrivateFolder.cs`, D7 per the security review) is the ONE entry into `<root>\coai-*`. Its Windows half is three files by what they do, so the rules run on every OS: **`PrivateAcl`** (`Files/PrivateAcl.cs`) holds every rule as a pure function of `AclFacts` (owner, protected, entries as `AceFact`s with SIDs as text): the wanted DACL, `IsExactlyOurs`, the owner rule, `NeedsReset` / `Inherited` for descendants, `Exposure` (who could read or modify a wide folder) and every refusal sentence. **`PrivateFolderWindows`** (`Files/PrivateFolderWindows.cs`) is the flow over an `IFolderShell` (create, open, final path, read, replace, walk the children, reset); the Linux suite drives it through a fake shell. **`PrivateFolderWindowsNative`** (`Files/PrivateFolderWindowsNative.cs`) is the shell: `[LibraryImport]` declarations and handles only, no `unsafe` code (the wanted descriptor is a pinned managed array), reading a real descriptor with `RawSecurityDescriptor` into facts. `RawSecurityDescriptor` and `SecurityIdentifier` throw `PlatformNotSupportedException` on .NET 10 Linux (measured), which is why the facts are plain records. The shell is the one file in `sonar.coverage.exclusions` for this work (SonarCloud analyses on Linux; `PrivateFolderWindowsTests` run it in the `windows-latest` job). A structural test
+  (`PrivateFolderTests.EveryEntryIntoACoaiFolderUnderTheHomesRoot_GoesThroughPrivateFolder`) fails on any other `Path.Combine` with the
+  root or a `coai-*` name. The root must be absolute, local and EXIST (coai never creates it). On Windows a missing folder is created
+  atomically with a protected DACL of the person, SYSTEM and Administrators (SIDs). Every folder is then verified BY HANDLE: ONE handle is opened (read-control, attributes, list-directory, a data right because a handle of attributes alone records no share mode, measured by E7, and WRITE_DAC when the person may; shared read and write, never delete), and through that handle its final path must equal `<canonical root>/<name>` component by component (a link or a swap is refused), its owner must be the person or Administrators (another owner is refused, naming it) and its DACL exactly the three Allow entries. A wrong DACL on the person's own folder is re-ACLed through the same handle with one log line saying who could read or modify it until now, and then EVERY DESCENDANT is walked (a link is never entered or touched) and reset to inherit when it holds an explicit entry or a protected DACL: propagation replaces only inherited entries, so without the walk an explicit `Everyone: Read` on a transcript survived 'made private'; a child that cannot be reset refuses the folder by name. The walk runs only when the parent itself needed the re-ACL (a stated limit). The handle that was verified is the handle that is HELD (E10: a folder renamed away and replaced during the re-ACL cannot be handed back; a folder somebody holds open for delete cannot be opened at all). On Unix the folder is created `0700` and must not be a symlink; a pre-existing one with a group or other bit is MIGRATED as on Windows (a wrong DACL of the person's own folder is re-ACLed): `chmod 0700` only succeeds for its owner or root, so success is the owner check, the mode is read back, and one line says what it was; a chmod that fails refuses the folder naming its mode (`PrivateFolder.UnixVerdict`, a pure function over a mode and what chmod does). There is no walk of the children on Unix: a 0700 parent stops anyone else traversing it, and a normal user has no bypass-traverse privilege. Limits: a local administrator and SYSTEM are outside the threat model;
+  re-ACLing does not undo contents planted while the folder was wide (the per-launch home check judges those), and the walk checks every child's OWNER: one that is not the person or Administrators refuses the folder by name, because an owner holds an implicit WRITE_DAC and could widen the DACL again right after the reset; a `coai-*` folder
+  another user made first on a shared root cannot be deleted by the person, so the cure is another folder. `VibeLaunch.HomeMade` makes
+  only the home, never the chain above it.
+- **A launch-control refusal is `launch-refused`.** `ReviewerOutcome.NotStarted.ByLaunchControl` is set from `LaunchTurn`, whose
+  `CliMissing` marks the one refusal that IS a missing CLI (`Win32Exception` 2 or 3 from `--version`). `ConsultFailure.LaunchRefused`
+  (`shared/consult-failure-kinds.json`, the extension's label map) keeps the whole sentence under `Redaction.TitleLimit`, so its cure
+  ("delete {home}", "set COAI_CONSULTANT_HOMES") reaches the person. A `--version` that started and printed no release is
+  `launch-refused` with both cures.
+- **A second turn starts on the home its first left.** In the manifest (`shared/vibe-home-manifest.json`, generated by
+  `scripts/vibe-home-manifest.mjs`), `logs/session/plugins/tmp/**` joins `varying` (Vibe's re-digested staging folder, judged before
+  the pinned prefix, starters still refused) and the new `varyingFolders` admits `logs/session/plugins/data/**` as EMPTY folders (a file directly under `data/` is refused too)
+  only; Vibe adopts a plugin's runtime code from there unchecked, so any file is refused. `deepestChild` is recorded per version (156
+  for 2.26.1, by hand once, from run 2's failing path).
+- **`VibeLimits.ConsultantTurns = 20`.** `VibeConsultant.Build` adds `--max-turns 20` after `--time-limit` (question row, conversation
+  turn, consultant check); a review (`VibeRuntime.Build`, retry, repair) never carries it. `WhyItFailed` says `turn_limit` and
+  `token_limit` as coai's neutral sentence (only that coai's cap stopped the launch before it answered: a conversation turn or a check may not be a file question at all, and a productive investigation can use its budget up too; the file-search guidance "if the question names files, name them exactly, Vibe cannot list a folder" is `IConsultantRuntime.QuestionRowAdvice`, which only the QUESTION ROW's report appends), and `ConsultFailures` follows the scheduler's precedence: a stderr line that announces a failure first (`ReviewerSummaryFactory.StderrAnnouncesAFailure`, the rule `Because` uses), then the adapter's reading, then a stderr label that announces nothing. The cause (no listing) is
+  [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md).
+- **M-V18 note (2026-10-15, the judge).** `VibePathBudget` measures `Path.GetFullPath`, which keeps 8.3 short names as written. If Vibe's interpreter resolves the real path, a folder named `RUNNER~1` is longer than the budget counted. M-V18 must measure that before the budget is relaxed or trusted at its edge.
+- **`LaunchTurn.Refused` states its cause** (code gate 2026-10-15): `RefusalCause { LaunchControl, CliMissing }` is REQUIRED, so an adapter's refusal never reads as coai's own launch check by default (Kimi's launch will call it too); `ReviewerExecutor` maps only `LaunchControl` to `NotStarted.ByLaunchControl`.
+- **Install cure is per OS** (`VendorDiagnosis.InstallCure`: `uv tool install mistral-vibe` on Windows, Mistral's script on Linux), so `VibeLaunchControlTests.TheKind_…` compares with the platform's own cure instead of spelling the Windows one. Fixed after: the default was `OperatingSystem.IsLinux()`, which gave macOS the Windows commands (uv, and Google's PowerShell line) although the vendors' scripts serve Linux and macOS; `InstallCure(runtime, HostKind)` is the seam, and only Windows gets the uv and PowerShell forms (`EveryHostButWindows_GetsTheVendorsShellScript`, first red: the `MacOs` case got `install it with uv…`).

@@ -225,6 +225,7 @@ const OWNERS: Readonly<Record<string, string>> = {
   'coai.vendors[].executablePath': 'The CLI path',
   'coai.alsoWatchDataDirectories': "Another installation's data folder",
   'coai.dataDirectory': "This window's data folder",
+  'coai.vibeHomesDirectory': 'The Vibe homes folder',
 };
 
 /** What this side does without the value — the title's second half. */
@@ -233,6 +234,7 @@ const CONSEQUENCES: Readonly<Record<string, string>> = {
   'coai.vendors[].executablePath': 'that model cannot run here until it is.',
   'coai.alsoWatchDataDirectories': 'its questions are not answered here until it is.',
   'coai.dataDirectory': 'nothing is written there until it exists.',
+  'coai.vibeHomesDirectory': 'a Vibe launch is refused until it exists (coai never creates it).',
 };
 
 const CURES: Readonly<Record<string, string>> = {
@@ -240,6 +242,7 @@ const CURES: Readonly<Record<string, string>> = {
   'coai.vendors[].executablePath': 'Install the CLI there, correct the path on its Models card, or clear it to look the CLI up on PATH.',
   'coai.alsoWatchDataDirectories': 'Connect the machine or share holding it, or remove it from the list in Settings › Setup › MCP server.',
   'coai.dataDirectory': 'Connect the drive, create the folder, or choose another in Settings › Setup › MCP server.',
+  'coai.vibeHomesDirectory': 'Create a short local folder of your own, or clear the setting to use the default, in Settings › Consultants › Consultant.',
 };
 
 /** The registry entry a finding is about — every finding is made from one, so a miss is a programming error. */

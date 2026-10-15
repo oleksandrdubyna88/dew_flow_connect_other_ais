@@ -35,6 +35,18 @@ internal sealed class PlayedVibe(IProcessLauncher inner, string answer) : IProce
     /// <summary>The answer to a turn, from what it was given — by default the one answer the stand-in was made with.</summary>
     public Func<Seen, string> AnswerFor { get; init; } = _ => answer;
 
+    /// <summary>The export's <c>outcome</c> — <c>finished</c> unless a test plays a stopped run (<c>turn_limit</c>, <c>deadline</c>).</summary>
+    public string Outcome { get; init; } = "finished";
+
+    /// <summary>The turn's exit code — 3 for a run Vibe itself stopped (its limits), which still writes its export.</summary>
+    public int TurnExit { get; init; }
+
+    /// <summary>What a stopped turn prints on stderr (<c>Stopped: turn_limit</c>).</summary>
+    public string TurnStdErr { get; init; } = string.Empty;
+
+    /// <summary>The export's usage, input and output tokens.</summary>
+    public (long In, long Out) Usage { get; init; } = (1200, 34);
+
     /// <summary>Runs during a turn, after it is recorded — a test's seam for a cancellation in flight.</summary>
     public Func<CancellationToken, Task> During { get; init; } = static _ => Task.CompletedTask;
 
@@ -57,22 +69,22 @@ internal sealed class PlayedVibe(IProcessLauncher inner, string answer) : IProce
         await During(ct);
         await ExportAsync(request, ct);
 
-        return new ProcessResult(0, JsonSerializer.Serialize(new object[]
+        return new ProcessResult(TurnExit, JsonSerializer.Serialize(new object[]
         {
             new Dictionary<string, object> { ["role"] = "user", ["content"] = "q", ["sessionId"] = Session },
             new Dictionary<string, object> { ["role"] = "assistant", ["content"] = AnswerFor(seen), ["sessionId"] = Session },
-        }), string.Empty, TimedOut: false);
+        }), TurnStdErr, TimedOut: false);
     }
 
-    private static async Task ExportAsync(ProcessRequest request, CancellationToken ct)
+    private async Task ExportAsync(ProcessRequest request, CancellationToken ct)
     {
         var export = request.Arguments[request.Arguments.ToList().IndexOf("--output-dir") + 1];
         Directory.CreateDirectory(export);
         await File.WriteAllTextAsync(Path.Combine(export, VibeExport.FileName), JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            ["outcome"] = "finished",
+            ["outcome"] = Outcome,
             ["session_id"] = Session,
-            ["usage"] = new Dictionary<string, long> { ["input_tokens"] = 1200, ["output_tokens"] = 34, ["cached_input_tokens"] = 0 },
+            ["usage"] = new Dictionary<string, long> { ["input_tokens"] = Usage.In, ["output_tokens"] = Usage.Out, ["cached_input_tokens"] = 0 },
             ["config"] = new Dictionary<string, string> { ["active_model"] = request.Environment[VibeLaunch.ModelVariable]! },
         }), ct);
     }

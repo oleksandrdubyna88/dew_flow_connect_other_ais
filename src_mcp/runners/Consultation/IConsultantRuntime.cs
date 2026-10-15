@@ -195,6 +195,13 @@ public interface IConsultantRuntime : IAnsweringRuntime
     bool UsageIsCumulative => false;
 
     /// <summary>
+    /// What a QUESTION ROW's failure report adds, beyond the launch's own reason, about `reason` — the vendor's sentence for why the launch
+    /// stopped. Empty for every vendor but one: only a question has files it was meant to name, so a conversation turn or a check, which
+    /// reports the same stop, never carries this advice (D6 of <c>todo/PLAN_vibe_live_round_fixes.md</c>).
+    /// </summary>
+    string QuestionRowAdvice(string reason) => string.Empty;
+
+    /// <summary>
     /// Whether this consultant must run in a coai-owned SANITISED SNAPSHOT of the live tree rather than in the checkout
     /// (D6 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>; the unit is <c>Snapshots/ReviewSnapshots</c>).
     /// </summary>

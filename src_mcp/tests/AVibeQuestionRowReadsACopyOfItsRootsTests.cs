@@ -63,9 +63,13 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         }
     }
 
-    private PanelService Service(PlayedVibe vibe, params string[] roots) => new(
+    private PanelService Service(PlayedVibe vibe, params string[] roots) => ServiceOn(vibe, string.Empty, roots);
+
+    /// <summary>The service with a homes root: a home-keeping row reserves its one-shot folder there (D1).</summary>
+    private PanelService ServiceOn(PlayedVibe vibe, string homesRoot, params string[] roots) => new(
         new PanelSettings
         {
+            ConsultantHomesRoot = homesRoot,
             Providers = [],
             Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
             DataDir = _dir.At("data"),
@@ -102,6 +106,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ASubFolderGrant_CopiesOnlyThatSubFolder_WithoutTheBranchsConfiguration_AndThePromptNamesTheCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
         var granted = Path.Combine(Repo, "src");
 
@@ -121,6 +126,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task TwoRoots_BothArrive_EachInItsOwnCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
 
         var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src"), Other));
@@ -148,10 +154,36 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         vibe.Turns.Should().BeEmpty();
     }
 
+    /// <summary>D1/D7 on every OS: a homes root that is not there refuses the row with the root's own sentence, before a copy or a launch.</summary>
+    [Fact]
+    public async Task ARowWhoseHomesRootDoesNotExist_IsRefusedWithTheRootsSentence_AndNothingStarts()
+    {
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(ServiceOn(vibe, _dir.At("no-such-homes"), Path.Combine(Repo, "src")));
+
+        TheRowWasRefusedFor(reply, "does not exist");
+        NothingOfVibesStarted(vibe);
+    }
+
+    /// <summary>A row refused at its copy had already reserved its one-shot folder: it is given back on that way out too.</summary>
+    [Fact]
+    public async Task ARowRefusedAtItsCopy_GivesItsOneShotFolderBack()
+    {
+        var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(ServiceOn(vibe, Homes, plain));
+
+        TheRowWasRefusedFor(reply, "not inside a Git work tree");
+        TheHomesFolderIsEmpty();
+    }
     [Fact]
     public async Task ARowTheLaunchControlRefuses_LeavesNoHomeAndNoCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice) { VersionExit = 1 };
 
         var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
@@ -165,6 +197,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowCancelledInFlight_LeavesNoHomeAndNoCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var vibe = new PlayedVibe(_launcher, Advice)
         {
@@ -180,6 +213,131 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         await asking.Should().ThrowAsync<OperationCanceledException>();
         Directory.Exists(RowFolderOf(vibe.Turns.Should().ContainSingle().Subject.Request)).Should().BeFalse(
             "the row's home and copy go in finally, whatever ended it");
+    }
+
+    /// <summary>K5: Vibe stopped at coai's turn cap — a failed row with coai's sentence and the usage read from the export, never zero.</summary>
+    [Fact]
+    public async Task ARowThatHitsTheTurnCap_FailsWithCoaisSentence_AndItsUsageIsRead()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var vibe = new PlayedVibe(_launcher, string.Empty)
+        {
+            Outcome = "turn_limit",
+            TurnExit = 3,
+            TurnStdErr = "Stopped: turn_limit\r\n",
+            Usage = (84186, 1395),
+        };
+
+        var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
+
+        var row = TheRow(reply);
+        row.GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
+        row.GetProperty("reason").GetString().Should().StartWith("exit 3: Vibe stopped at coai's cap of 20 assistant turns")
+            .And.Contain("name them exactly").And.Contain("Vibe cannot list a folder", "the row's own report carries the file-search guidance");
+        vibe.Turns.Should().ContainSingle().Which.Request.Arguments.Should().ContainInConsecutiveOrder("--max-turns", "20");
+        var billed = File.ReadAllLines(_dir.At("data", "usage.jsonl")).Select(line => JsonDocument.Parse(line).RootElement).Should().ContainSingle("one ledger line for the turn").Subject;
+        billed.GetProperty("tokensIn").GetInt64().Should().Be(84186, "read from the export, never zero");
+        billed.GetProperty("tokensOut").GetInt64().Should().Be(1395);
+    }
+
+    // ---------- the home is short and owned (D1 of todo/PLAN_vibe_live_round_fixes.md, A9) ----------
+
+    private string Homes => Directory.CreateDirectory(_dir.At("homes")).FullName;
+
+    private void TheHomesFolderIsEmpty() =>
+        Directory.EnumerateFileSystemEntries(Path.Combine(Homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the row's folder under coai-vh is deleted on every way out");
+
+    [Fact]
+    public async Task ARowsHome_IsUnderTheHomesRootsCoaiVh_ShortEnough_AndGoneAfterTheAnswer()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(ServiceOn(vibe, Homes, Path.Combine(Repo, "src")));
+
+        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+        var home = vibe.Turns.Should().ContainSingle().Subject.Request.Environment[VibeLaunch.HomeVariable]!;
+        Path.GetFileName(home).Should().Be("h");
+        Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(Homes, VibeHomes.OneShotFolder));
+        // Not an absolute length: the root is under this machine's TEMP, whatever its length. What the layout costs beyond the root is
+        // `/coai-vh/<8>/h` — 19 characters — and that is what fits the Windows budget at the default root (D1's table).
+        (home.Length - Homes.Length).Should().BeLessThanOrEqualTo(19);
+        TheHomesFolderIsEmpty();
+    }
+
+    /// <summary>The row reserves its one-shot folder, and its scratch folder is made too: when making the scratch throws, the reservation must not stay behind.</summary>
+    [Fact]
+    public async Task ARowWhoseScratchFolderCannotBeMade_LeavesNoFolderUnderCoaiVh()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        var admitted = (RowAdmission.Admitted)QuestionAdmission.Admit(
+            new QuestionRow("vibe-disk", "mistral", "vibe", "glm-5-3", string.Empty, PlayedVibe.Exe, string.Empty, "question-disk", Enabled: true),
+            new QuestionConsultSettings { Roots = [Path.Combine(Repo, "src")] }, [], Core.Api.ApiOverrides.None);
+        var input = new RowLaunchInput(
+            admitted, "Which helper retries?", new Runners.Reviewers.ReviewerSettings("vibe") { ExecutablePath = PlayedVibe.Exe, Model = "glm-5-3", Timeout = TimeSpan.FromSeconds(30) },
+            Repo, Directory.CreateDirectory(_dir.At("answers")).FullName, string.Empty, TimeSpan.FromSeconds(30))
+        {
+            ChangesSoFar = _ => Task.FromResult<IReadOnlyList<Core.Consultation.TreeChange>>([]),
+        };
+        var launch = new QuestionRowLaunch(new Runners.Reviewers.ReviewerExecutor(_launcher), new Runners.Reviewers.UsageLedger(_dir.At("data")), Logger.None, _launcher, Homes)
+        {
+            MakeScratch = () => throw new IOException("the scratch folder could not be made"),
+        };
+
+        var running = () => launch.RunAsync(input, new QuestionRowRecord("vibe-disk", "mistral", "glm-5-3", "vibe", "question-disk", "Projects on this disk", "disk", "default-deny"), TestContext.Current.CancellationToken);
+
+        await running.Should().ThrowAsync<IOException>();
+        TheHomesFolderIsEmpty();
+    }
+
+    [Fact]
+    public async Task ARowTheLaunchControlRefuses_LeavesNoFolderUnderCoaiVh()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var vibe = new PlayedVibe(_launcher, Advice) { VersionExit = 1 };
+
+        var reply = await AskAsync(ServiceOn(vibe, Homes, Path.Combine(Repo, "src")));
+
+        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
+        TheHomesFolderIsEmpty();
+    }
+
+    [Fact]
+    public async Task ARowCancelledInFlight_LeavesNoFolderUnderCoaiVh()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var vibe = new PlayedVibe(_launcher, Advice)
+        {
+            During = async ct =>
+            {
+                await caller.CancelAsync();
+                ct.ThrowIfCancellationRequested();
+            },
+        };
+
+        var asking = async () => await AskAsync(ServiceOn(vibe, Homes, Path.Combine(Repo, "src")), caller.Token);
+
+        await asking.Should().ThrowAsync<OperationCanceledException>();
+        TheHomesFolderIsEmpty();
+    }
+
+    /// <summary>A12: settings built by hand have no homes root, so the row keeps its home in its own scratch — never the machine's folder.</summary>
+    [Fact]
+    public async Task WithNoHomesRoot_TheRowKeepsItsHomeInItsOwnScratch()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
+
+        var home = vibe.Turns.Should().ContainSingle().Subject.Request.Environment[VibeLaunch.HomeVariable]!;
+        Path.GetFileName(Path.GetDirectoryName(home)).Should().StartWith("coai-question-", "no root: the home stays in the row's own scratch, as before");
     }
 
     // ---------- links in and around a granted root (P1 of the plan round) ----------
@@ -257,6 +415,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task OverlappingGrants_StandInCopiesOfAuthorisedBytes_AndThePromptNamesOnlyTheCopies()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
         var inner = Path.Combine(Repo, "src");
 

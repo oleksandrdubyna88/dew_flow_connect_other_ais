@@ -32,6 +32,13 @@ public sealed record VibeHomeManifest(string PinnedPrefix, IReadOnlyList<string>
 {
     private const string Resource = "CoaiMcp.Runners.vibe-home-manifest.json";
 
+    /// <summary>
+    /// Globs of FOLDERS that are admitted — and no file under them (D4 of <c>todo/PLAN_vibe_live_round_fixes.md</c>): a plugin's
+    /// per-session data, where Vibe adopts runtime code without re-checking it, so only its empty folders are Vibe's own. Absent
+    /// in an older manifest, so it loads as none.
+    /// </summary>
+    public IReadOnlyList<string> VaryingFolders { get; init; } = [];
+
     /// <summary>The manifest this build was shipped with, or the sentence that says why it cannot be read.</summary>
     public static VibeManifestLoad Builtin { get; } = Load();
 
@@ -57,7 +64,7 @@ public sealed record VibeHomeManifest(string PinnedPrefix, IReadOnlyList<string>
     private static VibeManifestLoad Validated(ManifestFile? file) =>
         file is { PinnedPrefix: { Length: > 0 } prefix, Varying.Count: > 0, Versions.Count: > 0 }
         && file.Versions.All(Complete)
-            ? new VibeManifestLoad.Loaded(new VibeHomeManifest(prefix, [.. file.Varying], [.. file.Versions.Select(Entry)]))
+            ? new VibeManifestLoad.Loaded(new VibeHomeManifest(prefix, [.. file.Varying], [.. file.Versions.Select(Entry)]) { VaryingFolders = [.. file.VaryingFolders ?? []] })
             : new VibeManifestLoad.Broken("shared/vibe-home-manifest.json lacks its pinned prefix, its varying names or a complete version entry");
 
     private static bool Complete(ManifestVersion? version) =>
@@ -99,6 +106,8 @@ internal sealed record ManifestFile
     public string? PinnedPrefix { get; init; }
 
     public IReadOnlyList<string>? Varying { get; init; }
+
+    public IReadOnlyList<string>? VaryingFolders { get; init; }
 
     public IReadOnlyList<ManifestVersion?>? Versions { get; init; }
 }

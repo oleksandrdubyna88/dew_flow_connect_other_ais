@@ -1,5 +1,15 @@
 namespace CoaiMcp.Runners.Reviewers;
 
+/// <summary>Why an adapter refused a launch — the one distinction a consultation's failure kind depends on.</summary>
+public enum RefusalCause
+{
+    /// <summary>coai's own launch check said no to a CLI that is installed (a home, a path, a model, an unreadable version): <c>launch-refused</c>.</summary>
+    LaunchControl,
+
+    /// <summary>There is no CLI to start (the OS says the file or its path is not there): <c>cli-not-found</c>, with the install cure.</summary>
+    CliMissing,
+}
+
 /// <summary>
 /// What an adapter answered when the executor asked to start one launch: go (holding whatever the launch needs until it
 /// has been read), or a refusal with the sentence the reviewer's failure carries.
@@ -19,9 +29,10 @@ public sealed class LaunchTurn : IDisposable
     private readonly IDisposable? _held;
     private bool _given;
 
-    private LaunchTurn(string refusal, IDisposable? held, string warning = "", string cliVersion = "")
+    private LaunchTurn(string refusal, IDisposable? held, string warning = "", string cliVersion = "", bool cliMissing = false)
     {
         Refusal = refusal;
+        CliMissing = cliMissing;
         _held = held;
         Warning = warning;
         CliVersion = cliVersion;
@@ -31,7 +42,12 @@ public sealed class LaunchTurn : IDisposable
     public static LaunchTurn Free => new(string.Empty, null);
 
     /// <summary>Do not start it — the sentence names what was found and what cures it.</summary>
-    public static LaunchTurn Refused(string reason) => new(reason, null);
+    /// <param name="cause">REQUIRED, with no default: every caller states WHY (D5 of <c>todo/PLAN_vibe_live_round_fixes.md</c>). A default
+    /// would make an adapter's refusal read as coai's own launch check saying no to an installed CLI, whatever it really was.</param>
+    public static LaunchTurn Refused(string reason, RefusalCause cause) => new(reason, null, cliMissing: cause == RefusalCause.CliMissing);
+
+    /// <summary>Whether a refusal is a missing CLI rather than the launch control's own verdict.</summary>
+    public bool CliMissing { get; }
 
     /// <summary>
     /// Start it, and give <paramref name="held"/> back once the launch has been read — with <paramref name="warning"/>, the

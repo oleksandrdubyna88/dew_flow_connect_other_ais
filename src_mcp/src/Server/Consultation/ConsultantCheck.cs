@@ -6,6 +6,7 @@ using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Vibe;
 
 namespace CoaiMcp.Server;
 
@@ -201,9 +202,29 @@ internal sealed class ConsultantCheckTurn(
         // with the consultant's home beside it (D6, D17) — gone with the scratch.
         using var place = await PlaceAsync(turn, ct);
 
-        return place.Refusal.Length > 0
-            ? Failed(turn.Checking, turn.Row, new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure), Usage.None, turn.Clock.Elapsed)
-            : await InPlaceAsync(turn, place, killedAs, ct);
+        if (place.Refusal.Length > 0)
+        {
+            return Failed(turn.Checking, turn.Row, new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure), Usage.None, turn.Clock.Elapsed);
+        }
+
+        // The consultant's home, short and under the homes root (D1 of todo/PLAN_vibe_live_round_fixes.md), owned for this one turn.
+        var homes = turn.Runtime.HomesFolder.Length > 0 ? VibeHomes.ReserveOneShot(settings.ConsultantHomesRoot, warn) : OneShotReservation.None.Instance;
+        if (homes is OneShotReservation.Refused refused)
+        {
+            return Failed(turn.Checking, turn.Row, new ConsultFailure.LaunchRefused(refused.Sentence), Usage.None, turn.Clock.Elapsed);
+        }
+
+        try
+        {
+            return await InPlaceAsync(turn, place, homes is OneShotReservation.Reserved reserved ? reserved.Home.Folder : place.Folder, killedAs, ct);
+        }
+        finally
+        {
+            if (homes is OneShotReservation.Reserved held)
+            {
+                held.Home.Dispose();
+            }
+        }
     }
 
     private async Task<ConsultantPlace> PlaceAsync(Turn turn, CancellationToken ct) =>
@@ -211,12 +232,12 @@ internal sealed class ConsultantCheckTurn(
             ? await _places.OneShotAsync(Path.Combine(turn.Scratch.Root, OwnName), [turn.Scratch.Repo], turn.Budget, ct)
             : ConsultantPlace.Checkout;
 
-    private async Task<ConsultCheckRecord> InPlaceAsync(Turn turn, ConsultantPlace place, Func<ConsultFailure> killedAs, CancellationToken ct)
+    private async Task<ConsultCheckRecord> InPlaceAsync(Turn turn, ConsultantPlace place, string homeFolder, Func<ConsultFailure> killedAs, CancellationToken ct)
     {
         // BEFORE the preparation, as a consultation takes it: whatever the preparation does is inside the comparison.
         var before = await _invariant.SnapshotAsync(turn.Scratch.Repo, ct);
         var canary = Fingerprint(turn.Scratch.CanaryPath);
-        var prepared = await turn.Runtime.PrepareAsync(await LaunchAsync(turn, place, ct), launcher, ct);
+        var prepared = await turn.Runtime.PrepareAsync(await LaunchAsync(turn, place, homeFolder, ct), launcher, ct);
         if (prepared is ConsultantPreparation.Refused refused)
         {
             warn($"consultant check: {turn.Row.Provider} was not launched — {refused.Failure.What(turn.Row.Provider)}");
@@ -237,7 +258,7 @@ internal sealed class ConsultantCheckTurn(
     private const string OwnName = "own";
 
     /// <summary>The launch a consultation's first turn would get, in the scratch repository — or in its copy (D6).</summary>
-    private async Task<ConsultantLaunch> LaunchAsync(Turn turn, ConsultantPlace place, CancellationToken ct)
+    private async Task<ConsultantLaunch> LaunchAsync(Turn turn, ConsultantPlace place, string homeFolder, CancellationToken ct)
     {
         var copy = place.Roots is [var only] ? only : string.Empty;
         var (sha, branch) = await context.HeadAsync(turn.Scratch.Repo, ct);
@@ -257,7 +278,7 @@ internal sealed class ConsultantCheckTurn(
         var schema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
 
         return new ConsultantLaunch(turn.Scratch.Repo, prompt, string.Empty, answers,
-            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings, keys) with { OwnedScratch = place.Folder }, schema.Path)
+            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings, keys) with { OwnedScratch = homeFolder }, schema.Path)
         {
             Workdir = copy,
         };

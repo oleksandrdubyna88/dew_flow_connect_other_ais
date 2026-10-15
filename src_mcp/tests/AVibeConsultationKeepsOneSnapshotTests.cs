@@ -26,7 +26,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     private const string Session = PlayedVibe.Session;
 
     /// <summary>The homes root, inside the scenario's data directory — removed with it, and never the machine's own local data.</summary>
-    private string Homes => Path.Combine(_data, "homes");
+    private string Homes => Directory.CreateDirectory(Path.Combine(_data, "homes")).FullName;
 
     private static readonly IReadOnlyDictionary<string, ConsultantChoice> OnVibe = new Dictionary<string, ConsultantChoice>
     {
@@ -48,6 +48,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     public async Task TwoTurns_StandInOneSnapshot_RefreshedInPlace_OnOneHome_AndTheCloseTakesTheFolder()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows — the launch control's tests pin that refusal");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
         await BranchConfigurationAsync();
         var vibe = new PlayedVibe(_launcher, Advice);
@@ -76,7 +77,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         turns[0].Request.Arguments.Should().NotContain("--resume");
         turns[1].Request.Arguments.Should().ContainInConsecutiveOrder("--resume", Session);
         turns.Select(turn => turn.Request.Environment[VibeLaunch.HomeVariable]).Distinct().Should().ContainSingle()
-            .Which.Should().StartWith(folder + Path.DirectorySeparatorChar, "D17: the conversation's own home, kept across its turns");
+            .Which.Should().Be(Path.Combine(folder, "h"), "D17 and A11: the conversation's own home, `h` in its folder, the same on every turn");
         turns.Should().OnlyContain(turn => turn.Request.StdIn.Contains(tree, StringComparison.OrdinalIgnoreCase)
             && !turn.Request.StdIn.Contains("checkout at " + _repo, StringComparison.OrdinalIgnoreCase),
             "the prompt names the copy Vibe can read, never the checkout it cannot (M-V11)");
@@ -96,6 +97,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     public async Task ATurnStampsItsFolderWithItsStore_HoldsItsLockWhileItRuns_AndEndsTheStamp()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
         var seenDuring = new List<Runners.Files.Hold>();
         string folder = string.Empty;
@@ -137,6 +139,93 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         place.Refusal.Should().Contain("is a link");
         Directory.EnumerateFileSystemEntries(elsewhere).Should().BeEmpty("no snapshot, stamp or lock is written through the link");
         DirectoryLink.Remove(folder);
+    }
+
+    /// <summary>K6: a stuck consultant's turn that hits the cap is an exit with coai's sentence — never cli-not-found or launch-refused.</summary>
+    [Fact]
+    public async Task ATurnThatHitsTheTurnCap_IsAnExitWithCoaisSentence()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var vibe = new PlayedVibe(_launcher, Advice) { Outcome = "turn_limit", TurnExit = 3, TurnStdErr = "Stopped: turn_limit\r\n", Usage = (84186, 1395) };
+
+        var reply = await Consult(Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes), "why is the count wrong");
+
+        var said = Refusal(reply);
+        said.Should().Contain("(failure: exit)").And.Contain("Vibe stopped at coai's cap of 20 assistant turns");
+        said.Should().NotContain("cli-not-found").And.NotContain("launch-refused");
+        said.Should().NotContain("list a folder", "a conversation turn may not be a file question at all — it gets the plain cap sentence");
+    }
+
+    /// <summary>D6 (second case) and A4: a home that would pass Windows' path limit is refused BEFORE the home is made, and the answer says what to set.</summary>
+    [Fact]
+    public async Task AHomeThatWouldPassTheWindowsPathLimit_IsLaunchRefused_BeforeAnythingStarts()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the path budget is Windows' (D2); off Windows there is none");
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var vibe = new PlayedVibe(_launcher, Advice);
+        var longRoot = Path.Combine(_data, new string('r', 50));
+        Directory.CreateDirectory(longRoot);
+
+        var reply = await Consult(Service(providers: [], consultants: OnVibe, launcher: vibe, homes: longRoot), "why is the count wrong");
+
+        var said = Refusal(reply);
+        said.Should().Contain("(failure: launch-refused)").And.Contain("COAI_CONSULTANT_HOMES").And.Contain("characters long");
+        said.Should().NotContain("uv tool install");
+        vibe.Turns.Should().BeEmpty();
+        vibe.Versions.Should().BeEmpty("the budget is the first check after the environment: not even `--version` ran");
+    }
+
+    /// <summary>C7: turn 1 makes the two empty folders in Vibe's home; turn 2 starts on that home with `--resume` and answers.</summary>
+    [Fact]
+    public async Task ASecondTurn_StartsOnTheHomeTheFirstLeft_WhenTurnOneMadeVibesTwoEmptyFolders()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        PlayedVibe? vibe = null;
+        vibe = new PlayedVibe(_launcher, Advice)
+        {
+            During = _ =>
+            {
+                var home = vibe!.Turns.Last().Request.Environment[VibeLaunch.HomeVariable]!;
+                Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "data", "193149ad-d8e5-069e-8f34-aece24b2623d", "vibe"));
+                Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "tmp"));
+                return Task.CompletedTask;
+            },
+        };
+        var service = Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes);
+        var first = await Consult(service, "why is the count wrong");
+        first.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
+
+        var second = await Consult(service, "and now?", first.GetProperty("consultationId").GetString()!);
+
+        second.TryGetProperty("error", out error).Should().BeFalse(error.ToString());
+        vibe.Turns.Should().HaveCount(2);
+        vibe.Turns.Last().Request.Arguments.Should().ContainInConsecutiveOrder("--resume", Session);
+    }
+
+    /// <summary>D6 of PLAN_vibe_live_round_fixes.md: a home the launch control refuses is `launch-refused` with its whole cure, never a missing CLI.</summary>
+    [Fact]
+    public async Task AHomeTheLaunchControlRefuses_IsLaunchRefused_AndTheAnswerQuotesTheWholeCure()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var vibe = new PlayedVibe(_launcher, Advice);
+        var service = Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes);
+        var first = await Consult(service, "why is the count wrong");
+        var id = first.GetProperty("consultationId").GetString()!;
+        var home = vibe.Turns.Single().Request.Environment[VibeLaunch.HomeVariable]!;
+        await File.WriteAllTextAsync(Path.Combine(home, "hooks.toml"), "[[hooks]]\n", TestContext.Current.CancellationToken);
+
+        var second = await Consult(service, "and now?", id);
+
+        var said = Refusal(second);
+        said.Should().Contain("(failure: launch-refused)").And.Contain($"delete {home}");
+        said.Should().NotContain("uv tool install");
+        vibe.Turns.Should().HaveCount(1, "the second turn was refused before anything started");
     }
 
     [Fact]

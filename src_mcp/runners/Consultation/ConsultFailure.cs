@@ -15,6 +15,7 @@ public static class ConsultFailureKinds
     public const string RateLimited = "rate-limited";
     public const string VendorRefused = "vendor-refused";
     public const string CliNotFound = "cli-not-found";
+    public const string LaunchRefused = "launch-refused";
     public const string Timeout = "timeout";
     public const string Deadline = "deadline";
     public const string Exit = "exit";
@@ -193,6 +194,17 @@ public abstract record ConsultFailure
         public override string What(string vendor) => $"the consultant ({vendor}) could not be started: {Said}";
 
         public override string Cure => Remedy;
+    }
+
+    /// <summary>coai's own launch check refused to start an installed CLI — a home, a path, a model: the sentence ends with the cure.</summary>
+    public sealed record LaunchRefused(string Said) : ConsultFailure
+    {
+        public override string Kind => ConsultFailureKinds.LaunchRefused;
+
+        public override string What(string vendor) => $"coai did not start the consultant ({vendor}): {Said}";
+
+        public override string Cure =>
+            "do what the sentence ends with — coai's launch check found this in its own setup, and the CLI itself is installed";
     }
 
     /// <summary>The launch ran past its own timeout and was killed.</summary>

@@ -154,7 +154,7 @@ public static partial class HandleRead
         }
     }
 
-    private static bool SameByComponents(string final, string expected, StringComparison rule)
+    internal static bool SameByComponents(string final, string expected, StringComparison rule)
     {
         var a = final.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
         var b = expected.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
@@ -192,7 +192,7 @@ public static partial class HandleRead
     // ---------------------------------------------------------------------------------------
 
     /// <summary>The final path the kernel holds for <paramref name="handle"/>, or empty when this platform cannot say.</summary>
-    private static string FinalPathOf(SafeFileHandle handle)
+    internal static string FinalPathOf(SafeFileHandle handle)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -208,7 +208,7 @@ public static partial class HandleRead
     }
 
     /// <summary>The root as the kernel spells it — the long, link-resolved form on Windows, <c>realpath</c>'s on Unix.</summary>
-    private static string CanonicalDirectory(string root)
+    internal static string CanonicalDirectory(string root)
     {
         if (!OperatingSystem.IsWindows())
         {
