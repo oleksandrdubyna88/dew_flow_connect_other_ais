@@ -1,7 +1,7 @@
 # PLAN — E2 stories: a code round records the size of its change, and each reviewer's effort
 
 > Status: **plan only, nothing implemented yet, 2026-10-15** (plan gate passed and its findings applied; the §S1.9 item 14
-> amendment awaits Fable's confirmation before E2.S1 is coded). Epic E2 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> amendment confirmed by Fable 2026-10-15, with row 0 (`unavailable: no merge base`) added — ContextAssembler.cs:457-462). Epic E2 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: `src_mcp` only — `runners/Context` (counted numstats, the delta numstat), new pure units in `core/Context`,
 > `runners/Context` and `src/Server/Rounds`, `RoundRecord.Size`, schema step 22 with its writer and its `--log` reader in
@@ -92,11 +92,11 @@ public sealed record RoundSize(ScopeSize Whole, ScopeSize Delta, string Origin =
 > fixed, and `From`'s rule for an `unavailable` scope made exact. No member was renamed; no state means zero.
 >
 > Amended 2026-10-15 by the E2 plan gate (Opus judge, from the epics 1–3 cadence consultation and the coordinator's
-> independent review; **Fable to confirm before E2.S1 is coded**): two more state words, `unavailable: base moved` and
+> independent review; **confirmed by Fable 2026-10-15, with row 0 (`unavailable: no merge base`) added — ContextAssembler.cs:457-462**): two more state words, `unavailable: base moved` and
 > `unavailable: base unknown` — a delta across a merge of the base branch counts the base's own lines as fixer work
 > (§S1.5 rows 3–4, §S1.9 item 14); `OfDelta` narrows the round's elided set to the delta (§S1.5, delta coverage);
-> `RoundRecord.Size` is declared by E2.S1, not E2.S3, because the predecessor rule reads it. No member renamed; no state
-> means zero.
+> `RoundRecord.Size` is declared by E2.S1, not E2.S3, because the predecessor rule reads it. Fable's confirmation added a
+> third, `unavailable: no merge base`, for both scopes (§S1.5 row 0). No member renamed; no state means zero.
 
 - `Coverage` ∈ `shown` · `elided` · `excluded` · `binary` — constants on a static `ChangeCoverage`, whose `All` lists them
   in that order; `Kind` ∈ `code` · `test` · `docs` · `config` · `unknown` — constants on `ChangeKind`, whose `All` lists
@@ -105,16 +105,19 @@ public sealed record RoundSize(ScopeSize Whole, ScopeSize Delta, string Origin =
   coverage (`ChangeCoverage.All`) then kind (`ChangeKind.All`), so two partitions of one range are equal by value.
 - `Added`/`Removed` are null **exactly** when `Coverage == binary`.
 - `State` ∈ `recorded` · `unavailable: first round` · `unavailable: no predecessor sha` · `unavailable: not an ancestor` ·
-  `unavailable: git failed` · `unavailable: numstats disagree` · `unavailable: base moved` · `unavailable: base unknown` —
-  constants on `ScopeState` (the last two are the delta's only: the predecessor's whole scope was measured against a
-  different base, or its base was never recorded). `recorded` with zero cells is an
+  `unavailable: git failed` · `unavailable: numstats disagree` · `unavailable: base moved` · `unavailable: base unknown` ·
+  `unavailable: no merge base` — constants on `ScopeState` (`no merge base` belongs to BOTH scopes: this round's `against`
+  is the base's tip, not a merge-base — `CollectedDiff.Kind != DiffBase.MergeBase`, ContextAssembler.cs:457-462; `base
+  moved` and `base unknown` are the delta's only: the predecessor's whole scope was measured against a different base, or
+  its base was never recorded). `recorded` with zero cells is an
   observed zero (the delta of two identical heads, or an empty range), and is distinct from every `unavailable`; an
   `unavailable` scope has NO cells. `numstats disagree` is the partition's own refusal (E2.S1 §S1.4): the filtered and the
   unfiltered numstat of ONE range name different files, so no partition of it would be a partition.
 - `From`: for `Whole`, the resolved base the diff was taken against (= `RoundWork.BaseRef`); for `Delta`, the predecessor
   round's sha. It is KEPT on an `unavailable` scope whenever a commit was chosen before the failure (`not an ancestor`,
-  `base moved`, `base unknown`, `git failed`, `numstats disagree`) and empty when none was (`first round`,
-  `no predecessor sha`).
+  `base moved`, `base unknown`, `no merge base`, `git failed`, `numstats disagree`) and empty when none was (`first round`,
+  `no predecessor sha`). Under `no merge base` the whole scope's `From` is `against` and the delta's is the predecessor's sha
+  when one was chosen or refused, else empty.
 - `Origin` ∈ `live` · `backfill` — constants on `SizeOrigin`.
 
 **C2 — the storage** (schema step 22, E2.S3):
@@ -248,6 +251,7 @@ public static class ScopeState
     public const string NumstatsDisagree = "unavailable: numstats disagree";
     public const string BaseMoved = "unavailable: base moved";
     public const string BaseUnknown = "unavailable: base unknown";
+    public const string NoMergeBase = "unavailable: no merge base";
 }
 
 /// <summary>Whether a size was measured by the round that ran, or rebuilt later with today's rules (parent §16 D12).</summary>
@@ -484,7 +488,7 @@ internal static class DeltaPredecessor
   a coalesced skip updates its row in place, so position is the record's own ordering and a clock comparison would be a
   second one. "Latest WITH a sha" rather than "latest, which must have a sha": after #490 the newest rounds carry shas and
   the oldest do not, and measuring from the newest commit any round read is the delta's point.
-- **SameBase** [3] (plan gate, 2026-10-15; Fable to confirm): the chosen round `R` is then held to THIS round's base.
+- **SameBase** [3] (plan gate, 2026-10-15; confirmed by Fable 2026-10-15, with row 0 (`unavailable: no merge base`) added — ContextAssembler.cs:457-462): the chosen round `R` is then held to THIS round's base.
   `R.Size?.Whole.From` empty or absent (a round from before E2, or one whose size was never written) →
   `Predecessor.Refused(R.Sha, ScopeState.BaseUnknown)`; not equal to `against` (`OrdinalIgnoreCase`, the head comparison
   of `ContextAssembler.cs:377`) → `Predecessor.Refused(R.Sha, ScopeState.BaseMoved)`; else `Predecessor.Of(R.Sha)`.
@@ -494,7 +498,9 @@ internal static class DeltaPredecessor
   below never fires), and those lines would be counted as fixer work while the whole scope, measured from the moved base,
   does not contain them. `ContextAssembler.cs:296-301` describes the same two-endpoint error for the whole scope; this is
   its delta twin. It costs no git process: both bases are already in hand. Stated limits: merging a branch that is NOT
-  the base (a sibling feature) leaves the base where it was and is not detected; the first code round after E2 deploys
+  the base (a sibling feature), and cherry-picking or squash-merging base commits, leave the merge-base where it was and
+  are not detected; SameBase is meaningful only when `against` IS a merge-base — the fallback kinds are refused by row 0
+  before it is reached; the first code round after E2 deploys
   reads `base unknown` once per gate session. E6 states the corrective cohort's denominator fallback for an unavailable
   delta and E7 reports the share of corrective rounds that end unavailable (parent §16 D26).
 - **A round whose every reviewer failed QUALIFIES.** It completes through `RoundMachine.CompleteRound`
@@ -509,6 +515,7 @@ internal static class DeltaPredecessor
 
   | Order | Condition | `Delta.State` | `From` | Cells |
   |---|---|---|---|---|
+  | 0 | this round's `collected.Kind != DiffBase.MergeBase` (`ContextAssembler.cs:98-119`, `:457-466`: `against` is the base's TIP, which a merge of it does not move) | `unavailable: no merge base` — and the WHOLE scope too (`From` = `against`) | the predecessor's sha when `Choose` chose or refused one, else empty | none; decided by E2.S4 from `collected.Kind`, no process is run; `Choose` is unchanged |
   | 1 | no candidate | `unavailable: first round` | empty | none |
   | 2 | candidates, none with a sha | `unavailable: no predecessor sha` | empty | none |
   | 3 | the chosen round's `Size.Whole.From` is absent or empty | `unavailable: base unknown` | `from` | none; no process is run |
@@ -519,8 +526,8 @@ internal static class DeltaPredecessor
   | 8 | the partition's `Disagreement` is non-empty | `unavailable: numstats disagree` | `from` | none |
   | 9 | otherwise | `recorded` | `from` | the partition of the delta's own two numstats (`ChangePartition.OfDelta`) |
 
-  Rows 3–4 come from `Choose` and are decided before any git call; a rebase usually also moves the base and so reads
-  row 4 rather than row 7 — both are honest refusals and the report treats them alike. Row 6 outranks row 7 only where
+  Row 0 is E2.S4's, from `collected.Kind`; rows 3–4 come from `Choose`; all three are decided before any git call; a
+  rebase usually also moves the base and so reads row 4 rather than row 7 — both are honest refusals and the report treats them alike. Row 6 outranks row 7 only where
   they cannot both hold (a `from` that is not a commit never reaches the ancestry question); when `is-ancestor` itself
   fails to run, that is row 6. Nothing in this unit or in E2.S2/E2.S4 takes two
   `ScopeSize`s, two `RoundSize`s or two totals (criterion 7) — §S1.7's reflection test holds the API to it.
@@ -666,7 +673,7 @@ restored and seen green; both runs go in the summary. No test is edited, none sk
    §S1.4 step 2).
 8. The predecessor is chosen by list order; the latest candidate WITH a sha; a round whose reviewers all failed qualifies;
    feature rounds never (§S1.5).
-9. The nine delta outcomes have the precedence of §S1.5's table; `From` is kept on an `unavailable` scope once a commit
+9. The ten delta outcomes (rows 0–9) have the precedence of §S1.5's table; `From` is kept on an `unavailable` scope once a commit
    was chosen (§4 C1).
 10. The delta's `elided` set is the round's own, NARROWED to the delta's reviewable paths by `OfDelta` (plan gate,
     2026-10-15); a delta file absent from the whole diff is `shown` (§S1.5).
@@ -674,10 +681,14 @@ restored and seen green; both runs go in the summary. No test is edited, none sk
 12. Criterion 7's "never arithmetic" is held by a reflection test over the units' API, with the behavioural proof in
     E2.S2 and E2.S4 (§S1.7, §S1.8 row 3).
 13. The three records carry no computed instance property; `ScopeSize` gets two static factories (§S1.2).
-14. **Amended by the plan gate (Opus), 2026-10-15 — Fable to confirm before E2.S1 is coded:** the chosen predecessor is
+14. **Amended by the plan gate (Opus), 2026-10-15 — confirmed by Fable 2026-10-15, with row 0 (`unavailable: no merge
+    base`) added — ContextAssembler.cs:457-462:** the chosen predecessor is
     held to this round's base — `unavailable: base unknown` when its `Size.Whole.From` is absent, `unavailable: base
     moved` when it differs from `against`; both keep the predecessor's sha in `From` and run no git (§S1.5 SameBase, rows
-    3–4). `RoundRecord.Size` is therefore declared in this story (§S1.1).
+    3–4). Fable's addition: in the fallback diff kinds (`ShallowHistory` / `NoCommonAncestor`) `against` is the base's tip,
+    not a merge-base, so merging it does not move it and SameBase cannot see the merge — both scopes read
+    `unavailable: no merge base` (row 0, decided by E2.S4 from `collected.Kind`; the constant `ScopeState.NoMergeBase` is
+    declared here, its test and break-it are S4's). `RoundRecord.Size` is therefore declared in this story (§S1.1).
 
 *Stated limits, not decisions to revisit here:* `.sln`, `.xml`, `.ini`, `.cshtml`, `.sql` and every language the outliner
 does not map are `unknown` — the parent's table, printed by E6; a .NET test project folder not literally named `tests`
@@ -821,7 +832,11 @@ because a partition that is wrong about one file is not known to be right about 
 - **Scope.**
   - New `src/Server/Rounds/RoundSizer.cs` — `MeasureAsync(ContextAssembler context, string repoPath, string sha,
     CollectedDiff collected, ShapedDiff shaped, IReadOnlyList<RoundRecord> earlier, CancellationToken ct)` →
-    `MeasuredSize(RoundSize? Size, int? Gitlinks)` (a small internal record in the same file): whole = S1's partition
+    `MeasuredSize(RoundSize? Size, int? Gitlinks)` (a small internal record in the same file): **first**, `collected.Kind
+    != DiffBase.MergeBase` (the fallback kinds — `against` is the base's tip, not a merge-base, `ContextAssembler.cs:98-119`,
+    `:457-466`) → BOTH scopes `ScopeSize.Unavailable(ScopeState.NoMergeBase, …)` (`From` = `against` for the whole scope; the
+    predecessor's sha for the delta when `Choose` chose or refused one, else empty), no git call (S1 §S1.5 row 0); else
+    whole = S1's partition
     over `collected.Counted`, `AllChangesAsync(collected.ComparedAgainst, sha)` and `shaped.Elided`; the predecessor by
     `DeltaPredecessor.Choose(earlier, collected.ComparedAgainst)` — a `base unknown`/`base moved` answer becomes the
     delta's state with no git call; the delta by `DeltaAsync` + `ChangePartition.OfDelta` (S1's delta-coverage rule). Every exception except `OperationCanceledException` → the affected scope `unavailable: git failed`, one Warning
@@ -858,6 +873,9 @@ because a partition that is wrong about one file is not known to be right about 
   - `AMergeOfMainBetweenRounds_IsBaseMoved_NotFixerWork` — round 1 on the branch; main gains a commit; the branch merges
     main and round 2 runs: `delta_state = 'unavailable: base moved'`, `delta_from` = round 1's sha, no delta rows; `whole`
     excludes main's commit (the moved merge-base). The plan gate's end-to-end proof for §S1.5 rows 3–4.
+  - `ARoundWithNoCommonAncestor_IsUnavailableInBothScopes` — real git, two unrelated histories (the base and the branch
+    share no commit): `size_state = delta_state = 'unavailable: no merge base'`, no `round_changes` rows, the round's
+    verdict and findings untouched. The end-to-end proof for §S1.5 row 0.
   - `ALockFileAndAnImage_AreCountedApart` — the excluded and binary cells present; neither inside shown.
   - `AnElidedFile_IsRecordedElided` — a text file past 192 KiB: `elided`, lines counted.
   - `ASizeThatCannotBeMeasured_DoesNotTouchTheRound` — `RoundSizer` driven directly with a launcher whose unfiltered numstat
@@ -875,12 +893,13 @@ because a partition that is wrong about one file is not known to be right about 
   scenario red. (3) Let a size exception propagate → `ASizeThatCannotBeMeasured_DoesNotTouchTheRound` red. (4) Drop
   `SameBase` from `Choose` (S1's break-it 14, end to end) → `AMergeOfMainBetweenRounds_IsBaseMoved_NotFixerWork` red with
   `delta_state = 'recorded'` and main's lines in the delta rows. (5) Drop `Gitlinks = roundWork.Gitlinks` → `AChangedSubmodulePointer_IsCountedAsAGitlink`
-  red with `size_gitlinks = -1`.
+  red with `size_gitlinks = -1`. (6) Drop the `collected.Kind` check → `ARoundWithNoCommonAncestor_IsUnavailableInBothScopes`
+  red with `size_state = 'recorded'` and the base's commits counted as deletions.
 - **Done when.** The scenarios green; `EndToEndTests`, `ARoundIsMintedAKeyTests`, `ARoundsNumberComesFromTheJournalTests`
   and the whole executable green; the measured cost of the size's git calls is in the summary; `research/module_server.md`'s
   code-round flow names the size step in one paragraph.
 - **Depends on.** E2.S1, E2.S2, E2.S3.
-- **Size.** ≈ 370 changed lines (≈ 115 code, ≈ 255 tests).
+- **Size.** ≈ 410 changed lines (≈ 115 code, ≈ 295 tests; the no-merge-base scenario is ≈ 40 of them).
 - **Coder: sonnet** · scenarios and brief: this document (opus) · review: opus.
 
 ### E2.S5 — `--log` names each round's size, and a step-21 file still answers
@@ -938,11 +957,11 @@ code is in; S5 needs only S3; S4 is last. The epic lands as ONE commit on its ow
 
 | Parent §12 row | Story | Kind |
 |---|---|---|
-| **Diff size** on a temp git repo: text edit, binary, rename, lock file, test/docs/config, elided file, a second round after one commit, a second round after a rebase; and (plan gate) a second round after a merge of main, a delta that left an elided file alone | S1 (pure table), S2 (git), S4 (end to end) | table + real git |
+| **Diff size** on a temp git repo: text edit, binary, rename, lock file, test/docs/config, elided file, a second round after one commit, a second round after a rebase; and (plan gate) a second round after a merge of main, a delta that left an elided file alone, a round on a branch with no common ancestor | S1 (pure table), S2 (git), S4 (end to end) | table + real git |
 | **Migration**: a step-21 database opens at 22; old rows read *not recorded*; read-only `--log`/`--round-counts` on a step-21 file still answer | S3, S5 | real SQLite + process |
 | `reviewers.effort` persisted (DoD) | S3 | real SQLite |
 | The same round recorded twice | S3 | real SQLite |
-| Break-its: excluded as shown, binary as 0, delta by subtraction, skipped predecessor, un-narrowed delta elided set, base not compared (area); wrong range, no ancestry (S2); null→0, no delete, no effort bind (S3); size not on the record, unfiltered predecessor, failure propagates, base not compared end to end, gitlinks not carried (S4); no column guard, NULL→0, origin not read (S5) | each story | red → restore |
+| Break-its: excluded as shown, binary as 0, delta by subtraction, skipped predecessor, un-narrowed delta elided set, base not compared (area); wrong range, no ancestry (S2); null→0, no delete, no effort bind (S3); size not on the record, unfiltered predecessor, failure propagates, base not compared end to end, gitlinks not carried, no-merge-base kind not checked (S4); no column guard, NULL→0, origin not read (S5) | each story | red → restore |
 
 ## 8. Growth budget
 
@@ -996,3 +1015,5 @@ code is in; S5 needs only S3; S4 is last. The epic lands as ONE commit on its ow
    `.css` are `unknown` and outside the default `code`+`test` denominator of parent §8 — a choice E6 should print.
 8. `RoundsDb.cs` and `RoundsQuery.cs` are past the 800-line ceiling; the parent names only `RoundEngine.cs` and
    `PanelService.cs` as call-site-only. S3 and S5 put the writer and the reader in new files.
+9. For E7.S3 (Fable, 2026-10-15): a backfilled size must take `Whole.From` from `rounds.base_ref`, never recompute
+   `merge-base(main, sha)` today — a branch since merged into main gives `merge-base = sha` and a zero whole.
