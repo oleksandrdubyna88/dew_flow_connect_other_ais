@@ -41,15 +41,6 @@ import { RowPriceLookup, rowOnTheWire } from './vendorsWire';
  * freeze this panel's reading of a caller nobody configured, so an untouched caller stays off the
  * wire and the server resolves its own absence, which `ConsultantRouting.For` does for a kind the
  * map lacks. A map with nothing to say emits no key, as before.
-  const crossing = callersOnTheWire(settings.consult);
-  if (crossing.length > 0) {
-    // One JSON key rather than four scalars, for the reason `COAI_VENDORS` already carries: a
-    // compound value needs a structured encoding, and four key spellings is four chances for the two
-    // halves to disagree about one of them.
-    const rowOf = consultantRowOf(catalogRowOnTheWire(vendors, installedServerVersion, priceOf, features));
-    env['COAI_CONSULTANTS'] = JSON.stringify(Object.fromEntries(
-      crossing.map((id) => [id, wireEntry(settings.consult.byCaller[id]!, rowOf(settings.consult.stored[id]))])));
-  }
  */
 export function consultantsEnv(
   consult: ConsultSettings,
