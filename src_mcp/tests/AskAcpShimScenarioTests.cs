@@ -22,7 +22,7 @@ public sealed class AskAcpShimScenarioTests : IDisposable
     public void Dispose() => _person.Dispose();
 
     /// <summary>The Kimi shim runs only on a Windows host (D18): elsewhere it cannot key the sign-in lock and refuses, so a turn through the real binary is a Windows test.</summary>
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18); the shim refuses elsewhere");
+    private static void OnWindows() => TheOwnersKimi.SkipUnlessWindowsAndFree("Kimi runs on Windows hosts only (D18); the shim refuses elsewhere");
 
     /// <summary>
     /// The Kimi profile needs an owned home, the person's bin and the lock folder (E4.3): a fake person's, in the test's own folder. The agent, started

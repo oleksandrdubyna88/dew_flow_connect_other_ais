@@ -4283,3 +4283,17 @@ refuses a kimi row by name (inferred from Vibe's measurement against 0.52.0, not
 
 `scripts/lib/kimi-shim.test.mjs` (minor 5), stated plainly: the flag check reads the SOURCE of the shim's help text (`Program.cs`), not the binary's `--help`; the dry run against the
 built shim is LOCAL ONLY — it needs Windows and a shim already built at `src_mcp/src/bin/Debug`, which can be older than the source, and it is skipped on CI's ubuntu runner.
+
+### The person's own Kimi beside a coai launch, and an immutable inventory — the epic 4 code gate (2026-10-15, decision 74 and the immutability finding)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `ForeignKimiTests` (14) (a) | a foreign `kimi` makes the turn Busy BEFORE any hold and before the junction check (the owned root is not even made), through `KimiShimHold.Taken` and through `KimiAcpProfile.Hold` with a fake process list | *Expected type to be CoaiMcp.Runners.Acp.AcpHolding+Busy, but found CoaiMcp.Runners.Acp.AcpHolding+Unusable.* (twice) |
+| `ForeignKimiTests` (b) | a foreign `kimi` that ends within the deadline is waited out (the fake pause counts the polls), and the turn goes on to the hold's own first check | green with the look stubbed out — it pins the other half of (a) and was green by construction |
+| `ForeignKimiTests` (c) | only coai's own `kimi` children — a grandchild of this shim, an earlier tree under another `coai-mcp` — are not counted; a `kimi` whose parent has ended is; a list with a cycle ends; names are matched case-insensitively and exactly | green (pure code written with the types) |
+| `ForeignKimiTests` | the host's own listing names this process with its parent (Windows only) | green |
+| `scripts/lib/kimi-d19.test.mjs` (3) | M-K11c's step arithmetic is a pure function and the run's steps are built by returning a new list (`inventoryStep`, `withStep`), never appended to | *inventoryStep is not exported — runInventory builds its steps by pushing into a list* |
+
+The scenarios that start the REAL shim (`AKimiShimScenarioTests`, `AskAcpShimScenarioTests`, `AKimiReviewerRunsThroughTheShimTests`, `KimiCanaryTests`) skip while a real `kimi` of the person's runs on the machine
+(`TheOwnersKimi`): the shim now rightly waits for it, and the scenario would only wait out its deadline. NOT covered: a person starting `kimi` after the agent is running; the real toolhelp listing reading a
+`kimi.exe` (the host-listing test checks only this process).

@@ -13,13 +13,29 @@ namespace CoaiMcp.Runners.Kimi;
 /// <c>USERPROFILE</c> IS the owned <c>os/</c> — so the person's <c>credentials</c> folder is read from the junction's own reparse data
 /// (<see cref="Junctions.Target"/>); the lock folder is <see cref="KimiCredentialsLock.Root"/>, which the caller has pointed at <c>--locks</c>
 /// for the turn (<see cref="KimiCredentialsLock.RootFor"/>) and which is never derived here.</para>
-/// <para><b>It gates.</b> Busy past the time given is the shim's exit 69, a hold that cannot be taken at all its 65 — there is no
+/// <para><b>The person's own Kimi is looked for first</b> (decision 74): see <see cref="ForeignKimiWatch"/>. <b>It gates.</b> Busy past the time given is the shim's exit 69, a hold that cannot be taken at all its 65 — there is no
 /// warning-only fallback, because the alternative to a refused turn is two refreshers on a rotating token.</para>
 /// </remarks>
 public static class KimiShimHold
 {
-    /// <summary>The hold for <paramref name="places"/>' owned root, waiting up to <paramref name="within"/> for another tree to let go.</summary>
-    public static AcpHolding Taken(KimiPlaces places, TimeSpan within)
+    /// <summary>
+    /// The hold for <paramref name="places"/>' owned root, waiting up to <paramref name="within"/> for another tree to let go — AFTER looking, read-only,
+    /// for the person's own Kimi (<see cref="ForeignKimiWatch"/>, decision 74): the sign-in's locks serialise coai's launches only, so a <c>kimi</c> the
+    /// person runs beside would race the rotating refresh token. It is waited for within the same deadline (the hold gets what is left), and past the
+    /// deadline the turn is busy, naming the process.
+    /// </summary>
+    public static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch)
+    {
+        var foreign = watch.Wait(within);
+        if (foreign.Still.Count > 0)
+        {
+            return new AcpHolding.Busy(ForeignKimiWatch.Sentence(foreign.Still[0]));
+        }
+
+        return TakenAfterTheLook(places, within - foreign.Waited);
+    }
+
+    private static AcpHolding TakenAfterTheLook(KimiPlaces places, TimeSpan within)
     {
         var target = Junctions.Target(places.Link);
         if (target.Length == 0)

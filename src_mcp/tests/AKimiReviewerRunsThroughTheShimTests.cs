@@ -21,7 +21,7 @@ public sealed class AKimiReviewerRunsThroughTheShimTests : IDisposable
 
     public void Dispose() => _person.Dispose();
 
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+    private static void OnWindows() => TheOwnersKimi.SkipUnlessWindowsAndFree("Kimi runs on Windows hosts only (D18)");
 
     private KimiRuntime Runtime() => new("kimi", HostKind.Windows, new KimiSeams(_person.PlacesAt, () => ("coai-mcp.exe", [])));
 

@@ -31,7 +31,7 @@ public sealed class AKimiShimScenarioTests : IDisposable
 
     private string Locks => Path.Combine(_person.Folder, "locks");
 
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+    private static void OnWindows() => TheOwnersKimi.SkipUnlessWindowsAndFree("Kimi runs on Windows hosts only (D18)");
 
     private (string Tree, string Home) HoldFiles(KimiPlaces places)
     {

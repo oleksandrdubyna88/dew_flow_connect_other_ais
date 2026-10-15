@@ -254,7 +254,7 @@ public sealed class KimiCanaryTests : IDisposable
     [Fact]
     public async Task NothingOfTheSignIn_EverAppearsInWhatCoaiWrites()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+        TheOwnersKimi.SkipUnlessWindowsAndFree("Kimi runs on Windows hosts only (D18)");
         using var rooted = KimiCredentialsLock.RootFor(Locks);
 
         await LaunchesAsync();
@@ -354,7 +354,7 @@ public sealed class KimiCanaryTests : IDisposable
     [Fact]
     public async Task TheDetector_SeesVendorTextRelayedIntoTheRoundsRecords()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+        TheOwnersKimi.SkipUnlessWindowsAndFree("Kimi runs on Windows hosts only (D18)");
         using var rooted = KimiCredentialsLock.RootFor(Locks);
 
         await RecordAsync(new ScriptedKimi(_ => new ProcessResult(70, string.Empty, $"agent printed its own file: {KimiFixture.RefreshCanary}", TimedOut: false)));
@@ -366,7 +366,7 @@ public sealed class KimiCanaryTests : IDisposable
     [Fact]
     public async Task TheDetector_SeesAServedCanary_WhenOneIsServed()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+        TheOwnersKimi.SkipUnlessWindowsAndFree("Kimi runs on Windows hosts only (D18)");
         using var served = new FakeAcpAgent([]);
         var notes = served.Inside("notes.md");
         File.WriteAllText(notes, $"keep this: {KimiFixture.RefreshCanary}");

@@ -976,6 +976,8 @@ override the lock root through `RootFor`, never by assigning the static; `FAKECL
 
 ## E4.3 — The shim: `--home`, the agent's environment rebuilt, the model checked in the session, `/usage` parsed
 
+*[Added after the epic's code gate, 2026-10-15: the shim also looks for the person's OWN `kimi` before it takes the hold and waits for it within the deadline — decision 74, below.]*
+
 `model: opus` spec (this document) · Sonnet codes · Opus reviews.
 
 **Carried from E4.2's review (2026-10-15) — notes, nothing more.** (a) Re-run S2.45's shim arm (`KimiCanaryTests`) with the tree hold ACTUALLY taken: E4.2's arm passes `--locks` and `--home` flags the shim does not read yet, so it takes no hold. (b) Prove deviation 32 — that the shim reads no environment — in a CHILD process started with a redirected `USERPROFILE`; no test in the host may redirect its own. (c) Record the M-K15 measurement (S3.17: after a normal `EndAsync` the `.tree.lock` is `Free` within ~2 s; with the shim killed mid-turn it stays `Held` until `kimi` exits) in `research/RESULTS_kimi_confinement.md` BEFORE E4.3's code round. The owner's ruling stands: the tree hold GATES as specified, and there is no warning-only fallback. (d) The environment builder is now `KimiEnvironment` (`Built`, `BuiltPath`, `Refusal`, `FlagOf`, `PathOf`), not `KimiLaunch` — read every `KimiLaunch.Built` / `KimiLaunch.EnvironmentRefusal` below and in E4.4 as that.
@@ -1702,6 +1704,23 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
 72. **⟳ and a row's own CLI path** (minor 4). `vendorUpdate` takes no path and none is put in the command; the Windows note now says ⟳ updates the default install and not a Kimi kept elsewhere.
 73. **What the probe test claims** (minor 5; rewords 62) and a stale comment (minor 6). `kimi-shim.test.mjs` and the probe's header say the flag check reads `Program.cs`'s source and the dry run is local-only;
     `AskAcpMode.Spent`'s comment says the exit lives in `AcpWords`.
+74. **The person's OWN Kimi beside a coai launch is looked for before the hold, and waited for** (the epic 4 code gate, accepted 2026-10-15; belongs to E4.3's shim). coai's
+    sign-in locks serialise coai's launches and anything that inherited the tree hold; they cannot stop a `kimi` the person started in their own terminal. A coai review that starts near the
+    access token's expiry and a person's Kimi would both refresh the ROTATING refresh token, and one is left with a retired token: the person is signed out. So `KimiShimHold.Taken` first asks a
+    read-only process listing (`IProcessList`, the seam; `HostProcessList` is Windows' toolhelp snapshot — no elevated rights, nothing opened, nothing ended) for a `kimi` that is not coai's
+    own. While one runs it WAITS within the turn's deadline, polling every second, and the hold gets what is left; past the deadline the turn is BUSY — exit **69**, report `not_started`, no agent
+    started, no hold taken — with "your own Kimi Code is running (pid N); coai does not start a second Kimi on the same sign-in while it runs, so two refreshes never race — close it or wait".
+    **How coai's own is told apart: the parent chain.** A `kimi` is coai's when walking its parents (from the one listing, bounded, cycle-safe) reaches this shim's pid or a process named
+    `coai-mcp`. Chosen over the alternatives for what works on Windows without elevation: a process's environment (`KIMI_CODE_HOME`) or command line needs its PEB (`OpenProcess` +
+    `PROCESS_VM_READ`, refused for protected or elevated processes, so "unreadable" must be guessed one way) or WMI (`System.Management` is not Native-AOT safe, and the server is); the
+    executable's path is the same for both (`~/.kimi-code/bin/kimi.exe`). A listing gives every same-user caller each process's parent id. **Directions chosen:** an orphan whose parent has ended
+    is counted as the person's (it can still refresh, and the tree hold calls it busy anyway); a framework-dependent server named `dotnet` is not recognised by name, so its OTHER shims' trees count
+    as foreign (wait, then busy — safe), while this shim's own tree is always recognised by pid; a recycled pid that makes a stranger look like an ancestor can only let a turn start, which is the
+    behaviour before this decision. Tests (`ForeignKimiTests`): (a) a foreign `kimi` → busy, before any hold and before the junction check, red first (*Expected type to be AcpHolding+Busy, but found
+    AcpHolding+Unusable*); (b) one that ends within the deadline → waited out, the turn goes on; (c) only coai's own `kimi` children, a grandchild and an earlier tree under another `coai-mcp` included → not
+    counted; the profile asks its own watch, not the host's. **Not covered, and said so:** a person who STARTS `kimi` after coai's agent is already running (nothing here can stop a process it does not
+    own), and a person's Kimi that refreshes in the seconds between the last poll and the agent's start. The scenario tests that start the REAL shim (`TheOwnersKimi`) now skip while a real `kimi` runs on the
+    machine, since the shim would rightly wait for it. Also in this change: `runInventory` of the probe builds its steps without mutation (`withStep`, `inventoryStep` — the immutability rule), red first.
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing

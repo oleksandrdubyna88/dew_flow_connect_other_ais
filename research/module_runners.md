@@ -3253,6 +3253,16 @@ one place where `KimiPlaces`, `KimiEnvironment` and `KimiCredentialsLock` meet t
   runtime (`KimiRuntime`) reads them from the same place, where they used to be imported from `KimiEnvironment` and `KimiReport`. No value changed. `KimiAcpProfile.BalanceSpent`
   stays with the profile: it is the failure NAME that profile defines for a known sentence. Still Kimi-named inside the generic shim: `KimiCredentialsLock.RootFor` (the lock-folder
   naming, ruling 2) and the `Kimi*` hold in `KimiShimHold` — reached only through the profile's `Hold` member.
+- **The person's own Kimi is looked for before the hold** (decision 74 of the E4 plan; the epic 4 code gate). The sign-in locks serialise coai's launches only; a `kimi` the person runs beside a coai review
+  that starts near the token's expiry would refresh the rotating token at the same time and sign them out. `KimiShimHold.Taken` therefore first asks `ForeignKimiWatch` — over the `IProcessList` seam
+  (`HostProcessList`, Windows' toolhelp snapshot: read-only, no elevated rights, nothing opened or ended) — for a `kimi` that is not coai's own, **waits for it within the deadline** (polling every second; the
+  hold gets what is left) and, past the deadline, answers `AcpHolding.Busy` — the shim's exit **69**, report `not_started`, no hold taken, no agent started — with "your own Kimi Code is running (pid N); coai does
+  not start a second Kimi on the same sign-in while it runs, so two refreshes never race — close it or wait". **Coai's own is told apart by the parent chain**: a `kimi` whose parents (one listing, bounded,
+  cycle-safe) reach this shim's pid or a process named `coai-mcp`. Why not the environment (`KIMI_CODE_HOME`) or the command line: both need the process's PEB (`OpenProcess` + `PROCESS_VM_READ`, refused for protected
+  or elevated processes, so "unreadable" must be guessed one way) or WMI (`System.Management` is not Native-AOT safe); the executable path is the same for both. An orphan (parent gone) counts as the person's — it
+  can still refresh; a server named `dotnet` is not recognised by name, so its other shims' trees count as foreign (wait, then busy: safe) while this shim's own is recognised by pid. **Not covered:** a person
+  who STARTS `kimi` after coai's agent is already running, and one that refreshes in the seconds between the last poll and the agent's start. The profile takes the watch in its constructor (a test hands in a fake list);
+  the tests that start the real shim skip while a real `kimi` runs on the machine (`TheOwnersKimi`).
 
 ```mermaid
 sequenceDiagram

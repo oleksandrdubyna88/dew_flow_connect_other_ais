@@ -22,8 +22,17 @@ namespace CoaiMcp.Runners.Acp;
 /// no permission request, no client call (§2.3) — so Kimi's READS are unbounded, as codex's are; the boundary
 /// closes <c>Read</c> and the instruction-file search, and the plan says so rather than claiming confinement.</para>
 /// </remarks>
-public sealed class KimiAcpProfile : IAcpProfile
+public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
 {
+    /// <summary>The profile on this host: the person's own Kimi is looked for in the host's process listing.</summary>
+    public KimiAcpProfile()
+        : this(ForeignKimiWatch.Real())
+    {
+    }
+
+    /// <summary>What looks for the person's own Kimi before the hold is taken (decision 74); a test hands in a fake process list's.</summary>
+    public ForeignKimiWatch Watch { get; } = watch;
+
     /// <summary>The name a launch asks for this profile by.</summary>
     public const string ProfileName = "kimi";
 
@@ -88,8 +97,8 @@ public sealed class KimiAcpProfile : IAcpProfile
     /// <summary>The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named.</summary>
     public string AgentRefusal(ProcessRequest request, AcpAsk ask) => KimiEnvironment.Refusal(request, PlacesOf(ask));
 
-    /// <summary>The sign-in's tree hold and the home's (<see cref="KimiShimHold"/>), taken immediately before the agent starts.</summary>
-    public AcpHolding Hold(AcpAsk ask, TimeSpan within) => KimiShimHold.Taken(PlacesOf(ask), within);
+    /// <summary>The sign-in's tree hold and the home's (<see cref="KimiShimHold"/>), taken immediately before the agent starts — once the person's own Kimi is not running (decision 74).</summary>
+    public AcpHolding Hold(AcpAsk ask, TimeSpan within) => KimiShimHold.Taken(PlacesOf(ask), within, Watch);
 
     private static KimiPlaces PlacesOf(AcpAsk ask) => KimiPlaces.ForShim(ask.Home, ask.PersonsBin);
 
