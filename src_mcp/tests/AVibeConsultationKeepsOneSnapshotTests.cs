@@ -141,6 +141,22 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
         DirectoryLink.Remove(folder);
     }
 
+    /// <summary>K6: a stuck consultant's turn that hits the cap is an exit with coai's sentence — never cli-not-found or launch-refused.</summary>
+    [Fact]
+    public async Task ATurnThatHitsTheTurnCap_IsAnExitWithCoaisSentence()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var vibe = new PlayedVibe(_launcher, Advice) { Outcome = "turn_limit", TurnExit = 3, TurnStdErr = "Stopped: turn_limit\r\n", Usage = (84186, 1395) };
+
+        var reply = await Consult(Service(providers: [], consultants: OnVibe, launcher: vibe, homes: Homes), "why is the count wrong");
+
+        var said = Refusal(reply);
+        said.Should().Contain("(failure: exit)").And.Contain("Vibe stopped at coai's cap of 20 assistant turns");
+        said.Should().NotContain("cli-not-found").And.NotContain("launch-refused");
+    }
+
     /// <summary>D6 (second case) and A4: a home that would pass Windows' path limit is refused BEFORE the home is made, and the answer says what to set.</summary>
     [Fact]
     public async Task AHomeThatWouldPassTheWindowsPathLimit_IsLaunchRefused_BeforeAnythingStarts()

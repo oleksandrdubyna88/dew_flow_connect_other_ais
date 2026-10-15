@@ -50,6 +50,32 @@ public sealed class VibeConsultantTests
         invocation.Adapter.Should().BeOfType<VibeRuntime>("the answer and the usage are read by the reviewer adapter's one copy");
     }
 
+    /// <summary>K1/K2: every consultant launch is capped at 20 assistant turns, after the time limit — and only once.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("4f1c2d3e-aaaa-bbbb-cccc-0123456789ab")]
+    public void AConversationTurn_IsCapped_WithAndWithoutResume(string handle)
+    {
+        var args = Consultant().Build(Turn(handle)).Request.Arguments;
+
+        args.Count(argument => argument == "--max-turns").Should().Be(1);
+        args.Should().ContainInConsecutiveOrder("--max-turns", VibeLimits.ConsultantTurns.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        args.ToList().IndexOf("--max-turns").Should().BeGreaterThan(args.ToList().IndexOf("--time-limit"), "after --time-limit");
+        VibeLimits.ConsultantTurns.Should().Be(20, "RESULTS §28: arm B took 2 requests, arm C at 10 cut every loop at 79–84 k tokens");
+    }
+
+    [Fact]
+    public void AQuestionRowLaunch_IsCapped_Too()
+    {
+        var plan = (Confinement.Planned)ConfinementPlanner.Plan("vibe", CapabilityGrant.None);
+        var launch = Turn() with { Confinement = new LaunchConfinement.Planned(plan), ScratchDir = @"C:scratch" };
+
+        var args = Consultant().Build(launch).Request.Arguments;
+
+        args.Should().ContainInConsecutiveOrder("--max-turns", "20");
+        args.Count(argument => argument == "--max-turns").Should().Be(1);
+    }
+
     [Fact]
     public void AConsultTurn_RunsOnTheConversationsOwnHome_InTheBuiltEnvironment()
     {

@@ -359,3 +359,21 @@ public static class VibeLaunch
         }
     }
 }
+
+/// <summary>The limits coai puts on a Vibe launch beside the time limit.</summary>
+public static class VibeLimits
+{
+    /// <summary>
+    /// The most assistant turns — one model request each — a Vibe CONSULTANT launch (a question row, a conversation turn, a
+    /// consultant check) may take: <c>--max-turns 20</c> (D6 of <c>todo/PLAN_vibe_live_round_fixes.md</c>).
+    /// </summary>
+    /// <remarks>
+    /// Measured in research/RESULTS_vibe_confinement.md §28: a question row that cannot list its folder guesses file names, one
+    /// request each, and one run spent 2 233 164 input tokens in 299 s. <c>--max-turns</c> counts exactly that request (§28.3),
+    /// ended every capped run 3 of 3 with exit 3, an export and <c>outcome: turn_limit</c>; arm B (the answer in one named
+    /// file) took 2 requests and arm C at 10 cut every looping run at 79–84 k tokens. 20 leaves room for ~15 named files and a
+    /// retry; the worst case is ≈ 180 k input tokens, mostly cached. A review is never capped. A setting for it is not added
+    /// until somebody needs a different one.
+    /// </remarks>
+    public const int ConsultantTurns = 20;
+}

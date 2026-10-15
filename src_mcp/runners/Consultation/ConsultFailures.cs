@@ -101,7 +101,9 @@ public static class ConsultFailures
 
         return VendorDiagnosis.Classify(said) switch
         {
-            null => new ConsultFailure.Exit(exit.ExitCode, Safe(said)),
+            // Nothing recognised in what the CLI said: the adapter's own reading of the failure (Vibe's export outcome as coai's
+            // sentence, D6 of todo/PLAN_vibe_live_round_fixes.md) is worth more than a stderr label such as `Stopped: turn_limit`.
+            null => new ConsultFailure.Exit(exit.ExitCode, Safe(exit.FailureReason.Length > 0 ? exit.FailureReason : said)),
             { Kind: DiagnosisKind.NotOnPath } d => new ConsultFailure.CliNotFound(Safe(said), VendorDiagnosis.InstallCure(runtime, linux) ?? Safe(d.Cure)),
             // The cure is redacted too: the unreachable-engine row carries the endpoint out of the vendor's text.
             var d => new ConsultFailure.VendorRefused(Safe(said), Redaction.SafeText(d.Cure, Redaction.TitleLimit)),

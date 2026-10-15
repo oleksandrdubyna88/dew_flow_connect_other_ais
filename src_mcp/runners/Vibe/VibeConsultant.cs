@@ -56,7 +56,7 @@ public sealed class VibeConsultant(VibeRuntime inner, string vendor = "vibe") : 
         var model = launch.Settings.Model.Length > 0 ? launch.Settings.Model : VibeModels.Default;
         var argv = (string[])
         [
-            .. VibeRuntime.Arguments(Cwd(launch), VibeRuntime.ExportFolder(owned, role, Guid.NewGuid()), launch.Settings.Timeout, ReadOnly(launch)),
+            .. VibeRuntime.Arguments(Cwd(launch), VibeRuntime.ExportFolder(owned, role, Guid.NewGuid()), launch.Settings.Timeout, ReadOnly(launch), VibeLimits.ConsultantTurns),
             .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
         ];
         ConsultantLaunches.MustCarryNoLineBreak(argv);

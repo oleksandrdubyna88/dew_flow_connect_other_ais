@@ -173,6 +173,31 @@ public sealed class VibeRuntimeTests : IDisposable
         new VibeRuntime().ReadUsage(missing, Finished).Should().Be(Usage.Unknown);
     }
 
+    /// <summary>K3: a REVIEW is never capped — it reads a snapshot whose files its prompt names, and a cut review is paid for and lost.</summary>
+    [Fact]
+    public void AReview_AndItsRetryOrRepair_CarryNoTurnCap()
+    {
+        var runtime = new VibeRuntime("vibe", HostKind.Windows);
+        var built = Built();
+
+        built.Request.Arguments.Should().NotContain("--max-turns");
+        runtime.ForLaunch(built).Request.Arguments.Should().NotContain("--max-turns");
+    }
+
+    /// <summary>K4: the cap's outcome is coai's sentence — what happened, why Vibe could not find it, and what to do.</summary>
+    [Fact]
+    public void ATurnLimit_IsSaidAsCoaisCap_AndATokenLimitInTheSameWords()
+    {
+        var turns = WithExport("""{"outcome":"turn_limit","stop_reason":"limit","usage":{"input_tokens":84186,"output_tokens":1395}}""");
+        var tokens = WithExport("""{"outcome":"token_limit","stop_reason":"interrupted","usage":null}""");
+        var deadline = WithExport("""{"outcome":"deadline","stop_reason":null,"usage":null}""");
+        var runtime = new VibeRuntime();
+
+        runtime.WhyItFailed(turns, Finished with { ExitCode = 3 }).Should().Contain("20").And.Contain("--max-turns").And.Contain("list a folder").And.Contain("§28");
+        runtime.WhyItFailed(tokens, Finished with { ExitCode = 3 }).Should().Contain("token").And.Contain("§28");
+        runtime.WhyItFailed(deadline, Finished with { ExitCode = 3 }).Should().Contain("time limit", "the deadline's sentence is unchanged");
+    }
+
     [Fact]
     public void ADeadline_IsSaidAsOne_FromTheExportsOutcome()
     {

@@ -146,13 +146,15 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// The same argv with the read-only pair a question row's PLAN gave (<see cref="ConfinementPlanner"/> — the one place a
     /// row's sandbox is decided); every other launch passes <see cref="ConfinementPlanner.VibeReadOnly"/>, the same words.
     /// </summary>
-    internal static IReadOnlyList<string> Arguments(string workdir, string exportFolder, TimeSpan timeout, IReadOnlyList<string> readOnly) =>
+    /// <param name="maxTurns">The cap on assistant turns (<see cref="VibeLimits.ConsultantTurns"/> for a consultant launch); 0 — a review — passes none.</param>
+    internal static IReadOnlyList<string> Arguments(string workdir, string exportFolder, TimeSpan timeout, IReadOnlyList<string> readOnly, int maxTurns = 0) =>
     [
         "-p",
         "--output", "json",
         .. readOnly,
         "--workdir", workdir,
         "--time-limit", TimeLimit(timeout).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        .. maxTurns > 0 ? (string[])["--max-turns", maxTurns.ToString(System.Globalization.CultureInfo.InvariantCulture)] : [],
         "--output-dir", exportFolder,
     ];
 
@@ -228,6 +230,10 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     {
         { Exists: false } => string.Empty,
         { Outcome: "deadline" } => $"Vibe stopped at its own time limit (--time-limit, outcome: deadline) — {invocation.Request.Timeout.TotalSeconds:0} s was not enough for this review",
+        { Outcome: "turn_limit" } => $"Vibe stopped at coai's cap of {VibeLimits.ConsultantTurns} assistant turns (--max-turns) — it did not find what it was asked for in its granted folders; "
+            + "Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28), so name the files the question is about",
+        { Outcome: "token_limit" } => "Vibe stopped at a token cap (--max-tokens, outcome: token_limit) — it did not find what it was asked for in its granted folders; "
+            + "Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28), so name the files the question is about",
         { Error.Length: > 0 } failed => $"{failed.Error} (outcome: {failed.Outcome})",
         var other => $"Vibe ended with outcome: {other.Outcome}",
     };

@@ -186,6 +186,27 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
             "the row's home and copy go in finally, whatever ended it");
     }
 
+    /// <summary>K5: Vibe stopped at coai's turn cap — a failed row with coai's sentence and the usage read from the export, never zero.</summary>
+    [Fact]
+    public async Task ARowThatHitsTheTurnCap_FailsWithCoaisSentence_AndItsUsageIsRead()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        var vibe = new PlayedVibe(_launcher, string.Empty)
+        {
+            Outcome = "turn_limit", TurnExit = 3, TurnStdErr = "Stopped: turn_limit\r\n", Usage = (84186, 1395),
+        };
+
+        var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
+
+        var row = TheRow(reply);
+        row.GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
+        row.GetProperty("reason").GetString().Should().StartWith("exit 3: Vibe stopped at coai's cap of 20 assistant turns");
+        vibe.Turns.Should().ContainSingle().Which.Request.Arguments.Should().ContainInConsecutiveOrder("--max-turns", "20");
+        var billed = File.ReadAllLines(_dir.At("data", "usage.jsonl")).Select(line => JsonDocument.Parse(line).RootElement).Should().ContainSingle("one ledger line for the turn").Subject;
+        billed.GetProperty("tokensIn").GetInt64().Should().Be(84186, "read from the export, never zero");
+        billed.GetProperty("tokensOut").GetInt64().Should().Be(1395);
+    }
+
     // ---------- the home is short and owned (D1 of todo/PLAN_vibe_live_round_fixes.md, A9) ----------
 
     private string Homes => Directory.CreateDirectory(_dir.At("homes")).FullName;
