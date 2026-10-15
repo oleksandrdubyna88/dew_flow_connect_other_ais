@@ -36,8 +36,11 @@ const KIMI: Vendor = {
   baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0,
 };
 
-/** The newest `coai-mcp` released WITHOUT the runtime — mcp 0.55.0 (2026-10-15) is the newest tag when this was written. */
-const OLDER = '0.55.0';
+/**
+ * A `coai-mcp` that is RELEASED without the runtime and is the newest the gate must hold the row back from: mcp 0.56.0, the release `main` will cut next
+ * (it already holds two `feat` commits after `mcp-v0.55.0`) — Kimi lands in the one after, `KIMI_RUNTIME_SINCE`. 0.55.0, the newest tag, is below it too.
+ */
+const OLDER = '0.56.0';
 const KNOWN = (version: string) => ({ kind: 'known' as const, version, remembered: false, updateOffered: false });
 
 const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', ...parts);
@@ -184,7 +187,8 @@ test('theUpdateLightReadsNpm: the newest Kimi is read from the package that is t
 
 test('anOlderServerNeverGetsAKimiRow: held out of the file below the release that knows it, crossing at it and on an unknown server', () => {
   assert.match(KIMI_RUNTIME_SINCE, /^\d+\.\d+\.\d+$/u, 'KIMI_RUNTIME_SINCE is not a version');
-  assert.equal(runtimeOnServer('kimi', OLDER), false, 'mcp 0.55.0 is RELEASED without the runtime');
+  assert.equal(runtimeOnServer('kimi', '0.55.0'), false, 'the newest TAG is released without the runtime');
+  assert.equal(runtimeOnServer('kimi', OLDER), false, 'mcp 0.56.0 is released without the runtime (0.55.0, the newest tag, too)');
 
   const older = rowsOf(vendorsEnv([...DEFAULT_VENDORS, KIMI], OLDER));
   assert.deepEqual(older.map((row) => row.id), ['codex', 'antigravity'],
