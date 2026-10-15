@@ -3411,7 +3411,7 @@ flowchart LR
 - **Tools.** `KimiTools`: `rg` and `fd` must each be found in the person's `bin` or on the parent's `PATH` (the name, then each `PATHEXT`
   suffix — `ExecutableResolver.In`, shared), else the launch is refused before any process with the two winget commands. They are
   NEVER admitted into the home by hash (the owned home holds no code); the built `PATH` begins with the person's `bin`, then the folder of
-  each tool found elsewhere, then the parent's entries (`KimiLaunch.BuiltPath`, idempotent).
+  each tool found elsewhere, then the parent's entries (`KimiEnvironment.BuiltPath`, idempotent).
 - **The config is RENDERED, never copied** (`KimiConfig`, byte for byte the probe's rung 3; LF, no BOM; a value needing an escape is a
   refusal naming the KEY). The slot is READ (`KimiPersonsConfig`: type must be `kimi`, storage must be `file`), the model block is the
   person's own `[models."id"]` when whole and on `managed:kimi-code` (`CodexConfigFile.TableValue/TableStrings/HasTable`, the one
@@ -3428,9 +3428,9 @@ flowchart LR
   reverse). The TREE HOLD (`<key>.tree.lock` + `<root>/coai-tree.lock`, the SHIM's, `FileShare.Inheritable`) is taken immediately before
   the agent starts: `kimi` inherits it, so the sign-in stays held while EITHER lives — a coai-mcp killed over a still-refreshing `kimi`
   must not let a second refresher in. UNMEASURED: whether `kimi`'s own children inherit it and can outlive it (E4.3's S3.14 and S3.17).
-  The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
+  The per-home file is waited for 500 ms (`HomeWait`): a disposal's `HomeProbe` opens it exclusively for an instant. The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
   rotation, exactly as the person's own `kimi` would; `kimi login` cures it (M-K14 decides whether a grace is needed).
-- **Disposal** (`KimiHome.Dispose`): (1) the per-HOME hold probed (`Held` or `Unknown` stop with nothing unlinked and nothing outside coai's tree
+- **Disposal** (`KimiHome.Dispose`; refused through a link — a root or `home/` that is itself a link answers `Stopped` from `Dispose` and is skipped by `DisposeAllUnder`, left to the deleter that removes the link by its own name): (1) the per-HOME hold probed (`Held` or `Unknown` stop with nothing unlinked and nothing outside coai's tree
   opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
   (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
   1–3 on a folder's own home and every `kh-*` child and leaves the rest to the caller's deleter; the D20 sweep calls it under its locks
@@ -3439,9 +3439,9 @@ flowchart LR
   credentials directly.
 - **An ancestor of the credentials target may be a link** (a relocated profile); the target itself may not. `Junctions.Refusal` asks the
   kernel where the target really is and refuses only a resolution that leaves the local drives.
-- **The built environment** (`KimiLaunch.Built`): not inherited, `ProcessEnvironment.Minimal`, exactly seven names — `KIMI_CODE_HOME`,
+- **The built environment** (`KimiEnvironment.Built`, its own unit; `KimiLaunch` is the checks and the launch): not inherited, `ProcessEnvironment.Minimal`, exactly seven names — `KIMI_CODE_HOME`,
   `KIMI_CODE_NO_AUTO_UPDATE=1`, `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH` (all into the owned `os/`) and `PATH`; `EnvironmentRefusal` admits
-  exactly what `Built` makes. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is warned about and run (`VersionWarnings`, the one
+  exactly what `Built` makes. The version probe is built from the LAUNCH request's own PATH (`KimiEnvironment.PathOf`), so one PATH source feeds both, and a person's home that is not on a local drive is refused by its spelling before any read, so a UNC home is never connected to. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is warned about and run (`VersionWarnings`, the one
   builder, Vibe's sentence unchanged); a version-less or unstartable one is refused.
 - **Nothing of the sign-in is ever written by coai:** it reads only the slot's NAME and `type`/`base_url`/`storage`/`oauth_host` and the credentials
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
