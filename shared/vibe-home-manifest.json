@@ -24,7 +24,7 @@
     "logs/session/plugins/tmp/**"
   ],
   "varyingFolders": [
-    "logs/session/plugins/data/*/**"
+    "logs/session/plugins/data/**"
   ],
   "versions": [
     {

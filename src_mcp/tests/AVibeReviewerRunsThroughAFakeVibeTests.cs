@@ -80,7 +80,8 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     {
         var work = Directory.CreateDirectory(_dir.At("work")).FullName;
 
-        return new VibeRuntime("vibe", HostKind.Windows).Build(RoleCatalog.ArchitectureRole, "review this", work, _dir.At("s.json"), _dir,
+        // Not about path length (TEMP is this machine's, a CI runner's another): the budget has its own tests.
+        return new VibeRuntime("vibe", HostKind.Windows, VibePathBudget.None).Build(RoleCatalog.ArchitectureRole, "review this", work, _dir.At("s.json"), _dir,
             new ReviewerSettings("vibe") { ExecutablePath = FakeCliExe, Model = "glm-5-3", OwnedScratch = Directory.CreateDirectory(_dir.At("round")).FullName, Timeout = TimeSpan.FromSeconds(60) });
     }
 
@@ -191,6 +192,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             Assert.Skip("D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal");
         }
 
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var (repo, data) = await RepositoryAsync();
         var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
         var homes = Directory.CreateDirectory(_dir.At("homes")).FullName;
@@ -216,7 +218,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         // A8: the home the child was given is under the homes root's coai-vh, short enough for Vibe's deepest write, and gone with the round.
         var vibeHome = (await File.ReadAllLinesAsync(env, TestContext.Current.CancellationToken)).Single(line => line.StartsWith("VIBE_HOME=", StringComparison.Ordinal))["VIBE_HOME=".Length..];
         vibeHome.Should().StartWith(Path.Combine(homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "D1: never under TEMP");
-        vibeHome.Length.Should().BeLessThanOrEqualTo(102, "the Windows budget's longest home");
+        (vibeHome.Length - homes.Length).Should().BeLessThanOrEqualTo(24, "what the layout costs beyond the root (`/coai-vh/<8>/<6>`) fits the Windows budget at the default root");
         Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the round's homes folder was deleted when the round ended");
     }
 

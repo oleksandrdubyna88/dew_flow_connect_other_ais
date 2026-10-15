@@ -14,7 +14,7 @@ after(() => rmSync(base, { recursive: true, force: true }));
 const RULES = {
   pinnedPrefix: 'logs/session/plugins/',
   varying: ['trusted_folders.toml', 'vibehistory', 'logs/vibe.log', 'logs/session/plugins/tmp/**', 'logs/session/unified/*/**'],
-  varyingFolders: ['logs/session/plugins/data/*/**'],
+  varyingFolders: ['logs/session/plugins/data/**'],
 };
 
 const SESSION = '4f94d59a-afc4-fe1d-2354-ff6c5e3f799d';

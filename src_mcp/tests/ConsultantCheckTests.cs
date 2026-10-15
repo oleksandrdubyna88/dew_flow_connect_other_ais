@@ -495,6 +495,7 @@ public sealed class ConsultantCheckTests : IDisposable
     public async Task AVibeCheck_ReadsTheMarkerInACopyOfTheScratch_NeverTheScratchItself()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = CoaiMcp.Runners.Vibe.VibePathBudget.Using(CoaiMcp.Runners.Vibe.VibePathBudget.None);
         var vibe = new PlayedVibe(new ProcessLauncher(), string.Empty)
         {
             AnswerFor = seen => $"marker: {seen.Files["CHECK.md"].Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT",
@@ -519,7 +520,7 @@ public sealed class ConsultantCheckTests : IDisposable
         var home = turn.Request.Environment[Runners.Vibe.VibeLaunch.HomeVariable]!;
         home.Should().StartWith(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "D1: under the short homes root, never under TEMP");
         Path.GetFileName(home).Should().Be("h");
-        home.Length.Should().BeLessThanOrEqualTo(102, "A10: the check's home fits the Windows budget");
+        (home.Length - homes.Path.Length).Should().BeLessThanOrEqualTo(19, "A10: what the check's layout costs beyond the root (`/coai-vh/<8>/h`) fits the Windows budget at the default root");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
         Directory.EnumerateFileSystemEntries(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
     }

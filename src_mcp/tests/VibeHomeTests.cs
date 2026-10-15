@@ -123,6 +123,21 @@ public sealed class VibeHomeTests : IDisposable
         VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
     }
 
+    /// <summary>The glob is `data/**`: a file directly in `plugins/data/` or in a session's folder is as much plugin data as one deeper (it was admitted by place under `data/*/**`).</summary>
+    [Theory]
+    [InlineData("stray.json")]
+    [InlineData("193149ad-d8e5-069e-8f34-aece24b2623d.json")]
+    public void AFileDirectlyUnderThePluginDataFolder_IsRefusedOnBothChecks(string file)
+    {
+        TheInventoryVibeWrites();
+        TheExtrasTurnOneLeaves();
+        var relative = $"logs/session/plugins/data/{file}";
+        Write(relative, "{}");
+
+        Refusal().Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
+        VibeHome.Refusal(_home, Manifest).Should().Contain($"holds {relative},").And.Contain("plugin's per-session data");
+    }
+
     [Fact]
     public void AFileVibeStagesWhileUnpacking_IsAdmittedByName_ButAStarterInItIsStillRefused()
     {
@@ -159,7 +174,7 @@ public sealed class VibeHomeTests : IDisposable
         var folders = manifest.TryGetProperty("varyingFolders", out var list) ? list.EnumerateArray().Select(item => item.GetString()!).ToArray() : [];
 
         varying.Should().Contain("logs/session/plugins/tmp/**");
-        folders.Should().Equal("logs/session/plugins/data/*/**");
+        folders.Should().Equal("logs/session/plugins/data/**");
         varying.Should().Equal(ListIn(script, "VARYING"), "the JSON's varying is the script's constant verbatim");
         folders.Should().Equal(ListIn(script, "VARYING_FOLDERS"), "and so is varyingFolders");
         manifest.GetProperty("versions").EnumerateArray().Single(v => v.GetProperty("version").GetString() == "2.26.1")

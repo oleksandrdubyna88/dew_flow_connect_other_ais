@@ -81,7 +81,7 @@ const VARYING = [
  * there are Vibe's own and a file is not: the product refuses one, and so does this script.
  */
 const VARYING_FOLDERS = [
-  'logs/session/plugins/data/*/**',
+  'logs/session/plugins/data/**',
 ];
 
 const RULES = { pinnedPrefix: PINNED_PREFIX, varying: VARYING, varyingFolders: VARYING_FOLDERS };

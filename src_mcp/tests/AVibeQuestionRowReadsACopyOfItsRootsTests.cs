@@ -106,6 +106,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ASubFolderGrant_CopiesOnlyThatSubFolder_WithoutTheBranchsConfiguration_AndThePromptNamesTheCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
         var granted = Path.Combine(Repo, "src");
 
@@ -125,6 +126,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task TwoRoots_BothArrive_EachInItsOwnCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
 
         var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src"), Other));
@@ -156,6 +158,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowTheLaunchControlRefuses_LeavesNoHomeAndNoCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice) { VersionExit = 1 };
 
         var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
@@ -169,6 +172,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowCancelledInFlight_LeavesNoHomeAndNoCopy()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var vibe = new PlayedVibe(_launcher, Advice)
         {
@@ -191,6 +195,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowThatHitsTheTurnCap_FailsWithCoaisSentence_AndItsUsageIsRead()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, string.Empty)
         {
             Outcome = "turn_limit",
@@ -221,6 +226,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowsHome_IsUnderTheHomesRootsCoaiVh_ShortEnough_AndGoneAfterTheAnswer()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
 
         var reply = await AskAsync(ServiceOn(vibe, Homes, Path.Combine(Repo, "src")));
@@ -229,7 +235,34 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         var home = vibe.Turns.Should().ContainSingle().Subject.Request.Environment[VibeLaunch.HomeVariable]!;
         Path.GetFileName(home).Should().Be("h");
         Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(Homes, VibeHomes.OneShotFolder));
-        home.Length.Should().BeLessThanOrEqualTo(102);
+        // Not an absolute length: the root is under this machine's TEMP, whatever its length. What the layout costs beyond the root is
+        // `/coai-vh/<8>/h` — 19 characters — and that is what fits the Windows budget at the default root (D1's table).
+        (home.Length - Homes.Length).Should().BeLessThanOrEqualTo(19);
+        TheHomesFolderIsEmpty();
+    }
+
+    /// <summary>The row reserves its one-shot folder, and its scratch folder is made too: when making the scratch throws, the reservation must not stay behind.</summary>
+    [Fact]
+    public async Task ARowWhoseScratchFolderCannotBeMade_LeavesNoFolderUnderCoaiVh()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        var admitted = (RowAdmission.Admitted)QuestionAdmission.Admit(
+            new QuestionRow("vibe-disk", "mistral", "vibe", "glm-5-3", string.Empty, PlayedVibe.Exe, string.Empty, "question-disk", Enabled: true),
+            new QuestionConsultSettings { Roots = [Path.Combine(Repo, "src")] }, [], Core.Api.ApiOverrides.None);
+        var input = new RowLaunchInput(
+            admitted, "Which helper retries?", new Runners.Reviewers.ReviewerSettings("vibe") { ExecutablePath = PlayedVibe.Exe, Model = "glm-5-3", Timeout = TimeSpan.FromSeconds(30) },
+            Repo, Directory.CreateDirectory(_dir.At("answers")).FullName, string.Empty, TimeSpan.FromSeconds(30))
+        {
+            ChangesSoFar = _ => Task.FromResult<IReadOnlyList<Core.Consultation.TreeChange>>([]),
+        };
+        var launch = new QuestionRowLaunch(new Runners.Reviewers.ReviewerExecutor(_launcher), new Runners.Reviewers.UsageLedger(_dir.At("data")), Logger.None, _launcher, Homes)
+        {
+            MakeScratch = () => throw new IOException("the scratch folder could not be made"),
+        };
+
+        var running = () => launch.RunAsync(input, new QuestionRowRecord("vibe-disk", "mistral", "glm-5-3", "vibe", "question-disk", "Projects on this disk", "disk", "default-deny"), TestContext.Current.CancellationToken);
+
+        await running.Should().ThrowAsync<IOException>();
         TheHomesFolderIsEmpty();
     }
 
@@ -237,6 +270,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowTheLaunchControlRefuses_LeavesNoFolderUnderCoaiVh()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice) { VersionExit = 1 };
 
         var reply = await AskAsync(ServiceOn(vibe, Homes, Path.Combine(Repo, "src")));
@@ -249,6 +283,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task ARowCancelledInFlight_LeavesNoFolderUnderCoaiVh()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var vibe = new PlayedVibe(_launcher, Advice)
         {
@@ -270,6 +305,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task WithNoHomesRoot_TheRowKeepsItsHomeInItsOwnScratch()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
 
         await AskAsync(Service(vibe, Path.Combine(Repo, "src")));
@@ -353,6 +389,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     public async Task OverlappingGrants_StandInCopiesOfAuthorisedBytes_AndThePromptNamesOnlyTheCopies()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
         var inner = Path.Combine(Repo, "src");
 

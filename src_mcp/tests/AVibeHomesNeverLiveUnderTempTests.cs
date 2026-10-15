@@ -58,7 +58,8 @@ public sealed class AVibeHomesNeverLiveUnderTempTests : IDisposable
         using var scratch = RoundScratch.Reserve(_ => { }, _homes, keepsAHome: true);
 
         scratch.HomeFolder.Should().NotStartWith(temp).And.StartWith(Path.Combine(_homes, VibeHomes.OneShotFolder));
-        VibeRuntime.HomeFor(scratch.HomeFolder, "vibe", "PlanCritique").Length.Should().BeLessThanOrEqualTo(102);
+        (VibeRuntime.HomeFor(scratch.HomeFolder, "vibe", "PlanCritique").Length - _homes.Path.Length).Should().BeLessThanOrEqualTo(24,
+            "what the layout costs beyond the root (`/coai-vh/<8>/<6>`) fits the Windows budget at the default root, whatever the root's length");
     }
 
     [Fact]
