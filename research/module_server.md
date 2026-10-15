@@ -7192,3 +7192,12 @@ step after the release, recorded then in research/RESULTS_vibe_confinement.md an
   sits in the place's held list (`ConsultantPlaces.OwnedAsync`).
 - **Sweeps**: `PanelService.PruneOldAnswerDirs(homesRoot)` also calls `VibeHomes.SweepOneShot`; `ConsultantHomeSweep.Pass.Over` and
   `SettleOne` (`close_consult`) open each homes folder through `PrivateFolder` first, and a refused one is said and walked by nothing.
+- **A wrong `COAI_CONSULTANT_HOMES` is said at startup** (`PanelSettings.HomesRootProblems`): a `SettingProblem` with the stored value and the
+  kind `missing-folder` (a full local path that is not there) or `unreadable-folder` (not a full local path — a share, a `\\?\` path — where
+  a 'missing' mark would lie), the sentence being the one a launch would be refused with (`PrivateFolder.RootRefusal`). The extension takes the
+  server's word for this setting (`saidBy: 'server'`), draws the mark beside the *Vibe homes folder* box and raises the missing-folder notice.
+- **Leaks closed on the exception paths:** the conversation place gives the homes folder's pinned handle back when the turn wait is cancelled or the
+  folder cannot be made; a question row makes its scratch folder inside the `try` whose `finally` releases its reservation; `RosterBuilder.ScratchAsync`
+  disposes the round's scratch (and its reservation) when the snapshot is cancelled, since the engine disposes only a scratch it was handed.
+- `SweepOneShot` says a `coai-vh` that is a link to nothing (`Directory.Exists` is false for a dangling symlink; on Windows a dangling junction still
+  reaches `PrivateFolder`, whose refusal now says "link").

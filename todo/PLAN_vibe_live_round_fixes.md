@@ -204,7 +204,7 @@ refused.** From the source cited in §1(2):
   package (a staged tree is re-digested before it is renamed, under a random name a planted folder cannot take), Vibe
   sweeps it itself, and a reviewer killed at its timeout mid-unpack leaves files there that its retry must not be refused
   over. A file under it is still put through `VibePluginStarters.Problem` (`VibePluginStarters.cs:39-42`) on both checks.
-- `logs/session/plugins/data/*/**` joins a NEW manifest list, `varyingFolders`: the FOLDERS that match it are admitted, and
+- `logs/session/plugins/data/**` joins a NEW manifest list, `varyingFolders`: the FOLDERS that match it are admitted, and
   any FILE under `plugins/data/` is refused on both checks — *"…holds {path}, which is a file in a Vibe plugin's
   per-session data, where Vibe adopts a plugin's runtime code without re-checking it (vibe/core/plugins/_materialize.py) —
   coai admits only its empty folders"*. Turn 1 of the built-in package wrote none; the first Vibe that does is refused
@@ -541,7 +541,7 @@ flags verbatim. **Redacted before commit:** the question and context are paraphr
 | no usable flag, H1 holds | not decided here: the question goes to the owner with the options and their costs — a lower question-row `--time-limit`, a question naming a path outside the row's granted roots refused or flagged before launch, or a prompt line telling the row a denied read is final (each a measured arm before it ships) |
 | neither H1 nor a flag | §28 is the deliverable; a fresh `todo/` plan carries what it found |
 
-### M-V18 — long paths ON, and a `\\?\` home (a follow-up; nothing in this plan waits for it)
+### M-V18 — long paths ON, and a `\\?\` home (a follow-up; nothing in this plan waits for it; it must also measure 8.3 short names — the budget counts `GetFullPath` as written)
 
 **Question.** Can the budget be relaxed — does Vibe 2.26.1 write past 259 characters (a) with `LongPathsEnabled = 1`, or
 (b) given `VIBE_HOME=\\?\<full path>` with the flag at 0? Today D2 refuses on Windows whatever the flag says, because the
@@ -622,6 +622,15 @@ the session written and resumed, the home validation still passing (does `\\?\` 
 
 ## 11. Gate and review — what changed (2026-10-15)
 
+- **Review round, 2026-10-15 (an Opus judge and a cadence consultant): FIX.** D7: ONE handle is opened (with a data right and, when it can,
+  WRITE_DAC), verified, re-ACLed and HELD (the first version verified one handle and held another, opened by path); after a re-ACL every
+  descendant is walked — links never entered — and reset to inherit (propagation leaves explicit entries and protected DACLs), only when the
+  parent needed the re-ACL; a child's planted OWNER keeps an implicit WRITE_DAC (stated). E5's token-privilege struct was laid out wrong, so it
+  never ran; fixed and restored after. `COAI_CONSULTANT_HOMES` is judged at startup (a `SettingProblem`) and drawn as a mark on the page.
+  `Exited` follows the scheduler's precedence (an announcing stderr line first); the cap wording is neutral; the Vibe end-to-end tests no longer
+  depend on TEMP's length (a 55-character TEMP reproduced 8 failures); `plugins/data/**`; three exception-path leaks; the structural test widened;
+  a dangling `coai-vh` is said. Deviation: B3's "second process" is a second open in the same process. M-V18 must also measure 8.3 names (the
+  budget counts `GetFullPath`, which keeps them as written).
 - **D7 per the security review, 2026-10-15** (ACCEPT-WITH-CHANGES): one `PrivateFolder` type is the only entry into `<root>\coai-*`; the
   root must exist and is never created; folders are made with a protected DACL and verified by handle (path, owner, DACL), re-ACLed when
   only the DACL is wrong and refused when the owner is another; the handle is held; the export moves beside the home; a `windows` CI job.

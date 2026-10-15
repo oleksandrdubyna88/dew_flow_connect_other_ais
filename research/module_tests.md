@@ -4020,3 +4020,23 @@ runner. `VibePathBudget.Using` is the `AsyncLocal` seam for scenarios that drive
 of the existing Vibe test classes: none needed `VibePathBudget.None` for its own homes on this machine except the four
 `AVibeConsultationKeepsOneSnapshotTests` scenarios that build a service with a data folder under TEMP (they use `Using`); the rest
 already passed the 102-character limit or were changed to a `testsToDelete-vh-*` homes root.
+
+### Review round of 2026-10-15 (the Opus judge and the cadence consultant) — what was added, and its first red
+
+| Finding | Test | First red |
+|---|---|---|
+| D7 TOCTOU: the held handle was not the verified one | `E10_AFolderRenamedAndReplacedWhileItIsBeingMadePrivate_IsNeverHandedBack` (the `note` callback renames the verified folder and puts a wide one in its place) | `the verified folder was swapped for a wide one during the re-ACL and Open still returned it as private` |
+| a folder somebody holds open for delete | `E10c_…IsRefused` | pins the behaviour (the old verifying handle conflicted too); the first version of the fixture held no DELETE access and proved nothing |
+| re-ACL left explicit and protected children | `E3b`, `E3c` (inheritable entry on the parent), `E3d` (a junction inside: the target's SDDL is unchanged), `E3e` (a second Open of a private parent does not walk — the stated limit) | E3b: `Expected rules… to be a collection with 3 item(s)… contains 1 item(s) more` (the explicit `Everyone`) |
+| E5 never ran (TOKEN_PRIVILEGES layout) | `ThePrivilegeHelper_EnablesAPrivilegeTheTokenHolds_AndPutsItBack` on `SeIncreaseWorkingSetPrivilege`; `TokenPrivilege` restores the previous state; the class is in the non-parallel `process-privileges` collection | `Expected enabled not to be <null>`; E5 itself still skips on a session that is not elevated (here), and runs on the elevated CI runner |
+| a wrong Vibe homes folder was never shown | `TheVibeHomesRootIsJudgedAtStartupTests` (C#); `pathFindings.test.ts` and `consultant.test.ts` (the extension) | `Expected var problem = With(gone).SettingProblems to contain a single item, but the collection is empty`; TS: `vibeHomesFinding does not exist in type ConsultantViewState` |
+| FailureReason inverted the stderr precedence | `AnAnnouncingStderrLine_BeatsTheAdaptersReading_ButALabelDoesNot` | `Expected announced "Vibe stopped at coai's cap…" to contain "the provider refused the request"` |
+| the cap wording asserted a failed search | `ATurnLimit_IsSaidAsCoaisCap_…` (neutral), `EachTurnOfAConversation_CarriesItsOwnCap_SoTheCapResetsPerLaunch` | `Expected … to contain "before it answered"` |
+| CI margin | the Vibe end-to-end classes rerun with TEMP, TMP and TMPDIR at a 55-character `testsToDelete-` folder (the process environment of the exe launched) | 8 failures in 5 classes before (`…is 109 characters long` and `NotStarted`); 0 of 132 after |
+| plugins/data glob | `AFileDirectlyUnderThePluginDataFolder_IsRefusedOnBothChecks`, the parity test | `…holds logs/session/plugins/data/stray.json, which is not one of the files Vibe 9.9.9 unpacks` (the shape check admitted it by place) |
+| exception-path leaks | `ACancellationWhileTheFoldersTurnIsWaitedFor_GivesTheHomesFoldersHandleBack`, `ARowWhoseScratchFolderCannotBeMade_LeavesNoFolderUnderCoaiVh` (a `MakeScratch` seam), `ASnapshotCancelledWhileItIsMade_GivesTheRoundsOneShotFolderBack` | `The process cannot access the file because it is being used by another process` (the pinned folder); a surviving `coai-vh\<8>` folder, twice |
+| the structural test | `EveryFileThatSpellsAFolderUnderTheHomesRoot_AlsoOpensItThroughPrivateFolder` | green from the start (no offender); it asserts it sees more than three spelling files |
+| dangling `coai-vh` | `CoaiVhADanglingJunction_IsSaid_NotSweptInSilence` | the refusal did not say "link" (on Windows a dangling junction was already said, via `PrivateFolder`; the symlink case is covered in the code) |
+
+Deviation recorded: **B3** (a lock held by another server) is tested with a second open of the same `HeldFile` in the SAME process, not by a child
+process — the exclusive open is the kernel's, so the second opener sees the same refusal, but it is not a second process.

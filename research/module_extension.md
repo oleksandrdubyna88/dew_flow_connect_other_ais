@@ -12821,3 +12821,7 @@ consultant* article (`helpContent.ts`, `helpDe.ts`, `helpEs.ts`, `helpRu.ts`, `h
 existing, that coai makes its folders there private, and that the old folder's `coai-vibe` and `coai-vh` can be deleted after a change.
 The failure word `launch-refused` ("Refused by coai's launch check") joined `consultantHealth.ts`'s label map together with
 `shared/consult-failure-kinds.json`.
+
+The box shows the server's word: `consultantView.ts` draws the shared path mark (`pathMark.ts`) beside *Vibe homes folder* from
+`state.pathFindings`, where `agreed()` turns the server's `COAI_CONSULTANT_HOMES` problem into a finding on `coai.vibeHomesDirectory`
+(place `consultants/consultant`, owner, consequence and cure in `pathFindings.ts`).
