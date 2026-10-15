@@ -187,11 +187,12 @@ consultant's grouping:** the extension's rounds log reads the SESSION FILE, not 
 it is display, and so that E1 ships nothing in `src_vs_code`. Riskiest: a read that is wrong with no symptom — a lossy
 decode, a truncation the flag missed, a BOM — recorded under a blob id it does not match; the area holds exactly that.
 
-Cornerstones: 0 of 1 — area named under E1, story to be marked by Opus
+Cornerstones: 1 of 1 — E1.S2
 
 ### E1 — Review a committed plan safely, and record what was reviewed (§6 steps 1–4) · L · depends on nothing
 
-- **Stories.** `todo/PLAN_the_plan_gate_reads_the_committed_plan_E1.md` — written when the epic starts.
+- **Stories.** [PLAN_the_plan_gate_reads_the_committed_plan_E1.md](PLAN_the_plan_gate_reads_the_committed_plan_E1.md) — six
+  stories, written by Opus 2026-10-15; **E1.S2 is the cornerstone** (the reader's integrity proof, spec by Fable).
 - **Goal.** §2 items 1–3, 5 and 6, and the session-file half of 4: a caller names a committed plan, the server reads it
   from the object database at the one pinned commit, proves the capture whole, refuses every wrong read before a round is
   consumed, every reviewer gets it whole, a reviewer that says it did not is not counted as answering, and the round's
@@ -227,7 +228,8 @@ Cornerstones: 0 of 1 — area named under E1, story to be marked by Opus
 
 ### E2 — Expose plan provenance in history and the rounds log (§6 steps 4–5) · S · depends on E1 (the record it projects and shows)
 
-- **Stories.** `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md` — written when the epic starts.
+- **Stories.** [PLAN_the_plan_gate_reads_the_committed_plan_E2.md](PLAN_the_plan_gate_reads_the_committed_plan_E2.md) — three
+  stories, written by Opus 2026-10-15 together with E1's; no cornerstone.
 - **Goal.** §2 item 4's second half: `--log` and the extension's rounds log show what each plan round reviewed; a database
   from before the step and a session file from before E1 read as *not recorded*, never as empty.
 - **Scope.** The schema step (D11) — `ALTER TABLE rounds ADD COLUMN plan_source TEXT NOT NULL DEFAULT ''` appended after
