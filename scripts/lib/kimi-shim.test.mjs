@@ -1,8 +1,12 @@
 // node --test scripts/lib/*.test.mjs — the confinement probe's shim arms speak the SHIPPED shim's contract (E4.3's flags, E4.5 brief
 // item 12): `--home <owned root>`, `--persons-bin` and `--locks` on the argv, the owned root laid out as `<root>/home` beside an empty
-// `<root>/os`, the agent's OS-home redirect and the person's `bin` first on PATH. Nothing here runs Kimi or spends a token: the argv is
-// read against the shim's own `--help` text, and the built shim is asked ONE turn with an executable that does not exist and an owned
-// root without a sign-in, so it parses every flag and refuses at the hold — before any agent could start.
+// `<root>/os`, the agent's OS-home redirect and the person's `bin` first on PATH. Nothing here runs Kimi or spends a token.
+//
+// WHAT IS PROVED, AND WHERE. (1) Everywhere, CI's ubuntu leg included: the argv is read against the SOURCE of the shim's help text
+// (`src_mcp/src/Program.cs`) — not against the binary's `--help` output. (2) LOCALLY ONLY: the built shim is asked ONE turn with an
+// executable that does not exist and an owned root without a sign-in, so it parses every flag and refuses at the hold — before any agent
+// could start. That second proof needs a Windows host and a shim already built at `src_mcp/src/bin/Debug`, which can be OLDER than the
+// source (the test does not build it), and it is skipped on the ubuntu runner, so a green CI run says nothing about it.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
@@ -42,7 +46,7 @@ test('a root with no person\'s bin or no lock folder is a half-plumbed call: ref
   assert.throws(() => kimi.shimArgs({ ...FULL, locks: '' }), /--locks/u);
 });
 
-test('every flag the probe sends is named in the shim\'s own --help text', () => {
+test('every flag the probe sends is named in the SOURCE of the shim\'s help text (Program.cs), not in a binary\'s output', () => {
   // reads-another-program: a positive claim about the shim's help text — each flag the probe sends is named there, so a flag renamed
   // on the server fails here loudly instead of the probe sending one the shim does not read.
   const help = readFileSync(join(repo, 'src_mcp', 'src', 'Program.cs'), 'utf8');
@@ -91,7 +95,7 @@ test('an arm that varies what the shim now fixes is refused by name — it canno
   assert.equal(kimi.shimRefusal({}), '');
 });
 
-test('the built shim parses the probe\'s argv and refuses at the hold, before any agent could start (a dry run: no kimi, no token)', { skip: !WINDOWS ? 'the hold is Windows-only (D18)' : !existsSync(SHIM) && 'the shim is not built' }, () => {
+test('the built shim parses the probe\'s argv and refuses at the hold, before any agent could start (a LOCAL dry run: no kimi, no token; Windows with a built, current shim only)', { skip: !WINDOWS ? 'the hold is Windows-only (D18) - this proof is local-only' : !existsSync(SHIM) && 'the shim is not built - this proof is local-only' }, () => {
   const root = owned.ownedRoot(join(base, 'dry')).root;
   const locks = join(base, 'dry-locks');
   const work = join(base, 'dry-work');

@@ -57,14 +57,20 @@ const VERBS: readonly {
   readonly admitted: 'packages' | 'wingetIds';
   /** The most arguments one step may carry — one for winget, whose second id is a second thing to install. */
   readonly most: number;
+  /** Flag-and-value pairs admitted EXACTLY as written: `--source winget` pins winget's community repository, any other value is a different source. */
+  readonly pairs: readonly (readonly [string, string])[];
+  /** Groups of spellings of which at least one must be present: `-e` / `--exact`, so an id is matched whole and not as a search. */
+  readonly required: readonly (readonly string[])[];
 }[] = [
-  { words: ['npm', 'install'], flags: ['-g', '--global'], spec: /^(.+?)(?:@(?:latest|\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?))?$/u, admitted: 'packages', most: Infinity },
-  { words: ['tool', 'install'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u, admitted: 'packages', most: Infinity },
-  { words: ['tool', 'upgrade'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u, admitted: 'packages', most: Infinity },
-  // winget: an exact id from the list, and no flag that points the install at anything else. --source, --manifest,
-  // --location, -v / --version and a second id are each refused by construction: the argument is then neither a flag listed
-  // here nor an id of the list, or there is more than one. --id itself is a flag here; its value is the one argument.
-  { words: ['winget', 'install'], flags: ['--id', '-e', '--exact', '--accept-source-agreements', '--accept-package-agreements', '--silent', '-h'], spec: /^([A-Za-z0-9][A-Za-z0-9.+-]*)$/u, admitted: 'wingetIds', most: 1 },
+  { words: ['npm', 'install'], flags: ['-g', '--global'], spec: /^(.+?)(?:@(?:latest|\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?))?$/u, admitted: 'packages', most: Infinity, pairs: [], required: [] },
+  { words: ['tool', 'install'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u, admitted: 'packages', most: Infinity, pairs: [], required: [] },
+  { words: ['tool', 'upgrade'], flags: [], spec: /^(.+?)(?:==\d+(?:\.\d+)*)?$/u, admitted: 'packages', most: Infinity, pairs: [], required: [] },
+  // winget: an EXACT id from the list (-e / --exact is required) out of the community repository (only the pair --source winget is
+  // admitted), and no flag that points the install at anything else. --manifest, --location, -v / --version, any other --source and
+  // a second id are each refused by construction: the argument is then neither a flag listed here nor an id of the list, or there is
+  // more than one. --id itself is a flag here; its value is the one argument.
+  { words: ['winget', 'install'], flags: ['--id', '-e', '--exact', '--accept-source-agreements', '--accept-package-agreements', '--silent', '-h'], spec: /^([A-Za-z0-9][A-Za-z0-9.+-]*)$/u, admitted: 'wingetIds', most: 1,
+    pairs: [['--source', 'winget']], required: [['-e', '--exact']] },
 ];
 
 /** A word that means "install something" — a step carrying one that no verb above reads is refused, not skipped. */
@@ -81,8 +87,16 @@ export function fromOfficialSources(command: string): boolean {
   const steps = command.split(STEP_BREAK).map(wordsOf).map(stepPackages);
 
   return urls.length + steps.reduce((sum, step) => sum + Math.max(step, 0), 0) > 0
-    && urls.every((url) => OFFICIAL_SOURCES.urls.some((prefix) => url.startsWith(prefix)))
+    && urls.every(urlIsAdmitted)
     && steps.every((step) => step >= 0);
+}
+
+/** A parent segment, plain or percent-encoded (any case), leaves the folder a prefix names — `/kimi-code/../x` still STARTS with `/kimi-code/`. */
+const LEAVES_THE_FOLDER = /\.\.|%2e/iu;
+
+/** Under an admitted prefix, and not climbing out of it. */
+function urlIsAdmitted(url: string): boolean {
+  return !LEAVES_THE_FOLDER.test(url) && OFFICIAL_SOURCES.urls.some((prefix) => url.startsWith(prefix));
 }
 
 /** A step's words, quotes stripped — what a shell would hand the program. */
@@ -127,9 +141,20 @@ function unknownInstall(words: readonly string[]): number {
 
 /** A read verb's arguments: every one an admitted flag or an admitted package, and at least one package. */
 function packagesAfter(words: readonly string[], verb: Verb): number {
-  const args = words.filter((word) => !verb.flags.includes(word));
+  const left = withoutPairs(words, verb.pairs);
+  const args = left.filter((word) => !verb.flags.includes(word));
 
-  return admitted(args, verb) ? args.length : -1;
+  return hasRequired(left, verb.required) && admitted(args, verb) ? args.length : -1;
+}
+
+/** The words with each admitted flag-and-value pair taken out — only the pair as written, so `--source msstore` stays and is then refused. */
+function withoutPairs(words: readonly string[], pairs: Verb['pairs']): readonly string[] {
+  return pairs.reduce((left, [flag, value]) => left.filter((word, at) => !(word === flag && left[at + 1] === value) && !(word === value && left[at - 1] === flag)), words);
+}
+
+/** Every group of spellings has at least one present. */
+function hasRequired(words: readonly string[], required: Verb['required']): boolean {
+  return required.every((spellings) => spellings.some((spelling) => words.includes(spelling)));
 }
 
 /** Whether a step's non-flag arguments are all the verb's to install, and no more of them than it may carry. */

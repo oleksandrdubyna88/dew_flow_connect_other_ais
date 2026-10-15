@@ -30,7 +30,7 @@ const KIMI: Vendor = {
 
 const SYSTEM_ROOT = process.env['SystemRoot'] ?? 'C:\\Windows';
 const WINDOWS_POWERSHELL = join(SYSTEM_ROOT, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-const FLAGS = '-e --accept-source-agreements --accept-package-agreements';
+const FLAGS = '-e --source winget --accept-source-agreements --accept-package-agreements';
 
 /**
  * The session the line runs in: the three stand-ins, the guard, the line, and what is left behind. The line runs as a
@@ -39,13 +39,19 @@ const FLAGS = '-e --accept-source-agreements --accept-package-agreements';
  */
 const HARNESS = [
   'foreach ($alias in "irm", "iex") { if (Test-Path "Alias:\\$alias") { Remove-Item "Alias:\\$alias" -Force } }',
-  'function winget {',
-  '  Add-Content -LiteralPath $env:FAKE_WINGET_LOG -Value ($args -join " ")',
-  '  $global:LASTEXITCODE = [int]$env:FAKE_WINGET_EXIT',
-  '}',
+  // A machine with no winget (App Installer missing, an older Windows): the stand-in is not defined at all, and the guard asks that
+  // nothing named winget resolves. $LASTEXITCODE is left at 0 on purpose — a profile or an earlier native command leaves it so.
+  'if (-not $env:FAKE_WINGET_ABSENT) {',
+  '  function winget {',
+  '    Add-Content -LiteralPath $env:FAKE_WINGET_LOG -Value ($args -join " ")',
+  '    $global:LASTEXITCODE = [int]$env:FAKE_WINGET_EXIT',
+  '  }',
+  '} else { $global:LASTEXITCODE = 0 }',
   'function irm { Add-Content -LiteralPath $env:FAKE_MOONSHOT_LOG -Value ("irm " + ($args -join " ")); "stand-in script" }',
   'function iex { Add-Content -LiteralPath $env:FAKE_MOONSHOT_LOG -Value ("iex " + ($input -join " ")) }',
-  'foreach ($name in "winget", "irm", "iex") { if ((Get-Command $name).CommandType -ne "Function") { "GUARD: $name is not the substitute"; exit 9 } }',
+  'foreach ($name in "irm", "iex") { if ((Get-Command $name).CommandType -ne "Function") { "GUARD: $name is not the substitute"; exit 9 } }',
+  'if ($env:FAKE_WINGET_ABSENT) { if (Get-Command winget -ErrorAction SilentlyContinue) { "GUARD: a real winget resolves"; exit 9 } }',
+  'elseif ((Get-Command winget).CommandType -ne "Function") { "GUARD: winget is not the substitute"; exit 9 }',
   '"STARTED"',
   'Invoke-Expression $env:COAI_LINE',
   '"LINE-ENDED"',
@@ -110,8 +116,9 @@ function linesOf(file: string): readonly string[] {
  *
  * @param present the tools that exist on PATH for this run (`git`, `rg`, `fd`)
  * @param wingetExit the exit code the `winget` stand-in answers every call with
+ * @param wingetAbsent no `winget` resolves at all
  */
-function run(shell: string, line: string, present: readonly string[], wingetExit = 0): Run {
+function run(shell: string, line: string, present: readonly string[], wingetExit = 0, wingetAbsent = false): Run {
   runs += 1;
   const place = join(root, `run ${runs}`);
   const bin = join(place, 'tools bin');
@@ -125,6 +132,7 @@ function run(shell: string, line: string, present: readonly string[], wingetExit
     PATH: `${bin};${join(SYSTEM_ROOT, 'System32')}`,
     FAKE_WINGET_LOG: logs.winget,
     FAKE_WINGET_EXIT: String(wingetExit),
+    ...(wingetAbsent ? { FAKE_WINGET_ABSENT: '1' } : {}),
     FAKE_MOONSHOT_LOG: logs.moonshot,
     COAI_LINE: line,
   };
@@ -172,6 +180,19 @@ test('theToolStepsSkipWhatIsThereAndStopOnFailure (c): fd absent, winget answers
     assert.deepEqual(moonshot, [], `${shell}: Moonshot’s step ran after a failed tool step: ${out}`);
     assert.doesNotMatch(out, /LINE-ENDED/u, `${shell}: the line went on past the failed step: ${err}`);
     assert.match(err, /fd/u, `${shell}: the reason does not name the tool: ${err}`);
+  }
+});
+
+test('a machine with NO winget stops the line at its first missing tool: the line does not go on to Moonshot’s step', { skip }, () => {
+  // Measured in pwsh 7: a command that is not found leaves $LASTEXITCODE where it was (0 on a fresh session), so a check on the exit code
+  // alone let the line walk on past a winget that never ran.
+  for (const shell of SHELLS) {
+    const { out, err, winget, moonshot } = run(shell, INSTALL, ['git', 'fd'], 0, true);
+
+    assert.deepEqual(winget, [], `${shell}: the stand-in must not exist: ${out}`);
+    assert.deepEqual(moonshot, [], `${shell}: Moonshot’s step ran after winget was never found: ${out}`);
+    assert.doesNotMatch(out, /LINE-ENDED/u, `${shell}: the line went on past the missing winget: ${err}`);
+    assert.match(err, /ripgrep/u, `${shell}: the reason does not name the tool: ${err}`);
   }
 });
 

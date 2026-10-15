@@ -2,7 +2,8 @@
 // arm now passes `--home <owned root>`, `--persons-bin <the person's bin>` and `--locks <this scratch's locks folder>`, on a home laid out as
 // the product's is — `<root>/home` (KIMI_CODE_HOME) beside an empty `<root>/os` (the OS-home redirect) — in the environment the runtime hands
 // the shim (lib/kimi-home.mjs shimEnv: the person's bin first on PATH). The plumbing is proved WITHOUT a paid run: scripts/lib/kimi-shim.test.mjs reads
-// the argv against the shim's own --help and asks the built shim one turn with no kimi and no sign-in, which it refuses at the hold. The cells
+// the argv against the shim's help text in Program.cs (the source, not the binary's --help) and — locally only, on Windows, with a shim
+// built beforehand — asks the built shim one turn with no kimi and no sign-in, which it refuses at the hold. The cells
 // themselves have NOT been re-run on this plumbing (they are paid; the owner decides when): until one is, the two arms a shim now fixes — no
 // KIMI_CODE_NO_AUTO_UPDATE pin, no OS-home redirect — are refused by name (lib/kimi.mjs shimRefusal) instead of being run as something else, and a
 // shim arm that has no owned root (the pre-D19 ones that measured the person's real home) records "launch failed" — the product no longer does that.

