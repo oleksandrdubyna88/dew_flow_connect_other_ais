@@ -19,15 +19,27 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-15 · mcp **0.54.0** and extension **0.74.0** (released) · server **0.12.0 DEPLOYED** (deploy run
-of 2026-10-14 10:34 UTC; `/api/health` answers 0.12.0) · automated items 1, 2, 6, 9 and 10 PASS as the checker printed
-them. Run locally: `MCP_VERSION=0.54.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs
---target 0.74.0`. **Items 7 and 12 observed** on the deploy's own canary — one real review per configured vendor:
-`codex: done`, `antigravity: done`, `claude: done`. On the box: `systemctl show coai-server -p KillMode` answers
-`KillMode=control-group` (the reader containment of epic 6 relies on it only as an extra layer), and the ledger
-`usage.jsonl` holds 27 launches since the deploy, every one carrying a client round id — 3 distinct rounds, nine
-launches each, all `clientAttempt: first` — so the server counts rounds by the client's id in live traffic (round counter
-plan, epics 4–5). Manual items 3, 4, 5, 8 and 11 were not run.
+Last verified: 2026-10-15 · mcp **0.54.0** and extension **0.74.0** (released) · server **0.12.0** deployed — the box
+serves 0.12.0 · automated items 1, 2, 7, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 6 and 12 were
+not run. **Items 8 and 11 observed** on the deploy's own canary (run of 2026-10-14 10:34 UTC) — one real review per
+configured vendor: `codex: done`, `antigravity: done`, `claude: done`. Also on the box: `systemctl show coai-server -p
+KillMode` answers `KillMode=control-group` (the reader containment of the round counter's epic 6 relies on it only as an
+extra layer), and the ledger `usage.jsonl` holds 27 launches since that deploy, every one carrying a client round id — 3
+distinct rounds, nine launches each, all `clientAttempt: first` — so the server counts rounds by the client's id in live
+traffic (round counter, epics 4–5). Run locally:
+`MCP_VERSION=0.54.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.74.0`. The
+`mcp-v0.54.0` run (38633475940) published 12 assets after its win-x64 build was re-run once
+(SecuritySourcesCharacterizationTests — the known two-timer race); `extension-v0.74.0` published its vsix. In these:
+#811 (Mistral Vibe as a consultant and a question-consultant row; consultant homes have a bounded life; the live
+round's two defects fixed — UTF-8 mode, read-only plugin folders).
+
+Previously verified: 2026-10-13 · mcp **0.53.0** and extension **0.73.0** (released) · server 0.11.0 released, NOT deployed —
+the box serves 0.9.0 · automated items 1, 2, 7, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 6, 8,
+11 and 12 were not run. Run locally:
+`MCP_VERSION=0.53.0 SERVER_VERSION=0.9.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.73.0`. The
+`mcp-v0.53.0` run (38454268919) published 12 assets after its osx-x64 build, cancelled once, was re-run; the tag never
+moved. `extension-v0.73.0` published its vsix. In these: #803 (Mistral Vibe as a reviewer — the owned home, the round's
+snapshot, warn-and-run on an unmeasured version, the install buttons on every system).
 
 Previously verified: 2026-10-13 · mcp **0.52.2** and extension **0.72.1** (released) · server 0.11.0 released, NOT deployed —
 the box serves 0.9.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; manual items 3, 4, 5, 7, 8,
