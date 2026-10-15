@@ -64,6 +64,19 @@ public sealed class VibeConsultantTests
         VibeLimits.ConsultantTurns.Should().Be(20, "RESULTS §28: arm B took 2 requests, arm C at 10 cut every loop at 79–84 k tokens");
     }
 
+    /// <summary>The cap is per LAUNCH: each turn of a conversation, resumed or not, carries its own `--max-turns 20` — nothing accumulates.</summary>
+    [Fact]
+    public void EachTurnOfAConversation_CarriesItsOwnCap_SoTheCapResetsPerLaunch()
+    {
+        var consultant = Consultant();
+
+        var turns = new[] { string.Empty, "4f1c2d3e-aaaa-bbbb-cccc-0123456789ab", "4f1c2d3e-aaaa-bbbb-cccc-0123456789ab" }
+            .Select(handle => consultant.Build(Turn(handle)).Request.Arguments).ToList();
+
+        turns.Should().OnlyContain(args => args.Count(argument => argument == "--max-turns") == 1);
+        turns.Should().OnlyContain(args => args[args.ToList().IndexOf("--max-turns") + 1] == "20", "a resumed session is a new launch with a full allowance");
+    }
+
     [Fact]
     public void AQuestionRowLaunch_IsCapped_Too()
     {

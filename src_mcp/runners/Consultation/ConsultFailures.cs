@@ -101,14 +101,21 @@ public static class ConsultFailures
 
         return VendorDiagnosis.Classify(said) switch
         {
-            // Nothing recognised in what the CLI said: the adapter's own reading of the failure (Vibe's export outcome as coai's
-            // sentence, D6 of todo/PLAN_vibe_live_round_fixes.md) is worth more than a stderr label such as `Stopped: turn_limit`.
-            null => new ConsultFailure.Exit(exit.ExitCode, Safe(exit.FailureReason.Length > 0 ? exit.FailureReason : said)),
+            null => new ConsultFailure.Exit(exit.ExitCode, Safe(Told(exit, said))),
             { Kind: DiagnosisKind.NotOnPath } d => new ConsultFailure.CliNotFound(Safe(said), VendorDiagnosis.InstallCure(runtime, linux) ?? Safe(d.Cure)),
             // The cure is redacted too: the unreachable-engine row carries the endpoint out of the vendor's text.
             var d => new ConsultFailure.VendorRefused(Safe(said), Redaction.SafeText(d.Cure, Redaction.TitleLimit)),
         };
     }
+
+    /// <summary>
+    /// What an exit with nothing recognised said, in the scheduler's precedence (`ReviewerSummaryFactory.Because`): a stderr line that
+    /// ANNOUNCES a failure first — a vendor writing `error:` means it — then what the adapter recovered (Vibe's export outcome as
+    /// coai's sentence, D6 of todo/PLAN_vibe_live_round_fixes.md), which beats a stderr line that announces nothing (a label such as
+    /// `Stopped: turn_limit`).
+    /// </summary>
+    private static string Told(ReviewerOutcome.NonZeroExit exit, string said) =>
+        exit.FailureReason.Length > 0 && !ReviewerSummaryFactory.StderrAnnouncesAFailure(exit.StdErrTail) ? exit.FailureReason : said;
 
     /// <summary>How to put the CLI on this machine — the vendor's own command, or where to point the row.</summary>
     /// <remarks>Public since a claude whose <c>--help</c> could not even be started is refused with it before any launch (the whole-branch review, L).</remarks>

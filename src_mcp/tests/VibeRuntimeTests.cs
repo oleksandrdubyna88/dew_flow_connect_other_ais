@@ -204,8 +204,9 @@ public sealed class VibeRuntimeTests : IDisposable
         var deadline = WithExport("""{"outcome":"deadline","stop_reason":null,"usage":null}""");
         var runtime = new VibeRuntime();
 
-        runtime.WhyItFailed(turns, Finished with { ExitCode = 3 }).Should().Contain("20").And.Contain("--max-turns").And.Contain("list a folder").And.Contain("§28");
-        runtime.WhyItFailed(tokens, Finished with { ExitCode = 3 }).Should().Contain("token").And.Contain("§28");
+        runtime.WhyItFailed(turns, Finished with { ExitCode = 3 }).Should().Contain("20").And.Contain("--max-turns").And.Contain("before it answered")
+            .And.Contain("Vibe cannot list a folder").And.Contain("§28").And.NotContain("did not find", "a productive investigation can use its budget up too — the sentence does not claim the search failed");
+        runtime.WhyItFailed(tokens, Finished with { ExitCode = 3 }).Should().Contain("token").And.Contain("before it answered").And.Contain("§28").And.NotContain("did not find");
         runtime.WhyItFailed(deadline, Finished with { ExitCode = 3 }).Should().Contain("time limit", "the deadline's sentence is unchanged");
     }
 

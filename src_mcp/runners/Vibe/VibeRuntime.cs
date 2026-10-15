@@ -237,10 +237,10 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     {
         { Exists: false } => string.Empty,
         { Outcome: "deadline" } => $"Vibe stopped at its own time limit (--time-limit, outcome: deadline) — {invocation.Request.Timeout.TotalSeconds:0} s was not enough for this review",
-        { Outcome: "turn_limit" } => $"Vibe stopped at coai's cap of {VibeLimits.ConsultantTurns} assistant turns (--max-turns) — it did not find what it was asked for in its granted folders; "
-            + "Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28), so name the files the question is about",
-        { Outcome: "token_limit" } => "Vibe stopped at a token cap (--max-tokens, outcome: token_limit) — it did not find what it was asked for in its granted folders; "
-            + "Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28), so name the files the question is about",
+        { Outcome: "turn_limit" } => $"Vibe stopped at coai's cap of {VibeLimits.ConsultantTurns} assistant turns (--max-turns) before it answered; "
+            + "if the question names files, name them exactly — Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28)",
+        { Outcome: "token_limit" } => "Vibe stopped at a token cap (--max-tokens, outcome: token_limit) before it answered; "
+            + "if the question names files, name them exactly — Vibe cannot list a folder (research/RESULTS_vibe_confinement.md §28)",
         { Error.Length: > 0 } failed => $"{failed.Error} (outcome: {failed.Outcome})",
         var other => $"Vibe ended with outcome: {other.Outcome}",
     };

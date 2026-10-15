@@ -159,6 +159,25 @@ public sealed class ConsultFailureTests
             .Should().BeOfType<ConsultFailure.LaunchRefused>().Which.Said.Should().Be(long900);
     }
 
+    /// <summary>
+    /// The precedence the scheduler documents (<c>BoundedScheduler.Because</c>): a stderr line that ANNOUNCES a failure beats what the
+    /// adapter recovered, and what the adapter recovered beats a stderr line that announces nothing (a progress label such as
+    /// <c>Stopped: turn_limit</c>). Vibe's own sentence for its cap must not displace a vendor writing `error:`.
+    /// </summary>
+    [Fact]
+    public void AnAnnouncingStderrLine_BeatsTheAdaptersReading_ButALabelDoesNot()
+    {
+        const string Coais = "Vibe stopped at coai's cap of 20 assistant turns (--max-turns) before it answered";
+
+        var announced = ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NonZeroExit(3, "error: the provider refused the request", Coais)), "vibe", OwnTimeout);
+        var labelled = ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NonZeroExit(3, "Stopped: turn_limit", Coais)), "vibe", OwnTimeout);
+        var silent = ConsultFailures.Classify(Codex, Ended(new ReviewerOutcome.NonZeroExit(3, string.Empty, Coais)), "vibe", OwnTimeout);
+
+        announced.Should().BeOfType<ConsultFailure.Exit>().Which.Said.Should().Contain("the provider refused the request").And.NotContain("cap of 20");
+        labelled.Should().BeOfType<ConsultFailure.Exit>().Which.Said.Should().Contain("cap of 20");
+        silent.Should().BeOfType<ConsultFailure.Exit>().Which.Said.Should().Contain("cap of 20");
+    }
+
     [Fact]
     public void ACliNotStarted_OrNotOnThePath_IsCliNotFound_WithTheVendorsOwnInstallCommand()
     {
