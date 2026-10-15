@@ -29,7 +29,7 @@ namespace CoaiMcp.Tests;
 public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 {
     /// <summary>SHA-256 of allowlist.json with CRLF read as LF. Update ONLY after reading what changed and whether it widens what a fixture may carry.</summary>
-    private const string ApprovedAllowlistSha256 = "b74320a9e3c182c9ccaaa1a7cdfec3a65f8a5b6ff349671670c318ae39626992";
+    private const string ApprovedAllowlistSha256 = "bb2940e42dad2d9be8a6a81025c8bc81c9f8db5f654e0817efc938c42dcb118b";
 
     /// <summary>
     /// The required cases (parent §6, §11 step 0, §12, §16) with the ONLY serves/provenance prose a manifest may carry: this pinned list was
@@ -651,7 +651,7 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 
     private static readonly string[] PrivateLookingProbes =
     [
-        "private-client-canary", "hello there", "a@b.example", "C:/Users/someone/x.cs", "claude-private-client-canary", "2.1.0+private-client-canary",
+        "private-client-canary", "2.1.999", "hello there", "a@b.example", "C:/Users/someone/x.cs", "claude-private-client-canary", "2.1.0+private-client-canary",
         "opus[private]", "msg_PrivateClientCanary00", "toolu_PrivateClientCanary00", "deadbeefPRIVATE", "2026-10-15T09:00:00.000Z", "mcp__private__tool",
     ];
 

@@ -9,6 +9,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { cutSession, createSanitiser, loadAllowlist } from './transcript-sanitise.mjs';
+import * as sanitise from './transcript-sanitise.mjs'; // names the fixes add are reached through here: a missing one fails ITS test, not the whole file
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, '..', 'cut-transcript-fixtures.mjs');
@@ -23,6 +24,7 @@ const scratch = (name) => { const d = join(base, `${name}-${++counter}`); mkdirS
 
 // ---- a synthetic session ---------------------------------------------------------------------------------------------
 const SESSION = '11111111-2222-4333-8444-555555555555';
+const OTHER_SESSION = '66666666-2222-4333-8444-555555555555';
 const AGENT_A = 'aaaaaaaaaaaaaaaa1';
 const AGENT_B = 'bbbbbbbbbbbbbbbb2';
 const AGENT_NESTED = 'cccccccccccccccc3';
@@ -113,9 +115,10 @@ const REPOS = [{ from: 'D:/rsd/_wt/x', to: 'D:/fixture/repo-a' }, { from: '/home
 
 function cut(sessionFile, overrides = {}) {
   const outDir = overrides.outDir ?? scratch('out');
-  const summary = cutSession({ sessionFile, outDir, allowlist, salt: 'salt-one', repos: REPOS, otherRoot: '/fixture/other',
+  const result = cutSession({ sessionFile, outDir, allowlist, salt: 'salt-one', repos: REPOS, otherRoot: '/fixture/other',
     quiet: true, ...overrides });
-  return { outDir, summary };
+  assert.equal(result.ok, true, result.refusal);
+  return { outDir, summary: result.value };
 }
 
 function walk(dir) {
@@ -180,6 +183,8 @@ test('aModelIdOrVersionOutsideTheExactListsIsTheSentinelWhateverItsPrefixOrSuffi
   assert.equal(out.requestedModel, SENTINEL);
   assert.equal(out.model, SENTINEL);
   assert.equal(s.sanitiseValue({ version: '2.1.289', requestedModel: 'opus[1m]', model: 'fable' }).version, '2.1.289');
+  for (const unmeasured of ['2.1.999', '2.1.282', '2.1.0', '3.0.0', '2.1.289 ']) assert.equal(s.sanitiseValue({ version: unmeasured }).version, SENTINEL, `${unmeasured} was never measured`);
+  for (const measured of ['2.1.283', '2.1.288', '2.1.300']) assert.equal(s.sanitiseValue({ version: measured }).version, measured);
   assert.equal(s.sanitiseValue({ requestedModel: 'claude-fable-5-1' }).requestedModel, 'claude-fable-5-1');
 });
 
@@ -504,6 +509,121 @@ test('unknownKeysAreSentinelledAndCountedByTheirParentPath', () => {
 
 // ---- the CLI --------------------------------------------------------------------------------------------------------
 const runCli = (args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
+
+// ---- expected failures are VALUES, not exceptions --------------------------------------------------------------------------
+const cutArgs = (over = {}) => ({ outDir: scratch('o'), allowlist, salt: 'salt-one', repos: REPOS, otherRoot: '/fixture/other', ...over });
+
+test('aRefusedCutIsAReturnedValueNotAThrow', () => {
+  const src = writeSession(scratch('in'));
+  const notASession = join(scratch('x'), 'not-a-session.jsonl');
+  assert.doesNotThrow(() => cutSession({ sessionFile: notASession, ...cutArgs() }));
+  const bad = cutSession({ sessionFile: notASession, ...cutArgs() });
+  assert.equal(bad.ok, false);
+  assert.match(bad.refusal, /<sessionId>\.jsonl/);
+  const full = scratch('full');
+  writeFileSync(join(full, 'f'), 'x');
+  const notEmpty = cutSession({ sessionFile: src, ...cutArgs({ outDir: full }) });
+  assert.equal(notEmpty.ok, false);
+  assert.match(notEmpty.refusal, /already holds files/);
+  const mapping = sanitise.parseRepoMapping('nonsense');
+  assert.equal(mapping.ok, false);
+  assert.match(mapping.refusal, /<real-prefix>=<fixture-root>/);
+  assert.equal(sanitise.parseRepoMapping('D:/rsd/_wt/x=D:/fixture/repo-a').ok, true);
+  assert.equal(sanitise.checkOutputAllowed(scratch('elsewhere'), join(scratch('allowed'), 'root')).ok, false);
+  assert.equal(cutSession({ sessionFile: src, ...cutArgs() }).ok, true);
+});
+
+// ---- the destination roots are the synthetic policy, nothing the caller types ----------------------------------------------
+test('aDestinationRootOutsideTheSyntheticPolicyIsRefusedBeforeAnyInputIsRead', () => {
+  const absent = join(scratch('empty'), `${SESSION}.jsonl`); // reading it would throw ENOENT: a refusal proves nothing was read
+  for (const to of ['C:\\Users\\alice\\project', '/home/alice', 'D:/fixture/repo-a/../../x', 'D:/fixture/repo-ab', 'D:/fixture/Other', 'D:/fixture/repo-a/p1', 'D:/fixture']) {
+    const r = cutSession({ sessionFile: absent, ...cutArgs({ repos: [{ from: 'D:/rsd/_wt/x', to }] }) });
+    assert.equal(r.ok, false, to);
+    assert.match(r.refusal, /fixture root/);
+    assert.ok(!r.refusal.includes('alice'), 'the refusal does not echo what was typed');
+  }
+  const other = cutSession({ sessionFile: absent, ...cutArgs({ otherRoot: 'C:\\Users\\alice\\other' }) });
+  assert.equal(other.ok, false);
+  assert.match(other.refusal, /fixture root/);
+  for (const to of ['D:/fixture/repo-a', 'D:\\fixture\\repo-z', '/fixture/other', '/fixture/scratch', 'D:/fixture/scratch/'])
+    assert.equal(sanitise.checkFixtureRoot?.(to).ok, true, to);
+});
+
+test('theCliRefusesAForeignDestinationRootWithExit65BeforeReadingTheSession', () => {
+  const absent = join(scratch('empty'), `${SESSION}.jsonl`);
+  for (const flags of [['--repo', 'D:/rsd/_wt/x=C:\\Users\\alice\\project'], ['--other-root', 'C:\\Users\\alice\\other']]) {
+    const r = runCli(['--session-file', absent, '--out', scratch('o'), '--out-anywhere', '--salt', '0123456789abcdef0123456789abcdef-test-salt', ...flags]);
+    assert.equal(r.status, 65, r.stderr);
+    assert.match(r.stderr, /fixture root/);
+    assert.ok(!r.stderr.includes('alice'));
+  }
+});
+
+// ---- the input size limit ---------------------------------------------------------------------------------------------------
+const bigSession = () => {
+  const dir = scratch('big');
+  const file = join(dir, `${SESSION}.jsonl`);
+  writeFileSync(file, `${JSON.stringify({ type: 'user', timestamp: T(1), pad: 'x'.repeat(1_500_000) })}\n`);
+  return file;
+};
+
+test('anInputOverTheSizeLimitIsRefusedBeforeItIsReadAndTheLimitIsDocumented', () => {
+  const src = bigSession();
+  const out = scratch('o');
+  const r = cutSession({ sessionFile: src, ...cutArgs({ outDir: out, maxInputBytes: 1024 * 1024 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.refusal, /1\.\d MiB .*limit of 1 MiB/);
+  assert.deepEqual(readdirSync(out), [], 'nothing was written');
+  assert.equal(sanitise.DEFAULT_MAX_INPUT_BYTES, 256 * 1024 * 1024, 'the documented default: above the 229 MB session cut so far, below what Node can parse in its default heap');
+  assert.equal(cutSession({ sessionFile: src, ...cutArgs({ outDir: scratch('o2') }) }).ok, true, 'the default admits it');
+});
+
+test('theAgentFilesCountTowardTheSizeLimitAndTheCliTakesItInMiB', () => {
+  const src = writeSession(scratch('in'));
+  const agent = join(dirname(src), SESSION, 'subagents', `agent-${AGENT_A}.jsonl`);
+  writeFileSync(agent, readFileSync(agent, 'utf8') + `${JSON.stringify({ type: 'user', timestamp: T(5), pad: 'x'.repeat(1_500_000) })}\n`);
+  const base = ['--session-file', src, '--out-anywhere', '--salt', '0123456789abcdef0123456789abcdef-test-salt', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a'];
+  const refused = runCli([...base, '--out', scratch('o'), '--max-input-mb', '1']);
+  assert.equal(refused.status, 65, refused.stderr);
+  assert.match(refused.stderr, /MiB/);
+  assert.equal(runCli([...base, '--out', scratch('o')]).status, 0);
+  assert.equal(runCli([...base, '--out', scratch('o'), '--max-input-mb', 'lots']).status, 2, 'a usage error');
+});
+
+// ---- the catch-all names the failure without a path ------------------------------------------------------------------------
+test('aKnownFailureIsExplainedInASafeSentenceWithAnExitCode', () => {
+  const explain = sanitise.explainFailure;
+  assert.equal(explain({ code: 'ENOENT' }).exit, 74);
+  assert.match(explain({ code: 'ENOENT' }).sentence, /does not exist/);
+  assert.match(explain({ code: 'EACCES' }).sentence, /permission denied/);
+  assert.match(explain({ code: 'EPERM' }).sentence, /permission denied/);
+  assert.match(explain({ code: 'EISDIR' }).sentence, /directory/);
+  assert.match(explain({ code: 'ENOSPC' }).sentence, /disk is full/);
+  assert.equal(explain(new SyntaxError('Unexpected token \'x\' in C:\\Users\\alice\\f.json')).exit, 65);
+  assert.match(explain(new SyntaxError('boom')).sentence, /not valid JSON/);
+  const unknown = explain(Object.assign(new RangeError('secret C:\\Users\\alice'), { code: undefined }));
+  assert.match(unknown.sentence, /unexpected RangeError/);
+  assert.ok(!unknown.sentence.includes('alice'), 'an error message never reaches the operator\'s terminal');
+});
+
+test('theCliExplainsAMissingSessionAnInvalidSpecAndADirectoryWithoutAPath', () => {
+  const dir = scratch('cli');
+  const flags = ['--out', scratch('o'), '--out-anywhere', '--salt', '0123456789abcdef0123456789abcdef-test-salt'];
+  const missing = runCli(['--session-file', join(dir, `${SESSION}.jsonl`), ...flags]);
+  assert.equal(missing.status, 74);
+  assert.match(missing.stderr, /does not exist/);
+  assert.ok(!missing.stderr.includes('testsToDelete') && !missing.stderr.includes(dir), 'no path');
+  const spec = join(dir, 'spec.json');
+  writeFileSync(spec, '{ not json at all');
+  const invalid = runCli(['--case-spec', spec, ...flags]);
+  assert.equal(invalid.status, 65, invalid.stderr);
+  assert.match(invalid.stderr, /not valid JSON/);
+  assert.ok(!invalid.stderr.includes(dir) && !invalid.stderr.includes('not json at all'));
+  mkdirSync(join(dir, `${OTHER_SESSION}.jsonl`));
+  const isDir = runCli(['--session-file', join(dir, `${OTHER_SESSION}.jsonl`), ...flags]);
+  assert.equal(isDir.status, 74);
+  assert.match(isDir.stderr, /directory/);
+});
 
 test('theCliRefusesAShortSaltBecauseAGuessableSaltLetsAnOriginalIdBeConfirmed', () => {
   const src = writeSession(scratch('in'));

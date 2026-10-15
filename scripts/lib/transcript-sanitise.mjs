@@ -28,10 +28,18 @@
 // This file reads only the files cutSession is handed and the agent-<hex>.jsonl|.meta.json files beside that session; it
 // never lists ~/.claude/sessions and never opens tool-results/.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-export class Refusal extends Error {}
+/**
+ * Expected failures are VALUES (the family's rule): a function that can be told "no" by its inputs returns `{ ok: true, value }` or
+ * `{ ok: false, refusal }`, and only the unexpected (a disk, a bug) throws. A refusal sentence never carries what was typed.
+ */
+const accept = (value) => ({ ok: true, value });
+const refuse = (refusal) => ({ ok: false, refusal });
+
+/** The documented ceiling on the SUM of a session's files (main + subagent jsonl/meta), checked before anything is read. */
+export const DEFAULT_MAX_INPUT_BYTES = 256 * 1024 * 1024;
 
 const RENAMED = /^k\d+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -92,6 +100,23 @@ function shapeTest(shape, shapes, vocabularies, path) {
 
 // ---- the sanitiser ---------------------------------------------------------------------------------------------------
 const fold = (path) => path.replaceAll('\\', '/');
+
+/** The only destination roots a fixture may carry (the C# guard pins the same shape): D:/fixture/repo-<a-z>, .../other, .../scratch. */
+const FIXTURE_ROOT_POLICY = /^(?:[A-Za-z]:)?\/fixture\/(?:repo-[a-z]|other|scratch)$/;
+
+/** A destination root, folded and trimmed, when it is on the synthetic policy; otherwise a refusal that does not echo the input. */
+export function checkFixtureRoot(text) {
+  const folded = typeof text === 'string' ? fold(text).replace(/\/+$/, '') : '';
+  return FIXTURE_ROOT_POLICY.test(folded)
+    ? accept(folded)
+    : refuse('a destination root is not a fixture root: it must be D:/fixture/repo-<a-z>, D:/fixture/other or D:/fixture/scratch (drive letter optional)');
+}
+
+/** Every --repo destination and the --other-root, checked BEFORE any input is read. */
+function checkRoots(repos, otherRoot) {
+  const roots = [...repos.map((r) => r.to), ...(otherRoot === undefined ? [] : [otherRoot])];
+  return roots.map(checkFixtureRoot).find((r) => !r.ok) ?? accept(roots.length);
+}
 
 /** One sanitiser per fixture: its id map, path map and counters are the fixture's. */
 export function createSanitiser({ allowlist, salt, repos = [], otherRoot = '/fixture/other' }) {
@@ -403,17 +428,42 @@ function realResolve(path) {
 }
 
 /** Exit-65 refusal: the cutter writes only inside the fixture folder unless the caller says otherwise. */
-export function assertOutputAllowed(outDir, allowedRoot) {
+export function checkOutputAllowed(outDir, allowedRoot) {
   const rel = relative(realResolve(allowedRoot), realResolve(outDir));
-  if (rel.startsWith('..') || isAbsolute(rel)) throw new Refusal(`output directory is outside ${allowedRoot} (use --out-anywhere for a scratch cut)`);
+  return rel.startsWith('..') || isAbsolute(rel) ? refuse(`the output directory is outside ${allowedRoot} (use --out-anywhere for a scratch cut)`) : accept(outDir);
 }
 
-/** "real=fixture" -> { from, to }; the last "=" splits, since a real path may contain one. */
+/** "real=fixture" -> { from, to }; the last "=" splits, since a real path may contain one. A malformed pair is a refusal, not a throw. */
 export function parseRepoMapping(text) {
   const at = text.lastIndexOf('=');
-  if (at <= 0 || at === text.length - 1) throw new Error(`--repo wants <real-prefix>=<fixture-root>, got "${text}"`);
-  return { from: text.slice(0, at), to: text.slice(at + 1) };
+  if (at <= 0 || at === text.length - 1) return refuse('--repo wants <real-prefix>=<fixture-root>');
+  return accept({ from: text.slice(0, at), to: text.slice(at + 1) });
 }
+
+/** What a failure that nobody planned for means to an operator: an exit code and a sentence that names no path and no message. */
+export function explainFailure(error) {
+  const known = {
+    ENOENT: [74, 'an input file or folder does not exist'],
+    EACCES: [74, 'permission denied reading an input or writing the output'],
+    EPERM: [74, 'permission denied reading an input or writing the output'],
+    EISDIR: [74, 'an input that should be a file is a directory'],
+    ENOTDIR: [74, 'a path component that should be a folder is a file'],
+    ENOSPC: [74, 'the disk is full'],
+    EMFILE: [74, 'too many files are open'],
+  }[error?.code];
+  if (known) return { exit: known[0], sentence: known[1] };
+  if (error instanceof SyntaxError) return { exit: 65, sentence: 'an input is not valid JSON' };
+  return { exit: 74, sentence: `unexpected ${error?.name ?? 'failure'} (its message is withheld: it could name a path)` };
+}
+
+/** Bytes of a session's main file plus every agent-<hex>.jsonl|.meta.json beside it: what the cutter would load. */
+function sessionInputBytes(sessionFile, sessionName) {
+  const dir = join(dirname(sessionFile), sessionName, 'subagents');
+  const agents = existsSync(dir) ? readdirSync(dir).filter((n) => AGENT_FILE.test(n)).map((n) => statSync(join(dir, n)).size) : [];
+  return agents.reduce((sum, size) => sum + size, statSync(sessionFile).size);
+}
+
+const mib = (bytes) => Number((bytes / 1048576).toFixed(1));
 
 const jsonl = (objects) => objects.map((o) => `${JSON.stringify(o)}\n`).join('');
 
@@ -421,10 +471,6 @@ function safeJson(text) {
   try { return JSON.parse(text); } catch { return undefined; }
 }
 
-/**
- * Cuts one caller session (main file + its subagent files and metas) into outDir/projects/<slug>/…, sanitised.
- * Returns counts only — never a value from the input.
- */
 const roundInstants = (rounds) => rounds.gateSessions.flatMap((g) => [g.openedUtc, ...g.rounds.flatMap((r) => [r.startedUtc, r.completedUtc])]);
 
 /**
@@ -434,26 +480,43 @@ const roundInstants = (rounds) => rounds.gateSessions.flatMap((g) => [g.openedUt
 function writeCaseFiles(sanitiser, outDir, caseSpec) {
   writeFileSync(join(outDir, 'rounds.json'), `${JSON.stringify(sanitiser.sanitiseRounds(caseSpec.rounds), null, 2)}\n`);
   if (caseSpec.registry === undefined) return;
-  if (!/^[0-9]{1,9}$/.test(String(caseSpec.registry.pid))) throw new Refusal('a registry pid is digits only');
   mkdirSync(join(outDir, 'sessions'), { recursive: true });
   writeFileSync(join(outDir, 'sessions', `${caseSpec.registry.pid}.json`), `${JSON.stringify(sanitiser.sanitiseRegistry(caseSpec.registry))}\n`);
 }
 
-/** A case with no transcript at all (a caller that ran without persistence): just its rounds file and registry entry. */
+/** What every cut checks before it reads or writes anything: the roots, the registry pid, an empty output folder. */
+function preflight({ outDir, repos, otherRoot, caseSpec }) {
+  const roots = checkRoots(repos, otherRoot);
+  if (!roots.ok) return roots;
+  if (caseSpec?.registry !== undefined && !/^[0-9]{1,9}$/.test(String(caseSpec.registry.pid))) return refuse('a registry pid is digits only');
+  return existsSync(outDir) && readdirSync(outDir).length > 0 ? refuse('the output directory already holds files') : accept(true);
+}
+
+/** A case with no transcript at all (a caller that ran without persistence): just its rounds file and registry entry. Returns a tagged result. */
 export function cutCaseWithoutTranscript({ outDir, allowlist, salt, repos = [], otherRoot, caseSpec }) {
-  if (existsSync(outDir) && readdirSync(outDir).length > 0) throw new Refusal('the output directory already holds files');
+  const checked = preflight({ outDir, repos, otherRoot, caseSpec });
+  if (!checked.ok) return checked;
   const sanitiser = createSanitiser({ allowlist, salt, repos, otherRoot });
   sanitiser.prepare([], roundInstants(caseSpec.rounds));
   mkdirSync(outDir, { recursive: true });
   writeCaseFiles(sanitiser, outDir, caseSpec);
-  return { mainLines: 0, agentFiles: 0, metas: 0, joinBreaks: 0, tornLines: 0, skippedFiles: 0, ...sanitiser.stats() };
+  return accept({ mainLines: 0, agentFiles: 0, metas: 0, joinBreaks: 0, tornLines: 0, skippedFiles: 0, ...sanitiser.stats() });
 }
 
+/**
+ * Cuts one caller session (main file + its subagent files and metas) into outDir/projects/<slug>/…, sanitised.
+ * Returns `{ ok: true, value: counts }` — counts only, never a value from the input — or `{ ok: false, refusal }` BEFORE anything is
+ * read: a destination root off the synthetic policy, a file that is not <sessionId>.jsonl, a non-empty output folder, or session files
+ * totalling more than `maxInputBytes` (default DEFAULT_MAX_INPUT_BYTES: every file is parsed whole before the window applies).
+ */
 export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], otherRoot, from, to, dropAgentFiles = [], dropMetas = [],
-  clipAgents = false, includeAgents = [], caseSpec }) {
+  clipAgents = false, includeAgents = [], caseSpec, maxInputBytes = DEFAULT_MAX_INPUT_BYTES }) {
+  const checked = preflight({ outDir, repos, otherRoot, caseSpec });
+  if (!checked.ok) return checked;
   const sessionName = /^(.+)\.jsonl$/.exec(basename(sessionFile))?.[1] ?? '';
-  if (!UUID.test(sessionName)) throw new Refusal('the session file must be named <sessionId>.jsonl');
-  if (existsSync(outDir) && readdirSync(outDir).length > 0) throw new Refusal('the output directory already holds files');
+  if (!UUID.test(sessionName)) return refuse('the session file must be named <sessionId>.jsonl');
+  const bytes = sessionInputBytes(sessionFile, sessionName);
+  if (bytes > maxInputBytes) return refuse(`the session's files total ${mib(bytes)} MiB which is over the limit of ${mib(maxInputBytes)} MiB (the cutter parses them whole before the window applies; raise the limit deliberately with --max-input-mb)`);
 
   const sanitiser = createSanitiser({ allowlist, salt, repos, otherRoot });
   const window = windowFilter(from, to);
@@ -501,5 +564,5 @@ export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], o
     if (!keptToolUses.has(a.meta.toolUseId)) joinBreaks++;
   }
   if (caseSpec) writeCaseFiles(sanitiser, outDir, caseSpec);
-  return { mainLines: keptMain.length, agentFiles, metas, joinBreaks, tornLines: torn, skippedFiles: skipped, ...sanitiser.stats() };
+  return accept({ mainLines: keptMain.length, agentFiles, metas, joinBreaks, tornLines: torn, skippedFiles: skipped, ...sanitiser.stats() });
 }
