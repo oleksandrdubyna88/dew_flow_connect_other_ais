@@ -283,5 +283,5 @@ public static partial class HandleRead
     private static partial uint GetFinalPathNameByHandleW(SafeFileHandle handle, Span<char> path, uint length, uint flags);
 
     [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
-    private static partial SafeFileHandle CreateFileW(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
+    internal static partial SafeFileHandle CreateFileW(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
 }
