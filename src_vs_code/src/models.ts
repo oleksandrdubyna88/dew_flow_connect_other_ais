@@ -32,7 +32,7 @@ import type { ModelChoice } from './modelChoice';
  * the one thing the local runtime exists to avoid. The comment beside that check already said the
  * two had to be kept in step, which is the argument for there being only one of them.</p>
  */
-export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api', 'vibe'] as const;
+export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api', 'vibe', 'kimi'] as const;
 
 export type Runtime = (typeof RUNTIMES)[number];
 

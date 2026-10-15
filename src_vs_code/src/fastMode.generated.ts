@@ -74,4 +74,11 @@ export const FAST_MODE: readonly FastModeRow[] = [
     measuredWith: '',
     note: 'Vibe has no service tier: the subscription answers at one speed.',
   },
+  {
+    runtime: 'kimi',
+    source: 'none',
+    models: [],
+    measuredWith: '',
+    note: 'Kimi Code has no service tier: the plan answers at one speed.',
+  },
 ];

@@ -20,7 +20,7 @@
     "(measured: research/RESULTS_codex_service_tier_versions_2026-10-07.md; the fix: research/PLAN_codex_tier_floor.md). An",
     "Off row on such a release is sent no tier at all; On still sends `fast`."
   ],
-  "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe"],
+  "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe", "kimi"],
   "features": {
     "consultant": ["codex", "claude", "antigravity", "local", "api", "vibe"],
     "chat": ["antigravity", "claude", "codex"]
@@ -81,6 +81,13 @@
       "levels": [],
       "measuredWith": "",
       "note": "Mistral Vibe 2.26.1 has no effort flag, and nothing has been shown setting one per launch (todo/PLAN_vibe_and_kimi_runtimes.md, S2)."
+    },
+    {
+      "runtime": "kimi",
+      "source": "unmeasured",
+      "levels": [],
+      "measuredWith": "",
+      "note": "Kimi Code 2.1.1's k3 models carry thinking levels (low, high, max) in the session's own model list (M-K7), but nothing has been shown taking effect, so no level is sent (todo/PLAN_vibe_and_kimi_runtimes.md, S4)."
     }
   ],
   "thinking": [
@@ -123,6 +130,11 @@
       "runtime": "vibe",
       "source": "unmeasured",
       "note": "Vibe’s models carry thinking levels in its own config, but no launch flag was shown taking effect (todo/PLAN_vibe_and_kimi_runtimes.md, S2)."
+    },
+    {
+      "runtime": "kimi",
+      "source": "unmeasured",
+      "note": "Kimi’s k3 models announce thinking levels (low, high, max) in the session, but nothing was shown setting one per launch (todo/PLAN_vibe_and_kimi_runtimes.md, S4, M-K7)."
     }
   ],
   "fastMode": [
@@ -182,6 +194,13 @@
       "models": [],
       "measuredWith": "",
       "note": "Vibe has no service tier: the subscription answers at one speed."
+    },
+    {
+      "runtime": "kimi",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "Kimi Code has no service tier: the plan answers at one speed."
     }
   ]
 }
