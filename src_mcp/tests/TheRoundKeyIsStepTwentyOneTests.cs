@@ -76,7 +76,8 @@ public sealed class TheRoundKeyIsStepTwentyOneTests : IDisposable
     public void TheRoundKey_IsTheTwentyFirstStep_AppendedNeverInserted()
     {
         KeyStep.Should().Be(20, "step 21 by position: step 20 is the reviewers' model, and a step is never inserted ahead of one that shipped");
-        Schema.Steps.Length.Should().Be(21);
+        // Changed on purpose with step 22 (the round's size, E2.S3): the head is that step's own test to pin.
+        Schema.Steps.Length.Should().BeGreaterThanOrEqualTo(21);
         Schema.Steps[20].Should().Be(Schema.TheRoundsKey);
     }
 

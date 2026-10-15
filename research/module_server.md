@@ -3279,6 +3279,22 @@ nothing. No index: nothing on this machine looks a round up by its key yet, and 
 Reached through both preview-fork shapes as step 20 is (`TheRoundKeyIsStepTwentyOneTests`); `--round-counts` on a
 step-20 file reads and leaves it at twenty — no reader asks for the column.
 
+**Schema step 22 — the round's size and `reviewers.effort`** (`Schema.TheRoundsSize`, appended after step 21; story
+E2.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
+per (scope `whole`/`delta`, coverage, kind) cell of the round's `RoundRecord.Size` — counts and lines only, no path — and
+`rounds` gains `size_state`, `delta_state`, `delta_from`, `size_origin` and `size_gitlinks`, because a delta that is
+`unavailable` and one that is an observed zero both have no rows and the state is what tells them apart.
+`RoundsDb.RecordRound` calls `RoundChangesTable.Record` (its own file, through `RoundsDb.Command()`, the
+`QuestionConsultTable` shape) after `RecordReviewers`, inside the same transaction: it deletes the round's rows and
+writes them again, so a re-record never doubles them. **A round with no `Size` writes nothing** — not even the gitlink
+count — so rows and states already there (a backfilled size, E7.S3) survive a live re-record. **Unknown is never 0:** a
+binary cell's `added`/`removed` are NULL in the table and absent in the session file; `size_gitlinks` is `-1` when
+`RoundRecord.Gitlinks` is null; empty states and an empty origin mean *not recorded*, which is every round written before
+the step. `reviewers.effort` is bound from `ReviewerState.Effort` by `RecordReviewers`: a reviewer that applied none is
+written empty, and the column's default `not recorded` marks every row from before the step — the two are never merged.
+Reached through both preview-fork shapes as step 21 is, and `--round-counts` on a step-21 file reads and leaves it at
+twenty-one (`TheRoundsSizeIsStepTwentyTwoTests`).
+
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
 The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer

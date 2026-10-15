@@ -201,6 +201,15 @@ public sealed record RoundRecord(
     /// </remarks>
     public Core.Context.RoundSize? Size { get; init; }
 
+    /// <summary>How many submodule pointers (gitlinks) the round's diff changed — null when the round recorded none.</summary>
+    /// <remarks>
+    /// <b>Nullable, and NOT normalised on the way in</b>, exactly as <see cref="Caller"/> and <see cref="Size"/> are: a round
+    /// written before the field, and one whose size was not measured, say nothing about gitlinks, and a getter that
+    /// materialised a 0 would turn "not recorded" into "no submodule moved". It is measured with the size or not at
+    /// all; the projection writes it to <c>rounds.size_gitlinks</c> (<c>-1</c> = not recorded).
+    /// </remarks>
+    public int? Gitlinks { get; init; }
+
     /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
     /// </summary>
