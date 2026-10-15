@@ -1,8 +1,4 @@
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Security.AccessControl;
-using System.Security.Principal;
-using Microsoft.Win32.SafeHandles;
 
 namespace CoaiMcp.Runners.Files;
 
@@ -55,10 +51,15 @@ public abstract record PrivateFolderOutcome
 /// DACL again right after it was reset. A
 /// <c>coai-*</c> folder another user made first on a shared, root-of-drive root cannot be deleted by the person: the cure is another
 /// folder.</para>
+/// <para><b>Where the Windows half lives.</b> This file is the door and the Unix leg. The Windows rules are pure functions of plain
+/// DACL facts in <c>PrivateAcl</c>; the flow (create, open one handle, verify, re-ACL, walk the children) is
+/// <c>PrivateFolderWindows</c> over an <c>IFolderShell</c>; and <c>PrivateFolderWindowsNative</c> is the shell — P/Invoke and handles,
+/// bytes in and out. All but the shell run in the Linux suite, which is where SonarCloud measures coverage.</para>
 /// </remarks>
-public static partial class PrivateFolder
+public static class PrivateFolder
 {
-    private const string Setting = "ConnectOtherAIs (COAI_CONSULTANT_HOMES)";
+    /// <summary>How the person's setting is named in every refusal sentence.</summary>
+    internal const string Setting = "ConnectOtherAIs (COAI_CONSULTANT_HOMES)";
 
     /// <summary><c>&lt;root&gt;\&lt;name&gt;</c> — the one place a folder under the homes root is spelled; pure.</summary>
     public static string PathOf(string root, string name) => Path.Combine(root, name);
@@ -74,26 +75,15 @@ public static partial class PrivateFolder
 
         try
         {
-            return OperatingSystem.IsWindows()
-                ? Windows.Open(root, name, note ?? (static _ => { }))
-                : Unix.Open(PathOf(root, name), note ?? (static _ => { }));
+            var target = new PrivateFolderWindows.Target(root, name, PathOf(root, name), note ?? (static _ => { }));
+
+            return OperatingSystem.IsWindows() ? PrivateFolderWindowsNative.Open(target) : Unix.Open(target.Path, target.Note);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
         {
             return new PrivateFolderOutcome.Refused($"{PathOf(root, name)} could not be made or read private ({e.Message}) — choose another Vibe homes folder in {Setting}");
         }
     }
-
-    /// <summary>
-    /// Why a descendant's OWNER refuses the folder — or empty: an owner other than the person or Administrators holds an implicit
-    /// WRITE_DAC, so whoever planted the child could widen its DACL again right after the walk reset it. The sentence names the child.
-    /// </summary>
-    [SupportedOSPlatform("windows")]
-    internal static string OwnerProblem(string entry, FileSystemSecurity security, SecurityIdentifier me) =>
-        Windows.OwnerIsOurs(security, me)
-            ? string.Empty
-            : $"{entry} inside the re-ACLed folder is owned by {Windows.Name(security.GetOwner(typeof(SecurityIdentifier)))}, and an owner keeps the right to change its DACL (WRITE_DAC), "
-              + $"so coai cannot make it private — delete it, or choose another Vibe homes folder in {Setting}";
 
     /// <summary>Whether <paramref name="root"/> is spelled as a full local path — the question before "does it exist" has any meaning.</summary>
     public static bool IsFullLocalPath(string root) =>
@@ -112,7 +102,8 @@ public static partial class PrivateFolder
             : $"the Vibe homes folder {root} does not exist — create a short local folder of your own and name it in {Setting}";
     }
 
-    private sealed class NothingHeld : IDisposable
+    /// <summary>What a folder that needs no handle is held by — nothing; its <see cref="IDisposable.Dispose"/> does nothing.</summary>
+    internal sealed class NothingHeld : IDisposable
     {
         public void Dispose()
         {
@@ -190,366 +181,5 @@ public static partial class PrivateFolder
             return new PrivateFolderOutcome.Refused($"{path} is not private to you (mode {Convert.ToString((int)mode, 8)}) — coai keeps Vibe's homes, their transcripts and its copies of your tree only in a folder only you can open; "
                 + $"delete it, or choose another Vibe homes folder in {Setting}");
         }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private static partial class Windows
-    {
-        private const uint ReadControl = 0x20000;
-        private const uint WriteDac = 0x40000;
-        private const uint FileReadAttributes = 0x80;
-        private const uint FileListDirectory = 0x1;
-        private const uint ShareReadWrite = 0x1 | 0x2;
-        private const uint OpenExisting = 3;
-        private const int SharingViolation = 32;
-        private const uint BackupSemantics = 0x02000000;
-        private const int FileObject = 1;
-        private const uint OwnerAndDacl = 0x1 | 0x4;
-        private const uint ReplaceDacl = 0x4 | 0x80000000;
-
-        public static PrivateFolderOutcome Open(string root, string name, Action<string> note)
-        {
-            var path = PathOf(root, name);
-            var me = WindowsIdentity.GetCurrent().User ?? throw new InvalidOperationException("the current user has no SID");
-            if (!Directory.Exists(path))
-            {
-                new DirectoryInfo(path).Create(Ours(me));
-            }
-
-            // Verified every time: the create above returns silently on an existing folder, so it proved nothing.
-            var handle = OpenHeld(path);
-            if (handle.IsInvalid)
-            {
-                return new PrivateFolderOutcome.Refused(NotOpened(path, Marshal.GetLastWin32Error()));
-            }
-
-            return Settled(handle, Checked(handle, root, name, path, me, note), path);
-        }
-
-        /// <summary>
-        /// The ONE handle: verified, re-ACLed through, and then HELD — so what was checked is what is kept. It asks for a data right
-        /// (the kernel records a share mode only for a handle that holds one — E7) and WRITE_DAC to re-ACL, without it when the
-        /// person may not have that; it shares read and write but never delete, so a rename or a delete of the folder is refused
-        /// while it is open, and a folder somebody else already holds open for delete cannot be opened at all.
-        /// </summary>
-        private static SafeFileHandle OpenHeld(string path)
-        {
-            var handle = OpenHandle(path, ReadControl | FileReadAttributes | FileListDirectory | WriteDac);
-
-            return handle.IsInvalid ? OpenHandle(path, ReadControl | FileReadAttributes | FileListDirectory) : handle;
-        }
-
-        private static string NotOpened(string path, int error) => OwnedPaths.IsLinkIfThere(path)
-            ? $"{path} is a link, and its target could not be opened (error {error}) — Vibe's homes are never made through one; delete it, or choose another Vibe homes folder in {Setting}"
-            : NotOpenedHere(path, error);
-
-        private static string NotOpenedHere(string path, int error) => error == SharingViolation
-            ? $"{path} is open elsewhere in a way that lets it be renamed or deleted under coai, so it cannot be held — close what holds it, or choose another Vibe homes folder in {Setting}"
-            : $"{path} could not be opened to check that it is private (error {error}) — choose another Vibe homes folder in {Setting}";
-
-        /// <summary>The verdict for the held handle: kept open on a pass, closed on a refusal or a failure to read.</summary>
-        private static PrivateFolderOutcome Checked(SafeFileHandle handle, string root, string name, string path, SecurityIdentifier me, Action<string> note)
-        {
-            try
-            {
-                return Verdict(handle, root, name, path, me, note);
-            }
-            catch
-            {
-                handle.Dispose();
-                throw;
-            }
-        }
-
-        private static PrivateFolderOutcome Settled(SafeFileHandle handle, PrivateFolderOutcome verdict, string path)
-        {
-            if (verdict is PrivateFolderOutcome.Opened)
-            {
-                return new PrivateFolderOutcome.Opened(handle, path);
-            }
-
-            handle.Dispose();
-
-            return verdict;
-        }
-
-        private static SafeFileHandle OpenHandle(string path, uint access) =>
-            CreateFileW(path, access, ShareReadWrite, 0, OpenExisting, BackupSemantics, 0);
-
-        private static PrivateFolderOutcome Verdict(SafeFileHandle handle, string root, string name, string path, SecurityIdentifier me, Action<string> note)
-        {
-            var expected = Path.Combine(HandleRead.CanonicalDirectory(root), name);
-            if (!HandleRead.SameByComponents(HandleRead.FinalPathOf(handle), expected, StringComparison.OrdinalIgnoreCase))
-            {
-                return new PrivateFolderOutcome.Refused($"{path} is not the folder it names — it is a link, or it was swapped — and coai does not use or make folders through one; "
-                    + $"delete it, or choose another Vibe homes folder in {Setting}");
-            }
-
-            var security = Read(handle);
-
-            return !OwnerIsOurs(security, me) ? Refuse(path, security)
-                : IsExactlyOurs(security, me) ? new PrivateFolderOutcome.Opened(new NothingHeld(), path)
-                : ReAcled(handle, path, security, me, note);
-        }
-
-        /// <summary>The owner may be the person or Administrators — an elevated session creates folders owned by the group.</summary>
-        internal static bool OwnerIsOurs(FileSystemSecurity security, SecurityIdentifier me)
-        {
-            var owner = security.GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
-
-            return owner is not null && (owner == me || owner == Admins);
-        }
-
-        private static SecurityIdentifier System => new(WellKnownSidType.LocalSystemSid, null);
-
-        private static SecurityIdentifier Admins => new(WellKnownSidType.BuiltinAdministratorsSid, null);
-
-        /// <summary>The three entries, and nothing else: SIDs, full control, container- and object-inheriting, protected.</summary>
-        private static DirectorySecurity Ours(SecurityIdentifier me)
-        {
-            var security = new DirectorySecurity();
-            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-            foreach (var sid in new[] { me, System, Admins })
-            {
-                security.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl,
-                    InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-            }
-
-            return security;
-        }
-
-        private static bool IsExactlyOurs(DirectorySecurity security, SecurityIdentifier me)
-        {
-            var rules = Rules(security);
-
-            return security.AreAccessRulesProtected
-                && rules.Count == 3
-                && rules.All(IsFullControlAllow)
-                && rules.Select(rule => rule.IdentityReference.Value).Order().SequenceEqual(new[] { me, System, Admins }.Select(sid => sid.Value).Order());
-        }
-
-        private static bool IsFullControlAllow(FileSystemAccessRule rule) =>
-            rule.AccessControlType == AccessControlType.Allow && !rule.IsInherited
-            && rule.FileSystemRights == FileSystemRights.FullControl
-            && rule.InheritanceFlags == (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit)
-            && rule.PropagationFlags == PropagationFlags.None;
-
-        private static List<FileSystemAccessRule> Rules(FileSystemSecurity security) =>
-            [.. security.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>()];
-
-        /// <summary>The folder is the person's but its DACL is not ours: made so through the handle, re-read, and said once.</summary>
-        private static PrivateFolderOutcome ReAcled(SafeFileHandle handle, string path, DirectorySecurity before, SecurityIdentifier me, Action<string> note)
-        {
-            if (!Replaced(handle, Ours(me)) || !IsExactlyOurs(Read(handle), me))
-            {
-                return new PrivateFolderOutcome.Refused($"{path} is not private to you and coai could not make it so — {Exposure(before)}; "
-                    + $"delete it, or choose another Vibe homes folder in {Setting}");
-            }
-
-            if (MadePrivateBelow(path, me) is { Length: > 0 } child)
-            {
-                return new PrivateFolderOutcome.Refused(child);
-            }
-
-            note($"made {path} private; {Exposure(before)} until now");
-
-            return new PrivateFolderOutcome.Opened(new NothingHeld(), path);
-        }
-
-        // -------------------------------------------------------------------------------------------------------------
-        // The descendants of a folder that was re-ACLed
-        // -------------------------------------------------------------------------------------------------------------
-
-        /// <summary>
-        /// Propagation from the parent replaces the INHERITED entries of the children only: an explicit entry and a protected DACL
-        /// stay, so a transcript could stay readable under a parent that now says it is private. Every descendant is therefore walked
-        /// (a link is never entered and never touched — propagation does not follow one either) and, when it holds an explicit entry
-        /// or is protected, reset to inherit from its parent and re-read. The sentence names the first child that cannot be.
-        /// </summary>
-        private static string MadePrivateBelow(string folder, SecurityIdentifier me)
-        {
-            var pending = new Stack<string>([folder]);
-            while (pending.Count > 0)
-            {
-                foreach (var entry in Directory.EnumerateFileSystemEntries(pending.Pop()))
-                {
-                    var problem = Settled(entry, me, pending);
-                    if (problem.Length > 0)
-                    {
-                        return problem;
-                    }
-                }
-            }
-
-            return string.Empty;
-        }
-
-        private static string Settled(string entry, SecurityIdentifier me, Stack<string> pending)
-        {
-            var attributes = File.GetAttributes(entry);
-            if ((attributes & FileAttributes.ReparsePoint) != 0)
-            {
-                return string.Empty;
-            }
-
-            if ((attributes & FileAttributes.Directory) != 0)
-            {
-                pending.Push(entry);
-            }
-
-            return InheritsExactly(entry, (attributes & FileAttributes.Directory) != 0, me);
-        }
-
-        private static string InheritsExactly(string entry, bool isFolder, SecurityIdentifier me)
-        {
-            try
-            {
-                var before = SecurityOf(entry, isFolder);
-
-                return OwnerProblem(entry, before, me) is { Length: > 0 } foreign ? foreign
-                    : NeedsReset(before) ? ResetAndChecked(entry, isFolder, me)
-                    : string.Empty;
-            }
-            catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidOperationException)
-            {
-                return CouldNotBeMade(entry, e.Message);
-            }
-        }
-
-        private static string ResetAndChecked(string entry, bool isFolder, SecurityIdentifier me)
-        {
-            Reset(entry, isFolder);
-
-            return Inherited(SecurityOf(entry, isFolder), me) ? string.Empty : CouldNotBeMade(entry, "it did not inherit the three entries after a reset");
-        }
-
-        private static string CouldNotBeMade(string entry, string why) =>
-            $"{entry} inside the re-ACLed folder could not be made private ({why}) — delete it, or choose another Vibe homes folder in {Setting}";
-
-        private static FileSystemSecurity SecurityOf(string entry, bool isFolder) =>
-            isFolder ? new DirectoryInfo(entry).GetAccessControl() : new FileInfo(entry).GetAccessControl();
-
-        private static bool NeedsReset(FileSystemSecurity security) =>
-            security.AreAccessRulesProtected || security.GetAccessRules(true, false, typeof(SecurityIdentifier)).Count > 0;
-
-        private static void Reset(string entry, bool isFolder)
-        {
-            var security = SecurityOf(entry, isFolder);
-            security.SetAccessRuleProtection(isProtected: false, preserveInheritance: false);
-            foreach (FileSystemAccessRule explicitRule in security.GetAccessRules(true, false, typeof(SecurityIdentifier)))
-            {
-                security.RemoveAccessRuleSpecific(explicitRule);
-            }
-
-            if (isFolder)
-            {
-                new DirectoryInfo(entry).SetAccessControl((DirectorySecurity)security);
-            }
-            else
-            {
-                new FileInfo(entry).SetAccessControl((FileSecurity)security);
-            }
-        }
-
-        /// <summary>Not protected, no explicit entry, and exactly the person, SYSTEM and Administrators — all inherited.</summary>
-        private static bool Inherited(FileSystemSecurity security, SecurityIdentifier me)
-        {
-            var rules = Rules(security);
-
-            return !security.AreAccessRulesProtected
-                && rules.All(rule => rule.IsInherited)
-                && rules.Select(rule => rule.IdentityReference.Value).Distinct().Order().SequenceEqual(new[] { me, System, Admins }.Select(sid => sid.Value).Order());
-        }
-
-        private static PrivateFolderOutcome Refuse(string path, DirectorySecurity security) =>
-            new PrivateFolderOutcome.Refused($"{path} is not private to you (owner {Name(security.GetOwner(typeof(SecurityIdentifier)))}; {Exposure(security)}) — "
-                + "coai keeps Vibe's homes, their transcripts and its copies of your tree only in a folder only you can open; "
-                + $"delete it, or choose another Vibe homes folder in {Setting}");
-
-        /// <summary>Who — beyond the three — could do what: <c>Everyone could read it</c>; a sentence of its own when no foreign Allow entry exists.</summary>
-        private static string Exposure(DirectorySecurity security)
-        {
-            var mine = new[] { WindowsIdentity.GetCurrent().User, System, Admins }.Select(sid => sid?.Value).ToHashSet();
-            var others = Rules(security).Where(rule => rule.AccessControlType == AccessControlType.Allow && !mine.Contains(rule.IdentityReference.Value)).ToList();
-
-            return others.Count == 0
-                ? "nobody else is listed as able to use it, but its protection or entries were not exactly the person's"
-                : string.Join("; ", others.GroupBy(rule => rule.IdentityReference.Value).Select(group => $"{Name(group.First().IdentityReference)} could {Rights(group)} it"));
-        }
-
-        private static string Rights(IEnumerable<FileSystemAccessRule> rules) =>
-            rules.Any(rule => (rule.FileSystemRights & (FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.Delete | FileSystemRights.WriteAttributes)) != 0) ? "modify" : "read";
-
-        internal static string Name(IdentityReference? who)
-        {
-            if (who is null)
-            {
-                return "unknown";
-            }
-
-            try
-            {
-                return who.Translate(typeof(NTAccount)).Value;
-            }
-            catch (Exception e) when (e is IdentityNotMappedException or SystemException)
-            {
-                return who.Value;
-            }
-        }
-
-        // -------------------------------------------------------------------------------------------------------------
-        // The handle's security descriptor — read and replaced through the verified handle, never by path
-        // -------------------------------------------------------------------------------------------------------------
-
-        private static DirectorySecurity Read(SafeFileHandle handle)
-        {
-            if (GetSecurityInfo(handle, FileObject, OwnerAndDacl, out _, out _, out _, out _, out var descriptor) != 0 || descriptor == 0)
-            {
-                throw new IOException("the folder's owner and DACL could not be read");
-            }
-
-            try
-            {
-                var bytes = new byte[GetSecurityDescriptorLength(descriptor)];
-                Marshal.Copy(descriptor, bytes, 0, bytes.Length);
-                var security = new DirectorySecurity();
-                security.SetSecurityDescriptorBinaryForm(bytes);
-
-                return security;
-            }
-            finally
-            {
-                LocalFree(descriptor);
-            }
-        }
-
-        private static unsafe bool Replaced(SafeFileHandle handle, DirectorySecurity wanted)
-        {
-            var bytes = wanted.GetSecurityDescriptorBinaryForm();
-            fixed (byte* descriptor = bytes)
-            {
-                return GetSecurityDescriptorDacl((nint)descriptor, out var present, out var dacl, out _) && present
-                    && SetSecurityInfo(handle, FileObject, ReplaceDacl, 0, 0, dacl, 0) == 0;
-            }
-        }
-
-        [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
-        private static partial SafeFileHandle CreateFileW(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
-
-        [LibraryImport("advapi32.dll", SetLastError = true)]
-        private static partial uint GetSecurityInfo(SafeFileHandle handle, int objectType, uint information, out nint owner, out nint group, out nint dacl, out nint sacl, out nint descriptor);
-
-        [LibraryImport("advapi32.dll", SetLastError = true)]
-        private static partial uint SetSecurityInfo(SafeFileHandle handle, int objectType, uint information, nint owner, nint group, nint dacl, nint sacl);
-
-        [LibraryImport("advapi32.dll")]
-        private static partial uint GetSecurityDescriptorLength(nint descriptor);
-
-        [LibraryImport("advapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static partial bool GetSecurityDescriptorDacl(nint descriptor, [MarshalAs(UnmanagedType.Bool)] out bool present, out nint dacl, [MarshalAs(UnmanagedType.Bool)] out bool defaulted);
-
-        [LibraryImport("kernel32.dll")]
-        private static partial nint LocalFree(nint memory);
     }
 }

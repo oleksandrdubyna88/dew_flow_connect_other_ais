@@ -71,29 +71,39 @@ public sealed class PrivateFolderWindowsTests : IDisposable
     }
 
     /// <summary>
-    /// The rule behind the walk's owner check, on a bare security descriptor (no elevation): a child owned by anyone but the person or
-    /// Administrators is refused BY NAME, because an owner holds an implicit WRITE_DAC and could widen the DACL again after the check.
+    /// The seam between the system and the pure rules: a real folder's descriptor, read through the native shell, comes out as the
+    /// facts <see cref="PrivateAcl"/> judges — owner, protection, each entry's SID, mask and inheritance — and a SID is named.
     /// </summary>
     [Fact]
-    public void TheOwnerRule_RefusesAChildOwnedBySomeoneElse_ByName_AndAdmitsThePersonAndAdministrators()
+    public void TheNativeShell_ReadsARealFoldersAclAsFacts_AndNamesASid()
     {
         OnWindows();
-        FileSecurity Owned(SecurityIdentifier owner)
-        {
-            var security = new FileSecurity();
-            security.SetOwner(owner);
+        var path = WideFolder("coai-vh");
+        var shell = new PrivateFolderWindowsNative();
 
-            return security;
-        }
+        var facts = shell.AclOf(path, isFolder: true);
 
-        const string Child = @"C:\homes\coai-vibe\id\h\transcript.jsonl";
-        PrivateFolder.OwnerProblem(Child, Owned(System), Me)
-            .Should().Contain(Child).And.Contain(@"NT AUTHORITY\SYSTEM").And.Contain("WRITE_DAC");
-        PrivateFolder.OwnerProblem("x", Owned(Everyone), Me).Should().NotBeEmpty();
-        PrivateFolder.OwnerProblem("x", Owned(Me), Me).Should().BeEmpty();
-        PrivateFolder.OwnerProblem("x", Owned(Admins), Me).Should().BeEmpty("an elevated session owns what it makes as Administrators");
+        facts.Owner.Should().NotBe(Sid.None);
+        facts.DaclPresent.Should().BeTrue();
+        facts.Aces.Should().Contain(ace => ace.Sid.Value == Everyone.Value && ace.Allow && (ace.Mask & 0x1) != 0 && ace.Inheritance == PrivateAcl.Inheriting, "the Everyone read entry set above");
+        shell.Me.Value.Should().Be(Me.Value);
+        shell.Name(new Sid(Everyone.Value)).Should().Be("Everyone");
+        shell.Name(new Sid("S-1-5-21-1-2-3-4")).Should().Be("S-1-5-21-1-2-3-4", "a SID that maps to no account reads as its own text");
+        shell.Name(Sid.None).Should().Be("unknown");
     }
 
+    /// <summary>The wanted facts, rendered by the shell and applied to a real folder, read back as exactly the wanted facts.</summary>
+    [Fact]
+    public void TheWantedFacts_RoundTripThroughTheSystem_AsExactlyOurs()
+    {
+        OnWindows();
+        var shell = new PrivateFolderWindowsNative();
+        var path = Path.Combine(_root, "coai-vh");
+
+        shell.Create(path, PrivateAcl.Wanted(shell.Me));
+
+        PrivateAcl.IsExactlyOurs(shell.AclOf(path, isFolder: true), shell.Me).Should().BeTrue("the pure rule and the system agree on what the three entries are");
+    }
     /// <summary>E5's twin one level down: a child planted with another OWNER makes the whole folder refused, naming the child (skips unless elevated, like E5).</summary>
     [Fact]
     public void E5b_AChildOwnedBySomeoneElse_RefusesTheFolder_NamingTheChild()
