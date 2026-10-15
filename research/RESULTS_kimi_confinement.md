@@ -631,3 +631,71 @@ launch on that sign-in until it ends, and a disposal that keeps the home.
   recorded run (`notCaptured` false) — the first live confirmation of E4.3's `/usage` after the fake agent's.
 
 Spend: 16 launches — 9 answered turns (6 recorded, 3 smoke) and 7 cut by the kill, whose spend is not measured; nothing was refused.
+
+## 28. A live round with a Kimi row — the plan round and the code round through `coai-mcp` as built from `feat/kimi-runtime` (2026-10-15)
+
+> The DoD row of `todo/PLAN_vibe_and_kimi_runtimes_E4.md` (E4.4 and E4.5, "a live round with a Kimi row"), run by a scout. **Both rounds passed.** Paths are
+> written `%TEMP%`, `%LOCALAPPDATA%` or `%USERPROFILE%`; no credential file was opened, read, copied or printed — only the sign-in folder's file NAMES,
+> sizes and modification times were listed. `kimi login` was never run.
+
+**Setup.** Kimi Code 2.1.1; Windows 11; the server is the `Debug` build of `src_mcp/src/CoaiMcp.csproj` at HEAD `c3f055d0` (clean tree), not the installed
+`coai-mcp`. The server and the shim are one executable: the reviewer's launch (debug log) is `coai-mcp.exe --ask-acp --profile kimi --model kimi-code/k3-256k --cwd
+<scratch>\tmp\coai-noworkspace-… --home <scratch>\tmp\coai-answers-<12 hex>\kh-<10 hex> --persons-bin %USERPROFILE%\.kimi-code\bin --locks
+%LOCALAPPDATA%\coai-mcp\kimi-locks --deadline-seconds 590 --executable %USERPROFILE%\.kimi-code\bin\kimi.exe`, the prompt on stdin.
+
+| What | Value |
+|---|---|
+| Data | `COAI_DATA_DIR=%TEMP%\testsToDelete-kimi-live-<6 hex>\data`, holding only `settings.json` = `{"COAI_VENDORS":[{"id":"kimi","runtime":"kimi","model":"","executablePath":"%USERPROFILE%\\.kimi-code\\bin\\kimi.exe"}]}` — one row, no model named (the default `kimi-code/k3-256k`), no vault; every inherited `COAI_*` variable removed from the server's environment |
+| Temp | `TEMP` = `TMP` = `<scratch>\tmp` for the server, so every `coai-*` scratch folder landed where it could be inspected |
+| Repository | a scratch `git init`: `main` = one commit (`src/slug.js`, a test, a README); branch `feat/slug-max-length` = `main` + a 576-byte plan (an optional `maxLength` for `slugify`; it carries one `→`, U+2192) + a second commit that implements it (29 added lines, 3 files) |
+| Client | a node stdio MCP client in the scratch (not committed): newline-delimited JSON-RPC, `initialize`, then `tools/call` — the shape of `scripts/live-consult-all.mjs`; `open` with `callerModel: "claude-opus-5-5"` |
+| Before every launch | the process list was read (never killed from); no `kimi` ran (three reads: before the first plan launch, before the code round, after both) |
+
+**The `providers` answer** (2.3 s): `{"provider":"kimi","enabled":true,"cliFound":true,"version":"2.1.1","auth":"own auth","note":"the CLI's own sign-in is used"}` — no `warning`.
+
+**The rounds.**
+
+| | Plan round (`review_plan`) | Code round (`review_code`, `baseRef main`) |
+|---|---|---|
+| Wall time | **87.0 s** the call (85.9 s the round, the reviewer 85.8 s); 1 m 46 s the whole driver, server start to stop | **215.6 s** the call (213.2 s the round); 3 m 51 s the whole driver |
+| Verdict | **`proceed`**, `gatingCount` 2, threshold 6 | **`proceed`**, `gatingCount` 0, threshold 5 |
+| Reviewer line | `all 1 reviewers answered` | `all 3 reviewers answered; Conventions was not asked: this repository has no written rules to judge against` |
+| `reviewerStates` | one: `kimi` / `PlanCritique`, `status: done`, `model: kimi-code/k3-256k`, 4 findings, 85.8 s, `note: ""` | three, run in the order `Architecture`, `SecurityReliability`, `UxDxPerformance`; each `done`, 2 findings each |
+| Findings | 4 (Blocking, Major, Minor, Minor), all about the plan's cut rule — the missing fallback, the dash at the limit index, `NaN` — which read the plan, not a stock phrase | 5 (3 Minor, 2 Nit), e.g. `slugify('Hello', null)` throws a destructuring `TypeError` and a numeric second argument is ignored, both true of the committed code, each with a `file:line` inside the repository |
+| Usage (`/usage`) | 21 115 in / 2 775 out | 65 636 in / 7 666 out — 21 843 / 2 365, 21 906 / 2 387, 21 887 / 2 914 |
+| Cost | `costUsd` null in the ledger (a subscription; D9) | the same |
+
+The ledger has four lines, all `outcome: ok`, `attempt: first`, `cli: kimi`, `cliVersion: kimi 2.1.1`; its `model` field is empty (the row names none), while the round's `reviewerStates`
+carry the model the shim was asked for. 4 launches, 4 answered turns: **86 751 in / 10 441 out** in all.
+
+**The three code reviewers ran one after another**, not at once: they started at 21:55:01 (all three argvs logged), 21:56:09 and 21:57:10 — each a second after the previous
+one answered — which is the sign-in hold of E4.2/E4.3 serialising the launches, as designed (the `.lock` and `.tree.lock` files of the sign-in's hash sit in
+`%LOCALAPPDATA%\coai-mcp\kimi-locks`, 0 bytes). A round of N Kimi reviewers costs the SUM of their times.
+
+**The shim's exit and the report's `end` — inferred, not observed.** The server keeps neither on success: no record, ledger line or log level prints them, and the shim's report is
+parsed in memory. What the records show is what the classifier requires: `KimiRuntime.ReadAnswer` returns an answer only for `end: answered`, every other exit is "an ordinary failure
+whatever words its trace holds", and each of the four reviewers returned findings and a `/usage` total from the report (`notCaptured` false) — so each shim ended `answered`, exit 0.
+A harness that wants the two numbers must launch the shim itself (as `scripts/probe-kimi-tree-hold.mjs` does) or the server must log them; it does neither.
+
+**The version warning did not appear** — not on the `providers` card (no `warning`), not on a `reviewerStates` row (`note` empty), not on a ledger line. That is the expected
+outcome: 2.1.1 is in `KimiAcpProfile.MeasuredVersions`. The warning's own path (an unmeasured version) was **not exercised** here.
+
+**Disposal.** Each reviewer's owned home was `kh-<10 hex>` inside one `coai-answers-<12 hex>` folder of the scratch `tmp` (three names in the debug log; the plan round's is not named below debug). After
+each round: no `kh-*` folder anywhere under the scratch, the `coai-answers-<12 hex>` folder itself gone, the round's `coai-plan-…` folder gone, the round's worktree
+(`%LOCALAPPDATA%\coai-mcp\round-worktrees\coai-wt-<8 hex>-r1-<8 hex>`) gone, and the server's log holds no "could not be deleted" line. The disposal was not watched live — the evidence is the
+absence and the silence — but it is the path §16 and §27 measured (16 of 16 clean), now through the product. What remained in the scratch `tmp`: empty `coai-answers-<8>.<3>`,
+`coai-repair-<8>.<3>` and `coai-noworkspace-…` folders, ordinary sweep material as in `RESULTS_vibe_confinement.md` §26.
+
+**The person's sign-in folder** (`%USERPROFILE%\.kimi-code\credentials`): both file NAMES kept (`kimi-code.json`, `kimi-code-env-<16 hex>.json`). `kimi-code.json`: size and time unchanged.
+`kimi-code-env-<16 hex>.json`: same size, **modification time moved to two seconds after the plan round's launch started** — a token refresh, the same event §27 saw in 2 of 16 launches; the
+content was never read. So a round DOES refresh the person's token when it is due, through the junction; the next `kimi` the person starts reads the rotated file. The person's own coai servers
+were running (7 `coai-mcp` processes, none started or touched by this run) and no `kimi` was.
+
+**What this run touched outside its scratch**, because the product's default places are not redirected by `COAI_DATA_DIR`: `%LOCALAPPDATA%\coai-mcp\kimi-locks` (the two lock files — wanted: the
+hold must be the SAME file for every coai on the machine) and `%LOCALAPPDATA%\coai-mcp\round-worktrees` (the code round's worktree, created and removed). The run wrote its settings, ledger and sessions to the scratch data directory only.
+
+**What is and is not covered.** Covered: a Windows plan round and a Windows code round with a real Kimi row, through the built server and the shipped shim; a non-ASCII plan; the usage totals
+from `/usage`; serialised launches; the disposal; the sign-in's names. Not covered: the `resolve` of the code round (the plan round's four findings were all accepted; the code round's five were left
+awaiting), a round with two Kimi rows or a Kimi row beside another vendor, a retry, the version warning, WSL and Linux (D18), and the panel's buttons and card in the editor (E4.5's other live checks).
+
+Spend: 4 paid launches, 4 answered; nothing was refused.
