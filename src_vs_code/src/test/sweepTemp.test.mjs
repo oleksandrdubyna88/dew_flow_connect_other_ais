@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { readRule, sweep, toSweep } from '../../scripts/sweepTemp.mjs';
@@ -134,4 +135,66 @@ test('the runner sweeps FIRST, before it discovers or runs anything', () => {
 
   assert.match(main, /^function main\(\) \{\s*sweepFirst\(\);\s*\n/,
     'a sweep after the run starts would race the run\'s own directories');
+});
+
+/**
+ * A link inside a leftover is removed by its own name and never entered (E4.1 S1.13 of
+ * todo/PLAN_vibe_and_kimi_runtimes_E4.md): a Kimi home's `credentials` is a junction to the person's own folder, and a
+ * leftover home is swept by `rmSync(..., { recursive: true })`. Everything below lives in ONE `testsToDelete-sweep-` folder,
+ * the junction's target a fake "person's credentials" folder beside the leftover — never the real `~/.kimi-code`.
+ */
+function leftoverWithALinkInside(makeLink) {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-sweep-'));
+  const persons = path.join(folder, 'persons');
+  const secret = path.join(persons, 'secret.json');
+  fs.mkdirSync(persons);
+  fs.writeFileSync(secret, '{"refresh_token":"not-a-real-one"}');
+  fs.chmodSync(secret, 0o444);
+  const home = path.join(folder, 'coai-left', 'kh', 'home');
+  fs.mkdirSync(home, { recursive: true });
+  const link = path.join(home, 'credentials');
+  makeLink(link, persons);
+  return { folder, persons, secret, link };
+}
+
+/** The folder removed with no chance of walking a link: every link by its own name first, the read-only bit cleared. */
+function cleanUp({ folder, secret, link }) {
+  try { fs.rmdirSync(link); } catch { /* not there, or not a link */ }
+  try { fs.chmodSync(secret, 0o666); } catch { /* already gone */ }
+  fs.rmSync(folder, { recursive: true, force: true });
+}
+
+function theLinkRuleSweepsLeftoverWith(makeLink) {
+  const made = leftoverWithALinkInside(makeLink);
+  try {
+    const result = sweep(made.folder, Date.now() + minute, { prefix: 'coai-', keepMinutes: 0, neverSwept: [] });
+
+    assert.equal(result.removed, 1, 'the leftover holding the link is taken');
+    assert.ok(!fs.existsSync(path.join(made.folder, 'coai-left')), 'and it is gone');
+    assert.equal(fs.readFileSync(made.secret, 'utf8'), '{"refresh_token":"not-a-real-one"}', 'the person\'s file keeps its bytes');
+    assert.equal(fs.statSync(made.secret).mode & 0o222, 0, 'and its read-only bit — the sweep never entered the link');
+  } finally {
+    cleanUp(made);
+  }
+}
+
+test('a junction inside a leftover is removed by its own name, never entered', { skip: process.platform !== 'win32' }, () => {
+  const mklink = (link, target) => execFileSync(path.join(process.env.SystemRoot, 'System32', 'cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target], { stdio: 'ignore' });
+
+  theLinkRuleSweepsLeftoverWith(mklink);
+});
+
+test('a symbolic link inside a leftover is removed by its own name, never entered', (t) => {
+  const symlink = (link, target) => fs.symlinkSync(target, link, 'dir');
+  const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-sweep-probe-'));
+  try {
+    symlink(path.join(probe, 'l'), probe);
+  } catch (error) {
+    t.skip(`this OS refuses to make a symbolic link without privilege: ${error.code}`);
+    return;
+  } finally {
+    fs.rmSync(probe, { recursive: true, force: true });
+  }
+
+  theLinkRuleSweepsLeftoverWith(symlink);
 });
