@@ -28,6 +28,19 @@ internal sealed record RoundWork(
     /// compares nothing.
     /// </remarks>
     public string BaseRef { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What this code round changed, by scope, coverage and kind (E2.S4) — carried out of the lambda that built the diff,
+    /// like <see cref="BaseRef"/>, because it is measured from that diff and recorded when the round ends. Null for a
+    /// round with no size: a plan, document or feature round, and a code round whose size could not be measured at all.
+    /// </summary>
+    public Core.Context.RoundSize? Size { get; init; }
+
+    /// <summary>
+    /// How many submodule pointers the round's range changed — measured with the size or not at all; null is "not recorded".
+    /// </summary>
+    public int? Gitlinks { get; init; }
+
     public bool SecurityActive { get; init; }
     public bool OrdinaryDue { get; init; }
 

@@ -1620,6 +1620,38 @@ empty directory and take no switch. Measured on one commit, Fast found MORE from
 models at a fraction of the tokens —
 [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
 
+**The size step — every code round measures itself (E2.S4, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
+In the code stage's `MakeWork` lambda (`PanelService.ReviewCodeAsync`), right after `CollectAsync` and `DiffShaper.Shape`,
+`RoundSizer.MeasureAsync(_context, repoPath, sha, collected, shaped, session.Rounds, _log, roundToken)` builds the round's
+`RoundSize` from the diff it actually built: the whole scope is `ChangePartition.Of` over `collected.Counted`, the unfiltered
+numstat (`AllChangesAsync`) and `shaped.Elided`; the delta is `DeltaPredecessor.Choose(session.Rounds, collected.ComparedAgainst)`
+→ `DeltaAsync` → `ChangePartition.OfDelta`. `session.Rounds` is the trail BEFORE this round, never re-loaded. **Row 0 comes
+first:** when `collected.Kind != DiffBase.MergeBase` (unrelated or truncated histories — `against` is the base's tip) both
+scopes are `unavailable: no merge base` and no git process runs. A `base unknown`/`base moved` predecessor becomes the delta's
+state with no git call. Changed submodule pointers are counted from `git diff --raw -z` (`ContextAssembler.GitlinksAsync`,
+`RawDiff.GitlinkCount`: an entry whose old or new mode is `160000`) — the numstat shows a submodule as one line, and its own
+edits are outside any size. The parse is strict: a record whose path token(s) are missing (a cut stream), a status letter
+outside `ACDMRTUX` or a non-digit score makes the whole answer *no count* (null), never a smaller number; a rename or copy
+needs two paths. **Stated limit:** under a user's `diff.ignoreSubmodules=all` git prints no submodule entries, so the count
+can read 0 for a range that moved a pointer — it is a measurement of what git showed. The result rides `RoundWork.Size` /
+`RoundWork.Gitlinks` (beside `BaseRef`) to the finished record's `with` in `RoundEngine` (`Size`, `Gitlinks`); `RecordRound`
+reads them from the record, as it reads `Caller`. A plan, document or feature round leaves both null. **Best-effort and
+bounded:** every size git call runs under `SizeGitTimeout` (10 s), and the whole sizing under ONE deadline of its own,
+`RoundSizer.SizeTotalTimeout` (15 s) — a token linked to the round's but separate from it, with the wait itself bounded
+(`WaitAsync`) so a launcher that ignores its token cannot hold the sizing. The whole scope (unfiltered numstat), the delta
+(is-ancestor first, then its two numstats together) and the gitlink count run **concurrently** (`Task.WhenAll`). On expiry
+the unfinished scopes read `unavailable: git failed` and the round goes on; an `OperationCanceledException` raised while the
+ROUND's token is cancelled propagates, any other (the deadline's, a call giving up) is a failed scope. Any other exception
+becomes `unavailable: git failed` for the scope it hit (one Warning, exception type only, no path); a
+`ChangePartition.Disagreement` is the state `unavailable: numstats disagree` with its fixed sentence logged once at Warning;
+a failed `--raw` leaves `Gitlinks` null and the size untouched. The partition itself is linear: `ChangePartition` indexes the
+reviewable numstat once per call (path and old-name dictionaries, claims counted by reference), so a 20 000-record range
+partitions in about a tenth of a second where the scanning form took 10 s (`APartitionOfAHugeRangeIsLinearTests`). One
+Information line per round: whole files/lines by coverage, the delta state, gitlinks, elapsed ms. Cost, measured on the test
+repo with a chosen predecessor under a loaded machine, before the calls ran together: 5 git processes (unfiltered numstat,
+`--raw`, is-ancestor, two delta numstats), p50 52 ms each, ≈ 330 ms in all; run side by side the elapsed time is the longest
+chain (is-ancestor, then the numstats), about two calls.
+
 ### What the gate found in this half (2026-09-03)
 
 Four of the nine defects from the 2026-09-02 campaign are server-side, and all four are the same
@@ -3278,6 +3310,37 @@ means "not recorded"**: every row from before the step, and a skipped round (`Ro
 nothing. No index: nothing on this machine looks a round up by its key yet, and sixteen bytes a round is the whole cost.
 Reached through both preview-fork shapes as step 20 is (`TheRoundKeyIsStepTwentyOneTests`); `--round-counts` on a
 step-20 file reads and leaves it at twenty — no reader asks for the column.
+
+**Schema step 22 — the round's size and `reviewers.effort`** (`Schema.TheRoundsSize`, appended after step 21; story
+E2.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
+per (scope `whole`/`delta`, coverage, kind) cell of the round's `RoundRecord.Size` — counts and lines only, no path — and
+`rounds` gains `size_state`, `delta_state`, `delta_from`, `size_origin` and `size_gitlinks`, because a delta that is
+`unavailable` and one that is an observed zero both have no rows and the state is what tells them apart.
+`RoundsDb.RecordRound` calls `RoundChangesTable.Record` (its own file, through `RoundsDb.Command()`, the
+`QuestionConsultTable` shape) after `RecordReviewers`, inside the same transaction: it deletes the round's rows and
+writes them again, so a re-record never doubles them. **A round with no `Size` writes nothing** — not even the gitlink
+count — so rows and states already there (a backfilled size, E7.S3) survive a live re-record. **Unknown is never 0:** a
+binary cell's `added`/`removed` are NULL in the table and absent in the session file; `size_gitlinks` is `-1` when
+`RoundRecord.Gitlinks` is null; empty states and an empty origin mean *not recorded*, which is every round written before
+the step. `reviewers.effort` is bound from `ReviewerState.Effort` by `RecordReviewers`: a reviewer that applied none is
+written empty, and the column's default `not recorded` marks every row from before the step — the two are never merged.
+Reached through both preview-fork shapes as step 21 is, and `--round-counts` on a step-21 file reads and leaves it at
+twenty-one (`TheRoundsSizeIsStepTwentyTwoTests`).
+
+**`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
+(`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
+`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's ids to `RoundChangesLog.Attach` (its own file, the
+`QuestionConsultLog` shape, on the read-only connection `Read` already opened), which answers with TWO grouped reads per page —
+`rounds` for the states, `round_changes` for the cells — never one per round. **Absent means not recorded:** a round with no
+`size` member predates step 22, is a plan/document round, or never had a size written; a file still at step 21 is asked for
+the `size_state` column (`HasColumn`, not a version guess), answers with no query, is logged exactly as before, and is left
+at twenty-one. **Absent also means "no line count" inside a binary cell:** `added`/`removed` are omitted there (the context
+writes no nulls) and a reader treats absent as *no line count*, never 0 — `RoundChangesLog` reads them with a nullable
+reader, not `Columns.Number`, which would turn the NULL into 0. `whole.from` is `rounds.base_ref` (the resolved base — a
+backfill never recomputes it), `delta.from` is `delta_from`, `origin` is `size_origin` (`live`/`backfill`). The Team server
+reads neither the session file nor `--log`; the extension's parser ignores members it does not know
+(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts`/`roundsLog.ts` are byte-identical to
+`extension-v0.75.0`'s, so that parser is the released one).
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 

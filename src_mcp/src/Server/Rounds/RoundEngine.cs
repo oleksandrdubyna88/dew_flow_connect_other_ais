@@ -483,6 +483,8 @@ internal sealed class RoundEngine(
             var record = live.Finish(answer.Verdict, gate.GatingCount, SecurityRound.Clause(results, roundWork) + summary.Sentence, results) with
             {
                 Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
+                Size = roundWork.Size,
+                Gitlinks = roundWork.Gitlinks,
                 // What the consultation cadence said about this round: met, or stood down and why.
                 CadenceNote = stage.Cadence.Call.Note,
                 // The D23 ground a feature review's second round was admitted on — read from the state this

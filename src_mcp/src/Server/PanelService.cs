@@ -755,6 +755,7 @@ public sealed class PanelService
             {
                 var collected = await _context.CollectAsync(repoPath, baseRef, sha, ct: roundToken);
                 var shaped = DiffShaper.Shape(collected.Files);
+                var measured = await RoundSizer.MeasureAsync(_context, repoPath, sha, collected, shaped, session.Rounds, _log, roundToken);
                 var bundle = new ReviewBundle(scope, branch, baseRef, sha, shaped);
 
                 // WHICH commit this round is a diff of, said out loud. Findings re-read a week later
@@ -866,6 +867,8 @@ public sealed class PanelService
                 return built with
                 {
                     BaseRef = collected.ComparedAgainst,
+                    Size = measured.Size,
+                    Gitlinks = measured.Gitlinks,
                     Unreviewed = NothingToReview.UnreviewedTail(await _context.UncommittedAsync(repoPath, sha, roundToken)),
                 };
             })
