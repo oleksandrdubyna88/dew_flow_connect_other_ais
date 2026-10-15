@@ -422,6 +422,58 @@ public sealed class KimiHomeTests : IDisposable
         ThePersonsFolderIsWhole(before);
     }
 
+    // ---------- M2: never unlink THROUGH a link ----------
+
+    /// <summary>An outside folder shaped like a home — <c>home/credentials</c> a junction to the fake person's — that a link under the swept folder points at.</summary>
+    private async Task<KimiPlaces> OutsideHomeAsync()
+    {
+        var outside = new KimiPlaces(Path.Combine(_person.Folder, "outside-root"), _person.PersonsHome, _person.Bin, [], string.Empty, "kimi");
+        KimiHome.Made(HostKind.Windows, outside, Expected()).Should().BeEmpty();
+        await Task.CompletedTask;
+
+        return outside;
+    }
+
+    [Fact]
+    public async Task AKhChildThatIsALink_IsNeverUnlinkedThrough()
+    {
+        OnWindows();
+        var outside = await OutsideHomeAsync();
+        var folder = Path.Combine(_person.Folder, "conversation");
+        Directory.CreateDirectory(folder);
+        var child = Path.Combine(folder, "kh-aaaaaaaaaa");
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), child, outside.OwnedRoot);
+        var before = _person.Hash();
+
+        var count = KimiHome.DisposeAllUnder(folder, _ => { });
+        var direct = KimiHome.Dispose(child, _ => { });
+
+        OwnedPaths.IsLinkIfThere(outside.Link).Should().BeTrue("the junction OUTSIDE the swept folder is untouched");
+        count.Should().Be(0, "a link is no home of this folder's to unlink in");
+        direct.Should().BeOfType<Disposal.Stopped>().Which.Reason.Should().Contain("is a link").And.Contain(child);
+        File.Exists(outside.Config).Should().BeTrue();
+        ThePersonsFolderIsWhole(before);
+        DirectoryLink.Remove(child);
+    }
+
+    [Fact]
+    public async Task AHomeFolderThatIsALink_IsNeverUnlinkedThrough()
+    {
+        OnWindows();
+        var outside = await OutsideHomeAsync();
+        var root = Path.Combine(_person.Folder, "owned", "kh-linkedhome");
+        Directory.CreateDirectory(root);
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), Path.Combine(root, "home"), outside.Home);
+
+        var disposal = KimiHome.Dispose(root, _ => { });
+
+        OwnedPaths.IsLinkIfThere(outside.Link).Should().BeTrue("home/ is a link to a folder holding a credentials junction: it is not followed");
+        disposal.Should().BeOfType<Disposal.Stopped>().Which.Reason.Should().Contain("is a link");
+        KimiHome.DisposeAllUnder(root, _ => { }).Should().Be(0);
+        OwnedPaths.IsLinkIfThere(outside.Link).Should().BeTrue();
+        DirectoryLink.Remove(Path.Combine(root, "home"));
+    }
+
     // ---------- S2.44 ----------
 
     [Fact]

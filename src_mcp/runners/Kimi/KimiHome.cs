@@ -132,7 +132,9 @@ public static class KimiHome
     {
         IEnumerable<string> itself = Directory.Exists(Path.Combine(folder, "home")) ? [folder] : [];
 
-        return itself.Concat(Children(folder)).Select(Unlinked).Count(disposal => Said(disposal, warn));
+        // A root that is itself a link (or whose home/ is one) is NOT a home of this folder's: unlinking `credentials` through it would reach
+        // a folder outside coai's tree. It is left to the shared deleter, which removes the link by its own name and never enters it.
+        return itself.Concat(Children(folder)).Where(root => ThroughNoLink(root).Length == 0).Select(Unlinked).Count(disposal => Said(disposal, warn));
     }
 
     private static IEnumerable<string> Children(string folder) =>
@@ -287,6 +289,11 @@ public static class KimiHome
     /// <summary>Step (1) alone: the live-tree probe, the junction unlinked by its own name, the person's folder verified. Clean when there is nothing (more) to unlink.</summary>
     private static Disposal Unlinked(string root)
     {
+        if (ThroughNoLink(root) is { Length: > 0 } through)
+        {
+            return new Disposal.Stopped(through);
+        }
+
         var link = Path.Combine(root, "home", "credentials");
         if (!OwnedPaths.IsLinkIfThere(link))
         {
@@ -295,6 +302,16 @@ public static class KimiHome
 
         return Alive(root) is { Length: > 0 } alive ? new Disposal.Stopped(alive) : Unlinking(root, link);
     }
+
+    /// <summary>
+    /// Why `<paramref name="root"/>/home/credentials` cannot be reached without passing through a link — the root or its `home/` is one — or
+    /// empty. Checked BEFORE anything is unlinked: a path through a link names a folder outside coai's tree, and the junction at its end
+    /// is somebody else's. The deleter (E4.1) removes such a link by its own name.
+    /// </summary>
+    private static string ThroughNoLink(string root) =>
+        OwnedPaths.FirstLink(root, Path.Combine(root, "home")) is { Length: > 0 } link
+            ? $"{link} is a link, and an owned home is never unlinked through one — it is left to the deleter, which removes the link by its own name and never enters it"
+            : string.Empty;
 
     /// <summary>Whether a tree is alive on THIS home — asked of the home's own file, before anything is unlinked and before anything outside coai's tree is opened. Free proceeds; Held or Unknown stop.</summary>
     private static string Alive(string root)

@@ -12,7 +12,7 @@ namespace CoaiMcp.Runners.Kimi;
 /// pins would put code coai never ran in the owned home under a hash KIMI checks, which is the alternative D19 itself rejected.
 /// So the owned home never holds code: the tools are found on the person's machine — their own <c>bin</c> (<c>KIMI_INSTALL_DIR</c>
 /// else <c>~/.kimi-code</c>, plus <c>/bin</c>) or a directory of the PARENT's <c>PATH</c> — and the launch's <c>PATH</c> is built so
-/// that both resolve without a download (<c>KimiLaunch.BuiltPath</c>). One or both missing is a refusal before any process, with
+/// that both resolve without a download (<c>KimiEnvironment.BuiltPath</c>). One or both missing is a refusal before any process, with
 /// the two documented commands in the sentence.</para>
 /// <para>Pure apart from the injected file test, so the whole table is a unit test rather than something discovered on somebody's
 /// laptop. Resolution is <see cref="ExecutableResolver"/>'s per-directory probe, fed this module's own candidates (the name, then

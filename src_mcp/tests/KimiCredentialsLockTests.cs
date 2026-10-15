@@ -119,7 +119,6 @@ public sealed class KimiCredentialsLockTests : IDisposable
             KimiCredentialsLock.KeyFor(Persons).Should().BeEmpty();
             KimiCredentialsLock.PathFor(Persons).Should().BeEmpty();
             (await KimiCredentialsLock.TakeAsync(Persons, TestContext.Current.CancellationToken)).Should().BeOfType<Hold.Unusable>();
-            KimiCredentialsLock.HoldTree(Persons, _dir.At("owned"), TimeSpan.FromMilliseconds(50)).Should().BeOfType<TreeHolding.Unusable>();
             Directory.Exists(Locks).Should().BeFalse();
         }
         finally
@@ -189,11 +188,28 @@ public sealed class KimiCredentialsLockTests : IDisposable
     private static async Task<(Process Shim, Process Grandchild)> StartShimAsync(string mode, string locks, string target, string home)
     {
         var exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-        var shim = Process.Start(new ProcessStartInfo(exe, ["tree-hold", mode, locks, target, home]) { RedirectStandardOutput = true, UseShellExecute = false })!;
+        var shim = Process.Start(new ProcessStartInfo(exe, ["tree-hold", mode, locks, target, home]) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false })!;
         var line = await shim.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
+        if (line is null)
+        {
+            await shim.WaitForExitAsync(TestContext.Current.CancellationToken);
+            Assert.Fail($"the child ended (exit {shim.ExitCode}) without taking its lock: {await shim.StandardError.ReadToEndAsync()}");
+        }
+
         line.Should().StartWith("held ", "the child takes its lock before it says so");
 
         return (shim, Process.GetProcessById(int.Parse(line![5..])));
+    }
+
+    /// <summary>The shim as a child that is expected NOT to take its lock: its exit code and what it said on stderr.</summary>
+    private static async Task<(int Exit, string Error)> ShimThatFailsAsync(string mode, string locks, string target, string home)
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
+        using var shim = Process.Start(new ProcessStartInfo(exe, ["tree-hold", mode, locks, target, home]) { RedirectStandardError = true, UseShellExecute = false })!;
+        var error = await shim.StandardError.ReadToEndAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
+        await shim.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        return (shim.ExitCode, error);
     }
 
     /// <summary>
@@ -241,9 +257,11 @@ public sealed class KimiCredentialsLockTests : IDisposable
 
             (await StaysHeldAsync(tree)).Should().BeTrue("the sleeping grandchild inherited the sign-in hold, so it stays Held after the opener is gone");
             (await StaysHeldAsync(homeHold)).Should().BeTrue("and the per-home one");
+            var second = await ShimThatFailsAsync("tree", Locks, Persons, home);
+            second.Exit.Should().Be(69, "a second shim on the same sign-in waits its second, then gives up");
+            second.Error.Should().Contain("Busy");
             using (Rooted())
             {
-                KimiCredentialsLock.HoldTree(Persons, home, TimeSpan.FromMilliseconds(300)).Should().BeOfType<TreeHolding.Busy>("a second shim on the same sign-in waits, then gives up");
                 KimiCredentialsLock.HomeProbe(home).Should().Be(LockProbe.Held);
             }
 
@@ -251,12 +269,38 @@ public sealed class KimiCredentialsLockTests : IDisposable
 
             (await Polls.Until(() => HeldFile.Probe(tree) == LockProbe.Free && HeldFile.Probe(homeHold) == LockProbe.Free, Patience))
                 .Should().BeTrue("both holds are free once the last process that inherited them is gone");
-            using (Rooted())
-            {
-                var again = KimiCredentialsLock.HoldTree(Persons, home, TimeSpan.FromSeconds(1));
-                again.Should().BeOfType<TreeHolding.Taken>();
-                ((TreeHolding.Taken)again).Hold.Dispose();
-            }
+            // Re-taken with the NON-inheriting calls: the test host never holds an inheritable handle (the scan next door pins it).
+            using var signIn = HeldFile.TakeWithin(tree, TimeSpan.FromSeconds(1)).Should().BeOfType<Hold.Taken>("the sign-in's tree file is free to take again").Subject.Stream;
+            using var homeFile = HeldFile.Take(homeHold).Should().BeOfType<Hold.Taken>("and the home's").Subject.Stream;
+        }
+        finally
+        {
+            await EndAsync(grandchild);
+            await EndAsync(shim);
+        }
+    }
+
+    [Fact]
+    public async Task AShimOnAFolderTheKernelCannotName_TakesNoHold_AndSaysSo()
+    {
+        var shim = await ShimThatFailsAsync("tree", Locks, _dir.At("persons", "never-made"), _dir.At("owned", "kh-z"));
+
+        shim.Exit.Should().Be(69);
+        shim.Error.Should().Contain("Unusable").And.Contain("named by its handle");
+        Directory.Exists(Locks).Should().BeFalse("no lock file was made on a spelling");
+    }
+
+    /// <summary>M1: a disposal's probe opens the per-home file exclusively for a moment; a shim that meets it waits it out and still takes the hold.</summary>
+    [Fact]
+    public async Task AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold()
+    {
+        OnWindows();
+        var home = _dir.At("owned", "kh-p");
+        Directory.CreateDirectory(home);
+        var (shim, grandchild) = await StartShimAsync("tree-probed", Locks, Persons, home);
+        try
+        {
+            (await StaysHeldAsync(Path.Combine(home, KimiCredentialsLock.HomeHoldName))).Should().BeTrue("the shim took the per-home hold once the probe let go");
         }
         finally
         {

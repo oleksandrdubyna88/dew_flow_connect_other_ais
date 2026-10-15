@@ -14,7 +14,7 @@ internal static class TreeHoldVerb
     internal static int Run(string mode, string locks, string target, string home)
     {
         using var _ = KimiCredentialsLock.RootFor(locks);
-        var held = mode == "tree" ? TakeTree(target, home) : TakeGate(target);
+        var held = mode.StartsWith("tree", StringComparison.Ordinal) ? TakeTree(mode, target, home) : TakeGate(target);
         if (held is null)
         {
             return 69;
@@ -30,16 +30,32 @@ internal static class TreeHoldVerb
     }
 
     /// <summary>The tree hold, taken for the sleeping grandchild to inherit; null (and said) when it could not be.</summary>
-    private static IDisposable? TakeTree(string target, string home)
+    private static IDisposable? TakeTree(string mode, string target, string home)
     {
-        if (KimiCredentialsLock.HoldTree(target, home, TimeSpan.FromSeconds(1)) is TreeHolding.Taken taken)
+        if (mode == "tree-probed")
+        {
+            // A disposal's probe meets the shim: the per-home file is held for a moment between the two takes (M1).
+            KimiCredentialsLock.BeforeTheHomeHold = MeetADisposalsProbe;
+        }
+
+        var holding = KimiCredentialsLock.HoldTree(target, home, TimeSpan.FromSeconds(1));
+        if (holding is TreeHolding.Taken taken)
         {
             return taken.Hold;
         }
 
-        Console.Error.WriteLine("fake-cli: the tree hold was not taken");
+        Console.Error.WriteLine(holding is TreeHolding.Unusable unusable
+            ? $"fake-cli: the tree hold was not taken: Unusable: {unusable.Cause.Message}"
+            : $"fake-cli: the tree hold was not taken: {holding.GetType().Name}");
 
         return null;
+    }
+
+    /// <summary>Holds the per-home file for a quarter of a second, as a probe does, and returns once it is held.</summary>
+    private static void MeetADisposalsProbe(string path)
+    {
+        var probe = (Hold.Taken)HeldFile.Take(path);
+        _ = Task.Delay(250).ContinueWith(_ => probe.Stream.Dispose(), TaskScheduler.Default);
     }
 
     /// <summary>The server's gate alone — NOT inheritable — the control arm.</summary>

@@ -34,7 +34,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
 
     private static ProcessRequest Request(KimiPlaces places, string model = KimiModels.Default) =>
-        KimiLaunch.Built(
+        KimiEnvironment.Built(
             new ProcessRequest(places.Executable, ["--ask-acp", "--profile", "kimi", "--model", model, "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin], places.Home),
             places);
 
@@ -65,6 +65,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     {
         "a Linux host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
         "a credentials folder that is not there", "a credentials folder that is a link", "a block on moonshot-ai",
+        "a UNC sign-in home",
     };
 
     [Theory]
@@ -108,6 +109,11 @@ public sealed class KimiLaunchControlTests : IDisposable
                 Directory.Move(_person.Credentials, real);
                 await DirectoryLink.MakeAsync(new ProcessLauncher(), _person.Credentials, real);
                 expected = "is itself a link";
+                break;
+            case "a UNC sign-in home":
+                places = places with { PersonsHome = @"\\kimi-test-host.invalid\share\.kimi-code" };
+                request = Request(places);
+                expected = "is not on a local drive";
                 break;
             default:
                 File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig().Replace("default_model", "# d\ndefault_model")
@@ -232,10 +238,32 @@ public sealed class KimiLaunchControlTests : IDisposable
         asked.Executable.Should().Be(places.Executable).And.NotContain("coai-mcp", "the REAL kimi is asked, not the shim");
         asked.Arguments.Should().Equal("--version");
         asked.WorkingDirectory.Should().Be(places.Home);
-        KimiLaunch.EnvironmentRefusal(asked, places).Should().BeEmpty();
+        KimiEnvironment.Refusal(asked, places).Should().BeEmpty();
         asked.Timeout.Should().Be(KimiLaunch.VersionTimeout);
         turn.CliVersion.Should().Be("kimi 2.1.1");
         turn.Warning.Should().BeEmpty();
+    }
+
+    // ---------- M4 ----------
+
+    [Fact]
+    public async Task TheVersionProbe_GetsTheLaunchRequestsPath_NotThisProcesses()
+    {
+        OnWindows();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = Path.Combine(_person.Folder, "only-in-the-launch-request");
+        var request = KimiEnvironment.Built(
+            new ProcessRequest(places.Executable, ["--ask-acp", "--model", KimiModels.Default, "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin], places.Home),
+            places,
+            string.Join(Path.PathSeparator, marker, places.PersonsBin));
+        var fake = new FakeKimi();
+
+        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, request, places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty();
+        var asked = fake.Started.Should().ContainSingle().Subject;
+        KimiEnvironment.PathOf(asked).Should().Be(KimiEnvironment.PathOf(request), "one PATH source feeds the probe and the launch").And.Contain(marker);
     }
 
     // ---------- S2.30 ----------

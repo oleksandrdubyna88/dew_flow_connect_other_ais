@@ -42,6 +42,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
+    <!-- The fake CLI plays the shim (E4.2 S2.43) and sets the lock seams in its own process. -->
+    <InternalsVisibleTo Include="FakeCli" />
   </ItemGroup>
 
 </Project>

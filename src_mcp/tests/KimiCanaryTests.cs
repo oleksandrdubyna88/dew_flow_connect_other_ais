@@ -41,7 +41,7 @@ public sealed class KimiCanaryTests : IDisposable
     private string Locks => Path.Combine(_person.Folder, "locks");
 
     private static ProcessRequest Request(KimiPlaces places, string model = KimiModels.Default) =>
-        KimiLaunch.Built(
+        KimiEnvironment.Built(
             new ProcessRequest(places.Executable, ["--ask-acp", "--profile", "kimi", "--model", model, "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin], places.Home),
             places);
 
@@ -92,10 +92,15 @@ public sealed class KimiCanaryTests : IDisposable
     {
         var broken = KimiFixture.OwnerConfig().Replace($"api_key = \"{KimiFixture.ApiKeyCanary}\"", $"api_key = \"{KimiFixture.ApiKeyCanary}")
             + "\n[models.\"kimi-code/k3\"]\nprovider = \"managed:kimi-code\"\nmodel = \"k3\"\nmax_context_size = 262144\ncapabilities = [ \"a\", \n";
-        See("answers", Describe(KimiPersonsConfig.Read(broken, "your config.toml")));
-        See("answers", Describe(KimiModelBlocks.For("kimi-code/k3", broken, ((BlocksLoad.Loaded)KimiModelBlocks.Builtin).Blocks)));
+        var slot = KimiPersonsConfig.Read(broken, "your config.toml");
+        var block = KimiModelBlocks.For("kimi-code/k3", broken, ((BlocksLoad.Loaded)KimiModelBlocks.Builtin).Blocks);
+        See("answers", Describe(slot));
+        See("answers", Describe(block));
+        slot.Should().BeOfType<SlotRead.Found>("the malformed api_key line is in a table nothing reads, so no parse error exists to quote it");
+        block.Should().BeOfType<BlockRead.Refused>().Which.Reason.Should().Contain("capabilities", "the refusal names the KEY").And.Contain("fix the block", "and the cure");
         File.WriteAllText(_person.PersonsConfig, broken);
-        await LaunchAsync(_person.Places("kh-malformed"), new FakeKimi(), model: "kimi-code/k3");
+        var launched = await LaunchAsync(_person.Places("kh-malformed"), new FakeKimi(), model: "kimi-code/k3");
+        launched.Refusal.Should().Contain("capabilities").And.Contain("fix the block").And.NotContain("\"a\",", "never the line");
         File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig());
     }
 

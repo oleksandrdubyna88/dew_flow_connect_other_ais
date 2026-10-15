@@ -32,7 +32,7 @@ public sealed class KimiLaunchChecksTests
     private static ProcessRequest ShimRaw() =>
         Raw("--ask-acp", "--profile", "kimi", "--model", KimiModels.Default, "--home", Root, "--persons-bin", Bin);
 
-    private static ProcessRequest Built() => KimiLaunch.Built(ShimRaw(), Places, Parent);
+    private static ProcessRequest Built() => KimiEnvironment.Built(ShimRaw(), Places, Parent);
 
     private static ProcessRequest With(ProcessRequest request, string name, string? value) =>
         request with { Environment = new Dictionary<string, string?>(request.Environment) { [name] = value } };
@@ -86,7 +86,7 @@ public sealed class KimiLaunchChecksTests
         built.Environment["HOME"].Should().Be(Places.Os);
         (built.Environment["HOMEDRIVE"] + built.Environment["HOMEPATH"]).Should().Be(Places.Os);
         built.Environment["PATH"].Should().Be(string.Join(Path.PathSeparator, Bin, Tools, Windows));
-        KimiLaunch.Built(built, Places, built.Environment["PATH"]!).Should().BeEquivalentTo(built, "building a built request changes nothing — idempotent");
+        KimiEnvironment.Built(built, Places, built.Environment["PATH"]!).Should().BeEquivalentTo(built, "building a built request changes nothing — idempotent");
     }
 
     [Fact]
@@ -106,9 +106,9 @@ public sealed class KimiLaunchChecksTests
         var separator = Path.PathSeparator;
         var trailing = Bin + Path.DirectorySeparatorChar;
 
-        KimiLaunch.BuiltPath([Bin, Tools], string.Join(separator, trailing, Windows, string.Empty, Tools))
+        KimiEnvironment.BuiltPath([Bin, Tools], string.Join(separator, trailing, Windows, string.Empty, Tools))
             .Should().Be(string.Join(separator, Bin, Tools, Windows), "a trailing separator is the same folder, an empty entry is dropped");
-        KimiLaunch.BuiltPath([Bin], null).Should().Be(Bin);
+        KimiEnvironment.BuiltPath([Bin], null).Should().Be(Bin);
     }
 
     // ---------- S2.23 ----------
@@ -140,11 +140,11 @@ public sealed class KimiLaunchChecksTests
             _ => (WithFlag(built, "--persons-bin", Path.Combine(Tmp, "other-bin")), "other-bin"),
         };
 
-        var refusal = KimiLaunch.EnvironmentRefusal(request, Places);
+        var refusal = KimiEnvironment.Refusal(request, Places);
 
         refusal.Should().NotBeEmpty($"{row} is not what Built makes");
         refusal.Should().Contain(mentions);
-        KimiLaunch.EnvironmentRefusal(built, Places).Should().BeEmpty("what Built makes is admitted");
+        KimiEnvironment.Refusal(built, Places).Should().BeEmpty("what Built makes is admitted");
     }
 
     /// <summary>The request with the value after <paramref name="flag"/> replaced.</summary>
@@ -162,9 +162,9 @@ public sealed class KimiLaunchChecksTests
     [Fact]
     public void ABuiltVersionRequest_CarriesNoFlags_AndIsAdmitted()
     {
-        var version = KimiLaunch.Built(Raw("--version"), Places, Parent);
+        var version = KimiEnvironment.Built(Raw("--version"), Places, Parent);
 
-        KimiLaunch.EnvironmentRefusal(version, Places).Should().BeEmpty("--version carries neither --home nor --persons-bin");
+        KimiEnvironment.Refusal(version, Places).Should().BeEmpty("--version carries neither --home nor --persons-bin");
     }
 
     [Fact]
@@ -172,11 +172,11 @@ public sealed class KimiLaunchChecksTests
     {
         var request = ShimRaw();
 
-        KimiLaunch.FlagOf(request, "--home").Should().Be(Root);
-        KimiLaunch.FlagOf(request, "--persons-bin").Should().Be(Bin);
-        KimiLaunch.FlagOf(request, "--nope").Should().BeEmpty();
+        KimiEnvironment.FlagOf(request, "--home").Should().Be(Root);
+        KimiEnvironment.FlagOf(request, "--persons-bin").Should().Be(Bin);
+        KimiEnvironment.FlagOf(request, "--nope").Should().BeEmpty();
         KimiLaunch.ModelOf(request).Should().Be(KimiModels.Default);
-        KimiLaunch.FlagOf(Raw("--model"), "--model").Should().BeEmpty("a flag with no value after it has none");
+        KimiEnvironment.FlagOf(Raw("--model"), "--model").Should().BeEmpty("a flag with no value after it has none");
     }
 
     // ---------- S2.24 ----------

@@ -65,9 +65,17 @@ public static class KimiCredentialsLock
 
     private static readonly TimeSpan Slice = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// How long the per-home file is waited for. Nothing else holds it for long, but a disposal's <see cref="HomeProbe"/> opens it
+    /// exclusively for the length of one open, and a shim that met that instant used to read it as a bug and exit 65.
+    /// </summary>
+    private static readonly TimeSpan HomeWait = TimeSpan.FromMilliseconds(500);
+
     private static readonly AsyncLocal<string?> _root = new();
 
     private static readonly AsyncLocal<Func<string, string>?> _final = new();
+
+    private static readonly AsyncLocal<Action<string>?> _beforeTheHomeHold = new();
 
     private static readonly string DefaultRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-mcp", "kimi-locks");
@@ -93,6 +101,13 @@ public static class KimiCredentialsLock
     {
         get => _final.Value;
         set => _final.Value = value;
+    }
+
+    /// <summary>TEST ONLY — null in the product: told the per-home file's path between the two takes of <see cref="HoldTree"/>, so a test can make a disposal's probe meet it. Per async flow.</summary>
+    internal static Action<string>? BeforeTheHomeHold
+    {
+        get => _beforeTheHomeHold.Value;
+        set => _beforeTheHomeHold.Value = value;
     }
 
     /// <summary>The key of a sign-in folder, or EMPTY when the kernel cannot name it by its handle (it does not exist, cannot be opened, or is off Windows).</summary>
@@ -168,10 +183,11 @@ public static class KimiCredentialsLock
     /// <summary>What a disposal asks before it unlinks anything: is a tree alive on THIS home. No sign-in folder is opened.</summary>
     public static LockProbe HomeProbe(string root) => HeldFile.Probe(Path.Combine(root, HomeHoldName));
 
-    /// <summary>The per-home file taken after the sign-in's; the first is released when the second cannot be had. Nothing else ever takes it, so a busy one is a bug and answered as unusable.</summary>
+    /// <summary>The per-home file taken after the sign-in's; the first is released when the second cannot be had. Only a disposal's probe ever opens it besides, for a moment, which <see cref="HomeWait"/> waits out; a file still busy after that is answered as unusable.</summary>
     private static TreeHolding WithHome(FileStream signIn, string root)
     {
-        var home = HeldFile.Take(Path.Combine(root, HomeHoldName), inheritable: true);
+        BeforeTheHomeHold?.Invoke(Path.Combine(root, HomeHoldName));
+        var home = HeldFile.TakeWithin(Path.Combine(root, HomeHoldName), HomeWait, inheritable: true);
         if (home is Hold.Taken taken)
         {
             return new TreeHolding.Taken(new TreeHold(signIn, taken.Stream));
@@ -179,7 +195,7 @@ public static class KimiCredentialsLock
 
         signIn.Dispose();
 
-        return new TreeHolding.Unusable(home is Hold.Unusable bad ? bad.Cause : new IOException($"{Path.Combine(root, HomeHoldName)} is held by another process, and nothing else ever takes it"));
+        return new TreeHolding.Unusable(home is Hold.Unusable bad ? bad.Cause : new IOException($"{Path.Combine(root, HomeHoldName)} is held by another process, and nothing but a disposal's probe ever takes it"));
     }
 
     private static string Named(string target, string suffix) =>
