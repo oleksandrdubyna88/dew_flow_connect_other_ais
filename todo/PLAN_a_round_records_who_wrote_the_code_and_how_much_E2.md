@@ -65,7 +65,11 @@ file and the database, readable through `--log`, and `reviewers.effort` persiste
   one, never disables a tripwire.
 - **Best-effort, like every projection.** No size computation, size git call or size write may fail, delay past its own
   git calls, or change the outcome of a round. A failure becomes a recorded `unavailable: …` state. Cancellation of the
-  round token still propagates (`OperationCanceledException` is never swallowed).
+  round token still propagates (`OperationCanceledException` is never swallowed). **Every size git call is bounded**
+  (plan gate round 2026-10-15, finding 2): it runs through `launcher.RunAsync` with `ProcessRequest.Timeout` set by the
+  existing `Bounded(...)` helper (`ContextAssembler.cs:470-471`, the mechanism `ComparisonBase` already uses), the deadline
+  one named constant `SizeGitTimeout` (10 s per call); a timeout is `unavailable: git failed` for that scope and the round
+  goes on. E2.S2's `AnUnknownCommit_IsGitFailed_NeverAThrow` gains a case with a 1 ms deadline.
 - **No new lines in `RoundsDb.cs`, `RoundsQuery.cs`, `PanelService.cs` or `RoundEngine.cs` beyond call sites and one
   bind** — new tables are written and read from their own files through `RoundsDb.Command()` and a read-only connection.
 - **Unknown is never 0.** A binary has no line count (null in the record, NULL in the database, an ABSENT field in JSON); a
@@ -150,6 +154,12 @@ default marks every row written before step 22 `not recorded`; a reviewer that a
 **C3 — the wire.** `RoundRecord.Size` (session file) and `LoggedRound.Size` (`--log`) are both `RoundSize?`, serialised by
 `ServerJsonContext`: absent = not recorded; inside a binary cell `added`/`removed` are ABSENT (the context omits nulls,
 `ServerJsonContext.cs:344`) and a reader treats absent as "no line count", never 0. E5's card and E6's report read this shape.
+**Boundary** (plan gate round 2026-10-15, finding 1): the Team server (`src_server`) reads neither the session file nor
+`--log` (nothing under `src_server` references `PersistedSession`, `LoggedLog` or `RoundRecord`, checked at `ce98747c`),
+so no Team server version meets the new field. The readers that do are
+the extension's `--log` parser (`src_vs_code/src/roundsLog.ts`) and the bench's `JsonNode` reader
+(`src_bench/CoaiBench/Running/OnDisk.cs:82`); E2.S5 adds `AnOlderExtensionReadsALogPageCarryingASize` (the released
+`roundsLog.ts` parser over a page with `size`: same rounds, no error).
 
 ## 5. Stories
 
