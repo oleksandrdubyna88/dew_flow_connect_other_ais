@@ -3754,6 +3754,12 @@ Review round: T3 no longer bounds the elapsed time (a cold fake-CLI start under 
 Also from the same CodeRabbit round: `RunToCompletionAsync`'s `onStdOut` selection and `ProcessResult` construction are
 `private static` helpers (`OnStdOut`, `ResultOf`), and `BoundedText` moved to its own file so `ProcessLauncher.cs` is under 800 lines.
 
+**Observed once, not reproduced (2026-10-15, after merging main with #811):**
+`GaugeReaderCrashHarnessTests.ACrashMidRead_AnAlreadyRunningContender_ReconcilesTheTreeBeforeItLaunchesAnything` failed once
+in a full server run (1 m 03 s, past its 60 s `Patience`) at 100 % machine CPU, then passed in two runs of its class and in a
+full run (610/610). That run's output was not kept, so the waiting step is unknown. If it recurs, keep the log first: a
+step that needs more than a minute to see a reader die is the containment's question, not a timing knob.
+
 ## Names and a missing root (2026-10-11, `research/PLAN_names_and_a_missing_root.md`)
 
 Every break-it below was a compiling one-line plant, applied from a `.mjs` that restored the file in `finally` and
