@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exports the code rounds of one coai store, read-only, as JSON (E1.S2 of PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md).
+r"""Exports the code rounds of one coai store, read-only, as JSON (E1.S2 of PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md).
 
     py -3     scripts/export-code-rounds.py <dataDir>\coai.db <out.json> <since yyyy-mm-dd>     (Windows)
     python3   scripts/export-code-rounds.py <dataDir>/coai.db <out.json> <since yyyy-mm-dd>     (WSL)
