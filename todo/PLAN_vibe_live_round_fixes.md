@@ -23,11 +23,11 @@ paid for. Measured 2026-10-15, three times:
 
 | Run | Site | Home (length) | Died at | Total |
 |---|---|---|---|---|
-| live round | round reviewer | `%TEMP%\coai-answers-<12 hex>\vh-<10 hex>` (TEMP + 40) | the chunk `.tmp` | > 259 with a TEMP ~29 characters longer than `C:\Users\strug\AppData\Local\Temp` |
+| live round | round reviewer | `%TEMP%\coai-answers-<12 hex>\vh-<10 hex>` (TEMP + 40) | the chunk `.tmp` | > 259 with a TEMP ~29 characters longer than `C:\Users\abcde\AppData\Local\Temp` |
 | consult run1 | conversation, `COAI_CONSULTANT_HOMES` under TEMP | `…\testsToDelete-vibe-consult-a7f3\homes\coai-vibe\e9a7ff70…\vh-21f30f2142` (128) | `…\generations\.staging-0000000000000000-b9d869c1dcbfecdd\runtime-state.json` (131 below the home) | **260** |
 | consult run2 | conversation, root under TEMP | `…\testsToDelete-vibe-consult-h1\coai-vibe\df1ed776…\vh-21f30f2142` (120) | `…\chunks\.00ef632a….json.7f4842daffb2dac5.tmp` (156 below) | **277** |
 
-With the DEFAULT root (`%LOCALAPPDATA%`) the second scout's longest path was 242 for the 5-character profile `strug`, so
+With the DEFAULT root (`%LOCALAPPDATA%`) the second scout's longest path was 242 for the 5-character profile name (`abcde` here), so
 every site fails for a longer profile name — computed from today's layout (`C:\Users\<u>\AppData\Local` is 23 + u):
 
 | Site | Where the home is today | Home length | Fails from a profile of |
