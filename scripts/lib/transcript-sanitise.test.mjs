@@ -96,7 +96,7 @@ function writeSession(root, { crlf = false, lateAgentLine = false } = {}) {
   const put = (file, text) => writeFileSync(file, crlf ? text.replaceAll('\n', '\r\n') : text);
   put(join(dir, `${SESSION}.jsonl`), jl(mainLines()));
   const a = agentLines(AGENT_A, 5, [nested]);
-  if (lateAgentLine) a.push({ ...a[1], timestamp: T(55) });
+  if (lateAgentLine) a.push({ ...a[0], timestamp: T(55) });
   put(join(sub, `agent-${AGENT_A}.jsonl`), jl(a));
   put(join(sub, `agent-${AGENT_A}.meta.json`), JSON.stringify({ agentType: 'general-purpose', description: 'MARKER_META_DESC', toolUseId: TOOL_AGENT_A, spawnDepth: 1, requestShape: 'background', model: 'sonnet' }));
   put(join(sub, `agent-${AGENT_NESTED}.jsonl`), jl(agentLines(AGENT_NESTED, 6)));
@@ -398,6 +398,35 @@ test('aDroppedAgentFileLeavesItsMetaAndADroppedMetaLeavesItsFile', () => {
   assert.ok(names.some((n) => n.includes(mapped(AGENT_NESTED)) && n.endsWith('.jsonl')));
   assert.ok(!names.some((n) => n.includes(mapped(AGENT_NESTED)) && n.endsWith('.meta.json')));
   assert.equal(summary.joinBreaks, 0, 'the meta still joins its launching tool_use');
+});
+
+test('clipAgentsKeepsOnlyTheWindowsLinesOfEveryAgentFileAndTheDefaultKeepsThemWhole', () => {
+  const src = writeSession(scratch('in'), { lateAgentLine: true });
+  const linesOf = (outDir) => readAll(outDir).filter((f) => f.file.includes('subagents') && f.file.endsWith('.jsonl')).map((f) => jsonLines(f.text));
+  assert.ok(linesOf(cut(src, { from: T(0), to: T(10) }).outDir).some((ls) => ls.some((l) => l.timestamp === T(55))), 'whole by default');
+  const clipped = linesOf(cut(src, { from: T(0), to: T(10), clipAgents: true }).outDir);
+  assert.equal(clipped.length, 2);
+  assert.ok(clipped.every((ls) => ls.length === 2 && ls.every((l) => l.timestamp !== T(55))), 'the minute-55 line is outside the window');
+});
+
+test('aClippedCutKeepsTheLaunchLineOfAnAgentWhoseCallIsOutsideTheWindow', () => {
+  const src = writeSession(scratch('in'));
+  const plain = cut(src, { from: T(5), to: T(7) });
+  assert.ok(plain.summary.joinBreaks >= 1, 'without the option the break is reported');
+  const { outDir, summary } = cut(src, { from: T(5), to: T(7), clipAgents: true });
+  const main = readAll(outDir).find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file));
+  assert.equal(jsonLines(main.text).length, 1, 'only the line that launched agent A, from minute 2');
+  assert.equal(summary.joinBreaks, 0);
+});
+
+test('includeAgentPullsInItsWholeChainOfParentsAndTheirLaunchLines', () => {
+  const src = writeSession(scratch('in'));
+  const agentFiles = (outDir) => readAll(outDir).filter((f) => f.file.includes('subagents') && f.file.endsWith('.jsonl'));
+  assert.equal(agentFiles(cut(src, { from: T(6), to: T(8), clipAgents: true }).outDir).length, 1, 'only the nested child starts in the window');
+  const { outDir, summary } = cut(src, { from: T(6), to: T(8), clipAgents: true, includeAgents: [AGENT_NESTED] });
+  assert.equal(agentFiles(outDir).length, 2, 'the nested child and its parent A');
+  assert.equal(readAll(outDir).filter((f) => f.file.endsWith('.meta.json')).length, 2);
+  assert.equal(summary.joinBreaks, 0, 'A is launched from the main file (kept as a pinned line), the child from A');
 });
 
 test('aTornLineIsDroppedNeverCopiedAsText', () => {

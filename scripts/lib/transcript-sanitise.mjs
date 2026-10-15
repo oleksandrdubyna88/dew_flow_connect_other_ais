@@ -259,11 +259,33 @@ function windowFilter(from, to) {
   return { unbounded: from === undefined && to === undefined, has: (t) => t !== undefined && t >= lo && t < hi };
 }
 
-/** The main file's lines inside the window; a line with no timestamp at all follows the line before it. */
-function keepMainLines(lines, window) {
+/** The main file's lines inside the window (or pinned); a line with no timestamp at all follows the line before it. */
+function keepMainLines(lines, window, pinned = new Set()) {
   if (window.unbounded) return lines;
   let previous = false;
-  return lines.filter((line) => { const t = timestampOf(line); previous = t === undefined ? previous : window.has(t); return previous; });
+  return lines.filter((line) => { const t = timestampOf(line); previous = t === undefined ? previous : window.has(t); return previous || pinned.has(line); });
+}
+
+/** An agent file clipped to the window: only the lines inside it (or pinned). Without --clip-agents the file is kept whole. */
+function keepAgentLines(lines, window, clip, pinned) {
+  return clip && !window.unbounded ? lines.filter((l) => window.has(timestampOf(l)) || pinned.has(l)) : lines;
+}
+
+/** With ids in `include`: the wanted agents plus those agents, each with its whole chain of parents (a nested agent is no use without its parent's file). */
+function withIncluded(wanted, loaded, include) {
+  if (include.length === 0) return wanted;
+  const byId = new Map(loaded.map((a) => [a.id, a]));
+  const chain = new Set();
+  for (let a of [...wanted, ...include.map((id) => byId.get(id))]) {
+    for (; a !== undefined && !chain.has(a); a = byId.get(a.meta?.parentAgentId)) chain.add(a);
+  }
+  return loaded.filter((a) => chain.has(a));
+}
+
+/** The one line (anywhere) that launched each wanted agent: kept even outside the window so the meta's toolUseId still joins. */
+function launchLines(wanted, allLines) {
+  const wantedIds = new Set(wanted.map((a) => a.meta?.toolUseId).filter(Boolean));
+  return new Set(allLines.filter((line) => toolUseIdsOf(line).some((id) => wantedIds.has(id))));
 }
 
 function discoverAgents(subagentsDir) {
@@ -311,7 +333,8 @@ function safeJson(text) {
  * Cuts one caller session (main file + its subagent files and metas) into outDir/projects/<slug>/…, sanitised.
  * Returns counts only — never a value from the input.
  */
-export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], otherRoot, from, to, dropAgentFiles = [], dropMetas = [] }) {
+export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], otherRoot, from, to, dropAgentFiles = [], dropMetas = [],
+  clipAgents = false, includeAgents = [] }) {
   const sessionName = /^(.+)\.jsonl$/.exec(basename(sessionFile))?.[1] ?? '';
   if (!UUID.test(sessionName)) throw new Refusal('the session file must be named <sessionId>.jsonl');
   if (existsSync(outDir) && readdirSync(outDir).length > 0) throw new Refusal('the output directory already holds files');
@@ -331,9 +354,12 @@ export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], o
   const launchedAt = new Map();
   for (const line of [...main.parsed, ...loaded.flatMap((a) => a.lines)])
     for (const id of toolUseIdsOf(line)) if (!launchedAt.has(id)) launchedAt.set(id, timestampOf(line));
-  const wanted = loaded.filter((a) => window.unbounded || window.has(launchedAt.get(a.meta?.toolUseId)) || window.has(timestampOf(a.lines[0])));
+  const inWindow = loaded.filter((a) => window.unbounded || window.has(launchedAt.get(a.meta?.toolUseId)) || window.has(timestampOf(a.lines[0])));
+  const wanted = withIncluded(inWindow, loaded, includeAgents);
+  const pinned = clipAgents || includeAgents.length > 0 ? launchLines(wanted, [...main.parsed, ...loaded.flatMap((a) => a.lines)]) : new Set();
+  for (const a of wanted) a.lines = keepAgentLines(a.lines, window, clipAgents, pinned);
 
-  const keptMain = keepMainLines(main.parsed, window);
+  const keptMain = keepMainLines(main.parsed, window, pinned);
   const sanitisedMain = keptMain.map((l) => sanitiser.sanitiseValue(l));
   const cwd = sanitisedMain.find((l) => typeof l.cwd === 'string')?.cwd;
   const sessionDir = join(outDir, 'projects', cwd === undefined ? 'fixture' : slugOf(cwd));
