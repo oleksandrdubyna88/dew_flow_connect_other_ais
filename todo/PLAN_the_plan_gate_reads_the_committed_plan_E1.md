@@ -117,9 +117,12 @@ line rides `RoundWork.Unreviewed` (`PanelService.cs:869` precedent), so it lands
 
 ### E1.S2 — The reader's integrity proof: the entry rules, the cut capture, the blob id (CORNERSTONE)
 
-**Cornerstone — spec by Fable, to be written before its code.** Area: parent §4 steps 3–5 as one unit — the `ls-tree -z`
-entry rules (mode, type, size, exactly one entry), the `Truncated` refusal, and the blob-id recomputation with its BOM and
-U+FFFD order (D5–D7), plus step 5's empty and LFS refusals. The coder starts only once the spec is committed here.
+**Cornerstone — spec by Fable, written 2026-10-15, in its own document because this one is sent whole to the gate:**
+[PLAN_the_plan_gate_reads_the_committed_plan_E1_S2_spec.md](PLAN_the_plan_gate_reads_the_committed_plan_E1_S2_spec.md)
+(§S2.0 measurements · §S2.1 units · §S2.2 types · §S2.3–§S2.7 the rules · §S2.8 algorithm · §S2.9 examples · §S2.10 tests ·
+§S2.11 break-its · §S2.12 fixtures · §S2.13 decisions). Area: parent §4 steps 3–5 as one unit — the `ls-tree -z` entry
+rules (mode, type, size, exactly one entry), the `Truncated` refusal, and the blob-id recomputation with its BOM and U+FFFD
+order (D5–D7), plus step 5's empty and LFS refusals. The coder starts from that document; it is committed.
 
 - **Goal (fixed before the spec).** `CommittedPlanReader.ReadAsync(git, repoPath, sha, canonicalPath, ct)` → C2, doing
   steps 3–5 and 7 over an already-normalised path; the pure parts in `core/` (entry parser, blob id, the proof's decision,
@@ -127,25 +130,16 @@ U+FFFD order (D5–D7), plus step 5's empty and LFS refusals. The coder starts o
 - **Parent rows it owns.** T6, T7, T8, T9, T19 (the reader half: a valid plan holding a literal U+FFFD is accepted), T21.
   Break-its **B1** (drop the `Truncated` refusal → T7), **B4** (skip the blob-id proof → T8), **B8** (refuse on U+FFFD
   before the id check → T19). B2 is run in E1.S3, where T2 exists.
-- **Questions the spec must close** (placeholder — Fable writes §S2.1–§S2.n here):
-  1. Unit names and placement (core vs runners); whether the LFS header is extracted from `SnapshotPlanner.cs:60` into one
-     shared core constant (reuse-first, move 2) rather than copied.
-  2. The exact `ls-tree -l -z` grammar: fields, the left-padded size, `-` for a non-blob; zero entries, more than one, a
-     path that differs (ordinal compare after normalisation); a malformed line; an unparseable size.
-  3. The refusal per entry case and its exact sentence (symlink `120000`, submodule `160000 commit`, directory `040000
-     tree`, mode other than `100644`/`100755`, size 0, size > `MaxBytes`), and the proof that none of them runs `cat-file`.
-  4. `cat-file` outcomes: `!Ran`, `Truncated`, non-zero exit — one word each, and their order.
-  5. D7's table, exactly: id match; id over `EF BB BF` + bytes (does the launcher's decoder drop a leading BOM? measure,
-     do not assume); refusal wording "not UTF-8" vs "the capture differs from the blob"; which text is handed on, which
-     byte count is recorded (blob size), and over which text `TextId` is taken.
-  6. Order of the empty-after-trim and LFS-pointer checks relative to the proof, and the LFS match (prefix on the decoded
-     text, after a dropped BOM or not).
-  7. A SHA-256 repository (64-hex oids): `IsCommitish` refuses them — the sentence the reader answers.
-  8. Fixtures: committing a symlink and a submodule entry on Windows (`update-index --cacheinfo`), invalid-UTF-8 and BOM
-     blobs (`TempGitRepo.WriteAsync` writes text only — a bytes writer or `hash-object -w --stdin`).
-  9. Confirm or amend C1/C2 (§4), and any break-it the spec adds.
-- **Done when.** The spec's tests green; B1, B4, B8 and the spec's own break-its observed red then green; C1/C2 final.
-- **Depends on.** E1.S1 (the git reads). **Size.** set by the spec (estimate ≈ 450 lines, two thirds tests).
+- **The nine questions this section used to list are closed in the spec's §S2.13**, each against a measurement (§S2.0:
+  git 2.55, .NET 10 — the launcher's decoder DROPS a leading BOM; a symlink's `ls-tree` type is `blob`, its mode decides; a
+  SHA-256 repository hashes its blobs with SHA-256, so a 64-hex sha is refused first). C1 and C2 (§4) are **confirmed
+  unchanged**. Units: `core/Collecting/{TreeEntry,BlobProof,LfsPointer}.cs` (the LFS header moves there from
+  `SnapshotPlanner.cs:60` — one constant), `core/Rounds/{PlanEntry,PlanSource}.cs`, `runners/Collecting/CommittedPlanReader.cs`.
+- **Break-its.** B1, B4, B8 (above) and the spec's **B16–B23** (§S2.11): mode-vs-type, padded size, `Bytes` = blob size,
+  `TextId` over the text handed on, ceiling before `cat-file`, exactly one entry, ordinal path, LFS prefix.
+- **Done when.** The spec's three test files green; B1, B4, B8, B16–B23 observed red then green; `ReviewSnapshotTests` and
+  `ArchitectureTests` green unchanged; the whole executable green.
+- **Depends on.** E1.S1 (the git reads). **Size.** ≈ 520 lines (≈ 170 code incl. ≈ 20 in `TempGitRepo.cs`, ≈ 350 tests).
 - **Cornerstone — spec by Fable** · **Coder: sonnet** · review: opus.
 
 ### E1.S3 — The reader's guards: path shape, credential shape, and a clean checkout
