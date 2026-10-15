@@ -47,7 +47,7 @@ internal static class AskAcpMode
     internal const int BadRequest = 65; // EX_DATAERR — a known mode refusing its arguments; never 64
     internal const int Unavailable = 69; // EX_UNAVAILABLE — ended before an answer: usage not captured
     internal const int Failed = 70; // EX_SOFTWARE — the agent's own failure
-    internal const int Spent = KimiReport.SpentExit; // EX_TEMPFAIL (75) — a known spent-allowance sentence; declared where KimiRuntime reads it
+    internal const int Spent = AcpWords.SpentExit; // EX_TEMPFAIL (75) — a known spent-allowance sentence; declared where KimiRuntime reads it
     internal const int Protocol = 76; // EX_PROTOCOL — the stream itself failed
     internal const int Refused = 77; // EX_NOPERM — a known sign-in or plan refusal
 
@@ -63,7 +63,7 @@ internal static class AskAcpMode
     private const string Mode = "--ask-acp";
 
     /// <summary>The lock folder the tree hold lives in — <see cref="KimiCredentialsLock.Root"/> of the runtime that started this shim.</summary>
-    private const string LocksFlag = KimiEnvironment.LocksFlag;
+    private const string LocksFlag = AcpWords.LocksFlag;
 
     /// <param name="args">The argv from the mode on: <c>--profile</c>, <c>--model</c>, <c>--cwd</c>, <c>--deadline-seconds</c>, an optional <c>--executable</c> (a row's configured path), and for a profile that needs a home <c>--home</c>, <c>--persons-bin</c> and <c>--locks</c>.</param>
     /// <param name="stdin">The prompt, read to its end.</param>
@@ -114,7 +114,7 @@ internal static class AskAcpMode
 
         var ask = new AcpAsk(
             Executable(flags, profile), Path.GetFullPath(cwd), model, prompt, Deadline(flags),
-            flags.GetValueOrDefault(KimiEnvironment.HomeFlag, string.Empty), flags.GetValueOrDefault(KimiEnvironment.PersonsBinFlag, string.Empty));
+            flags.GetValueOrDefault(AcpWords.HomeFlag, string.Empty), flags.GetValueOrDefault(AcpWords.PersonsBinFlag, string.Empty));
         using var rooted = LocksScope(flags);
 
         return await AskedAsync(profile, ask, note, output, ct);
@@ -241,15 +241,15 @@ internal static class AskAcpMode
 
         return new[]
         {
-            HomeRefusal(flags.GetValueOrDefault(KimiEnvironment.HomeFlag, string.Empty)),
-            NamedRefusal(flags, KimiEnvironment.PersonsBinFlag, "the person's tool folder, the first entry of the agent's PATH"),
+            HomeRefusal(flags.GetValueOrDefault(AcpWords.HomeFlag, string.Empty)),
+            NamedRefusal(flags, AcpWords.PersonsBinFlag, "the person's tool folder, the first entry of the agent's PATH"),
             NamedRefusal(flags, LocksFlag, "the lock folder the tree hold lives in"),
         }.FirstOrDefault(static reason => reason.Length > 0) ?? string.Empty;
     }
 
     private static string HomeRefusal(string home) =>
         home.Length == 0 || !Directory.Exists(home)
-            ? $"{Mode} needs {KimiEnvironment.HomeFlag} <the coai-owned root holding home/ and os/>" + (home.Length == 0 ? string.Empty : $" — '{home}' is not an existing folder")
+            ? $"{Mode} needs {AcpWords.HomeFlag} <the coai-owned root holding home/ and os/>" + (home.Length == 0 ? string.Empty : $" — '{home}' is not an existing folder")
             : string.Empty;
 
     private static string NamedRefusal(IReadOnlyDictionary<string, string> flags, string flag, string what) =>
@@ -260,7 +260,7 @@ internal static class AskAcpMode
 
     /// <summary>A configured path is the whole answer; otherwise the profile's own.</summary>
     private static string Executable(IReadOnlyDictionary<string, string> flags, IAcpProfile profile) =>
-        flags.GetValueOrDefault(KimiEnvironment.ExecutableFlag, string.Empty) is { Length: > 0 } configured ? configured : profile.DefaultExecutable;
+        flags.GetValueOrDefault(AcpWords.ExecutableFlag, string.Empty) is { Length: > 0 } configured ? configured : profile.DefaultExecutable;
 
     /// <summary>The given seconds — already checked by <see cref="Refusal"/> — or the default.</summary>
     private static TimeSpan Deadline(IReadOnlyDictionary<string, string> flags) =>
@@ -353,12 +353,12 @@ internal static class AskAcpMode
 
     internal static string EndWord(AcpEnd end) => end switch
     {
-        AcpEnd.Answered => KimiReport.AnsweredWord,
-        AcpEnd.NotStarted => KimiReport.NotStartedWord,
+        AcpEnd.Answered => AcpWords.AnsweredWord,
+        AcpEnd.NotStarted => AcpWords.NotStartedWord,
         AcpEnd.AgentFailed => "agent_failed",
         AcpEnd.Deadline => "deadline",
         AcpEnd.Protocol => "protocol",
-        AcpEnd.ModelNotOffered => KimiReport.ModelNotOfferedWord,
+        AcpEnd.ModelNotOffered => AcpWords.ModelNotOfferedWord,
         _ => "cancelled",
     };
 

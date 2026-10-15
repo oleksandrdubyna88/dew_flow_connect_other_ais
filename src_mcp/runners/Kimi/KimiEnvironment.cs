@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 
@@ -17,18 +18,6 @@ public static class KimiEnvironment
     public const string NoUpdateVariable = "KIMI_CODE_NO_AUTO_UPDATE";
 
     public const string NoUpdateOn = "1";
-
-    public const string HomeFlag = "--home";
-
-    public const string PersonsBinFlag = "--persons-bin";
-
-    public const string ModelFlag = "--model";
-
-    /// <summary>The absolute <c>kimi</c> the shim starts — resolved by the runtime in the unredirected parent, never re-derived inside the redirected shim (deviation 7 of the E4 plan).</summary>
-    public const string ExecutableFlag = "--executable";
-
-    /// <summary>The lock folder the shim's tree hold lives in — <see cref="KimiCredentialsLock.Root"/> of the runtime that started it.</summary>
-    public const string LocksFlag = "--locks";
 
     private const string ProfileVariable = "USERPROFILE";
 
@@ -105,8 +94,8 @@ public static class KimiEnvironment
             () => DrivePath(request, places),
             () => Pinned(request),
             () => PathBegins(request, places),
-            () => FlagIs(request, HomeFlag, places.OwnedRoot, "the owned root"),
-            () => FlagIs(request, PersonsBinFlag, places.PersonsBin, "the person's bin"),
+            () => FlagIs(request, AcpWords.HomeFlag, places.OwnedRoot, "the owned root"),
+            () => FlagIs(request, AcpWords.PersonsBinFlag, places.PersonsBin, "the person's bin"),
         }
         .Select(check => check())
         .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;

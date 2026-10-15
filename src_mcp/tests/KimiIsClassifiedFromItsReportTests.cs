@@ -36,7 +36,7 @@ public sealed class KimiIsClassifiedFromItsReportTests : IDisposable
         await new ReviewerExecutor(launcher).RunAsync(Invocation(), ct: TestContext.Current.CancellationToken);
 
     private static ProcessResult Spent() => KimiShimScripts.Ended(
-        KimiReport.SpentExit, AcpEnd.AgentFailed, "provider.api_error: 429 Your account is suspended due to insufficient balance",
+        AcpWords.SpentExit, AcpEnd.AgentFailed, "provider.api_error: 429 Your account is suspended due to insufficient balance",
         failure: "balance_spent", stderr: "balance_spent: provider.api_error: 429 Your account is suspended due to insufficient balance — the Kimi allowance is spent (D14)");
 
     // ---------- S4.5 ----------

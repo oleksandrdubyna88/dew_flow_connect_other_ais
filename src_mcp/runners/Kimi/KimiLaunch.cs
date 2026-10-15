@@ -33,7 +33,7 @@ public static class KimiLaunch
                 : string.Empty;
 
     /// <summary>The model the request names (<c>--model</c>).</summary>
-    public static string ModelOf(ProcessRequest request) => KimiEnvironment.FlagOf(request, KimiEnvironment.ModelFlag);
+    public static string ModelOf(ProcessRequest request) => KimiEnvironment.FlagOf(request, AcpWords.ModelFlag);
 
     /// <summary>
     /// The warning for a Kimi version nobody measured — the same sentence on the launch (<see cref="LaunchTurn.Warning"/>) and on the

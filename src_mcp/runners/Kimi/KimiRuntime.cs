@@ -92,13 +92,13 @@ public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams) : IRe
         .. prefix,
         "--ask-acp",
         "--profile", KimiAcpProfile.ProfileName,
-        KimiEnvironment.ModelFlag, model,
+        AcpWords.ModelFlag, model,
         "--cwd", cwd,
-        KimiEnvironment.HomeFlag, places.OwnedRoot,
-        KimiEnvironment.PersonsBinFlag, places.PersonsBin,
-        KimiEnvironment.LocksFlag, KimiCredentialsLock.Root,
+        AcpWords.HomeFlag, places.OwnedRoot,
+        AcpWords.PersonsBinFlag, places.PersonsBin,
+        AcpWords.LocksFlag, KimiCredentialsLock.Root,
         DeadlineFlag, DeadlineOf(timeout),
-        KimiEnvironment.ExecutableFlag, places.Executable,
+        AcpWords.ExecutableFlag, places.Executable,
     ];
 
     private static string DeadlineOf(TimeSpan timeout) => LocalAsk.ShimDeadlineSeconds(timeout).ToString(CultureInfo.InvariantCulture);
@@ -133,13 +133,13 @@ public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams) : IRe
     public Task<LaunchTurn> TakeTurnAsync(ReviewerInvocation invocation, IProcessLauncher launcher, CancellationToken ct)
     {
         var request = invocation.Request;
-        var root = KimiEnvironment.FlagOf(request, KimiEnvironment.HomeFlag);
+        var root = KimiEnvironment.FlagOf(request, AcpWords.HomeFlag);
         if (root.Length == 0)
         {
-            return Task.FromResult(LaunchTurn.Refused($"this Kimi launch names no owned home ({KimiEnvironment.HomeFlag}) and is refused (D19)"));
+            return Task.FromResult(LaunchTurn.Refused($"this Kimi launch names no owned home ({AcpWords.HomeFlag}) and is refused (D19)"));
         }
 
-        return KimiLaunch.TakeAsync(host, request, PlacesOf(root, KimiEnvironment.FlagOf(request, KimiEnvironment.ExecutableFlag)), launcher, ct);
+        return KimiLaunch.TakeAsync(host, request, PlacesOf(root, KimiEnvironment.FlagOf(request, AcpWords.ExecutableFlag)), launcher, ct);
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams) : IRe
     {
         var report = KimiReport.Parse(result.StdOut);
 
-        return result.ExitCode == KimiReport.SpentExit && report.Failure == KimiAcpProfile.BalanceSpent
+        return result.ExitCode == AcpWords.SpentExit && report.Failure == KimiAcpProfile.BalanceSpent
             ? RateLimitVerdict.Because(SpentReason(report), report.Usage)
             : RateLimitVerdict.No;
     }
