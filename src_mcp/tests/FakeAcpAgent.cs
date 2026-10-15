@@ -118,6 +118,9 @@ internal sealed class FakeAcpAgent : IDisposable
 
     public static string Read(string path) => $$"""{"kind":"read","path":{{Quote(path)}}}""";
 
+    /// <summary>A read whose reply is also said back as the agent's own message — the shape that would leak a served file into an answer.</summary>
+    public static string ReadEchoed(string path) => $$"""{"kind":"read","path":{{Quote(path)}},"echo":true}""";
+
     public static string Read(string path, int line, int limit) => $$"""{"kind":"read","path":{{Quote(path)}},"line":{{line}},"limit":{{limit}}}""";
 
     public static string Request(string method, string paramsJson) => $$"""{"kind":"request","method":{{Quote(method)}},"params":{{paramsJson}}}""";

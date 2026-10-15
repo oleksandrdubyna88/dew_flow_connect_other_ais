@@ -27,7 +27,7 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"toolCall","id":"t1","title":"…","toolKind":"read","status":"pending"}
 ///     {"kind":"toolCallUpdate","id":"t1","status":"completed"}
 ///     {"kind":"permission","title":"…","toolKind":"edit","options":[{"optionId":"a","kind":"allow_once"},…]}
-///     {"kind":"read","path":"…","line":1,"limit":10}   an fs/read_text_file; the reply is logged
+///     {"kind":"read","path":"…","line":1,"limit":10}   an fs/read_text_file; the reply is logged ("echo":true: and said back as a message chunk, whole — E4.2 S2.45)
 ///     {"kind":"request","method":"fs/write_text_file","params":{…}}   any other client request; the reply is logged
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
@@ -190,7 +190,12 @@ internal static class AcpAgent
                 });
                 break;
             case "read":
-                Request("fs/read_text_file", ReadParams(step));
+                var reply = Request("fs/read_text_file", ReadParams(step));
+                if (step.TryGetProperty("echo", out var echo) && echo.ValueKind == JsonValueKind.True)
+                {
+                    Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
+                }
+
                 break;
             case "request":
                 Request(Text(step, "method"), (JsonObject)JsonNode.Parse(step.TryGetProperty("params", out var p) ? p.GetRawText() : "{}")!);
@@ -274,7 +279,7 @@ internal static class AcpAgent
     }
 
     /// <summary>Sends a request of the agent's own and waits for its reply, logging it; a cancel seen meanwhile is noted.</summary>
-    private static void Request(string method, JsonObject parameters)
+    private static string Request(string method, JsonObject parameters)
     {
         var id = _nextId++;
         Write(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters }.ToJsonString());
@@ -294,12 +299,14 @@ internal static class AcpAgent
 
             if (message.TryGetProperty("id", out var replyId) && replyId.TryGetInt64(out var replied) && replied == id)
             {
-                return;
+                return line;
             }
         }
 
         // The client went away mid-request: nothing left to answer to.
         Environment.Exit(0);
+
+        return string.Empty;
     }
 
     private static void Update(JsonObject update) =>
