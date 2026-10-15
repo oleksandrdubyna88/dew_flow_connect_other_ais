@@ -72,6 +72,6 @@ public sealed class VersionWarningsTests
             .StartWith("Kimi 2.2.0 is not a version coai has measured (it measured 2.1.1); it is run anyway, but ")
             .And.Contain("the write refusals, the owned home's inventory, the OS-home redirect (research/RESULTS_kimi_confinement.md)")
             .And.Contain("is 2.1.1's")
-            .And.EndWith("re-measure the sign-in hold with `node scripts/probe-kimi-tree-hold.mjs` (the confinement probe, scripts/probe-kimi-confinement.mjs, still has to be re-plumbed to the shim's flags — E4.5)");
+            .And.EndWith("re-run `node scripts/probe-kimi-confinement.mjs` (the confinement probe, a paid run) and `node scripts/probe-kimi-tree-hold.mjs` (the sign-in hold) on it");
     }
 }

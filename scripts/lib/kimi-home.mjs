@@ -11,7 +11,7 @@
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, parse } from 'node:path';
 import { files, fwd, minimalWindowsEnv } from './vibe.mjs';
-import { fileHash, junction } from './kimi.mjs';
+import { OWNED_HOME, OWNED_OS, fileHash, junction } from './kimi.mjs';
 
 /** What M-K11 (a) may admit into an owned home, one at a time, in the plan's order (§5) — the junction is always there. */
 export const CANDIDATES = ['config', 'config-models', 'device_id', 'region', 'migrations', 'bin'];
@@ -172,16 +172,33 @@ export function realHomeVerdict(diff, { owned }) {
  * D19's environment, built and never inherited: ProcessEnvironment.Minimal (lib/vibe.mjs's copy of the C# list) plus
  * exactly `KIMI_CODE_HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1` (documented by Kimi: "fully disable the update preflight",
  * docs/en/configuration/env-vars.md). `pin: false` is M-K13's control; `profile` redirects `USERPROFILE`/`HOME`/
- * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*`.
+ * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*`. `personsBin` puts the person's tool folder first on PATH.
  */
-export function builtEnv({ home, pin = true, profile = '' }) {
+export function builtEnv({ home, pin = true, profile = '', personsBin = '' }) {
   const env = { ...minimalWindowsEnv(), NoDefaultCurrentDirectoryInExePath: '1', KIMI_CODE_HOME: home };
   if (pin) env.KIMI_CODE_NO_AUTO_UPDATE = '1';
+  // The person's tool folder FIRST (KimiEnvironment.BuiltPath): the rg and fd Kimi's Grep and Glob run are theirs, found before any other.
+  if (personsBin) env.PATH = [personsBin, env.PATH ?? process.env.PATH ?? ''].join(';');
   if (profile) {
     const { root, dir, base } = parse(profile);
     Object.assign(env, { USERPROFILE: profile, HOME: profile, HOMEDRIVE: root.replace(/[\\/]+$/u, ''), HOMEPATH: `${dir.slice(root.length - 1)}\\${base}`.replace(/^\\+/u, '\\') });
   }
   return env;
+}
+
+/**
+ * The shim's own environment for a turn on the owned root `root`, as the runtime hands it (E4.3, KimiRuntime): KIMI_CODE_HOME the root's
+ * `home/`, every OS-home name the root's empty `os/`, the person's `bin` first on PATH, the auto-update pin on.
+ */
+export function shimEnv({ root, personsBin, pin = true }) {
+  return builtEnv({ home: join(root, OWNED_HOME), profile: join(root, OWNED_OS), personsBin, pin });
+}
+
+/** The product's layout (E4.2): `<root>/home` (KIMI_CODE_HOME, 0700) beside an empty `<root>/os`. Returns the three paths. */
+export function ownedRoot(root) {
+  mkdirSync(join(root, OWNED_OS), { recursive: true });
+  mkdirSync(join(root, OWNED_HOME), { recursive: true, mode: 0o700 });
+  return { root, home: join(root, OWNED_HOME), os: join(root, OWNED_OS) };
 }
 
 // ----------------------------------------------------------------------------------------------- the ~/.agents canary

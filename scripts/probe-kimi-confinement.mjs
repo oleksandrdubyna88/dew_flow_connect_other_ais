@@ -1,8 +1,11 @@
-// STALE AGAINST THE SHIPPED SHIM (E4.3, deviation 39 of todo/PLAN_vibe_and_kimi_runtimes_E4.md): its shim arms pass
-// `--ask-acp --profile kimi` WITHOUT `--home <owned root>`, `--persons-bin` and `--locks`, and build owned homes with the home folder AS
-// KIMI_CODE_HOME (no `<root>/home` + empty `<root>/os`) — so every shim arm exits 65 today. Re-plumbing shimArgs, makeOwnedHome and builtEnv
-// to the owned-root layout is an explicit E4.5 task; the arms that do not use the shim (lib/kimi.mjs's small client, `kimi -p`) are unaffected.
-// Against the shipped shim, only scripts/probe-kimi-tree-hold.mjs (M-K15) runs.
+// RE-PLUMBED TO THE SHIPPED SHIM (E4.5 brief item 12; it was stale from E4.3, deviation 39 of todo/PLAN_vibe_and_kimi_runtimes_E4.md). Every shim
+// arm now passes `--home <owned root>`, `--persons-bin <the person's bin>` and `--locks <this scratch's locks folder>`, on a home laid out as
+// the product's is — `<root>/home` (KIMI_CODE_HOME) beside an empty `<root>/os` (the OS-home redirect) — in the environment the runtime hands
+// the shim (lib/kimi-home.mjs shimEnv: the person's bin first on PATH). The plumbing is proved WITHOUT a paid run: scripts/lib/kimi-shim.test.mjs reads
+// the argv against the shim's own --help and asks the built shim one turn with no kimi and no sign-in, which it refuses at the hold. The cells
+// themselves have NOT been re-run on this plumbing (they are paid; the owner decides when): until one is, the two arms a shim now fixes — no
+// KIMI_CODE_NO_AUTO_UPDATE pin, no OS-home redirect — are refused by name (lib/kimi.mjs shimRefusal) instead of being run as something else, and a
+// shim arm that has no owned root (the pre-D19 ones that measured the person's real home) records "launch failed" — the product no longer does that.
 //
 // Probe: what confines a Kimi Code launch from coai? PAID: every run that reaches the model is a turn on the person's Kimi
 // Code plan. Plan: todo/PLAN_vibe_and_kimi_runtimes.md (S4, §5 cells M-K1…M-K10). Results: research/RESULTS_kimi_confinement.md.
@@ -64,12 +67,12 @@ import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, run } from './lib/vibe.mjs';
 import {
   CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
-  parseStreamJson, promptMode, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, trustInHome,
+  parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
 } from './lib/kimi.mjs';
 import { table } from './lib/kimi-report.mjs';
 import {
   CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, makeAgentsCanary, makeOwnedHome, modelAlias,
-  realHomeVerdict, removeAgentsCanary,
+  ownedRoot, realHomeVerdict, removeAgentsCanary, shimEnv,
 } from './lib/kimi-home.mjs';
 import { D19_CELLS, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
 
@@ -121,6 +124,10 @@ if (privacy.length > 0) {
   process.exit(65);
 }
 mkdirSync(scratch, { recursive: true, mode: 0o700 });
+/** The shim's `--locks` (the sign-in's and the home's tree holds) and `--persons-bin` (the person's rg/fd folder) — both this scratch's / the person's, never a default. */
+const locks = join(scratch, 'locks');
+const PERSONS_BIN = join(REAL_HOME, 'bin');
+if (!reparse) mkdirSync(locks, { recursive: true });
 
 function write(path, text) {
   mkdirSync(dirname(path), { recursive: true });
@@ -130,9 +137,13 @@ function write(path, text) {
 // Numbered past any home an earlier invocation left in this scratch, so a later `--cells` run never re-fills one.
 let homes = readdirSync(scratch).filter((d) => /^h\d+$/u.test(d)).length;
 const copiedHomes = [];
-/** A SHORT copied KIMI_CODE_HOME inside <scratch>; `at` places it elsewhere (the deep arm). */
+/**
+ * A SHORT copied KIMI_CODE_HOME inside <scratch>, laid out as the product's owned root is: `<scratch>/h<n>/home` beside an empty
+ * `<scratch>/h<n>/os`. `at` places the HOME elsewhere (the deep arm) — it must be `<root>/home`, and its `os` is made beside it.
+ */
 function copiedHome(options = {}, at = '') {
-  const home = at || join(scratch, `h${++homes}`);
+  const home = at || ownedRoot(join(scratch, `h${++homes}`)).home;
+  if (at) ownedRoot(rootOfHome(at));
   copyHome(REAL_HOME, home, options);
   copiedHomes.push(home);
   return home;
@@ -158,7 +169,7 @@ let agentsCanaryMade = false;
  * first pass, 2026-10-13: a home written for `k3-256k` refuses `kimi-code/k3` with `-32603`, exit 70).
  */
 function ownedHome(runDir, extras = [], modelId = '') {
-  const path = join(runDir, 'kh');
+  const path = ownedRoot(join(runDir, 'kh')).home;
   const made = makeOwnedHome(path, REAL_HOME, [...new Set([...ADMITTED, ...extras])], { defaultModel: modelId || model });
   if (made.junctionError) throw new Error(made.junctionError);
   ownedHomes.push(path);
@@ -335,8 +346,7 @@ const LEGACY_ARMS = {
       mkdirSync(workdir, { recursive: true });
       const spec = { workdir, prompt: 'Reply with exactly: OK', kind: a.kind ?? 'shim', model: a.model, deadline: 120 };
       if (a.empty) {
-        spec.home = join(runDir, 'empty-home');
-        mkdirSync(spec.home, { recursive: true });
+        spec.home = ownedRoot(join(runDir, 'empty')).home;
       }
       if (a.noCredentials) spec.home = copiedHome({ credentials: false });
       return spec;
@@ -353,7 +363,8 @@ const LEGACY_ARMS = {
         // The HOME itself stays creatable under MAX_PATH (its longest copied file is credentials/<38 chars>, so ~205 + 51 < 260);
         // Kimi's own session path inside it — sessions/wd_work_<12>/session_<36>/agents/main/wire.jsonl, ~100 more — passes 260.
         const base = join(scratch, 'deep');
-        home = join(base, 'k'.repeat(Math.max(1, 205 - base.length - 1)));
+        // The ROOT is the long part; `home` is appended, so the HOME's own length (what Kimi sees as KIMI_CODE_HOME) is still ~205.
+        home = join(base, 'k'.repeat(Math.max(1, 205 - base.length - 1 - '\\home'.length)), 'home');
         copiedHome({}, home);
       } else {
         home = copiedHome({});
@@ -445,7 +456,10 @@ function gitInit(workdir) {
 const guard = reparse ? null : new CredentialGuard(REAL_HOME);
 
 function childEnv(spec) {
-  // An OWNED home (D19) gets the BUILT environment: Minimal + KIMI_CODE_HOME + the auto-update pin — never this process's.
+  // The shim's own environment on an owned root (E4.3): the runtime's — the OS-home redirect and the person's bin first on PATH included.
+  const root = (spec.kind ?? 'shim') === 'shim' ? rootOfHome(spec.home ?? '') : '';
+  if (spec.owned && root) return shimEnv({ root, personsBin: PERSONS_BIN, pin: spec.pin !== false });
+  // An OWNED home (D19) driven directly (`kimi -p`, the small client) gets the BUILT environment: Minimal + KIMI_CODE_HOME + the auto-update pin.
   if (spec.owned) return builtEnv({ home: spec.home, pin: spec.pin !== false, profile: spec.profile ?? '' });
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which the shim inherits through coai.
   return { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { KIMI_CODE_HOME: spec.home } : {}), ...(spec.env ?? {}) };
@@ -474,7 +488,11 @@ async function launch(runDir, tag, spec, load = '') {
   let r;
   let args = [];
   if (kind === 'shim') {
-    args = shimArgs({ cwd: spec.workdir, model: spec.model ?? model, deadlineSeconds: deadline, executable: flag('--kimi', '') });
+    const refusal = shimRefusal(spec);
+    if (refusal) throw new Error(`not measurable through the shim: ${refusal}`);
+    const root = rootOfHome(spec.home ?? '');
+    if (!root) throw new Error('no owned root (<root>/home beside <root>/os): the shim refuses a Kimi turn without --home, --persons-bin and --locks (E4.3), and no longer runs on the person\'s real home');
+    args = shimArgs({ cwd: spec.workdir, model: spec.model ?? model, deadlineSeconds: deadline, executable: flag('--kimi', ''), root, personsBin: PERSONS_BIN, locks });
     r = run(shim, args, { cwd: spec.workdir, input: spec.prompt, encoding: 'utf8', timeout: (deadline + 60) * 1000, env: childEnv(spec), maxBuffer: 64 * 1024 * 1024 });
   } else if (kind === 'prompt' || kind === 'prompt-stdin') {
     r = promptMode(kimi, { cwd: spec.workdir, env: childEnv(spec), prompt: spec.prompt, timeoutMs: (deadline + 60) * 1000, viaStdin: kind === 'prompt-stdin' });
@@ -501,7 +519,7 @@ async function launch(runDir, tag, spec, load = '') {
     // An owned home's inventory keeps `bin/` (did Kimi download ripgrep into it?) and names the junction without entering it.
     homeAfter: spec.home ? safeFiles(spec.home).filter((f) => (spec.owned ? f !== 'credentials' : !f.startsWith('bin/') && !f.startsWith('credentials/'))) : [],
     realHome, versions: versionBefore ? { before: versionBefore, after: versionAfter } : null, updates: spec.owned ? updatesIn(spec.home) : '',
-    profileAfter: spec.profile ? safeFiles(spec.profile) : null, sessionLogPath: session.log ? sessionLogPath : '', modelAlias: modelAlias(session.log),
+    profileAfter: spec.profile ? safeFiles(kind === 'shim' ? join(rootOfHome(spec.home ?? ''), 'os') : spec.profile) : null, sessionLogPath: session.log ? sessionLogPath : '', modelAlias: modelAlias(session.log),
     env: spec.owned ? Object.keys(childEnv(spec)).sort((a, b) => a.localeCompare(b)) : ['(inherited)'],
   };
   writeFileSync(join(runDir, `meta${tag}.json`), JSON.stringify(meta, null, 2));
@@ -631,12 +649,14 @@ async function runResume(n) {
   write(join(a, 'notes.txt'), `the marker is OLD-${n}\n`);
   write(join(b, 'notes.txt'), `the marker is NEW-${n}\n`);
   const word = `PELICAN-${40 + n}`;
-  const t1 = { workdir: a, prompt: `The code word is ${word}. Remember it. Use the Write tool to create pelican.txt in the current folder containing it; you have my permission; do not ask. Reply OK.` };
+  // Both turns on ONE owned home (E4.3: the shim runs on no other, and a session is found in the home it was made in).
+  const home = ownedHome(runDir).path;
+  const t1 = { workdir: a, home, owned: true, prompt: `The code word is ${word}. Remember it. Use the Write tool to create pelican.txt in the current folder containing it; you have my permission; do not ask. Reply OK.` };
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: 'two turns', n, spec: t1 }, null, 2));
   await launch(runDir, '-t1', t1);
   const r1 = rowOf(runDir, cell, 'turn 1 (shim)', n, t1, '-t1');
   const t2 = {
-    workdir: b, kind: 'acp-load', expect: { word, newMarker: `NEW-${n}`, oldMarker: `OLD-${n}` },
+    workdir: b, home, owned: true, kind: 'acp-load', expect: { word, newMarker: `NEW-${n}`, oldMarker: `OLD-${n}` },
     prompt: 'What is the code word I gave you? Then use the Read tool on notes.txt in the current folder and quote its marker. Then use the Write tool to '
       + 'create pelican2.txt in the current folder containing the code word; you have my permission; do not ask. Reply on one line: the code word, the marker, and whether the file was written.',
   };

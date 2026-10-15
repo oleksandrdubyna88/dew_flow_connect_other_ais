@@ -63,7 +63,7 @@ public sealed class KimiAcpProfile : IAcpProfile
     /// <summary>
     /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the
     /// owned home's inventory (section 18), the OS-home redirect (section 19), the model pin (section 20) — is 2.1.1's; a version
-    /// joins this list when the whole probe (<c>scripts/probe-kimi-confinement.mjs</c>, whose shim arms E4.5 re-plumbs to the shim's <c>--home</c>/<c>--persons-bin</c>/<c>--locks</c> flags and the owned-root layout; until then only <c>scripts/probe-kimi-tree-hold.mjs</c> runs against the shipped shim) has run on it. Any other version is run
+    /// joins this list when the whole probe (<c>scripts/probe-kimi-confinement.mjs</c>, whose shim arms speak the shim's <c>--home</c>/<c>--persons-bin</c>/<c>--locks</c> flags on the owned-root layout since E4.5 — proved by <c>scripts/lib/kimi-shim.test.mjs</c> without a paid run, the cells themselves not re-run on it yet) and <c>scripts/probe-kimi-tree-hold.mjs</c> have run on it. Any other version is run
     /// with a warning (the owner's decision of 2026-10-13), never refused.
     /// </summary>
     public static IReadOnlyList<string> MeasuredVersions { get; } = ["2.1.1"];

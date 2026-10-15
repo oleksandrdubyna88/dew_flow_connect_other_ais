@@ -47,7 +47,7 @@ public static class KimiLaunch
             : VersionWarnings.Unmeasured(
                 "Kimi", version, string.Join(", ", KimiAcpProfile.MeasuredVersions),
                 $"every confinement number coai has — the write refusals, the owned home's inventory, the OS-home redirect (research/RESULTS_kimi_confinement.md) — is {string.Join(", ", KimiAcpProfile.MeasuredVersions)}'s",
-                "re-measure the sign-in hold with `node scripts/probe-kimi-tree-hold.mjs` (the confinement probe, scripts/probe-kimi-confinement.mjs, still has to be re-plumbed to the shim's flags — E4.5)");
+                "re-run `node scripts/probe-kimi-confinement.mjs` (the confinement probe, a paid run) and `node scripts/probe-kimi-tree-hold.mjs` (the sign-in hold) on it");
 
     /// <summary>What the checks before the turn concluded: a refusal, or the config bytes the home must hold.</summary>
     private sealed record Prepared(string Refusal, byte[] Expected)
