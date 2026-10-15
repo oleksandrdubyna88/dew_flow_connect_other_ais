@@ -144,8 +144,8 @@ test('the panel’s install commands are the ones coai-mcp names when it finds n
   assert.ok(kimi.includes(MOONSHOT_SH), 'the Linux script differs from coai-mcp’s cure');
   assert.ok(kimi.includes(MOONSHOT_PS1), 'the Windows script differs from coai-mcp’s cure');
 
-  // And the two tools a Kimi launch is refused without: the commands coai-mcp's refusal sentence names (KimiTools) are the
-  // steps this line runs.
+  // reads-another-program: a positive claim about KimiTools — the two commands coai-mcp's refusal names for the tools a Kimi
+  // launch is refused without are the steps this line runs, so a changed id on the server fails here loudly.
   const tools = readFileSync(repo('src_mcp', 'runners', 'Kimi', 'KimiTools.cs'), 'utf8');
   const line = vendorInstall(KIMI, 'win32').command;
   for (const step of ['winget install --id BurntSushi.ripgrep.MSVC -e', 'winget install --id sharkdp.fd -e']) {

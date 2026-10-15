@@ -43,6 +43,8 @@ test('a root with no person\'s bin or no lock folder is a half-plumbed call: ref
 });
 
 test('every flag the probe sends is named in the shim\'s own --help text', () => {
+  // reads-another-program: a positive claim about the shim's help text — each flag the probe sends is named there, so a flag renamed
+  // on the server fails here loudly instead of the probe sending one the shim does not read.
   const help = readFileSync(join(repo, 'src_mcp', 'src', 'Program.cs'), 'utf8');
   const flags = kimi.shimArgs(FULL).filter((word) => word.startsWith('--'));
 
