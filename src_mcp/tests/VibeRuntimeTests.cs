@@ -283,7 +283,7 @@ public sealed class VibeLaunchRulesTests
     }
 
     [Theory]
-    [InlineData("python.exe C:\\Users\\strug\\.local\\bin\\vibe 2.26.1\r\n", "2.26.1")]
+    [InlineData("python.exe C:\\Users\\abcde\\.local\\bin\\vibe 2.26.1\r\n", "2.26.1")]
     [InlineData("vibe 2.27.10", "2.27.10")]
     [InlineData("usage: vibe", "")]
     public void TheVersion_IsReadOffWhatVibePrints(string printed, string version)

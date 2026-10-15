@@ -145,7 +145,7 @@ out of ten. Its 50% precision includes the rule-only finding; useful findings al
 [The 128K study](RESULTS_local_models_128k.md) records five of eight planted plan defects twice,
 and approximately 23.5K input tokens per code reviewer. These are different tasks and metrics,
 not a security-lane success rate. The original session records and schema still exist under
-`C:/Users/strug/qwen128`; they identify the universal code roles, including `security-reliability`.
+`C:/Users/abcde/qwen128`; they identify the universal code roles, including `security-reliability`.
 
 The historical role prompt asks for a concrete situation and wrong outcome, accepts an empty list
 and reviews the bounded change. The ordinary product path carries scope as well as diff. The lane

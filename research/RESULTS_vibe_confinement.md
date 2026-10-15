@@ -157,7 +157,7 @@ The format Vibe writes and reads (code `vibe/core/trusted_folders.py`, file from
 
 ```toml
 trusted = [
-    "C:\\Users\\strug\\AppData\\Local\\Temp\\vcp2\\M-V4-a_workdir_trusted-1\\parent\\work",
+    "C:\\Users\\abcde\\AppData\\Local\\Temp\\vcp2\\M-V4-a_workdir_trusted-1\\parent\\work",
 ]
 untrusted = []
 ```
@@ -559,7 +559,7 @@ running servers.
 
 ```json
 { "provider": "vibe", "enabled": true, "cliFound": true,
-  "version": "python.exe C:\\Users\\strug\\.local\\bin\\vibe 2.26.1",
+  "version": "python.exe C:\\Users\\abcde\\.local\\bin\\vibe 2.26.1",
   "auth": "own auth", "note": "the CLI's own sign-in is used" }
 ```
 
