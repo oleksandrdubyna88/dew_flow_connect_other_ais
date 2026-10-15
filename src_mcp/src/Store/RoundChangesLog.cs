@@ -46,11 +46,12 @@ public static class RoundChangesLog
     private static Dictionary<long, StateRow> States(SqliteConnection db, IReadOnlyCollection<long> ids)
     {
         using var read = db.CreateCommand();
-        read.CommandText = $"""
+        read.CommandText = """
             SELECT id, size_state, delta_state, delta_from, size_origin, base_ref
             FROM rounds
-            WHERE size_state <> '' AND id IN ({Placeholders(read, ids)})
+            WHERE size_state <> '' AND id IN (SELECT value FROM json_each($ids))
             """;
+        BindIds(read, ids);
         using var rows = read.ExecuteReader();
         var states = new Dictionary<long, StateRow>();
         while (rows.Read())
@@ -72,12 +73,13 @@ public static class RoundChangesLog
         }
 
         using var read = db.CreateCommand();
-        read.CommandText = $"""
+        read.CommandText = """
             SELECT round_id, scope, coverage, kind, files, added, removed
             FROM round_changes
-            WHERE round_id IN ({Placeholders(read, ids)})
+            WHERE round_id IN (SELECT value FROM json_each($ids))
             ORDER BY round_id, rowid
             """;
+        BindIds(read, ids);
         using var rows = read.ExecuteReader();
         while (rows.Read())
         {
@@ -114,18 +116,9 @@ public static class RoundChangesLog
         cells.TryGetValue((id, scope), out var list) ? list : [];
 
     /// <summary>
-    /// One bound parameter per id — the VALUES are never part of the SQL text, only the generated names.
+    /// The page's ids as ONE bound parameter, a JSON array of integers that the constant SQL unpacks with
+    /// <c>json_each</c> — no SQL text is ever built from data, and no page can reach SQLite's variable limit.
     /// </summary>
-    private static string Placeholders(SqliteCommand command, IReadOnlyCollection<long> ids)
-    {
-        var names = new List<string>(ids.Count);
-        foreach (var id in ids)
-        {
-            var name = "$id" + names.Count;
-            command.Parameters.AddWithValue(name, id);
-            names.Add(name);
-        }
-
-        return string.Join(',', names);
-    }
+    private static void BindIds(SqliteCommand command, IReadOnlyCollection<long> ids) =>
+        command.Parameters.AddWithValue("$ids", "[" + string.Join(',', ids) + "]");
 }
