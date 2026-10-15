@@ -140,7 +140,7 @@ jobs:
       #     day an extension-host harness exists.
       #
       #   sonar.coverage.exclusions + src_mcp/runners/Files/PrivateFolderWindowsNative.cs
-      #     The Windows-only NATIVE SHELL of `PrivateFolder` (D7 of todo/PLAN_vibe_live_round_fixes.md): the
+      #     The Windows-only NATIVE SHELL of `PrivateFolder` (D7 of research/PLAN_vibe_live_round_fixes.md): the
       #     P/Invoke declarations and the code that touches a directory handle — CreateFileW,
       #     GetSecurityInfo, SetSecurityInfo — plus the ACL calls on descendants. SonarCloud's analysis
       #     host is Linux, where none of it can run: a pull request that adds it arrived at the gate as

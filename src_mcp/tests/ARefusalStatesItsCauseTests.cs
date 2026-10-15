@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// An adapter's refusal states its CAUSE (D5 of <c>todo/PLAN_vibe_live_round_fixes.md</c>, the code gate of 2026-10-15): it has no
+/// An adapter's refusal states its CAUSE (D5 of <c>research/PLAN_vibe_live_round_fixes.md</c>, the code gate of 2026-10-15): it has no
 /// default, because a default made every adapter's refusal read as coai's own launch check saying no to an installed CLI — and a
 /// second adapter (Kimi's) will refuse launches too.
 /// </summary>

@@ -76,7 +76,7 @@ const VARYING = [
 ];
 
 /**
- * FOLDERS admitted - and no file under them (D4 of todo/PLAN_vibe_live_round_fixes.md). A plugin's per-session data is where
+ * FOLDERS admitted - and no file under them (D4 of research/PLAN_vibe_live_round_fixes.md). A plugin's per-session data is where
  * Vibe adopts a plugin's runtime code without re-checking it (vibe/core/plugins/_materialize.py), so turn 1's two EMPTY folders
  * there are Vibe's own and a file is not: the product refuses one, and so does this script.
  */

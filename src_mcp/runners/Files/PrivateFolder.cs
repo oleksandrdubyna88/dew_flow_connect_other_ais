@@ -17,7 +17,7 @@ public abstract record PrivateFolderOutcome
 }
 
 /// <summary>
-/// The ONE entry into <c>&lt;homes root&gt;\coai-*</c> (D7 of <c>todo/PLAN_vibe_live_round_fixes.md</c>, as the security review of
+/// The ONE entry into <c>&lt;homes root&gt;\coai-*</c> (D7 of <c>research/PLAN_vibe_live_round_fixes.md</c>, as the security review of
 /// 2026-10-15 left it): coai's folders under the homes root hold session transcripts of the reviewed code and its copies of the
 /// person's tree, so they must be a folder only the person can open — and the root may be one the person picked (a drive's
 /// root inherits <c>Authenticated Users: Modify</c>).

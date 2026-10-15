@@ -5,7 +5,7 @@
 > `QuestionRowLaunch.cs`, `src_mcp/runners/Vibe/VibeConsultant.cs`), and Vibe's read-only flag pair
 > (`src_mcp/core/QuestionConsult/ConfinementPlanner.cs:85`).
 >
-> Extracted from [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) D6, which caps the loss (`--max-turns 20`
+> Extracted from [PLAN_vibe_live_round_fixes.md](../research/PLAN_vibe_live_round_fixes.md) D6, which caps the loss (`--max-turns 20`
 > on every Vibe consultant launch) but does not cure the cause. Evidence:
 > [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §28 (M-V17). Parent:
 > [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (D2 — read-only by Vibe's own handling; D6 — the

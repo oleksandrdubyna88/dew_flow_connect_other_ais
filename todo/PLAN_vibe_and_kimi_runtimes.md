@@ -288,7 +288,7 @@ against the code or a run before it went in here — the question consultant had
     Rust CLI between two launches; the Rust CLI refuses `--time-limit` and `--output-dir` (exit 2) and is unmeasured
     (RESULTS §3). `VIBE_CLI=python` pins the measured one. If a later Vibe drops the Python CLI, the launch fails with
     exit 2 and `VendorDiagnosis` names the cause — coai never falls through to the Rust CLI unmeasured.
-  - **Amended 2026-10-15 (PLAN_vibe_live_round_fixes.md D1, D2, D4, D7; RESULTS §27).** The home is no longer under TEMP for a
+  - **Amended 2026-10-15 ([PLAN_vibe_live_round_fixes.md](../research/PLAN_vibe_live_round_fixes.md) D1, D2, D4, D7; RESULTS §27).** The home is no longer under TEMP for a
     round, a question row or a check: every one-shot home is `<homes root>\coai-vh\<8 hex>\…` and a conversation's is
     `<homes root>\coai-vibe\<id>\h`, the root being `COAI_CONSULTANT_HOMES` (a setting of the extension) or the local
     application data — a folder that must EXIST and be short and local. On Windows a home whose deepest write (156 characters
@@ -489,7 +489,7 @@ against the code or a run before it went in here — the question consultant had
   conversation's home (record open, written now) → kept; a closed record's home → gone on the beat; a home whose turn is held
   → skipped, then gone once the turn is given back; a service built with a stale home present → gone at start; a Vibe home
   the same without the junction; an unreadable folder → logged, the pass goes on. The disk projection is §7's.
-  - **Amended 2026-10-15 (PLAN_vibe_live_round_fixes.md D1, D3, D7).** The sweep walks only `coai-vibe` and `coai-kimi`; the one-shot homes
+  - **Amended 2026-10-15 ([PLAN_vibe_live_round_fixes.md](../research/PLAN_vibe_live_round_fixes.md) D1, D3, D7).** The sweep walks only `coai-vibe` and `coai-kimi`; the one-shot homes
     of a round, a row and a check live in `<root>\coai-vh`, OUTSIDE `ConsultantHomes.All`, owned by their creator under a held lock and swept
     by the six-hour scratch sweep (`VibeHomes.SweepOneShot`). Both sweeps enter their folder through `PrivateFolder` and sweep nothing through a
     link or a folder that is not private to the person.

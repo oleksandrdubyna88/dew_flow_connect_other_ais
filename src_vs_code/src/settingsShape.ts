@@ -131,7 +131,7 @@ export interface CoaiSettings {
   /**
    * The folder coai keeps Mistral Vibe's homes under (`coai-vh`, `coai-vibe`) — `COAI_CONSULTANT_HOMES` on the wire; empty is the
    * server's own default, the local application data. Short, local, made by the person, private to them (D8 of
-   * `todo/PLAN_vibe_live_round_fixes.md`).
+   * `research/PLAN_vibe_live_round_fixes.md`).
    */
   readonly vibeHomesDirectory: string;
 

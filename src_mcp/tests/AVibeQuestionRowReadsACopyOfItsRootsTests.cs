@@ -241,7 +241,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         billed.GetProperty("tokensOut").GetInt64().Should().Be(1395);
     }
 
-    // ---------- the home is short and owned (D1 of todo/PLAN_vibe_live_round_fixes.md, A9) ----------
+    // ---------- the home is short and owned (D1 of research/PLAN_vibe_live_round_fixes.md, A9) ----------
 
     private string Homes => Directory.CreateDirectory(_dir.At("homes")).FullName;
 

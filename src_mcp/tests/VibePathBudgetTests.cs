@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A Vibe home whose deepest write would pass Windows' path limit is refused before anything starts (D2 of
-/// <c>todo/PLAN_vibe_live_round_fixes.md</c>; research/RESULTS_vibe_confinement.md §27): Vibe writes 156 characters below its
+/// <c>research/PLAN_vibe_live_round_fixes.md</c>; research/RESULTS_vibe_confinement.md §27): Vibe writes 156 characters below its
 /// home, a FILE path stops at 259, so a home over 102 characters dies after the launch was paid for.
 /// </summary>
 /// <remarks>Pure: nothing is made on disk, so a path is a string padded to the length the case needs.</remarks>

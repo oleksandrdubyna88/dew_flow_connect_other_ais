@@ -12,7 +12,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The one type that enters <c>&lt;homes root&gt;\coai-*</c> (D7 of <c>todo/PLAN_vibe_live_round_fixes.md</c>, per the security
+/// The one type that enters <c>&lt;homes root&gt;\coai-*</c> (D7 of <c>research/PLAN_vibe_live_round_fixes.md</c>, per the security
 /// review of 2026-10-15): the folder is made with a protected DACL of the person, SYSTEM and Administrators — or an existing one
 /// is verified BY HANDLE (its path, its owner, its DACL), re-ACLed when only its DACL is wrong, and refused when its owner is
 /// another — and the handle is held for the reservation's life.

@@ -4001,7 +4001,7 @@ script (`teeth.py`), its class run, and the file restored — the messages are t
 | `ConfinementPlannerTests` (Vibe) | a Vibe disk plan's `AddDirs` is empty and its `SnapshotSources` are the roots; no Vibe launch's argv carries `--add-dir` or a root, whatever the grant | RED FIRST: *Expected disk.AddDirs to be empty because AddDirs are launch flags, and Vibe is never given --add-dir (D3), but found at least one item {"D:/projects/alpha"}* |
 | `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` | two roots, the second's copy slower than a 1 s budget (`SnapshotOptions.BeforeCopyOf` through the `Maker` seam): the place is refused naming "1 of 2" and the budget, nothing is left under `tree`, the snapshot budget holds no bytes | RED FIRST: *Expected place.Refusal "" to contain "1 of 2"* — then, with the budget applied but the cut-short copy's own refusal winning: *Expected place.Refusal "the snapshot of …\slow was refused: git ls-files … did not answer in time" to contain "1 of 2"* |
 
-## The Vibe live-round fixes (2026-10-15, `todo/PLAN_vibe_live_round_fixes.md`)
+## The Vibe live-round fixes (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
 Every group was run RED before its fix (a stub for a new member, or the fix temporarily reverted where the test was written after it,
 `testing.md` *if the fix already landed*) and then green. The first red message of each:
