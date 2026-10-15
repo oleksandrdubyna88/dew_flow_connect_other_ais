@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -320,10 +321,14 @@ public static class VendorDiagnosis
             ("vibe", true) => "install Mistral's own CLI: curl -LsSf https://mistral.ai/vibe/install.sh | bash",
             ("vibe", false) =>
                 "install it with uv: uv tool install mistral-vibe (no uv yet: powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\")",
-            // Moonshot's own getting-started page (read 2026-10-14, E4.5): its script per OS, and Git for Windows first — Kimi runs its shell through Git Bash.
+            // Moonshot's own getting-started page (read 2026-10-14, E4.5): its script per OS — Linux, WSL and macOS all get the shell script
+            // (the true arm is "any host but Windows", PR #823), Windows the PowerShell one — and on Windows Git first (Kimi runs its shell
+            // through Git Bash) plus the ripgrep and fd a Kimi launch is refused without (KimiTools; neither Moonshot script installs them).
+            // The panel's ⤓ runs the same winget ids (kimiWindowsInstall.test.ts).
             ("kimi", true) => "install Kimi Code's own CLI: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash",
             ("kimi", false) =>
-                "install Kimi Code's own CLI (it needs Git for Windows first: winget install Git.Git): irm https://code.kimi.com/kimi-code/install.ps1 | iex",
+                "install Kimi Code's own CLI (it needs Git for Windows, ripgrep and fd first: winget install --id Git.Git -e; "
+                + $"{KimiTools.RipgrepInstall}; {KimiTools.FdInstall}): irm https://code.kimi.com/kimi-code/install.ps1 | iex",
             ("claude", _) => "install it with: npm install -g @anthropic-ai/claude-code",
             _ => null,
         };

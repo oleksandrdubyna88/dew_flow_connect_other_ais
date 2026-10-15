@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
@@ -34,9 +36,27 @@ public sealed class KimiIsDiagnosedInItsOwnWordsTests
     [Fact]
     public void TheInstallCure_IsMoonshotsOwn_PerOperatingSystem()
     {
-        VendorDiagnosis.InstallCure("kimi", linux: true).Should().Be("install Kimi Code's own CLI: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash");
-        var windows = VendorDiagnosis.InstallCure("kimi", linux: false);
-        windows.Should().Contain("irm https://code.kimi.com/kimi-code/install.ps1 | iex")
-            .And.Contain("Git for Windows").And.Contain("winget install Git.Git");
+        const string Script = "install Kimi Code's own CLI: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash";
+        foreach (var host in new[] { HostKind.Linux, HostKind.Wsl, HostKind.MacOs })
+        {
+            VendorDiagnosis.InstallCure("kimi", host).Should().Be(Script, $"{host} gets Moonshot's shell script (PR #823 gave macOS the vendor's script, not the PowerShell form)");
+        }
+
+        VendorDiagnosis.InstallCure("kimi", linux: true).Should().Be(Script);
+        var windows = VendorDiagnosis.InstallCure("kimi", HostKind.Windows);
+        windows.Should().Contain("irm https://code.kimi.com/kimi-code/install.ps1 | iex").And.NotContain("curl");
+        VendorDiagnosis.InstallCure("kimi", linux: false).Should().Be(windows);
+    }
+
+    [Fact]
+    public void TheWindowsCure_NamesTheSameThreeTools_AndIdsAsTheButtonInstalls()
+    {
+        // The panel's ⤓ runs winget for exactly these ids (kimiWindowsInstall.test.ts holds the line); the sentence a failed round
+        // shows must not name fewer — a Kimi launch is refused without rg and fd (KimiTools), which Moonshot's script never installs.
+        var windows = VendorDiagnosis.InstallCure("kimi", HostKind.Windows);
+
+        windows.Should().Contain("winget install --id Git.Git -e")
+            .And.Contain(KimiTools.RipgrepInstall).And.Contain(KimiTools.FdInstall)
+            .And.Contain("Git for Windows");
     }
 }

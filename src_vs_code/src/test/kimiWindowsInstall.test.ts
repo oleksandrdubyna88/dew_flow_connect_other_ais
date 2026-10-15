@@ -138,11 +138,20 @@ test('the panel’s install commands are the ones coai-mcp names when it finds n
   // reads-another-program: a positive claim about VendorDiagnosis.InstallCure — Moonshot's two lines must appear verbatim in
   // the server's own cure sentence, so the panel and a failed round never tell a person two different installs.
   const source = readFileSync(repo('src_mcp', 'runners', 'Reviewers', 'VendorDiagnosis.cs'), 'utf8').replaceAll('\\"', '"');
-  const kimi = source.slice(source.indexOf('("kimi", true)'));
+  // The kimi arms, ended by the NEXT arm (claude's): since #823 the switch is (runtime, host != Windows) — the true arm is Linux, WSL and
+  // macOS (the vendor's shell script), the false arm Windows — and the cure may be interpolated from KimiTools, so the slice is read as
+  // two arms rather than as one line's text.
+  const start = source.indexOf('("kimi", true)');
+  const end = source.indexOf('("claude", _)');
+  assert.ok(start > 0 && end > start, 'coai-mcp’s InstallCure has no kimi arms where this test looks for them');
+  const kimi = source.slice(start, end);
+  const windowsArm = kimi.slice(kimi.indexOf('("kimi", false)'));
+  const scriptArm = kimi.slice(0, kimi.indexOf('("kimi", false)'));
 
-  assert.ok(kimi.length < source.length, 'coai-mcp’s InstallCure has no kimi arms where this test looks for them');
-  assert.ok(kimi.includes(MOONSHOT_SH), 'the Linux script differs from coai-mcp’s cure');
-  assert.ok(kimi.includes(MOONSHOT_PS1), 'the Windows script differs from coai-mcp’s cure');
+  assert.ok(scriptArm.includes(MOONSHOT_SH), 'the Linux, WSL and macOS script differs from coai-mcp’s cure');
+  assert.ok(windowsArm.includes(MOONSHOT_PS1), 'the Windows script differs from coai-mcp’s cure');
+  assert.ok(windowsArm.includes('winget install --id Git.Git -e'), 'coai-mcp’s Windows cure does not name the Git step the button runs');
+  assert.ok(windowsArm.includes('KimiTools.RipgrepInstall') && windowsArm.includes('KimiTools.FdInstall'), 'coai-mcp’s Windows cure does not name the ripgrep and fd steps');
 
   // reads-another-program: a positive claim about KimiTools — the two commands coai-mcp's refusal names for the tools a Kimi
   // launch is refused without are the steps this line runs, so a changed id on the server fails here loudly.

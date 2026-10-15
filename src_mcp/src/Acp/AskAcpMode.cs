@@ -47,7 +47,7 @@ internal static class AskAcpMode
     internal const int BadRequest = 65; // EX_DATAERR — a known mode refusing its arguments; never 64
     internal const int Unavailable = 69; // EX_UNAVAILABLE — ended before an answer: usage not captured
     internal const int Failed = 70; // EX_SOFTWARE — the agent's own failure
-    internal const int Spent = AcpWords.SpentExit; // EX_TEMPFAIL (75) — a known spent-allowance sentence; declared where KimiRuntime reads it
+    internal const int Spent = AcpWords.SpentExit; // EX_TEMPFAIL (75) — a known spent-allowance sentence; declared in AcpWords, which KimiRuntime reads it from too
     internal const int Protocol = 76; // EX_PROTOCOL — the stream itself failed
     internal const int Refused = 77; // EX_NOPERM — a known sign-in or plan refusal
 
