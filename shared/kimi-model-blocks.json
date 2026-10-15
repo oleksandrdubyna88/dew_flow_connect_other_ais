@@ -1,0 +1,43 @@
+{
+  "why": [
+    "The model block coai writes into an owned Kimi home's config.toml when the person has no [models.\"<id>\"] block of their own for the model a launch names (D10 and D19 of todo/PLAN_vibe_and_kimi_runtimes.md; E4.2 of todo/PLAN_vibe_and_kimi_runtimes_E4.md).",
+    "One entry per CURATED id, in the order the curated list is shown (the first is the default): KimiModels.Curated IS this table's ids, so the list and the blocks cannot drift.",
+    "Every value is one a Kimi 2.1.1 run accepted, and 'source' names the section of research/RESULTS_kimi_confinement.md that measured it. A new id joins when a run shows Kimi accept it, not when a list says it exists.",
+    "Embedded in the runners assembly (CoaiMcp.Runners.kimi-model-blocks.json): a Native-AOT binary runs where no shared/ folder exists, and a broken file refuses every Kimi launch rather than becoming an empty table."
+  ],
+  "seenOn": "2.1.1",
+  "blocks": [
+    {
+      "id": "kimi-code/k3-256k",
+      "provider": "managed:kimi-code",
+      "model": "k3-256k",
+      "maxContextSize": 262144,
+      "capabilities": ["thinking", "always_thinking", "image_in", "tool_use", "dynamically_loaded_tools"],
+      "source": "research/RESULTS_kimi_confinement.md §17 rung 3, 3 of 3"
+    },
+    {
+      "id": "kimi-code/k3",
+      "provider": "managed:kimi-code",
+      "model": "k3",
+      "maxContextSize": 262144,
+      "capabilities": ["thinking", "always_thinking", "image_in", "tool_use", "dynamically_loaded_tools"],
+      "source": "research/RESULTS_kimi_confinement.md §22, 1 of 1"
+    },
+    {
+      "id": "kimi-code/kimi-for-coding",
+      "provider": "managed:kimi-code",
+      "model": "kimi-for-coding",
+      "maxContextSize": 262144,
+      "capabilities": ["thinking", "always_thinking", "image_in", "tool_use", "dynamically_loaded_tools"],
+      "source": "research/RESULTS_kimi_confinement.md §22, 1 of 1 — the template's 262144 where the owner's own block says 1 048 576"
+    },
+    {
+      "id": "kimi-code/kimi-for-coding-highspeed",
+      "provider": "managed:kimi-code",
+      "model": "kimi-for-coding-highspeed",
+      "maxContextSize": 262144,
+      "capabilities": ["thinking", "always_thinking", "image_in", "tool_use", "dynamically_loaded_tools"],
+      "source": "research/RESULTS_kimi_confinement.md §22 — the home was accepted; the plan answered 401"
+    }
+  ]
+}

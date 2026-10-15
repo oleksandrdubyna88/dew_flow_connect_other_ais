@@ -51,17 +51,33 @@ public static class ExecutableResolver
         // and fail in CI, which is the least useful place to learn it.
         foreach (var directory in (pathVariable ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            foreach (var candidate in candidates)
+            if (In(directory, candidates, isWindows: true, fileExists) is { Length: > 0 } found)
             {
-                var full = $"{directory.TrimEnd('\\')}\\{candidate}";
-                if (fileExists(full))
-                {
-                    return full;
-                }
+                return found;
             }
         }
 
         return command;
+    }
+
+    /// <summary>
+    /// The first of <paramref name="candidates"/> that exists in ONE <paramref name="directory"/>, as the path to start, or empty —
+    /// the per-directory probe of <see cref="Resolve(string, bool, string?, Func{string, bool})"/>, shared with
+    /// <c>KimiTools</c>, which asks it for <c>rg</c> and <c>fd</c> over a PATH of its own (E4.2 decision 2) rather than copy it.
+    /// </summary>
+    internal static string In(string directory, IEnumerable<string> candidates, bool isWindows, Func<string, bool> fileExists)
+    {
+        var separator = isWindows ? '\\' : '/';
+        foreach (var candidate in candidates)
+        {
+            var full = $"{directory.TrimEnd(separator)}{separator}{candidate}";
+            if (fileExists(full))
+            {
+                return full;
+            }
+        }
+
+        return string.Empty;
     }
 
     /// <summary>

@@ -53,6 +53,14 @@ public sealed class KimiAcpProfile : IAcpProfile
             AcpFailureKind.Spent),
     ];
 
+    /// <summary>
+    /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the
+    /// owned home's inventory (section 18), the OS-home redirect (section 19), the model pin (section 20) — is 2.1.1's; a version
+    /// joins this list when the whole probe (<c>scripts/probe-kimi-confinement.mjs</c>) has run on it. Any other version is run
+    /// with a warning (the owner's decision of 2026-10-13), never refused.
+    /// </summary>
+    public static IReadOnlyList<string> MeasuredVersions { get; } = ["2.1.1"];
+
     public string Name => ProfileName;
 
     /// <summary>The installer's own path when the binary is there, else bare <c>kimi</c> for the PATH — see <see cref="InstalledExecutableFor"/>.</summary>

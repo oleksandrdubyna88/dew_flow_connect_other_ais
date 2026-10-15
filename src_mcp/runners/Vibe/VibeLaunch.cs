@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.RegularExpressions;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
@@ -70,8 +69,6 @@ public static class VibeLaunch
     /// <summary>How long the <c>--version</c> asked before every launch may take.</summary>
     public static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(60);
 
-    private static readonly Regex VersionPattern = new(@"\b(\d+\.\d+\.\d+)\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-
     /// <summary>
     /// D18: Vibe only where it was measured — a Windows host, starting a Windows <c>vibe</c>. Every number in the RESULTS
     /// is Windows; on Linux Vibe's keyring may fall back to a file inside <c>VIBE_HOME</c>, which would break D17, and
@@ -80,20 +77,9 @@ public static class VibeLaunch
     public static string HostRefusal(HostKind host, string executable) =>
         host != HostKind.Windows
             ? $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — every Vibe measurement coai has is Windows"
-            : RunsInWsl(executable)
+            : HostKinds.RunsInWsl(executable)
                 ? $"'{executable}' would start Vibe on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows vibe"
                 : string.Empty;
-
-    /// <remarks>The file name is cut at EITHER separator, not by <c>Path.GetFileName</c>: a Windows path is judged the same on a Linux test host.</remarks>
-    private static bool RunsInWsl(string executable)
-    {
-        var trimmed = executable.Trim();
-        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
-
-        return name.Equals("wsl", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
-            || executable.TrimStart().StartsWith(@"\\wsl", StringComparison.OrdinalIgnoreCase);
-    }
 
     /// <summary>
     /// D17: the launch is the built one — not inheriting this process's environment, keeping only the minimal names, and
@@ -147,8 +133,7 @@ public static class VibeLaunch
               + "(D10: Vibe answers an unknown alias on its own default model instead of refusing it)";
 
     /// <summary>The version a <c>vibe --version</c> printed (<c>python.exe …\vibe 2.26.1</c>), or empty.</summary>
-    public static string VersionIn(string printed) =>
-        VersionPattern.Match(printed) is { Success: true } found ? found.Groups[1].Value : string.Empty;
+    public static string VersionIn(string printed) => VersionWarnings.VersionIn(printed);
 
     /// <summary>The value a request carries for <paramref name="name"/>, or empty.</summary>
     public static string Value(ProcessRequest request, string name) =>
@@ -332,10 +317,10 @@ public static class VibeLaunch
         version.Length == 0 || manifest.For(version).Count > 0 ? string.Empty : Unmeasured(manifest, version);
 
     private static string Unmeasured(VibeHomeManifest manifest, string version) =>
-        $"Vibe {version} is not a version coai has measured (it measured {manifest.Known}); it is run anyway, but its "
-        + $"confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are {manifest.Known}'s, and this "
-        + "version's plugin files are admitted by name only — re-run `node scripts/vibe-home-manifest.mjs --write` and "
-        + "`node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it";
+        VersionWarnings.Unmeasured(
+            "Vibe", version, manifest.Known,
+            $"its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are {manifest.Known}'s, and this version's plugin files are admitted by name only",
+            "re-run `node scripts/vibe-home-manifest.mjs --write` and `node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it");
 
     /// <summary>
     /// The release as a ledger line names it: <c>vibe 2.26.1</c>. Never Vibe's raw <c>--version</c> line, which starts with the
