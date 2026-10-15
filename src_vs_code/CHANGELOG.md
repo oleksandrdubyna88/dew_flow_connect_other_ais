@@ -1,5 +1,38 @@
 # Changelog
 
+## Server 0.56.0 — 2026-10-15
+
+**Fixed: a Vibe turn no longer fails on the Windows path limit.** Vibe writes up to 156 characters below its home. A home
+under TEMP pushed some of those paths past 260 characters, so the turn failed after it had been paid for. Every Vibe home
+that writes a session now lives under one short folder: `COAI_CONSULTANT_HOMES`, else `%LOCALAPPDATA%`. A home that would
+still be too deep is refused before Vibe starts, and the sentence says how to fix it.
+
+**Fixed: a Vibe conversation can have a second turn.** The first turn left two empty plugin folders, and the home check
+refused them on the second turn. They are now admitted. A hook or a server declaration under them is still refused.
+
+**Fixed: a refusal by coai's launch check is named as one.** It is reported as `launch-refused`, with its whole cure. It
+is no longer reported as a missing CLI with an install command.
+
+**Changed: a Vibe consultant stops after 20 turns.** Question rows, conversation turns and consultant checks run with
+`--max-turns 20`. Reviews do not. One measured question row looped for 2.2 M input tokens. coai reports such a stop in
+its own sentence.
+
+**Changed: coai's Vibe folders are private.** coai creates `coai-vh` and `coai-vibe` so that only you can open them
+(SYSTEM and Administrators keep access). A folder of yours with wider access is made private, together with what is in
+it. A folder owned by someone else is refused. On Linux and macOS the folder is mode 0700.
+
+**Fixed: on macOS the install hint names the vendor's script,** not the Windows command.
+
+**Added: every code round records the size of its change.** The record holds lines added and removed by scope and file
+type, the changed submodule pointers, and each reviewer's effort. `--log` carries it as `size`. A size that could not
+be measured says so, and it never changes the round's verdict.
+
+## Extension 0.76.0 — 2026-10-15
+
+**Added: a setting for the folder that holds Vibe's homes.** `coai.vibeHomesDirectory` is on the Consultant tab. If your
+Windows profile name is long, set it to a short local folder. The Settings page marks a folder that does not exist. The
+help explains it in all five languages.
+
 ## Extension 0.75.0 — 2026-10-15
 
 **Added: Vendor gauges on the Team server tab.** For each vendor whose account the server reads after a job (today:
