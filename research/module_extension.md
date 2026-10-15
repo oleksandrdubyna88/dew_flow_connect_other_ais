@@ -12841,8 +12841,8 @@ with the server through a file, and the ▶ terminal sets no environment. Neithe
 flowchart LR
   P["Add a model: the Kimi Code preset"] --> R["coai.vendors row, runtime kimi"]
   R --> W{"vendorsEnv: runtimeOnServer('kimi', installed)"}
-  W -->|"installed >= 0.56.0, or unknown"| F["settings.json: the row crosses"]
-  W -->|"installed < 0.56.0"| H["row withheld; the card says why (runtimeNote)"]
+  W -->|"installed >= 0.57.0, or unknown"| F["settings.json: the row crosses"]
+  W -->|"installed < 0.57.0"| H["row withheld; the card says why (runtimeNote)"]
   R --> B["card: run, install, update"]
   B --> T["run: plain interactive kimi, no flag, no env, /usage at the prompt"]
   B --> I{"host platform"}
@@ -12878,16 +12878,21 @@ flowchart LR
   neither Moonshot script downloads them; Git is Moonshot's own prerequisite (Kimi runs its shell through Git Bash). The ids are the projects'
   own, verified 2026-10-14 by `winget show --id <id> -e`: the installers are their GitHub release zips, nobody repackaging. Each step is
   guarded by `Get-Command` (idempotent: winget's "already installed" exit never stops the line) and each failure `throw`s a sentence that
-  names the tool and ends the typed line in Windows PowerShell 5.1 and pwsh 7 alike (the brief said `return`; see deviation 58 of the E4 plan).
+  names the tool and ends the typed line in Windows PowerShell 5.1 and pwsh 7 alike (the brief said `return`; see deviation 58 of the E4 plan). The stop reads
+  `$?` as well as `$LASTEXITCODE` (deviation 70): a winget that is not on PATH never runs and leaves `$LASTEXITCODE` where it was — 0 in a fresh session —
+  so the exit code alone let the line walk on to Moonshot's step; every step also passes `--source winget`.
   The note says where Kimi lands (`%USERPROFILE%\.kimi-code\bin`), that the user PATH reaches only terminals started afterwards (restart VS
   Code before ▶ — and coai-mcp — finds `kimi`, `rg` and `fd`), and that the sign-in (`/login` in the Kimi ▶ opens, or `kimi login`) is the
-  person's. On Linux, WSL and macOS the note also says coai-mcp does not run Kimi there yet and that the line installs Kimi only. For the day
+  person's. ⟳ is the same line for every row: it updates the DEFAULT install and ignores a row's own CLI path (`vendorUpdate` takes no path and none is put
+  in the command) — the note says so (deviation 72). On Linux, WSL and macOS the note also says coai-mcp does not run Kimi there yet and that the line installs Kimi only. For the day
   D18 lifts the remarks write down the projects' own instructions (`brew install ripgrep fd`; `sudo apt-get install -y ripgrep fd-find` plus
   a `~/.local/bin/fd` link to `fdfind`; `sudo dnf install ripgrep fd-find`) — `OFFICIAL_SOURCES` would need those verbs, a change of that day.
 - **Official sources** (`officialSources.ts`): `urls` gains `https://code.kimi.com/kimi-code/` (the domain AND the path; not `cdn.kimi.com`,
   which no command names); `packages` gains nothing (nothing is npm-installed for Kimi); a new list `wingetIds` holds exactly
   `Git.Git`, `BurntSushi.ripgrep.MSVC`, `sharkdp.fd`, read by a fourth `VERBS` entry for `winget install` whose flags are `--id`, `-e`,
-  `--exact`, the two `--accept-*-agreements`, `--silent`, `-h` and which takes **one** id per step. `VERBS` entries now name the list they draw
+  `--exact`, the two `--accept-*-agreements`, `--silent`, `-h`, which takes **one** id per step, **requires** `-e`/`--exact` (an id matched whole, not searched),
+  and admits exactly the pair `--source winget` (the community repository; any other `--source` value, or a bare `--source`, is refused). Every URL in a
+  command is also refused when it contains `..` or `%2e` in any case: `https://code.kimi.com/kimi-code/../x` still STARTS with the admitted prefix. `VERBS` entries now name the list they draw
   from (`admitted`) and how many arguments a step may carry (`most`); what stays refused by construction: `--source`, `--manifest`,
   `--location`, `-v`/`--version`, a second id, an id outside the list — each a way to install something other than the three publishers'
   packages. `kimiWindowsInstall.test.ts` holds the whole table (S5.9) and the two exact lists.
@@ -12895,12 +12900,15 @@ flowchart LR
   the npm package are one release line (the 2.1.1 manifest's `tag` is `@moonshot-ai/kimi-code@2.1.1`; `code.kimi.com/kimi-code/latest` and npm's
   `latest` both answered 2.2.0 on 2026-10-14). `vendorTerminal`'s `PACKAGE` stays without `kimi`, so the update command is the script, never
   npm — this corrects D16's "neither is on npm" for Kimi.
-- **An older server** (D13, path 1; `runtimeSince.ts`): `KIMI_RUNTIME_SINCE = '0.56.0'`, one more arm of the `RUNTIME_SINCE` table, so
+- **An older server** (D13, path 1; `runtimeSince.ts`): `KIMI_RUNTIME_SINCE = '0.57.0'`, one more arm of the `RUNTIME_SINCE` table, so
   `crossesTo` withholds a kimi row from the settings file of a server below it while every other row crosses, and the card names the row and
-  the release (`runtimeSkewNote`). **Why 0.56.0:** release-please bumps the minor for a `feat`; the newest RELEASED `src_mcp` on `main` when
-  this was written is 0.55.0 (tag `mcp-v0.55.0`, 2026-10-15), and a server released without the runtime refuses a kimi row by name. The plan
-  brief's "0.54.0 or 0.55.0" was written when 0.53.0 was newest — both have since been released without Kimi. Whoever cuts the release keeps
-  the constant level with the tag. **Path 3 (D13) for `kimi` beside `vibe`'s:** an OLDER extension window's own save of `coai.vendors`
+  the release (`runtimeSkewNote`). **Why 0.57.0:** release-please bumps the minor for a `feat`; the newest RELEASED `src_mcp` is 0.55.0 (tag `mcp-v0.55.0`, 2026-10-15),
+  but `main` already holds two `feat` commits after it (#828, #829), so the NEXT release — 0.56.0 — ships without Kimi and these stories land in
+  the one after. A server released without the runtime refuses a kimi row by name. The plan brief's "0.54.0 or 0.55.0" was written when 0.53.0 was
+  newest, and the first draft here (0.56.0) was computed from the tag alone. Whoever cuts the release keeps the constant level with the tag.
+  `runtimeSinceIsAhead.test.ts` holds what a test can: every `RUNTIME_SINCE` entry is ahead of the manifest's `src_mcp` or named in its `## Server <SINCE>`
+  changelog section (read by `changelog-section.mjs`; `api` is listed with its reason) — shown red with `0.55.0`, green with `0.57.0`; it cannot see
+  unreleased commits on `main`, which is how 0.56.0 passed. **Path 3 (D13) for `kimi` beside `vibe`'s:** an OLDER extension window's own save of `coai.vendors`
   rewrites a kimi row's runtime to `codex` (its `RUNTIMES` lacks `kimi`), and this build then mirrors that; code that already shipped cannot
   be changed, so the help says in five languages to reload every window after updating, and the stamp guard of path 2 makes an older build
   stand down before a file that holds the row.
@@ -12911,9 +12919,9 @@ flowchart LR
   Git, ripgrep and fd on Windows), the sign-in (`/login`, `kimi login`), ⟳ (Moonshot's installer again, the version read from npm), the reload advice
   for Kimi, and the version warning. It claims nothing about the owned home never receiving code — M-K12 (c) is unrecorded (parent D19).
   `HELP.installVendorCli` names Moonshot's script. `kimiHelp.test.ts` holds it in every language.
-- **Tests**: `kimiRuntime.test.ts` (21; S5.1–S5.6, S5.11–S5.13), `kimiWindowsInstall.test.ts` (10; S5.7–S5.10), `kimiWindowsInstallRuns.test.ts`
-  (7; S5.15 — the line RUN in Windows PowerShell 5.1 and pwsh 7 against `winget`/`irm`/`iex` functions and stub `git.exe`/`rg.exe`/`fd.exe`
-  files, in a `testsToDelete-…` folder with spaces), `kimiHelp.test.ts` (2). The hand-typed lists in `addModelGroups` and `vendorColour` gained
+- **Tests**: `kimiRuntime.test.ts` (21; S5.1–S5.6, S5.11–S5.13), `kimiWindowsInstall.test.ts` (11; S5.7–S5.10), `kimiWindowsInstallRuns.test.ts`
+  (8; S5.15 — the line RUN in Windows PowerShell 5.1 and pwsh 7 against `winget`/`irm`/`iex` functions and stub `git.exe`/`rg.exe`/`fd.exe`
+  files, in a `testsToDelete-…` folder with spaces), `kimiHelp.test.ts` (2), `runtimeSinceIsAhead.test.ts` (6; the release guard). The hand-typed lists in `addModelGroups` and `vendorColour` gained
   `kimi`; `vibeWindowsInstall`'s exact source list gained Moonshot's path.
 - **Not here / open**: the buttons were never RUN against the real winget or Moonshot's installers (the plan's "Done when" asks for one Windows run
   on a machine without `kimi` — or a `testsToDelete-` `KIMI_INSTALL_DIR` — and one in WSL); Kimi as a consultant or question row (S5); chat; a

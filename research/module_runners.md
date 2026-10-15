@@ -3534,6 +3534,8 @@ flowchart LR
   and `--executable` (the executor holds only the invocation). It is the same control for the first launch, a retry, a repair; a refusal is `NotStarted`
   with the sentence and nothing starts, a held turn (the home's in-process turn and the sign-in's gate) is given back after the answer, usage and reason were read.
   The version warning reaches `ReviewerOutcome.Warning` and the card (`VersionWarning` is `KimiLaunch.VersionWarning`: one sentence, two places).
+  Every refusal states its cause (`LaunchTurn.Refused(reason, RefusalCause)`, required since #823): `LaunchControl` for all of Kimi's own, `CliMissing` when the OS cannot start `kimi` at the version
+  ask — cli-not-found with `InstallCure("kimi", host)`: Moonshot's script on Linux, WSL and macOS, the PowerShell line (with Git, ripgrep and fd) on Windows.
 - **The probe.** `ProbeVersionAsync` asks `kimi --version` in `KimiEnvironment.Built` on a THROWAWAY owned folder (`coai-answers-*` in temp, `home/` and `os/`
   made, NO junction and NO config — `kimi --version` writes nothing and needs no sign-in, RESULTS §18), deleted in a `finally`: `providers` never starts Kimi
   in the inherited environment and never touches the person's home. `DefaultExecutable` is the `kimi` CLI (`KimiPlaces.Resolve`'s rule), not the shim.

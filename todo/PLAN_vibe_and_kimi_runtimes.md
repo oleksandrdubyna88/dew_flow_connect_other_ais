@@ -717,7 +717,7 @@ plan's "where the parent plan and the code disagree" (items 9, 11, 12 and 18): t
 `rg` and `fd` are found before the launch and never admitted into the home; the person's slot must be `type = "kimi"` with `storage = "file"`;
 the sign-in lock is two files keyed by the folder's final path, with the running tree holding one of them. This text stays the plan's until promotion.*
 
-*E4.5 landed 2026-10-15 (feat/kimi-runtime): the extension's row — preset, curated models, colour, ▶, install and update per OS (Windows: winget provisions Git, ripgrep and fd, then Moonshot's installer; the Linux/macOS line installs Kimi only), the update light from npm, `KIMI_RUNTIME_SINCE` = 0.56.0, help in five languages — and the confinement probe re-plumbed to the shim's flags (its cells not re-run). Deviations 58–66 of the E4 plan; the live checks and the live round remain, so S4 is code-complete and NOT finished, and S5 has not started.*
+*E4.5 landed 2026-10-15 (feat/kimi-runtime): the extension's row — preset, curated models, colour, ▶, install and update per OS (Windows: winget provisions Git, ripgrep and fd, then Moonshot's installer; the Linux/macOS line installs Kimi only), the update light from npm, `KIMI_RUNTIME_SINCE` = 0.57.0 (guarded by a release test), help in five languages — and the confinement probe re-plumbed to the shim's flags (its cells not re-run). Deviations 58–73 of the E4 plan; the live checks and the live round remain, so S4 is code-complete and NOT finished, and S5 has not started.*
 
 *The measurement half — DONE 2026-10-13.* `scripts/probe-kimi-confinement.mjs` → `research/RESULTS_kimi_confinement.md`
 §3–§15: cells M-K1…M-K10 and M-K8b, 74 launches, each ACP arm through the shipped `coai-mcp --ask-acp` (so the probe

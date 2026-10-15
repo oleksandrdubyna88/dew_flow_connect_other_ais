@@ -1646,7 +1646,7 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
     and what it does to a line TYPED into a terminal is not something this repository has measured; `throw` is what `vibeWindowsInstallRuns.test.ts` already proved ends the rest
     of a typed line in Windows PowerShell 5.1 and pwsh 7 alike, and it says why (`ripgrep could not be set up by winget; nothing after it was run`). The words avoid "install" —
     `fromOfficialSources` reads every step and refuses one that says it and no verb reads. Seen: the line stops after a failed `fd` step with Moonshot's step not reached, in both shells.
-59. **`KIMI_RUNTIME_SINCE = '0.56.0'`, not the brief's 0.54.0 or 0.55.0.** The brief was written when 0.53.0 was the newest release. `origin/main`'s manifest (fetched 2026-10-15) says
+59. **(REJECTED by the Opus review; superseded by 67: it is `0.57.0`.) `KIMI_RUNTIME_SINCE = '0.56.0'`, not the brief's 0.54.0 or 0.55.0.** The brief was written when 0.53.0 was the newest release. `origin/main`'s manifest (fetched 2026-10-15) says
     `src_mcp` 0.55.0 — tag `mcp-v0.55.0`, 2026-10-15 — and 0.54.0 was released 2026-10-14, both WITHOUT the Kimi stories; a server released without the runtime refuses the row by name, so
     the earliest release that can carry it is the next minor. This branch's own `.release-please-manifest.json` (0.53.0) is behind `main`. If another minor ships before #817, raise it.
 60. **S5.1 and S5.13 were green from the start, and S5.5's first draft was green by luck.** S5.1: `kimi` has been in `RUNTIMES` since E4.4 (deviation 50), so the parser could not
@@ -1656,8 +1656,9 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
     entry; but "a second id in one step" (S5.9's `winget install --id sharkdp.fd --id Git.Git`) is two ADMITTED ids, which `every(...)` alone accepts, so the winget entry carries `most: 1`
     (npm and uv: `Infinity`, unchanged). The step with a bare second id (`winget install sharkdp.fd Git.Git`) is refused the same way.
 62. **The probe was re-plumbed, not re-run.** `shimArgs` sends `--home <root>`, `--persons-bin`, `--locks`; homes are `<root>/home` beside an empty `<root>/os`; a shim turn runs in the
-    runtime's environment. The plumbing is proved by `scripts/lib/kimi-shim.test.mjs` — the argv against the shim's `--help` and ONE dry-run turn of the built shim with no `kimi` and no
-    sign-in, refused at the hold — and no paid arm ran. Two arms vary what the shim now fixes (no update pin, no OS-home redirect) and are refused by name (`shimRefusal`) instead of
+    runtime's environment. The plumbing is proved by `scripts/lib/kimi-shim.test.mjs` — reworded by the review (deviation 73): the argv is read against the SOURCE of the shim's help text (`Program.cs`), not the
+    binary's `--help`, and the ONE dry-run turn of the built shim with no `kimi` and no sign-in, refused at the hold, is LOCAL ONLY (Windows, a shim built beforehand and possibly older than the
+    source, skipped on CI's ubuntu runner) — and no paid arm ran. Two arms vary what the shim now fixes (no update pin, no OS-home redirect) and are refused by name (`shimRefusal`) instead of
     being run as something else; the pre-D19 shim arms that measured the person's REAL home have no owned root and record "launch failed" (the product no longer does that); M-K5's two
     turns share one owned home. So the "stale" header is gone but no version joins `MeasuredVersions`: the cells have not been re-run on this plumbing, and the unmeasured-version warning
     now says "re-run `scripts/probe-kimi-confinement.mjs` (a paid run) and `scripts/probe-kimi-tree-hold.mjs`".
@@ -1669,8 +1670,38 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
 65. **The "Done when" live checks were NOT run.** The Windows install button was not pressed on a machine without `kimi` (nor into a `testsToDelete-` `KIMI_INSTALL_DIR`) and not in WSL:
     this story's constraints forbade running any installer or touching WSL. What stands in their place: the line parsed by PowerShell's own parser and RUN against stand-ins for `winget`,
     `irm`, `iex` and the three tools, in both shells (`kimiWindowsInstallRuns.test.ts`). They stay on the epic's open list.
-66. **The server-side tail E4.5 left alone:** `VendorDiagnosis.InstallCure("kimi")` still has no macOS-specific line (review M5, merged with #823), and `scripts/live-kimi-runtime-compat.mjs`
+66. **The server-side tail E4.5 left alone (its first half CLOSED by 69):** `VendorDiagnosis.InstallCure("kimi")` had no macOS-specific line (review M5, merged with #823), and `scripts/live-kimi-runtime-compat.mjs`
     (Vibe has one) was not written — the claim that a released 0.55.0 refuses a kimi row by name is inferred from Vibe's measurement against 0.52.0, not measured.
+
+**The Opus review of the E4.5 commits (2026-10-15, verdict FIX; 58 and 60–66 accepted, 59 rejected) — what was done.** Items 67–73.
+
+67. **`KIMI_RUNTIME_SINCE = '0.57.0'`** (review B1, replacing 59). The newest RELEASED `src_mcp` is 0.55.0, but `main` already holds two `feat` commits after `mcp-v0.55.0` (#828, #829), so the NEXT
+    release — 0.56.0 — ships WITHOUT Kimi and these stories land in the one after. Set to 0.56.0 the gate would have called that release "new enough" and stayed silent on the server that refuses a
+    kimi row by name. Changed in `runtimeSince.ts` (its remarks say why), the five help texts, the preset hint, the README, `architecture.md`, the module docs and the tests (`OLDER = '0.56.0'`).
+    **The guard** (`runtimeSinceIsAhead.test.ts`, in the `releaseAnchors` family, `RUNTIME_SINCE` now exported): every entry is AHEAD of the manifest's `src_mcp` or named in its `## Server <SINCE>`
+    changelog section, read by `changelog-section.mjs` (the script that writes the release body); `api` is listed with its reason (shipped in 0.37.0 under a section about something else, gate
+    measured live). Red with `0.55.0` (*kimi: SINCE 0.55.0 is not ahead of the newest released coai-mcp (0.55.0) and the changelog's "## Server 0.55.0" section does not name kimi*), green with
+    `0.57.0`. **Its limit, stated:** it cannot see unreleased commits on `main`, so `0.56.0` still passes it — the manifest is the only released fact available to a test; the person cutting the release
+    keeps the constant level with the tag, as the remarks say.
+68. **The rebase onto `origin/main` (5d8a24da; review B2).** 37 commits; conflicts and how each was resolved — todo/README.md: main's other rows kept, the two plan rows take the branch's
+    text (a scripted, row-by-row merge); `PanelService.cs` (the sweep): BOTH changes — `PruneOldAnswerDirs(string homesRoot, Serilog.ILogger log)` runs the branch's `warn`-ing scratch sweep AND main's
+    one-shot Vibe homes sweep, with main's one-argument overload kept for its tests; `HandleRead.cs`: main's `CanonicalDirectory` stays `internal` and is now the wrapper over the branch's
+    `FinalDirectory`; `VibeRuntime.cs`: one `Short(string text, int length = 10)` serves main's two-argument callers and the branch's one-argument one; `module_tests.md`, `module_runners.md`,
+    `module_extension.md`: both sides' sections kept. Then two semantic merges the compiler found: `LaunchTurn.Refused` now REQUIRES a `RefusalCause` (#823) — Kimi says `LaunchControl` for every
+    refusal of its own and `CliMissing` when the OS cannot start `kimi` at the version ask (red first: *Expected turn.CliMissing to be True … but found False.*), and `RoundScratch.At` passes the
+    empty one-shot reservation. `.release-please-manifest.json` is main's (0.55.0). **Left open:** a Kimi row's homes still live in the round's scratch folder under TEMP (`OwnedScratch` falls back to it
+    when no reservation is made), not in #823's short `coai-vh` reservation; Kimi's root is `kh-<10 hex>` under the scratch, well under 102 characters of its own, but the reservation is the place a
+    long TEMP is handled.
+69. **The server's cure follows the panel and main's shape** (review B2, minor 7, M5; closes 66's first half). `InstallCure(runtime, HostKind)` is `host != Windows`: Linux, WSL and macOS get Moonshot's
+    script; Windows the PowerShell one — now with Git, ripgrep and fd (`winget install --id Git.Git -e` and the `KimiTools` commands), where it named Git alone. The parity test reads the two arms apart.
+70. **A missing winget stops the line** (minor 1). `kimiToolStep` stops on `-not $? -or $LASTEXITCODE -ne 0`: a native command that never ran (winget not on PATH) leaves `$LASTEXITCODE` at its old value,
+    0 in a fresh session (measured in pwsh 7 by the review), so the exit code alone walked on to Moonshot's step. New S5.15 arm with no `winget` at all and `$LASTEXITCODE` 0 — red first
+    (*Moonshot's step ran after winget was never found*), green in both shells.
+71. **The official-source check is tighter** (minors 2 and 3). Every winget step passes `--source winget`; the verb admits exactly that pair (any other `--source` value or a bare one is refused) and REQUIRES `-e`/`--exact`
+    (`pairs`, `required` on `VERBS` entries); a URL containing `..` or `%2e` in any case is refused wherever it appears (`/kimi-code/../x` STARTS with the admitted prefix). Rows added to S5.9, red first.
+72. **⟳ and a row's own CLI path** (minor 4). `vendorUpdate` takes no path and none is put in the command; the Windows note now says ⟳ updates the default install and not a Kimi kept elsewhere.
+73. **What the probe test claims** (minor 5; rewords 62) and a stale comment (minor 6). `kimi-shim.test.mjs` and the probe's header say the flag check reads `Program.cs`'s source and the dry run is local-only;
+    `AskAcpMode.Spent`'s comment says the exit lives in `AcpWords`.
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
