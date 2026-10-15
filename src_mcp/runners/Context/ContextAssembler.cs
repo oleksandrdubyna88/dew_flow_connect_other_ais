@@ -116,7 +116,27 @@ public enum DiffBase
 /// compared against is a round whose findings can be re-checked afterwards — and a reviewer told the
 /// branch deleted three files it never touched has no way to tell that from a real deletion.
 /// </remarks>
-public sealed record CollectedDiff(IReadOnlyList<FileDiff> Files, string ComparedAgainst, DiffBase Kind);
+public sealed record CollectedDiff(IReadOnlyList<FileDiff> Files, string ComparedAgainst, DiffBase Kind)
+{
+    /// <summary>The same files as <see cref="Files"/>, same order, with the line counts git gave each (E2.S2) — a binary reads 0 and 0 here.</summary>
+    public IReadOnlyList<CountedChange> Counted { get; init; } = [];
+}
+
+/// <summary>A numstat read with its counts — or the fact that git could not give one; never an exception.</summary>
+public sealed record CountedNumstat(IReadOnlyList<CountedChange> Changes, bool Failed = false)
+{
+    /// <summary>git failed, timed out, or answered with something that is not a numstat: no changes, and not an empty range.</summary>
+    public static CountedNumstat GitFailed { get; } = new([], true);
+}
+
+/// <summary>The delta range of two heads: both numstats, or the ScopeState word saying why there are none.</summary>
+public sealed record DeltaNumstats(string State, IReadOnlyList<CountedChange> Filtered, IReadOnlyList<CountedChange> Unfiltered)
+{
+    public static DeltaNumstats Measured(IReadOnlyList<CountedChange> filtered, IReadOnlyList<CountedChange> unfiltered) =>
+        new(ScopeState.Recorded, filtered, unfiltered);
+
+    public static DeltaNumstats Unavailable(string state) => new(state, [], []);
+}
 
 /// <summary>
 /// How much of a change a reviewer would be shown, known before a round is built.
@@ -291,7 +311,7 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         IReadOnlyList<string>? exclusions = null,
         CancellationToken ct = default)
     {
-        var excludes = (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}").ToArray();
+        var excludes = Excludes(exclusions);
         // The whole of this fix. `{base}..{sha}` diffs two ENDPOINTS, so every commit the base has
         // and the branch does not arrives INVERTED — as a deletion the branch performed. Measured on
         // 2026-09-08: 17 files and 1616 deletions sent where the branch's own change was 9 and 12,
@@ -310,8 +330,9 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         // the measurement are written down.
         var numstat = await Git(repoPath, ct, ["diff", "--numstat", "-z", $"{against}..{sha}", "--", ".", .. excludes]);
 
+        var counted = NumstatReader.ReadCounted(numstat).ToList();
         var files = new List<FileDiff>();
-        foreach (var change in NumstatReader.Read(numstat))
+        foreach (var change in counted.Select(c => c.Change))
         {
             files.Add(change.IsBinary
                 ? new FileDiff(
@@ -326,7 +347,7 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
                     await Git(repoPath, ct, ["diff", $"{against}..{sha}", "--", .. change.Pathspecs])));
         }
 
-        return new CollectedDiff(files, against, kind);
+        return new CollectedDiff(files, against, kind) { Counted = counted };
     }
 
     /// <summary>
@@ -346,7 +367,7 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         IReadOnlyList<string>? exclusions = null,
         CancellationToken ct = default)
     {
-        var excludes = (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}").ToArray();
+        var excludes = Excludes(exclusions);
         var (against, _) = await ComparisonBase(repoPath, baseRef, sha, ct);
 
         var shown = NumstatReader.Read(
@@ -360,6 +381,119 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
 
         return new ReviewableChange(0, [.. all.Select(c => c.Path)]);
     }
+
+    /// <summary>The deadline of every git call a round's SIZE makes — a measurement may not hold a round up (E2 plan §3).</summary>
+    public static readonly TimeSpan SizeGitTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The numstat of <c>{against}..{sha}</c> with NO pathspecs — every file the range changed, the ones the
+    /// exclusions hid included (E2.S2). Never throws for git: a failed, timed-out or unreadable answer is
+    /// <see cref="CountedNumstat.GitFailed"/>, which is not an empty range.
+    /// </summary>
+    /// <param name="timeout">The deadline of the one call; absent, <see cref="SizeGitTimeout"/>.</param>
+    public async Task<CountedNumstat> AllChangesAsync(
+        string repoPath, string against, string sha, CancellationToken ct, TimeSpan? timeout = null) =>
+        IsCommit(against) && IsCommit(sha)
+            ? await CountedAsync(repoPath, $"{against}..{sha}", [], timeout, ct)
+            : CountedNumstat.GitFailed;
+
+    /// <summary>
+    /// The delta range <c>{from}..{sha}</c> — what changed between two heads the gate was asked about — as its two
+    /// numstats, or the <see cref="ScopeState"/> word saying why there are none (E2.S2, S1.5 rows 5-7). Never throws for git.
+    /// </summary>
+    /// <remarks>
+    /// <para>The ancestry question comes FIRST: a rebased or force-pushed branch no longer contains the predecessor, and
+    /// a head-to-head diff would then count the rewrite as fixer work. What this layer cannot see is a base that moved
+    /// by a MERGE — the predecessor stays an ancestor and the base's own lines arrive in the range — which the caller
+    /// refuses from the two bases before it ever asks git (S1.5 rows 3-4).</para>
+    /// <para><paramref name="exclusions"/> are the round's own, absent meaning <see cref="DiffExclusions.Default"/>.</para>
+    /// </remarks>
+    public async Task<DeltaNumstats> DeltaAsync(
+        string repoPath,
+        string from,
+        string sha,
+        IReadOnlyList<string>? exclusions,
+        CancellationToken ct,
+        TimeSpan? timeout = null)
+    {
+        if (!IsCommit(from) || !IsCommit(sha))
+        {
+            return DeltaNumstats.Unavailable(ScopeState.GitFailed);
+        }
+
+        return from.Equals(sha, StringComparison.OrdinalIgnoreCase)
+            ? DeltaNumstats.Measured([], [])
+            : await MeasureDeltaAsync(repoPath, from, sha, Excludes(exclusions), timeout, ct);
+    }
+
+    private async Task<DeltaNumstats> MeasureDeltaAsync(
+        string repoPath, string from, string sha, string[] excludes, TimeSpan? timeout, CancellationToken ct)
+    {
+        var ancestry = AncestryState(await RunSizeGit(repoPath, ["merge-base", "--is-ancestor", from, sha], timeout, ct));
+        if (ancestry.Length > 0)
+        {
+            return DeltaNumstats.Unavailable(ancestry);
+        }
+
+        var range = $"{from}..{sha}";
+        var filtered = await CountedAsync(repoPath, range, excludes, timeout, ct);
+        var unfiltered = await CountedAsync(repoPath, range, [], timeout, ct);
+
+        return filtered.Failed || unfiltered.Failed
+            ? DeltaNumstats.Unavailable(ScopeState.GitFailed)
+            : DeltaNumstats.Measured(filtered.Changes, unfiltered.Changes);
+    }
+
+    /// <summary>
+    /// The state word of <c>merge-base --is-ancestor</c>, or empty when it IS an ancestor: exit 0 is one, exit 1 is not,
+    /// anything else — and a call that ran out its deadline, whose killed process may read as any code — is a failed call.
+    /// </summary>
+    private static string AncestryState(ProcessResult result) =>
+        result.TimedOut ? ScopeState.GitFailed
+            : result.ExitCode switch
+            {
+                0 => string.Empty,
+                1 => ScopeState.NotAnAncestor,
+                _ => ScopeState.GitFailed,
+            };
+
+    /// <summary>One numstat of a range; <paramref name="excludes"/> empty means no pathspec at all.</summary>
+    private async Task<CountedNumstat> CountedAsync(
+        string repoPath, string range, string[] excludes, TimeSpan? timeout, CancellationToken ct)
+    {
+        string[] pathspec = excludes.Length == 0 ? [] : ["--", ".", .. excludes];
+        var result = await RunSizeGit(repoPath, ["diff", "--numstat", "-z", range, .. pathspec], timeout, ct);
+
+        return Succeeded(result) ? ReadOrFail(result.StdOut) : CountedNumstat.GitFailed;
+    }
+
+    /// <summary>A numstat that cut off mid-record is a failed one — never a shorter change presented as the whole.</summary>
+    private static CountedNumstat ReadOrFail(string numstat)
+    {
+        try
+        {
+            return new CountedNumstat([.. NumstatReader.ReadCounted(numstat)]);
+        }
+        catch (ContextException)
+        {
+            return CountedNumstat.GitFailed;
+        }
+    }
+
+    private static bool Succeeded(ProcessResult result) => result is { ExitCode: 0, TimedOut: false, Truncated: false };
+
+    /// <summary>One git call of a size, under <see cref="SizeGitTimeout"/> (or the caller's), whose round token still propagates.</summary>
+    private async Task<ProcessResult> RunSizeGit(string repoPath, string[] args, TimeSpan? timeout, CancellationToken ct)
+    {
+        var result = await launcher.RunAsync(
+            Bounded(new ProcessRequest("git", args, repoPath), timeout ?? SizeGitTimeout), ct);
+        ct.ThrowIfCancellationRequested();
+
+        return result;
+    }
+
+    private static string[] Excludes(IReadOnlyList<string>? exclusions) =>
+        [.. (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}")];
 
     /// <summary>
     /// What is uncommitted in the checkout at <paramref name="repoPath"/> — but only when that
