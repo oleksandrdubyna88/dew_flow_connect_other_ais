@@ -27,7 +27,7 @@ public sealed class VibeLedgerNamesTheVersionTests : IDisposable
         var work = Directory.CreateDirectory(_dir.At("work")).FullName;
         var vibe = new PlayedVibe(new ProcessLauncher(), """{"findings": []}""");
         var invocation = new VibeRuntime("vibe", HostKind.Windows).Build(RoleCatalog.ArchitectureRole, "review this", work, _dir.At("s.json"), _dir,
-            new ReviewerSettings("vibe") { ExecutablePath = PlayedVibe.Exe, Model = "glm-5-3", OwnedScratch = _dir.At("round"), Timeout = TimeSpan.FromSeconds(60) });
+            new ReviewerSettings("vibe") { ExecutablePath = PlayedVibe.Exe, Model = "glm-5-3", OwnedScratch = Directory.CreateDirectory(_dir.At("round")).FullName, Timeout = TimeSpan.FromSeconds(60) });
 
         var outcome = await new ReviewerExecutor(vibe).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
         var ledger = new UsageLedger(_dir.At("data"));

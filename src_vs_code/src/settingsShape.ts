@@ -134,6 +134,13 @@ export interface CoaiSettings {
   /** Where collected pairs would be sent. Asked for in a dialog; stored here like any other. */
   readonly bugzServer: string;
 
+  /**
+   * The folder coai keeps Mistral Vibe's homes under (`coai-vh`, `coai-vibe`) — `COAI_CONSULTANT_HOMES` on the wire; empty is the
+   * server's own default, the local application data. Short, local, made by the person, private to them (D8 of
+   * `todo/PLAN_vibe_live_round_fixes.md`).
+   */
+  readonly vibeHomesDirectory: string;
+
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
   readonly maxPerProvider: number;
@@ -263,6 +270,7 @@ export const DEFAULTS: CoaiSettings = {
     DocumentReview: true, DocumentSummary: true, FeatureReview: true },
   bugzModel: '',
   bugzServer: '',
+  vibeHomesDirectory: '',
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
@@ -319,6 +327,8 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // machine can face different companies, and the local engine that may read their findings — and
   // the server those pairs would be sent to — are not the same question on both.
   'bugzModel', 'bugzServer',
+  // The Vibe homes folder is a path on THIS side (a Windows folder is not a WSL one), like the question consultant's roots.
+  'vibeHomesDirectory',
   // Which chat presets this side's catalog moved (E4.6a) — beside its `vendors`, which hold the rows they became.
   'chatPresetsMoved',
   // Which chat model this side opens on, and its model name (D8: chat models are per side) — they name this side's rows.
@@ -414,6 +424,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     credsKey: asString(read('credsKey')),
     bugzModel: asString(read('bugzModel')),
     bugzServer: asString(read('bugzServer')),
+    vibeHomesDirectory: asString(read('vibeHomesDirectory')).trim(),
 
     escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
@@ -612,6 +623,11 @@ export function envBlock(
   // is a setting that looks wired and is not; `settingsReach.test.ts` says why its walk skips `bugzModel`.
   if (settings.bugzServer) {
     env['COAI_BUGZ_SERVER'] = settings.bugzServer;
+  }
+  // Where Vibe's homes live; empty writes nothing, and the server uses the local application data. The server judges the value
+  // (a full local path that exists, made private by coai) — the environment still wins over this key.
+  if (settings.vibeHomesDirectory) {
+    env['COAI_CONSULTANT_HOMES'] = settings.vibeHomesDirectory;
   }
   return env;
 }

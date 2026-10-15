@@ -32,6 +32,7 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   dataDirectory: 'a path on this machine',
   dataSide: 'which side of this machine this window is',
   alsoWatchDataDirectories: 'paths on this machine',
+  vibeHomesDirectory: 'a path on this machine',
   // The question consultant's disk roots are folders of the machine that wrote them (research/PLAN_paths_per_side.md E1.6,
   // decided with the operator, D4). An older export that carries them is refused by name; the importer keeps its own.
   qconsultRoots: 'paths on this machine',

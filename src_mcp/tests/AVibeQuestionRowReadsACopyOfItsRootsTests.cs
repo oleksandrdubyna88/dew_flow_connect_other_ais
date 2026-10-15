@@ -193,7 +193,10 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
         var vibe = new PlayedVibe(_launcher, string.Empty)
         {
-            Outcome = "turn_limit", TurnExit = 3, TurnStdErr = "Stopped: turn_limit\r\n", Usage = (84186, 1395),
+            Outcome = "turn_limit",
+            TurnExit = 3,
+            TurnStdErr = "Stopped: turn_limit\r\n",
+            Usage = (84186, 1395),
         };
 
         var reply = await AskAsync(Service(vibe, Path.Combine(Repo, "src")));

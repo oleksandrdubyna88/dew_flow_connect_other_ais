@@ -563,7 +563,7 @@ export function consultantSection(state: PanelState, callerRows: string): string
     + vaultKeySplit(state)
     // Each caller's pick carries its own health block (`consultantPicks.ts`); the body draws the switch, the caps and
     // the prompt around the picks.
-    + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt }, callerRows)
+    + consultantBody(state.settings.consult, { consultPrompt: state.consultPrompt, vibeHomes: state.settings.vibeHomesDirectory }, callerRows)
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);

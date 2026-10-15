@@ -17,6 +17,8 @@ import { help } from './panelControls';
 export interface ConsultantViewState {
   /** The prompt override as it is ON DISK, or empty for "the one this build ships with". */
   readonly consultPrompt?: string | undefined;
+  /** `coai.vibeHomesDirectory` as saved — the folder Mistral Vibe's homes live under; empty is the server's default. */
+  readonly vibeHomes?: string | undefined;
 }
 
 /**
@@ -46,8 +48,21 @@ ${callerRows}
   <label for="consultIdleMinutes">${help('consultIdleMinutes')}Close an idle consultation after, minutes</label>
   <input type="number" id="consultIdleMinutes" min="1" max="240" data-setting="consultIdleMinutes" value="${consult.idleMinutes}">
 </div>
+${vibeHomesField(state.vibeHomes ?? '')}
 ${promptField(state.consultPrompt ?? '')}
 <div class="hint">A consultation leaves a thread in the vendor's own store holding this repository's uncommitted change — that is what makes a follow-up possible, and it is not ours to delete.</div>`;
+}
+
+/**
+ * Where Mistral Vibe's homes live — `COAI_CONSULTANT_HOMES` on the wire. A plain text setting: the server judges it (a full local
+ * path that exists, which coai then makes private) and says so in the refusal a launch carries, so the box asks nothing itself.
+ */
+function vibeHomesField(value: string): string {
+  return `<div class="field">
+  <label for="vibeHomesDirectory">${help('vibeHomesDirectory')}Vibe homes folder</label>
+  <input type="text" id="vibeHomesDirectory" data-setting="vibeHomesDirectory" value="${escapeHtml(value)}" placeholder="default: your local application data" spellcheck="false">
+  <div class="hint">Short, local, and made by you: coai keeps Mistral Vibe's homes here — session transcripts of the code under review and its copy of your repository — in folders only you can open.</div>
+</div>`;
 }
 
 /**
