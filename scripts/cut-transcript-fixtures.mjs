@@ -6,10 +6,13 @@
 //
 //   node scripts/cut-transcript-fixtures.mjs --session-file <dir>/<sessionId>.jsonl --out <case-dir> --salt <text>
 //        --repo <real-prefix>=<fixture-root> [--repo …] [--other-root <fixture-root>] [--from <utc>] [--to <utc>]
-//        [--drop-agent-file <agentId>] [--drop-meta <agentId>] [--clip-agents] [--include-agent <agentId>] [--allowlist <file>] [--out-anywhere]
+//        [--drop-agent-file <agentId>] [--drop-meta <agentId>] [--clip-agents] [--include-agent <agentId>] [--case-spec <file>] [--allowlist <file>] [--out-anywhere]
 //
 // --clip-agents keeps only the window's lines of every agent file (default: whole files); --include-agent forces an agent and its chain of
 // parents into the cut. Either one also keeps, outside the window, the single line that launched each wanted agent, so metas still join.
+// --case-spec <file> is a REAL case spec ({ rounds: { callerSessionId, gateSessions }, registry?: { pid, sessionId, cwd, version } }); its
+// rounds.json and sessions/<pid>.json are written through the same sanitiser (ids, paths, synthetic clock). Without --session-file the
+// case has no transcript (a caller that ran without persistence) and --case-spec is required. The spec holds real values: keep it OUTSIDE the repository.
 // Reads the named main file and the agent-<hex>.jsonl|.meta.json files of its own subagents/ folder — nothing else, never
 // ~/.claude/sessions, never tool-results/. Writes <out>/projects/<slug>/<sessionId>.jsonl and the subagent files beside it.
 // Refuses (exit 65) an --out outside src_mcp/tests/fixtures/caller-transcripts/ unless --out-anywhere (tests and scratch cuts),
@@ -18,11 +21,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Refusal, assertOutputAllowed, cutSession, loadAllowlist, parseRepoMapping } from './lib/transcript-sanitise.mjs';
+import { Refusal, assertOutputAllowed, cutCaseWithoutTranscript, cutSession, loadAllowlist, parseRepoMapping } from './lib/transcript-sanitise.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = join(repoRoot, 'src_mcp', 'tests', 'fixtures', 'caller-transcripts');
-const VALUE_FLAGS = new Set(['--session-file', '--out', '--salt', '--repo', '--other-root', '--from', '--to', '--drop-agent-file', '--drop-meta', '--include-agent', '--allowlist']);
+const VALUE_FLAGS = new Set(['--session-file', '--out', '--salt', '--repo', '--other-root', '--from', '--to', '--drop-agent-file', '--drop-meta', '--include-agent', '--case-spec', '--allowlist']);
 const camel = (flag) => flag.slice(2).replace(/-(\w)/g, (_, c) => c.toUpperCase());
 
 function assertUtcInstant(name, text) {
@@ -43,7 +46,8 @@ function parseArgs(argv) {
     else if (flag === '--include-agent') opts.includeAgents.push(value);
     else opts[camel(flag)] = value;
   }
-  for (const required of ['--session-file', '--out', '--salt']) if (!opts[camel(required)]) throw new Error(`${required} is required`);
+  for (const required of ['--out', '--salt']) if (!opts[camel(required)]) throw new Error(`${required} is required`);
+  if (!opts.sessionFile && !opts.caseSpec) throw new Error('--session-file or --case-spec is required');
   assertUtcInstant('--from', opts.from);
   assertUtcInstant('--to', opts.to);
   return opts;
@@ -56,9 +60,12 @@ function main() {
     const out = resolve(opts.out);
     if (!opts.outAnywhere) assertOutputAllowed(out, fixtureRoot);
     const allowlist = loadAllowlist(JSON.parse(readFileSync(opts.allowlist ?? join(fixtureRoot, 'allowlist.json'), 'utf8')));
-    const { unknownKeys, shapeFailures, lockedKeys, zeroedNumbers, ...counts } = cutSession({
-      sessionFile: resolve(opts.sessionFile), outDir: out, allowlist, salt: opts.salt, repos: opts.repos, otherRoot: opts.otherRoot,
-      from: opts.from, to: opts.to, dropAgentFiles: opts.dropAgentFiles, dropMetas: opts.dropMetas, clipAgents: opts.clipAgents, includeAgents: opts.includeAgents });
+    const caseSpec = opts.caseSpec ? JSON.parse(readFileSync(opts.caseSpec, 'utf8')) : undefined;
+    const common = { outDir: out, allowlist, salt: opts.salt, repos: opts.repos, otherRoot: opts.otherRoot, caseSpec };
+    const { unknownKeys, shapeFailures, lockedKeys, zeroedNumbers, ...counts } = opts.sessionFile
+      ? cutSession({ ...common, sessionFile: resolve(opts.sessionFile), from: opts.from, to: opts.to, dropAgentFiles: opts.dropAgentFiles,
+        dropMetas: opts.dropMetas, clipAgents: opts.clipAgents, includeAgents: opts.includeAgents })
+      : cutCaseWithoutTranscript(common);
     process.stdout.write(`${JSON.stringify(counts)}\n`);
     process.stderr.write(`${JSON.stringify({ unknownKeys, shapeFailures, lockedKeys, zeroedNumbers })}\n`);
     return 0;

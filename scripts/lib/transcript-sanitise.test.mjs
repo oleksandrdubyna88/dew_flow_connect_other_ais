@@ -157,6 +157,7 @@ test('everyStringOffTheAllowlistBecomesTheSentinel', () => {
 
 test('anAllowlistedFieldKeepsItsShapeAndOnlyItsShape', () => {
   const s = sanitiser();
+  s.prepare([{ message: { usage: { input_tokens: 5 } } }]);
   const out = s.sanitiseValue({ message: { model: 'a sentence about my secret project', role: 'assistant', id: 'not-a-message-id' }, version: 'banana',
     timestamp: 'yesterday', effort: 'high', agentId: 'ZZZZ', isSidechain: 'true' });
   assert.equal(out.message.model, SENTINEL);
@@ -170,11 +171,65 @@ test('anAllowlistedFieldKeepsItsShapeAndOnlyItsShape', () => {
   assert.equal(s.sanitiseValue({ message: { model: 'claude-opus-4-1', usage: { input_tokens: 5 } } }).message.model, 'claude-opus-4-1');
 });
 
+test('aModelIdOrVersionOutsideTheExactListsIsTheSentinelWhateverItsPrefixOrSuffix', () => {
+  const s = sanitiser();
+  const out = s.sanitiseValue({ message: { model: 'claude-private-client-canary' }, version: '2.1.0+private-client-canary', requestedModel: 'opus-private-canary',
+    model: 'sonnet[private]', agentType: 'general-purpose' });
+  assert.equal(out.message.model, SENTINEL);
+  assert.equal(out.version, SENTINEL);
+  assert.equal(out.requestedModel, SENTINEL);
+  assert.equal(out.model, SENTINEL);
+  assert.equal(s.sanitiseValue({ version: '2.1.289', requestedModel: 'opus[1m]', model: 'fable' }).version, '2.1.289');
+  assert.equal(s.sanitiseValue({ requestedModel: 'claude-fable-5-1' }).requestedModel, 'claude-fable-5-1');
+});
+
+test('everyInstantIsRedrawnOnASyntheticClockByRankAndOrderTiesAndWindowsSurvive', () => {
+  const s = sanitiser();
+  const real = [T(0), T(1), T(1), T(7), T(55)];
+  s.prepare(real.map((timestamp) => ({ timestamp })), [T(7, 30)]);
+  const mapped = real.map((timestamp) => s.sanitiseValue({ timestamp }).timestamp);
+  assert.deepEqual(mapped, ['2000-01-01T00:00:00.000Z', '2000-01-01T00:00:01.000Z', '2000-01-01T00:00:01.000Z', '2000-01-01T00:00:02.000Z', '2000-01-01T00:00:04.000Z'],
+    'rank, not offset: ties stay ties, the 54-minute gap is one step, and the extra instant took rank 3');
+  assert.ok(!mapped.some((m) => m.startsWith('2026')), 'no real date survives');
+  assert.equal(s.sanitiseRounds({ callerSessionId: SESSION, gateSessions: [{ id: SESSION, repoPath: 'D:/rsd/_wt/x', openedUtc: T(0),
+    rounds: [{ number: 1, startedUtc: T(7, 30), completedUtc: T(55), status: 'done', headSha: 'abc' }] }] }).gateSessions[0].rounds[0].startedUtc, '2000-01-01T00:00:03.000Z');
+});
+
+test('anInstantNobodyGavePrepareIsAnErrorNotAPassThrough', () => {
+  assert.throws(() => sanitiser().sanitiseValue({ timestamp: T(3) }), /prepare/);
+  assert.throws(() => sanitiser().sanitiseValue({ message: { usage: { output_tokens: 8 } } }), /prepare/);
+});
+
+test('usageCountsAreRedrawnAsRanksKeepingEqualityOrderAndZero', () => {
+  const s = sanitiser();
+  const line = (output, cacheRead) => ({ message: { usage: { input_tokens: 4, output_tokens: output, cache_read_input_tokens: cacheRead } } });
+  s.prepare([line(7, 0), line(7, 0), line(9100, 0), line(250000, 3)]);
+  const usage = (l) => s.sanitiseValue(l).message.usage;
+  assert.equal(usage(line(7, 0)).output_tokens, usage(line(7, 0)).output_tokens, 'a message\'s lines keep equal usage equal');
+  assert.ok(usage(line(7, 0)).output_tokens < usage(line(9100, 0)).output_tokens && usage(line(9100, 0)).output_tokens < usage(line(250000, 3)).output_tokens, 'growth survives');
+  assert.deepEqual([usage(line(7, 0)).output_tokens, usage(line(9100, 0)).output_tokens, usage(line(250000, 3)).output_tokens], [1, 2, 3], 'no real magnitude survives');
+  assert.equal(usage(line(7, 0)).cache_read_input_tokens, 0, 'zero stays zero');
+  assert.equal(usage(line(250000, 3)).cache_read_input_tokens, 1);
+});
+
+test('aFractionalOrNegativeNumberAtAnIntPathIsZero', () => {
+  const s = sanitiser();
+  s.prepare([{ message: { usage: { input_tokens: 3 } } }]);
+  const usage = (v) => s.sanitiseValue({ message: { usage: { input_tokens: v, output_tokens: v } }, spawnDepth: v }).message.usage;
+  assert.deepEqual(usage(2.5), { input_tokens: 0, output_tokens: 0 });
+  assert.deepEqual(usage(-4), { input_tokens: 0, output_tokens: 0 });
+  assert.equal(s.sanitiseValue({ spawnDepth: 1.5 }).spawnDepth, 0);
+  assert.equal(s.sanitiseValue({ spawnDepth: 2 }).spawnDepth, 2, 'a depth is structural, kept');
+});
+
 test('aNumberIsKeptOnlyAtAnIntPathAndEveryOtherNumberIsZero', () => {
-  const out = sanitiser().sanitiseValue({ parentUuid: null, isSidechain: true, durationMs: 12, ratio: 0.5, nope: false, note: '', other: ['x', 3, { a: 'b' }],
-    message: { usage: { input_tokens: 5, service_tier: 'MARKER_TIER', server_tool_use: { n: 9 } } }, spawnDepth: 2, effort: 3 });
+  const s = sanitiser();
+  const input = { parentUuid: null, isSidechain: true, durationMs: 12, ratio: 0.5, nope: false, note: '', other: ['x', 3, { a: 'b' }],
+    message: { usage: { input_tokens: 5, service_tier: 'MARKER_TIER', server_tool_use: { n: 9 } } }, spawnDepth: 2, effort: 3 };
+  s.prepare([input]);
+  const out = s.sanitiseValue(input);
   assert.deepEqual(out, { parentUuid: null, isSidechain: true, k1: 0, k2: 0, k3: false, k4: SENTINEL, k5: [SENTINEL, 0, { k1: SENTINEL }],
-    message: { usage: { input_tokens: 5, k1: SENTINEL, k2: { k1: 0 } } }, spawnDepth: 2, effort: 0 });
+    message: { usage: { input_tokens: 1, k1: SENTINEL, k2: { k1: 0 } } }, spawnDepth: 2, effort: 0 });
 });
 
 test('structuralContainersKeepTheirNamesAndIsErrorIsKeptAsABool', () => {
@@ -375,7 +430,9 @@ test('aResumedAgentKeepsItsLaterLines', () => {
   const withLate = readAll(outDir).filter((f) => f.file.includes('subagents') && f.file.endsWith('.jsonl'))
     .map((f) => jsonLines(f.text)).find((ls) => ls.length === 3);
   assert.ok(withLate, 'the agent launched in the window keeps the line it wrote at minute 55');
-  assert.ok(withLate.some((l) => l.timestamp === T(55)));
+  const stamps = withLate.map((l) => l.timestamp);
+  assert.equal(stamps.at(-1), [...stamps].sort().at(-1), 'the resumed line is the last, on the synthetic clock');
+  assert.ok(stamps.every((t) => t.startsWith('2000-01-01')));
 });
 
 test('anAgentWhoseFirstLineIsInTheWindowIsKeptEvenWhenItsLaunchIsNot', () => {
@@ -403,10 +460,10 @@ test('aDroppedAgentFileLeavesItsMetaAndADroppedMetaLeavesItsFile', () => {
 test('clipAgentsKeepsOnlyTheWindowsLinesOfEveryAgentFileAndTheDefaultKeepsThemWhole', () => {
   const src = writeSession(scratch('in'), { lateAgentLine: true });
   const linesOf = (outDir) => readAll(outDir).filter((f) => f.file.includes('subagents') && f.file.endsWith('.jsonl')).map((f) => jsonLines(f.text));
-  assert.ok(linesOf(cut(src, { from: T(0), to: T(10) }).outDir).some((ls) => ls.some((l) => l.timestamp === T(55))), 'whole by default');
+  assert.ok(linesOf(cut(src, { from: T(0), to: T(10) }).outDir).some((ls) => ls.length === 3), 'whole by default: the minute-55 line is kept');
   const clipped = linesOf(cut(src, { from: T(0), to: T(10), clipAgents: true }).outDir);
   assert.equal(clipped.length, 2);
-  assert.ok(clipped.every((ls) => ls.length === 2 && ls.every((l) => l.timestamp !== T(55))), 'the minute-55 line is outside the window');
+  assert.ok(clipped.every((ls) => ls.length === 2), 'the minute-55 line is outside the window');
 });
 
 test('aClippedCutKeepsTheLaunchLineOfAnAgentWhoseCallIsOutsideTheWindow', () => {
@@ -477,3 +534,44 @@ test('theCliRefusesAnOutputDirectoryThatEscapesThroughDotDot', () => {
   const r = runCli(['--session-file', src, '--out', sneaky, '--salt', 's']);
   assert.equal(r.status, 65, r.stderr);
 });
+
+// ---- case spec: rounds.json and the registry entry go through the same sanitiser -----------------------------------------
+const CASE_SPEC = () => ({
+  rounds: { callerSessionId: SESSION, gateSessions: [{ id: '99999999-2222-4333-8444-555555555555', repoPath: 'D:/rsd/_wt/x', openedUtc: T(0, 5),
+    rounds: [{ number: 1, startedUtc: T(2, 30), completedUtc: T(40), status: 'done', headSha: 'f'.repeat(40) }] }] },
+  registry: { pid: 4242, sessionId: SESSION, cwd: 'D:/rsd/_wt/x', version: '2.1.289' }
+});
+
+test('aCaseSpecWritesRoundsAndRegistryOnTheSameClockAndUnderTheSameIdMap', () => {
+  const src = writeSession(scratch('in'));
+  const { outDir } = cut(src, { caseSpec: CASE_SPEC() });
+  const files = readAll(outDir);
+  const rounds = JSON.parse(files.find((f) => f.file === 'rounds.json').text);
+  const registry = JSON.parse(files.find((f) => f.file === 'sessions/4242.json').text);
+  const mainName = /^projects\/[^/]+\/([^/]+)\.jsonl$/.exec(files.find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file)).file)[1];
+  assert.equal(rounds.callerSessionId, mainName, 'the caller id is the transcript\'s mapped id');
+  assert.equal(registry.sessionId, mainName);
+  assert.equal(registry.cwd, 'D:/fixture/repo-a');
+  const main = jsonLines(files.find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file)).text);
+  const stamps = main.map((l) => l.timestamp).filter((t) => t !== undefined && t !== SENTINEL);
+  const round = rounds.gateSessions[0].rounds[0];
+  assert.ok(round.startedUtc < round.completedUtc && rounds.gateSessions[0].openedUtc < round.startedUtc);
+  assert.ok([round.startedUtc, round.completedUtc, rounds.gateSessions[0].openedUtc, ...stamps].every((t) => t.startsWith('2000-01-01T00:')), 'one synthetic clock for both');
+  assert.ok(stamps.some((t) => t > round.startedUtc) && stamps.some((t) => t < round.startedUtc), 'the round still sits between transcript lines');
+  assert.ok(!files.some((f) => /2026-10|ffffffff/.test(f.text)), 'no real instant and no real sha survives');
+  assert.match(round.headSha, /^[0-9a-f]{40}$/);
+});
+
+test('aCaseWithoutATranscriptIsJustItsRoundsAndRegistryThroughTheSanitiser', () => {
+  const out = scratch('nt');
+  const cli = spawnSync(process.execPath, [CLI, '--case-spec', writeSpec(CASE_SPEC()), '--out', out, '--salt', 's', '--repo', 'D:/rsd/_wt/x=D:/fixture/repo-a', '--out-anywhere'], { encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.deepEqual(readAll(out).map((f) => f.file), ['rounds.json', 'sessions/4242.json']);
+  assert.ok(!readAll(out).some((f) => f.text.includes('2026')));
+});
+
+function writeSpec(spec) {
+  const file = join(scratch('spec'), 'spec.json');
+  writeFileSync(file, JSON.stringify(spec));
+  return file;
+}

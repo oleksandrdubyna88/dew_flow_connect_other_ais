@@ -18,6 +18,12 @@
 //   - tool names: only the closed builtin list in allowlist.json survives; mcp__<server>__<tool> becomes mcp__s<n>__t<n>; any
 //     other name is the sentinel. Agent types: a builtin survives, any other becomes custom-<n>.
 //
+//   - TIME and MAGNITUDE are re-drawn, never kept: every instant becomes a position on a synthetic clock (2000-01-01T00:00:00Z plus
+//     one second per RANK of the distinct real instants of the fixture), and every usage count becomes the rank of its value among
+//     the fixture's values at that path (0 stays 0). Order, ties, containment of a round in a window, equality of a message's
+//     usage across its lines and the last/max relation survive; the operator's activity times, the gaps between them and the real
+//     magnitudes do not (one constant offset would have kept the whole fingerprint). Call prepare() before sanitiseValue().
+//
 // Deterministic by construction: no clock, no randomness, no directory-order dependence (agent files are sorted).
 // This file reads only the files cutSession is handed and the agent-<hex>.jsonl|.meta.json files beside that session; it
 // never lists ~/.claude/sessions and never opens tool-results/.
@@ -34,6 +40,12 @@ const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,40}$/;
 const MCP_TOOL = /^mcp__(.+?)__(.+)$/;
 const SHORT_EXTENSION = /^\.[a-z0-9]{1,5}$/i;
 const MAX_REPORTED_KEYS = 200;
+export const SYNTHETIC_EPOCH_MS = Date.UTC(2000, 0, 1);
+const SYNTHETIC_STEP_MS = 1000;
+/** An int path whose value is a structural depth, not a measured size: kept as it is (1, 2, 3). */
+const KEPT_INTS = new Set(['spawnDepth']);
+const ROUND_STATUSES = new Set(['done', 'running', 'failed', 'cancelled']);
+const isCount = (value) => Number.isInteger(value) && value >= 0;
 
 // ---- the allowlist ---------------------------------------------------------------------------------------------------
 /**
@@ -61,13 +73,13 @@ export function loadAllowlist(json) {
 
 function loadVocabulary(name, { builtin, rewritten }) {
   if (!Array.isArray(builtin) || builtin.length === 0) throw new Error(`allowlist: vocabulary ${name} has no builtin list`);
-  return { builtin: new Set(builtin), rewritten: new RegExp(rewritten) };
+  return { builtin: new Set(builtin), rewritten: typeof rewritten === 'string' ? new RegExp(rewritten) : undefined };
 }
 
 function shapeTest(shape, shapes, vocabularies, path) {
   if (shape === 'int' || shape === 'bool') return () => false; // a STRING is never an int or a bool
   if (shape === 'fixture-path') return () => true; // checked by the rewrite, which cannot produce anything else
-  if (vocabularies.has(shape)) return (s) => vocabularies.get(shape).builtin.has(s) || vocabularies.get(shape).rewritten.test(s);
+  if (vocabularies.has(shape)) return (s) => vocabularies.get(shape).builtin.has(s) || (vocabularies.get(shape).rewritten?.test(s) ?? false);
   if (shape.startsWith('enum:')) {
     const options = new Set(shape.slice(5).split('|').filter(Boolean));
     if (options.size === 0) throw new Error(`allowlist: empty enum for ${path}`);
@@ -91,6 +103,10 @@ export function createSanitiser({ allowlist, salt, repos = [], otherRoot = '/fix
   const mcpTools = new Map();
   const customAgents = new Map();
   let pathCounter = 0;
+  const instantsSeen = new Set();
+  const intsSeen = new Map();
+  const instantRank = new Map();
+  const intRank = new Map();
   const unknownKeys = new Map();
   const shapeFailures = new Map();
   let lockedKeys = 0;
@@ -169,7 +185,9 @@ export function createSanitiser({ allowlist, salt, repos = [], otherRoot = '/fix
 
   /** The vocabulary rewrite: a closed builtin list survives, a private name never does. undefined = not representable. */
   function rewriteVocabulary(name, text) {
-    if (allowlist.vocabularies.get(name).builtin.has(text)) return text;
+    const vocabulary = allowlist.vocabularies.get(name);
+    if (vocabulary.builtin.has(text)) return text;
+    if (vocabulary.rewritten === undefined) return undefined; // an exact list: anything else is the sentinel
     if (name === 'tool-name') return rewriteMcpTool(text);
     return text === '' ? undefined : numbered(customAgents, text, (n) => `custom-${n}`);
   }
@@ -186,15 +204,63 @@ export function createSanitiser({ allowlist, salt, repos = [], otherRoot = '/fix
     const field = locked ? undefined : allowlist.fields.get(path);
     if (!field) return allowlist.sentinel;
     if (field.shape === 'fixture-path') return rewritePath(text);
+    if (field.shape === 'iso-utc') return instant(path, text);
     const value = field.vocabulary ? rewriteVocabulary(field.shape, text) : (field.accepts(text) ? text : undefined);
     if (value === undefined) { bump(shapeFailures, path); return allowlist.sentinel; }
     return ID_SHAPES.has(field.shape) ? mapId(value) : value;
   }
 
+  /** A real instant -> its place on the synthetic clock; the sentinel when it is not an instant at all. */
+  function instant(path, text) {
+    const ms = Date.parse(text);
+    if (!allowlist.fields.get(path).accepts(text) || Number.isNaN(ms)) { bump(shapeFailures, path); return allowlist.sentinel; }
+    const synthetic = instantRank.get(ms);
+    if (synthetic === undefined) throw new Error(`an instant at ${path} was not given to prepare()`);
+    return new Date(synthetic).toISOString();
+  }
+
   function number(path, locked, value) {
-    if (!locked && allowlist.fields.get(path)?.shape === 'int') return value;
+    const isInt = !locked && allowlist.fields.get(path)?.shape === 'int';
+    if (isInt && KEPT_INTS.has(path) && isCount(value)) return value;
+    if (isInt && isCount(value)) {
+      if (value === 0) return 0;
+      const synthetic = intRank.get(path)?.get(value);
+      if (synthetic === undefined) throw new Error(`a count at ${path} was not given to prepare()`);
+      return synthetic;
+    }
     zeroedNumbers += value === 0 ? 0 : 1;
     return 0;
+  }
+
+  /** Pass one of two: the instants and counts a value will carry, in the same walk the sanitiser takes. */
+  function collect(node, path, locked) {
+    if (typeof node === 'string') {
+      const field = locked ? undefined : allowlist.fields.get(path);
+      const ms = Date.parse(node);
+      if (field?.shape === 'iso-utc' && field.accepts(node) && !Number.isNaN(ms)) instantsSeen.add(ms);
+    } else if (typeof node === 'number') {
+      if (!locked && allowlist.fields.get(path)?.shape === 'int' && isCount(node) && node > 0 && !KEPT_INTS.has(path)) {
+        if (!intsSeen.has(path)) intsSeen.set(path, new Set());
+        intsSeen.get(path).add(node);
+      }
+    } else if (Array.isArray(node)) node.forEach((e) => collect(e, `${path}[]`, locked));
+    else if (node !== null && typeof node === 'object') {
+      for (const [key, value] of Object.entries(node)) {
+        if (!locked && allowlist.keptKeys.has(key)) collect(value, path ? `${path}.${key}` : key, false);
+        else collect(value, '', true);
+      }
+    }
+  }
+
+  /**
+   * Fixes the synthetic clock and the count ranks for ONE fixture from everything it will contain: `values` are the lines and
+   * metas to be sanitised, `extraInstants` the ISO instants of its rounds file. Rank, not offset: ties stay ties, order stays order.
+   */
+  function prepare(values, extraInstants = []) {
+    values.forEach((v) => collect(v, '', false));
+    extraInstants.forEach((text) => { const ms = Date.parse(text); if (!Number.isNaN(ms)) instantsSeen.add(ms); });
+    [...instantsSeen].sort((a, b) => a - b).forEach((ms, rank) => instantRank.set(ms, SYNTHETIC_EPOCH_MS + rank * SYNTHETIC_STEP_MS));
+    for (const [path, set] of intsSeen) intRank.set(path, new Map([...set].sort((a, b) => a - b).map((v, i) => [v, i + 1])));
   }
 
   function renameKey(parentPath, key, locked) {
@@ -217,8 +283,34 @@ export function createSanitiser({ allowlist, salt, repos = [], otherRoot = '/fix
     return out;
   }
 
+  const instantOrSentinel = (text) => (typeof text === 'string' && instantRank.has(Date.parse(text))
+    ? new Date(instantRank.get(Date.parse(text))).toISOString() : allowlist.sentinel);
+
+  /** The rounds file of a case: ids through the one map, the path under a fixture root, instants on the synthetic clock, a hashed sha. */
+  function sanitiseRounds(rounds) {
+    return {
+      callerSessionId: mapId(rounds.callerSessionId),
+      gateSessions: rounds.gateSessions.map((g) => ({
+        id: mapId(g.id), repoPath: rewritePath(g.repoPath), openedUtc: instantOrSentinel(g.openedUtc),
+        rounds: g.rounds.map((r) => ({
+          number: isCount(r.number) ? r.number : 0, startedUtc: instantOrSentinel(r.startedUtc), completedUtc: instantOrSentinel(r.completedUtc),
+          status: ROUND_STATUSES.has(r.status) ? r.status : allowlist.sentinel,
+          headSha: createHash('sha256').update(`${salt}\0sha\0${r.headSha}`).digest('hex').slice(0, 40) }))
+      }))
+    };
+  }
+
+  /** The hand-built registry entry of a case, from real inputs: an id, a path, a version. */
+  function sanitiseRegistry(entry) {
+    return { sessionId: mapId(entry.sessionId), cwd: rewritePath(entry.cwd),
+      version: allowlist.fields.get('version').accepts(entry.version) ? entry.version : allowlist.sentinel };
+  }
+
   return {
     sanitiseValue: (value) => walk(value, '', false),
+    prepare,
+    sanitiseRounds,
+    sanitiseRegistry,
     mapId,
     rewritePath,
     stats: () => ({
@@ -333,8 +425,32 @@ function safeJson(text) {
  * Cuts one caller session (main file + its subagent files and metas) into outDir/projects/<slug>/…, sanitised.
  * Returns counts only — never a value from the input.
  */
+const roundInstants = (rounds) => rounds.gateSessions.flatMap((g) => [g.openedUtc, ...g.rounds.flatMap((r) => [r.startedUtc, r.completedUtc])]);
+
+/**
+ * Writes a case's side files from a REAL case spec ({ rounds: {callerSessionId, gateSessions}, registry?: {pid, sessionId, cwd, version} }):
+ * rounds.json, and sessions/<pid>.json when the spec has a registry entry. Everything goes through the sanitiser: ids, path, clock.
+ */
+function writeCaseFiles(sanitiser, outDir, caseSpec) {
+  writeFileSync(join(outDir, 'rounds.json'), `${JSON.stringify(sanitiser.sanitiseRounds(caseSpec.rounds), null, 2)}\n`);
+  if (caseSpec.registry === undefined) return;
+  if (!/^[0-9]{1,9}$/.test(String(caseSpec.registry.pid))) throw new Refusal('a registry pid is digits only');
+  mkdirSync(join(outDir, 'sessions'), { recursive: true });
+  writeFileSync(join(outDir, 'sessions', `${caseSpec.registry.pid}.json`), `${JSON.stringify(sanitiser.sanitiseRegistry(caseSpec.registry))}\n`);
+}
+
+/** A case with no transcript at all (a caller that ran without persistence): just its rounds file and registry entry. */
+export function cutCaseWithoutTranscript({ outDir, allowlist, salt, repos = [], otherRoot, caseSpec }) {
+  if (existsSync(outDir) && readdirSync(outDir).length > 0) throw new Refusal('the output directory already holds files');
+  const sanitiser = createSanitiser({ allowlist, salt, repos, otherRoot });
+  sanitiser.prepare([], roundInstants(caseSpec.rounds));
+  mkdirSync(outDir, { recursive: true });
+  writeCaseFiles(sanitiser, outDir, caseSpec);
+  return { mainLines: 0, agentFiles: 0, metas: 0, joinBreaks: 0, tornLines: 0, skippedFiles: 0, ...sanitiser.stats() };
+}
+
 export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], otherRoot, from, to, dropAgentFiles = [], dropMetas = [],
-  clipAgents = false, includeAgents = [] }) {
+  clipAgents = false, includeAgents = [], caseSpec }) {
   const sessionName = /^(.+)\.jsonl$/.exec(basename(sessionFile))?.[1] ?? '';
   if (!UUID.test(sessionName)) throw new Refusal('the session file must be named <sessionId>.jsonl');
   if (existsSync(outDir) && readdirSync(outDir).length > 0) throw new Refusal('the output directory already holds files');
@@ -360,6 +476,9 @@ export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], o
   for (const a of wanted) a.lines = keepAgentLines(a.lines, window, clipAgents, pinned);
 
   const keptMain = keepMainLines(main.parsed, window, pinned);
+  const writtenAgents = wanted.filter((w) => w.file && !dropAgentFiles.includes(w.id));
+  const writtenMetas = wanted.filter((w) => w.meta && !dropMetas.includes(w.id));
+  sanitiser.prepare([...keptMain, ...writtenAgents.flatMap((a) => a.lines), ...writtenMetas.map((a) => a.meta)], caseSpec ? roundInstants(caseSpec.rounds) : []);
   const sanitisedMain = keptMain.map((l) => sanitiser.sanitiseValue(l));
   const cwd = sanitisedMain.find((l) => typeof l.cwd === 'string')?.cwd;
   const sessionDir = join(outDir, 'projects', cwd === undefined ? 'fixture' : slugOf(cwd));
@@ -371,15 +490,16 @@ export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], o
   let agentFiles = 0;
   let metas = 0;
   let joinBreaks = 0;
-  for (const a of wanted.filter((w) => w.file && !dropAgentFiles.includes(w.id))) {
+  for (const a of writtenAgents) {
     writeFileSync(join(agentDir, `agent-${sanitiser.mapId(a.id)}.jsonl`), jsonl(a.lines.map((l) => sanitiser.sanitiseValue(l))));
     a.lines.flatMap(toolUseIdsOf).forEach((id) => keptToolUses.add(id));
     agentFiles++;
   }
-  for (const a of wanted.filter((w) => w.meta && !dropMetas.includes(w.id))) {
+  for (const a of writtenMetas) {
     writeFileSync(join(agentDir, `agent-${sanitiser.mapId(a.id)}.meta.json`), `${JSON.stringify(sanitiser.sanitiseValue(a.meta))}\n`);
     metas++;
     if (!keptToolUses.has(a.meta.toolUseId)) joinBreaks++;
   }
+  if (caseSpec) writeCaseFiles(sanitiser, outDir, caseSpec);
   return { mainLines: keptMain.length, agentFiles, metas, joinBreaks, tornLines: torn, skippedFiles: skipped, ...sanitiser.stats() };
 }
