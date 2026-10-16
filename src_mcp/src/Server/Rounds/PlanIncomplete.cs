@@ -11,9 +11,13 @@ namespace CoaiMcp.Server;
 /// them: the summary, the merge (which keeps only <see cref="ReviewerOutcome.Ok"/>), the decision, the notice, the
 /// live view's finish and the spent lenses. The progress callback has already shown the reviewer as finished — an
 /// accepted mismatch the parent records.</para>
-/// <para>Only an answer that is EXACTLY the one token finding is folded. The token beside other findings stays an
-/// answer, so a substantive review is never discarded over a title collision. <see cref="ReviewerOutcome.Unparseable"/>
-/// is reused: it already means "an answer the gate cannot use", and it keeps the usage.</para>
+/// <para><b>Any</b> finding titled with THIS round's token folds the reviewer, whatever else it answered. The token is a
+/// statement that the plan did not arrive whole; a reviewer that makes it did not review the plan, and "exactly one
+/// finding" let two identical tokens — or the token beside others — stay an answer and carry a round past the plan
+/// threshold with no review at all (the cadence consultation). Its other findings are set aside, and the reason says how
+/// many. A token for ANOTHER round's id is an ordinary finding. <see cref="ReviewerOutcome.Unparseable"/> is reused: it
+/// already means "an answer the gate cannot use", and it keeps what the reviewer cost — the usage AND everything the
+/// outcome inherited from earlier launches, turns and the launch control, which the round's totals and the ledger read.</para>
 /// </remarks>
 internal static class PlanIncomplete
 {
@@ -34,9 +38,32 @@ internal static class PlanIncomplete
         return [.. results.Select(r => (r.Invocation, Outcome: Folded(r.Outcome, title)))];
     }
 
-    private static ReviewerOutcome Folded(ReviewerOutcome outcome, string title) =>
-        outcome is ReviewerOutcome.Ok { Review.Findings: [var only] } ok
-        && string.Equals(only.Title.Trim(), title, StringComparison.OrdinalIgnoreCase)
-            ? new ReviewerOutcome.Unparseable(Reason, ok.Usage)
-            : outcome;
+    private static ReviewerOutcome Folded(ReviewerOutcome outcome, string title)
+    {
+        if (outcome is not ReviewerOutcome.Ok ok)
+        {
+            return outcome;
+        }
+
+        var tokens = ok.Review.Findings.Count(f => IsToken(f.Title, title));
+
+        return tokens == 0 ? outcome : Failed(ok, ok.Review.Findings.Count() - tokens);
+    }
+
+    private static bool IsToken(string findingTitle, string title) =>
+        string.Equals(findingTitle.Trim(), title, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The failure, carrying EVERYTHING the answer's accounting carried — a billed retry stays billed.</summary>
+    private static ReviewerOutcome Failed(ReviewerOutcome.Ok ok, int setAside) =>
+        new ReviewerOutcome.Unparseable(Reason + Aside(setAside), ok.Usage)
+        {
+            EarlierTurns = ok.EarlierTurns,
+            EarlierLaunches = ok.EarlierLaunches,
+            Launches = ok.Launches,
+            Warning = ok.Warning,
+            CliVersion = ok.CliVersion,
+        };
+
+    private static string Aside(int count) =>
+        count == 0 ? string.Empty : $"; {count} other finding{(count == 1 ? string.Empty : "s")} set aside";
 }

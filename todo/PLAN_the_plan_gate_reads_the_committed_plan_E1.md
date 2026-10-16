@@ -298,6 +298,15 @@ The most valuable part of a plan's record. Nothing here changes a contract C1–
 - **E1.S6.** A skipped PLAN round does not exist (only the feature stage records skips); "a skipped round has none" holds
   because the stamp is limited to `Stage.PlanReview` and the skip road never calls it. The record's `Commit` is the engine's
   own resolved commit for both origins.
+- **E1.S4, amended after the cadence consultation (2026-10-16).** Three changes to what § E1.S4 above says:
+  (1) `PlanIncomplete.Fold` folds when ANY finding's trimmed title equals THIS round's token (case-insensitive) — not only
+  "exactly one" finding; two identical tokens or the token beside real findings are a failed reviewer, and the reason says
+  how many other findings were set aside; a foreign id still does not fold. Owner's decision, fail closed: the old rule let
+  two copies stay an `Ok` and carry a round past the threshold with no review. (2) The folded `Unparseable` keeps the
+  outcome's whole accounting — `EarlierLaunches`, `EarlierTurns`, `Launches`, `Warning`, `CliVersion` — not only `Usage`, so
+  `TotalUsage` and the ledger still count a retried reviewer's earlier launches. (3) The prompt marks the start too: a
+  `BEGIN OF PLAN <id>` line right under the heading, a one-line reminder just before `END OF PLAN <id>`, and an instruction
+  that names both markers. The parent's D12 and § 5 carry the same amendment.
 - **E1.S2 (see its spec's report).** Refusal wording follows the spec's meaning, not every letter; `BlobProof` sentences
   name the blob and the reader prefixes `'{path}' at commit {sha12}:`; the "differs from the blob" sentence also names
   UTF-16/UTF-32 (found by review) and the reader checks `RepoPaths.WhyNotRelative` before any git call.
