@@ -56,9 +56,10 @@ internal sealed class ConsultationFailedTurns(
     /// ended on its own failure, or a clean exit with nothing in it, classified by <see cref="ConsultFailures.Classify"/>
     /// with its transcript kept. Writes nothing but that transcript.
     /// </summary>
-    public ConsultationFailed? Decided(ConsultationRecord record, TurnConsultant consultant, ConsultantTurnResult turned, IReadOnlyList<TreeChange> changes, ConsultFailure killedAs)
+    /// <param name="statusBefore">The record's status before this turn marked it <c>asking</c> (<see cref="TurnFailure.StatusBefore"/>).</param>
+    public ConsultationFailed? Decided(ConsultationRecord record, TurnConsultant consultant, ConsultantTurnResult turned, IReadOnlyList<TreeChange> changes, ConsultFailure killedAs, string statusBefore = "")
     {
-        var facts = Facts(record, consultant, turned.SurvivingHandle, consultant.ShareOf(record, turned.TurnUsage));
+        var facts = Facts(record, consultant, turned.SurvivingHandle, consultant.ShareOf(record, turned.TurnUsage)) with { StatusBefore = statusBefore };
         if (changes.Count > 0)
         {
             var breach = new ConsultFailure.TreeChanged(FilesystemSnapshot.Sentence(changes));

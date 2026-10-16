@@ -28,8 +28,23 @@ public static class ConsultationUsage
     /// <para><b>Money is subtracted only when this report names some.</b> An unpriced report stays unpriced —
     /// a null here is "the vendor said nothing about money", which a zero would turn into "it was free". The
     /// two flags are facts about THIS report and travel unchanged.</para>
+    /// <para><b>A counter that restarted is billed whole</b> (<see cref="IsAReset"/>; decision 12 of E5.4 in
+    /// <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): the floor alone read such a report as "0 this turn" — a flat row
+    /// under-billing the whole turn.</para>
     /// </remarks>
     public static Usage Less(Usage reported, ConsultationBilled billed) =>
+        IsAReset(reported, billed) ? reported : Subtracted(reported, billed);
+
+    /// <summary>
+    /// The vendor's counter RESTARTED: a CAPTURED report whose input or output total is below what the conversation was already
+    /// billed — a session that was not the one loaded, a vendor-side restart. Both totals are judged together, never per field:
+    /// a per-field mix would subtract one counter and restart the other. An uncaptured report is zeros that are not a counter,
+    /// and is never a reset (its turn is billed unknown, and the next captured share carries its spend).
+    /// </summary>
+    public static bool IsAReset(Usage reported, ConsultationBilled billed) =>
+        !reported.NotCaptured && (reported.TokensIn < billed.TokensIn || reported.TokensOut < billed.TokensOut);
+
+    private static Usage Subtracted(Usage reported, ConsultationBilled billed) =>
         reported with
         {
             TokensIn = Floor(reported.TokensIn - billed.TokensIn),

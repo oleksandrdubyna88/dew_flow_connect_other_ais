@@ -16,6 +16,15 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
 {
     /// <summary>The handle an ended record keeps: this turn's, else the one it already had — for whoever reads it later.</summary>
     public string KeptHandle => TurnsHandle.Length > 0 ? TurnsHandle : Record.Handle;
+
+    /// <summary>
+    /// The status the record had BEFORE this turn marked it <c>asking</c> — <c>open</c> or <c>interrupted</c> for a conversation that already
+    /// went on, empty (or <c>asking</c>, a record never written) for a new one. What a turn that launched NOTHING returns the record to.
+    /// </summary>
+    public string StatusBefore { get; init; } = string.Empty;
+
+    /// <summary>A conversation that had already gone on before this turn: a follow-up, not a first turn.</summary>
+    public bool WentOn => StatusBefore is ConsultationStatuses.Open or ConsultationStatuses.Interrupted;
 }
 
 /// <summary>A failed turn, decided: the record to write, the ledger's outcome word, and whether it can be resumed.</summary>
@@ -70,11 +79,21 @@ internal static class ConsultationFailing
     /// the vendor no longer holds loses its handle as well.
     /// </summary>
     /// <param name="ledgerOutcome">The executor's own description of the ending — the ledger's word since before epic 2.</param>
-    public static ConsultationFailed Terminal(TurnFailure turn, ConsultFailure failure, string ledgerOutcome) =>
-        failure is ConsultFailure.ConversationDropped
-            ? new(Ended(turn, failure, "the vendor no longer holds this conversation") with { Handle = string.Empty },
-                ledgerOutcome, failure, Resumable: false, turn.Vendor, turn.Share)
-            : Resolved(turn, failure, ledgerOutcome);
+    /// <remarks>
+    /// <b>A launch coai's own control refused</b> (<see cref="ConsultFailure.LaunchRefused"/>) on a conversation that had already gone on leaves the
+    /// record as it was (E5.3 decision c, S5.4.16 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): nothing was launched, so nothing about the
+    /// CONVERSATION went wrong — the rule <see cref="BeforeTheLaunch"/>'s caller applies, for the refusal that comes from inside the executor. The
+    /// record goes back to its status, the failure is recorded beside it, and <c>close_consult</c> can still end it (and take its home with it).
+    /// A first turn refused so is ended as before: there is no conversation to keep.
+    /// </remarks>
+    public static ConsultationFailed Terminal(TurnFailure turn, ConsultFailure failure, string ledgerOutcome) => failure switch
+    {
+        ConsultFailure.ConversationDropped => new(Ended(turn, failure, "the vendor no longer holds this conversation") with { Handle = string.Empty },
+            ledgerOutcome, failure, Resumable: false, turn.Vendor, turn.Share),
+        ConsultFailure.LaunchRefused when turn.WentOn => new(Classified(turn, failure) with { Status = turn.StatusBefore },
+            ledgerOutcome, failure, Resumable: false, turn.Vendor, turn.Share),
+        _ => Resolved(turn, failure, ledgerOutcome),
+    };
 
     /// <summary>
     /// The adapter refused before anything was launched — claude whose <c>--help</c> never answered. Nothing ran, so
