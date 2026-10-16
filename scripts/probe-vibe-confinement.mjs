@@ -118,7 +118,8 @@ function mcpToml(canary) {
 }
 
 let homes = 0;
-const signIns = [];
+/** One record per sign-in link made, in order; replaced (never pushed to) as homes are made. */
+let signIns = [];
 /**
  * A SHORT VIBE_HOME inside <scratch>. `copy` copies config.toml from the real home (never moves, never writes it). On Linux
  * `signIn` (the default) gives it the `.env` LINK to the person's sign-in (lib/vibe.mjs linkSignIn — never read or copied); the
@@ -130,7 +131,7 @@ function shortHome({ copy, signIn = true }) {
   if (copy && existsSync(join(REAL_HOME, 'config.toml'))) {
     copyFileSync(join(REAL_HOME, 'config.toml'), join(home, 'config.toml'));
   }
-  if (!WINDOWS && signIn) signIns.push({ home: basename(home), ...linkSignIn(home) });
+  if (!WINDOWS && signIn) signIns = [...signIns, { home: basename(home), ...linkSignIn(home) }];
   return home;
 }
 
@@ -475,7 +476,7 @@ function childEnv(spec) {
 
 let launches = 0;
 /** One vibe launch; everything it produced is saved in `runDir` so `--reparse` can rebuild the row. */
-function launch(runDir, tag, armSpec, resume = '') {
+function launch(runDir, tag, armSpec, resume = '', { cell = '', n = 0 } = {}) {
   const spec = ownedOnLinux(armSpec);
   const exportDir = join(runDir, `export${tag}`);
   const args = vibeArgs({ workdir: spec.workdir, exportDir, trust: spec.trust, timeLimit: spec.timeLimit, resume });
@@ -483,7 +484,7 @@ function launch(runDir, tag, armSpec, resume = '') {
   const t0 = performance.now();
   launches++;
   // Said before the launch, not after: one launch can take minutes (the code round, codex, 2026-10-12).
-  console.error(`[probe] launch ${launches}: ${basename(runDir)}${tag} …`);
+  console.error(`[probe] launch ${launches}: ${cell} repeat ${n} ${basename(runDir)}${tag} …`);
   const r = run(exe, args, { cwd: spec.workdir, input: spec.prompt, encoding: 'utf8', timeout: ((spec.timeLimit ?? 120) + 90) * 1000,
     env: childEnv(spec), maxBuffer: 64 * 1024 * 1024 });
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
@@ -579,7 +580,7 @@ function runArm(cell, a, n) {
   mkdirSync(runDir, { recursive: true });
   const spec = a.setup(runDir, n);
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: a.arm, n, spec }, null, 2));
-  launch(runDir, '', spec);
+  launch(runDir, '', spec, '', { cell, n });
   const row = rowOf(runDir, cell, a.arm, n, spec);
   console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, s: row.seconds, canaries: row.canaries, expect: row.expect,
     newFiles: row.newFiles, tools: row.tools.slice(0, 200), answer: row.answer.slice(0, 120).replace(/\s+/gu, ' ') }));
@@ -598,11 +599,11 @@ function runResume(n) {
   const shared = WINDOWS ? {} : { home: shortHome({ copy: false }) };
   const t1 = { ...shared, workdir, prompt: `The code word is ${word}. Remember it. Reply with exactly: OK` };
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: 'two turns', n, spec: t1 }, null, 2));
-  launch(runDir, '-t1', t1);
+  launch(runDir, '-t1', t1, '', { cell, n });
   const r1 = rowOf(runDir, cell, 'turn 1', n, t1, '-t1');
   const t2 = { ...shared, workdir, prompt: 'What is the code word I gave you? Reply with it only.', expect: { word } };
   const id = r1.export.sessionId || r1.sessionId;
-  if (id) launch(runDir, '-t2', t2, id);
+  if (id) launch(runDir, '-t2', t2, id, { cell, n });
   const r2 = id ? rowOf(runDir, cell, 'turn 2', n, t2, '-t2') : null;
   const row = { cell, arm: 'two turns (--resume)', run: n, turn1: r1, turn2: r2, sameSession: r2 ? (r2.export.sessionId || r2.sessionId) === id : null };
   console.log(JSON.stringify({ cell, run: n, exit1: r1.exit, exit2: r2?.exit, u1: r1.export.usage, u2: r2?.export.usage, remembered: r2?.expect.word, same: row.sameSession }));

@@ -6,7 +6,7 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, w
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { inventoryOf, platformOf, unstaged, withEntry } from './vibe-manifest.mjs';
+import { inventoryOf, platformOf, unstaged, withEntry, withoutSignInLink } from './vibe-manifest.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-vibe-manifest-test-'));
@@ -39,6 +39,17 @@ test('a staged entry goes to `staged` and leaves `versions` — what the shipped
   assert.deepEqual(promoted.staged, []);
 });
 
+test('an entry staged and then written unstaged (or the other way round) appears ONCE, in the list written to', () => {
+  const staged = withEntry({ versions: [WIN] }, LINUX, { stage: true });
+  const written = withEntry(staged, LINUX);
+  assert.deepEqual(written.versions, [WIN, LINUX]);
+  assert.deepEqual(written.staged, [], 'the staged copy is gone — the shipped C# would otherwise read one slot twice');
+  const back = withEntry(written, { ...LINUX, measured: 'again' }, { stage: true });
+  assert.deepEqual(back.versions, [WIN], 'an entry staged again leaves versions');
+  assert.deepEqual(back.staged, [{ ...LINUX, measured: 'again' }]);
+  assert.deepEqual(withEntry({ versions: [WIN], staged: [LINUX] }, WIN).staged, [LINUX], 'another platform of the same version stays staged');
+});
+
 test('the inventory names a link and never reads through it — the person\'s .env is not hashed (an unreadable target proves it)', { skip: WINDOWS && 'a file symlink needs a privilege on Windows, and Windows homes hold no .env link' }, () => {
   const home = join(base, 'home');
   mkdirSync(join(home, 'logs'), { recursive: true });
@@ -49,10 +60,26 @@ test('the inventory names a link and never reads through it — the person\'s .e
   symlinkSync(secret, join(home, '.env'), 'file');
   try {
     const listed = inventoryOf(home);
-    assert.deepEqual(listed.find((e) => e.path === '.env'), { path: '.env', link: true, sha256: '', bytes: 0 });
+    assert.deepEqual(listed.find((e) => e.path === '.env'), { path: '.env', link: true, target: secret, sha256: '', bytes: 0 });
     assert.equal(listed.find((e) => e.path === 'logs/vibe.log').bytes, 3);
     assert.equal(listed.find((e) => e.path === 'logs/').sha256, '');
   } finally {
     chmodSync(secret, 0o600);
   }
+});
+
+const SIGN_IN = '/person/.vibe/.env';
+const link = (path, target) => ({ path, link: true, target, sha256: '', bytes: 0 });
+
+test('only the .env link coai made is left out of what Vibe wrote — a changed or unexpected .env link stays, to be classed unknown', () => {
+  const logs = { path: 'logs/vibe.log', sha256: 'a'.repeat(64), bytes: 3 };
+  assert.deepEqual(withoutSignInLink([link('.env', SIGN_IN), logs], SIGN_IN), [logs], "coai's own sign-in link is dropped");
+  const retargeted = link('.env', '/somewhere/else/.env');
+  assert.deepEqual(withoutSignInLink([retargeted, logs], SIGN_IN), [retargeted, logs], 'a link to another target is not the one coai made');
+  const unread = { path: '.env', link: true, sha256: '', bytes: 0 };
+  assert.deepEqual(withoutSignInLink([unread], SIGN_IN), [unread], 'a link with no recorded target cannot be proven to be the one coai made');
+  const other = link('config.toml', SIGN_IN);
+  assert.deepEqual(withoutSignInLink([other], SIGN_IN), [other], 'a different name is never the sign-in link, whatever it points at');
+  const plain = { path: '.env', sha256: 'b'.repeat(64), bytes: 9 };
+  assert.deepEqual(withoutSignInLink([plain], SIGN_IN), [plain], 'a regular .env file is not a link at all');
 });
