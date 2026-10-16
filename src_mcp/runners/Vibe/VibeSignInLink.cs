@@ -63,10 +63,17 @@ internal sealed record SignInSteps(
 /// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>). Never a copy, never a read of the target by path, never a <c>chmod</c>, never a log line.
 /// </summary>
 /// <remarks>
-/// In order: already there and right (the same home's second turn) → nothing is touched; else the target is judged through one
-/// descriptor and its NAMES scanned (<see cref="DotenvNames"/>), the buffer zeroed after the scan; then the link is made at a path that does
-/// not exist and read back RAW. A failed step leaves nothing at the name (a half-made link is removed by its own name) and the launch goes
-/// on signed out — and a home holding a <c>.env</c> coai could not remove is never launched on.
+/// In order: the target is judged through one descriptor and its NAMES scanned (<see cref="DotenvNames"/>), the buffer zeroed after the
+/// scan — <b>on every turn, including the same home's second</b>; then, unless the right link is already there, the link is made at a path
+/// that does not exist and read back RAW. A failed step leaves nothing at the name (a half-made link is removed by its own name) and the
+/// launch goes on signed out — and a home holding a <c>.env</c> coai could not remove is never launched on.
+/// <para><b>This corrects the A1 spec §3.2 step 2</b>, which answered <c>Linked</c> for the right link on a second turn "with nothing
+/// touched". The person's file can change between two turns of one home (a <c>VIBE_*</c> variable appended, <c>chmod 666</c>, a FIFO put in its
+/// place) and that turn would run on a sign-in nobody judged; a link to a file is not a verdict on the file. Legitimate key rotation stays
+/// admitted: the names are the same, only the value differs.</para>
+/// <para><b>A residual, stated:</b> <see cref="LeftOver"/> removes by name what is at the link path after a failed step. If the person's own
+/// account (the same uid — the home is <c>0700</c>) puts something there between the <c>Present</c> check and the link, the link fails with
+/// <c>EEXIST</c> and that something is removed. The same account can do worse directly; coai does not claim to close it.</para>
 /// </remarks>
 public static class VibeSignInLink
 {
@@ -82,23 +89,28 @@ public static class VibeSignInLink
 
     /// <summary>
     /// Something is at the name already. The shape check one step earlier refused anything but the right link, so only the right link (the
-    /// same home's second turn) is met here; any other is NOT coai's to delete, and is refused with the home's own sentence.
+    /// same home's second turn) is met here — and its TARGET is judged again, the link not remade. Any other thing is NOT coai's to delete,
+    /// and is refused with the home's own sentence.
     /// </summary>
     private static SignInLink Existing(VibeSignIn signIn, string home, string link, SignInSteps steps) =>
         steps.RawTarget(link) == signIn.PersonsEnvFile
-            ? new SignInLink.Linked()
+            ? Judged(signIn, steps, () => new SignInLink.Linked())
             : new SignInLink.Refused($"the coai-owned Vibe home {home} holds {VibeSignIn.LinkName}, which is not the link coai makes to the Vibe sign-in {signIn.PersonsEnvFile} — coai refuses to start Vibe on it; delete {home} and the next launch starts from an empty home");
 
-    private static SignInLink Fresh(VibeSignIn signIn, string home, string link, SignInSteps steps) => steps.Judge(signIn.PersonsEnvFile) switch
+    private static SignInLink Fresh(VibeSignIn signIn, string home, string link, SignInSteps steps) =>
+        Judged(signIn, steps, () => Made(signIn, home, link, steps));
+
+    /// <summary>The person's file judged through one descriptor and its names scanned; <paramref name="admitted"/> says what an admitted file comes to.</summary>
+    private static SignInLink Judged(VibeSignIn signIn, SignInSteps steps, Func<SignInLink> admitted) => steps.Judge(signIn.PersonsEnvFile) switch
     {
         FileReadResult.Missing => new SignInLink.NoSignIn($"there is no Vibe sign-in file at {signIn.PersonsEnvFile}"),
         FileReadResult.Unreadable bad => new SignInLink.Refused(VibeSignInSentences.Target(signIn.PersonsEnvFile, bad.Reason)),
-        FileReadResult.Content read => Scanned(signIn, home, link, steps, read.Bytes),
+        FileReadResult.Content read => Scanned(signIn, read.Bytes, admitted),
         _ => throw new InvalidOperationException("the union is closed"),
     };
 
     /// <summary>The names scan, then the buffer zeroed whatever the verdict was (I4); only an admitted file is linked.</summary>
-    private static SignInLink Scanned(VibeSignIn signIn, string home, string link, SignInSteps steps, byte[] bytes)
+    private static SignInLink Scanned(VibeSignIn signIn, byte[] bytes, Func<SignInLink> admitted)
     {
         DotenvVerdict verdict;
         try
@@ -113,7 +125,7 @@ public static class VibeSignInLink
         return verdict switch
         {
             DotenvVerdict.Refused(var line, var kind) => new SignInLink.Refused(VibeSignInSentences.Name(signIn.PersonsEnvFile, line, kind)),
-            _ => Made(signIn, home, link, steps),
+            _ => admitted(),
         };
     }
 

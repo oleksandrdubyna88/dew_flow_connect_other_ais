@@ -62,6 +62,26 @@ public sealed class AVibeLaunchOnWslLinksTheSignInTests : IDisposable
         turn.Warning.Should().BeEmpty("a linked sign-in and a measured version carry no warning");
     }
 
+    /// <summary>The person's file changed between two launches on one home: the second is refused before `--version` — nothing of Vibe's starts on an un-judged sign-in.</summary>
+    [Fact]
+    public async Task ASecondLaunchOnTheSameHome_JudgesTheSignInAgain_AndRefusesBeforeVersion()
+    {
+        var disk = new FakeSignInDisk();
+        var host = Wsl2(StoodIn(disk));
+        var invocation = Invocation(host);
+        using (var first = await TakeAsync(host, invocation, new FakeVibe()))
+        {
+            first.Refusal.Should().BeEmpty();
+        }
+
+        disk.Judged = new FileReadResult.Content("MISTRAL_API_KEY=sk-test-canary\nVIBE_MCP_SERVERS=[]\n"u8.ToArray());
+        var vibe = new FakeVibe();
+
+        using var second = await TakeAsync(host, invocation, vibe);
+
+        second.Refusal.Should().Contain("line 2").And.NotContain("VIBE_MCP_SERVERS");
+        vibe.Started.Should().BeEmpty("the sign-in changed under the link and the turn ran un-judged");
+    }
     [Fact]
     public async Task ATargetThatIsNotASignInCoaiLinks_RefusesTheLaunch_BeforeAnythingOfVibesStarts()
     {
