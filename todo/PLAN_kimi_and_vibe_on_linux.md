@@ -64,7 +64,7 @@ The scout's draft (session scratch, not in git; redacted) is carried into the RE
 | L-K5 | Generic Linux `flock`: the lock stays HELD after the parent's SIGKILL while the direct child that inherited the fd lives; a `close_fds` or `setsid` grandchild does NOT hold it; a grandchild handed the fd holds it. | measured (no Kimi) |
 | L-K4 harness | With a FAKE ACP agent: killing the agent by pid leaves both children; killing its process group kills the same-group child, NOT a `setsid` child. | measured (fake agent, not Kimi) |
 | L-K1 static | `kimi` 2.2.0 is a 191 MB ELF; `fd` is in `~/.kimi-code/bin`, `rg` is NOT; Kimi looks for `rg` on `PATH`, then `<share>/bin/rg`; a lazy download exists in the strings, unproven. | strings only |
-| L-K1 live, L-K2, L-K3, L-K4 (Kimi) | — | **NOT RUN** (§5) |
+| L-K1 live, L-K2, L-K3, L-K4, L-K6, L-K7 (Kimi 2.2.0) | Signed in 8 of 8 through the symlink; one refresh landed in the person's folder (tmp + rename, mode kept, link kept); no `bin/` in the owned home; `os/` gains Kimi's native cache (→ DL11); `rg` in its own session survives a pid or group kill briefly (→ DL9); `comm` of `kimi acp` is `MainThread` (→ DL10); 3 of 3 write arms refused; `session/load` works, the model in `configOptions` (already what the shipped parser reads). | **measured 2026-10-16**, 8 paid turns — RESULTS_kimi_confinement §29 |
 
 The owner's OAuth slot on that machine is `oauth/kimi-code-env-<hex>`, not the default — the D19 rule (the slot READ from the person's
 `config.toml`) already covers it. The scout found the owner's TUI by `comm` = `kimi` (`ps -eo comm=`).
@@ -345,6 +345,11 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   lives" (the finally runs; the tree is ended) and "the shim is `SIGKILL`ed" (nothing of the shim runs; the marker written before
   the start names the agent; the next launch reconciles it), and the cancellation of the outer launcher is the same arm seen from
   the server.
+  **Measured (L-K4, RESULTS_kimi_confinement §29): confirmed.** The real `rg` of a Grep turn runs in its OWN group and session; a
+  group kill misses it and a pid kill leaves it, alive 0.1–0.5 s. Without a subreaper its orphan is reparented to WSL's
+  `Relay(<pid>)`, not to pid 1 — so no teardown may look for `ppid == 1`; under `PR_SET_CHILD_SUBREAPER` the orphan comes to the shim
+  and `Descendants(shim pid)` finds it. Only the agent held the inherited lock descriptor (DL8's premise holds). Not run: Kimi's
+  sub-agents, background shell and MCP servers — S4's test keeps its own grandchild arm.
 
 - **DL10 — The foreign-Kimi wait reads `/proc` on Linux.** `HostProcessList.Current` returns `[]` off Windows
   (`src_mcp/runners/Kimi/HostProcessList.cs:29`, `:53`), so on Linux the wait for the person's own `kimi` never waits — silently. The
@@ -356,15 +361,33 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   and exactly what the `[]` off Windows does today (`HostProcessList.cs:53`). On Linux the listing answers a closed union — the
   processes, or *unreadable* with the reason — and *unreadable* ends the wait as Busy with the reason, never as clear; a listing that
   does not contain the shim's own pid is unreadable by definition. The limit stays worded as `ForeignKimi.cs:37-39` already words it:
-  a check at the START, which cannot stop a `kimi` the person opens afterwards. **Waits for L-K6** (the `comm` of a running
-  `kimi acp`, and whether the parent chain reaches `coai-mcp`).
+  a check at the START, which cannot stop a `kimi` the person opens afterwards.
+  **Re-decided by L-K6 (RESULTS_kimi_confinement §29): match the EXECUTABLE, not `comm`.** A running `kimi acp` has `comm` =
+  `MainThread` (every Node process on that machine does; it read `kimi-code` once, during shutdown), so `KimiNames` matched against
+  `/proc/<pid>/stat` would never see an ACP agent — the wait would be fail-open again by another road. `/proc/<pid>/exe`'s basename
+  is `kimi`, stable for the whole run. So the Linux listing reads, per process: the parent from `stat` (the extracted reader), the
+  owner uid (`/proc/<pid>` owner), and the `exe` link's basename; a process is Kimi when that basename is `kimi` OR its `comm` is
+  `kimi` (the TUI, as the first scout saw it). **Only processes of THIS uid are judged**: another account's process answers `EACCES`
+  on `exe` (`/proc/1` does, for everyone), and it cannot refresh this person's sign-in — its folder is `0700` — so it is skipped,
+  not counted unreadable (otherwise every launch is Busy). A same-uid process whose `exe` cannot be read is *unreadable* → Busy with
+  the reason. `coai-mcp` in the parent chain is matched the same way, by the `exe` basename (`coai-mcp`); its `comm` was not
+  measured and is not relied on. The parent-chain rule itself held: the agent's chain reached the driver.
 
 - **DL11 — Kimi's OS-home redirect on Linux is `HOME` alone.** D19 already says so (parent plan, "On Unix the redirect is `HOME`
   alone, when D18 lifts"). `KimiEnvironment.Built` sets `HOME` → `os/` on Unix and not the three Windows names; its refusal checks
   `HOME` only there (`src_mcp/runners/Kimi/KimiEnvironment.cs:138`). The Unix minimal set has no `XDG_*`
   (`src_mcp/runners/Processes/ProcessEnvironment.cs:90-91`), so Kimi derives its XDG folders from the redirected `HOME` — into `os/`,
-  which `KimiHome.OsProblem` refuses the moment it holds anything (`src_mcp/runners/Kimi/KimiHome.cs:185-195`). **Waits for L-K3**: if
-  Kimi writes under `os/` on Linux, the `os/` rule is re-decided from that inventory with the owner — never silently widened.
+  which `KimiHome.OsProblem` refuses the moment it holds anything (`src_mcp/runners/Kimi/KimiHome.cs:185-195`).
+  **Decided by L-K3 (RESULTS_kimi_confinement §29): `os/` stays EMPTY; the built environment gains `XDG_CACHE_HOME`.** Every launch,
+  `--version` included, extracts nine native files (about 2 MB) into `$HOME/.cache/kimi-code/native/<version>/linux-x64/<sha256>/` —
+  the same in three fresh folders, and nothing else lands in `os/`. A free arm measured that `XDG_CACHE_HOME` moves exactly that
+  extraction and leaves `HOME` empty. Of the two measured cures this is the one that does NOT widen the `os/` rule (the other,
+  admitting that cache path inside `os/`, would), so it needs no owner decision: `KimiEnvironment.Built` sets `XDG_CACHE_HOME` to a
+  `cache/` folder inside the round's owned tree, beside `os/` and NOT inside `KIMI_CODE_HOME` (whose shape `KimiHome` judges), created
+  `0700` with the home and disposed with it; `OsProblem` is unchanged and its test gains the Linux arm *a launch leaves `os/` empty*.
+  The cost is 2 MB and one extraction per owned home. Also measured: Kimi reads `$HOME/.agents/AGENTS.md` and `skills/*/SKILL.md` of
+  the REDIRECTED home (a canary in an owned fake home came back in the answer) — so `os/` staying empty is also what keeps a skills
+  folder out of the review; the person's real `~/.agents` was not touched.
 
 - **DL12 — `rg` and `fd` on Linux are provisioned by the install button.** The owner rules (set it up once; every action is a
   button) exclude "ask the owner to install them by hand". The line, one press, each step guarded and idempotent:
