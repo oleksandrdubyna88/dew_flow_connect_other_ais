@@ -86,7 +86,7 @@ export const QCONSULT_ROOTS: PathSetting = {
  */
 export const VIBE_HOMES: PathSetting = {
   id: 'coai.vibeHomesDirectory', setting: 'coai.vibeHomesDirectory', kind: 'folder', mustExist: true, saidBy: 'server',
-  place: 'consultants/consultant', wireKey: 'COAI_CONSULTANT_HOMES', noun: 'Vibe homes folder', there: 'its server keeps its Vibe homes there',
+  place: 'consultants/consultant', wireKey: 'COAI_CONSULTANT_HOMES', noun: 'Vibe and Kimi homes folder', there: 'its server keeps its Vibe and Kimi homes there',
   instead: ' and uses the default, the local application data', asksDisk: false,
 };
 

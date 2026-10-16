@@ -12,6 +12,7 @@ import { refusalAttributes, refusalNote as typedRefusalNote, rootBoxKey, type Ty
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
 import { QCONSULT_ROOTS } from './pathSettings';
+import { consultantRuntimeNote } from './runtimeSince';
 import { MAX_ACTIVE_ROWS, type QconsultSettings, type QuestionRowSetting, qconsultSkewNote } from './qconsultSettings';
 import {
   type QuestionPromptView,
@@ -80,6 +81,11 @@ export interface QuestionRowView {
   readonly enabled: boolean;
   /** Why the switch of a row that is OFF may not be turned on — empty when it may. */
   readonly blocked: string;
+  /**
+   * The installed server cannot consult on this row's runtime (E5.7 of todo/PLAN_vibe_and_kimi_runtimes_E5.md) — empty when it can or
+   * its version is unknown. A note only: the row is drawn and crosses as it is, and that server refuses it by name.
+   */
+  readonly serverNote: string;
 }
 
 /** What one row shows, decided — exported because it is what the tests assert. */
@@ -96,6 +102,7 @@ export function questionRowView(row: QuestionRowSetting, settings: QconsultSetti
     admission: rowAdmission(row, prompts, state.vendors),
     enabled: row.enabled,
     blocked: row.enabled ? '' : enableBlocker(row, settings.rows, prompts, state.vendors),
+    serverNote: consultantRuntimeNote(state.serverVersion, runtime),
   };
 }
 
@@ -166,8 +173,14 @@ ${promptOptions(view)}
   </select>
 ${flagBlock(view)}
 ${rowHints(view)}
+${serverNote(view)}
   <button type="button" class="link" data-command="qconsultRemoveRow" data-id="${id}">Remove</button>
 </div>`;
+}
+
+/** The installed server cannot consult on this row's runtime — said beside the row, in the class every skew note uses. */
+function serverNote(view: QuestionRowView): string {
+  return view.serverNote.length === 0 ? '' : `  <div class="hint stale" data-server-note>${escapeHtml(view.serverNote)}</div>`;
 }
 
 /** The catalog row this row asks, picked from the rows ticked "question consultant" (E4.2). */
