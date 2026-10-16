@@ -147,6 +147,12 @@ B9 compare the working tree even when HEAD ≠ the pinned sha → T16.
   (`common/coai-review-gate.md`, step 2) and the extension's `claudeSnippet.ts`; offering `committedPlan` there is a
   conventions change after this ships, and this plan does not depend on it.
 - No refusal of a pointer-shaped `planText`: D12 makes such a round fail closed instead of guessing.
+- **Boundary, 2026-10-16:** [PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md](PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md)
+  (open) takes two slices next to D12/D13 — both sides name them in a table (its § 4). (1) WHERE the D12 fold runs: once,
+  inside the scheduler, so the ledger, the live view, the audit and the local stand-down read the folded outcome; D12's
+  "accepted mismatch" is superseded there, and its "the ledger row is right (the tokens were spent)" is kept for the
+  tokens — only the outcome word changes. (2) A per-row, operator-set prompt cap in BYTES (`maxPromptKib`); D13's "no
+  token preflight" and the 256 KiB ceiling stand. The D12 rule, the sentinel, the prompt and E2 are untouched by it.
 
 ## 9. Growth
 
