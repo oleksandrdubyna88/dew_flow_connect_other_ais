@@ -11,6 +11,9 @@
 > **Fable amended S2 the same day** (§S2.2a decides F1–F5 and E5's §8 items) and §9 stays as the record of the questions.
 > §10 is the risk-consultation brief owed before E4's code round. Nothing is implemented, so the status stays.
 >
+> **Plan gate 2026-10-16** (round 1 `proceed`, on `c17fbc0c`): the risk (4/4.2) and cadence (4–6) consultations were
+> taken and closed; findings for S1/S3 are applied in place, and what touches S2 is §11, for Fable.
+>
 > Scope: `src_mcp/core/Authors/` (new, pure) and `src_mcp/tests/` (new test classes). No schema step, no
 > call site, no I/O — those are E5's. Related docs: [module_server.md](../research/module_server.md),
 > [PLAN_local_db.md](../research/PLAN_local_db.md).
@@ -150,7 +153,7 @@ public sealed record ObservedMessage(AgentKey Agent, string MessageId, DateTimeO
 public sealed record ObservedAgent(AgentKey Key, AgentKey Parent, string AgentType,
     string Requested, DateTimeOffset FirstLineAt, bool TranscriptPresent);
 public enum WriteKind { Checkout, OutsideAnyCheckout, Unresolved }                          // 1:1 with E3.S3's WriteTargetKind
-public sealed record ObservedWrite(AgentKey Agent, DateTimeOffset At, string Path, WriteKind Kind, string Where); // E3 ObservedWrite.Target mapped field for field: Kind = Target.Kind, Where = Target.Where (a normalised root KEY / directory / empty); Path = the tool's path
+public sealed record ObservedWrite(AgentKey Agent, DateTimeOffset At, WriteKind Kind, string Where); // E3 ObservedWrite.Target mapped field for field: Kind = Target.Kind, Where = Target.Where (a normalised root KEY / directory / empty). No Path: E3's ObservedWrite(AgentKey, Utc, Tool, Target) carries none, and no rule reads one (plan gate 2026-10-16)
 public sealed record UnobservedLaunch(AgentKey Parent, string ToolUseId, DateTimeOffset? At, string Why); // E3's UnobservedLaunches, 1:1; At null → every window (as a StateReason with no instant)
 public sealed record StateReason(string Why, DateTimeOffset? At);                       // At null = the whole session
 public sealed record ObservationState(string Kind, ImmutableArray<StateReason> Reasons); // observed | partial | unobserved
@@ -187,7 +190,10 @@ trailing slash trimmed); equality or `StartsWith(root + "/")`, `OrdinalIgnoreCas
 `AgentLog.cs:311-314`, now in one place. Longest wins, so a worktree nested inside another checkout
 (`D:/rsd/x/.claude/worktrees/y`) is `y`, not `x`. Relative paths and `""` → `""` (never resolved against a
 working directory, which would be I/O). A WSL `/mnt/d/…` path and a `D:\…` root are NOT equated — no
-translation is guessed; E5 passes the universe in the spelling the transcript uses, and S5 checks it.
+translation is guessed; E5 passes the universe in the spelling the transcript uses, and S5 checks it. Two universe roots
+that are equal under `Normalise` + `OrdinalIgnoreCase` (the gate's `repo_path` as typed, `D:/x`, and E3's lower-cased
+`d:/x`) are ONE root: `RepositoryOf` keeps the first in ordinal order, so a tie never depends on input order (plan gate
+2026-10-16; fact `TwoSpellingsOfOneRoot_AreOneRoot`).
 
 **What the paths look like, and the rules that follow** (RESULTS Q8, added 2026-10-16). Every write path E1 measured is
 absolute on both sides. On Windows, 90 % use backslashes, separators are mixed inside one path, and the drive letter is
@@ -209,7 +215,8 @@ kept as typed (lowercase on 219 subagent writes). WSL uses `/` only. A write und
 from short statements — `.Opened(t)`, `.Round("CodeReview", 1, startedAt: t)`,
 `.Main(at: t, model: "claude-opus-5-5", tokens: …)`, `.Agent("a1", parent: main, launchedAt: t, requested: "sonnet")`,
 `.Message("a1", at, model, effort, requested: …)` (a requested value apart from the model, so a fallback or an empty
-meta alias can be built), `.Write("a1", at, path)`, `.MissingChild(parent, at, why)`,
+meta alias can be built), `.Write("a1", at, path)` (a `Checkout` write whose `Where` is `path`; `.WriteOutside` and
+`.WriteUnresolved` build the other two kinds), `.MissingChild(parent, at, why)`,
 `.Peer(timeline)`. Every instant is ONE fixed base `2026-10-14T12:00:00Z` plus minutes, never `now`
 (testing.md, *A test that reads the clock expires*). Message ids are generated deterministically (`m-0001`, …).
 S1 adds `AttributionInput.Validate()` returning the list of contract violations (a message whose agent is not
@@ -243,11 +250,11 @@ the code REJECTS proves nothing*). `RoundAttribution.Assign` throws `ArgumentExc
 
 | Class | Facts | Asserts |
 |---|---|---|
-| `APathBelongsToTheLongestRepositoryThatHoldsItTests` | `AFileUnderTheRoot_IsInIt` / `TheRootItself_IsInIt` / `ASiblingWithTheRootAsPrefix_IsNot` (`/repo-two` vs `/repo`) / `BackslashesAndATrailingSlash_DoNotMatter` / `CaseDoesNotMatter` / `ANestedWorktree_BelongsToTheInnerRoot` / `ARelativeOrEmptyPath_IsInNone` / `AWslSpellingIsNotTranslated`; added 2026-10-16 (Q8): `MixedSeparatorsInsideOnePath_DoNotMatter` (`D:\x/y\z.cs` under `D:/x`) / `ALowercaseDriveAgainstAnUppercaseRoot_IsInIt` (`d:\x\a.cs` under `D:/x`, and the reverse) / `ANonAsciiFolderMatchesAcrossCase` (`d:/проект/a.cs` under `D:/Проект`) / `ADotSegment_IsInNone` (`D:/x/../y/a.cs` and `D:/x/./a.cs` against root `D:/x` → `""`; a root `D:/x/..` matches nothing) | the exact root or `""` |
+| `APathBelongsToTheLongestRepositoryThatHoldsItTests` | `AFileUnderTheRoot_IsInIt` / `TheRootItself_IsInIt` / `ASiblingWithTheRootAsPrefix_IsNot` (`/repo-two` vs `/repo`) / `BackslashesAndATrailingSlash_DoNotMatter` / `CaseDoesNotMatter` / `ANestedWorktree_BelongsToTheInnerRoot` / `ARelativeOrEmptyPath_IsInNone` / `AWslSpellingIsNotTranslated`; added 2026-10-16 (Q8): `MixedSeparatorsInsideOnePath_DoNotMatter` (`D:\x/y\z.cs` under `D:/x`) / `ALowercaseDriveAgainstAnUppercaseRoot_IsInIt` (`d:\x\a.cs` under `D:/x`, and the reverse) / `ANonAsciiFolderMatchesAcrossCase` (`d:/проект/a.cs` under `D:/Проект`) / `ADotSegment_IsInNone` (`D:/x/../y/a.cs` and `D:/x/./a.cs` against root `D:/x` → `""`; a root `D:/x/..` matches nothing); added by the plan gate: `TwoSpellingsOfOneRoot_AreOneRoot` (universe `[d:/x, D:/x]` in both orders → the same root) | the exact root or `""` |
 | `AgentLogTests` (existing) | unchanged | `InRepo`'s behaviour kept through the move |
 | `TheAttributionInputSaysWhatIsWrongWithItTests` | one fact per violation above (the caller-mismatch, the duplicate `MessageId`, the round listed twice and the looping parent chain included), plus `AWellFormedScenario_HasNoViolations` and `AnAgentWithNoParentOrAnUndeclaredOne_IsNoViolation` (the positive ones) | the violation list |
 | `ARoundStartFromASessionFileIsReadAsUtcTests` | `AnUnspecifiedKind_KeepsItsHourAndGetsZeroOffset`; `TheDefaultInstant_IsNotRecorded` | `UtcInstant.From` |
-| `TheAttributionCoreTouchesNoClockAndNoDiskTests` | `NoAuthorsSourceNamesTheClockTheDiskOrTheEnvironment` — reads `src_mcp/core/Authors/*.cs` through `ProductionSources` and asserts none contains `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`, `DateTimeOffset.UtcNow`, `TimeProvider`, `File.`, `Directory.`, `Environment.`, `Guid.NewGuid`, `new Random`; and `TheScannerSeesTheAuthorsFolder` — at least one file was read (testing.md, *A structural test that matches nothing passes forever*) | the source text |
+| `TheAttributionCoreTouchesNoClockAndNoDiskTests` | `NoAuthorsSourceNamesTheClockTheDiskOrTheEnvironment` — reads `src_mcp/core/Authors/*.cs` through `ProductionSources` and asserts none contains `DateTime.Now`, `DateTime.UtcNow`, `DateTime.Today`, `DateTimeOffset.Now`, `DateTimeOffset.UtcNow`, `TimeProvider`, `TimeZoneInfo.Local`, `Stopwatch`, `Process.`, `File.`, `Directory.`, `Environment.`, `Guid.NewGuid`, `new Random` (the clock list widened by the 2026-10-16 plan gate); and `TheScannerSeesTheAuthorsFolder` — at least one file was read (testing.md, *A structural test that matches nothing passes forever*) | the source text |
 
 **Break-its.** (a) Drop the `+ "/"` from `Contains` → `ASiblingWithTheRootAsPrefix_IsNot` red. (b) Return the
 FIRST containing root instead of the longest → `ANestedWorktree_BelongsToTheInnerRoot` red. (c) Add
@@ -256,7 +263,14 @@ FIRST containing root instead of the longest → `ANestedWorktree_BelongsToTheIn
 +00:00. It cannot go red on a UTC machine; the test's summary says so, and the break-it is watched on this
 operator's machine (not at +00:00). (e) Remove the dot-segment refusal from `RepositoryOf` →
 `ADotSegment_IsInNone` red: `D:/x/../y/a.cs` reads as inside `D:/x`. (f) Drop the duplicate-round rule →
-`ARoundListedTwice_IsAViolation` red.
+`ARoundListedTwice_IsAViolation` red. (g) Replace `DateTime.UtcNow` by `DateTime.Today` in plant (c) → the purity test
+red.
+
+**RED against the shells** (plan gate 2026-10-16). A fact that expects `""` passes against a `RepositoryOf` shell that
+returns `""`. So the shell returns its `path` argument unchanged; then `ASiblingWithTheRootAsPrefix_IsNot`,
+`ARelativeOrEmptyPath_IsInNone` and `ADotSegment_IsInNone` fail on their assertion. `AWellFormedScenario_HasNoViolations`
+and `AnAgentWithNoParentOrAnUndeclaredOne_IsNoViolation` are positives: a `Validate()` shell that returns no violations
+passes them, and they are proven by the negative facts beside them, as the summary says.
 
 **Done when.** The records, `Repositories` and the builder exist; `AgentLog` calls the moved rule and its
 tests are green; every fact above is green and every break-it was watched red; `CoaiMcp.Tests.exe` green.
@@ -736,6 +750,7 @@ public sealed record ActivityTotals(int Agents, int Launches, int Turns, TokenTe
 { public static ActivityTotals Unknown { get; } = new(-1, -1, -1, new(-1, -1, -1, -1)); }
 
 public sealed record RoundAuthors(
+    string Stage, int Number,   // added by the 2026-10-16 plan gate: S4's NotSeen and FixersOf need them for a round with no rows; announced to E5
     string CallerSessionId, string State, ImmutableArray<string> Reasons,
     ImmutableArray<AuthorRow> Rows,
     ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,
@@ -752,13 +767,17 @@ persists them as they are, so a member change here is an E4 document edit announ
 
 `WritesOutsideTheGateCheckout` (plan gate finding 0, parent §7): for every owned `wrote here` write placement whose
 checkout root is NOT `Gate.RepoPath` itself (a submodule or a nested worktree under it), the root and its call count,
-ordered by root, ordinal. Association is unchanged by it — those writes are `wrote here` — but their lines are not in
+ordered by root, ordinal. "Itself" is `Repositories.Normalise` on both sides and `OrdinalIgnoreCase` — E3's roots are
+lower-cased and `repo_path` is as typed, so an ordinal `!=` would list every write into the gate checkout (plan gate
+2026-10-16; the fact below has a lower-cased root of the gate checkout). Association is unchanged by it — those writes are `wrote here` — but their lines are not in
 the gate checkout's diff. E5.S4 turns it into `submodule_writes` and `uncovered_writes`; the root never leaves memory.
 
 `ClaimedByPeer` totals the items E4.S2 labels `claimed by peer` — owned by an earlier-completed window of a peer gate
 session; like `Elsewhere`, they make no row and no contributor here.
 
-**Grain.** One row per (window, agent, model, effort, association). Per AGENT, not per family, on purpose: S4
+**Grain.** One row per (window, agent, requested, model, effort, association) — `requested` added by the 2026-10-16
+risk consultation: two requests answered by one model are two rows, so the request is never one placement's value
+chosen for all. Per AGENT, not per family, on purpose: S4
 deduplicates contributors by agent, and the card's "3 Sonnet coders" counts distinct agents — a straddling
 coder writes in a window where it launched 0, so `launches` cannot stand in for "agents" (§7, defect 8).
 `Turns` = distinct `message.id`s on the row. `Launches` = 1 on the row holding the agent's first message in the
@@ -768,7 +787,7 @@ writes into THIS repository inside the window. Ambiguous and elsewhere activity 
 (§6: "no row") — with ONE exception, E4.S2 decision 4: an agent whose association is `ambiguous` with rung `two
 repositories` gets a `wrote here` row built from its `AgentAssociation` and the window's `Writes`: `WriteCalls` = its
 writes into this repository, `Turns`, `Launches` and every token term ZERO (its messages are in the ambiguous totals or
-claimed by a peer). Rows are ordered by (window, stage, number, who, agent id, model, effort, association),
+claimed by a peer). Rows are ordered by (window, stage, number, who, agent id, requested, model, effort, association),
 ordinal — equal inputs give equal outputs, byte for byte.
 
 **`Model` and `Requested` on a row** (added 2026-10-16, §2 and RESULTS Q2). A row's `Model` is the placements'
@@ -808,7 +827,7 @@ the `-1` sentinel and record the choice (reuse-first).
 |---|---|
 | `ARowIsOneAgentModelAndEffortInOneWindowTests` | a model switch gives two rows for main; an effort switch gives two rows; tokens are exact sums; a message E3 folded from three lines contributes once |
 | `ALaunchIsCountedOnceAndNeverLostTests` | a launch lands on its first-message row; a straddler's later window shows `Launches = 0`; an agent launched with no assistant message in its first window has a zero-token row carrying the launch; Σ `Launches` over every window of a session = the number of distinct launched agents |
-| `AWriteIntoANestedCheckoutIsHereButOutsideTheGateCheckoutTests` | a write into a submodule root and one into a nested worktree under `Gate.RepoPath`: both `wrote here` on the agent's row, both listed in `WritesOutsideTheGateCheckout` with their call counts; a write into `Gate.RepoPath` itself is not |
+| `AWriteIntoANestedCheckoutIsHereButOutsideTheGateCheckoutTests` | a write into a submodule root and one into a nested worktree under `Gate.RepoPath`: both `wrote here` on the agent's row, both listed in `WritesOutsideTheGateCheckout` with their call counts; a write into `Gate.RepoPath` itself is not, also when its root arrives lower-cased (`d:/x` against `D:/x`) |
 | `AmbiguousAndElsewhereActivityHasNoRowsTests` | they appear only in the totals; `Agents` counts distinct agents; `claimed by peer` items only in `ClaimedByPeer` |
 | `ATwoRepositoryAgentKeepsItsWritesAndAddsNoTokenTests` | the agent of E4.S2 decision 4 has one `wrote here` row with its write calls into this repository and zero turns, launches and tokens; its messages are counted once, in `Ambiguous` or `ClaimedByPeer` |
 | `EveryWindowAccountsForEveryMessageTests` | local completeness over ROWS: Σ row turns + ambiguous turns + elsewhere turns + claimed-by-peer turns = the window's distinct message ids, and the same per token term — over every S2 acceptance scenario, through one `[Theory]` fed by the builder |
@@ -816,6 +835,8 @@ the `-1` sentinel and record the choice (reuse-first).
 | `NoEffortIsUnknownNotHighTests` | absent effort → `unknown` on the row |
 | `TheModelOnARowIsTheOneThatAnsweredTests` (added 2026-10-16) | `ASessionAnsweredByAFallbackModel_CountsTheAnsweringModel` (main requests `claude-opus-5-5[1m]`, its messages carry `claude-opus-4-8` → the row's `Model` is `claude-opus-4-8`, `Requested` is `claude-opus-5-5[1m]`); `AMetaWithNoAlias_NeverBlanksTheModel` (an agent whose `ObservedAgent.Requested` is `""` → `Model` from its messages, `Requested` from theirs); `ASwitchMidWindowAfterAFallback_IsTwoRows` |
 | `TheSameRoundBuiltTwiceIsIdenticalTests` | `Build` twice → equal by value AND equal `ToString()`; the input's message order permuted → identical output |
+| `TwoRequestsAnsweredByOneModelAreTwoRowsTests` (risk consultation 2026-10-16) | one agent, two messages on `claude-sonnet-5-5`, requested `sonnet` and `claude-sonnet-5-5` → two rows, each with its own `Requested` |
+| `AnOutputRecordHasOnlyItsNamedStringMembersTests` (plan gate 2026-10-16) | reflection over `AuthorRow`, `ActivityTotals`, `RoundAuthors`, `CheckoutWrites`, and S4's `RoundRef`, `Contributor`, `NotSeen`, `ContributorSet`: the set of `string` and `ImmutableArray<string>` members EQUALS a named allowlist (`AuthorRow`: `Window`, `Stage`, `Who`, `AgentType`, `Requested`, `Model`, `Effort`, `Association`; `CheckoutWrites.Root` is the one path, in memory only). A new string member fails by name before any data can carry text; S5's sentinel test is the data-side half |
 
 **Break-its.** (a) Count `Launches` on every row of the agent → `ALaunchIsCountedOnceAndNeverLostTests` red.
 (b) Emit a row for ambiguous activity → `AmbiguousAndElsewhereActivityHasNoRowsTests` red, and completeness
@@ -823,7 +844,10 @@ double-counts. (c) Default effort to `"high"` → `NoEffortIsUnknownNotHighTests
 an unobserved round → `AnUnobservedRound_NeverReadsAsZero` red. (e) Drop the final `OrderBy` → the permuted-input
 fact red. (f) Take a row's `Model` from `ObservedAgent.Requested` when it is non-empty →
 `ASessionAnsweredByAFallbackModel_CountsTheAnsweringModel` red for subagents (main's twin: from the message's
-`Requested`).
+`Requested`). (g) Drop `requested` from the grain → `TwoRequestsAnsweredByOneModelAreTwoRowsTests` red: one row. (h) Add
+`string Description` to `AuthorRow` → `AnOutputRecordHasOnlyItsNamedStringMembersTests` red, naming the member. (i) Compare
+the gate root ordinally in `WritesOutsideTheGateCheckout` → `AWriteIntoANestedCheckout…` red: the lower-cased gate root is
+listed.
 
 **Done when.** Every fact green, every break-it watched red; local completeness holds over all S2 scenarios;
 `CoaiMcp.Tests.exe` green.
@@ -1037,8 +1061,9 @@ hand-read.
       asserts a duration, a date or a token magnitude read from a fixture; the order fact is green.
 - [x] (added 2026-10-16) Fable answered every item of §9 before S2's code, and each answer is in S2 or in the parent's §16.
       *(Done 2026-10-16: §S2.2a.)*
-- [ ] (added 2026-10-16) The risk consultation of §10 was taken, verified and closed (`close_consult`) before the epic's
-      code round, and what it changed is recorded.
+- [x] (added 2026-10-16) The risk consultation of §10 was taken, verified and closed (`close_consult`) before the epic's
+      code round, and what it changed is recorded. *(Done 2026-10-16: §10's note, §11.)*
+- [ ] (added 2026-10-16, plan gate) Fable answered every item of §11 before S2's code.
 
 ## 7. Defects found in the parent plan while splitting (not fixed here)
 
@@ -1230,3 +1255,32 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
    Attribution counts the model that ANSWERED: a session can fall back (Opus 5.5 → Opus 4.8, scope session, seen
    2026-10-16), and metas often name no request at all. Is storing both and grouping on the answering model the right
    default for E6, and what must the report show where the two differ?
+
+> *Taken 2026-10-16* (consultation `2d5ed45d…`, closed `solved`) together with the 4–6 cadence consultation (`95d43c15…`,
+> closed `solved`). What each changed is in §11: G1–G3, G9 and G11 come from them, and the `requested` grain was applied
+> in S3.
+> On the five questions: completion rank is defensible as an accounting convention but is no repository evidence, and a
+> caller-level shared total is the alternative (open, G11); `same-session` is inference, and main not propagating is
+> sound; the weakest-window roll-up is honest, but a report that leaves out `before-open` needs the per-window states
+> (G9); grouping on the answering model is right, and the report needs requested → answered counts (E6).
+
+## 11. For Fable — from the 2026-10-16 plan gate, the own review and the two consultations
+
+> **Open, for Fable.** Each item touches E4.S2 or a shape S2 declares final, so it is listed here and S2's text
+> is not changed. Every item was checked against code or a document; the evidence is named. Items that touch only S1,
+> S3 or S4 were applied in place, marked "plan gate 2026-10-16".
+
+| # | What is wrong | Evidence | Proposed fix |
+|---|---|---|---|
+| G1 | **A running peer is not `CompletedUtc = null`.** Decision 3, case 8b and §S2.7 rank a running peer last, but on disk the running record carries a completion stamp | `LiveRound.cs:256` saves the running row through `Record()`, which stamps `CompletedUtc = DateTime.UtcNow` (`:276`); `RoundRecord.CompletedUtc` is positional (`SessionStore.cs:84`) | the E5 mapping gives `GateRound.CompletedUtc` only when `Status == done`, else null; a builder fact with a running peer that HAS a stamp |
+| G2 | **`PriorEnd` is not only a read bound when a peer is not done.** A running peer round's start counts (`recorded` excludes only skipped/interrupted). If that round is then interrupted, a message before `PriorEnd` is owned by nobody, but with `.WithoutPriorEnd()` it is owned — so case 7's equality claim fails | §S2.3 *Prior end*; risk consultation, turn 1 item 2 (A starts `+60`, running; B opens `+100`, completes `+140`; message at `+30`) | `PriorEnd` and `ClaimantsOf` read only `done` peer rounds; that scenario as a fact |
+| G3 | **What is STORED can be owned twice.** The identities hold over `AssignEvery`, which recomputes. Live snapshots are frozen: (a) `Finish` stamps completion before attribution, save and projection, and `SessionClaim` locks repo + branch, not the caller, so two gates of one caller can each read the other as running; (b) a write answered after A's live read makes B recompute A's ladder as `wrote elsewhere`, and B owns what A already stored. Parent §9's backfill does not overwrite an `observed`/`partial` row of an equal reader version, so nothing repairs it. Decisions 7 and 10 say "placement and ownership never change after completion" and "the backfill is the authority"; both are false for the stored rows | `LiveRound.cs:233-237`, `RoundEngine.cs:485/591/612`, `SessionClaim.cs:32-44`, parent §9; both consultations | name an owner (E5) for uniqueness of stored ownership: provisional ownership plus reconciliation, or caller-level coordination; E5 tests the persisted interleaving, the late-result case and a failed projection |
+| G4 | **A meta without a transcript is counted twice.** E3 step 8a emits `UnobservedLaunch(…, MetaWithoutTranscript)` AND keeps `ObservedAgent(TranscriptPresent = false)`; decision 9 and *What is placed* turn both into items, so `c05` gets 3 unobserved launches, not 2. Also, `partial: <its Why>` has no source for the agent: `ObservedAgent` has no `Why` | amended E3 (`165de3bc`) steps 8a/`:777`, `:811`; its `c05` row: `UnobservedLaunches.Count == 2` | only `UnobservedLaunches` make items and reasons; a `TranscriptPresent = false` agent gets no launch and no item; the builder's `.MetaWithoutTranscript` emits both records, as E3 does |
+| G5 | **E3's reasons have no instant.** `ObservationReason(Code, Count)`; `StateReason.At` cannot be filled, and `At = null` marks every window `partial`, against decision 9 ("other windows stay observed"), case 5's C2 and S3's "a read budget hit before the window's end" | amended E3 `:227` | the mapping drops the two transcript-missing codes (G4's `UnobservedLaunches` carry them, with instants) and maps the rest with `At = null`; say so in §0 |
+| G6 | **`AssignEvery` throws on another caller's round.** One observation, every round: case 8b (B C1 by `c9`) and *Caller changed* fail `Validate()`. The `PeersUnknown` variant of case 7 duplicates on purpose | §S2.5 identity 2; S1 `Validate()` caller rule | `AssignEvery` skips rounds of another caller; the `PeersKnown = false` scenarios are outside the identity-2 theory |
+| G7 | **The token identity is wrong** (gate finding, accepted). `TokensAreTheSumOfOwnedMessagesOnce` subtracts `wrote elsewhere`, but cx `+10` in case 1 is owned by A AND labelled `wrote elsewhere` by B | §S2.10 row `NoMessageIsOwnedTwiceTests` | over message ids: tokens counted once when some assignment owns the id; excluded only when no assignment owns it and it is `wrote elsewhere` |
+| G8 | **Blind rounds, two texts.** §S2.1 says a round with no `StartedUtc` "opens no window, so its stretch lands in the next recorded round"; decision 1 makes it blind and the next round blind too | §S2.1 vs §S2.2 decision 1 | §S2.1 says what decision 1 says |
+| G9 | **Per-window state is lost.** S3 collapses `WindowState` into one round state, and `AuthorRow`/`ActivityTotals` are announced final. E6 leaves `before-open` out by default, so it cannot compute the state of the windows it includes ("before-open partial, round observed" and the reverse store the same) | §S2.5 `States`; S3 *State*; cadence consultation item 2 | S3 carries the state and reasons per window (empty windows too) before E5.S1 is coded; announce it to E5 |
+| G10 | **Decision 4's ambiguous agent in B.** "B's ambiguous totals count 1 agent and 0 tokens", but every w2 message in B is `claimed by peer`, and S3 has no rule that counts that agent; `BothGatesCountOneAmbiguousAgent` sits in S2, which makes no totals. The two-repositories row has no `Model`/`Effort`, and S3 says the only `unknown` model is the launch-only row | §S2.6 *Two repositories, one agent*; S3 *Grain* | a rule for the agent count from `AgentAssociation`; the fact moves to S3; that row's `Model` is `unknown` (or its placements') and S3 says so |
+| G11 | **Open choice (not a defect):** ambiguous activity seen by two gates goes by completion rank; the risk consultant prefers a caller-level shared total that no gate owns, at the cost of one more aggregate. With rank, E6 labels the allocation and keeps it out of repository and model conclusions | risk consultation, turn 1 | Fable chooses; E6 states it |
+| G12 | **Small text points.** (a) §S2.3 says "strongest wins" and §S2.5 "the weakest over its windows" for one ordering — use one word. (b) Claimants test `P.From ≤ t < P.To`; a null `From` needs `P.Contains(t)`. (c) When the ladder runs for a peer's window, its destination set must include THIS gate's `repo_path`. (d) `NoInputMemberIsACwd` and `ABashCallIsNotAWrite` cannot fail against the shells; say that their break-its prove them. (e) Four anchors are stale: `SessionStore.cs:248` → `:278`, `:594-597` → `:608-631` (`:626`), `RoundEngine.cs:895` → `:900` (case 2, §S2.11) | own review; §8.1 | edit when S2 is next amended |
