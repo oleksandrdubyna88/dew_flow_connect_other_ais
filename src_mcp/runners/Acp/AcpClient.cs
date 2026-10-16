@@ -99,7 +99,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             session.Pump();
             ended = await ConverseAsync(session, ask);
         }
-        catch (Exception e) when (e is AcpAgentException or AcpProtocolException or OperationCanceledException)
+        catch (Exception e) when (e is AcpAgentException or AcpProtocolException or AcpSessionLostException or OperationCanceledException)
         {
             ended = Ended.Of(Failed(e, ct.IsCancellationRequested, ask.Deadline));
         }
@@ -117,10 +117,21 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         };
     }
 
-    /// <summary><c>initialize</c>, <c>session/new</c>, the model found among what the session announced (D10) — and only then the prompt.</summary>
+    /// <summary><c>initialize</c>, the session opened (new, or loaded for <c>--session</c>), the model found among what it announced (D10) — and only then the prompt.</summary>
     private async Task<Ended> ConverseAsync(AcpSession session, AcpAsk ask)
     {
         await session.CallAsync("initialize", AcpMessages.Initialize());
+        var announced = await OpenedAsync(session, ask);
+
+        return NotOffered(announced, ask) is { Length: > 0 } why ? Ended.Of((AcpEnd.ModelNotOffered, why)) : await PromptedAsync(session, ask);
+    }
+
+    /// <summary>The session's own announcement: a new one's (<c>session/new</c>), or — with <see cref="AcpAsk.Session"/> — a loaded one's, whose result announces the model as a new one's does (M-K16, RESULTS §29).</summary>
+    private static Task<JsonElement> OpenedAsync(AcpSession session, AcpAsk ask) =>
+        ask.Session.Length == 0 ? CreatedAsync(session, ask) : LoadedAsync(session, ask);
+
+    private static async Task<JsonElement> CreatedAsync(AcpSession session, AcpAsk ask)
+    {
         var created = await session.CallAsync("session/new", AcpMessages.NewSession(ask.Cwd));
         session.SessionId = AcpMessages.Text(created, "sessionId");
         if (session.SessionId.Length == 0)
@@ -130,8 +141,32 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             throw new AcpProtocolException("session/new answered with no sessionId — nothing to configure or prompt");
         }
 
-        return NotOffered(created, ask) is { Length: > 0 } why ? Ended.Of((AcpEnd.ModelNotOffered, why)) : await PromptedAsync(session, ask);
+        return created;
     }
+
+    /// <summary>
+    /// <c>session/load</c> of the session an earlier turn's report named, on the SAME working folder (a loaded session resolves paths against the
+    /// folder it was made in, M-K5). The id is the asked one — the result need not repeat it. The history Kimi replays before it answers the load
+    /// is never the answer (<see cref="AcpSession.ReplayedAsync"/>). Any error the agent answers the load with is
+    /// <see cref="AcpEnd.SessionLost"/>: the agent no longer holds the session, whatever its code (a bad <c>cwd</c> is the same <c>-32602</c>,
+    /// RESULTS §29) — unless a known failure names it, which the shim decides (E5.2 decision 4).
+    /// </summary>
+    private static async Task<JsonElement> LoadedAsync(AcpSession session, AcpAsk ask)
+    {
+        session.SessionId = ask.Session;
+        try
+        {
+            return await session.ReplayedAsync("session/load", AcpMessages.LoadSession(ask.Session, ask.Cwd));
+        }
+        catch (AcpAgentException refused)
+        {
+            throw new AcpSessionLostException(LostReason(ask.Session, refused));
+        }
+    }
+
+    /// <summary>The sentence for a refused load: the id in coai's own words, the agent's code and message — its echo of the id written <c>&lt;id&gt;</c>, never repeated.</summary>
+    private static string LostReason(string session, AcpAgentException refused) =>
+        $"the agent no longer holds session {session} — it answered session/load with an error ({refused.Code}): {refused.Message.Replace(session, "<id>", StringComparison.Ordinal)}";
 
     /// <summary>
     /// Why the asked model cannot be set — the session does not offer it, or offers no such option at all — or empty. Found out in the
@@ -220,6 +255,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
     /// <param name="cancelledByCaller">Whether the caller's own token fired; otherwise a cancellation is the deadline.</param>
     private static (AcpEnd End, string Reason) Failed(Exception e, bool cancelledByCaller, TimeSpan deadline) => e switch
     {
+        AcpSessionLostException lost => (AcpEnd.SessionLost, lost.Message),
         AcpAgentException agent => (AcpEnd.AgentFailed, $"the agent answered with an error ({agent.Code}): {agent.Message}"),
         AcpProtocolException protocol => (AcpEnd.Protocol, protocol.Message),
         _ => Cancelled(cancelledByCaller, deadline),

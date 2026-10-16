@@ -8,7 +8,8 @@ namespace CoaiMcp.Runners.Acp;
 /// <param name="Deadline">The client's own deadline, under the caller's timeout — reaching it ends with a reason where a kill leaves a guess.</param>
 /// <param name="Home">The owned root the shim was handed (<c>--home</c>) — empty for a profile that needs none. The person's paths are NEVER derived from it or from this process's environment (D19).</param>
 /// <param name="PersonsBin">The person's tool folder the shim was handed (<c>--persons-bin</c>) — empty for a profile that needs none.</param>
-public sealed record AcpAsk(string Executable, string Cwd, string Model, string Prompt, TimeSpan Deadline, string Home = "", string PersonsBin = "");
+/// <param name="Session">The session to continue (<c>--session</c>): loaded with <c>session/load</c> on the same <paramref name="Cwd"/> — empty for a new session (E5.2).</param>
+public sealed record AcpAsk(string Executable, string Cwd, string Model, string Prompt, TimeSpan Deadline, string Home = "", string PersonsBin = "", string Session = "");
 
 /// <summary>How a turn ended — the one thing an exit code is made from.</summary>
 public enum AcpEnd
@@ -33,6 +34,9 @@ public enum AcpEnd
 
     /// <summary>The session did not offer the asked model (or offers no model option at all): found out before any prompt, so nothing was spent (D10).</summary>
     ModelNotOffered,
+
+    /// <summary>The agent no longer holds the session <c>--session</c> named: its <c>session/load</c> was answered with an error no known failure names — nothing was prompted (E5.2).</summary>
+    SessionLost,
 }
 
 /// <summary>Context tokens as the agent reported them: <c>usage_update {used, size}</c> — no input/output split, no cost (D15, D9).</summary>
