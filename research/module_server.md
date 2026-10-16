@@ -3468,6 +3468,18 @@ written empty, and the column's default `not recorded` marks every row from befo
 Reached through both preview-fork shapes as step 21 is, and `--round-counts` on a step-21 file reads and leaves it at
 twenty-one (`TheRoundsSizeIsStepTwentyTwoTests`).
 
+**Schema step 23 — `rounds.plan_source`** (`Schema.ThePlanSource`, appended after step 22; story E2.S1 of
+`todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C1). What a PLAN round reviewed: the JSON of the
+record's `PlanSource` (`origin` `commit`/`text`, `commit`, `path`, `blob`, `bytes`, `textId`), serialised through
+`ServerJsonContext.Default.PlanSource` — camelCase, indented, exactly what the session file holds. `RoundsDb.RecordRoundRow`
+binds it from the record (`$planSource`), and the upsert on `(session, stage, number)` rewrites it with the rest, as it
+does `round_key`: unlike the size there is no separate measurement to protect, so a re-record from the record is correct.
+**Empty means "not recorded"**: every row from before the step, every code/document/feature/skipped round (they carry no
+`PlanSource`), and a plan round that finished before E1 stamped one. No backfill — the session file keeps its own copy.
+Reached through both preview-fork shapes as step 22 is, and a read-only `--log` on a step-22 file reads and leaves it at
+twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' step-12 re-run drops the column with the
+rest.
+
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
 `files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's ids to `RoundChangesLog.Attach` (its own file, the
