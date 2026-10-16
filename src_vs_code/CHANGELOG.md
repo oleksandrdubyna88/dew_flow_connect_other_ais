@@ -1,5 +1,15 @@
 # Changelog
 
+## Extension 0.78.0 — 2026-10-16
+
+**Added: the Rounds page says what a plan round reviewed.** When you open a plan round, a line under "asked by" now
+says "reviewed from":
+- a committed plan shows its path, the commit, the file's id and its size;
+- a pasted plan shows its size and its id.
+
+A record that is incomplete or malformed shows no line at all, and never a wrong one. It needs coai-mcp 0.58.0; with an
+older server the line is not there.
+
 ## Server 0.58.0 — 2026-10-16
 
 **Added: the plan gate can read a committed plan itself.** `review_plan` takes `committedPlan`, a path in the
