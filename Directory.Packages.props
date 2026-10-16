@@ -72,7 +72,7 @@
     <!-- xUnit v3 on the native Microsoft Testing Platform: the test project builds into a
          self-contained runner executable. There is no VSTest testhost here, so `dotnet test`
          aborts — run the executable (.claude/rules/shared/common/testing.md). -->
-    <PackageVersion Include="xunit.v3" Version="4.0.1" />
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
 
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License
          (non-commercial only). Do NOT bump. -->
