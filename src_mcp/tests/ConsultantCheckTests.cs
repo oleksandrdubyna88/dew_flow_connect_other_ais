@@ -525,6 +525,34 @@ public sealed class ConsultantCheckTests : IDisposable
         Directory.EnumerateFileSystemEntries(Path.Combine(homes, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
     }
 
+    /// <summary>A Vibe consultant row that names no model: the check's ledger row names the default it ran on (decision 75 of the E4 plan).</summary>
+    [Fact]
+    public async Task AVibeCheckOfARowWithNoModel_IsLedgeredOnTheDefaultItRanOn()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = CoaiMcp.Runners.Vibe.VibePathBudget.Using(CoaiMcp.Runners.Vibe.VibePathBudget.None);
+        var vibe = new PlayedVibe(new ProcessLauncher(), string.Empty)
+        {
+            AnswerFor = seen => $"marker: {seen.Files["CHECK.md"].Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT",
+        };
+        using var homes = TempDir.For("testsToDelete-vh-check-model-");
+        var settings = Settings() with
+        {
+            ConsultantHomesRoot = homes,
+            Consultants = new Dictionary<string, ConsultantChoice>
+            {
+                [CallerIdentity.Claude] = new("mistral", Model: string.Empty, Runtime: "vibe", ExecutablePath: PlayedVibe.Exe),
+            },
+        };
+
+        var (code, said, _) = await Check(settings, vibe, TestContext.Current.CancellationToken, "--caller", "claude");
+
+        code.Should().Be(0);
+        Text(said, "state").Should().Be("answered", said.ToString());
+        var row = JsonDocument.Parse(File.ReadAllLines(Path.Combine(_data, "usage.jsonl")).Single(line => line.Contains("\"consult-check\""))).RootElement;
+        row.GetProperty("model").GetString().Should().Be(CoaiMcp.Runners.Vibe.VibeModels.Default);
+    }
+
     private PanelSettings VibeSettings(string homesRoot) => Settings() with
     {
         ConsultantHomesRoot = homesRoot,

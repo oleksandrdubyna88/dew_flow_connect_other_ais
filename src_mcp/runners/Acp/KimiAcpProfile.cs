@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 
@@ -21,17 +22,32 @@ namespace CoaiMcp.Runners.Acp;
 /// no permission request, no client call (§2.3) — so Kimi's READS are unbounded, as codex's are; the boundary
 /// closes <c>Read</c> and the instruction-file search, and the plan says so rather than claiming confinement.</para>
 /// </remarks>
-public sealed class KimiAcpProfile : IAcpProfile
+public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
 {
+    /// <summary>The profile on this host: the person's own Kimi is looked for in the host's process listing.</summary>
+    public KimiAcpProfile()
+        : this(ForeignKimiWatch.Real())
+    {
+    }
+
+    /// <summary>What looks for the person's own Kimi before the hold is taken (decision 74); a test hands in a fake process list's.</summary>
+    public ForeignKimiWatch Watch { get; } = watch;
+
     /// <summary>The name a launch asks for this profile by.</summary>
     public const string ProfileName = "kimi";
 
     /// <summary>
     /// The names refused at every depth: both spellings Kimi searches for its instructions (<c>AGENTS.md</c>,
     /// <c>agents.md</c>, and <c>.kimi-code/AGENTS.md</c> through its folder), Vibe's folder and the shared
-    /// exclusions of the sanitised snapshot (D6) — so the boundary refuses what the snapshot leaves out.
+    /// exclusions of the sanitised snapshot (D6) — so the boundary refuses what the snapshot leaves out. M-K9 (e) added two
+    /// (RESULTS section 21): <c>.agents/agents</c> (a sub-agent root Kimi loads from disk, a PATH suffix like <c>.agents/skills</c>) and
+    /// <c>.mcp.json</c> (the file Kimi starts MCP servers from when the folder is trusted). The latter is a NAME, so it is refused at every
+    /// depth — the parent plan says "project-root", and the stricter reading is what a name entry does.
     /// </summary>
-    public static readonly string[] Exclusions = ["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".git"];
+    public static readonly string[] Exclusions = ["AGENTS.md", "agents.md", ".kimi-code", ".vibe", ".agents/skills", ".agents/agents", ".mcp.json", ".git"];
+
+    /// <summary>The name of the spent-allowance failure — the field of the shim's report that <c>KimiRuntime</c> classifies a rate limit from, never the text.</summary>
+    public const string BalanceSpent = "balance_spent";
 
     /// <summary>The sentences measured on 2026-10-12 (RESULTS §2), the specific one first.</summary>
     private static readonly AcpKnownFailure[] Failures =
@@ -48,10 +64,18 @@ public sealed class KimiAcpProfile : IAcpProfile
             AcpFailureKind.Refused),
         new(
             "insufficient balance",
-            "balance_spent",
+            BalanceSpent,
             "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset",
             AcpFailureKind.Spent),
     ];
+
+    /// <summary>
+    /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the
+    /// owned home's inventory (section 18), the OS-home redirect (section 19), the model pin (section 20) — is 2.1.1's; a version
+    /// joins this list when the whole probe (<c>scripts/probe-kimi-confinement.mjs</c>, whose shim arms speak the shim's <c>--home</c>/<c>--persons-bin</c>/<c>--locks</c> flags on the owned-root layout since E4.5 — proved by <c>scripts/lib/kimi-shim.test.mjs</c> without a paid run, the cells themselves not re-run on it yet) and <c>scripts/probe-kimi-tree-hold.mjs</c> have run on it. Any other version is run
+    /// with a warning (the owner's decision of 2026-10-13), never refused.
+    /// </summary>
+    public static IReadOnlyList<string> MeasuredVersions { get; } = ["2.1.1"];
 
     public string Name => ProfileName;
 
@@ -59,6 +83,24 @@ public sealed class KimiAcpProfile : IAcpProfile
     public string DefaultExecutable => InstalledExecutable;
 
     public IReadOnlyList<string> Arguments => ["acp"];
+
+    /// <summary>Kimi runs only on an owned home and only under the tree hold (D19, E4.2 decision 10): <c>--home</c>, <c>--persons-bin</c> and <c>--locks</c>.</summary>
+    public bool NeedsAHome => true;
+
+    /// <summary>
+    /// <c>kimi acp</c> in the BUILT environment (D19) — the minimal names and the seven the launch control builds, never the shim's own. The
+    /// person's paths are the two the runtime passed on the argv (<see cref="KimiPlaces.ForShim"/>); nothing is read from this process's environment
+    /// but the <c>PATH</c> to keep.
+    /// </summary>
+    public ProcessRequest AgentRequest(AcpAsk ask) => KimiEnvironment.Built(new ProcessRequest(ask.Executable, Arguments, ask.Cwd), PlacesOf(ask));
+
+    /// <summary>The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named.</summary>
+    public string AgentRefusal(ProcessRequest request, AcpAsk ask) => KimiEnvironment.Refusal(request, PlacesOf(ask));
+
+    /// <summary>The sign-in's tree hold and the home's (<see cref="KimiShimHold"/>), taken immediately before the agent starts — once the person's own Kimi is not running (decision 74).</summary>
+    public AcpHolding Hold(AcpAsk ask, TimeSpan within) => KimiShimHold.Taken(PlacesOf(ask), within, Watch);
+
+    private static KimiPlaces PlacesOf(AcpAsk ask) => KimiPlaces.ForShim(ask.Home, ask.PersonsBin);
 
     /// <summary>The <c>session/new</c> config option that carries the model id (<c>kimi-code/k3-256k</c>, …).</summary>
     public string ModelOptionId => "model";

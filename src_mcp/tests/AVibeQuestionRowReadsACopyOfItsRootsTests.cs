@@ -65,8 +65,12 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
 
     private PanelService Service(PlayedVibe vibe, params string[] roots) => ServiceOn(vibe, string.Empty, roots);
 
+    private PanelService ServiceWithModel(PlayedVibe vibe, string model, params string[] roots) => ServiceFor(vibe, string.Empty, model, roots);
+
     /// <summary>The service with a homes root: a home-keeping row reserves its one-shot folder there (D1).</summary>
-    private PanelService ServiceOn(PlayedVibe vibe, string homesRoot, params string[] roots) => new(
+    private PanelService ServiceOn(PlayedVibe vibe, string homesRoot, params string[] roots) => ServiceFor(vibe, homesRoot, "glm-5-3", roots);
+
+    private PanelService ServiceFor(PlayedVibe vibe, string homesRoot, string model, params string[] roots) => new(
         new PanelSettings
         {
             ConsultantHomesRoot = homesRoot,
@@ -76,7 +80,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
             ReviewerTimeout = TimeSpan.FromSeconds(30),
             QuestionConsult = new QuestionConsultSettings
             {
-                Rows = [new QuestionRow("vibe-disk", "mistral", "vibe", "glm-5-3", string.Empty, PlayedVibe.Exe, string.Empty, "question-disk", Enabled: true)],
+                Rows = [new QuestionRow("vibe-disk", "mistral", "vibe", model, string.Empty, PlayedVibe.Exe, string.Empty, "question-disk", Enabled: true)],
                 Roots = roots,
                 RowBudget = TimeSpan.FromSeconds(30),
             },
@@ -239,6 +243,21 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         var billed = File.ReadAllLines(_dir.At("data", "usage.jsonl")).Select(line => JsonDocument.Parse(line).RootElement).Should().ContainSingle("one ledger line for the turn").Subject;
         billed.GetProperty("tokensIn").GetInt64().Should().Be(84186, "read from the export, never zero");
         billed.GetProperty("tokensOut").GetInt64().Should().Be(1395);
+    }
+
+    /// <summary>A Vibe question row that names no model: its ledger line names the default it ran on, not the row's empty one (decision 75 of the E4 plan).</summary>
+    [Fact]
+    public async Task ARowWithNoModel_IsLedgeredOnTheDefaultItRanOn()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(ServiceWithModel(vibe, string.Empty, Path.Combine(Repo, "src")));
+
+        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+        var billed = File.ReadAllLines(_dir.At("data", "usage.jsonl")).Select(line => JsonDocument.Parse(line).RootElement).Should().ContainSingle().Subject;
+        billed.GetProperty("model").GetString().Should().Be(VibeModels.Default);
     }
 
     // ---------- the home is short and owned (D1 of research/PLAN_vibe_live_round_fixes.md, A9) ----------

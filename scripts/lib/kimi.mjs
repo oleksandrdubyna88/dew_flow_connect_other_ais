@@ -24,10 +24,34 @@ export const EXIT = { ok: 0, badRequest: 65, unavailable: 69, failed: 70, spent:
 /** KimiAcpProfile.Exclusions — the names the shipped boundary refuses at every depth; the M-K5 client refuses the same. */
 export const EXCLUSIONS = ['AGENTS.md', 'agents.md', '.kimi-code', '.vibe', '.agents/skills', '.git'];
 
-/** `coai-mcp --ask-acp …` as KimiRuntime will build it (plan §4 S4): the prompt rides on stdin, never here. */
-export function shimArgs({ cwd, model, deadlineSeconds, executable = '' }) {
+/** The product's owned-home layout (E4.2/E4.3): the shim's `--home` is the ROOT; `<root>/home` is KIMI_CODE_HOME, `<root>/os` the empty OS home. */
+export const OWNED_HOME = 'home';
+export const OWNED_OS = 'os';
+
+/** The owned root a KIMI_CODE_HOME belongs to (`<root>/home` → `<root>`), or '' for a folder not laid out that way — the shim refuses it. */
+export const rootOfHome = (home) => (home && basename(home) === OWNED_HOME ? dirname(home) : '');
+
+/**
+ * `coai-mcp --ask-acp …` as KimiRuntime builds it (KimiRuntime.ForLaunch; the shim's own contract, E4.3): the prompt rides on stdin, never here.
+ * `root` is the owned root and brings the three flags a Kimi turn is refused without — `--home`, `--persons-bin` (the person's tool folder) and
+ * `--locks` (the lock folder). Without a root the argv is the pre-E4.3 shape, which the shim answers 65.
+ */
+export function shimArgs({ cwd, model, deadlineSeconds, executable = '', root = '', personsBin = '', locks = '' }) {
+  if (root && !personsBin) throw new Error('shimArgs: a root without --persons-bin — the shim refuses a Kimi turn without all three of --home, --persons-bin and --locks');
+  if (root && !locks) throw new Error('shimArgs: a root without --locks — the shim refuses a Kimi turn without all three of --home, --persons-bin and --locks');
   return ['--ask-acp', '--profile', 'kimi', '--cwd', cwd, '--model', model, '--deadline-seconds', String(deadlineSeconds),
-    ...(executable ? ['--executable', executable] : [])];
+    ...(executable ? ['--executable', executable] : []),
+    ...(root ? ['--home', root, '--persons-bin', personsBin, '--locks', locks] : [])];
+}
+
+/**
+ * What an arm would vary that the shim now FIXES: `KimiEnvironment.Built` always pins KIMI_CODE_NO_AUTO_UPDATE and always redirects the OS home
+ * to `<root>/os` (E4.3), so an arm that measured their absence cannot be run through it — and is refused by name, never run as something else.
+ */
+export function shimRefusal(spec) {
+  if (spec.pin === false) return 'the shim always sets KIMI_CODE_NO_AUTO_UPDATE=1 (KimiEnvironment.Built) — run this arm with kind "prompt" to measure its absence';
+  if (spec.profile === '') return 'the shim always redirects USERPROFILE/HOME to <root>/os (KimiEnvironment.Built) — run this arm with kind "prompt" to measure the real OS home';
+  return '';
 }
 
 export const sha256 = (data) => createHash('sha256').update(data).digest('hex');

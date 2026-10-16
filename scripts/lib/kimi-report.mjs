@@ -10,9 +10,35 @@ export const cut = (s, k) => String(s ?? '').replaceAll(/\s+/gu, ' ').replaceAll
 /** `{a: true, b: false}` as `a=yes b=no`. */
 export const flags = (o) => Object.entries(o ?? {}).map(([k, v]) => `${k}=${v ? 'yes' : 'no'}`).join(' ');
 
-/** One cell's table: M-K5's two-turn layout, or the arm layout every other cell uses. */
+/** One cell's table: M-K5's two-turn layout, M-K11c's inventory steps, M-K5b's usage across a load, or the arm layout every other cell uses. */
 export function table(cell, rows) {
-  return cell === 'M-K5' ? resumeTable(rows) : armTable(cell, rows);
+  if (cell === 'M-K5') return resumeTable(rows);
+  if (cell === 'M-K11c') return inventoryTable(rows);
+  if (cell === 'M-K5b') return usageTable(rows);
+  return armTable(cell, rows);
+}
+
+/** M-K11 (c): one row per step of each run — what the owned home holds after it, what was added or changed, and each new name's class. */
+function inventoryTable(rows) {
+  const classes = (s) => Object.entries(s.classes ?? {}).filter(([, c]) => c !== 'data').map(([f, c]) => `${f}=${c}`).join(' ');
+  return [
+    '### M-K11c', '',
+    '| Run | Step | Files | Added | Changed | Removed | Non-data names added | Exit / answered |',
+    '|---|---|---|---|---|---|---|---|',
+    ...rows.flatMap((r) => (r.error ? [`| ${r.run} | — | ${cut(r.error, 160)} | | | | | |`]
+      : r.steps.map((s) => `| ${r.run} | ${s.step} | ${s.count} | ${cut(s.added.join(' '), 220)} | ${cut(s.changed.join(' '), 160)} | ${cut(s.removed.join(' '), 80)} | ${cut(classes(s) || 'none', 120)} | ${s.exit ?? s.version?.stdout ?? ''} ${s.answer ? flags(s.answer) : ''} |`))),
+  ].join('\n');
+}
+
+/** M-K5b: turn 1's and turn 2's model calls out of the session log against the `/usage` line after the load. */
+function usageTable(rows) {
+  return [
+    '### M-K5b', '',
+    '| Run | Exit t1 | Same session | outputTokens after t1 | after t2 (every call) | /usage line | Verdict |',
+    '|---|---|---|---|---|---|---|',
+    ...rows.map((r) => (r.error ? `| ${r.run} | — | ${cut(r.error, 160)} | | | | |`
+      : `| ${r.run} | ${r.turn1.exit} | ${r.sameSession} | ${r.outputTokensAfterTurn1.join('+')} | ${r.outputTokensAfterTurn2.join('+')} | ${cut(r.usageLine, 120)} | ${cut(r.verdict, 100)} |`)),
+  ].join('\n');
 }
 
 function resumeTable(rows) {
@@ -40,15 +66,23 @@ function markerRead(t2) {
 function armTable(cell, rows) {
   return [
     `### ${cell}`, '',
-    '| Arm | Run | Exit | End / failure | Answer (excerpt) | Canary / written | Expect | Refusals | Tool calls | Reads | Session store |',
-    '|---|---|---|---|---|---|---|---|---|---|---|',
-    ...rows.map((r) => (r.error ? `| ${r.arm} | ${r.run} | — | ${cut(r.error, 160)} | | | | | | | |` : armRow(r))),
+    '| Arm | Run | Exit | End / failure | Answer (excerpt) | Canary / written | Expect | Refusals | Tool calls | Reads | Session store | Homes (D19) |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    ...rows.map((r) => (r.error ? `| ${r.arm} | ${r.run} | — | ${cut(r.error, 160)} | | | | | | | | |` : armRow(r))),
   ].join('\n');
 }
 
 function armRow(r) {
   const extra = extraOf(r);
-  return `| ${r.arm} | ${r.run} | ${r.exit} | ${endOf(r)} | ${answerOf(r)} | ${writtenOf(r)} | ${expectOf(r)}${extra ? ` ${cut(extra, 160)}` : ''} | ${cut(r.refusals, 80)} | ${cut(`${r.toolCallCount}: ${r.toolCalls}`, 120)} | ${cut(r.reads, 100)} | ${cut(storeOf(r) + credentialsOf(r), 140)} |`;
+  return `| ${r.arm} | ${r.run} | ${r.exit} | ${endOf(r)} | ${answerOf(r)} | ${writtenOf(r)} | ${expectOf(r)}${extra ? ` ${cut(extra, 160)}` : ''} | ${cut(r.refusals, 80)} | ${cut(`${r.toolCallCount}: ${r.toolCalls}`, 120)} | ${cut(r.reads, 100)} | ${cut(storeOf(r) + credentialsOf(r), 140)} | ${cut(homesOf(r), 220)} |`;
+}
+
+/** The D19 facts of a row: what the owned home was admitted to hold, what the person's home did, `updates/`, the version around, the model, the redirected profile. */
+function homesOf(r) {
+  const versions = r.versions ? `version ${r.versions.before?.stdout}→${r.versions.after?.stdout}` : '';
+  const profile = r.profileAfter === null || r.profileAfter === undefined ? '' : `profile got: ${r.profileAfter.length ? r.profileAfter.join(' ') : 'nothing'}`;
+  return [r.admitted ? `admitted: ${r.admitted}` : '', r.realHome ? `real home: ${r.realHome}` : '', r.updates ? `updates/: ${r.updates}` : '', versions,
+    r.modelAlias ? `model ${r.modelAlias}` : '', profile].filter(Boolean).join('; ');
 }
 
 function writtenOf(r) {

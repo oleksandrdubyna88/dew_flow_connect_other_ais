@@ -6,7 +6,9 @@ namespace CoaiMcp.Runners.Acp;
 /// <param name="Model">The value of the profile's model option, set before the prompt (D15).</param>
 /// <param name="Prompt">The whole prompt, sent as one text block of <c>session/prompt</c>.</param>
 /// <param name="Deadline">The client's own deadline, under the caller's timeout — reaching it ends with a reason where a kill leaves a guess.</param>
-public sealed record AcpAsk(string Executable, string Cwd, string Model, string Prompt, TimeSpan Deadline);
+/// <param name="Home">The owned root the shim was handed (<c>--home</c>) — empty for a profile that needs none. The person's paths are NEVER derived from it or from this process's environment (D19).</param>
+/// <param name="PersonsBin">The person's tool folder the shim was handed (<c>--persons-bin</c>) — empty for a profile that needs none.</param>
+public sealed record AcpAsk(string Executable, string Cwd, string Model, string Prompt, TimeSpan Deadline, string Home = "", string PersonsBin = "");
 
 /// <summary>How a turn ended — the one thing an exit code is made from.</summary>
 public enum AcpEnd
@@ -28,6 +30,9 @@ public enum AcpEnd
 
     /// <summary>The caller's token fired — somebody withdrew the job; never retried, never a failure of the model.</summary>
     Cancelled,
+
+    /// <summary>The session did not offer the asked model (or offers no model option at all): found out before any prompt, so nothing was spent (D10).</summary>
+    ModelNotOffered,
 }
 
 /// <summary>Context tokens as the agent reported them: <c>usage_update {used, size}</c> — no input/output split, no cost (D15, D9).</summary>
@@ -35,6 +40,18 @@ public enum AcpEnd
 public sealed record AcpUsage(long ContextUsed, long ContextSize, bool Captured)
 {
     public static readonly AcpUsage Unknown = new(0, 0, false);
+}
+
+/// <summary>
+/// The session's token totals as the agent's own <c>/usage</c> reported them (D15, M-K2): the input/output split that
+/// <c>usage_update</c> does not carry. Unknown is said by <see cref="Captured"/>, never by a zero.
+/// </summary>
+/// <param name="In">Input tokens of the whole session so far.</param>
+/// <param name="Out">Output tokens of the whole session so far.</param>
+/// <param name="Captured">False when the agent said nothing parseable — the tokens are then unknown, and 0.</param>
+public sealed record AcpTokens(long In, long Out, bool Captured)
+{
+    public static readonly AcpTokens Unknown = new(0, 0, false);
 }
 
 /// <summary>A permission request the client refused: which tool asked, and which option said no.</summary>
@@ -76,4 +93,12 @@ public sealed record AcpOutcome(
     string StdErr,
     int AgentPid,
     int DroppedTraceEntries = 0,
-    int TruncatedTraceFields = 0);
+    int TruncatedTraceFields = 0)
+{
+    /// <summary>The session's input/output token totals from <c>/usage</c>, asked after an answered turn only — unknown otherwise.</summary>
+    public AcpTokens Tokens { get; init; } = AcpTokens.Unknown;
+
+    /// <summary>A turn that never started an agent: only the reason, and nothing from a session that did not exist.</summary>
+    public static AcpOutcome NotStarted(string why) =>
+        new(AcpEnd.NotStarted, string.Empty, why, string.Empty, string.Empty, AcpUsage.Unknown, [], [], [], string.Empty, 0);
+}

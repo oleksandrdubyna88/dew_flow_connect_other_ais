@@ -74,6 +74,9 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     private AcpUsage _usage = AcpUsage.Unknown;
     private string _broken = string.Empty;
 
+    /// <summary>The id <c>session/new</c> answered with — empty until it has. Set by the client; the teardown's <c>session/cancel</c> names it.</summary>
+    public string SessionId { get; set; } = string.Empty;
+
     /// <summary>The reader, started by <see cref="Pump"/>; awaited by the client on the way out.</summary>
     public Task Reading { get; private set; } = Task.CompletedTask;
 

@@ -82,7 +82,8 @@ export const UNNAMED_VENDOR_COLOUR = 'var(--vscode-foreground)';
  * since the feature shipped, because a mapping somebody has already learned is not worth
  * invalidating; `claude` and `antigravity` are pinned for the same reason before anybody learns
  * something else, and `vibe` (Mistral, 2026-10-13) takes amber — the warm end of Mistral's own mark,
- * the orange of which `local` already wears.</p>
+ * the orange of which `local` already wears; `kimi` (Moonshot, 2026-10-15) takes the slate — its own mark is monochrome,
+ * and the last free slot is the neutral one.</p>
  *
  * <p><b>Their slots are reserved whether or not they are configured.</b> Placing anchors "first" is
  * not enough: with only `claude` configured, an unanchored vendor would otherwise be free to take
@@ -97,6 +98,7 @@ const ANCHORED: Readonly<Record<string, number>> = {
   gemini: 4,       // Green
   claude: 6,       // Purple
   local: 10,       // Orange
+  kimi: 11,        // Slate — Kimi's own mark is monochrome, so a neutral slot nobody else wears
 };
 
 const ANCHOR_SLOTS: ReadonlySet<number> = new Set(Object.values(ANCHORED));

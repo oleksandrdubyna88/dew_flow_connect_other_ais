@@ -1193,7 +1193,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
  * on this list is asked for an endpoint, which is the safe direction: an unnecessary empty box is
  * a smaller defect than a reviewer that cannot be configured.</p>
  */
-const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 'gemini', 'antigravity', 'vibe']);
+const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 'gemini', 'antigravity', 'vibe', 'kimi']);
 
 /**
  * What a Team server still allows for one of its vendors.

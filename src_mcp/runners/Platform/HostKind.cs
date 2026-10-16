@@ -30,6 +30,22 @@ public static class HostKinds
     public static HostKind Current =>
         Of(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), OperatingSystem.IsMacOS(), VendorDiagnosis.OnWsl);
 
+    /// <summary>
+    /// Whether a configured executable would start the Linux side: <c>wsl</c> / <c>wsl.exe</c> by file name, or anything under
+    /// <c>\\wsl…</c> — D18's "a WSL bridge named as the executable is the Linux side by another door". Shared by the Vibe and Kimi
+    /// launch controls (E4.2 decision 7), moved here from <c>VibeLaunch</c> rather than copied.
+    /// </summary>
+    /// <remarks>The file name is cut at EITHER separator, not by <c>Path.GetFileName</c>: a Windows path is judged the same on a Linux test host.</remarks>
+    public static bool RunsInWsl(string executable)
+    {
+        var trimmed = executable.Trim();
+        var name = trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
+
+        return name.Equals("wsl", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("wsl.exe", StringComparison.OrdinalIgnoreCase)
+            || executable.TrimStart().StartsWith(@"\\wsl", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>The host the four facts describe — pure, so every platform is a unit test on any one of them.</summary>
     public static HostKind Of(bool windows, bool linux, bool macOs, bool wsl) => (windows, linux, macOs) switch
     {

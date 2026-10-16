@@ -89,6 +89,26 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     }
 
     /// <summary>
+    /// A Vibe row that names no model runs on Vibe's default, and the ledger line says so (decision 75 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>): the consult
+    /// turn's ledger row took the ROW's model, which is empty, while the adapter had resolved <see cref="VibeModels.Default"/> into the launch.
+    /// </summary>
+    [Fact]
+    public async Task AVibeRowWithNoModel_IsLedgeredOnTheDefaultItRanOn()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var _ = Runners.Vibe.VibePathBudget.Using(Runners.Vibe.VibePathBudget.None);
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var vibe = new PlayedVibe(_launcher, Advice);
+        var noModel = new Dictionary<string, ConsultantChoice> { [CallerIdentity.Claude] = new("mistral", Model: string.Empty, Runtime: "vibe", ExecutablePath: PlayedVibe.Exe) };
+
+        var reply = await Consult(Service(providers: [], consultants: noModel, launcher: vibe, homes: Homes), "why is the count wrong");
+
+        reply.TryGetProperty("error", out var error).Should().BeFalse(error.ToString());
+        var row = JsonDocument.Parse(File.ReadAllLines(Path.Combine(_data, "usage.jsonl")).Single(line => line.Contains("\"consult\""))).RootElement;
+        row.GetProperty("model").GetString().Should().Be(VibeModels.Default);
+    }
+
+    /// <summary>
     /// R1 and R4 of the S3 risk consultation, at the place: a turn stamps its folder with THIS store, holds the folder's
     /// cross-process turn lock for the whole turn, and marks the stamp ended once the turn is read — so a second server
     /// neither judges the folder by its own records nor deletes it under a running turn.

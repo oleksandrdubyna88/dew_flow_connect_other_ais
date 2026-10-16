@@ -106,7 +106,10 @@ if (args is ["acp-agent", var acpScript])
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScript);
 }
 
-if (args is ["acp"] && Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT") is { Length: > 0 } acpScriptFromEnv)
+// The script comes from the environment, else from beside the working folder (`<cwd>/../agent.json`): a launch that builds the
+// agent's environment from scratch (E4.3, the Kimi shim) carries no FAKECLI_* variable, and the fake agent's folder is the one place the
+// test and the agent both already know.
+if (args is ["acp"] && (Environment.GetEnvironmentVariable("FAKECLI_ACP_SCRIPT") is { Length: > 0 } named ? named : CoaiMcp.FakeCli.AcpAgent.ScriptBesideTheWorkFolder()) is { Length: > 0 } acpScriptFromEnv)
 {
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScriptFromEnv);
 }
@@ -292,6 +295,12 @@ switch (args0)
         Thread.Sleep(int.Parse(ms));
         File.WriteAllText(Path.Combine(dir, $"{id}.end"), DateTime.UtcNow.Ticks.ToString());
         return 0;
+
+    // The SHIM, played by a child (E4.2 S2.43): takes the PRODUCT's sign-in hold — `tree` — or only the server's gate — `gate`,
+    // the control arm — under the lock folder it was handed, prints `held <pid of its sleeping grandchild>`, and sleeps. The
+    // test host itself NEVER holds an inheritable handle: the hold would be inherited by every process the suite starts.
+    case ["tree-hold", var mode, var locks, var target, var home]:
+        return CoaiMcp.FakeCli.TreeHoldVerb.Run(mode, locks, target, home);
 
     // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
     // for. Five of these are how the cross-process claim is measured rather than asserted: two

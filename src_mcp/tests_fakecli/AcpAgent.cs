@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.FakeCli;
 
@@ -21,13 +22,20 @@ namespace CoaiMcp.FakeCli;
 ///   "omitStopReason": false,      true: the prompt is answered with an empty result, no stopReason at all
 ///   "omitSessionId": false,       true: session/new answers with no sessionId at all
 ///   "ignoreCancel": false,        true: a session/cancel changes nothing
+///   "models": ["m-1"],            the values of the "model" config option session/new announces; absent: ["m-1"]; []: no config option at all (E4.3)
+///   "usageReply": "…",            the text of the one chunk a session/prompt whose text is exactly "/usage" is answered with (RESULTS §5);
+///                                 absent: that prompt is answered end_turn at once, with no chunk and none of the steps — as a real agent answers it itself
+///   "promptErrorOnUsage": "…",    answer the "/usage" prompt with this JSON-RPC error
+///   "usageHang": false,           true: the "/usage" prompt is never answered (the bound's arm)
+///   "envFile": "&lt;path&gt;",         on start, before reading anything: this process's whole environment, NAME=value lines sorted, and then
+///   "probes": ["&lt;path&gt;",…]       one "PROBE &lt;path&gt; Held|Free|Unknown" line per lock file named — what a tree hold looks like from INSIDE the agent
 ///   "steps": [                    run in order while session/prompt is open
 ///     {"kind":"chunk","text":"…"}                      an agent_message_chunk
 ///     {"kind":"usage","used":1,"size":2}               a usage_update
 ///     {"kind":"toolCall","id":"t1","title":"…","toolKind":"read","status":"pending"}
 ///     {"kind":"toolCallUpdate","id":"t1","status":"completed"}
 ///     {"kind":"permission","title":"…","toolKind":"edit","options":[{"optionId":"a","kind":"allow_once"},…]}
-///     {"kind":"read","path":"…","line":1,"limit":10}   an fs/read_text_file; the reply is logged
+///     {"kind":"read","path":"…","line":1,"limit":10}   an fs/read_text_file; the reply is logged ("echo":true: and said back as a message chunk, whole — E4.2 S2.45)
 ///     {"kind":"request","method":"fs/write_text_file","params":{…}}   any other client request; the reply is logged
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
@@ -56,6 +64,7 @@ internal static class AcpAgent
         var script = JsonDocument.Parse(File.ReadAllText(scriptPath)).RootElement.Clone();
         _log = Text(script, "log");
         _sessionId = Text(script, "sessionId") is { Length: > 0 } named ? named : "fake-session";
+        WriteEnvironment(script);
 
         while (Console.In.ReadLine() is { } line)
         {
@@ -71,6 +80,37 @@ internal static class AcpAgent
         // EOF on stdin: the client closed its end, and a well-behaved agent leaves.
         return 0;
     }
+
+    /// <summary>The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — or empty when there is none.</summary>
+    public static string ScriptBesideTheWorkFolder()
+    {
+        var beside = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "agent.json"));
+
+        return File.Exists(beside) ? beside : string.Empty;
+    }
+
+    /// <summary>
+    /// <c>envFile</c>: what this process was started with, before a line of the protocol — and what it can see of the locks named in
+    /// <c>probes</c>. A tree hold taken by the shim is visible here only if the agent inherited it, which is the point.
+    /// </summary>
+    private static void WriteEnvironment(JsonElement script)
+    {
+        if (Text(script, "envFile") is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        var lines = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
+            .Select(pair => $"{pair.Key}={pair.Value}")
+            .Order(StringComparer.Ordinal)
+            .Concat(Probed(script));
+        File.WriteAllLines(path, lines);
+    }
+
+    private static IEnumerable<string> Probed(JsonElement script) =>
+        script.TryGetProperty("probes", out var probes) && probes.ValueKind == JsonValueKind.Array
+            ? probes.EnumerateArray().Select(probe => probe.GetString() ?? string.Empty).Select(path => $"PROBE {path} {HeldFile.Probe(path)}")
+            : [];
 
     private static void Answer(JsonElement script, JsonElement message)
     {
@@ -90,14 +130,14 @@ internal static class AcpAgent
             case "session/new":
                 // `omitSessionId`: an agent that mints no session id at all — a shape the client must not go on with.
                 Reply(id, script.TryGetProperty("omitSessionId", out var noId) && noId.ValueKind == JsonValueKind.True
-                    ? new JsonObject { ["configOptions"] = new JsonArray() }
-                    : new JsonObject { ["sessionId"] = _sessionId, ["configOptions"] = new JsonArray() });
+                    ? new JsonObject { ["configOptions"] = ConfigOptions(script) }
+                    : new JsonObject { ["sessionId"] = _sessionId, ["configOptions"] = ConfigOptions(script) });
                 break;
             case "session/set_config_option":
                 SetConfigOption(script, id);
                 break;
             case "session/prompt":
-                Prompt(script, id);
+                Prompt(script, id, PromptText(message));
                 break;
             case "session/cancel":
                 _cancelled = true;
@@ -112,6 +152,28 @@ internal static class AcpAgent
         }
     }
 
+    /// <summary>The <c>model</c> option the session announces: the script's <c>models</c> (absent: <c>m-1</c>, what the stand-in has always been asked for); an empty list announces no option at all.</summary>
+    private static JsonArray ConfigOptions(JsonElement script)
+    {
+        var models = script.TryGetProperty("models", out var listed) && listed.ValueKind == JsonValueKind.Array
+            ? listed.EnumerateArray().Select(model => model.GetString() ?? string.Empty).ToArray()
+            : ["m-1"];
+
+        return models.Length == 0
+            ? new JsonArray()
+            : new JsonArray(new JsonObject
+            {
+                ["id"] = "model",
+                ["options"] = new JsonArray([.. models.Select(model => (JsonNode?)new JsonObject { ["value"] = model, ["name"] = model })]),
+            });
+    }
+
+    /// <summary>The text of the first block of a <c>session/prompt</c>.</summary>
+    private static string PromptText(JsonElement message) =>
+        message.TryGetProperty("params", out var parameters) && parameters.TryGetProperty("prompt", out var blocks) && blocks.ValueKind == JsonValueKind.Array && blocks.GetArrayLength() > 0
+            ? Text(blocks[0], "text")
+            : string.Empty;
+
     private static void SetConfigOption(JsonElement script, JsonElement id)
     {
         if (Text(script, "refuseModel") is { Length: > 0 } refused)
@@ -124,8 +186,41 @@ internal static class AcpAgent
         Reply(id, new JsonObject());
     }
 
-    private static void Prompt(JsonElement script, JsonElement id)
+    /// <summary>
+    /// <c>/usage</c> is the agent's own command: answered at once, no model call, none of the steps (a real agent does not replay its
+    /// tool calls for it). The script says what it answers with, or fails it, or never answers it.
+    /// </summary>
+    private static void Usage(JsonElement script, JsonElement id)
     {
+        if (script.TryGetProperty("usageHang", out var hang) && hang.ValueKind == JsonValueKind.True)
+        {
+            Thread.Sleep(Timeout.Infinite);
+        }
+
+        if (Text(script, "promptErrorOnUsage") is { Length: > 0 } failure)
+        {
+            Error(id, -32000, failure);
+
+            return;
+        }
+
+        if (Text(script, "usageReply") is { Length: > 0 } reply)
+        {
+            Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
+        }
+
+        Reply(id, new JsonObject { ["stopReason"] = "end_turn" });
+    }
+
+    private static void Prompt(JsonElement script, JsonElement id, string text)
+    {
+        if (text == "/usage")
+        {
+            Usage(script, id);
+
+            return;
+        }
+
         if (script.TryGetProperty("steps", out var steps) && steps.ValueKind == JsonValueKind.Array)
         {
             foreach (var step in steps.EnumerateArray())
@@ -190,7 +285,12 @@ internal static class AcpAgent
                 });
                 break;
             case "read":
-                Request("fs/read_text_file", ReadParams(step));
+                var reply = Request("fs/read_text_file", ReadParams(step));
+                if (step.TryGetProperty("echo", out var echo) && echo.ValueKind == JsonValueKind.True)
+                {
+                    Update(new JsonObject { ["sessionUpdate"] = "agent_message_chunk", ["content"] = new JsonObject { ["type"] = "text", ["text"] = reply } });
+                }
+
                 break;
             case "request":
                 Request(Text(step, "method"), (JsonObject)JsonNode.Parse(step.TryGetProperty("params", out var p) ? p.GetRawText() : "{}")!);
@@ -274,7 +374,7 @@ internal static class AcpAgent
     }
 
     /// <summary>Sends a request of the agent's own and waits for its reply, logging it; a cancel seen meanwhile is noted.</summary>
-    private static void Request(string method, JsonObject parameters)
+    private static string Request(string method, JsonObject parameters)
     {
         var id = _nextId++;
         Write(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters }.ToJsonString());
@@ -294,12 +394,14 @@ internal static class AcpAgent
 
             if (message.TryGetProperty("id", out var replyId) && replyId.TryGetInt64(out var replied) && replied == id)
             {
-                return;
+                return line;
             }
         }
 
         // The client went away mid-request: nothing left to answer to.
         Environment.Exit(0);
+
+        return string.Empty;
     }
 
     private static void Update(JsonObject update) =>

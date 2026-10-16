@@ -174,6 +174,79 @@ public sealed class TempDirsAreSwept
         Directory.Delete(root, recursive: true);
     }
 
+    /// <summary>
+    /// E4.1 S1.12: a round's scratch holding a Kimi home — <c>credentials</c> a junction to the person's folder — is swept by
+    /// the six-hour sweep through the one deleter, and the person's folder keeps its file; a loss during the unlink is
+    /// REPORTED through `warn` (it used to fall into a silent catch) and the scratch is left for the next sweep.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ARoundsScratchHoldingAKimiHomeWithAJunction_IsSwept_AndThePersonsFolderKeepsItsFile(bool lossDuringTheUnlink)
+    {
+        using var root = TempDir.For("testsToDelete-sweep-kh-");
+        var persons = Directory.CreateDirectory(root.At("persons")).FullName;
+        var secret = Path.Combine(persons, "kimi-code-env.json");
+        var other = Path.Combine(persons, "kimi-code.json");
+        await File.WriteAllTextAsync(secret, "{}", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(other, "{}", TestContext.Current.CancellationToken);
+        File.SetAttributes(secret, FileAttributes.ReadOnly);
+        var scratch = Directory.CreateDirectory(root.At("coai-answers-x")).FullName;
+        var home = Directory.CreateDirectory(Path.Combine(scratch, "kh-0123456789", "home")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(home, "config.toml"), "[loop_control]", TestContext.Current.CancellationToken);
+        await DirectoryLink.MakeAsync(new Runners.Processes.ProcessLauncher(), Path.Combine(home, "credentials"), persons);
+        Directory.SetLastWriteTimeUtc(scratch, DateTime.UtcNow.AddDays(-3));
+        List<string> warned = [];
+        if (lossDuringTheUnlink)
+        {
+            Runners.Kimi.KimiHome.AfterUnlink = _ => File.Delete(other); // the sweep now unlinks through KimiHome first (E4.4 review B1); the deleter is the second belt
+        }
+
+        try
+        {
+            PanelService.PruneOldScratchDirs(root, DateTime.UtcNow.AddDays(-1), ["coai-answers-*"], warn: warned.Add);
+        }
+        finally
+        {
+            Runners.Kimi.KimiHome.AfterUnlink = null;
+        }
+
+        File.ReadAllText(secret).Should().Be("{}", "the person's file keeps its bytes");
+        File.GetAttributes(secret).HasFlag(FileAttributes.ReadOnly).Should().BeTrue("and its attribute — the sweep never entered the link");
+        Directory.Exists(scratch).Should().Be(lossDuringTheUnlink, "a loss leaves the scratch; no loss removes it");
+        warned.Should().HaveCount(lossDuringTheUnlink ? 1 : 0, "a loss is said through warn; a clean sweep says nothing");
+        warned.ForEach(said => said.Should().Contain("kimi-code.json"));
+    }
+
+    /// <summary>
+    /// E4.1 S1.11: the deleters in product code are the shared one — the only files that still call a RAW recursive
+    /// <c>Directory.Delete</c> are the three that cannot meet a coai junction (an escalation's plan folder, two git
+    /// worktrees; S1.10 proves .NET's own recursive delete does not enter a junction anyway). A fourth is a new deleter that
+    /// has not been through the verification of the link's target.
+    /// </summary>
+    [Fact]
+    public void EveryProductDeleterIsTheSharedOne()
+    {
+        var program = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        // `Directory.Delete(path, <anything but a literal false>)` — a flag in a variable counts — and `DirectoryInfo.Delete(true)`.
+        var raw = new System.Text.RegularExpressions.Regex(
+            @"Directory\.Delete\((?:[^;(),]|\([^;()]*\))+,(?>\s*)(?!false\b|recursive:\s*false\b)|\.Delete\(\s*(?:recursive:\s*)?true\s*\)");
+        var seen = new List<string>();
+        foreach (var folder in (string[])["src", "runners", "core"])
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(program, folder), "*.cs", SearchOption.AllDirectories)
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+            {
+                var code = string.Join('\n', File.ReadLines(file).Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+                seen.AddRange(raw.Matches(code).Select(_ => Path.GetFileName(file)));
+            }
+        }
+
+        seen.Distinct().Should().BeEquivalentTo(["Escalations.cs", "ReviewTreeRoot.cs", "WorktreeManager.cs"],
+            "a raw recursive delete in a fourth file is a deleter that skipped the shared one — use GitScratch.DeleteEvenIfReadOnly");
+    }
+
     [Fact]
     public void ADownloadedServerIsNotScratch_AndSurvives()
     {

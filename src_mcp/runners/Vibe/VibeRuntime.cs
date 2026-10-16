@@ -187,7 +187,7 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     internal static string ExportFolder(string outputDir, string role, Guid attempt) =>
         Path.Combine(outputDir, "vx-" + Short($"{role}/{attempt:N}", 10));
 
-    private static string Short(string text, int length) =>
+    internal static string Short(string text, int length = 10) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..length];
 
     /// <summary>

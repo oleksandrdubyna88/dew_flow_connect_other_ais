@@ -353,7 +353,9 @@ public sealed class UsageLedger(string dataDir)
     /// </remarks>
     public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
     {
-        var line = new LineOf(VersionedBy(invocation, outcome), model, stage);
+        // The model that RAN: an adapter that resolves a default for a row that names none (Kimi, Vibe) put it on the invocation, and the row's own model is
+        // empty. Every other adapter copies the row's, so the two agree for them; a CLI on its own default names none and the line says nothing (decision 75).
+        var line = new LineOf(VersionedBy(invocation, outcome), ModelRan.Of(invocation.Model, model), stage);
         foreach (var turn in outcome.EarlierTurns)
         {
             AppendTurn(line, turn.Launches, turn.Usage, turn.Elapsed, LaunchLines.Answered);

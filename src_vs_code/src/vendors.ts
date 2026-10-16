@@ -1,8 +1,8 @@
 import { DEFAULT_API_DIALECT } from './apiRuntime';
 import { storedApiSettings } from './apiSettings';
 import { reviewsFeatures } from './featureGate';
-import { Runtime, RUNTIMES, VIBE_MODELS } from './models';
-import { VIBE_RUNTIME_SINCE } from './runtimeSince';
+import { KIMI_MODELS, Runtime, RUNTIMES, VIBE_MODELS } from './models';
+import { KIMI_RUNTIME_SINCE, VIBE_RUNTIME_SINCE } from './runtimeSince';
 import { saidText } from './saidText';
 import { catalogFields, CatalogUse, type FastSetting } from './catalogFields';
 import { bySideOf, type ExecutableBySide } from './pathFamily';
@@ -295,6 +295,22 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'vibe',
     runtime: 'vibe',
     model: VIBE_MODELS[0]!.id,
+    enabled: true, plan: true, code: true,
+    baseUrl: '',
+    executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+  },
+  // Moonshot's own CLI on the person's own Kimi Code plan (todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5). A preset and never a
+  // default (D11). The hint carries what a person meets first: the sign-in is Kimi's own, coai-mcp runs it on Windows only
+  // for now (D18), an older coai-mcp does not know the runtime (D13 — `runtimeSince.ts`), and the three reviewers of a round
+  // run one after another because they share one sign-in (D19).
+  {
+    label: 'Kimi Code',
+    hint: `Moonshot’s own Kimi CLI on your Kimi Code plan, signed in as itself (kimi login) — no key in the vault. coai-mcp runs it on Windows only for now, needs coai-mcp ${KIMI_RUNTIME_SINCE} or later, and a Kimi row’s reviewers run one after another because they share one sign-in.`,
+    id: 'kimi',
+    runtime: 'kimi',
+    model: KIMI_MODELS[0]!.id,
     enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',

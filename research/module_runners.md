@@ -1557,6 +1557,43 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
 - **`GitScratch.DeleteEvenIfReadOnly`** (`runners/Files/GitScratch.cs`) — moved out of `PanelService` (git marks
   object files read-only, and `Directory.Delete` refuses them); the check deletes and sweeps its scratch repositories
   with it.
+- **Junctions and link-safe disposal** (`runners/Files/Junctions.cs`, `LinkTargetLostException.cs`; E4.1 of
+  `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). `Junctions.Make(host, link, target)` makes a directory junction from an owned
+  home to the person's folder by `DeviceIoControl(FSCTL_SET_REPARSE_POINT)` over a hand-laid `REPARSE_DATA_BUFFER` (the
+  `CreateFileW` import is `HandleRead`'s, shared) — no `cmd.exe`, no quoting of the person's profile path, no privilege; its
+  bytes equal `mklink /J`'s (`fsutil reparsepoint query`, compared by a test). `Refusal` answers first, and `Make` then reads
+  the link back (`Target`, one level, never chased; `SameFolder` ignores case and a trailing separator) and removes a link that
+  reads back as anything else. Refused before anything is made: any host but Windows (the D18 sentence), a target that is not a
+  local `X:/` path on a non-network drive (UNC, `wsl$`, device paths, relative, a mapped drive), longer than the reparse
+  buffer can hold (about 4 090 characters — the 16 KiB bound, checked by arithmetic before any disk access), missing or a file,
+  itself a link, or a link path that already exists. A failed call removes the empty folder it made, and says so when it cannot.
+  `GitScratch.DeleteEvenIfReadOnly` deletes a folder's links first, reads the entry names of a link's target through its own
+  reparse data before and after the unlink — **only when `Junctions.IsLocal` says the target is on a local drive** (reading a
+  share connects out, and Windows sends NTLM; reading a mapped drive waits out the SMB timeout) — and a name still gone after
+  one re-listing 200 ms later (a Kimi refresh rotates a file by temp file and rename) throws `LinkTargetLostException` (an
+  `IOException`) naming it: the walk stops there and nothing more is deleted. A link pointing at its own parent does not count
+  its own name. Callers: the six-hour sweep (`PanelService.PruneOldScratchDirs`, new `warn`; `SweepOne`) and the question row's
+  scratch (`QuestionRowLaunch.RemoveScratch`) now say it; D20's consultant home sweep already warns on any `IOException` and
+  now deletes a conversation folder's files last, so a stopped deletion leaves the folder still its own; the tests' `TempDir`
+  re-throws it (a re-throw inside an unwinding `using` hides the original failure). This check is the SECOND belt:
+  `KimiHome.Dispose` (E4.2) unlinks `credentials` first where the caller knows it holds a Kimi home. **Stated limit** (risk
+  consultation 7de9430b, 2026-10-15): the deleter's link checks are path checks at one moment — a directory swapped for a
+  junction between `IsLink(dir)` and the enumeration can still be entered; closing it needs handle-based deletion
+  (`FILE_FLAG_OPEN_REPARSE_POINT`), out of this story, and a same-user process able to swap folders in coai's scratch could
+  equally touch the credentials directly.
+  **Shell and decisions are two files (PR #817's Sonar round, 2026-10-16; the method of `PrivateFolder`'s `IFolderShell`).** `Junctions.cs`
+  holds every decision and every sentence; what only Windows can answer sits behind `IJunctionShell` (`Files/JunctionShell.cs`): the
+  handle's final path (`HandleRead.FinalDirectory`), the drive's type, and the one kernel call that turns the empty folder into a mount
+  point. The one implementation is `JunctionsNative` (`Files/JunctionsNative.cs`, `[LibraryImport]` for `DeviceIoControl` — excluded from
+  Sonar's coverage list, where `.github/workflows/sonarcloud.yml` says why); `Junctions.Shell` is it, unless a test says otherwise for its async
+  flow (`Junctions.StandIn`). The reparse buffer's layout (`ReparseSize`, `ReparseBuffer`) and the 16 KiB arithmetic stay in
+  `Junctions` and are pinned on every OS. `IsLocal(target, driveType)` is the Windows drive rule on Windows and the Unix rule elsewhere
+  (`IsLocalDrivePath` is now judged by its spelling alone — a letter, a colon and a separator — where it used to ask
+  `Path.IsPathFullyQualified`, which says no to `C:\` off Windows and is implied by that spelling on Windows).
+  **`HostProcessList`** (`Kimi/`) is split the same way: the `PROCESSENTRY32W` layout, `Applies` and `Parsed` stay, and run on any OS;
+  `HostProcessListNative` is the toolhelp snapshot. `KimiCredentialsLock.HoldTree` is `TakeTreeThrough(…, take)` with the INHERITABLE take
+  as its one product argument, so the key, the busy/unusable answers and the first-file-given-back rule run in the test host with the
+  non-inheriting take. `KimiShimHold.Held` is `internal` and tested for each of the lock's answers.
 - **`ConsultantRoles.Check`** = `consult-check`, the LEDGER role of a check; the launch itself still carries `consult`
   — it is the same turn a consultation makes.
 - **`ConsultantLimitation.SnippetWarning`** — the agy allow-rule snippet's warning (a prefix rule is not read-only)
@@ -3145,12 +3182,12 @@ prompt mode cannot carry a review prompt (`-p` takes it only as an argument, ove
 CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runners/Acp/` behind one profile interface
 (`IAcpProfile`, one module per vendor; `KimiAcpProfile` the only one today); the process half is the one-shot mode
 `coai-mcp --ask-acp` (`src_mcp/src/Acp/AskAcpMode.cs`), the third self-invocation shim after `--ask-local` and
-`--ask-api`. `KimiRuntime` above it, its registration, the seeds and the extension are the next step of S4.
+`--ask-api`. `KimiRuntime` above it (E4.4, *The Kimi reviewer* below) builds its request and reads its report; the extension's row (E4.5) is in [module_extension.md](module_extension.md), *Kimi Code on the panel's side*.
 
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
 `ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
-`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.git`; the known sentences: the subscription `401`
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences: the subscription `401`
 (`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
 D14 `insufficient balance` (`balance_spent`).
 
@@ -3195,6 +3232,72 @@ has the codex standing; the boundary covers `Read` and the instruction-file sear
 what the branch could supply, and the question-consultant `disk` standing for `kimi` will be `unconfined` (S5). ACP
 `mode: plan` changes nothing here (§2.4). Kimi's session store under `~/.kimi-code/sessions` is a permitted vendor write.
 
+**What E4.3 adds (2026-10-15, `todo/PLAN_vibe_and_kimi_runtimes_E4.md`).** A profile that `NeedsAHome` (Kimi) runs only on an owned home, and the shim is the
+one place where `KimiPlaces`, `KimiEnvironment` and `KimiCredentialsLock` meet the agent:
+
+- **The three place flags.** `--home <owned root>` (must exist), `--persons-bin <folder>`, `--locks <folder>`: a Kimi turn without one is 65 naming it,
+  before anything is read or started. They arrive on the argv because inside this process `USERPROFILE` IS the owned `os/` — the shim reads no
+  location from any environment (`KimiPlaces.ForShim`; `AKimiShimScenarioTests.TheShimReadsNoEnvironment_InAChildWithARedirectedProfile` proves it in a CHILD
+  whose `USERPROFILE`, `HOME`, `APPDATA`, `LOCALAPPDATA`, `KIMI_CODE_HOME` and `KIMI_INSTALL_DIR` all name a decoy folder: the hold is still taken at the keys of
+  the owned junction's target under `--locks`, and the decoy stays empty). `--executable` is still the caller's to pass absolute — without it the
+  profile's default reads `SpecialFolder.UserProfile`, which is what the redirected shim must never be left to do: `KimiRuntime` (E4.4) always passes it.
+- **The agent's environment is built, never inherited.** `IAcpProfile.AgentRequest(ask)` (default: the inherited request, so a stand-in works) is, for Kimi,
+  `KimiEnvironment.Built` on `ForShim(--home, --persons-bin)`: the minimal names plus the seven; `AgentRefusal` is `KimiEnvironment.Refusal` on that request, asked
+  before the hold (65, report `not_started`) and again by `AcpClient` (a request its profile refuses never starts a process). `AcpTransport.Start` takes the
+  `ProcessRequest`, nothing else.
+- **The tree hold GATES** (E4.2 decision 10). `AskAcpMode` points `KimiCredentialsLock.RootFor` at `--locks` for the whole turn, takes `profile.Hold` — for
+  Kimi `KimiShimHold`: the target read from the junction's own reparse data, then `HoldTree` — IMMEDIATELY before `AcpClient.AskAsync` (no `await` between;
+  the wait is synchronous and bounded by the turn's deadline, which then shrinks by what it cost) and disposes it once `AskAsync` has returned, by which time
+  the client's `finally` has ended the agent. `AcpHolding` is a closed union: `Held`, `Busy` (exit **69**, "another Kimi started on this sign-in is still running (<path> is
+  held) — it ends when its agent does; the turn is given up", report `not_started`, the agent never started) and `Unusable` (exit **65**). There is no warning-only fallback, and a profile that
+  needs no home takes no hold — so no test host ever holds an inheritable handle. **A hold taken late** (the E4.3 review's minor 1): when the wait left the turn under a second
+  (`AskAcpMode.MinimumTurn` — the client refuses "a deadline of 0s" outright, and a turn that short answers nothing) the hold is given back at once and the end is the one a
+  still-running tree gives: exit 69, report `not_started`, a sentence. A hold answer the shim has no word for (the union is closed, so only a defective profile) is 65 — it fails CLOSED, never `Ok`.
+- **The model is checked in the session** (D10, `AcpMessages.AnnouncedValues`): after `session/new` the `model` option's announced values must contain the asked
+  model, else the turn ends `model_not_offered` (65) with the list — before `set_config_option` and before any prompt is spent. A session that announces no `model`
+  option at all is the same refusal ("offers no 'model' option").
+- **`/usage` after an answer** (D15, M-K2: ~2 s, no model call). Only after `end_turn`: the answer's length is marked, `/usage` is sent as a second `session/prompt`
+  on the same session under its own bound (`AcpClient.DefaultUsageBound`, 15 s, linked to the turn's token so never longer than what is left of it), the answer is
+  what came BEFORE the mark and `AcpUsageLine.Parse` reads `Session total: N input, M output` out of what came after (thousands commas, culture-invariant; a number no
+  `long` holds, `no LLM calls yet` and silence are all "not captured", 0 and `notCaptured: true`). A failure, a hang or a deadline during the second prompt never
+  changes the first one's end, answer or exit.
+- **The shim's words** (E4.5, the E4.4 review's M3). The flags on the shim's argv (`--home`, `--persons-bin`, `--model`, `--executable`, `--locks`), the three end words
+  (`answered`, `not_started`, `model_not_offered`) and the spent exit (75) are `AcpWords` (`src_mcp/runners/Acp/AcpWords.cs`): `AskAcpMode` writes them for ANY profile and a profile's
+  runtime (`KimiRuntime`) reads them from the same place, where they used to be imported from `KimiEnvironment` and `KimiReport`. No value changed. `KimiAcpProfile.BalanceSpent`
+  stays with the profile: it is the failure NAME that profile defines for a known sentence. Still Kimi-named inside the generic shim: `KimiCredentialsLock.RootFor` (the lock-folder
+  naming, ruling 2) and the `Kimi*` hold in `KimiShimHold` — reached only through the profile's `Hold` member.
+- **The person's own Kimi is looked for before the hold** (decision 74 of the E4 plan; the epic 4 code gate). The sign-in locks serialise coai's launches only; a `kimi` the person runs beside a coai review
+  that starts near the token's expiry would refresh the rotating token at the same time and sign them out. `KimiShimHold.Taken` therefore first asks `ForeignKimiWatch` — over the `IProcessList` seam
+  (`HostProcessList`, Windows' toolhelp snapshot: read-only, no elevated rights, nothing opened or ended) — for a `kimi` that is not coai's own, **waits for it within the deadline** (polling every second; the
+  hold gets what is left) and, past the deadline, answers `AcpHolding.Busy` — the shim's exit **69**, report `not_started`, no hold taken, no agent started — with "your own Kimi Code is running (pid N); coai does
+  not start a second Kimi on the same sign-in while it runs, so two refreshes never race — close it or wait". **Coai's own is told apart by the parent chain**: a `kimi` whose parents (one listing, bounded,
+  cycle-safe) reach this shim's pid or a process named `coai-mcp`. Why not the environment (`KIMI_CODE_HOME`) or the command line: both need the process's PEB (`OpenProcess` + `PROCESS_VM_READ`, refused for protected
+  or elevated processes, so "unreadable" must be guessed one way) or WMI (`System.Management` is not Native-AOT safe); the executable path is the same for both. An orphan (parent gone) counts as the person's — it
+  can still refresh; a server named `dotnet` is not recognised by name, so its other shims' trees count as foreign (wait, then busy: safe) while this shim's own is recognised by pid. **Not covered:** a person
+  who STARTS `kimi` after coai's agent is already running, and one that refreshes in the seconds between the last poll and the agent's start. The profile takes the watch in its constructor (a test hands in a fake list);
+  the tests that start the real shim skip while a real `kimi` runs on the machine (`TheOwnersKimi`).
+- **What a Kimi launch leaves in the records** (decision 75). The ledger line's `model` is the model that RAN, by one rule — `ModelRan.Of(launch's, row's)` — used by `UsageLedger.Record` (a reviewer's line), the consultation turn (billed after `Build`), the question row and the check: the adapter's resolved default (Kimi's `kimi-code/k3-256k`, Vibe's) over the row's, which is empty for a row that names none; other adapters copy the row's, so nothing changes for them. And one Debug line per launch — `Kimi launch <provider>/<role> on <model>: exit N, end <end>[, failure <name>], usage captured|not captured` (or `no report`) — is written by `KimiRuntime.RateLimited`, the one per-launch read the executor makes before judging the exit: the only trace of a success's exit code and `end`. No answer, prompt or reason in it.
+
+```mermaid
+sequenceDiagram
+  participant R as KimiRuntime (E4.4)
+  participant S as coai-mcp --ask-acp
+  participant L as KimiCredentialsLock
+  participant A as kimi acp
+  R->>S: argv --home --persons-bin --locks ... , prompt on stdin
+  S->>S: refuse a missing flag (65), then AgentRefusal of the built request (65)
+  S->>L: RootFor(--locks) for the whole turn
+  S->>L: HoldTree(target of home/credentials, root) - Busy past the deadline: 69, Unusable: 65
+  S->>A: start in the BUILT environment (inherits both hold files)
+  A-->>S: session/new: configOptions model values
+  Note over S: asked model not among them: model_not_offered (65), nothing set or spent
+  S->>A: set_config_option, prompt
+  A-->>S: end_turn
+  S->>A: /usage (own bound)
+  A-->>S: Session total: N input, M output
+  Note over S,A: tree kill by pid, then the hold disposed, then the report
+```
+
 **Lifecycle.** The shim reads its stdin to EOF — `ProcessLauncher` closes stdin after writing the prompt, so EOF means
 "complete", never cancel — and only then starts the agent, whose own stdin stays open for the replies; stdout and
 stderr are drained concurrently. The client has its own deadline (`--deadline-seconds`, under the row's timeout).
@@ -3238,23 +3341,23 @@ The report on stdout carries the same bounded lists and both counts; the answer 
 
 **Exit codes** (never 64 — `.agents/PROJECT.md`): **0** answered (`stopReason: end_turn`); **65** declined before the
 agent starts (no or unknown `--profile`, no `--model`, no or missing `--cwd`, a `--deadline-seconds` outside 1..86400,
-an empty prompt); **69** ended before an
-answer — not started, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
+an empty prompt; for Kimi no `--home` / `--persons-bin` / `--locks`, an agent request that is not coai's own environment, a hold that cannot be
+taken, a model the session does not offer); **69** ended before an
+answer — not started, another Kimi holds the sign-in past the deadline, the deadline, or cancelled (read by the parent as "usage not captured"); **70** the agent's own
 failure — a JSON-RPC error to a client request, or a `stopReason` other than `end_turn`; **75** a known spent sentence;
 **76** (EX_PROTOCOL) the stream broke — output closed or the process gone before answering, not listening, over the
 answer ceiling; **77** a known sign-in or plan sentence.
 
-**The stdout shape**, one JSON object on EVERY exit (the future `KimiRuntime.ReadAnswer`/`ReadUsage` read it as
-`ApiRuntime` reads the api shim's line): `answer`, `end` (`answered` | `not_started` | `agent_failed` | `deadline` |
-`protocol` | `cancelled`), `stopReason`, `reason`, `sessionId`, `failure` (only when a known sentence matched), `usage`
-in the api shim's field names — `tokensIn`/`tokensOut` 0 with `notCaptured: true`, because ACP reports context tokens
-with no split (D15; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
+**The stdout shape**, one JSON object on EVERY exit (`KimiReport` — Kimi's own reader, because the usage is nested — is what `KimiRuntime.ReadAnswer`/`ReadUsage`/`RateLimited`/`WhyItFailed` read it with): `answer`, `end` (`answered` | `not_started` | `agent_failed` | `deadline` |
+`protocol` | `cancelled` | `model_not_offered`), `stopReason`, `reason`, `sessionId`, `failure` (only when a known sentence matched), `usage`
+in the api shim's field names — `tokensIn`/`tokensOut` the session's totals from `/usage` asked after an answered turn (E4.3, M-K2; `notCaptured: true` and 0 when
+it could not be had — never a guessed number; cost `null`, D9) — plus `contextUsed`/`contextSize` from the last `usage_update` when one came, and
 the trace: `refusals` (`tool`, `kind`, `option`), `toolCalls` (`id`, `title`, `kind`, `status`), `reads` (`path`,
 `served`, `reason`), and `droppedTraceEntries` — how many entries the three caps dropped, 0 when none.
 
 ```mermaid
 sequenceDiagram
-  participant P as ReviewerExecutor (later: KimiRuntime)
+  participant P as ReviewerExecutor (KimiRuntime's request)
   participant S as coai-mcp --ask-acp
   participant A as kimi acp
   P->>S: prompt on stdin, then EOF (= complete)
@@ -3279,8 +3382,8 @@ sequenceDiagram
   S-->>P: one JSON object on stdout; exit 0 / 65 / 69 / 70 / 75 / 76 / 77 — never 64
 ```
 
-Tests: `AcpClientTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpShimScenarioTests`
-(the REAL binary through the real launcher) — listed in [module_tests.md](module_tests.md). The scripted agent is the
+Tests: `AcpClientTests`, `AcpClientUsageTests`, `AcpUsageLineTests`, `AcpReadBoundaryTests`, `KimiAcpProfileTests`, `AskAcpModeTests`, `AskAcpModelAndUsageTests`, `AskAcpShimScenarioTests`
+(the REAL binary through the real launcher) and `AKimiShimScenarioTests` (the real binary on an owned home: the built environment, the hold seen from inside the agent, busy, unusable, no environment read) — listed in [module_tests.md](module_tests.md). The scripted agent is the
 fake CLI's `acp-agent <script>` verb (`src_mcp/tests_fakecli/AcpAgent.cs`).
 
 ### The first live round's two defects, fixed (2026-10-13 — research/RESULTS_vibe_confinement.md §26)
@@ -3362,3 +3465,133 @@ flowchart TD
 - **M-V18 note (2026-10-15, the judge).** `VibePathBudget` measures `Path.GetFullPath`, which keeps 8.3 short names as written. If Vibe's interpreter resolves the real path, a folder named `RUNNER~1` is longer than the budget counted. M-V18 must measure that before the budget is relaxed or trusted at its edge.
 - **`LaunchTurn.Refused` states its cause** (code gate 2026-10-15): `RefusalCause { LaunchControl, CliMissing }` is REQUIRED, so an adapter's refusal never reads as coai's own launch check by default (Kimi's launch will call it too); `ReviewerExecutor` maps only `LaunchControl` to `NotStarted.ByLaunchControl`.
 - **Install cure is per OS** (`VendorDiagnosis.InstallCure`: `uv tool install mistral-vibe` on Windows, Mistral's script on Linux), so `VibeLaunchControlTests.TheKind_…` compares with the platform's own cure instead of spelling the Windows one. Fixed after: the default was `OperatingSystem.IsLinux()`, which gave macOS the Windows commands (uv, and Google's PowerShell line) although the vendors' scripts serve Linux and macOS; `InstallCure(runtime, HostKind)` is the seam, and only Windows gets the uv and PowerShell forms (`EveryHostButWindows_GetsTheVendorsShellScript`, first red: the `MacOs` case got `install it with uv…`).
+
+## The Kimi home, its sign-in locks and its launch control — `src_mcp/runners/Kimi/` (2026-10-15, E4.2 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
+
+Kimi runs on the person's LIVE sign-in: a coai-owned `KIMI_CODE_HOME` whose `credentials` is a junction to the person's own folder
+(D19). Kimi's refresh token ROTATES, so two refreshers sign the person out, and a deleter that walks the junction deletes the sign-in.
+This unit is the library the shim (E4.3) and `KimiRuntime` (E4.4) call. Nothing here starts `kimi acp`; it checks, builds and holds.
+
+```mermaid
+flowchart LR
+  P[KimiPlaces.Resolve<br/>real profile, once, in the parent] --> L[KimiLaunch.TakeAsync]
+  L --> A[before the turn: host, tools, model, environment,<br/>person's slot, credentials folder, model block, render, KimiHome.Made]
+  A --> T[VibeHomeTurns.TakeAsync root] --> G[KimiCredentialsLock.TakeAsync gate]
+  G --> V[KimiHome.Refusal -> kimi --version in the BUILT environment -> KimiHome.Refusal]
+  V --> H[LaunchTurn.Holding: warning when the version is unmeasured]
+  S[shim, E4.3] -->|HoldTree, inheritable| K[(kimi inherits the hold)]
+  D[KimiHome.Dispose] -->|HomeProbe free?| U[unlink junction -> verify the person's names -> GitScratch]
+```
+
+- **`KimiPlaces`** resolves every path ONCE, in the unredirected parent, from an injected `env`, the REAL profile and a file test:
+  `PersonsHome` (`KIMI_CODE_HOME` else `~/.kimi-code`), `PersonsBin` (`KIMI_INSTALL_DIR` else the same, plus `/bin`), the tool
+  folders, the absolute `kimi`. `ForShim(root, personsBin)` reads NO environment — inside the shim `USERPROFILE` IS the owned `os/`.
+  The shim's three place flags are `--home <owned root>`, `--persons-bin` and (new) `--locks <KimiCredentialsLock.Root>`.
+- **Tools.** `KimiTools`: `rg` and `fd` must each be found in the person's `bin` or on the parent's `PATH` (the name, then each `PATHEXT`
+  suffix — `ExecutableResolver.In`, shared), else the launch is refused before any process with the two winget commands. They are
+  NEVER admitted into the home by hash (the owned home holds no code); the built `PATH` begins with the person's `bin`, then the folder of
+  each tool found elsewhere, then the parent's entries (`KimiEnvironment.BuiltPath`, idempotent).
+- **The config is RENDERED, never copied** (`KimiConfig`, byte for byte the probe's rung 3; LF, no BOM; a value needing an escape is a
+  refusal naming the KEY). The slot is READ (`KimiPersonsConfig`: type must be `kimi`, storage must be `file`), the model block is the
+  person's own `[models."id"]` when whole and on `managed:kimi-code` (`CodexConfigFile.TableValue/TableStrings/HasTable`, the one
+  reader) else the pinned entry of `shared/kimi-model-blocks.json` (embedded; `KimiModels.Curated` IS its ids, the first is the default).
+- **The home check** (`KimiHome.Refusal`, before AND after `--version`) is an allowlist: `home/` holds only the `credentials` junction
+  (must point at the person's folder, never descended), the one `config.toml` (compared as BYTES), Kimi's own data folders and files
+  (RESULTS §18), the `device_id` file Kimi writes when a launch's token refresh rotates the sign-in (RESULTS §27) — a regular file of at most 64 bytes, pinned by size and never by a format and an EMPTY `workspace-trust`; `bin/`, `mcp.json`, `skills/`, `AGENTS.md`, any link and any unlisted name refuse by name.
+  `os/` must exist and be empty. The root may hold more (S5's `tree/`, `coai-turn.lock`, `coai-tree.lock`): it is judged only for being a link.
+- **Two locks per sign-in** (`KimiCredentialsLock`, under `<LocalApplicationData>/coai-mcp/kimi-locks/`, never under `coai-kimi/` where the D20
+  sweep walks, never in temp). The key is SHA-256 of the UPPER-cased FINAL PATH of the opened folder handle (`HandleRead.FinalDirectory`):
+  one sign-in, one key, whatever the spelling (case, 8.3, `..`, an ancestor junction). A folder the kernel cannot name has NO key and
+  takes no lock — never the spelling. The GATE (`<key>.lock`, the server's, non-inheritable) serialises launchers, waited for in one-second
+  slices inside the row's timeout, held by the `LaunchTurn` until the launch is read (the home's turn first, the gate second, released in
+  reverse). The TREE HOLD (`<key>.tree.lock` + `<root>/coai-tree.lock`, the SHIM's, `FileShare.Inheritable`) is taken immediately before
+  the agent starts: `kimi` inherits it, so the sign-in stays held while EITHER lives — a coai-mcp killed over a still-refreshing `kimi`
+  must not let a second refresher in. MEASURED by E4.3 (M-K15, RESULTS §27): both files are Held while `kimi` lives and Free in the poll it is gone in, 6 of 6 cut launches, three with an `rg` running — nothing of Kimi's outlived it, so the hold GATES.
+  The per-home file is waited for 500 ms (`HomeWait`): a disposal's `HomeProbe` opens it exclusively for an instant. The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
+  rotation, exactly as the person's own `kimi` would; `kimi login` cures it (M-K14 decides whether a grace is needed).
+- **Disposal** (`KimiHome.Dispose`; refused through a link — a root or `home/` that is itself a link answers `Stopped` from `Dispose` and is skipped by `DisposeAllUnder`, left to the deleter that removes the link by its own name): (1) the per-HOME hold probed (`Held` or `Unknown` stop with nothing unlinked and nothing outside coai's tree
+  opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
+  (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
+  1–3 on a folder's own home and every `kh-*` child and leaves the rest to the caller's deleter; the D20 sweep calls it under its locks
+  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch). **Stated limit:** the deleter's link checks are path checks at one
+  moment; closing the swap needs handle-based deletion, and a same-user process able to swap folders in coai's tree could touch the
+  credentials directly.
+- **An ancestor of the credentials target may be a link** (a relocated profile); the target itself may not. `Junctions.Refusal` asks the
+  kernel where the target really is and refuses only a resolution that leaves the local drives.
+- **The built environment** (`KimiEnvironment.Built`, its own unit; `KimiLaunch` is the checks and the launch): not inherited, `ProcessEnvironment.Minimal`, exactly seven names — `KIMI_CODE_HOME`,
+  `KIMI_CODE_NO_AUTO_UPDATE=1`, `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH` (all into the owned `os/`) and `PATH`; `EnvironmentRefusal` admits
+  exactly what `Built` makes. The version probe is built from the LAUNCH request's own PATH (`KimiEnvironment.PathOf`), so one PATH source feeds both, and a person's home that is not on a local drive is refused by its spelling before any read, so a UNC home is never connected to. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is warned about and run (`VersionWarnings`, the one
+  builder, Vibe's sentence unchanged); a version-less or unstartable one is refused.
+- **Nothing of the sign-in is ever written by coai:** it reads only the slot's NAME and `type`/`base_url`/`storage`/`oauth_host` and the credentials
+  folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
+  sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.
+
+## The Kimi reviewer — `KimiRuntime` (2026-10-15, E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
+
+Kimi Code (`kimi`, on the person's own Kimi Code plan, signed in as itself) as a machine-only reviewer runtime, `kimi`. The adapter BUILDS the shim's request,
+READS the shim's report and CLASSIFIES from it; whether a launch may start at all is the launch control's (`KimiLaunch`, E4.2), unchanged.
+
+```mermaid
+flowchart LR
+  B[KimiRuntime.Build<br/>places resolved ONCE in the parent] --> R["coai-mcp --ask-acp --profile kimi<br/>--home root --persons-bin --locks --executable abs --deadline-seconds<br/>prompt on stdin · BUILT environment"]
+  X[ReviewerExecutor] -->|before EVERY launch| T[KimiRuntime.TakeTurnAsync → KimiLaunch.TakeAsync]
+  T -->|Holding: warning, cliVersion| X
+  X --> R
+  R -->|exit + one JSON report| C{KimiRuntime reads}
+  C -->|end = answered| A[ReadAnswer / ReadUsage<br/>usage.tokensIn / tokensOut]
+  C -->|exit 75 AND failure = balance_spent| L[RateLimited — hopeless, usage kept]
+  C -->|anything else| N[NonZeroExit + WhyItFailed<br/>failure: reason + the cure]
+  S[BoundedScheduler] -->|LaunchesOneAtATime: cap 1| X
+  D[RoundScratch.Dispose] -->|KimiHome.DisposeAllUnder, junction first| G[GitScratch]
+```
+
+- **The request.** `Build` resolves `KimiPlaces` ONCE (`KimiSeams.PlacesFor`: the real profile, the real environment, `File.Exists`; a test hands in a fake
+  person's) and returns a `ProcessRequest` for THIS binary (`LocalRuntime.SelfInvocation`, the framework-dependent host's dll first): `--ask-acp --profile kimi
+  --model <id> --cwd <the round's snapshot> --home <owned ROOT> --persons-bin <bin> --locks <KimiCredentialsLock.Root> --deadline-seconds <n> --executable <absolute
+  kimi>`, the prompt on stdin and never on the argv, then `KimiEnvironment.Built` — the shim itself is started in the built environment (D19: "on both hops"),
+  because inside it `USERPROFILE` is the owned `os/` and the four places above are the only way it can find the person's. The owned root is
+  `<OwnedScratch>/kh-<10 hex of sha256(provider/role)>` (`KimiHome.HomeFor`): one home per reviewer of the round, so a retry or a repair starts on the home its
+  first launch left. A row's configured `ExecutablePath` is the KIMI the shim starts (`--executable`), never the shim; the model is the row's or
+  `KimiModels.Default`; no effort and no tier are sent (neither is measured, `shared/feature-availability.json`). `ForLaunch` rewrites `--deadline-seconds`
+  from the timeout THIS launch has (a retry's and a repair's are shorter), so the shim's report arrives before the executor's kill.
+- **The launch control** is `TakeTurnAsync` → `KimiLaunch.TakeAsync(host, request, places, launcher, ct)`, the places rebuilt from the argv's `--home`
+  and `--executable` (the executor holds only the invocation). It is the same control for the first launch, a retry, a repair; a refusal is `NotStarted`
+  with the sentence and nothing starts, a held turn (the home's in-process turn and the sign-in's gate) is given back after the answer, usage and reason were read.
+  The version warning reaches `ReviewerOutcome.Warning` and the card (`VersionWarning` is `KimiLaunch.VersionWarning`: one sentence, two places).
+  Every refusal states its cause (`LaunchTurn.Refused(reason, RefusalCause)`, required since #823): `LaunchControl` for all of Kimi's own, `CliMissing` when the OS cannot start `kimi` at the version
+  ask — cli-not-found with `InstallCure("kimi", host)`: Moonshot's script on Linux, WSL and macOS, the PowerShell line (with Git, ripgrep and fd) on Windows.
+- **The probe.** `ProbeVersionAsync` asks `kimi --version` in `KimiEnvironment.Built` on a THROWAWAY owned folder (`coai-answers-*` in temp, `home/` and `os/`
+  made, NO junction and NO config — `kimi --version` writes nothing and needs no sign-in, RESULTS §18), deleted in a `finally`: `providers` never starts Kimi
+  in the inherited environment and never touches the person's home. `DefaultExecutable` is the `kimi` CLI (`KimiPlaces.Resolve`'s rule), not the shim.
+- **The report is Kimi's own reader** (`KimiReport.Parse`): `end`, `failure`, `reason`, `answer` and `usage.tokensIn/tokensOut` (nested — `ApiRuntime.ReadUsage`
+  reads the root, so it is not reused). `ReadAnswer` is the report's answer when `end` is `answered`, else null; `ReadUsage` is the session's totals, `Usage.Unknown`
+  when `usage.notCaptured` or the stdout is no report, and `Usage.None` for an `end` that never reached the model (`not_started`, `model_not_offered`) — a fact, not
+  an unknown; never a cost (D9). `WhyItFailed` is the shim's word and reason, led by the cure when the word is one `VendorDiagnosis` knows
+  (`not_signed_in`, `subscription_model`, `balance_spent`, and the end word `model_not_offered`).
+- **Classification is by the report's FIELDS, never by text** (the risk consultation `ba5f661a`). `IReviewerRuntime.RateLimited(invocation, result)` — a new
+  default member whose body is exactly today's (`RateLimitVerdict.ByText`: `RateLimit.Hit` over the text, no usage) — is asked by `ReviewerExecutor.Classified` before
+  the exit is judged. Kimi's override is limited ONLY for exit **75** AND `failure: balance_spent` (the reason carries `insufficient balance`, so
+  `RateLimit.Hopeless` stops the ladder, D14) and carries the report's usage; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
+  exit 77 with a trace that names `src/quota.cs` and a tool titled `check rate limit` included — is an ordinary `NonZeroExit`, one launch. Exit **69** is also "another
+  Kimi holds the sign-in past the deadline" (report `not_started`, the sentence on stderr and in `reason`); exit **65** also covers `model_not_offered` and an
+  unusable hold. The exit and end words are shared with the shim (`AcpWords.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared in a profile-neutral unit both read, as
+  `ApiRuntime.EndedBeforeAnAnswerExit` is (they sat in `KimiReport` until E4.5 moved them — see *The shim's words* below).
+- **One Kimi launch at a time, in one lane.** `IReviewerRuntime.LaunchesOneAtATime` (default false; Kimi true — D19, until M-K14) makes
+  `BoundedScheduler.CapFor(work, perProviderCap)` give the limiter a cap of ONE, and `LaneOf(work)` key that limiter by the ADAPTER's kind, not by the provider id: what it protects is the
+  machine's one rotating sign-in, so two Kimi rows with different ids (or a settings reload that builds a new adapter) share the lane (E4.4 review M1). Every other vendor keeps its
+  limiter per provider id. The limiter is created once per lane for the scheduler's life, so the first run's cap sticks. The cross-process half is the sign-in's gate (E4.2).
+- **The round's scratch** (`RoundScratch`, `src/Server/Rounds/`): `Dispose` calls `KimiHome.DisposeAllUnder(Directory, …)` — every `kh-*` home has its `credentials` junction
+  removed by its own name, the person's folder verified, under no live tree — BEFORE the shared deleter, which then meets no link. A `Stopped` home is noted and the
+  scratch is KEPT whole (the D20 sweep's rule): deleting "the rest" would unlink the junction under a `kimi` that is still running (an orphan of a crashed server, which
+  holds the per-home file) and its next refresh would sign the person out (E4.2 decision 11). The six-hour scratch sweep (`PanelService.PruneOldScratchDirs`) finishes it once the tree has ended: it calls `KimiHome.DisposeAllUnder` on each due `coai-answers-*` folder BEFORE the deleter, asks the same per-home hold, and on any `Stopped` skips the folder for that beat (warned) — a folder's last-write time cannot say a `kimi` is still running, because writes deep inside a home never move it (E4.4 review B1).
+- **Registered** in `ReviewerRuntimeSelector.Default`, `RuntimeNames` and `Named("kimi", vendorId)`, and in `MachineOnlyRuntimes` (D12: the Team server derives its accepted set as
+  `RuntimeNames` minus that one, so it refuses a `kimi` row by name). `shared/feature-availability.json` names it: effort and thinking `unmeasured` (the k3 models announce
+  `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; NOT a consultant, NOT in `runtime-capabilities.json` (S5 — a runtime may not enter it without its
+  own `ConfinementPlanner` arm). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
+  described in [module_extension.md](module_extension.md).
+- **Diagnosis.** `VendorDiagnosis.Known` carries the four NAMES the shim writes (`not_signed_in:`, `subscription_model:`, `balance_spent:`, `model_not_offered`) — the shim files a
+  known failure as `<name>: <reason> — <cure>` on stderr — never a phrase of Kimi's trace. `InstallCure("kimi")` is Moonshot's own: `irm https://code.kimi.com/kimi-code/install.ps1 | iex`
+  (Git for Windows first, `winget install Git.Git`) on Windows, `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash` on Linux and macOS (read 2026-10-14).
+
+Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
+`TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).

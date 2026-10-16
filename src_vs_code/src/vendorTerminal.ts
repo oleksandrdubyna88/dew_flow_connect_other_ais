@@ -34,6 +34,9 @@ const USAGE_COMMAND: Record<string, string> = {
   // Vibe 2.26.1's own command table (`vibe/cli/commands.py` in the installed package): "Display agent
   // statistics and model and provider details". It has no spend command; `/whoami` names the plan.
   vibe: '/status',
+  // Kimi's own command (research/RESULTS_kimi_confinement.md §5): answered without a model call — the one coai's own shim
+  // sends after a turn to read the tokens.
+  kimi: '/usage',
 };
 
 /** Which binary each runtime actually is. A default here runs somebody else's CLI under this name. */
@@ -43,6 +46,7 @@ const EXECUTABLE: Record<string, string> = {
   claude: 'claude',
   antigravity: 'agy',
   vibe: 'vibe',
+  kimi: 'kimi',
 };
 
 /**
@@ -55,6 +59,9 @@ const MODEL_FLAG: Record<string, string> = {
   // Vibe has no `--model`: the alias rides `VIBE_ACTIVE_MODEL` (D10), so the ▶ terminal sets it in the
   // terminal's environment ({@link TERMINAL_ENV}) instead — the same variable every coai launch of Vibe sets.
   vibe: '',
+  // Kimi: ▶ is the person's own interactive `kimi` — never `acp`, never a model flag nobody measured. The curated id is coai's
+  // launch setting, handed to the session through ACP; the person's own Kimi chooses its own model.
+  kimi: '',
 };
 
 /**
@@ -98,6 +105,8 @@ function vibeTerminalEnv(vendor: Vendor): Readonly<Record<string, string>> {
  *   <li><b>gemini</b>: `npm install -g @google/gemini-cli@latest`, from its README.</li>
  *   <li><b>vibe</b>: Mistral's own script again on Linux and macOS (it upgrades an installed Vibe), and
  *       `uv tool upgrade mistral-vibe` on Windows — {@link vibeUpdate}.</li>
+ *   <li><b>kimi</b>: Moonshot's own installer again — it installs the latest over the old one — on every platform;
+ *       {@link kimiInstall}.</li>
  * </ul>
  *
  * <p>A vendor whose CLI path is set gets that path, not the bare name: the update must touch the
@@ -316,6 +325,7 @@ const DOCS: Record<string, string> = {
   claude: 'https://docs.claude.com/en/docs/claude-code',
   antigravity: 'https://antigravity.google',
   vibe: 'https://github.com/mistralai/mistral-vibe',
+  kimi: 'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started',
 };
 
 /** How each platform gets node, which is the actual reason somebody reads this on a fresh box. */
@@ -482,15 +492,97 @@ const VIBE_NOTE_POSIX =
   + 'starts — or run `vibe --setup`. ' + VIBE_KEYRING + ' coai-mcp does not run Vibe on Linux, WSL or macOS yet — none '
   + 'of them is measured — so a reviewer on this side waits for that.';
 
+/**
+ * Kimi Code: Moonshot's own installer, per operating system (todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5, D16; the owner's
+ * decision of 2026-10-13 that the buttons must WORK on every side, WSL included — one press, never a hand install).
+ *
+ * <p><b>Sources, read 2026-10-14, never guessed.</b> Moonshot's getting-started page
+ * (https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started): macOS and Linux —
+ * `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash`; Windows (PowerShell) —
+ * `irm https://code.kimi.com/kimi-code/install.ps1 | iex`; Windows needs Git for Windows before the first launch (Kimi runs
+ * its shell through Git Bash). The two scripts (code.kimi.com/kimi-code/install.{ps1,sh}, a 302 to cdn.kimi.com): install
+ * into `%USERPROFILE%\.kimi-code\bin\kimi.exe` or `$HOME/.kimi-code/bin/kimi`, download only from code.kimi.com/kimi-code,
+ * check the manifest's SHA-256, put the folder on the user PATH (Windows) or in one shell rc file (POSIX), and
+ * <b>re-running installs the latest over the old one</b> (the old binary kept as `.bak`) — so re-running the script IS the
+ * update, which is why ⟳ is this same line and never `kimi upgrade` (documented, unmeasured here, and not a verb
+ * `fromOfficialSources` reads). Neither script downloads ripgrep or fd.</p>
+ *
+ * <p><b>Windows provisions what a Kimi launch needs</b> (the plan round on #817): coai-mcp refuses a Kimi launch when `rg` or
+ * `fd` does not resolve (D19), so one press installs them — and Git, which Kimi needs anyway — through winget, each step
+ * guarded by a look-up (the line is idempotent, and winget's "already installed" exit never stops it) and each failure
+ * stopping the line. The ids are the projects' own, verified 2026-10-14 by `winget show --id <id> -e`: `Git.Git`;
+ * `BurntSushi.ripgrep.MSVC` (15.2.0, publisher BurntSushi, github.com/BurntSushi, installer the project's own release zip
+ * github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip); `sharkdp.fd` (10.5.0,
+ * David Peter, github.com/sharkdp/fd, installer github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-msvc.zip).
+ * Both are portable zips from the project's own GitHub releases — nobody is repackaging. A later version's manifest is
+ * checked the same way before this id list is trusted again. Linux and macOS get Moonshot's script alone: D18 refuses a Kimi
+ * REVIEW there, so the tools are not needed yet. For the day it lifts, the projects' READMEs give `brew install ripgrep fd`
+ * on macOS, `sudo apt-get install -y ripgrep fd-find` on Debian and Ubuntu (where the binary is `fdfind` and Kimi looks for
+ * `fd`, so `~/.local/bin/fd` must link to it) and `sudo dnf install ripgrep fd-find` on Fedora; `OFFICIAL_SOURCES` would then
+ * need those verbs — a change of that day.</p>
+ *
+ * <p>These are the commands `VendorDiagnosis.InstallCure` names when a round finds no Kimi, held level by
+ * `kimiWindowsInstall.test.ts`, which also holds the Windows line to PowerShell's own parser; `kimiWindowsInstallRuns.test.ts`
+ * runs it against stand-ins.</p>
+ */
+function kimiInstall(platform: Platform): VendorInstall {
+  return platform === 'win32'
+    ? { command: KIMI_WINDOWS_LINE, prerequisite: '', docs: DOCS['kimi']!, note: KIMI_NOTE_WINDOWS }
+    : { command: KIMI_SCRIPT, prerequisite: '', docs: DOCS['kimi']!, note: KIMI_NOTE_POSIX };
+}
+
+/**
+ * One winget step for a tool Kimi needs: skipped when the tool is already on PATH (whoever installed it), and STOPPING the
+ * line when winget fails — measured by `kimiWindowsInstallRuns.test.ts`. The words of the stop avoid "install": the
+ * official-source check reads every step. The stop reads BOTH `$?` and `$LASTEXITCODE`: a winget that is not on PATH never runs, and
+ * a native command that never ran leaves `$LASTEXITCODE` where it was (0 in a fresh session — measured in pwsh 7), so the exit code alone
+ * let the line walk on to Moonshot's step.
+ */
+function kimiToolStep(tool: string, id: string, name: string): string {
+  return `if (-not (Get-Command ${tool} -ErrorAction SilentlyContinue)) { winget install --id ${id} ${WINGET_FLAGS}; `
+    + `if (-not $? -or $LASTEXITCODE -ne 0) { throw '${name} could not be set up by winget; nothing after it was run' } }`;
+}
+
+// --source winget pins the community repository (without it winget also searches msstore); -e matches the id whole.
+const WINGET_FLAGS = '-e --source winget --accept-source-agreements --accept-package-agreements';
+const KIMI_SCRIPT = 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash';
+const KIMI_WINDOWS_LINE = [
+  kimiToolStep('git', 'Git.Git', 'Git for Windows'),
+  kimiToolStep('rg', 'BurntSushi.ripgrep.MSVC', 'ripgrep'),
+  kimiToolStep('fd', 'sharkdp.fd', 'fd'),
+  'irm https://code.kimi.com/kimi-code/install.ps1 | iex',
+].join('; ');
+
+/** The part of both notes that only a person can do. */
+const KIMI_SIGN_IN = 'Then sign in, which only you can do: press ▶ on this card — it starts Kimi — and type /login there.';
+
+const KIMI_NOTE_WINDOWS =
+  'One press: if this machine has no Git for Windows (Kimi runs its shell through Git Bash), no ripgrep or no fd (coai-mcp '
+  + 'refuses a Kimi launch without them), winget installs each from its project’s own release, and a step that fails stops '
+  + 'the line; then Moonshot’s own installer puts Kimi in `%USERPROFILE%\\.kimi-code\\bin` and on your user PATH. That PATH '
+  + 'reaches only terminals started after it, so restart VS Code before ▶ — and coai-mcp — finds `kimi`, `rg` and `fd`. '
+  + KIMI_SIGN_IN + ' ⟳ runs this same line: Moonshot’s installer puts the latest over the old Kimi and keeps the old binary '
+  + 'as a .bak. It updates the default install: a row with a CLI path of its own (a Kimi kept in another folder) is NOT what ⟳ '
+  + 'reaches — the line puts no path in the command — so update that copy yourself, or clear the CLI path.';
+
+const KIMI_NOTE_POSIX =
+  'Moonshot’s own installer, from code.kimi.com. It is a piped script — read it first if that matters to you. It puts Kimi in '
+  + '~/.kimi-code/bin and edits one shell rc file so that folder is on your PATH (open a new shell, or restart VS Code). '
+  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on Linux, WSL or macOS yet — none of them is measured — so a reviewer on '
+  + 'this side waits for that; this line installs Kimi only, not the ripgrep and fd it will need.';
+
 /** The CLIs a person installs from their vendor's own installer rather than from npm. */
 const OWN_INSTALLER: Record<string, (platform: Platform) => VendorInstall> = {
   antigravity: antigravityInstall,
   vibe: vibeInstall,
+  kimi: kimiInstall,
 };
 
 /** The CLIs whose update is neither a subcommand of their own nor npm's `@latest`. */
 const OWN_UPDATE: Record<string, (platform: Platform) => VendorInstall> = {
   vibe: vibeUpdate,
+  // Re-running Moonshot's script installs the latest over the old one, and the tool steps skip what is there: the update IS the install.
+  kimi: kimiInstall,
 };
 
 // The official sources and their check live in `officialSources.ts` (they grew a parser of their own, 2026-10-13); they

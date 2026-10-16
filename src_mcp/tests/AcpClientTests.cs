@@ -75,7 +75,7 @@ public sealed class AcpClientTests
     [Fact]
     public async Task TheModelIsSetBeforeThePrompt_AndNewSendsTheCwdAndNoMcpServer()
     {
-        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], FakeAcpAgent.Models("kimi-code/k3-256k"));
 
         await RunAsync(agent, agent.Ask(model: "kimi-code/k3-256k"));
 
@@ -89,7 +89,7 @@ public sealed class AcpClientTests
         option.GetProperty("sessionId").GetString().Should().Be("fake-session");
         option.GetProperty("configId").GetString().Should().Be("model");
         option.GetProperty("value").GetString().Should().Be("kimi-code/k3-256k");
-        var prompt = agent.Received("session/prompt").Single().GetProperty("params").GetProperty("prompt");
+        var prompt = agent.Received("session/prompt").First().GetProperty("params").GetProperty("prompt");
         prompt[0].GetProperty("type").GetString().Should().Be("text");
         prompt[0].GetProperty("text").GetString().Should().Be("say hello");
     }

@@ -208,19 +208,33 @@ public static partial class HandleRead
     }
 
     /// <summary>The root as the kernel spells it — the long, link-resolved form on Windows, <c>realpath</c>'s on Unix.</summary>
-    internal static string CanonicalDirectory(string root)
+    internal static string CanonicalDirectory(string root) =>
+        FinalDirectory(root) is { Length: > 0 } final ? final : WorktreePaths.Real(root);
+
+    /// <summary>
+    /// What the kernel says a DIRECTORY handle really names — the handle's final path, every link on the way resolved and each
+    /// component spelled with its on-disk casing and long name — or EMPTY when the open fails, the call fails or answers a path
+    /// longer than the buffer, or the host is not Windows (no <c>Real</c>, no <c>realpath</c>: D18 never reaches a non-Windows
+    /// host here, and a non-Windows answer would be a spelling).
+    /// </summary>
+    /// <remarks>
+    /// Also the identity a Kimi sign-in's lock is keyed by, and what the junction maker asks to see where a target really is —
+    /// and for those two an unnamed handle is EMPTY, never the spelling (E4.2 decisions 9 and 13 of
+    /// <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>). <see cref="CanonicalDirectory"/> falls back to the spelling and is
+    /// <c>internal</c> for the readers that want that (<see cref="Trust"/>, and the private-folder check).
+    /// </remarks>
+    internal static string FinalDirectory(string root)
     {
         if (!OperatingSystem.IsWindows())
         {
-            return WorktreePaths.Real(root);
+            return string.Empty;
         }
 
         // A directory handle needs FILE_FLAG_BACKUP_SEMANTICS, which no managed open sets; asked once per read, so
         // the temp directory's short spelling (RUNNER~1) and the handle's long one compare as the same place.
         using var directory = CreateFileW(root, FileReadAttributes, ShareAll, 0, OpenExisting, BackupSemantics, 0);
-        var canonical = directory.IsInvalid ? string.Empty : WindowsFinalPath(directory);
 
-        return canonical.Length > 0 ? canonical : WorktreePaths.Real(root);
+        return directory.IsInvalid ? string.Empty : WindowsFinalPath(directory);
     }
 
     /// <remarks>
@@ -283,5 +297,5 @@ public static partial class HandleRead
     private static partial uint GetFinalPathNameByHandleW(SafeFileHandle handle, Span<char> path, uint length, uint flags);
 
     [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
-    private static partial SafeFileHandle CreateFileW(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
+    internal static partial SafeFileHandle CreateFileW(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
 }

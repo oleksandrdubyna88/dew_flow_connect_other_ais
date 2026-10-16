@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Tests;
 
@@ -47,9 +48,30 @@ internal sealed class FakeAcpAgent : IDisposable
 
     public string Inside(params string[] parts) => Path.Combine([Cwd, .. parts]);
 
-    /// <summary>A profile that launches the fake agent by verb, with the exclusions and failure sentences a test names.</summary>
-    public IAcpProfile Profile(IReadOnlyList<string>? excluded = null, IReadOnlyList<AcpKnownFailure>? failures = null) =>
-        new FakeAcpProfile(Script, excluded ?? KimiAcpProfile.Exclusions, failures ?? []);
+    /// <summary>Where the agent writes its environment and the probes of <see cref="EnvField"/>, when the script asks.</summary>
+    public string EnvFile => _dir.At("env.txt");
+
+    /// <summary>The script with more fields (each one `,"name":value`) — for a field that names a path of this very agent.</summary>
+    public FakeAcpAgent WithFields(string extraFields)
+    {
+        var text = File.ReadAllText(Script).TrimEnd();
+        File.WriteAllText(Script, text[..^1] + extraFields + "}");
+
+        return this;
+    }
+
+    /// <summary>The script fields that make the agent announce exactly these values for the <c>model</c> option — none: no option at all.</summary>
+    public static string Models(params string[] models) => $$""","models":[{{string.Join(",", models.Select(Quote))}}]""";
+
+    /// <summary>The script field that makes the agent answer a <c>/usage</c> prompt with this text as one message chunk.</summary>
+    public static string UsageReply(string text) => $$""","usageReply":{{Quote(text)}}""";
+
+    /// <summary>The script fields that make the agent write its environment to <see cref="EnvFile"/> at start, and the state of each lock file named.</summary>
+    public string EnvField(params string[] probes) => $$""","envFile":{{Quote(EnvFile)}},"probes":[{{string.Join(",", probes.Select(Quote))}}]""";
+
+    /// <summary>A profile that launches the fake agent by verb, with the exclusions and failure sentences a test names — and, when a test names one, the sentence its agent request is refused with.</summary>
+    public IAcpProfile Profile(IReadOnlyList<string>? excluded = null, IReadOnlyList<AcpKnownFailure>? failures = null, string agentRefusal = "") =>
+        new FakeAcpProfile(Script, excluded ?? KimiAcpProfile.Exclusions, failures ?? [], agentRefusal);
 
     public AcpAsk Ask(string prompt = "say hello", string model = "m-1", TimeSpan? deadline = null, string? executable = null) =>
         new(executable ?? FakeCliExe, Cwd, model, prompt, deadline ?? TimeSpan.FromSeconds(30));
@@ -118,6 +140,9 @@ internal sealed class FakeAcpAgent : IDisposable
 
     public static string Read(string path) => $$"""{"kind":"read","path":{{Quote(path)}}}""";
 
+    /// <summary>A read whose reply is also said back as the agent's own message — the shape that would leak a served file into an answer.</summary>
+    public static string ReadEchoed(string path) => $$"""{"kind":"read","path":{{Quote(path)}},"echo":true}""";
+
     public static string Read(string path, int line, int limit) => $$"""{"kind":"read","path":{{Quote(path)}},"line":{{line}},"limit":{{limit}}}""";
 
     public static string Request(string method, string paramsJson) => $$"""{"kind":"request","method":{{Quote(method)}},"params":{{paramsJson}}}""";
@@ -144,8 +169,10 @@ internal sealed class FakeAcpAgent : IDisposable
             : string.Empty;
 
     /// <summary>The fake agent as a profile: the verb and the script in argv, the exclusions and failures a test chose.</summary>
-    private sealed class FakeAcpProfile(string script, IReadOnlyList<string> excluded, IReadOnlyList<AcpKnownFailure> failures) : IAcpProfile
+    private sealed class FakeAcpProfile(string script, IReadOnlyList<string> excluded, IReadOnlyList<AcpKnownFailure> failures, string agentRefusal) : IAcpProfile
     {
+        public string AgentRefusal(ProcessRequest request, AcpAsk ask) => agentRefusal;
+
         public string Name => "fake";
 
         public string DefaultExecutable => FakeCliExe;

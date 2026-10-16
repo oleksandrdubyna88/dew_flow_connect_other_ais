@@ -679,6 +679,8 @@ public sealed class ConsultationService(
         // The row's system prompt is redacted from what the child says, as a reviewer's is: a CLI echoes its prompt, and a
         // failing one quotes it into the reason that reaches the record and the reply (research/PLAN_one_model_catalog.md, C2).
         var launch = consultant.Runtime.Build(ready.Launch) with { Redact = ConsultantTurnInputs.Redacted(record.RowInstruction) };
+        // From here the turn is BILLED and fenced under the model that ran: a row that names none runs on its adapter's default (decision 75).
+        consultant = consultant with { Model = ModelRan.Of(launch.Model, consultant.Model) };
         // What the turn is SENT rides the record from here on, so every ending — answered or failed — carries it.
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow), Confinement = ready.Confinement };
         if (ready.Note.Length > 0)

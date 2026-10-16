@@ -61,6 +61,88 @@ public static partial class CodexConfigFile
         return string.Empty;
     }
 
+    /// <summary>
+    /// A key's value inside ONE named table — the lines after the FIRST line that trims to exactly <paramref name="header"/>
+    /// (<c>[providers."managed:kimi-code".oauth]</c>) up to the next line that starts with <c>[</c> — read as
+    /// <see cref="RootValue"/> reads a root key; empty when the table or the key is not there or not spelled plainly.
+    /// </summary>
+    /// <remarks>
+    /// For Kimi's config (D19): the same "unsure means silent", with the same one reader. The text is sliced to the table BEFORE
+    /// any key is looked for, so the same name in another table (<c>base_url</c> is in the managed provider and the
+    /// <c>moonshot-ai</c> one) is never confused, and a malformed line outside the table is never parsed.
+    /// </remarks>
+    public static string TableValue(string toml, string header, string key)
+    {
+        foreach (var line in TableLines(toml, header))
+        {
+            if (RootKey.Match(line) is { Success: true } found && found.Groups["key"].Value == key)
+            {
+                return ValueOf(found);
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// A ONE-LINE array of basic strings, <c>key = [ "a", "b" ]</c>, inside the named table; empty when it is absent or of any
+    /// other form (a multi-line array, a non-string item, a literal string).
+    /// </summary>
+    public static IReadOnlyList<string> TableStrings(string toml, string header, string key)
+    {
+        foreach (var line in TableLines(toml, header))
+        {
+            if (ArrayKey.Match(line) is { Success: true } found && found.Groups["key"].Value == key)
+            {
+                return StringsIn(found.Groups["items"].Value);
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>Whether a line trims to exactly <paramref name="header"/>.</summary>
+    public static bool HasTable(string toml, string header) => toml.Split('\n').Any(line => line.Trim() == header);
+
+    /// <summary>The trimmed lines of the table whose first header is <paramref name="header"/>, up to the next line that starts with <c>[</c>.</summary>
+    private static IEnumerable<string> TableLines(string toml, string header)
+    {
+        var inside = false;
+        foreach (var raw in toml.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (inside && line.StartsWith('['))
+            {
+                yield break;
+            }
+
+            if (inside)
+            {
+                yield return line;
+            }
+
+            inside |= line == header;
+        }
+    }
+
+    /// <summary>The strings of an array body, or none when anything but strings and commas is in it.</summary>
+    private static IReadOnlyList<string> StringsIn(string items)
+    {
+        var strings = BasicString.Matches(items).Select(match => match.Groups[1].Value).ToList();
+
+        return BasicString.Replace(items, string.Empty).All(character => character == ',' || char.IsWhiteSpace(character)) ? strings : [];
+    }
+
+    /// <summary><c>key = [ ... ]</c> on ONE line, with an optional trailing comment; the body holds no bracket.</summary>
+    [GeneratedRegex("""^(?<key>[A-Za-z0-9_-]+)\s*=\s*\[(?<items>[^\[\]]*)\]\s*(?:#.*)?$""", RegexOptions.CultureInvariant, MatchTimeoutMs)]
+    private static partial Regex ArrayKey { get; }
+
+    /// <summary>One basic string.</summary>
+    [GeneratedRegex("""
+        "([^"\\]*)"
+        """, RegexOptions.CultureInvariant, MatchTimeoutMs)]
+    private static partial Regex BasicString { get; }
+
     private static string ValueOf(Match found) =>
         found.Groups["basic"].Success ? found.Groups["basic"].Value
         : found.Groups["literal"].Success ? found.Groups["literal"].Value

@@ -513,6 +513,30 @@ public interface IReviewerRuntime
     /// throw, and it must never invent.</para>
     /// </remarks>
     string WhyItFailed(ReviewerInvocation invocation, ProcessResult result) => string.Empty;
+
+    /// <summary>
+    /// Whether a launch that ran to its end was RATE LIMITED — asked by the executor BEFORE the exit code is judged, and the
+    /// verdict carries the usage the limited launch consumed.
+    /// </summary>
+    /// <remarks>
+    /// <para>The default is exactly what the executor always did: <see cref="RateLimit.Hit"/> over the TEXT of stdout and
+    /// stderr (<see cref="RateLimitVerdict.ByText"/>), with no usage. An adapter whose CLI reports its refusals in a
+    /// STRUCTURED report overrides it and classifies from the report's fields: Kimi's shim prints the whole trace of a
+    /// turn — file paths, tool titles — on stdout, and a path named <c>quota.cs</c> or a tool titled <c>check rate limit</c>
+    /// is not a rate limit (E4.4 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>, S4.6).</para>
+    /// <para>Must never throw: it runs on the failure path of a launch that has already gone wrong.</para>
+    /// </remarks>
+    RateLimitVerdict RateLimited(ReviewerInvocation invocation, ProcessResult result) => RateLimitVerdict.ByText(result);
+
+    /// <summary>
+    /// Whether launches of this adapter's provider must run ONE AT A TIME within a round, whatever the per-provider cap says.
+    /// </summary>
+    /// <remarks>
+    /// Kimi's refresh token ROTATES: two Kimis refreshing one sign-in at once is a race that signs the person out (M-K14, D19 of
+    /// <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>). The cross-process half is <c>KimiCredentialsLock</c>'s gate; this is the
+    /// in-process half, so a round does not even start the second reviewer it would then have to make wait. False by default.
+    /// </remarks>
+    bool LaunchesOneAtATime => false;
 }
 
 /// <summary>The default read conventions the adapters share.</summary>
@@ -840,7 +864,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         runtimes.ToDictionary(r => r.Provider, StringComparer.OrdinalIgnoreCase);
 
     public static ReviewerRuntimeSelector Default { get; } =
-        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new AntigravityRuntime(), new DeepseekRuntime(), new Vibe.VibeRuntime()]);
+        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new AntigravityRuntime(), new DeepseekRuntime(), new Vibe.VibeRuntime(), new Kimi.KimiRuntime()]);
 
     /// <summary>
     /// Every runtime NAME a configured vendor may name. The one list; nobody writes a second.
@@ -858,7 +882,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     public static readonly IReadOnlySet<string> RuntimeNames =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe",
+            "codex", "gemini", "claude", "antigravity", "local", "remote", "api", "vibe", "kimi",
         };
 
     /// <summary>
@@ -873,9 +897,11 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     /// the next machine-only runtime would have been admitted because a set grew.</para>
     /// <para><c>vibe</c> runs on the person's own Mistral sign-in, kept in THIS machine's OS keyring (D12 of
     /// <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>): a Team server has no such sign-in and no plan for one yet.</para>
+    /// <para><c>kimi</c> runs on the person's own Kimi Code sign-in, kept as files in THIS machine's <c>~/.kimi-code/credentials</c> and reached by a
+    /// junction from a coai-owned home (D19): the same reason, and a stricter one — a rotating refresh token that two machines would race.</para>
     /// </remarks>
     public static readonly IReadOnlySet<string> MachineOnlyRuntimes =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "local", "api", "vibe" };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "local", "api", "vibe", "kimi" };
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
 
@@ -894,6 +920,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         "codex" => new CodexRuntime(vendorId),
         "local" => new LocalRuntime(vendorId, string.Empty),
         "vibe" => new Vibe.VibeRuntime(vendorId),
+        "kimi" => new Kimi.KimiRuntime(vendorId),
         // `remote` is absent DELIBERATELY, and this comment is the guard against somebody adding it
         // to match the set. A Team server vendor cannot be built from a name: it needs the server's
         // URL, which only the full identity carries, so `RuntimeResolution.For` constructs it before

@@ -7050,6 +7050,13 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
   it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
   beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+- **A Kimi home in the scratch** (E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`, S4.15): `RoundScratch.Delete` first calls `KimiHome.DisposeAllUnder(Directory, note)` — every `kh-*`
+  home (a Kimi reviewer's, `KimiRuntime`) has its `credentials` junction to the person's own folder removed by its own name, the person's names verified, under no live tree — and only
+  then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep (which asks the same per-home hold before it deletes a due folder, E4.4 review B1), not
+  deleted "around" it: the stop that matters is a Kimi still running on that home (it holds the per-home file), and unlinking its junction would make its next refresh write the rotated
+  token into a folder it re-creates inside coai's home and sign the person out (E4.2 decision 11) — the D20 sweep's rule, applied to the round. `RoundScratch.At(directory, note)` is the
+  one factory besides `Reserve`, so a test puts the scratch in its own `testsToDelete-` folder; the rest of the roster is unchanged (`KimiRuntime` asks for the snapshot through
+  `NeedsASanitisedSnapshot`, reads `OwnedScratch` for its homes, and `BoundedScheduler.CapFor` makes its provider one-at-a-time — [module_runners.md](module_runners.md), *The Kimi reviewer*).
 
 ```mermaid
 flowchart TD
@@ -7133,7 +7140,10 @@ folder's turn or any home's turn in it is held (`VibeHomeTurns.TryTake`, zero wa
 never by a stamp). Before the delete the process's snapshot of it is released (its bytes back to the budget); the delete is
 `GitScratch.DeleteEvenIfReadOnly`, which unlinks a junction by its own name and never walks through it — so a Kimi home's
 `credentials` junction goes and the person's folder keeps every file (Kimi's own junction-first-and-verify disposal is S4's,
-in its home's owner; this sweep is the backstop). A folder that cannot be listed, read or removed is logged and skipped —
+in its home's owner; this sweep is the backstop). The deleter also checks, around each unlink, that the folder the link pointed
+at lost nothing — a lost name throws `LinkTargetLostException`, the walk stops, the sweep warns with the name, and because a
+conversation folder's own files (its stamp, in particular) are deleted LAST the folder stays recognisably this store's and the
+next beat finishes it (E4.1 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). A folder that cannot be listed, read or removed is logged and skipped —
 never the reason the sweep fails. `close_consult` removes the conversation's folders at once (`ConsultantHomeSweep.RemoveNow`,
 under the repository lock) instead of leaving them to the beat. The bound: while a server runs, a home outlives its
 conversation by at most `ConsultIdle` + one beat (15 min + 60 s by default); a killed host's homes go at the next start.

@@ -74,6 +74,8 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
         ("deepseek", new DeepseekRuntime(), new("deepseek") { Model = "deepseek-reasoner", ApiKey = "sk-ds", ReasoningEffort = "high" }),
         // The model rides VIBE_ACTIVE_MODEL, not the argv (D10), and no effort is sent: none is measured taking effect.
         ("vibe", new Runners.Vibe.VibeRuntime(), new("vibe") { Model = "glm-5-3", ReasoningEffort = "high" }),
+        // The model rides the shim's --model (D10, checked twice), and no effort is sent: none is measured taking effect (shared/feature-availability.json).
+        ("kimi", new Runners.Kimi.KimiRuntime(), new("kimi") { Model = "kimi-code/k3", ReasoningEffort = "high" }),
     ];
 
     private static TheoryData<string, IReviewerRuntime, ReviewerSettings> Table(Func<string, bool> keep)

@@ -2,6 +2,7 @@ using System.Text;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
@@ -149,6 +150,119 @@ public sealed class ConsultantHomeSweepTests : IAsyncLifetime
         Sweep().Should().Be(1);
 
         Directory.Exists(folder).Should().BeFalse("rule (a): no record, and nothing written inside the window");
+        TheSecretIsUntouched();
+    }
+
+    /// <summary>E4.1 S1.8: the person's folder lost a file during the unlink — the sweep SAYS so, leaves the folder, and the next beat finishes.</summary>
+    [Fact]
+    public async Task TheSweepSaysALoss_AndGoesOn()
+    {
+        var lost = Path.Combine(Persons, "kimi-code.json");
+        await File.WriteAllBytesAsync(lost, Token, TestContext.Current.CancellationToken);
+        var folder = Home(ConsultantHomes.Kimi, ConsultationStore.NewId(), Window * 2);
+        var junction = Path.Combine(folder, "vh-0123456789", "credentials");
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), junction, Persons);
+        Aged(folder, Window * 2);
+        GitScratch.AfterUnlink = _ => File.Delete(lost);
+        try
+        {
+            Sweep().Should().Be(0, "a folder whose deletion stopped is not counted as removed");
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        _said.Should().ContainSingle(said => said.Contains("kimi-code.json") && said.Contains(Persons), "the loss is a warning with the name, never silence");
+        Directory.Exists(folder).Should().BeTrue("the folder is left for the next beat");
+
+        Aged(folder, Window * 2);
+
+        Sweep().Should().Be(1, "the link is gone already, so the next beat finds nothing to lose and finishes");
+        Directory.Exists(folder).Should().BeFalse();
+        File.ReadAllBytes(Secret).Should().Equal(Token);
+    }
+
+    /// <summary>A Kimi CONVERSATION root: <c>coai-kimi/&lt;id&gt;/home/credentials</c> is a junction to the fake person's folder — S5's shape, past the window.</summary>
+    private async Task<string> KimiConversationAsync()
+    {
+        var folder = Home(ConsultantHomes.Kimi, ConsultationStore.NewId(), Window * 2);
+        Directory.CreateDirectory(Path.Combine(folder, "home"));
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), Path.Combine(folder, "home", "credentials"), Persons);
+        Aged(folder, Window * 2);
+
+        return folder;
+    }
+
+    /// <summary>E4.2 S2.39: the sweep's Kimi path removes the junction FIRST through <c>KimiHome</c>, so the shared deleter meets no link — and keeps the folder when the person's folder lost a name.</summary>
+    [Fact]
+    public async Task TheSweepsKimiPath_DisposesJunctionFirst_AndKeepsTheFolderOnALoss()
+    {
+        var folder = await KimiConversationAsync();
+        var deleterMetALink = false;
+        GitScratch.AfterUnlink = _ => deleterMetALink = true;
+        try
+        {
+            Sweep().Should().Be(1);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        Directory.Exists(folder).Should().BeFalse();
+        deleterMetALink.Should().BeFalse("the junction went first, by KimiHome's own explicit step — the deleter met no link");
+        TheSecretIsUntouched();
+
+        var lost = Path.Combine(Persons, "kimi-code.json");
+        await File.WriteAllBytesAsync(lost, Token, TestContext.Current.CancellationToken);
+        var loss = await KimiConversationAsync();
+        KimiHome.AfterUnlink = _ => File.Delete(lost);
+        try
+        {
+            Sweep().Should().Be(0, "a Stopped keeps the folder this beat");
+        }
+        finally
+        {
+            KimiHome.AfterUnlink = null;
+        }
+
+        _said.Should().ContainSingle(said => said.Contains("kimi-code.json") && said.Contains(Persons), "the loss is a warning with the name");
+        Directory.Exists(loss).Should().BeTrue();
+        File.Exists(Path.Combine(loss, ConversationFolder.LockName)).Should().BeTrue("the folder is kept with its lock file");
+
+        Aged(loss, Window * 2);
+
+        Sweep().Should().Be(1, "the link is gone already, so the next beat finishes");
+        Directory.Exists(loss).Should().BeFalse();
+        File.ReadAllBytes(Secret).Should().Equal(Token);
+    }
+
+    /// <summary>E4.2 S2.44, the sweep arm: a Kimi tree still alive on the home (its per-home hold held) stops the disposal, and the folder is kept until it ends.</summary>
+    [Fact]
+    public async Task ASweepUnderALiveTree_KeepsTheFolder_UntilTheHoldEnds()
+    {
+        var folder = await KimiConversationAsync();
+        var hold = Path.Combine(folder, KimiCredentialsLock.HomeHoldName);
+        await File.WriteAllTextAsync(hold, string.Empty, TestContext.Current.CancellationToken);
+        Aged(folder, Window * 2);
+        var held = ((Hold.Taken)HeldFile.Take(hold)).Stream;
+        try
+        {
+            Sweep().Should().Be(0);
+        }
+        finally
+        {
+            held.Dispose();
+        }
+
+        _said.Should().ContainSingle(said => said.Contains("still running") && said.Contains(KimiCredentialsLock.HomeHoldName));
+        Directory.Exists(folder).Should().BeTrue("the folder is kept");
+        OwnedPaths.IsLinkIfThere(Path.Combine(folder, "home", "credentials")).Should().BeTrue("nothing was unlinked under a live tree");
+        TheSecretIsUntouched();
+
+        Sweep().Should().Be(1, "the hold released, the next beat removes it");
+        Directory.Exists(folder).Should().BeFalse();
         TheSecretIsUntouched();
     }
 

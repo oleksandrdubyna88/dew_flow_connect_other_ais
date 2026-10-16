@@ -32,7 +32,7 @@ import type { ModelChoice } from './modelChoice';
  * the one thing the local runtime exists to avoid. The comment beside that check already said the
  * two had to be kept in step, which is the argument for there being only one of them.</p>
  */
-export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api', 'vibe'] as const;
+export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api', 'vibe', 'kimi'] as const;
 
 export type Runtime = (typeof RUNTIMES)[number];
 
@@ -43,7 +43,7 @@ export type Runtime = (typeof RUNTIMES)[number];
  * its own — and a runtime added to one and not the other is a CLI the card names and the table
  * forgets.</p>
  */
-export const CLI_RUNTIMES: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'gemini', 'vibe'];
+export const CLI_RUNTIMES: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'gemini', 'vibe', 'kimi'];
 
 /**
  * `agy models` → the ids it lists, in its order.
@@ -129,8 +129,28 @@ export const VIBE_MODELS: readonly ModelChoice[] = [
 /** The Vibe version the curated aliases were seen accepted on — the label D10 asks the list to carry. */
 export const VIBE_MODELS_SEEN_ON = '2.26.1';
 
+/**
+ * Kimi Code's model ids — curated, because Kimi's ACP session lists the plan's models only after a session is open
+ * (todo/PLAN_vibe_and_kimi_runtimes.md D10; RESULTS_kimi_confinement.md §22).
+ *
+ * <p><b>The list coai-mcp checks a launch against, not a suggestion.</b> It EQUALS `KimiModels.Curated` on the server —
+ * the ids of `shared/kimi-model-blocks.json`, in that order, the first being what a row that names none runs on — and a
+ * test reads both. coai-mcp refuses an id outside `kimi-code/` before the launch, because a `moonshot-ai/*` id bills the
+ * person's own API key, and checks the id against the session's own list inside the shim (exit 65 with the list). Seen
+ * accepted on Kimi {@link KIMI_MODELS_SEEN_ON}.</p>
+ */
+export const KIMI_MODELS: readonly ModelChoice[] = [
+  { id: 'kimi-code/k3-256k', label: 'K3-256k — answered 64 paid turns in the probe' },
+  { id: 'kimi-code/k3', label: 'K3' },
+  { id: 'kimi-code/kimi-for-coding', label: 'K2.8 Preview' },
+  { id: 'kimi-code/kimi-for-coding-highspeed', label: 'K2.8 Preview, high speed — answers 401 unless your Kimi Code plan includes it' },
+];
+
+/** The Kimi version the curated ids were seen accepted on — the label D10 asks the list to carry. */
+export const KIMI_MODELS_SEEN_ON = '2.1.1';
+
 /** A runtime whose models are a list shipped with this build, because its CLI publishes none. */
-const CURATED_FOR: Partial<Record<Runtime, readonly ModelChoice[]>> = { vibe: VIBE_MODELS };
+const CURATED_FOR: Partial<Record<Runtime, readonly ModelChoice[]>> = { vibe: VIBE_MODELS, kimi: KIMI_MODELS };
 
 export function modelsFor(
   runtime: Runtime,
@@ -362,6 +382,9 @@ const CURATED_NOTE: Partial<Record<Runtime, string>> = {
   gemini: 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.',
   vibe: `a curated list — the aliases coai-mcp has seen Vibe ${VIBE_MODELS_SEEN_ON} accept; Vibe lists none without `
     + 'a model turn. coai-mcp refuses any other alias before the launch, because Vibe would answer it on its default.',
+  kimi: `a curated list — the ids coai-mcp has seen Kimi ${KIMI_MODELS_SEEN_ON} accept; the Kimi Code plan lists its models only `
+    + 'inside an open session. coai-mcp refuses any id outside kimi-code/ before the launch, because a moonshot-ai/ id would '
+    + 'bill your own API key, and checks the id against the session’s own list inside the launch.',
 };
 
 export function modelsProvenance(

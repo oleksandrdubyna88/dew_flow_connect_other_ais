@@ -114,6 +114,32 @@ public sealed class AcpReadBoundaryTests : IDisposable
         answer.Refusal.Should().Contain("not served");
     }
 
+    /// <summary>M-K9 (e), RESULTS section 21: a sub-agent root Kimi loads from disk, and the project-root MCP file it starts when trusted. The `.mcp.json` entry is a NAME, so it is refused at every depth — the stricter reading of "project-root".</summary>
+    [Theory]
+    [InlineData(".agents/agents/x.md")]
+    [InlineData("sub/.agents/agents/y.md")]
+    [InlineData(".mcp.json")]
+    [InlineData("deep/er/.mcp.json")]
+    public void TheTwoNamesMK9eAdded_AreRefused(string relative)
+    {
+        var path = Write(relative.Replace('/', Path.DirectorySeparatorChar), "{}");
+
+        var answer = Boundary().Read(path);
+
+        answer.Served.Should().BeFalse(relative);
+        answer.Refusal.Should().Contain("not served");
+    }
+
+    [Fact]
+    public void TheNamesNextToThem_AreStillServed()
+    {
+        var plain = Write(Path.Combine(".agents", "PROJECT.md"), "kept");
+        var other = Write("mcp.json.md", "kept");
+
+        Boundary().Read(plain).Served.Should().BeTrue(".agents/PROJECT.md is not a sub-agent root");
+        Boundary().Read(other).Served.Should().BeTrue("a name is matched whole");
+    }
+
     [Fact]
     public void TheExclusionFollowsThePlatformsCaseRule()
     {
