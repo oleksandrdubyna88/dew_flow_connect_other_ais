@@ -6,6 +6,9 @@
 > each, and its fixes are in. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
 > its security judgement. The plan gate passed (proceed), and its findings are folded in (§"Plan gate 2026-10-16").
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
+> **E5.7 implemented 2026-10-16 (Opus)**, on its own branch beside E5.4: the consultant-runtime gate (`CONSULTANT_SINCE`, a note, never a
+> withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in five languages; deviations 40–46,
+> *E5.7 as built*. S5.7.5 is green only once E5.4's seed (`features.consultant` gains `kimi`) is merged.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1015,6 +1018,36 @@ Numbered apart from the list above, so the stories built in parallel do not coll
 - **Open tail: no `--cells M-K16` arm in the probe.** M-K16 ran on the scout's scratch driver, outside the repository, so the measurement cannot be re-run from the
   repository. The probe library has the two features it needs (`loadUpdates`, `endLikeTheShim`); the cell itself is owed — before M-K16 is re-run on a new
   Kimi version, or with the live checks of RESULTS §31.
+
+### E5.7 as built (Opus, 2026-10-16)
+
+Numbered from 40, apart from the lists above, so the stories built in parallel do not collide on a number.
+
+40. **The guard's consultant rule is stricter than the runtime rule, and its sentence says so.** S5.7.4's row predicted the refusal
+    "… section does not name kimi". Against the real changelog that sentence cannot come: the `## Server 0.57.0` section names Kimi in
+    almost every paragraph — as a REVIEWER — so the runtime rule (the name anywhere) lets a planted `kimi: '0.57.0'` through (watched:
+    `actual ''`). `runtimeSinceIsAhead.test.ts` now reads each table through a `Gate`: `KNOWS` (as before; `api` exempt with its reason) and
+    `CONSULTS`, whose section must name the runtime AND a consultant in ONE sentence (split after a full stop, also one inside a bold run),
+    with no exemptions. The refusal ends "… does not name kimi as a consultant …". `vibe: '0.54.0'` passes on "Added: Mistral Vibe as a
+    consultant and a question consultant."
+41. **The reds read as the plan's, with two differences of wording.** S5.7.1's red is `+ {}` against the expected table (the stub the plan's
+    compile-red rule asks for — an empty table, not `undefined`). S5.7.6's red names `en`, not `ru`: `HELP_LANGUAGES` starts with English.
+42. **The note covers every runtime of the table, not only `kimi`**, and it is drawn in two places: the Consultant section
+    (`consultSettings.consultantRuntimeSkewNote`, each runtime of the RESOLVED caller map named once, beside the definition skew note) and
+    beside a question row (`QuestionRowView.serverNote`). So a `vibe` consultant on a server below 0.54.0 is named too — the table's purpose.
+43. **S5.7.5 waits on E5.4's seed, and is its own commit.** `features.consultant` is the server's `ConsultantResolution.Consulting` too, so
+    seeding `kimi` here would break the server's suite (`FeatureAvailabilityTests.cs:78`, `ConsultantLimitationsTests`) on this branch. The
+    commit holds `kimiIsOfferedAsAConsultant`, the `CONSULTING` list in `consultant.test.ts` and the flipped `kimiRuntime.test.ts` pin
+    ("neither a consultant" → "a consultant (S5)"). Watched red here (`actual 'a consultation runs on codex, claude, antigravity, local, api,
+    vibe'`) and green with E5.4's seed applied in the working tree only (`kimi` appended after `vibe`, the generator run), then reverted.
+    `featureAvailability.test.ts`'s frozen list is E5.4's (S5.4.12) and goes red under the seed until E5.4 changes it.
+44. **The homes folder: more texts than the three `pathFindings.ts` lines, and one of the three left.** The owner and the consequence name both
+    CLIs; the cure (`:245`) names no CLI, so there is nothing to widen. The registry's `noun`/`there` (`pathSettings.ts`), the box's own hint,
+    the manifest's `markdownDescription` and *The consultant* article's setup paragraph in five languages say Kimi too, because each names
+    the label. The help-coverage alias is `vibe and kimi homes folder`.
+45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
+    the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
+46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

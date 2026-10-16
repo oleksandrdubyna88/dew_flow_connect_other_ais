@@ -12927,3 +12927,58 @@ flowchart LR
   on a machine without `kimi` — or a `testsToDelete-` `KIMI_INSTALL_DIR` — and one in WSL); Kimi as a consultant or question row (S5); chat; a
   live round through the product with the version warning shown; a `live-kimi-runtime-compat.mjs` beside Vibe's (that a released 0.55.0 refuses a
   kimi row by name is inferred from the Vibe measurement, not measured).
+
+## Kimi Code as a consultant — the extension's half (2026-10-16, E5.7 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The server's half (`KimiConsultant`, the seed, the question row) is E5.4–E5.6 and is documented in `module_runners.md` /
+`module_server.md` / `module_core.md`. This section is what the extension adds beside it: a gate for an installed `coai-mcp` that cannot
+consult on a runtime, and the help. **No picker code**: `CONSULTING` is generated from `shared/feature-availability.json`'s
+`features.consultant` (E5.4 adds `kimi` there), and `modelCardFields.ts` enables the consultant and question-consultant ticks from it.
+
+```mermaid
+flowchart LR
+  P["a caller's consultant, or a question row, on runtime kimi"] --> W["COAI_CONSULTANTS / COAI_QCONSULT_ROWS: the entry crosses as it is"]
+  P --> G{"consultantOnServer('kimi', installed)"}
+  G -->|"installed >= 0.58.0, or unknown"| Q["nothing to say"]
+  G -->|"installed < 0.58.0"| N["consultantRuntimeNote: named in the Consultant section and beside the question row"]
+  W --> S["an older server refuses it BY NAME (ConsultantResolution.CannotConsult)"]
+```
+
+- **The consultant table** (`runtimeSince.ts`): `KIMI_CONSULTANT_SINCE = '0.58.0'` and `CONSULTANT_SINCE = { vibe: '0.54.0', kimi }`
+  beside `RUNTIME_SINCE`. Two tables because knowing a runtime and consulting on it ship in different releases: Vibe reviewed from 0.53.0
+  and consulted from 0.54.0 (#811, with no gate); Kimi reviews from 0.57.0. **Why 0.58.0:** the newest released `src_mcp` is 0.57.0 (the
+  manifest), the release that first reviews with Kimi, and release-please bumps the minor for a `feat` — whoever cuts the release keeps it
+  level with the tag. `consultantOnServer` reads it by `runtimeOnServer`'s one rule (`onServer`: a runtime outside the table, or an
+  UNKNOWN server, is never old).
+- **A note, never a withheld entry** (decision 2). Unlike the runtime gate, nothing is kept out of the settings file: an older server
+  refuses a consultant on a runtime it cannot consult with, by name, while a withheld `COAI_CONSULTANTS` entry would make it consult with
+  the shipped default pair, silently. `consultantRuntimeNote(installed, runtime)` says "The coai-mcp you have installed ({version}) cannot
+  consult on {runtime}; update it to {since} or later — the MCP server tab." — only for a KNOWN server strictly older.
+  `consultSettings.consultantRuntimeSkewNote` names each runtime of the RESOLVED caller map once; `panelView.consultantSkew` draws it in the
+  Consultant section beside the definition skew note, in the `stale` class. A question row on such a runtime carries it as
+  `QuestionRowView.serverNote`, drawn beside the row (`qconsultView.ts`, `data-server-note`); the row and its switch stay.
+- **The guard reads both tables** (`runtimeSinceIsAhead.test.ts`). One `refusal` with a per-table `Gate`: `KNOWS` (the runtime's name
+  anywhere in the release's `## Server <SINCE>` section, `api` exempt with its reason) and `CONSULTS` — stricter, because 0.57.0's
+  section names Kimi all through, as a REVIEWER: the section must name the runtime and a consultant in ONE sentence (split after a full
+  stop, also inside a bold run), and the table has no exemptions. `vibe: '0.54.0'` passes on "Added: Mistral Vibe as a consultant …";
+  a planted `kimi: '0.57.0'` is refused "… does not name kimi as a consultant …".
+- **The homes folder names both CLIs** (decision 6). The key `coai.vibeHomesDirectory` is unchanged (a rename is a migration); the label
+  is "Vibe and Kimi homes folder", and the box's hint, `HELP.vibeHomesDirectory`, the manifest's description, the path notice
+  (`pathFindings.ts` owner and consequence, `pathSettings.ts` noun) and *The consultant* article in five languages say that Kimi's
+  conversation homes (`coai-kimi`) and one-shot homes (`coai-vh`) live there too, each holding a LINK to the Kimi sign-in that coai removes
+  first when it deletes the home, and that the 156-character rule is Vibe's (Kimi writes long paths without trouble). The help-coverage
+  alias is `vibe and kimi homes folder`.
+- **Help, five languages** (decision 5). *The question consultant* says, after the Vibe sentence: a Kimi row gets an empty folder on
+  **none** and a copy of each folder on **disk**, but its search tools read any file the person can, so on both it can read this machine
+  and the **Can read this machine** tick is on and cannot be taken off; a **web** prompt is disabled (nothing measured Kimi on the web);
+  Windows only; a folder outside a Git repository is refused; its launches wait for one another and for a Kimi review on the same sign-in.
+  Nothing about "the home never receives code" (M-K12 (c) unrecorded) and nothing about the web for `none`/`disk` (M-K17 not run).
+  *The consultant* article's *What can go wrong* gains **A Kimi consultant waits its turn** (E5.3 decision e): the gate's wait counts inside
+  the turn's time limit, so a consult turn that waits behind a Kimi review round can time out, and is then *interrupted* — the sidebar
+  reads *resumable* — as any stopped turn is.
+- **Tests**: `runtimeSince.test.ts` (4; S5.7.1 and the rule), `consultant.test.ts` (S5.7.2 pure, S5.7.3 the entry crosses, S5.7.7, and
+  S5.7.5's two picker assertions), `panelView.test.ts` and `qconsultSection.test.ts` (S5.7.2 on the page), `runtimeSinceIsAhead.test.ts`
+  (10; S5.7.4 and the consultant rule's teeth), `helpCoverage.test.ts` (S5.7.6, two), `kimiRuntime.test.ts` (kimi is a consultant).
+- **Waits on E5.4's seed:** S5.7.5 (`kimiIsOfferedAsAConsultant`) and the lists that pin `CONSULTING` (`consultant.test.ts`,
+  `kimiRuntime.test.ts`, and E5.4's own `featureAvailability.test.ts`) are green only once `features.consultant` holds `kimi` and
+  `featureAvailability.generated.ts` is regenerated — which is E5.4's change (S5.4.12), not this story's.
