@@ -3643,3 +3643,70 @@ flowchart LR
 
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
 `TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).
+
+## The shim continues a session — `--ask-acp … --session <id>` (2026-10-16, E5.1–E5.2 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The second turn of a Kimi conversation is a `session/load` of the session the first turn's report named, run by the same shim, under the same three
+blocks (every permission refused, reads served only from the cwd, the tree hold) and in the same built environment. What the load does was measured
+first (M-K16, `research/RESULTS_kimi_confinement.md` §29, Kimi 2.1.1): the load's RESULT announces the `model` option like `session/new`'s; Kimi REPLAYS
+the history as `session/update` (the earlier user and agent chunks, verbatim) BEFORE it answers the load; an id it does not hold is JSON-RPC `-32602`
+`Invalid params: Unknown sessionId: <id>`; and `/usage` stays cumulative over three turns, the output delta equal to that turn's own output tokens.
+
+```mermaid
+sequenceDiagram
+  participant H as host (E5.4)
+  participant S as coai-mcp --ask-acp --session id
+  participant A as kimi acp
+  H->>S: argv: --session id, the SAME --cwd · prompt on stdin
+  Note over S: id not a vendor handle (ConsultantHandle.IsWellFormed),<br/>or --session with no value → 65, nothing started
+  S->>A: initialize
+  S->>A: session/load {sessionId, cwd, mcpServers: []}
+  A-->>S: session/update × n (the replayed history — dropped)
+  alt the load answered with an error
+    A-->>S: error (code, message)
+    S-->>H: end session_lost, exit 70 — or the known failure (not_signed_in 77, end agent_failed)
+  else the load answered
+    A-->>S: result {configOptions: model …}
+    Note over S: model not among the LOAD's values → model_not_offered, 65
+    S->>A: session/set_config_option model → session/prompt → /usage
+    A-->>S: the turn's chunks (the answer) · Session total (cumulative)
+    S-->>H: report: answer, end answered, sessionId = id, usage = the SESSION's totals
+  end
+```
+
+- **The flag.** `AcpWords.SessionFlag` (`--session`) is the shim's own (parsed apart from `--findings`'s by `Program.Flags` from the mode on). `AcpAsk.Session`
+  carries it (empty = a new session, byte for byte what the shim did before — S5.2.8 pins the client's lines). `AskAcpMode.SessionRefusal` refuses, 65 and before
+  any process, an id that `ConsultantHandle.IsWellFormed` refuses (its pattern ends `\z`, not `$`: .NET's `$` also matches before a final newline, so `abc\n` passed), and `WithBareSession` keeps a `--session` with no value as an EMPTY id so it is refused too —
+  `Program.Flags` drops a flag whose value is missing, and a continuation that lost its id must never quietly become a new session. The refused value is not echoed.
+- **The load.** `AcpClient.OpenedAsync` chooses `CreatedAsync` (`session/new`, unchanged) or `LoadedAsync`: `session.SessionId = ask.Session` first (the result
+  need not repeat it, and the teardown's `session/cancel` names it), then `session/load` through `AcpSession.ReplayedAsync`, whose window drops every
+  `session/update` that arrives while the request is open — not the answer, not the trace, not the usage. The pump handles messages in order, so every replayed
+  update is handled before the load's response completes the request; nothing of the turn's own can arrive before its prompt is sent. The model check
+  (`NotOffered`, D10) then runs on the LOAD's announcement, exactly as on a new session's (E5.1 (a), the first branch).
+- **The lost session.** Any `AcpAgentException` on `session/load` becomes `AcpSessionLostException` → `AcpEnd.SessionLost`, word `AcpWords.SessionLostWord`
+  (`session_lost`), exit 70 — never keyed on the code (a bad `cwd` is the same `-32602`). Its reason is `AcpClient.LostLead` (the id in coai's words), then the
+  agent's code and message, with only Kimi's own echo `Unknown sessionId: <the id>` rewritten `Unknown sessionId: <id>` — a short id written over every
+  occurrence would garble the agent's words. The diagnosis reads the reason WITHOUT that lead (`AskAcpMode.Diagnosable`), so an id can never spell a known failure
+  and turn a lost session into a refusal or a spent allowance; it still reads the agent's message: `AskAcpMode.Named` turns a `SessionLost` that a known failure names into
+  `AgentFailed` with that failure (a load refused with `Authentication required` is `not_signed_in`, 77, end `agent_failed`), because the host reads `session_lost` as
+  "the conversation is gone" and a sign-in failure is not that. Nothing is prompted after a refused load.
+- **Every end has its own arms** (decision 9). `EndWord` and `EndExit` (now `internal`) name every `AcpEnd` explicitly — `Answered` → 0, `SessionLost` → 70,
+  `NotStarted`/`Deadline`/`Cancelled` → 69 — and keep a default arm only for a value nobody named; `EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm` fails
+  when a new value falls to it (the default prints `cancelled` and exits 69). `KimiReport.End`'s remark lists `session_lost`.
+- **What the report carries for E5.4.** `sessionId` is the asked id on EVERY exit of a `--session` turn that prints a report — an agent refusal (65), a hold busy past
+  the deadline or taken too late (69), an executable that cannot start (69), a failure before or during the load, `session_lost`, a known failure — through
+  `AcpOutcome.NotStarted(why, session)` and the client's `Named` (the id the agent minted or loaded, else the asked one); a refusal of the argv (65 before any report)
+  prints none. `usage.tokensIn/tokensOut` are
+  the SESSION's totals from `/usage`, cumulative over every turn so far (the per-turn share is the host's, `ConsultationUsage.Less`); `end` is `session_lost` only when no
+  known failure named the refused load. `KimiReport` has no `SessionId` field yet — E5.4 decision 3 widens it.
+- **The probe's client** (`scripts/lib/kimi.mjs`, `acpTurn`) gained the two features M-K16 needed, after the measurement ran on a scratch driver: `loadUpdates`
+  (every `session/update` between the load request and its response — its kind, and for a text chunk the first 120 characters) and `endLikeTheShim`
+  (`session/cancel`, a quiet of 250 ms with no output and at most 1 s, the tree kill while the agent lives, and only then stdin closed). Its tree kill is by pid on
+  every host (`taskkill /T /F` on Windows; the pid's `SIGKILL` on POSIX, where only the unit tests' fake agent runs), and only while `stillRunning(child)` — neither
+  exited nor killed — so a late kill never reaches a pid another process holds now. `args` (default `['acp']`) lets a test start a node fake agent.
+- **A replayed tool call stays history.** While the replay window is open, `AcpSession` keeps only the tool-call ids it hears; a later `tool_call` or
+  `tool_call_update` of one of those ids is dropped, never merged into the turn's trace as an entry with an empty title and kind.
+
+Not covered by a test: a live load through the released binary (owed after the code, RESULTS §31), and the probe's M-K16 cell as a `--cells` arm (it ran on a
+scratch driver outside the repository, so it cannot be re-run from the repository yet). Tests: `AskAcpSessionTests`,
+`AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo`, and `scripts/lib/kimi.test.mjs` (S5.1.1–S5.1.2) — listed in [module_tests.md](module_tests.md).

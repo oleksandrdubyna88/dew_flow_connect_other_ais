@@ -12,7 +12,7 @@ namespace CoaiMcp.Runners.Kimi;
 /// Classification reads these FIELDS and the exit, never the text of the trace: the report carries every path the agent read and every tool it titled,
 /// and a path named <c>quota.cs</c> is not a rate limit (risk consultation <c>ba5f661a</c>).
 /// </remarks>
-/// <param name="End">The shim's end word (<see cref="AcpWords.AnsweredWord"/>, <see cref="AcpWords.NotStartedWord"/>, <see cref="AcpWords.ModelNotOfferedWord"/>, <c>agent_failed</c>, <c>deadline</c>, <c>protocol</c>, <c>cancelled</c>); empty for an unreadable report.</param>
+/// <param name="End">The shim's end word (<see cref="AcpWords.AnsweredWord"/>, <see cref="AcpWords.NotStartedWord"/>, <see cref="AcpWords.ModelNotOfferedWord"/>, <see cref="AcpWords.SessionLostWord"/> — the agent no longer holds the <c>--session</c> a continued turn named, exit 70 (E5.2) —, <c>agent_failed</c>, <c>deadline</c>, <c>protocol</c>, <c>cancelled</c>); empty for an unreadable report.</param>
 /// <param name="Failure">A known failure's NAME (<c>not_signed_in</c>, <c>subscription_model</c>, <c>balance_spent</c>), or empty.</param>
 /// <param name="Reason">The shim's own sentence for how the turn ended.</param>
 /// <param name="Answer">The agent's answer — empty unless the turn was answered.</param>

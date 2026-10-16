@@ -74,6 +74,12 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     private AcpUsage _usage = AcpUsage.Unknown;
     private string _broken = string.Empty;
 
+    /// <summary>True while a <see cref="ReplayedAsync"/> request is open: every <c>session/update</c> then is history, not this turn's.</summary>
+    private volatile bool _replaying;
+
+    /// <summary>The tool-call ids the replay announced: a later update of one of them is history too, never a new entry of this turn's trace (E5.2 review).</summary>
+    private readonly HashSet<string> _replayedToolCalls = new(StringComparer.Ordinal);
+
     /// <summary>The id <c>session/new</c> answered with — empty until it has. Set by the client; the teardown's <c>session/cancel</c> names it.</summary>
     public string SessionId { get; set; } = string.Empty;
 
@@ -163,6 +169,25 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         }
 
         return await answer.Task.WaitAsync(ct);
+    }
+
+    /// <summary>
+    /// A request whose answer is PRECEDED by a replay of the session's history — <c>session/load</c>: Kimi sends every earlier user and agent
+    /// chunk as <c>session/update</c> before it answers the load (M-K16, RESULTS §29). Every update that arrives while it is open is left out
+    /// of the answer, the usage and the trace, so the turn's answer is only what follows its own prompt and the trace caps are not spent on
+    /// history. The pump handles messages in order, so every replayed update has been handled before this request's answer completes it.
+    /// </summary>
+    public async Task<JsonElement> ReplayedAsync(string method, JsonObject parameters)
+    {
+        _replaying = true;
+        try
+        {
+            return await CallAsync(method, parameters);
+        }
+        finally
+        {
+            _replaying = false;
+        }
     }
 
     /// <summary>
@@ -446,10 +471,34 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     {
         if (notification.Method == "session/update")
         {
-            Update(AcpMessages.Child(notification.Params, "update"));
+            Heard(AcpMessages.Child(notification.Params, "update"));
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>An update of this turn — or, while a replay is open, a piece of history: only its tool-call id is kept, to recognise its later updates.</summary>
+    private void Heard(JsonElement update)
+    {
+        if (_replaying)
+        {
+            Remembered(update);
+
+            return;
+        }
+
+        Update(update);
+    }
+
+    private void Remembered(JsonElement update)
+    {
+        if (AcpMessages.Text(update, "toolCallId") is { Length: > 0 } id)
+        {
+            lock (_traceGate)
+            {
+                _replayedToolCalls.Add(id);
+            }
+        }
     }
 
     private void Update(JsonElement update)
@@ -500,7 +549,10 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         var id = Bounded(AcpMessages.Text(update, "toolCallId"), ref cuts);
         lock (_traceGate)
         {
-            Merged(update, id, cuts);
+            if (!_replayedToolCalls.Contains(AcpMessages.Text(update, "toolCallId")))
+            {
+                Merged(update, id, cuts);
+            }
         }
     }
 
@@ -629,3 +681,6 @@ internal sealed class AcpAgentException(long code, string message) : Exception(m
 
 /// <summary>The stream itself failed: closed early, not listening, or not an answer.</summary>
 internal sealed class AcpProtocolException(string message) : Exception(message);
+
+/// <summary>The agent answered <c>session/load</c> with an error: it no longer holds the session <c>--session</c> named (E5.2).</summary>
+internal sealed class AcpSessionLostException(string message) : Exception(message);
