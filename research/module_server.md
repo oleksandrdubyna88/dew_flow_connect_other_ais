@@ -6359,6 +6359,15 @@ a clean tree as dirty (so a review tree could never be removed from the panel), 
 registration and leaves the files, and a submodule's nested clone fails the same way. It is per command —
 no repository, global or system config is written — and Linux and macOS argv is unchanged.
 
+When a round-tree add STILL fails over a path, `WorktreeFailure.Sentence` (used where `AddAsync` throws) reads
+git's own `error: unable to create file …` or `fatal: cannot create directory at …` line and says which path,
+how long it is (UTF-16 units, what Windows counts) and git's reason — e.g. `Invalid argument` for a single
+path component of 256 units, which `core.longpaths` does not lift because NTFS caps a component at 255. For
+`Filename too long` it also names the 259 limit, says coai already asked for long paths, and names
+`COAI_ROUND_WORKTREES`; for any other reason it names no root advice, because a shorter root does not cure
+it. git's closing `fatal:` line follows, as the last word rather than the only one. A failure with no such
+line reads as it always did, and a review tree's add keeps its wire word `git_failed`.
+
 ### A gate can be run again, and a lost reply read back (S3, issue #490)
 
 A code round CLOSED the session: `Resolve` set `Done`, and `BeginCodeRound` refused `Done` with "this
