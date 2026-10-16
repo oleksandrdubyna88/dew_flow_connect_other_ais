@@ -303,6 +303,43 @@ public sealed class JunctionsTests : IDisposable
         NothingIsAt(Link).Should().BeTrue("nothing is made on a host Kimi is refused on");
     }
 
+    [Theory]
+    [InlineData(HostKind.Linux)]
+    [InlineData(HostKind.Wsl)]
+    public void ALinuxOrWslHost_AsksTheMountTable_AndATableItCannotReadRefuses(HostKind host)
+    {
+        using var standIn = WindowsStandIn.Begin();
+        Directory.CreateDirectory(Target);
+        Junctions.StandInMountInfo(() => throw new IOException("no /proc here"));
+        try
+        {
+            var refusal = Junctions.Refusal(host, Link, Target);
+
+            refusal.Should().Contain("/proc/self/mountinfo").And.Contain("cannot tell which filesystem").And.Contain("refused", "a table coai could not read was read as 'local'");
+            NothingIsAt(Link).Should().BeTrue();
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
+    [Fact]
+    public void AWindowsHost_NeverAsksTheMountTable()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        Directory.CreateDirectory(Target);
+        Junctions.StandInMountInfo(() => throw new IOException("a Windows host must not read a Unix mount table"));
+        try
+        {
+            Junctions.Refusal(HostKind.Windows, Link, Target).Should().BeEmpty();
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
     // ---------- S-K2 ----------
 
     [Fact]

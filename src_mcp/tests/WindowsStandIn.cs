@@ -61,9 +61,8 @@ internal static class WindowsStandIn
 
         public DriveType DriveOf(string root) => DriveType.Fixed;
 
-        public string SetReparsePoint(string link, string target)
+        public string MakeLink(string link, string target)
         {
-            Directory.Delete(link);
             Directory.CreateSymbolicLink(link, target);
 
             return string.Empty;

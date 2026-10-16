@@ -69,11 +69,11 @@ public sealed class KimiHomeTests : IDisposable
     }
 
     [Fact]
-    public void ANonWindowsHost_MakesNothing()
+    public void AMacOsHost_MakesNothing()
     {
-        var places = _person.Places("kh-linux");
+        var places = _person.Places("kh-mac");
 
-        KimiHome.Made(HostKind.Linux, places, Expected()).Should().Contain("D18").And.Contain("sign-in could not be linked");
+        KimiHome.Made(HostKind.MacOs, places, Expected()).Should().Contain("D18").And.Contain("sign-in could not be linked");
         File.Exists(places.Config).Should().BeFalse("nothing is written when the junction was refused");
     }
 
