@@ -271,15 +271,17 @@ public sealed class TheRoundsNumstatsAreCountedTests : IAsyncLifetime
     public async Task ANumstatThatOutlivesItsDeadline_IsGitFailed_NeverAnEmptySuccess()
     {
         var (head, parent) = (await Git("rev-parse", "HEAD"), await Git("rev-parse", "HEAD~1"));
-        var launcher = new ScriptedLauncher(new ProcessLauncher(), Stalls("diff"));
+        var launcher = new ScriptedLauncher(new ProcessLauncher(), Stalls("diff", answersAncestor: true));
         var assembler = new ContextAssembler(launcher);
 
         (await assembler.DeltaAsync(_repo, parent, head, null, Ct, OneMillisecond)).State
             .Should().Be(ScopeState.GitFailed, "the ancestry was answered; it is the numstat that ran out its deadline");
+        // Asked by the delta alone (AllChangesAsync has not run yet): a numstat is only asked once the scripted ancestry said 'ancestor'.
+        launcher.Launches.Should().Contain(l => l.Request.Arguments.Contains("--numstat"), "the delta really reached its numstat");
+
         (await assembler.AllChangesAsync(_repo, parent, head, Ct, OneMillisecond)).Failed
             .Should().BeTrue("and not an empty, successful numstat");
         launcher.Launches.Select(l => l.Request.Timeout).Should().OnlyContain(t => t == OneMillisecond, "every size call carries the caller's deadline");
-        launcher.Launches.Should().Contain(l => l.Request.Arguments.Contains("--numstat"), "the stalled call was really asked");
     }
 
     private static readonly TimeSpan OneMillisecond = TimeSpan.FromMilliseconds(1);
@@ -290,9 +292,16 @@ public sealed class TheRoundsNumstatsAreCountedTests : IAsyncLifetime
     /// real launcher answers a killed tree. A real 1 ms deadline over real git is a race against the clock instead: on a
     /// fast runner git finishes inside the millisecond and the call simply succeeds (CI ubuntu, 2026-10-16).
     /// </summary>
-    private static Func<ScriptedLaunch, Task<ScriptedAnswer?>> Stalls(string subcommand) =>
+    /// <param name="subcommand">The one call that is stalled past its deadline.</param>
+    /// <param name="answersAncestor">
+    /// Answer <c>merge-base --is-ancestor</c> with exit 0 (an ancestor) instead of running it for real under the 1 ms deadline:
+    /// real, it could itself time out, and the delta would fail on the ancestry before any numstat ran.
+    /// </param>
+    private static Func<ScriptedLaunch, Task<ScriptedAnswer?>> Stalls(string subcommand, bool answersAncestor = false) =>
         launch => Task.FromResult<ScriptedAnswer?>(
-            launch.Request.Arguments.Contains(subcommand) ? new ScriptedAnswer(Wait: TimeSpan.FromHours(1)) : null);
+            launch.Request.Arguments.Contains(subcommand) ? new ScriptedAnswer(Wait: TimeSpan.FromHours(1))
+            : answersAncestor && launch.Request.Arguments.Contains("merge-base") ? new ScriptedAnswer()
+            : null);
 
     [Fact]
     public async Task TheSameHeadTwice_IsAnObservedZero()
