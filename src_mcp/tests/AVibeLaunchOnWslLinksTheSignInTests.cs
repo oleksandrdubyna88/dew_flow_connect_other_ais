@@ -135,6 +135,13 @@ public sealed class AVibeLaunchOnWslLinksTheSignInTests : IDisposable
         VibeSignIn.For(HostKind.Windows, nothing, "/home/p").Should().Be(VibeSignIn.None, "on Windows the sign-in is in the keyring: no link is ever made or admitted");
         VibeSignIn.For(HostKind.Wsl, nothing, "/home/p").PersonsEnvFile.Should().Be(Path.GetFullPath(Path.Combine("/home/p", ".vibe", ".env")));
         VibeSignIn.For(HostKind.Wsl, redirected, "/home/p").PersonsEnvFile.Should().Be(Path.GetFullPath(Path.Combine("/data/vibe", ".env")));
+
+        // A relative or unexpanded VIBE_HOME would resolve against coai-mcp's cwd - often the reviewed repository, whose committed .vibe/.env would be linked.
+        foreach (var unsafeHome in new[] { ".vibe", "~/.vibe", "relative/dir", "$HOME/.vibe", "  " })
+        {
+            VibeSignIn.For(HostKind.Wsl, name => name == "VIBE_HOME" ? unsafeHome : null, "/home/p").PersonsEnvFile
+                .Should().Be(Path.GetFullPath(Path.Combine("/home/p", ".vibe", ".env")), $"VIBE_HOME='{unsafeHome}' is not an absolute folder: the person's home is ~/.vibe");
+        }
         VibeSignIn.For(HostKind.Wsl, nothing, string.Empty).Should().Be(VibeSignIn.None, "no profile, no Vibe home to name");
         VibeSignIn.For(HostKind.Wsl, nothing, "/home/p").Admitted.Should().Be(new AdmittedLink(".env", VibeSignIn.For(HostKind.Wsl, nothing, "/home/p").PersonsEnvFile));
         VibeSignIn.None.Admitted.Should().Be(AdmittedLink.None);
