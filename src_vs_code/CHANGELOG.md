@@ -1,5 +1,30 @@
 # Changelog
 
+## Server 0.58.0 — 2026-10-16
+
+**Added: the plan gate can read a committed plan itself.** `review_plan` takes `committedPlan`, a path in the
+repository, in place of `planText`. You can also pass `expectedCommit`. coai reads that file from git at the branch tip
+and checks that the text it sends is exactly the stored file, all of it. Then the reviewers get the whole plan. Before,
+a caller had to paste the plan, and a long plan could be cut on its way, so the reviewers judged part of a plan or none
+of it.
+
+Before any round starts, coai refuses a plan it cannot prove. That includes:
+- a file that is not committed, or is changed in your checkout;
+- a symlink, a submodule, an empty file or a file over 256 KiB;
+- a file that is not UTF-8;
+- a name that looks like a credential;
+- a repository that uses SHA-256 object ids.
+
+Each refusal says how to fix it. `planText` works as before.
+
+**Added: a reviewer that did not get the whole plan counts as failed.** Every plan round now marks the start and the end
+of the plan. A reviewer that says it cannot see both marks is counted as not answered, even if it also sent other
+findings. When no reviewer answered, the verdict is `call_human`.
+
+**Added: the round says what it reviewed.** A plan round records the commit, the path, the file's id and its size for a
+committed plan, or an id for a pasted one. `status` shows it, and `--log` carries it as `planSource`. The database gains
+one column (schema step 23). An older database is upgraded when the new server first opens it.
+
 ## Server 0.57.0 — 2026-10-16
 
 **Added: Kimi Code as a reviewer (Windows).** A `kimi` reviewer row runs Moonshot's Kimi Code CLI on your own sign-in.
