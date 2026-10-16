@@ -38,9 +38,7 @@ internal static class FeaturePlan
             : Located(repoPath, said, Inside(repoPath, said));
     }
 
-    private static string CredentialNamed(string said, string shape) =>
-        $"'{said}' looks like a credential file ({shape}) — this product never reads a file of that shape, and a plan is never named like one; "
-        + "pass the plan's path inside the repository (todo/PLAN_x.md)";
+    private static string CredentialNamed(string said, string shape) => CredentialFiles.NamedSentence(said, shape);
 
     /// <summary>The plan where the caller said it is: inside the repository, and a file that exists.</summary>
     private static FeatureInput<FeaturePlanText> Located(string repoPath, string said, string identity) =>

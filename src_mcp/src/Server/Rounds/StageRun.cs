@@ -98,6 +98,12 @@ internal sealed record StageRun(
     /// </summary>
     public string Head { get; init; } = string.Empty;
 
+    /// <summary>
+    /// What a plan round's text was read from, when the server read it (a committed plan) — null for a pasted one.
+    /// Nothing reads it before the round's record is stamped (E1.S6).
+    /// </summary>
+    public PlanSource? PlanSource { get; init; }
+
     /// <summary>What the engine does when the roster comes back empty. Refuse, for every stage but one.</summary>
     public NobodyPolicy WhenNobody { get; init; } = NobodyPolicy.Refuse;
 

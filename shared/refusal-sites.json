@@ -11,7 +11,7 @@
     },
     {
       "file": "src_mcp/src/Server/PanelService.cs",
-      "refusals": 21
+      "refusals": 22
     },
     {
       "file": "src_mcp/src/Server/QuestionConsult/QuestionConsultService.cs",

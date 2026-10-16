@@ -211,6 +211,18 @@ public sealed record RoundRecord(
     public int? Gitlinks { get; init; }
 
     /// <summary>
+    /// What a completed PLAN round reviewed: where the text came from, the commit, the blob and the id of the text sent.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nullable, and NOT normalised on the way in</b>, for <see cref="Caller"/>'s reason: a round written before this
+    /// field said nothing, and a getter that materialised an empty one would turn "not recorded" into "recorded as
+    /// nothing" the next time the session is saved — which is on every progress tick. Null for a code, document or
+    /// feature round, for a SKIPPED round (it reviewed nothing), and for every plan round older than the field.
+    /// <see cref="PlanSource.Commit"/> is the engine's own resolved commit, so a pasted plan has one too.
+    /// </remarks>
+    public PlanSource? PlanSource { get; init; }
+
+    /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
     /// </summary>
     /// <remarks>

@@ -11,7 +11,12 @@ namespace CoaiMcp.Runners.Collecting;
 /// property of somebody's repository and hides for a month. (Plan round, codex.)
 /// </remarks>
 /// <param name="Ran">Whether git ran to completion at all, whatever it then said.</param>
-public readonly record struct GitAnswer(bool Ran, bool Ok, string Out)
+/// <param name="Truncated">
+/// The launcher cut a stream — its ceiling, or the drain grace after the child ended — so <c>Out</c> is a head and not
+/// the whole. Exit 0 with this set is NOT a complete read; a reader that must be exact refuses it. Additive and
+/// defaulted: no existing caller reads it, so none changes.
+/// </param>
+public readonly record struct GitAnswer(bool Ran, bool Ok, string Out, bool Truncated = false)
 {
     internal static GitAnswer Broken => new(false, false, string.Empty);
 
@@ -182,6 +187,54 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             : Refused;
 
     /// <summary>
+    /// The ONE tree entry at a path — <c>mode type oid size\tpath\0</c>, the size right-aligned — or nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>ls-tree -l -z</c> and not <c>show</c>/<c>cat-file -e</c>: it is the only read that says WHAT the path is
+    /// (a link, a submodule, a directory) and how big, before a byte of it is fetched. <c>-z</c> so a path is never
+    /// quoted; <c>--full-tree</c> so the path is read from the root whatever directory the process starts in;
+    /// <c>--literal-pathspecs</c> so <c>*.md</c> is a file named that and not a glob; the path after <c>--</c>.</para>
+    /// <para>A path that is not in the tree is exit 0 and empty output, not an error. The <b>output is raw</b> — never
+    /// <see cref="GitAnswer.Lines"/>, which trims and would eat the padding and every NUL; the grammar is the reader's.</para>
+    /// </remarks>
+    public Task<GitAnswer> EntryAtAsync(
+        string repoPath, string sha, string path, CancellationToken ct = default) =>
+        IsCommitish(sha) && IsRepoRelative(path)
+            ? RunAsync(repoPath, ["--literal-pathspecs", "ls-tree", "-l", "-z", "--full-tree", sha, "--", path], ct)
+            : Refused;
+
+    /// <summary>One blob by its object id — exactly the bytes git holds, decoded by the launcher.</summary>
+    /// <remarks>
+    /// The id goes through <see cref="IsCommitish"/> too: it is the same forty-hex shape, and it is the one thing here
+    /// that could otherwise be read as an option. <c>cat-file blob</c> fails (exit 128) on a missing id or a tree's.
+    /// </remarks>
+    public Task<GitAnswer> BlobAsync(string repoPath, string oid, CancellationToken ct = default) =>
+        IsCommitish(oid)
+            ? RunAsync(repoPath, ["cat-file", "blob", oid], ct)
+            : Refused;
+
+    /// <summary>The working tree's root and the commit HEAD is on — two lines, in that order.</summary>
+    public Task<GitAnswer> RootAndHeadAsync(string repoPath, CancellationToken ct = default) =>
+        RunAsync(repoPath, ["rev-parse", "--show-toplevel", "HEAD"], ct);
+
+    /// <summary>
+    /// The porcelain status of ONE tracked path — <c>XY path\0</c> — empty when it is untouched.
+    /// </summary>
+    /// <remarks>
+    /// Run from the ROOT (<see cref="RootAndHeadAsync"/>), because a pathspec is relative to the directory git starts
+    /// in. <c>--no-optional-locks</c> so a read never takes the index lock a concurrent session may hold;
+    /// <c>--untracked-files=no</c> because only a tracked path can be an edit of a committed one. Parsed by
+    /// <c>PorcelainReader</c>, not here.
+    /// </remarks>
+    public Task<GitAnswer> PathStatusAsync(string root, string path, CancellationToken ct = default) =>
+        IsRepoRelative(path)
+            ? RunAsync(
+                root,
+                ["--no-optional-locks", "--literal-pathspecs", "status", "--porcelain=v1", "-z", "--untracked-files=no", "--", path],
+                ct)
+            : Refused;
+
+    /// <summary>
     /// The commits that touched a file in <c>from..to</c>, OLDEST first, each with its path THERE.
     /// </summary>
     /// <remarks>
@@ -270,6 +323,6 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
         // nothing, and the caller must record `failed` rather than a skip.
         return result.TimedOut || result.Cancelled
             ? GitAnswer.Broken
-            : new GitAnswer(true, result.ExitCode == 0, result.StdOut);
+            : new GitAnswer(true, result.ExitCode == 0, result.StdOut, result.Truncated);
     }
 }

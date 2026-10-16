@@ -10,7 +10,7 @@
 |---|---|---|
 | `providers` | `PanelService.ProvidersAsync` — CLI probe + vault state | never; it reports |
 | `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session, stamp the caller | repo/branch unresolvable |
-| `review_plan` | `RunStageAsync` with one `PlanCritique` per provider | no session; round awaiting resolve |
+| `review_plan` | `PlanInputs.PrepareAsync`, then `RunStageAsync` with one `PlanCritique` per provider; the plan is `planText` OR `committedPlan` (+ `expectedCommit`) | no session; round awaiting resolve; both plan inputs or neither; `expectedCommit` alone, malformed or stale; any unreadable committed plan (see *The plan gate reads a committed plan*) |
 | `review_code` | `RunStageAsync` with the four code roles per provider — `Conventions` first | **no plan round reached `proceed`** |
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
@@ -1576,6 +1576,147 @@ flowchart LR
 
 Still in `PanelService` and still over the ceiling: the document stage's entry points, the resolve path
 and the scratch sweeps — steps 5–7 of the same plan.
+
+## The plan gate reads a committed plan (2026-10-16, `todo/PLAN_the_plan_gate_reads_the_committed_plan_E1.md`)
+
+A caller can name a COMMITTED plan file instead of pasting it. The server reads the blob at ONE commit, proves the
+text is that blob, and refuses every wrong read before a round number is taken. The reader is
+`runners/Collecting/CommittedPlanReader.cs`; its pure parts are in `core/`.
+
+```mermaid
+flowchart TD
+    A["PlanPath.Check: trim, backslash to slash, relative, no trailing slash, not a credential name"] --> B["rev-parse --show-toplevel HEAD"]
+    B --> C["ls-tree -l -z, TreeEntries.Parse, PlanEntry.Pick: mode, type, size, one entry, same path"]
+    C -->|accepted only| D["cat-file blob oid"]
+    D --> E["CaptureGate: not Ran, not Ok, Truncated"]
+    E --> F["BlobProof.Prove: SHA-1 of the re-encoded text equals the oid, or BOM plus text does"]
+    F --> G["empty and LFS test on the PROVED text"]
+    G --> H{"HEAD is the commit?"}
+    H -->|yes| I["status --porcelain=v1 -z of the path: edited or staged is refused"]
+    H -->|no| J["Note: the working tree was not compared"]
+    I --> K["Accepted: PlanSource, Text, Note"]
+    J --> K
+```
+
+- **Accepted if and only if the text re-encodes to the blob id.** The launcher decodes stdout as UTF-8 and DROPS a
+  leading BOM (measured), so a BOM blob matches only over `EF BB BF` + the bytes. A literal U+FFFD in a valid blob
+  matches the first id and is accepted; U+FFFD is looked for only after both ids fail. UTF-16/UTF-32 blobs decode
+  without a replacement character and are refused as "differs from the blob", with the cure "save it as UTF-8".
+- **The mode decides before the type**: a committed symlink's `ls-tree` type is `blob`, only mode `120000` says link.
+  Directory, symlink, submodule, odd mode, empty, over `DocumentRules.MaxBytes` and "path differs" (a trailing slash
+  lists what is UNDER a directory) are refused from the entry alone — no `cat-file` runs.
+- **A cut capture is refused on the flag alone** (`GitAnswer.Truncated`), even when the id would match. Order of the
+  gate: did it finish, did it succeed, was it whole — a cut capture of a command that failed is a failed command.
+- **A SHA-256 repository is refused first** (its blob ids are SHA-256; the proof is SHA-1 only): pass `planText` there.
+  `BlobId.Sha1Of` carries a `SuppressMessage` for Sonar S4790 ("use a stronger hashing algorithm"): the SHA-1 there is
+  git's object identity by definition, not a security digest — the repository has no other suppression to follow.
+- **The checkout guard** (`git status`, compared through the clean filters) runs only when HEAD IS the commit read. A
+  checkout written with CRLF under `core.autocrlf=true` is clean. A file re-saved with a different size AFTER the commit
+  is reported as modified by git before it hashes anything (measured: a CRLF rewrite of an LF file under autocrlf), so
+  such a file is refused as "uncommitted". Blind spots, said not fixed: `skip-worktree` / `assume-unchanged` paths read
+  as clean; a branch checked out in ANOTHER worktree is "not compared". A path with BOTH staged and unstaged changes
+  (`MM`) has its own sentence ("git add it again, then git commit"): committing the staged part alone leaves the edit.
+- **One entry point is public**: `CommittedPlanReader.ReadGuardedAsync`. `ReadAsync` (the proof over a canonical path,
+  with no credential refusal) is `internal`, so no caller outside the assembly can read `.env` as a plan.
+- **Credential-shaped names** use the one table in `CredentialFiles` and the one sentence
+  (`CredentialFiles.NamedSentence`, shared with `review_feature`'s `planPath`).
+
+### How `review_plan` takes it (E1.S5)
+
+`Tools.cs` publishes `planText`, `committedPlan` and `expectedCommit` as OPTIONAL (C# defaults — without one the SDK
+makes an argument required); only `repoPath` and `branch` are required. `PanelService.ReviewPlanAsync` has three
+overloads: the two string ones (every older caller) wrap the text in a `PlanInput` and delegate to the third, which runs
+`PlanInputs.PrepareAsync` BEFORE the claim, the begin and any round number:
+
+```mermaid
+sequenceDiagram
+    participant T as Tools.cs review_plan
+    participant P as PanelService.ReviewPlanAsync
+    participant I as PlanInputs.PrepareAsync
+    participant R as CommittedPlanReader
+    participant E as RoundEngine.RunStageAsync
+    T->>P: PlanInput(text, committedPlan, expectedCommit)
+    P->>I: input, branch, resolve seam
+    I->>I: both / neither / expectedCommit alone / malformed → Refused
+    I->>I: resolve branch → tip (WorktreeException → Refused)
+    I->>I: expectedCommit differs from tip → Refused naming both
+    I->>R: ReadGuardedAsync(tip, path)
+    R-->>I: Accepted(PlanSource, Text, Note) or Refused
+    I-->>P: Ready(Text, Head = tip, Source, SourceLine, Unreviewed) or Refused
+    P->>E: StageRun { Head = tip, PlanSource }
+    P-->>T: Refused → Error(sentence), no round
+```
+
+- `committedPlan` made only of whitespace counts as absent; `planText` is judged exactly as before (empty is absent).
+  A pasted plan takes no resolve and no git.
+- The tip is resolved ONCE and becomes the round's `Head`: the engine resolves `stage.Head`, so the plan text, the
+  cadence outline read under the claim and the round's `head_sha` are one commit even if the branch moves.
+  `PanelService.TipResolver` is the test seam that proves it.
+- The preparation runs under ONE overall deadline, `PlanInputs.PreparationDeadline` (45 s), because each git call has its
+  own 30-second budget and the sequence (resolve, root and HEAD, entry, blob, status) could otherwise take minutes with no
+  round yet. On expiry it answers "git did not answer in time — the round was not started". The root-and-HEAD call runs
+  WHILE the proof runs. A stale `expectedCommit` is answered with the cure "check what landed (git log), then pass
+  expectedCommit = <the new tip> or re-read the plan" — never "drop the guard".
+- A committed plan's round subject (the line in the log) is its FILE NAME; a pasted plan keeps the title rule.
+- The prompt's source line is `(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)`;
+  the "working tree was not compared" note rides `RoundWork.Unreviewed`, so it lands on the reviewer line.
+
+### What a plan round records (E1.S6)
+
+`RoundRecord.PlanSource` (`core/Rounds/PlanSource.cs`: `Origin` `commit`|`text`, `Commit`, `Path`, `Blob`, `Bytes`,
+`TextId`) is stamped by the engine beside `Sha`/`CadenceNote` through ONE call, `PlanSources.Stamp(stage, planText, sha)`:
+
+| Round | `PlanSource` |
+|---|---|
+| committed plan | the reader's record (path, blob, the blob's byte count, `TextId` of the text sent) with `Commit` = the engine's resolved commit |
+| pasted plan | `Origin = text`, `Commit` = the engine's resolved commit, `Path`/`Blob` empty, `Bytes` = UTF-8 byte count, `TextId` of the text |
+| code, document, feature round | none |
+| a round written before the field | none — **absent, never empty** |
+
+It is nullable and NOT normalised on the way in, as `Caller` is: a getter that made an empty one would turn "not recorded"
+into "recorded as nothing" on the next save, and a session is saved on every progress tick. `status` serialises
+`RoundRecord`s, and the JSON context omits nulls, so a round with none shows no `planSource` property. The type is
+registered in `ServerJsonContext` so E2's `rounds` column writes it with the same context. A skipped round reviewed
+nothing and is recorded by another road, which never stamps one. `TextId` is the id the prompt's `END OF PLAN` line
+carries, so the end line and the record name one text.
+
+### What every plan reviewer is told, and when one does not count (E1.S4)
+
+`PlanSection.Compose(planText, sourceLine, textId)` builds the plan part of EVERY plan prompt — pasted or committed:
+
+```
+<instruction: the plan is marked by BEGIN OF PLAN <id> and END OF PLAN <id>; if you cannot see BOTH, or there is no plan body,
+ answer with exactly one blocking finding titled PLAN_INCOMPLETE <id> and nothing else>
+
+## The plan under review
+BEGIN OF PLAN <id>
+(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)    <- committed reads only
+<the plan>
+
+Reminder: if the first line under the heading was not `BEGIN OF PLAN <id>`, answer … PLAN_INCOMPLETE <id> …
+END OF PLAN <id>
+```
+
+`<id>` is `DocumentRules.ArtifactIdOf(plan)` — the hash of the very text that contains it, so a plan cannot forge it. The
+END line catches a cut tail, the BEGIN line (and the reminder just before END) a cut start. A detector, not a proof.
+
+`PlanIncomplete.Fold` runs on `results` right after the fan-out, before anything reads them (summary, merge, decision,
+notice, live finish, spent lenses). The rule, as amended after the cadence consultation:
+
+- **ANY finding** whose title equals `PLAN_INCOMPLETE <this round's id>` fails the reviewer — never "exactly one": two
+  identical tokens, or the token beside real findings, are no answer. The outcome becomes
+  `Unparseable("…(PLAN_INCOMPLETE); N other finding(s) set aside")`; those other findings are not merged.
+- **A token wrapped in markdown still counts**: backticks, straight and curly quotes, `*`, `_` and spaces are stripped
+  from both ends, repeatedly, before the exact compare (models copy the backticked title from the instruction). A token
+  for ANOTHER id never folds.
+- **Accounting is kept**: the fold carries `Usage`, `EarlierLaunches`, `EarlierTurns`, `Launches`, the warning and the CLI
+  version, so `TotalUsage` and the ledger still count a retried reviewer's earlier launches.
+- Zero answered after the fold → `call_human`.
+
+**Stated mismatch:** the progress callback records each finished reviewer in the spending **ledger** (`_ledger.Record`,
+`RoundEngine.cs`) and shows it in the live view as finished BEFORE the fold runs, so the ledger and the live view hold the
+reviewer's raw result, not the folded one. The ledger row is right as it stands (the tokens were spent); the round's own
+summary, verdict and record read the folded results.
 
 ## Flow of one stage
 

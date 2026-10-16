@@ -25,13 +25,22 @@ public static class CredentialFiles
 
     private static readonly char[] Separators = ['/', '\\'];
 
+    /// <summary>
+    /// The refusal for a plan named like a credential file — one sentence for every road that reads a plan by its
+    /// name (<c>review_feature</c>'s <c>planPath</c>, <c>review_plan</c>'s <c>committedPlan</c>), so the two say the same.
+    /// </summary>
+    public static string NamedSentence(string said, string shape) =>
+        $"'{said}' looks like a credential file ({shape}) — this product never reads a file of that shape, and a plan is never named like one; "
+        + "pass the plan's path inside the repository (todo/PLAN_x.md)";
+
     /// <summary>Whether <paramref name="path"/> names a credential-looking file.</summary>
     public static bool LooksLikeOne(string path) => WhichPattern(path).Length > 0;
 
     /// <summary>The pattern <paramref name="path"/> matches — for the refusal that names it — or empty.</summary>
     public static string WhichPattern(string path)
     {
-        var name = BasenameOf(path);
+        // Windows ignores trailing dots and spaces in a file name: `key.pem.` IS `key.pem` there.
+        var name = BasenameOf(path).TrimEnd('.', ' ');
 
         return Patterns.FirstOrDefault(pattern => Matches(name, pattern)) ?? string.Empty;
     }

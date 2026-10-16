@@ -391,7 +391,7 @@ internal sealed class RoundEngine(
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
             // What the round is about, derived from the plan the caller passed — a file name if
             // they handed a path, its title otherwise. Nobody has to remember to name the work.
-            var subject = RoundSubject.From(planText, File.Exists);
+            var subject = PlanSources.SubjectOf(stage, planText);
             var live = new LiveRound(_store, session, number, work, subject, _noticing, key);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), number);
             // Two kinds of exclusion, one list: a vendor this round cannot run AT ALL — no adapter,
@@ -425,6 +425,8 @@ internal sealed class RoundEngine(
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
             _settings.StopLocalWhenQuiet ? StandDown.For(work) : null);
+            // A plan that did not reach a reviewer whole is a failed reviewer, and everything below reads `results`.
+            results = PlanIncomplete.Fold(stage.Stage, planText, results);
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
             // The deadline is reported only when IT is what ended the round: `roundClock` fired and
@@ -490,6 +492,7 @@ internal sealed class RoundEngine(
                 // The D23 ground a feature review's second round was admitted on — read from the state this
                 // round BEGAN from, because completing it is what spends the ground.
                 AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
+                PlanSource = PlanSources.Stamp(stage, planText, sha),
             };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
