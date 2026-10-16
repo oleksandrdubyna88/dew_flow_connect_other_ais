@@ -333,6 +333,17 @@ against the code or a run before it went in here — the question consultant had
   — whether Kimi opens its credentials through a symlink, whether it refuses or re-`chmod`s a linked folder, and whether a
   refresh through the link lands in the person's folder, are unmeasured; the WSL/Linux run of the Kimi probe answers them
   before D18 lifts for Kimi.
+  - **Amended 2026-10-16 — the lifting is planned in [PLAN_kimi_and_vibe_on_linux.md](PLAN_kimi_and_vibe_on_linux.md).**
+    The boundary, the same table there (§10): that plan lifts D18 for a coai-mcp whose own HOST is Linux or WSL — Vibe first
+    (measured on WSL2 2026-10-16: on Linux the sign-in is `~/.vibe/.env`, linked into the owned home, never copied), Kimi after
+    its WSL cells; a Windows host starting the Linux side (`HostKinds.RunsInWsl`) and macOS stay refused here. Its DL9 changes
+    S4's Linux mechanism (a child subreaper instead of a process group) and keeps S4's test.
+
+    | Item | Built by | This plan's part |
+    |---|---|---|
+    | D18 lifted for a Linux/WSL host | PLAN_kimi_and_vibe_on_linux.md | states the refusal it lifts |
+    | Kimi's Linux install line with `rg`/`fd` | PLAN_kimi_and_vibe_on_linux.md DL12 | E4.5 wrote it down for that day |
+    | M-K14 | this plan, later | unchanged there |
 - **D19 — every Kimi launch gets a coai-owned `KIMI_CODE_HOME`, a built environment, and the person's sign-in by JUNCTION —
   never by copy** (2026-10-13; evidence RESULTS_kimi_confinement.md §11–§15 and, for D19's own cells recorded the same
   evening, §16–§26 — every cell 3 of 3 on Windows through the shipped shim). Two cells the plan had no block for: the person's own `config.toml` `[[hooks]]` fired under coai's launch
