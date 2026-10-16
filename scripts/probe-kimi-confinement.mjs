@@ -629,8 +629,8 @@ async function runLadder() {
       for (let n = 1; n <= repeats; n++) got.push(await runArm('M-K11', arm, n, {}, `-a${round}`));
       const admitted = ADMITTED.join(', ') || '(junction only)';
       rows.push(...got.map((r) => ({ ...r, admitted })));
-      const passed = got.every(passes);
-      console.error(`[probe] M-K11 ${arm.arm} on [${admitted}]: ${got.filter(passes).length} of ${repeats}`);
+      const passed = got.every((cell) => passes(cell));
+      console.error(`[probe] M-K11 ${arm.arm} on [${admitted}]: ${got.filter((cell) => passes(cell)).length} of ${repeats}`);
       if (passed || queue.length === 0) return passed;
       ADMITTED = [...ADMITTED, queue.shift()];
     }
