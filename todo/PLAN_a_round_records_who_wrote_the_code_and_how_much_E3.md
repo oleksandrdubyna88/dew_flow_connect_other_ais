@@ -5,6 +5,28 @@
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
 > **E3.S4**, spec by Fable.
+>
+> **Revised 2026-10-16 against main** (`59463d73`: E1 shipped in #828, E2 in #829, the plan-gate fix in #837/#841). Opus
+> made this revision. It changes documents only. What changed:
+> 1. **E1's measurements are in.** The new §2.3 holds RESULTS Q1–Q9, the folder facts and the shape of the twenty shipped
+>    fixtures `c01`–`c20`. Where §2.3 and §2.2 differ, §2.3 wins. §2.2's "the LAST line holds the maximum" is marked
+>    refuted (Q3).
+> 2. **Every `file:line` was checked again on main.** Citations that moved are updated: `PanelSettings.cs`,
+>    `CallerSessions.cs`, `CallerDeclaration.cs`, `CoaiMcp.Runners.csproj`, `RoundEngine.cs`, `AgentLogTests.cs` (13
+>    tests, not 14) and `module_server.md`. New §2.1 rows name what has shipped: E1's artefacts,
+>    `RoundRecord.Size`/`Gitlinks`/`PlanSource`, and schema steps 22 and 23. E5's step is **24**.
+> 3. **E3.S1 gets the skip-before-parse half of the read (Q6).** A byte-level gate tests each line's exact stamp and never
+>    decodes a line that is before the bound. A head rule always yields the file's first lines. A meter keeps bytes
+>    *scanned* apart from bytes *in the slice*, so the budget can apply to the slice (parent D7). `AgentLog`'s day gate
+>    does not change.
+> 4. **E3.S2, E3.S3 and E3.S5 get the facts from Q4, Q5 and Q8**, and the fixture cases that their checks use. E3.S5
+>    reads the sentinel from `allowlist.json` and the case count from `manifest.json`, because E1's own lists are
+>    private.
+> 5. **E3.S4 (Fable's spec) is not edited.** It gets only a revision box. §7, *For Fable to confirm*, lists every point
+>    where the spec disagrees with E1's measurements or fixtures. Coding E3.S4 waits for Fable's answers.
+> 6. **No test uses a real date.** The fixtures use a synthetic clock (2000-01-01, one second per rank), and every
+>    clock in a test is taken from the fixture's own instants, never from `DateTime.UtcNow` (§4).
+> 7. **§6 records three new defects in the parent** (items 12–14). The parent itself is not edited here.
 
 ## 1. The goal, and where this epic stops
 
@@ -18,36 +40,43 @@ files, keyed by the session id, never by `cwd`, and never holding a byte of prom
 | Counting: messages, tokens, launches, models, effort, states | E3.S4 (cornerstone) | — |
 | A write and the checkout it landed in | E3.S3 | Whether that checkout IS the gate's `repo_path`: E4 |
 | Windows, association, ambiguous totals, contributors | — | E4 (`RoundAttribution`) |
-| The budget's numbers (2 s / 64 MB), the call before `Projection.Write`, columns, `authors_reader` column | the budget MECHANISM and `ReaderVersion` | E5 |
-| Fixtures with every text field a sentinel | — (consumed) | E1 |
+| The budget's numbers (2 s / 64 MB, applied to the SLICE — parent D7), the call before `Projection.Write`, schema step 24's columns, `authors_reader` column | the budget MECHANISM, the skip before parsing (E3.S1) and `ReaderVersion` | E5 |
+| Fixtures with every text field a sentinel | — (consumed: `c01`–`c20`, shipped in #828) | E1 |
 | Backfill over stored `rounds.caller` ids | the `stored` id source | E7 |
 
-E3.S1–S3 build on synthetic files written by their own tests, so they **do not wait for E1**. E3.S4 and E3.S5 run
-over E1's fixtures and start when E1.S5 has landed them.
+E3.S1–S3 build on synthetic files written by their own tests. E3.S4 and E3.S5 run over E1's fixtures. **E1 has
+landed them** (E1.S5, #828), so no story waits for E1 now. E3.S4 waits only for the answers to §7.
 
 ## 2. What the reader is built on
 
-### 2.1 In the code (verified on this branch, 2026-10-14)
+### 2.1 In the code (verified on this branch, 2026-10-14; re-verified on main `59463d73`, 2026-10-16)
 
 | What | Where | How E3 uses it |
 |---|---|---|
 | Shared-mode, never-throwing line read | `src_mcp/src/Store/AgentLog.cs:183-207` | lifted to `TranscriptLines` (S1) |
 | Torn-line tolerance | `AgentLog.cs:209-231` (the `JsonException` catch at `:227-230`) | the parse half lifted (S1) |
-| Day gate | `AgentLog.cs:103-112` (`Days`), `:157-173` (`Mentions`) | lifted (S1); the reader uses it under a lower bound (S4) |
+| Day gate | `AgentLog.cs:103-112` (`Days`), `:157-173` (`Mentions`) | lifted (S1) and kept for `AgentLog`. *Revised 2026-10-16:* the new reader skips by S1's exact-stamp byte gate, not by `Mentions` (Q6, §2.3; §7 F2) |
 | Last-write gate | `AgentLog.cs:121-130` | the same test, applied to agent files (S4) |
 | Default transcript root | `AgentLog.cs:39-40` (`DefaultProjectsDir`) | moved to `ClaudeHome.Default` (S2), `AgentLog` delegating |
-| Override | `src_mcp/src/Server/PanelSettings.cs:386` (`AgentLogDir`), `:972` (`COAI_AGENT_LOG_DIR`) | `ClaudeHome.With(agentLogDir)` (S2) |
-| The env ladder today | `src_mcp/src/Server/CallerSessions.cs:44-53` | **not reused as is**: it puts `COAI_CALLER_SESSION` first, and the parent (§16 D9) wants that alone to be `unobserved: stated id` (S2) |
-| Vendor | `src_mcp/src/Server/CallerDeclaration.cs:90-95,106-108` | handshake outranks env; the reader is told the vendor, never infers it (S2) |
+| Override | `src_mcp/src/Server/PanelSettings.cs:421` (`AgentLogDir`), `:1009` (`COAI_AGENT_LOG_DIR`) | `ClaudeHome.With(agentLogDir)` (S2) |
+| The env ladder today | `src_mcp/src/Server/CallerSessions.cs:44-50` (`Variables`), `:53-64` (`From`) | **not reused as is**: it puts `COAI_CALLER_SESSION` first, and the parent (§16 D9) wants that alone to be `unobserved: stated id` (S2) |
+| Vendor | `src_mcp/src/Server/CallerDeclaration.cs:90-94` (`VendorFor`), `:106-108` (`VendorOf`) | handshake outranks env; the reader is told the vendor, never infers it (S2) |
 | What `rounds.caller` holds | `src_mcp/src/Server/Rounds/RoundCommands.cs:34-35` | the `stored` id source for E7 (S2) |
-| Path key normalisation | `src_mcp/runners/Context/RepositoryIdentity.cs:24` (`Normalised`) | the key of a checkout root (S3) |
-| "Holds a `.git` file or folder" | `src_mcp/runners/Worktrees/SubmodulePopulator.cs:133-134` (`HasGit`, `internal`; `runners` has no `InternalsVisibleTo` for `CoaiMcp`, `CoaiMcp.Runners.csproj:40`) | widened to `public` and called (S3) — reuse move 1, no copy |
-| `agent_log`'s window | `src_mcp/src/Server/Rounds/RoundEngine.cs:892-902` | untouched; the parent's §3 keeps `agent_log`'s behaviour |
-| `AgentLog`'s guards | `src_mcp/tests/AgentLogTests.cs` (14 tests; `Days` at `:125-133`) | stay green; the `Days` test moves with the code (S1) |
-| Clock seam | `TimeProvider`, `src_mcp/tests/FixedClock.cs` | the budget's time (S4) |
-| Temp dirs | `src_mcp/tests/TempDir.cs` | every test here |
+| Path key normalisation | `src_mcp/runners/Context/RepositoryIdentity.cs:24` (`Normalised`: trims, folds `\` to `/`, drops a trailing `/`, lower-cases) | the key of a checkout root (S3) — it already folds the separators and the drive case that Q8 measured |
+| "Holds a `.git` file or folder" | `src_mcp/runners/Worktrees/SubmodulePopulator.cs:133-134` (`HasGit`, `internal`; `runners` gives `InternalsVisibleTo` only to `CoaiMcp.Tests` and `FakeCli`, `CoaiMcp.Runners.csproj:44-48`, not to `CoaiMcp`) | widened to `public` and called (S3) — reuse move 1, no copy |
+| `agent_log`'s window | `src_mcp/src/Server/Rounds/RoundEngine.cs:898-907` (`WhatTheCallerWasDoing`; the projects folder picked at `:902`) | untouched; the parent's §3 keeps `agent_log`'s behaviour |
+| `AgentLog`'s guards | `src_mcp/tests/AgentLogTests.cs` (**13** tests; `Days` at `:125-133`; `AHalfWrittenLastLineIsSkipped_NotAFailure` at `:173-182`) | stay green; the `Days` test moves with the code (S1) |
+| Clock seam | `TimeProvider`, `src_mcp/tests/FixedClock.cs` (read-only by design) | the budget's time (S4) |
+| Temp dirs | `src_mcp/tests/TempDir.cs` (`TempDir.For(prefix)`) | every test here; the prefix starts `testsToDelete-` (the family's `test-leftovers` rule) |
+| **Shipped by E1 (#828)** — the measurements | `research/RESULTS_caller_transcripts_on_both_sides.md` (Q1–Q9 at `:39-47`, folder facts at `:53-59`, open items at `:80-84`) | §2.3; wins over §2.2 |
+| **Shipped by E1** — the fixtures | `src_mcp/tests/fixtures/caller-transcripts/c01`…`c20`, each with `projects/**` (except `c10`) and `rounds.json`; `c10` and `c12` also have `sessions/<pid>.json`; `manifest.json` (name → dir, `counts`, `fixtureRoots`, `pathStyle`, `hasTranscript`); `allowlist.json` (`sentinel` = the string every text field became) | E3.S2 (cross-checks), E3.S4, E3.S5; copied to the test output folder as `fixtures/caller-transcripts` (`ACallerTranscriptFixtureCarriesNoTextTests.cs:98`) |
+| **Shipped by E1** — the guard | `src_mcp/tests/ACallerTranscriptFixtureCarriesNoTextTests.cs` (the pinned case list `:39-61`, the pinned dirs `:68-90`; both `private`) | E3.S5 does not re-type its lists: it reads `manifest.json` and `allowlist.json` |
+| **Shipped by E1** — the harness | `scripts/lib/caller-transcripts.mjs` (Node; counts only; `timeSession` at `:594-623` and `parsePass` at `:563-582` timed the Q6 figures) | not reused by the C# reader. It shows how Q6 was measured: every file of the session, every line decoded to a string, no last-write gate |
+| **Shipped by E2 (#829) and the plan-gate fix (#837/#841)** | `RoundRecord` at `src_mcp/src/Server/SessionStore.cs:78` (`Size` `:202`, `Gitlinks` `:211`, `PlanSource` `:223`); `src_mcp/src/Server/Rounds/RoundSizer.cs`; schema step 22 (`Schema.cs:619`) and step 23 (`:655`) | E3 touches none of them. E5's AUTHORS step is **24** |
 
-No code reads the Claude session registry today: there is no `CLAUDE_PID` anywhere under `src_mcp`. S2 adds that read.
+No code reads the Claude session registry today: there is no `CLAUDE_PID` in any `.cs` file under `src_mcp` (checked
+again 2026-10-16). S2 adds that read. Nothing of E3 exists on main yet (no `TranscriptLines`, `CallerTranscriptLocator`
+or `ObservedSession`).
 
 ### 2.2 In one transcript folder (this machine, 2026-10-14; field names and counts only, no content)
 
@@ -63,6 +92,9 @@ Read from one Claude Code session folder: main transcript 14.8 MB, `subagents/` 
   input terms are identical on every line, `output_tokens` never decreases, and the LAST line holds the maximum; on
   **162** ids the lines carry DIFFERENT `output_tokens`. So "once per `message.id`" needs a rule for which value — summing
   over-counts, the first line under-counts. No id appeared in two files.
+  *Revised 2026-10-16 (E1, Q3):* the inputs-identical fact holds. "The LAST line holds the maximum" is **refuted**: on WSL,
+  16 of 6 745 ids with different outputs have a last line BELOW the maximum. The rule is the per-term maximum, never
+  the last line. Different outputs occur on ~10 % of ids (11.2 % Windows, 9.2 % WSL), not on a few.
 - **Agent files**: the first line of every `agent-<id>.jsonl` is `type: user` and carries `agentId` = the file's id (92 of
   92); every assistant line in it carries the same `agentId`.
 - **Requested vs observed**: subagent `requestedModel` equals `message.model` here; the main session's
@@ -77,7 +109,71 @@ Read from one Claude Code session folder: main transcript 14.8 MB, `subagents/` 
 - No `isSidechain: true` line in the main transcript; one `compact_boundary` system line.
 
 E1 measures the same things on both sides and per Claude Code version. Where E1 finds a different shape, the RESULTS
-file wins over this section, and the story it touches records the change.
+file wins over this section, and the story it touches records the change. *(2026-10-16: E1 has measured; §2.3.)*
+
+### 2.3 What E1 measured, and what it changes here (added 2026-10-16)
+
+Source: `research/RESULTS_caller_transcripts_on_both_sides.md`, measured 2026-10-15 on both sides from inside each one
+(Windows: 405 code rounds, 21 caller sessions, 799 files, 528 k lines; WSL: 516 rounds, 44 sessions, 901 files,
+486 k lines), on Claude Code 2.1.283–2.1.300. Counts only.
+
+| Q | Measured | What it changes for E3 | Where |
+|---|---|---|---|
+| Q1 | The layout holds on both sides. Every agent file has its meta and every meta has its file (778/778, 857/857). The old 2.1.197 CLI left no session in the window | nothing changes; the metaless older layout (S4-6, S4-12) is still not on disk | — |
+| Q2 | `effort` is on ≥ 99.5 % of assistant lines in every version. Metas WITH `model`: 100 % only on 2.1.283–2.1.285 and 2.1.300; elsewhere 70–98 % (Windows) and as low as 32 % (WSL 2.1.284). A launch without a `model` argument writes a meta without one | The meta names only the REQUEST (`RequestedAlias`, often `""`). The observed model is `ObservedMessage.Model`, from the agent file's own lines. **Boundary:** E3 gives the model per message, keyed by `AgentKey`. An agent-level "model of this agent" is E4's work over those messages. E3 does not give one. `partial: meta without model` would mark a large share of real rounds | §7 F6 |
+| Q3 | 2.18 (Windows) and 2.41 (WSL) lines per `message.id`; at most 31 and 44 lines. Only `output_tokens` ever differs, on 11.2 % and 9.2 % of ids. On WSL, 16 ids have a last line below the maximum | per-term **MAXIMUM**, never the last line (parent D8 holds). The fixture `c03` (`message-last-line-below-max`) is that case | §2.2, §7 F11 |
+| Q4 | The headless probes (2.1.289 Windows, 2.1.300 WSL) give the same results. The child sees `CLAUDE_CODE_SESSION_ID` and `CLAUDE_PID`, and the registry `sessionId` equals the variable. A nested `claude -p` gets its OWN id. `--resume` appends to the same file and replays no message id. `--no-session-persistence` leaves a registry entry and no `.jsonl`. **One message's lines span** p50 1.7 s, p99 50 s, **max 2.01 h**, with 3 ids over 1 h on each side. The lines are not written together. `/clear` is still OPEN (it needs an attended session) | S2's ladder holds as designed. Persistence off is `transcript not found` (S2). A resumed agent is one launch (S4 test 5). The message instant is its FIRST line (S4-8 holds). **`StraddleGuard = 1 h` and "one message never spans an hour" (S4-9) are refuted.** The budget cut (S4-3) cannot assume that a message's lines are adjacent | §7 F3, F4 |
+| Q5 | 100 % of the Claude-called rounds have a transcript on both sides (399/405 Windows; the 6 not found have a codex caller; 516/516 WSL) | `no reader for codex` is a real, frequent state (S2), not a theoretical one | S2 |
+| Q6 | The largest session is **650 MB** (273 files, 187 k lines). A full parse takes p50 **30.5 s**. The day-gated parse takes **19.9 s**, and the gate keeps 14 % of the lines. The largest WSL session is 235 MB: 9.6 s full, 7.8 s gated. The p99 session is 91 MB (Windows) and 124 MB (WSL); 4 and 5 sessions are ≥ 100 MB. *(Node, every file of the session, every line decoded: `scripts/lib/caller-transcripts.mjs:563-582`. E1/5: Node's time is not the C# reader's; E5 measures again.)* | A gate that still reads and decodes every line saves a third at best. The reader must skip BEFORE it decodes. File-level: the last-write time. Line-level: the stamp, tested on raw bytes, with no `JSON.parse` and no string. The byte budget meets these sessions every time, so it is charged on the slice only (parent D7). In E3.S4 step 1 the budget is charged on every line, before the gate: that is the known defect | E3.S1; §7 F1, F2 |
+| Q7 | Windows: 587 `Agent` tool uses and 778 metas. The 191 extra metas are the nested launches, at depth 2–3. WSL: 844 uses, 857 metas, 17 nested, 4 uses with no meta (refused launches) | S4-5 and step 7a hold. Depth 3 exists, so no rule may assume depth ≤ 2 | — |
+| Q8 | Every write path is absolute on both sides. Windows: 90 % backslash, a lower-case drive on 219 subagent writes. WSL: `/` only. A write under the session's `cwd`: 0 on Windows (where decidable), 5 % on WSL | S3 holds (`Normalised` folds both). `cwd` is never read. The test with mixed separators and drive case stays | S3 |
+| Q9 | 21 top-level line types (`api-request-blob` and others are new to §2.2), and the content types `text`, `thinking`, `tool_use`, `tool_result`, `tool_addition`, `image`. Unparseable lines: 1 on Windows and 3 on WSL; one of them is at a file's end (a line that was being written). A file's first line is a `queue-operation` on 64 of 65 files | An unknown type means "nothing more" (step 3 holds). Torn MIDDLE lines exist in real data, so `partial: torn line` can occur | — |
+| Folder | `is_error` is absent on 43 % (Windows) and 34 % (WSL) of `tool_result`s. A main file's first line is a stamped `queue-operation` on 20 of 21 Windows files; the 21st starts with an `ai-title`, which has **no timestamp**. In 0 of 9 379 samples did a live read see a torn last line | absent means "not an error" (S4 holds). The first-line exemption must reach the first STAMPED line (§7 F5). S4-1 and D22 stay as designed | §7 F5 |
+
+**The shipped fixtures** (measured on main 2026-10-16 by Opus, from the files; counts and shapes only):
+
+| dir | name (manifest) | main · agent files · metas · `Agent` uses | Notes that matter to E3 |
+|---|---|---|---|
+| c01 | `background-agent-across-round-start` | 1 · 1 · 1 · 1 | one `<synthetic>` line (its `message.id` is the sentinel) |
+| c02 | `message-as-several-lines` | 1 · 1 · 1 · 1 | 3 multi-line ids; main `requestedModel` is the sentinel |
+| c03 | `message-last-line-below-max` | 1 · 1 · 1 · 1 | 1 id whose last line is below its maximum (Q3) |
+| c04 | `meta-without-model` | 1 · 1 · 1 · 1 | the one meta has no `model` |
+| c05 | `missing-child-transcripts` | 1 · 1 · 2 · 3 | one meta without a file; one call with neither; one `<synthetic>` line |
+| c06 | `model-switch-in-window` | 1 · 0 · 0 · 0 | two `message.model` values; 1 write (backslash path, into `scratch`) |
+| c07 | `nested-agents` | 1 · 2 · 2 · 3 | the depth-2 meta has `parentAgentId` and **no `model`**; one agent file (clipped) starts with an `assistant` line |
+| c08 | `no-effort-lines` | 1 · 1 · 1 · 1 | the only effort-less line is the `<synthetic>` one |
+| c09 | `no-evidence-two-repositories` | 1 · 0 · 0 · 0 | no write |
+| c10 | `persistence-off` | — · — · — · — | no `projects/`; `sessions/41017.json` names the caller id |
+| c11 | `refused-agent-call` | 1 · 0 · 0 · 1 | the call's `tool_result` has `is_error: true` |
+| c12 | `registry-and-variable-disagree` | 1 · 0 · 0 · 0 | `sessions/52044.json` names an id that has NO transcript; 2 writes, 1 without a `tool_result` |
+| c13, c15, c16 | `replay-same-round-twice`, `second-gate-session-same-caller`, `skipped-round-between-recorded` | 1 · 0 · 0 · 0 | rounds-file cases (E4's); 1 answered write each |
+| c14 | `resumed-agent` | 1 · 1 · 1 · 1 | 21 ids; the `Agent` call has no `tool_result`, but its meta joins it |
+| c17 | `two-repositories-one-session` | 1 · 0 · 0 · 0 | 2 writes (`repo-a`, `repo-b`); the `repo-b` write has **no `tool_result`** |
+| c18 | `work-before-open` | 1 · 0 · 0 · 0 | 1 answered write into `repo-a` |
+| c19 | `write-into-submodule-and-scratchpad` | 1 · 0 · 0 · 0 | 2 assistant lines only: **neither write has a `tool_result`**; the submodule dir `repo-a/p1000` is not a manifest root |
+| c20 | `writes-only-elsewhere` | 1 · 0 · 0 · 0 | 1 answered write into `scratch` |
+
+The facts that hold across all twenty, and that every E3 test must respect:
+
+- **The clock is synthetic.** Every instant is `2000-01-01T00:00:00Z` plus one second per rank of the real instants.
+  One fixture spans 88 s at most. Midnight, a 2 h span and a multi-day window cannot appear without a mutation. A test
+  takes its bound and its clock from the fixture's own instants (its lines or `rounds.json`). It never uses a literal
+  real date and never uses `DateTime.UtcNow`. A copied file's last-write time is the copy time (the real clock), so it
+  says nothing about the synthetic stamps.
+- **Numbers are ranks.** Each token term is the RANK of its value at that path (0 stays 0). Order is kept, so
+  "maximum" and "sum > maximum" can still be tested. Totals are not real token counts.
+- **Stamps are not always in file order.** In 11 of 19 cases, 12 of 406 stamped lines are earlier than the line before
+  them. E1 did not measure order over whole sessions. A skip that needs stamps in order (bisection, "stop at the first
+  line past the bound", a per-file LAST-stamp skip) is therefore not safe.
+- **The top-level `timestamp` comes after `message`** in 237 of 240 lines that have both. A "prefix" read must find the
+  key inside the line. It is not at the line's start.
+- **Every fixture is ASCII.** No line holds a multibyte character, so a byte-versus-char test needs a mutation.
+- **13 of 20 cases use `backslash+slash` paths.** Every write path in c06, c12–c18 and c20 is a backslash path
+  (`D:\fixture\…`, JSON-escaped). The manifest's `fixtureRoots` include `D:/fixture/scratch`, which is the scratchpad.
+- **A text field is the sentinel.** That includes a line `type` off the allowlist (c04–c06, c08, c09, c12, c13, c15, c16,
+  c18 and c20 have such lines), a synthetic line's `message.id`, and the main lines' `requestedModel`
+  (`claude-opus-5-5[1m]` is not in `allowlist.json`'s `model-ref` list): it is the sentinel in c02, c03, c04, c07, c11,
+  c12, c14 and c17. In the other fixtures (versions 2.1.284–2.1.288) no line has a `requestedModel`.
 
 ## 3. The contract E4 reads — `ObservedSession`
 
@@ -192,6 +288,14 @@ node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.
 node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe   # whole suite before done
 ```
 
+Two rules for every test in this epic (added 2026-10-16):
+
+- **No real clock, no real date.** A test that reads a fixture takes its bound and its `FixedClock`/`SteppingClock`
+  from that fixture's own instants (§2.3: the synthetic clock starts at 2000-01-01). A test that writes its own lines
+  picks its instants freely, but it never calls `DateTime.UtcNow` and never depends on today's date.
+- **Temp folders are `TempDir.For("testsToDelete-coai-<what>-")`** (the family's `test-leftovers` rule; 46 call sites
+  already use the prefix).
+
 Every story is test-first: write the tests, run them and watch them fail **for the stated reason**, not because
 something does not compile. A missing type is a compile error, not a RED: create the empty type first, then watch
 the assertion fail. Then implement, watch the tests go green, run each break-it (delete or alter the named production
@@ -202,9 +306,12 @@ line, watch the named test fail, restore it), and report both observations.
 ### E3.S1 — The transcript-read helpers lifted out of `AgentLog`, behaviour kept
 
 - **Goal.** One text-free unit for reading a transcript that its CLI is still appending to, shared by `AgentLog` and the
-  new reader, so the two cannot drift. `agent_log` behaves exactly as before (parent §3).
+  new reader, so the two cannot drift. `agent_log` behaves exactly as before (parent §3). *Revised 2026-10-16:* the unit
+  also gives the new reader a way to **skip before it decodes** (items 7–9). E1 measured that a gate which still reads
+  and decodes every line saves only a third of a 30.5 s read (Q6, §2.3). The budget can then apply to the slice
+  (parent D7), not to the whole file.
 - **Scope.**
-  - New `src_mcp/src/Store/TranscriptLines.cs` (`internal static class`, ≤ 120 lines).
+  - New `src_mcp/src/Store/TranscriptLines.cs` (`internal static class`, ≤ 220 lines; was ≤ 120 before items 7–9).
   - `src_mcp/src/Store/AgentLog.cs`: remove `ReadLines` (`:183-207`), `Days` (`:103-112`) and `Mentions`
     (`:157-173`), and call the new unit. `Parse` (`:209-231`) stays in `AgentLog`, because it builds `AgentLog`'s
     `Entry`, but its JSON step goes through the new `TryParse`.
@@ -225,20 +332,89 @@ line, watch the named test fail, restore it), and report both observations.
   5. `AgentLog` calls all of these. Its public surface (`Slice`, `DefaultProjectsDir`) is unchanged, and so is
      everything it renders.
   6. Style: follow `AgentLog.cs` — remarks that explain why, `private static` pure helpers, no new dependencies.
+  7. *(added 2026-10-16)* `TranscriptLines.StampAtOrAfter(ReadOnlySpan<byte> line, DateTime boundUtc) → bool`. Pure.
+     - Find EVERY occurrence of the ASCII bytes `"timestamp":` in the line, then skip optional spaces and one `"`.
+     - Read the next 19 bytes as `yyyy-MM-ddTHH:mm:ss`. Compare them, ordinal, with the bound in the same form, with the
+       bound floored to the second.
+     - Return true when ANY occurrence is at or after the bound. Return false when every occurrence is before it, or
+       when the key does not occur. When the 19 bytes are not in that form, treat them as "at or after", so the line is
+       parsed and the JSON decides.
+     - Remark why it checks every occurrence: the top-level `timestamp` comes AFTER `message` (237 of 240 fixture lines,
+       §2.3). So the first occurrence can be a key in a nested object, and the last can be one inside `toolUseResult`.
+       With "any occurrence", a nested key can cost one extra parse. It can never cause the line's own stamp to be
+       skipped.
+  8. *(added 2026-10-16)* `TranscriptLines.ReadSharedFrom(string file, DateTime boundUtc, ScanMeter meter) →
+     IEnumerable<string>`. It opens the file exactly as `ReadShared` does (shared, never throws). Then:
+     - It reads RAW BYTES in blocks of 64 KiB and splits them on `\n` with `Span.IndexOf`. A line longer than a block
+       makes the buffer grow, so the line stays one line. A `\r` before the `\n` is dropped from the yielded text.
+     - **The head:** every line up to and including the first line whose bytes contain `"timestamp":` is yielded,
+       whatever its stamp. This is the line that gives `FirstLineUtc` and `LaunchedUtc`. A file can start with an
+       `ai-title`, which has no timestamp (1 of 21 Windows main files, §2.3).
+     - **The tail:** a last line with no `\n` is always yielded. A torn tail usually ends before its stamp (the stamp
+       comes after `message`), and S4-1 must still see it.
+     - Every other line is yielded only when `StampAtOrAfter(line, boundUtc)` is true. Otherwise
+       `meter.LinesSkipped++`, and its bytes are **never decoded**.
+     - A yielded line is decoded with UTF-8. `meter.BytesYielded` grows by the line's raw byte count plus its
+       terminator. These are encoded bytes, so nothing is encoded again and no char count is used.
+       `meter.BytesScanned` grows by every byte read.
+     - `meter.Stop` (a `Func<bool>`) is asked after every yielded line and after every 1 MiB scanned. When it returns
+       true, the sequence ends. This is the budget's hook. E3.S4 decides what `Stop` checks (§7 F1).
+     - It never stops early on a stamp. Each line is judged alone, because stamps are not always in file order (§2.3).
+  9. *(added 2026-10-16)* `internal sealed class ScanMeter { long BytesScanned; long BytesYielded; int LinesSkipped;
+     Func<bool> Stop; }`. One instance serves one read, across every file of that read. **Considered and rejected,
+     with the reason:**
+     - A byte-offset bisection, a per-file LAST-stamp skip, and "the first line past the bound ends the file" all need
+       a file's stamps to be in order. They are not in order in 11 of 19 fixtures, and E1 did not measure order on
+       whole sessions.
+     - `WrittenSince` (item 4) needs no order: a file that was last written before the bound holds no later line. It is
+       the file-level skip.
+     - `AgentLog` keeps `Days`/`Mentions` unchanged (parent §3). Moving it to item 8 is a separate decision, not part
+       of E3.
 - **Test scenarios** (`ATranscriptIsReadWhileItIsBeingWrittenTests`):
   - `A_file_held_open_for_writing_by_another_handle_is_still_read`: open the file with `FileShare.Read` and a write
     handle, then read it. Every whole line comes back.
   - `A_file_that_cannot_be_opened_is_no_lines_not_an_exception`: missing file, and a directory passed as a file.
   - `A_torn_line_is_reported_as_torn_and_the_next_whole_line_still_parses`: `TryParse` returns false, then true on the
-    next line.
+    next line. The lines are synthetic: real unparseable lines exist (Q9: 1 on Windows, 3 on WSL), but no fixture holds
+    one, because E1 shipped no `torn-last-line` case.
   - `Only_the_days_a_window_touches_are_listed` (moved from `AgentLogTests.cs:125-133`, unchanged assertions).
   - `A_file_last_written_before_the_bound_is_skipped`: set the time with `File.SetLastWriteTimeUtc`.
-  - All 14 `AgentLogTests` stay green **unchanged** apart from the moved test. That is the behaviour-kept proof.
+  - All **13** `AgentLogTests` stay green **unchanged** apart from the moved test. That is the behaviour-kept proof.
+  - *(added 2026-10-16, items 7–9; synthetic lines, instants chosen by the test, never the real clock)*
+    - `A_line_stamped_before_the_bound_is_skipped`: three lines before the bound and two at or after
+      it. Expect two yielded, `LinesSkipped == 3`, and `BytesYielded` equal to the two lines' byte lengths plus their
+      terminators.
+    - `Any_stamp_at_or_after_the_bound_keeps_the_line`: a nested `"timestamp":` before the top-level one, and one after
+      it. When either is at or after the bound, the line is yielded. When both are before it, the line is skipped.
+    - `A_stamp_written_with_a_space_is_still_seen`: `"timestamp": "…"`.
+    - `The_head_is_yielded_up_to_the_first_stamped_line`: line 1 is an `ai-title` with no stamp, line 2 is a
+      `queue-operation` stamped before the bound, and line 3 is stamped before the bound. Expect lines 1 and 2 yielded
+      and line 3 skipped.
+    - `An_unterminated_last_line_is_always_yielded`: the last line has no `\n` and no stamp.
+    - `Lines_out_of_order_are_judged_one_by_one`: stamps 10:00, 12:00, 09:00, 11:00 and a bound of 10:30. Expect 12:00
+      and 11:00 yielded. The read does not stop early.
+    - `Bytes_in_the_slice_are_bytes_not_chars`: one yielded line holds a 3-byte character. Expect `BytesYielded` to be
+      its UTF-8 length plus 1, not its char count.
+    - `A_line_longer_than_a_read_block_is_one_line`: a 200 KiB line.
+    - `A_CRLF_ends_a_line_and_is_not_yielded`.
+    - `The_stop_hook_ends_the_read`: `Stop` returns true after the first yielded line. Expect exactly one line.
+    - `The_gate_never_drops_a_line_a_full_parse_places_at_or_after_the_bound` (the positive anchor, over E1's
+      fixtures). Enumerate every case in `manifest.json` that has `hasTranscript: true` (19 cases; `c10` has none), and
+      assert the count is above zero. Take every `.jsonl` file from the test output folder (read only, no copy). Use as
+      the bound the median of the file's own stamps. Expect every line that `JsonDocument` gives a top-level
+      `timestamp` at or after the bound to be yielded. The 11 cases whose stamps are out of order (§2.3) are inside
+      this set.
 - **Break-its.** (a) In `ReadShared`, drop `FileShare.ReadWrite` → the held-open test goes red. (b) Make `TryParse`
   rethrow → the torn-line test goes red, and so does `AgentLogTests.AHalfWrittenLastLineIsSkipped_NotAFailure` (`:173`).
   (c) Make `WrittenSince` return true → the last-write test goes red.
-- **Done when.** The new class and all `AgentLogTests` are green; the three break-its were observed red and restored;
-  `AgentLog.cs` no longer contains a `FileStream` or a `JsonException` catch of its own; the whole suite is green.
+  *(added 2026-10-16)* (d) `StampAtOrAfter` reads only the FIRST occurrence → the any-stamp test goes red. (e) End the
+  file at the first skipped line after a yielded one → the out-of-order test and the fixture anchor go red. (f) Count
+  `line.Length` → the bytes test goes red. (g) Drop the head rule → the head test goes red. "A skipped line is never
+  decoded" cannot be seen from outside: a decode of bad bytes does not throw, it substitutes. So the reviewer checks
+  that the one UTF-8 decode call comes after the gate, and E5 measures the time.
+- **Done when.** The new class and all `AgentLogTests` are green; the break-its (a)–(g) were observed red and restored;
+  `AgentLog.cs` no longer contains a `FileStream` or a `JsonException` catch of its own; the review confirms that
+  `ReadSharedFrom` decodes only yielded lines; the whole suite is green.
 - **Depends on.** Nothing. It may run beside E3.S2 and E3.S3.
 - **Model.** Brief: Opus (this document) · code + tests: Sonnet · review: Opus · fixes: Sonnet.
 
@@ -256,15 +432,15 @@ line, watch the named test fail, restore it), and report both observations.
   - **The test home** (parent §16 D17): a test-assembly fixture (the `[assembly: AssemblyFixture]` precedent,
     `src_mcp/tests/TempDirsAreSwept.cs:5`) points `ClaudeHome.Default` — through ONE seam the fixture sets, never by
     rewriting the process's profile variables — at an empty temp directory for the whole run, so neither this reader
-    nor `AgentLog` (whose FakeCli round tests read the real `~/.claude/projects` today, `RoundEngine.cs:897`) ever
+    nor `AgentLog` (whose FakeCli round tests read the real `~/.claude/projects` today, `RoundEngine.cs:902`) ever
     opens a developer's transcripts. E5.S4 adds only the clearing of the caller-identity variables on top of it.
   - New `src_mcp/tests/TheCallersTranscriptIsFoundByItsSessionIdTests.cs`.
-  - No call site: E5 wires it from `RoundEngine` the way `RoundEngine.cs:897` picks the projects folder.
+  - No call site: E5 wires it from `RoundEngine` the way `RoundEngine.cs:902` picks the projects folder.
 - **Brief (Sonnet coder).**
   1. `public sealed record ClaudeHome(string ProjectsDir, string SessionsDir)`:
      - `Default` is `<UserProfile>/.claude/projects` and `<UserProfile>/.claude/sessions`.
      - `With(string agentLogDir)` replaces only `ProjectsDir` when `agentLogDir` is non-empty, which is what
-       `PanelSettings.AgentLogDir` (`PanelSettings.cs:386`) means. The registry folder does not move.
+       `PanelSettings.AgentLogDir` (`PanelSettings.cs:421`) means. The registry folder does not move.
      - `CLAUDE_CONFIG_DIR` is NOT honoured in this epic (`AgentLog` does not honour it either). Say so in a remark.
   2. `public readonly record struct CallerSessionId(string Id, string Source)` with `const`s `Registry = "registry"`,
      `Environment = "environment"` and `Stored = "stored"`. Add a `None` value whose `Id` is empty.
@@ -320,11 +496,25 @@ line, watch the named test fail, restore it), and report both observations.
     finds.
   - Positive anchor (testing.md, *a file full of negatives needs one positive*): the first test above must assert
     `Found`, so a fixture the locator rejects cannot pass every test.
+  - *(added 2026-10-16)* **Two checks over E1's fixtures.** They go through `CallerTranscriptFixture.Materialise`, which
+    E3.S4 adds; the epic is one commit, so they are written when it exists. They need it to copy `sessions/` too
+    (§7 F9).
+    - `The_registry_wins_even_when_only_the_variables_transcript_exists` — `c12` (`registry-and-variable-disagree`).
+      `CLAUDE_PID=52044`, and `CLAUDE_CODE_SESSION_ID` is the `rounds.json` `callerSessionId`, which is the id that has
+      a transcript. The registry names another id. Expect `NotObservable(TranscriptNotFound)` with source `registry`.
+      This is the `/clear` shape that rule 7 decides.
+    - `Persistence_off_is_transcript_not_found_from_a_real_registry_entry` — `c10` (`persistence-off`).
+      `CLAUDE_PID=41017`, and `projects/` is absent. Expect `TranscriptNotFound` with source `registry`.
+  - *(added 2026-10-16, E1 Q4/Q5)* What the probes settled: in a headless session the registry `sessionId` EQUALS the
+    variable, a nested `claude -p` gets its own id, `--resume` keeps the id and the file, and
+    `--no-session-persistence` leaves a registry entry and no file. **`/clear` is still open** (RESULTS `:82`). The
+    registry-first order of parent D9 stays the design until an attended session measures `/clear`. The Q5 coverage
+    makes `no reader for codex` real: 6 of 405 Windows rounds have a codex caller.
 - **Break-its.**
   - (a) Swap the registry and variable order → the registry test goes red.
   - (b) Replace the pid-named read with a listing → the by-pid test goes red.
   - (c) Drop the uuid check → the path test goes red.
-  - (d) Use `CallerIdentity.From` (`CallerSessions.cs:53-64`) as the ladder → the stated-session test goes red. This is
+  - (d) Use `CallerIdentity.From` (`CallerSessions.cs:53-64`; still these lines on main 2026-10-16) as the ladder → the stated-session test goes red. This is
     the refuted approach; name a test for it: `Reusing_the_round_callers_ladder_would_read_a_stated_id_and_that_is_the_point`.
 - **Done when.** All scenarios and break-its are observed; `AgentLog.DefaultProjectsDir` delegates; no
   `EnumerateFiles(…, AllDirectories)` in the new file; the whole suite is green.
@@ -341,12 +531,15 @@ line, watch the named test fail, restore it), and report both observations.
 - **Scope.**
   - New `src_mcp/src/Store/WriteEvidence.cs` (≤ 200 lines) with `WriteTools`, `WriteTarget` and `CheckoutRoots`.
   - `src_mcp/runners/Worktrees/SubmodulePopulator.cs:133-134`: `HasGit` goes from `internal` to `public`. Extend its
-    remark to name the third caller.
+    remark (`:132`, which names `Snapshots/SnapshotListing` as the second caller) to name the third.
   - New `src_mcp/tests/AWriteIsKnownOnlyByItsPathTests.cs`.
 - **Brief (Sonnet coder).**
   1. `WriteTools.Names` = `["Edit", "Write", "MultiEdit", "NotebookEdit"]` (ordinal, case-sensitive), plus — parent
      §16 D18 — `Artifact`-style file writers as table entries (tool name → its ONE path property), counted only when
-     the path resolves to a `Checkout`; none is added without an E1 fixture showing it on disk.
+     the path resolves to a `Checkout`; none is added without an E1 fixture showing it on disk. *(2026-10-16: E1's
+     fixtures hold no `Artifact` write with a path, and `allowlist.json` keeps only `input.file_path` and
+     `input.notebook_path`. So the table ships with the four names alone. E1's harness uses the same four,
+     `scripts/lib/caller-transcripts.mjs:17`.)*
      `WriteTools.TryPath(string toolName, JsonElement input, out string path)`:
      - `Edit`, `Write` and `MultiEdit` read `file_path`; `NotebookEdit` reads `notebook_path`. Each reads ONE property,
        through `TryGetProperty`, and only when it is `JsonValueKind.String`.
@@ -390,6 +583,15 @@ line, watch the named test fail, restore it), and report both observations.
   - `A_relative_path_is_unresolved_never_joined_to_our_cwd`.
   - `Backslashes_and_case_give_one_key`: `D:\\X\\repo` and `d:/x/repo/` give one `Where`. Windows only:
     `Assert.SkipUnless(OperatingSystem.IsWindows())`.
+  - *(added 2026-10-16, E1 Q8: on Windows 90 % of write paths use backslashes, and 219 subagent writes have a
+    lower-case drive; on WSL every path uses `/`)* `A_mixed_separator_lower_case_drive_path_finds_its_checkout`: the
+    tree is built at the temp root, and the write path is given as the temp root with a lower-case drive and `\` and `/`
+    mixed. Expect `Checkout(the root)`. Windows only. `A_windows_shaped_path_on_linux_is_unresolved`: on a non-Windows
+    host, `D:\x\a.cs` is not fully qualified, so expect `Unresolved("")`. Skip on Windows. (E1 found no
+    Windows-shaped path on WSL. The test fixes the outcome in case one appears.)
+  - The fixture cases with writes (`c06`, `c12`–`c20`) are read through E3.S4's materialiser, not here. S3's trees
+    stay synthetic. The CACHE key in `CheckoutRoots` is the `Normalised` directory, so `D:\X` and `d:/x` share one
+    entry.
 - **Break-its.**
   - (a) Add `"Bash"` to `Names` → the shell test goes red.
   - (b) Walk up from a missing directory → the removed-worktree test goes red.
@@ -403,6 +605,20 @@ line, watch the named test fail, restore it), and report both observations.
 ---
 
 ### E3.S4 — The counting rules and the states · **Cornerstone — spec by Fable**
+
+> **Revision box, 2026-10-16 (Opus; the spec below is Fable's and is NOT edited).** It was checked against main
+> `59463d73` and against E1's RESULTS and fixtures (§2.3). The citations it holds still resolve: `AgentLog.cs:229`
+> (the torn-tail comment), `AgentLog.Parse`'s timestamp styles (`:216`), parent D6–D9 and D17/D18. Several rules and
+> worked examples **disagree with the measurements or with the shipped fixtures**. Each one is listed, with the reason
+> and a proposed answer, in **§7 *For Fable to confirm*** (F1–F12):
+> - the budget, the day gate and the guard — steps 1–2, S4-3, S4-9, `ReadDiagnostics`;
+> - the first-line exemption — step 2, S4-10;
+> - `meta without model` as `partial` — step 7, the `nested-agents` row;
+> - the materialiser and its helpers;
+> - six worked-example rows and tests 1, 7, 8, 10, 13, 31 and 38.
+>
+> A fixture named below is a manifest NAME. Its folder is `c01`–`c20` (§2.3). **The coder does not start E3.S4 until
+> Fable has answered §7.**
 
 > **Spec by Fable, 2026-10-14**, over the parent's §5 and §16 (D3, D4, D6–D9, D17, D18 and the accepted resolutions
 > E3/9, E3/11, E4/4), this document's §2–§3, E1.S5's fixture list, `AgentLog.cs` as it stands, and one real transcript
@@ -757,16 +973,21 @@ the mutations it must cover (E3/11). `SteppingClock(start, step)` is a `TimeProv
   `research/module_server.md` describes the reader as it is.
 - **Scope.**
   - New `src_mcp/tests/NoTextLeavesTheCallerReaderTests.cs`.
-  - `research/module_server.md`: a new subsection right after the `rounds.agent_log` paragraphs (`:3007-3021`). No
-    product code.
-- **Brief (Sonnet coder).**
-  1. **Fixtures are enumerated, never listed.** Find every fixture folder E1 created under `src_mcp/tests/fixtures/`
-     (the folder name is in E1's RESULTS file) with `Directory.EnumerateDirectories`. Assert the count is greater than
-     zero AND equals the number E1's own sentinel test enumerates. That is the companion that keeps the scan alive
-     (testing.md, *a structural test that matches nothing passes forever*).
-  2. **The sentinel is E1's constant**, referenced and never re-typed. A copy would be a second list that drifts.
-  3. **The positive half first.** For each fixture, assert the RAW bytes contain the sentinel at least once. This proves
-     the fixture would leak if the reader read text.
+  - `research/module_server.md`: a new subsection right after the `rounds.agent_log` paragraphs (`:3180-3194` on main
+    2026-10-16; `:3007-3021` when this was written). No product code.
+- **Brief (Sonnet coder).** *(Items 1–3 revised 2026-10-16 to match what E1 shipped.)*
+  1. **Fixtures are enumerated, never listed.** E1's folder is `src_mcp/tests/fixtures/caller-transcripts/`, copied to
+     `AppContext.BaseDirectory/fixtures/caller-transcripts` (`ACallerTranscriptFixtureCarriesNoTextTests.cs:98`). Find
+     the case folders (`c01`–`c20`) with `Directory.EnumerateDirectories`. Assert the count is greater than zero AND
+     equals the number of `cases` in `manifest.json` (20 today). E1's own pinned lists (`RequiredCases`, `RequiredDirs`)
+     are `private`, and the manifest is the public form of the same list: the guard compares the two both ways. That is
+     the companion that keeps the scan alive (testing.md, *a structural test that matches nothing passes forever*).
+  2. **The sentinel is E1's value**, read from `allowlist.json`'s `sentinel` field, exactly as E1's guard reads it, and
+     never re-typed. (It is a JSON value, not a C# constant. A copy would be a second list that drifts.)
+  3. **The positive half first.** For each case with `hasTranscript: true` (19 cases; `c10` has no transcript), assert
+     that the RAW bytes of its main file contain the sentinel at least once. This proves that the fixture would leak if
+     the reader read text. E1's `TheSentinelIsActuallyPresent` asserts the same, so this is a second check by design.
+     Do not reuse that test.
   4. **The guard.** Materialise each fixture through E3.S4's `CallerTranscriptFixture.Materialise(case, TempDir)` — the
      one materialiser, never a second — and read it with `ReadBudget.Unbounded`. Walk the
      resulting graph by reflection: every public instance property, recursing into records and `IEnumerable`, and
@@ -785,19 +1006,24 @@ the mutations it must cover (E3/11). `SteppingClock(start, step)` is a `TimeProv
 - **Test scenarios.** `Every_fixture_holds_the_sentinel_in_its_raw_bytes`;
   `No_string_in_an_observed_session_holds_the_sentinel`; `Every_reason_is_from_the_closed_vocabulary`;
   `The_fixture_scan_found_every_fixture_E1_cut`.
+  *(2026-10-16)* The no-string test **will be red as the spec stands**. The fixtures' `requestedModel` is the sentinel
+  in c02, c03, c04, c07, c11, c12, c14 and c17, and `ObservedMessage.Requested` copies it (§7 F7). The guard is right.
+  The fix belongs to E3.S4 or to E1, never to this test. The synthetic lines' `message.id` is also the sentinel
+  (c01, c05, c08). It stays out of `ObservedSession` only because S4-11 drops synthetic lines (§7 F10).
 - **Break-its.** (a) Temporarily set `ObservedAgent.AgentType` from the meta's `description` → the no-string test goes
   red on the fixtures with a meta. (b) Temporarily build a reason from a transcript string → the vocabulary test goes
   red. (c) Point the enumeration at an empty folder → the companion test goes red.
 - **Done when.** All four tests pass; the three break-its were observed and restored; the module doc paragraph exists
   and matches the code; `node .agents/conventions/tools/plan-lifecycle.mjs` is clean; the whole suite is green.
-- **Depends on.** E3.S4, E1.S3 (`allowlist.json` and its sentinel), E1.S5 (fixtures).
+- **Depends on.** E3.S4, E1.S3 (`allowlist.json` and its sentinel), E1.S5 (fixtures). E1.S3 and E1.S5 have shipped
+  (#828).
 - **Model.** Brief: Opus (this document) · code + tests: Sonnet · review: Opus · fixes: Sonnet.
 
 ## 5. Order, and the epic's done-when
 
 ```
 E3.S1 ─┐
-E3.S2 ─┼─► E3.S4 (Fable spec; needs E1.S5) ─► E3.S5
+E3.S2 ─┼─► E3.S4 (Fable spec; E1.S5 shipped; waits for §7) ─► E3.S5
 E3.S3 ─┘
 ```
 
@@ -805,10 +1031,10 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
 
 | Parent's E3 done-when | Met by |
 |---|---|
-| a three-line message counts once | E3.S4 tests 1–3 |
-| a resumed agent is one launch | E3.S4 test 5 |
-| meta without transcript, `Agent` call with neither, a torn MIDDLE line, meta with no `model` → `partial: <why>`, reading on; a torn LAST line → NOT partial, counted in `Diagnostics.TornTails` (S4-1, parent §16 D22) | E3.S4 tests 20, 22, 24, 25, 26 |
-| no `effort` → `unknown` | E3.S4 tests 10, 11 |
+| a three-line message counts once | E3.S4 tests 1–3, plus a test over `c03` if Fable accepts F11 |
+| a resumed agent is one launch | E3.S4 test 5 (`c14`) |
+| meta without transcript, `Agent` call with neither, a torn MIDDLE line, meta with no `model` → `partial: <why>`, reading on; a torn LAST line → NOT partial, counted in `Diagnostics.TornTails` (S4-1, parent §16 D22) | E3.S4 tests 20, 22 (`c05`), 24 (`c04`), 25, 26 (mutations). *"meta with no `model` → partial" is in question: §7 F6* |
+| no `effort` → `unknown` | E3.S4 tests 10, 11. *`c08` cannot show it: §7 F10* |
 | persistence off → `unobserved: transcript not found` | E3.S2, carried through by E3.S4 test 30 |
 | the registry beats the variable, recorded | E3.S2 |
 | no sentinel in any rendering | E3.S5 (E5 adds the `.db` bytes and `--log`) |
@@ -819,6 +1045,15 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
 > **Settled 2026-10-14** in the parent's §16: 1 and 10 → D7; 2 → D8; 3 → D4; 4 and 5 → D3; 7 and 8 → D9 (and the
 > stated id is its own reason, `stated id`); 9 and 11 accepted as resolved here; 6 stays open — E3.S4's spec states the
 > torn-LAST-line rule on E1.S4's measured frequency.
+>
+> **2026-10-16, against E1's RESULTS:**
+> - 6 is closed by D22, and E1 saw no torn tail in 9 379 live samples.
+> - 1 and 10 are measured. The largest session is 650 MB, not 77 MB, and the day-substring gate does not make the bound
+>   cheap (Q6). That is new item 12, and E3.S1 and §7 F1/F2 carry the change.
+> - 2 is strengthened by Q3: the last line is not always the maximum.
+> - 11 is partly closed: E1 shipped `c04`, `c05` and `c11` for three of the partial causes. A torn line is still a
+>   mutation.
+> - Items 12–14 are new.
 
 1. **The budget does not fit a real session.** E5's cap is 64 MB, and §11 step 0 measures read time "over a 14 MB
    transcript". This session's main transcript is 14.8 MB, but its `subagents/` folder is **63 MB**, 77 MB in all. A
@@ -840,8 +1075,10 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
    `partial: torn line` (§12, E3 done-when) may make most live rounds partial. E1 should measure how often a live read
    sees one; E3.S4's spec states its treatment.
 7. **The id source has no column.** §5 says "which id source was used is recorded", and §12 says "the record says
-   which", but step 24's columns (step 23 was taken by the plan-gate E2, 2026-10-16) (`authors_state`, `authors_session`, `authors_reader`) carry no source. E5 needs one.
-8. **`CallerSessions.cs:44-53` is cited as the id source, but its ladder puts `COAI_CALLER_SESSION` first.** §12 wants
+   which", but the AUTHORS step's columns (`authors_state`, `authors_session`, `authors_reader`) carry no source. E5
+   needs one. (Settled by D9's `authors_id_source`. The AUTHORS step is now **24**: step 22 is E2's size, #829, and
+   step 23 is the plan-gate fix's `PlanSource`, #837/#841.)
+8. **`CallerSessions.cs:44-64` is cited as the id source, but its ladder puts `COAI_CALLER_SESSION` first.** §12 wants
    that variable alone to be `unobserved: no session id`. The reader needs its own ladder (E3.S2), and E7 must not take
    a stated `rounds.caller` as a transcript key.
 9. **The Agent-count check ignores refused launches.** The family's PreToolUse model guard refuses `Agent` calls,
@@ -852,3 +1089,37 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
 11. **E1's fixture list (§11 step 0) has no case for E3's partial causes** (meta without transcript, `Agent` call with
     neither, torn line, meta without `model`, refused call). E3 derives them by mutating E1's fixtures. Only E1 can
     supply the real shape of an older version's transcript without metas.
+12. *(2026-10-16)* **§5 says "the day-substring gate makes the bound cheap (§16 D7)". Q6 refutes this.** At 650 MB the
+    gated read takes 19.9 s against 30.5 s for a full one. The bound is cheap only when a line is skipped before it is
+    decoded (last-write time per file, then the exact stamp on raw bytes, E3.S1). §5 and D7's reason should say so.
+    E5's budget must apply to the slice: D7 already says this, and E3.S4 step 1 does not do it (§7 F1).
+13. *(2026-10-16)* **The parent's E3 done-when lists "a meta with no `model` → `partial`".** Q2 shows that up to 68 % of
+    the metas of one version have no `model`, because the launch gave none. Nothing is lost, because the model comes from the
+    agent file's lines. Pending Fable (§7 F6), the done-when and §5's "requested (the meta's alias, else
+    `requestedModel`)" should say the empty alias is normal.
+14. *(2026-10-16)* **The parent's E1 goal still reads "the read time over 14 MB … ≤ 300 ms p50".** It was measured
+    over 650 MB, and the measurement refuted it by two orders of magnitude. The E1 epic entry should cite the result.
+
+## 7. For Fable to confirm (added 2026-10-16)
+
+E3.S4 is Fable's spec, so Opus did not change it. Each item gives what the spec says, the measured fact that disagrees
+(the RESULTS Q or the fixture, §2.3), why the two cannot both hold, and ONE proposed answer. A rule that is accepted
+and changes a count bumps `ReaderVersion`. It is still 1, and nothing has shipped.
+
+| # | The spec says | Measured | Why it cannot stand | Proposed |
+|---|---|---|---|---|
+| F1 | Step 1: every line that `ReadShared` yields adds its bytes, and the budget is checked after EVERY line. The day gate is step 2, so the bytes are charged before old lines are skipped. `ReadDiagnostics.BytesRead` | Q6: sessions of 650 / 235 MB; the p99 session is 91 / 124 MB; 4 / 5 sessions ≥ 100 MB | The parent's D7 says *"the 64 MiB / 2 s budget applies to the slice"*. Charged on every line, every long orchestrator session ends `partial: read budget`, and that is exactly the case the parent wanted to keep | Charge `MaxBytes` on `ScanMeter.BytesYielded` (the slice, E3.S1 item 8). Check `MaxTime` over the WHOLE read, skipping included, through `ScanMeter.Stop` after each yielded line and each 1 MiB scanned, because the round pays for that time. `ReadDiagnostics`: replace `BytesRead` with `BytesScanned` + `BytesInSlice`, and `LinesSkippedByDayGate` with `LinesSkippedBeforeParse`. E5 sets the numbers from a C# measurement (E1/5) |
+| F2 | Step 2 and S4-9: the day gate is `TranscriptLines.Mentions(line, Days(fromUtc − 1 h, max(now, fromUtc)))` over decoded lines | Q6: the substring gate still costs 19.9 s of 30.5 s. `Days` returns `[]` for a span of more than 7 days (`AgentLog.cs:106-109`), and then the gate is off. Fixtures: the stamps are on 2000-01-01, so with a real `now` the span is > 7 days in every fixture test | The gate does not make the read cheap (Q6). In tests it is off, so the break-it *"drop `StraddleGuard` → test 38 red"* cannot go red unless the clock is pinned. Also, a torn tail usually ends before its stamp, so a day gate skips it and `TornTails` never counts it under a bound | Use E3.S1's `ReadSharedFrom(file, fromUtc − StraddleGuard, meter)`: the exact stamp tested on raw bytes, no list of days, no clock in the gate, the head and the unterminated tail always yielded. `max(now, fromUtc)` is then not needed |
+| F3 | S4-9: `StraddleGuard = 1 h` — *"One message never spans an hour"* | Q4: the lines of one message span up to **2.01 h** on both sides, and 3 ids per side span more than 1 h | A message that starts more than 1 h before the bound has its first line skipped. It is then counted by its tail, which acceptance 12 forbids | `StraddleGuard = 3 h` (1.5 × the measured maximum), with Q4 in its remark. Test 38 then needs a stamp-setting mutation (F9e) |
+| F4 | S4-3: a budget hit drops only *"the id of the line it stopped at"*. Test 31: *"every present id has all its lines"* | Q4: the lines of one message are not adjacent and can be 2 h apart | Any id already seen in the file where the read stopped can have more lines after the stop. In real data, "present ⇒ complete" is not guaranteed (only in the 88 s fixtures) | On a stop, drop every id of the stopped file whose latest seen line is within `StraddleGuard` of the stop line's stamp. (Or drop every id first seen in that file: simpler, and it loses more.) Test 31 asserts this rule |
+| F5 | Step 2: *"except the FIRST line of every file, which is always parsed"*. `FirstLineUtc` = the first parseable line WITH a timestamp | Folder facts: 1 of 21 Windows main files starts with an `ai-title`, which has no timestamp | Under a bound, the first STAMPED line can be gated out. `FirstLineUtc` then becomes the first in-slice line, or null. The worked example and test 40 do not see this, because every fixture's main file starts stamped | The exemption reaches the first stamped line (E3.S1's head). A mutation puts a stamp-less line first (F9e) |
+| F6 | `meta without model` → `partial` (step 7, contract). The `nested-agents` row: `observed` | Q2: metas with `model` are 32–98 % in most versions. `c07`'s depth-2 meta has no `model` | By the spec's own principle (*a reason only when something was LOST or a counted value is uncertain*), nothing is lost: `Requested` falls back, and `Model` comes from the lines. Most real rounds would read `partial`. `c07` reads `partial: meta without model`, which contradicts its row | Make it a count, `Diagnostics.MetasWithoutModel`, not a reason. `RequestedAlias` stays `""`. The parent's done-when changes (§6 item 13) |
+| F7 | `Requested` = the meta alias, else the earliest line's `requestedModel`. Test 7: main's `Requested` ends with `[1m]` | Fixtures: main `requestedModel` is the SENTINEL in c02, c03, c04, c07, c11, c12, c14 and c17 (`claude-opus-5-5[1m]` is not in `allowlist.json`'s `model-ref` list). In the other cases it is absent | The sentinel enters `ObservedMessage.Requested`, so E3.S5's no-string test goes red. No fixture can pass test 7 | Either (a) E1 widens `model-ref` with the `claude-…[1m]` ids (a privacy decision: the pinned `ApprovedAllowlistSha256` changes, and the fixtures are cut again), or (b) the reader admits `requestedModel` only when it matches a closed shape, `^(claude-[a-z0-9-]+\|[a-z]+)(\[1m\])?$` or `<synthetic>`, and otherwise uses `""`. (b) is a read-side shape check in the spirit of §3.4, and it needs no re-cut. Test 7 then needs (a) or a mutation |
+| F8 | Rows `write-into-submodule-and-scratchpad` (one `Checkout(submodule)` + one `OutsideAnyCheckout`), `two-repositories-one-session` (two `Where`) and `writes-only-elsewhere`; test 13 | `c19`: neither write has a `tool_result`. `c17`: the `repo-b` write has none. `c12`: 1 of 2 has none. `c19`'s submodule dir `repo-a/p1000` is not a manifest root. `D:/fixture/scratch` IS a manifest root | Under S4-7, an unanswered write is not a write. So `c19` gives zero writes and `c17` gives one. The materialiser puts `.git` only on manifest roots, so the submodule write resolves to `repo-a`, and the scratchpad write becomes `Checkout(scratch)`, not `OutsideAnyCheckout` | Ask E1 to re-cut `c12`/`c17`/`c19` with their `tool_result` lines kept, and to say in the manifest which roots are checkouts (not `scratch`) and where a submodule `.git` goes. Until then, the rows assert the S4-7 outcome on the fixtures as they are |
+| F9 | The materialiser: copies `fixtures/caller-transcripts/<case>/projects/**`; rewrites the root prefix *"ordinal, forward slashes"*; the closed list of helpers | (a) Cases are folders `c01`–`c20`; the name is in `manifest.json`. (b) `c10` and `c12` hold `sessions/<pid>.json`. (c) 13 of 20 cases are `backslash+slash`, and every write path in c06 and c12–c18 and c20 is `D:\fixture\…`. (d) A copied file's last-write time is the copy time. (e) No fixture is multibyte | (a) `<case>` does not resolve. (b) E3.S2's fixture checks need the registry. (c) An ordinal forward-slash prefix misses backslash paths, which then point at the real `D:\fixture`. On Linux, a `D:\` path is `Unresolved`. (d) `WrittenSince` is never exercised. (e) Tests 11, 27, 28, 34, 38 and F5 alter fixtures with no helper, and test 31's multibyte line does not exist. E3.S5 finds the helpers by reflection, so the list must be complete | Resolve the name to the folder through `manifest.json`. Copy `sessions/` as well. Match roots with the separators folded (as `allowlist.json`'s `fixture-path` rule does), and write the temp root in the platform's form. Set each file's last-write time from its last stamp. Add the helpers `SetEffort(n, value\|absent)`, `SetAgentId(file, n, id)`, `SetMetaKey(id, key, value)`, `SetSidechain(n, bool, agentId?)`, `SetStamp(n, instant)`, `PrependLine(file, json)` and `PutMultibyte(n)` |
+| F10 | The `no-effort-lines` row and test 10: every message of the stripped lines reads `Effort == "unknown"` | `c08`'s manifest: *"the only assistant lines without an effort field are synthetic ones"*. The synthetic lines' `message.id` is the sentinel (c01, c05, c08) | S4-11 drops synthetic lines, so `c08` yields no `unknown` message, and test 10 observes nothing. S4-11 is also what keeps the sentinel out of `MessageId`, and no test pins that | Test 10 strips `effort` from a real line with `SetEffort` (F9). Add a test: *a synthetic line's id never reaches `Messages`* (c01, c05, c08) |
+| F11 | The `message-as-several-lines` row: *"`Tokens` = per-term max (= the last line)"*. Test 1 is named `…_with_its_final_usage` | Q3: on WSL, 16 ids have a last line below the maximum. Fixture `c03` is that case. Tokens are RANKS (0 stays 0) | "= the last line" is refuted. No test or break-it catches "take the LAST line" on a shipped shape | Drop the parenthesis and rename test 1. Add `A_message_whose_last_line_is_below_its_maximum_is_counted_by_its_maximum` (c03), with the break-it "take the last line's usage". Test 2 asserts `Output < sum` only for ids whose output rank is above 0 |
+| F12 | Test 8 and the `nested-agents` row: a subagent's `Requested` equals its meta's `model` | `c07`'s depth-2 meta has no `model` (F6). Its lines' `requestedModel` is a real id (`claude-sonnet-5-5`/`claude-fable-5-1`) | Test 8 holds only for the depth-1 agent of `c07` | Test 8 names the depth-1 key. The depth-2 key asserts the fallback to the lines' `requestedModel` |
+
+Nothing in Q1, Q5, Q7, Q8, Q9 or the `is_error` facts disagrees with the spec. S4-1 and D22 (a torn tail is not
+`partial`) stand: E1 saw 0 torn tails in 9 379 samples.
