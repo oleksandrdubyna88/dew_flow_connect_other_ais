@@ -62,7 +62,7 @@ public static class ProcStat
     }
 
     /// <summary>The line's leading field is the pid the caller read it for — a line from another directory is not this process's.</summary>
-    private static bool IsPid(string lead, int pid) => int.TryParse(lead, NumberStyles.AllowTrailingWhite,CultureInfo.InvariantCulture, out var written) && written == pid;
+    private static bool IsPid(string lead, int pid) => int.TryParse(lead, NumberStyles.AllowTrailingWhite, CultureInfo.InvariantCulture, out var written) && written == pid;
 
     /// <summary>The <c>stat</c> of process <paramref name="pid"/> through <paramref name="reads"/>: gone when the file or its folder is not there, unreadable for any other failure.</summary>
     public static ProcStatRead ReadFor(int pid, IProcReads reads)
