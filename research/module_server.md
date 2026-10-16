@@ -1650,6 +1650,25 @@ sequenceDiagram
 - The prompt's source line is `(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)`;
   the "working tree was not compared" note rides `RoundWork.Unreviewed`, so it lands on the reviewer line.
 
+### What a plan round records (E1.S6)
+
+`RoundRecord.PlanSource` (`core/Rounds/PlanSource.cs`: `Origin` `commit`|`text`, `Commit`, `Path`, `Blob`, `Bytes`,
+`TextId`) is stamped by the engine beside `Sha`/`CadenceNote` through ONE call, `PlanSources.Stamp(stage, planText, sha)`:
+
+| Round | `PlanSource` |
+|---|---|
+| committed plan | the reader's record (path, blob, the blob's byte count, `TextId` of the text sent) with `Commit` = the engine's resolved commit |
+| pasted plan | `Origin = text`, `Commit` = the engine's resolved commit, `Path`/`Blob` empty, `Bytes` = UTF-8 byte count, `TextId` of the text |
+| code, document, feature round | none |
+| a round written before the field | none — **absent, never empty** |
+
+It is nullable and NOT normalised on the way in, as `Caller` is: a getter that made an empty one would turn "not recorded"
+into "recorded as nothing" on the next save, and a session is saved on every progress tick. `status` serialises
+`RoundRecord`s, and the JSON context omits nulls, so a round with none shows no `planSource` property. The type is
+registered in `ServerJsonContext` so E2's `rounds` column writes it with the same context. A skipped round reviewed
+nothing and is recorded by another road, which never stamps one. `TextId` is the id the prompt's `END OF PLAN` line
+carries, so the end line and the record name one text.
+
 ## Flow of one stage
 
 **All three stages are judged against written rules.** The code stage collects from the round's

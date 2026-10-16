@@ -492,6 +492,7 @@ internal sealed class RoundEngine(
                 // The D23 ground a feature review's second round was admitted on — read from the state this
                 // round BEGAN from, because completing it is what spends the ground.
                 AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
+                PlanSource = PlanSources.Stamp(stage, planText, sha),
             };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.

@@ -1,6 +1,6 @@
 # PLAN — E1 stories: review a committed plan safely, and record what was reviewed
 
-> Status: **plan only, nothing implemented yet, 2026-10-15.** Epic E1 of
+> Status: **coded and tested on the branch `feat/plan-gate-reads-committed-plan`, 2026-10-16 — not merged; it moves to `research/` with the parent plan and E2** (§ 10 records what shipped differently). Epic E1 of
 > [PLAN_the_plan_gate_reads_the_committed_plan.md](PLAN_the_plan_gate_reads_the_committed_plan.md) (its `## Epics`).
 >
 > Scope: `src_mcp` only — `runners/Collecting` (`GitHistory` widened, the new `CommittedPlanReader`), pure units in
@@ -273,3 +273,31 @@ long-lived process; five git processes per committed read, each ≤ 30 s, ended 
 - [ ] `CoaiMcp.Tests.exe` green as a whole; `node .agents/conventions/tools/plan-lifecycle.mjs` clean;
       `research/module_server.md` updated.
 - [ ] This document is promoted with the parent and E2's, not before.
+
+## 10. What shipped differently — recorded on the branch, 2026-10-16
+
+The most valuable part of a plan's record. Nothing here changes a contract C1–C3.
+
+- **E1.S3, T4 was set up wrongly in this document.** "A CRLF working copy of an LF blob under `core.autocrlf=true` is
+  clean" is false when the CRLF file is WRITTEN after the commit: git compares the file's size with the recorded stat
+  first and reports it modified before it hashes anything (measured, git 2.55: `git status` says ` M`, `git diff` says
+  nothing). What `git status` does keep clean is a CHECKOUT under `autocrlf=true`, which writes CRLF and records that
+  stat; the test (`ACrlfCheckoutOfAnLfBlob_UnderAutocrlf_IsStillClean`) builds that. A re-saved file with a changed size is
+  refused as "uncommitted" even when its text equals the blob — the safe direction; written in `module_server.md`.
+- **E1.S3, B2 cannot be red on T8.** Reading the working file instead of the blob changes nothing for a blob the working
+  tree holds byte-for-byte; B2 was recorded red on T2, T3 and T16 (the proof refuses the edited text with the wrong word).
+  B25 (a byte comparison instead of `git status`) is the break-it that makes T4 red; B26 (drop the dirty refusal), B27
+  (credential check), B28 (path guard) and B9/B13 cover the rest of the story.
+- **E1.S3, one new entry point.** `CommittedPlanReader.ReadGuardedAsync(git, repo, sha, path, ct)` does steps 1, 2 and 6
+  around `ReadAsync`, which keeps its S2 contract (an already-canonical path, objects only) so E1.S2's tests stand
+  unchanged. The credential sentence moved to `CredentialFiles.NamedSentence`, shared with `review_feature`.
+- **E1.S5.** `PlanInputs.PrepareAsync` takes an `IProcessLauncher` (not a `GitHistory`) so `PanelService` needs no new
+  `using`; `PanelService.TipResolver` is an `init`-only test seam — the only way to prove the pinned commit survives a
+  moving branch; `RoundWork.WithUnreviewed` carries the "not compared" note (a `with` expression in `PanelService` was
+  not formattable). The neither-input sentence replaces the engine's "planText is required" for a `review_plan` call.
+- **E1.S6.** A skipped PLAN round does not exist (only the feature stage records skips); "a skipped round has none" holds
+  because the stamp is limited to `Stage.PlanReview` and the skip road never calls it. The record's `Commit` is the engine's
+  own resolved commit for both origins.
+- **E1.S2 (see its spec's report).** Refusal wording follows the spec's meaning, not every letter; `BlobProof` sentences
+  name the blob and the reader prefixes `'{path}' at commit {sha12}:`; the "differs from the blob" sentence also names
+  UTF-16/UTF-32 (found by review) and the reader checks `RepoPaths.WhyNotRelative` before any git call.

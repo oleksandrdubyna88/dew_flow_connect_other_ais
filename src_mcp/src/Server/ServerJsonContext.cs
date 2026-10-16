@@ -343,6 +343,8 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(PersistedSession))]
+// What a plan round reviewed (E1.S6) — registered by name so the log's column (E2) writes it with the same context.
+[JsonSerializable(typeof(Core.Rounds.PlanSource))]
 
 [JsonSerializable(typeof(ProvidersAnswer))]
 [JsonSerializable(typeof(SessionAnswer))]
