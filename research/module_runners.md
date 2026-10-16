@@ -3493,8 +3493,10 @@ flowchart TD
   foreign-`kimi` wait → (F) the sign-in's tree hold → (G) the per-home `coai-tree.lock`. **Every disposer takes with NO wait** (`HeldFile.Take`, `VibeHomeTurns.TryTake`, one
   probe of G) and never D, E or F; so the sweep's reversed order B → A is safe, and a new wait may only ever be added on the acquirer's side, on something no disposer holds.
 - **Where the sign-in really is, re-asked before every turn** (decision j, R8): `Junctions.ResolvedRefusal(target)` — the make-time `Resolved` check made public, one sentence,
-  two callers — runs in `KimiLaunch.Rendered` right after the credentials folder's existence check and BEFORE any lock, so an ancestor of `~\.kimi-code\credentials` swapped
-  for a link to a share since the home was made refuses turn 2 ("resolves to … not a local drive path … (D19)") and leaves no file under `kimi-locks`.
+  two callers — runs twice per turn, both BEFORE any lock: on the person's HOME as the last check of `KimiLaunch.Prepare`'s pre-read list, before their
+  `config.toml` is read from it (the review's M1 — a swapped ancestor gets no read from the share, not one; asked only of a folder that exists, so a
+  sign-out keeps its own sentence), and on the `credentials` folder in `KimiLaunch.Rendered` right after its existence check. An ancestor swapped for a
+  link to a share since the home was made refuses the turn ("resolves to … not a local drive path … (D19)") and leaves no file under `kimi-locks`.
 - **Every coai Kimi launch on one sign-in passes the one gate** (decision k): two conversations' turns started together peak at one live launch, the second starting after the
   first's end; a gate held by another process is waited for in one-second slices and the launch starts within two seconds of its release (`AConversationsKimiHomeTests`, S5.3.16).
 - **A one-shot home ends junction-first, UNDER its lock** (decision g, R5 — the judgement overruled step 3 of the brief): `VibeHomes.EmptiedUnderItsLock(folder, kept, io)` is

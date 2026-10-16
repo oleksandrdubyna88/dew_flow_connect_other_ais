@@ -720,6 +720,11 @@ shim request with `KimiShimScripts.Report(…)` widened with a session id and a 
 | S5.4.13 `EveryAdapterRecordsWhatItLaunched` / `ConfinementPlannerTests` consult row | `Adapters()` gains `("kimi", new KimiConsultant(…))` (`ConfinementPlannerTests.cs:459-466`); the consult test's exclusion list (`:446`) gains `kimi` | the existing tests | a Kimi consult launch stands in the snapshot (asserted beside Vibe's, `:451-457`) | *Expected …WorkingDirectory to be "<RowTree>", but found "<Repo>".* |
 | S5.4.14 `ATotalBelowWhatWasBilled_IsAReset_AndTheTurnIsBilledWhatItSaid` (decision 12; pure in `ConsultationUsageTests`, then through the service with `PlayedKimi`; Theory) | (i) billed 20 000/30, the next report 5 000/9 captured; (ii) billed 20 000/30, the next report 25 000/20 (out below, in above); (iii) billed 20 000/30, the next report `notCaptured` | `ConsultationUsage.Less`; the service's second turn | (i) 5 000/9 — not 0/0; (ii) 25 000/20 whole — one counter restarted means the pair did; (iii) `Unknown`, 0 tokens, `NotCaptured`, as decision 4 says — never a reset; the record's `Billed` advances by the share each time | *Expected the second turn's billed TokensIn to be 5000L, but found 0L.* |
 | S5.4.15 `ADroppedSession_NeverStartsAFreshOne` (decision 11) | turn 2's report `end: session_lost`, exit 70 | the follow-up | the played shim was launched exactly twice (turn 1, the follow-up) — no third launch and no `session/new` after the loss; the record is no longer `open` and its `Handle` is empty; the reply's cure names `close_consult` and a new consultation | *Expected the played shim to have been launched 2 times, but it was launched 3 times.* (against an implementation that restarts the session) |
+| S5.4.16 `AReLoginBetweenTurns_IsLaunchRefused_TheRecordStaysOpen_AndCloseConsultRemovesTheHomeJunctionFirst` (E5.3's S5.3.4 through the service; E5.3 deviation 16) | turn 1 answered by `PlayedKimi`; the fake person's slot `key` changed | turn 2 through `ConsultationService`; then `close_consult` | the turn fails `launch-refused` with the re-login sentence (D19's `config.toml is not what coai writes … (a re-login)`); the record is still `open`; `close_consult` removes `coai-kimi\<id>` with `GitScratch.AfterUnlink` never invoked and the person's folder whole | *Expected the record's status to be "open" because a refused launch is the turn's failure, not the conversation's, but found "failed".* |
+| S5.4.17 `NothingOfTheSignIn_AppearsInATwoTurnConversationsRecords` (E5.3's S5.3.14 in full; `KimiCanaryTests` shape, E4.2 decision 12) | the two canaries of S2.45; a two-turn conversation through `ConsultationService` with a played shim; one `close_consult` | every collector with its liveness check: the record, the ledger lines, the reply, the warn lines, the folder names | no collector holds either canary; the control arm sees a served canary | (a pin — its red, if ever: *Expected the record not to contain "CANARY-REFRESH-7f3a0c", but found it in …*) |
+| S5.4.18 `TwoConversationsOnOneSignIn_RunOneShimAtATime_ThroughTheService` (E5.3's S5.3.16 (i); decision k) | two consultations on ONE fake person; `PlayedKimi` whose shim records its start and end and holds 300 ms | both turns started together through `ConsultationService` | the peak of live played shims is 1; the second's start is not before the first's end; both answered; both used ONE gate path (`KimiCredentialsLock.PathFor(<fake credentials>)`) | *Expected the peak of live Kimi launches on one sign-in to be 1, but found 2.* (if the gate were skipped) |
+| S5.4.19 `AGateAnotherProcessHolds_DelaysTheShim_UntilItsRelease` (E5.3's S5.3.16 (ii)) | one consultation; the gate file pre-held by the test (a plain `HeldFile.Take`, not inheritable), released after 1 s | one turn through the service | the played shim started only after the release, and within 2 s of it | *Expected the shim to start after the gate was released, but it started while the gate was held.* |
+| S5.4.20 `TheConsultant_HandsTheService_ItsPlaceFolderAsTheOwnedScratch` (E5.3's root, R1) | a Kimi consultation through the service | turn 1 | the launch the service builds carries `OwnedScratch = place.Folder` (`coai-kimi\<id>`), and the shim's `--home` is `<folder>\kh-<10 hex>` — never the folder itself, never TEMP or the answers folder | *Expected the shim's --home to be a child of …\coai-kimi\<id>, but found "…\coai-answers\kh-…".* |
 
 **Done when** every scenario is green through the service where the table says so, both suites are green, and the generator's
 `--check` is clean. The live three-turn consult is the parent's DoD (J2).
@@ -931,10 +936,13 @@ homes live, in all five languages.
 
 **E5.3 as built (Fable, 2026-10-16) — where it deviates from the spec above:**
 
-13. **Decision j's check sits after the credentials folder's EXISTENCE check, not "right after `LocalHome`".** `Junctions.ResolvedRefusal`
-    on a missing folder answers "cannot be named by its handle"; placed before `Rendered`'s existence check it would have replaced the
-    sign-out sentence ("has no credentials folder; run `kimi login`") with it. It is still before the slot is rendered and before any lock
-    (S5.3.15: no file under `kimi-locks`), which is what R8 asked for.
+13. **Decision j runs TWICE per turn, and neither run is "right after `LocalHome`" as written.** (a) The person's HOME (`~\.kimi-code`) is
+    resolved as the LAST check of `KimiLaunch.Prepare`'s pre-read list — before `KimiPersonsConfig.ReadFile` reads their `config.toml` from it
+    (the review's M1: a swapped ancestor must get no read from the share, not one) — and only when that folder exists, so a sign-out that
+    removed it keeps `ReadFile`'s own "not signed in" sentence. (b) The `credentials` folder is resolved in `Rendered`, right after its
+    existence check — `Junctions.ResolvedRefusal` on a missing folder answers "cannot be named by its handle", which placed earlier would
+    have replaced "has no credentials folder; run `kimi login`". Both run before the slot is rendered and before any lock (S5.3.15 and
+    `ThePersonsHomeResolvingOffTheLocalDrives_IsRefusedBeforeTheirConfigIsRead`: no file under `kimi-locks`, the config never read).
 14. **`OneShotHome.Remove` (a whole-folder seam) became `OneShotHome.Io : HomeIo` (per entry).** S5.3.20 observes the lock at the moment
     EACH entry goes, which a whole-folder seam cannot show. `HomeIo.Real.Delete` is `GitScratch.DeleteEntry`, made public (reuse move 1):
     a link by its own name, a folder whole, a FILE as a file — the old `io.Delete(entry)` = `DeleteEvenIfReadOnly(entry)` threw on a file
@@ -945,7 +953,9 @@ homes live, in all five languages.
     folder", S5.3.14's two-turn conversation with a played shim, and S5.3.16 (i) "through `ConsultationService`". Each is pinned at the one
     control instead — `KimiRuntime.TakeTurnAsync` over a place from `ConsultantPlaces.ForConversationAsync` (the HOME-ONLY shape, no snapshot
     copy: the lock order A → B → C → D is the same) — and S5.3.14's arm covers the collectors THIS story adds (the owner's and the sweep's
-    warns, the decision-j sentence). E5.4 owes the three service arms; the shapes are in `AConversationsKimiHomeTests`.
+    warns, and the decision-j sentence PRODUCED through the `ResolvingJunctionShell` seam — a local folder resolves to itself and says
+    nothing, so the arm asserts the sentence is among what the detector reads). E5.4 owes the three service arms as its own rows
+    (S5.4.16–S5.4.20 below); the shapes are in `AConversationsKimiHomeTests`.
 17. **S5.3.10 gained the live-tree arm of both fallbacks** (`TheRootlessFallback_KeepsTheScratchUnderALiveTree`): the row's scratch is kept with a
     WARNING (`a question row's scratch directory at {Path} is kept for the scratch sweep: {Reason}`), the check's with its warn. The brief's
     "the in-deleter check stays the second belt" implied it; nothing listed it.
