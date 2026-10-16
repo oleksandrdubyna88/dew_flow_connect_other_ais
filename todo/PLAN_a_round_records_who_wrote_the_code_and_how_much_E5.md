@@ -2,7 +2,7 @@
 
 > Status: **plan only, nothing implemented yet, 2026-10-14.** Epic E5 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
-> Scope: parent §11 step 4. The round's authors as a nullable snapshot on `RoundRecord` (the session file), schema step 23 and
+> Scope: parent §11 step 4. The round's authors as a nullable snapshot on `RoundRecord` (the session file), schema step 24 (step 23 was taken by the plan-gate E2, 2026-10-16) and
 > its projection write, `--log`'s state, the reader and attribution run on the answer path under a 2 s / 64 MB budget, and one
 > line on the round card. Six stories, S1–S6. **No cornerstone**: the parent names no area for E5 (`## Epics`, "E1, E5, E6, E7
 > carry no area"); the parent's ledger reads `Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2` (parent §16 D21).
@@ -34,7 +34,7 @@ Three consequences every story obeys:
 
 | Needs | From | Exactly what |
 |---|---|---|
-| Step 22 merged before step 23 | E2.S3 | `round_changes` + `reviewers.effort` appended after `TheRoundsKey` (`Schema.cs:31-37,614-616`); E5's step is numbered at merge time, after whatever is last on `main` |
+| Steps 22 and 23 merged before step 24 | E2.S3; the plan-gate E2.S1 (`ThePlanSource`, step 23) | `round_changes` + `reviewers.effort` appended after `TheRoundsKey` (`Schema.cs:31-37,614-616`); E5's step is numbered at merge time, after whatever is last on `main` |
 | `RoundRecord.Size` and its JSON shape | E2.S3 (the member), E2 §4 C3 (the shape) | the card's size clause (S6) |
 | The reader's entry point and states | E3.S2 (`ClaudeHome`, the locator, the test home), E3.S4 (`ObservedSession`, the budget, `fromUtc`) | resolve the caller session id (registry, then variable) and its source; read `<projects>/*/<sessionId>.jsonl` + subagents; return an `ObservedSession` with `observed` / `partial: <why>` / `unobserved: <why>`; a **budget seam** (time + bytes) and a **home-directory seam** (projects + session registry) — S4 widens E3's entry with one optional parameter if either is missing, never a second reader |
 | The reader's version | E3.S4 (`ObservedSession.ReaderVersion`) | one integer that changes when a counting or association rule changes (`authors_reader`, parent §9); S1 adds the constant only if neither epic did |
@@ -53,8 +53,8 @@ Each is a choice the main session may overrule before the story starts; §7 list
   its SESSION FILE — `OpenedUtc` from `PersistedSession.OpenedUtc`, never `sessions.opened_utc` (parent §6), its
   journal from the file, `CompletedUtc` per round — with `CallerSessionId` per round from `rounds.authors_session`,
   else `rounds.caller` when it is a UUID, else `""`. E4 computes the `before-open` bound from them (`Windows.PriorEnd`).
-  A store that cannot answer (absent, locked, older than step 23 → no column, a peer file unreadable) → `PeersKnown =
-  false`, `Peers` empty, and every window `partial: prior windows unknown`. Step 23 indexes `rounds(authors_session)`.
+  A store that cannot answer (absent, locked, older than step 24 → no column, a peer file unreadable) → `PeersKnown =
+  false`, `Peers` empty, and every window `partial: prior windows unknown`. Step 24 indexes `rounds(authors_session)`.
 - **The id source is persisted** (`authors_id_source`): parent §5 requires it, §11 step 4's column list omits it.
 - **`open`/`status` do not carry the snapshot.** `SessionAnswerFor` sends `session.Rounds` to the calling AI on every reply
   (`src_mcp/src/Server/PanelService.cs:1814-1822`); the rows would cost the caller up to several KB of context per round. The
@@ -68,7 +68,7 @@ Each is a choice the main session may overrule before the story starts; §7 list
 
 ```mermaid
 flowchart TD
-    S1[S1 snapshot on RoundRecord] --> S2[S2 step 23 + projection write]
+    S1[S1 snapshot on RoundRecord] --> S2[S2 step 24 + projection write]
     S2 --> S3[S3 --log prints the state]
     S1 --> S4[S4 authors on the answer path]
     S2 --> S4
@@ -110,7 +110,7 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
 - **Depends on.** E4.S3 (its per-round output type, to reuse it), E2.S3 (`RoundRecord.Size`, the other trailing member).
 - **Model.** Judge: opus (scenarios + brief) → Coder: sonnet → Judge: opus (review) → Coder: sonnet (fixes).
 
-### E5.S2 — Schema step 23 and the projection write
+### E5.S2 — Schema step 24 and the projection write
 
 - **Goal.** `coai.db` holds what the snapshot holds, written from `round` inside `RecordRound`'s transaction, and comes back
   identical from the session file after the database is deleted.
@@ -132,7 +132,7 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
 - **The brief.** Parameterised SQL only; `RecordRoundRow`'s upsert (`RoundsDb.cs:841-921`) is NOT widened — the authors columns
   are written by the table's own `UPDATE`, so its `ON CONFLICT` list stays as it is. Copy the test file
   `src_mcp/tests/TheRoundKeyIsStepTwentyOneTests.cs` as the shape of the migration tests (its `MakeAt`, `Shape`, preview forks).
-- **Tests (RED first; new `TheRoundsAuthorsAreStepTwentyThreeTests` + `RoundAuthorsTableTests`):**
+- **Tests (RED first; new `TheRoundsAuthorsAreStepTwentyFourTests` + `RoundAuthorsTableTests`):**
   - The step is the last and appended, never inserted; a database at E2's step (and one at step 21) opens at the head and its
     older rounds read state `''` and zero rows; a migrated database opens again unchanged.
   - Both preview forks still reach the head (`TheRoundKeyIsStepTwentyOneTests.cs:134-150`).
@@ -145,13 +145,13 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
   - Break-it (rebuild): make the table read a `RoundContext` field instead of `round.Authors` (the shape the decision forbids)
     → the rebuild test goes red with zero rows; restore. Break-it (replay): drop the `DELETE` → recorded-twice doubles the rows.
 - **Done when.** Tests green; `TheRoundKeyIsStepTwentyOneTests` and `RoundCountsCliScenarioTests` unchanged and green.
-- **Depends on.** E5.S1; E2.S3 (step 22 merged).
+- **Depends on.** E5.S1; E2.S3 (step 22 merged); the plan-gate E2.S1 (step 23 merged).
 - **Model.** Judge: opus → Coder: sonnet → Judge: opus → Coder: sonnet.
 
 ### E5.S3 — `--log` prints the state
 
 - **Goal.** Every round in `--log` says its authors state — the stored one, or `not recorded` — and a read-only `--log` or
-  `--round-counts` on a file older than step 23 still answers and leaves it byte for byte.
+  `--round-counts` on a file older than step 24 still answers and leaves it byte for byte.
 - **Scope.** `LoggedRound` (`src_mcp/src/Store/RoundsQuery.cs:27-112`) gains a trailing `string AuthorsState = ""`. The value
   comes from a separate, page-scoped read in a new small file (`id → authors_state` for the page's round ids), asked only when
   `RoundsQuery.HasColumn(db, "rounds", "authors_state")` (`:895-898`) — NOT a fourth rung on the `SqlRoundsNoted/Counted/Plain`

@@ -388,7 +388,7 @@ gone for good. The report does not wait for it.
 | 5 attribution as its own epic | adopted (§6). **Correction**: the window is `RoundEngine.cs:893-902`, not `PanelService ~:2648` (`PanelService.cs` is 1 849 lines) | — |
 | 6 "reviewer model and effort are not persisted" | **half right**: the model IS persisted since step 20 (`RoundsDb.cs:930-944`); the effort is not → `reviewers.effort` joins the first schema step. Requested ≠ ran on a Team server: adopted as a stated limit (`SessionStore.cs:17-28`). Numerators, cohorts, population/arithmetic split: adopted (§8) | `GateRule.cs:32-37` |
 | 7 backfill last, versioned, idempotent | adopted (§9) | `RoundsDb.cs:849-886` |
-| 8 fixtures from the spike before the schema | adopted (step 0) — for the AUTHORS schema (step 23); step 22 derives from git numstat and may land first | — |
+| 8 fixtures from the spike before the schema | adopted (step 0) — for the AUTHORS schema (step 24); step 22 derives from git numstat and may land first | — |
 
 ## 11. Build order
 
@@ -396,7 +396,7 @@ gone for good. The report does not wait for it.
    presence per Claude Code version on disk, message-id repetition, `/clear` and `--resume` against the registry and
    the inherited variable, transcript coverage of each store's code rounds, WHOLE-session sizes (main + subagents —
    one real session measured 14.8 MB main + 63 MB subagents, §16 D7) and the read time over them. The fixtures gate the
-   AUTHORS schema — step 23 (E5) gives no field a meaning before they exist; step 22 (the size, E2) derives from git
+   AUTHORS schema — step 24 (E5) gives no field a meaning before they exist; step 22 (the size, E2) derives from git
    numstat alone and may land before E1 (plan gate finding 4, rejected as a dependency, made explicit). Predictions written
    first (`measurement.md` rule 4) for what is still unknown — WSL coverage, read time; Windows coverage (392 / 398)
    was already observed and is recorded as an observation. The read time is Node's; E5 re-measures the C# reader
@@ -414,7 +414,7 @@ gone for good. The report does not wait for it.
    reader's own id ladder, the lower bound `fromUtc`, the per-call writes, the home fixture for tests.
 3. **Attribution.** `RoundAttribution` in `src_mcp/core/Authors/` over `ObservedSession` + the gate session's rounds:
    windows, association, ambiguous totals, contributors. Pure; every acceptance case of §6 is a test.
-4. **Store and show.** Schema step 23 (`round_authors` with `who`, `agent` (the opaque agent id, empty for `main` —
+4. **Store and show.** Schema step 24 — step 23 was taken by the plan-gate E2, 2026-10-16 — (`round_authors` with `who`, `agent` (the opaque agent id, empty for `main` —
    "3 Sonnet coders" counts distinct agents, and contributors deduplicate on it), `requested`, `model`, `effort`,
    `agent_type`, `association`, `window` (the round's `(stage, number)` is its `round_id`'s), `launches`, `turns`, the four token terms,
    `write_calls`; `rounds.authors_state`, `authors_session`, `authors_id_source`, `authors_reader`,
@@ -562,7 +562,7 @@ hand-over — peers on EVERY round, from the peers' session files, `ReadFrom` be
 ## Definition of Done
 
 - [ ] Step 0's results file exists with its prediction written first, the WSL side measured, and the fixtures cut
-      before the AUTHORS schema (step 23); step 22 may have landed earlier.
+      before the AUTHORS schema (step 24); step 22 may have landed earlier.
 - [ ] Writes into a submodule or a nested checkout under `repo_path` are counted and mark the round `size not covered`;
       changed gitlinks are counted, never sized as code.
 - [ ] The card line follows §8's coder-mix format (two families, *N coders (mixed)*, *main only*).
@@ -595,7 +595,7 @@ E5, E6, E7 carry no area — data, wiring, an arithmetic §8 fixes as exact-cell
 *Consultant (gpt-6-astra), 2026-10-14, used for this split:* diff size first, useful on its own; observation (reader + record)
 as ONE epic, attribution kept out; attribution its own epic — the highest risk, it decides what the report means; the report
 after live attribution, not waiting for backfill; backfill last, rerunnable; the spike's fixtures before the AUTHORS schema
-(step 23) gives a field meaning — step 22 (size) is git numstat only and may land first. Riskiest everywhere: numbers wrong without a symptom — the association, tokens once per `message.id`, the
+(step 24) gives a field meaning — step 22 (size) is git numstat only and may land first. Riskiest everywhere: numbers wrong without a symptom — the association, tokens once per `message.id`, the
 denominator's coverage kinds, the delta's definition; the three areas hold exactly those four. E7 joins §11's steps 6 and 7:
 the answer cannot precede the backfill, and the hand-check cannot follow the answer.
 
@@ -609,7 +609,7 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
   each store's transcript coverage, the read time over 14 MB — prediction first (`measurement.md` rule 4: ≥ 95 %, ≤ 300 ms p50).
 - **Scope.** A `research/RESULTS_` file; sanitised fixtures under `src_mcp/tests/fixtures/caller-transcripts/` (LF by
   `.gitattributes`), the union of §6's and §12's cases, each with a `rounds.json`, every string off a shape-checked allowlist the
-  sentinel; whole-session sizes (§16 D7); the `/clear` and `--resume` probes attended; the WSL side from inside WSL (`roundCountsRead.ts:18-21`). No product code, no schema step. Its fixtures gate the AUTHORS schema (step 23, E5) only; E2's step 22 derives from git numstat and does not wait for them (gate finding 4).
+  sentinel; whole-session sizes (§16 D7); the `/clear` and `--resume` probes attended; the WSL side from inside WSL (`roundCountsRead.ts:18-21`). No product code, no schema step. Its fixtures gate the AUTHORS schema (step 24, E5) only; E2's step 22 derives from git numstat and does not wait for them (gate finding 4).
 - **Done when.** The RESULTS file carries prediction then observation for both sides; one fixture per case; a test asserts
   every string off the allowlist is the sentinel and every allowlisted one has its shape; the measured read time is in the file, for E5's budget.
 
@@ -663,18 +663,18 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
 - **Cornerstone AREA.** The window tiling and the association ladder — the highest risk by the consultant's reading and by §6:
   this unit decides what the report means.
 
-### E5 — Store and show (step 4) · M · depends on E2 (step 22 before 23; the card reads the size) and E4
+### E5 — Store and show (step 4) · M · depends on E2 (steps 22 and 23 before 24; the card reads the size) and E4
 
 - **Stories.** [PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md)
 - **Goal.** Every new round's record carries its authors and their state in the session file, and its projection row from it (§7, §11 step 4); one line on the card.
-- **Scope.** The nullable, text-free `RoundRecord.Authors` snapshot (§7), saved with the round; schema step 23 — `round_authors`
+- **Scope.** The nullable, text-free `RoundRecord.Authors` snapshot (§7), saved with the round; schema step 24 — `round_authors`
   (§11 step 4's columns), `rounds.authors_state`, `authors_session`, `authors_id_source`, `authors_reader`, the ambiguous totals, an opaque `agent` per
   row — projected from that snapshot under `SessionClaim`, a null snapshot never erasing stored authors, stripped from
   `open`/`status` (§16 D13, D14); read + attribution BEFORE the round is saved (`RoundEngine.cs:586`), so before `Projection.Write` opens the database (`Projection.cs:24-38`), capped at
   2 s / 64 MB → `partial: read budget`; rows delete-then-insert per round like `RecordReviewers` (`RoundsDb.cs:923-945`); call
   sites only in `RoundEngine.cs:605-625` and `PanelService.cs`; `--log` prints the state; the card line (`rounds.ts:156`,
   `roundsLog.ts:519`): *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9 files* or *authors not observed — <why>*.
-- **Done when.** A step-21 database opens at 23 and read-only `--log`/`--round-counts` on a step-21 file still answer; a pre-step
+- **Done when.** A step-21 database opens at 24 and read-only `--log`/`--round-counts` on a step-21 file still answer; a pre-step
   round (no `Authors` in its session file) reads *not recorded*; the same round recorded twice gives identical rows; projecting a
   record that carries the snapshot, with NO transcript directory present, writes the same `round_authors` rows (rounds have no
   startup re-projection today — consultations do, `PanelService.cs:159` — so this is the test that the rows need nothing else); the sentinel is absent from the session
