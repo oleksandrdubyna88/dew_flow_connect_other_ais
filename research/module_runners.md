@@ -1581,6 +1581,19 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   junction between `IsLink(dir)` and the enumeration can still be entered; closing it needs handle-based deletion
   (`FILE_FLAG_OPEN_REPARSE_POINT`), out of this story, and a same-user process able to swap folders in coai's scratch could
   equally touch the credentials directly.
+  **Shell and decisions are two files (PR #817's Sonar round, 2026-10-16; the method of `PrivateFolder`'s `IFolderShell`).** `Junctions.cs`
+  holds every decision and every sentence; what only Windows can answer sits behind `IJunctionShell` (`Files/JunctionShell.cs`): the
+  handle's final path (`HandleRead.FinalDirectory`), the drive's type, and the one kernel call that turns the empty folder into a mount
+  point. The one implementation is `JunctionsNative` (`Files/JunctionsNative.cs`, `[LibraryImport]` for `DeviceIoControl` — excluded from
+  Sonar's coverage list, where `.github/workflows/sonarcloud.yml` says why); `Junctions.Shell` is it, unless a test says otherwise for its async
+  flow (`Junctions.StandIn`). The reparse buffer's layout (`ReparseSize`, `ReparseBuffer`) and the 16 KiB arithmetic stay in
+  `Junctions` and are pinned on every OS. `IsLocal(target, driveType)` is the Windows drive rule on Windows and the Unix rule elsewhere
+  (`IsLocalDrivePath` is now judged by its spelling alone — a letter, a colon and a separator — where it used to ask
+  `Path.IsPathFullyQualified`, which says no to `C:\` off Windows and is implied by that spelling on Windows).
+  **`HostProcessList`** (`Kimi/`) is split the same way: the `PROCESSENTRY32W` layout, `Applies` and `Parsed` stay, and run on any OS;
+  `HostProcessListNative` is the toolhelp snapshot. `KimiCredentialsLock.HoldTree` is `TakeTreeThrough(…, take)` with the INHERITABLE take
+  as its one product argument, so the key, the busy/unusable answers and the first-file-given-back rule run in the test host with the
+  non-inheriting take. `KimiShimHold.Held` is `internal` and tested for each of the lock's answers.
 - **`ConsultantRoles.Check`** = `consult-check`, the LEDGER role of a check; the launch itself still carries `consult`
   — it is the same turn a consultation makes.
 - **`ConsultantLimitation.SnippetWarning`** — the agy allow-rule snippet's warning (a prefix rule is not read-only)

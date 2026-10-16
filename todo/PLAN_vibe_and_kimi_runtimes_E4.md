@@ -1462,6 +1462,15 @@ D18 still refuses a Kimi REVIEW there.
     ("Access to the path 'credentials' is denied") and leaves the emptied parent folders. The three raw sites (`Escalations.cs`,
     `ReviewTreeRoot.cs`, `WorktreeManager.cs`) swallow it and stay as they are, pinned by S1.11 (whose scan now also catches
     `DirectoryInfo.Delete(true)` and `Directory.Delete(path, <any flag but a literal false>)`).
+    **Amended 2026-10-16 (PR #817's `windows-latest` job): the exception TYPE is the filesystem's, not .NET's.** On the runner's D: drive the same
+    call threw `IOException` ("The parameter is incorrect. : 'credentials'", from `FileSystem.RemoveDirectoryRecursive`), where this
+    machine's NTFS drive throws `UnauthorizedAccessException`; the first test pinned the one it was written on. S1.10 now asserts the GUARANTEE —
+    the junction is gone by its own name, the target and its files (the writable one too) keep their bytes — and accepts either type (or none),
+    saying which one happened in its failure message and as a diagnostic line. The target-survives assertion is unchanged. S1.11's "the three raw
+    sites swallow it" was re-read site by site: `ReviewTreeRoot.cs:201` catches `IOException or UnauthorizedAccessException or TimeoutException`
+    and answers `!Directory.Exists`; `WorktreeManager.DeletedNow` catches `DirectoryNotFoundException`, then `IOException or
+    UnauthorizedAccessException`, and answers false; `Escalations.cs` `ScratchDirectory.Dispose` catches `IOException` and
+    `UnauthorizedAccessException` in two clauses and does nothing. All three already swallow BOTH types, so no product line changed.
 16. **The length check precedes the existence check in `Junctions.Refusal`** (E4.1, accepted), so a 33 000-character target gets
     the number rather than "does not exist"; and the bound is the REAL one — the two names must fit the reparse buffer's 16 KiB,
     about 4 090 characters, not the 32 000 the brief named (review M2).
@@ -1731,6 +1740,35 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
     takes the process's own): "Kimi launch kimi/<role> on <model>: exit 0, end answered, usage captured" — plus ", failure <name>" when the report names one, "usage not captured", or "no report (stdout was not
     the shim's)". Written from \`RateLimited\`, which the executor asks once per launch, before the exit is judged; it carries no answer, prompt or reason (vendor and person text). Red first:
     *Expected sink.Lines to contain 1 item(s) because one Debug line per Kimi launch … but found 0* (4 of 4). The ledger and the round record are unchanged: the log is where a live check reads it.
+
+76. **PR #817's CI round (2026-10-16): five findings, one rule — a test pins a guarantee, never one machine's spelling of it.**
+    (a) **`windows-latest` S1.10** — see 15: the exception type is the filesystem's (`IOException` on the runner's D:, `UnauthorizedAccessException` here); the
+    guarantee (junction gone by its own name, target and its writable file intact) is what is asserted now.
+    (b) **Linux `scripts/lib/kimi-home.test.mjs:75`** (`'' !== 'C:'`): `builtEnv` derived `HOMEDRIVE`/`HOMEPATH` with node's DEFAULT `path`, which on Linux parses no drive
+    letter. It builds a WINDOWS environment, so the product script now uses `path.win32.parse` (and `win32.join` is NOT used in `shimEnv`: its `home`/`profile` strings also
+    reach `kimi-shim.test.mjs`, which compares them with the host's `join`; a probe only ever runs on Windows). The same default-`path` use in `probe-kimi-tree-hold.mjs`'s
+    `shimEnvironment` is `win32` too. Red first: the test was red on the runner and reproduced in a `node:24-alpine` container; green there and on Windows.
+    (c) **Sonar BUG `javascript:S7727`** (`probe-kimi-confinement.mjs:632-633`): `got.every(passes)` and `got.filter(passes)` passed a function whose second and third
+    parameters `every`/`filter` would feed (`index`, `array`); now `(cell) => passes(cell)`.
+    (d) **Sonar VULNERABILITY `javascript:S4036`** (`probe-kimi-tree-hold.mjs:82`): the process listing spawned the bare name `pwsh`, so whichever folder of the PATH comes first
+    decided what ran. A CODE CHANGE was right, not a "safe" mark: nothing needs pwsh 7 there (`Get-CimInstance` and a `$()` string are the same in Windows PowerShell 5.1),
+    so it now runs `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` by `SYSTEM32(…)` (lib/vibe.mjs's helper, the one the other probes already use for `cmd.exe` and
+    `taskkill.exe`). The probe's other spawns already name an absolute path (`shim`, the kimi `exe`). The PRODUCT's PATH (the person's bin first, KimiEnvironment) is untouched —
+    that is the plan's D19, the point of the sign-in being the person's, and no script here builds it.
+    (e) **Sonar new-code coverage 75.3 % against 80 %**: 299 uncovered lines, nearly all of them Windows-only code that never ran on Sonar's Linux host, in files that ALSO hold decisions.
+    The method is #823's (`PrivateFolder`): the decisions run on Linux, only the thin native shells are excluded. **(1)** `Junctions` keeps every refusal, the 16 KiB arithmetic, the
+    reparse buffer's layout (`ReparseSize`/`ReparseBuffer`, now `internal`), the read-back and the removal; what only Windows answers sits behind `IJunctionShell` (final path, drive type, set
+    the reparse point), implemented by `JunctionsNative` (excluded). `IsLocalDrivePath` is judged by its spelling alone (a letter, a colon, a separator — implied by what
+    `Path.IsPathFullyQualified` asked on Windows) so Linux can say what Windows would, and `Junctions.IsLocal(path, driveType)` is the drive rule on Windows and the Unix rule elsewhere. **(2)**
+    `HostProcessList` keeps the `PROCESSENTRY32W` layout, `Applies` and `Parsed`; `HostProcessListNative` (excluded) holds the toolhelp calls. **(3)** `KimiCredentialsLock.HoldTree` is
+    `TakeTreeThrough(…, take)` with the inheritable take as its one product argument — the decisions run in the test host with the NON-inheriting take, which the
+    `NoTestHoldsAnInheritableHandleTests` scan still forbids spelled any other way; `KimiShimHold.Held` is `internal` and has a test for each answer. **(4)** The Windows-gated suites run on Linux through a TEST
+    stand-in, `WindowsStandIn` (per async flow, nothing replaced on Windows): a "junction" is a directory symbolic link, a folder's final path is its real spelling, every drive is fixed;
+    `KimiFixture.PlacesAt` spells the places with the host's separators off Windows (`KimiPlaces.Resolve` joins a Windows host's with backslashes whatever machine asks). What stays
+    Windows-only, by test: the child-process lock tests (a child cannot be given the stand-in), a case-insensitive spelling, mklink/fsutil as the oracle, a 5 000-character real folder (PATH_MAX).
+    Measured in a `mcr.microsoft.com/dotnet/sdk:10.0-noble` container under `dotnet-coverage collect`, counting the diff's added lines against `origin/main` that the report covers:
+    **before 337 uncovered of 1 191 = 71.7 %** (Sonar said 299, 75.3 %); **after 34 uncovered of 1 175 = 97.1 %** with the two shells excluded (59 of 1 201 = 95.1 % with them counted).
+    The 34 left are defensive catches no unprivileged Linux run reaches (an unlinkable folder as root, a deleter's `IOException`, an embedded resource that is missing, a regex timeout).
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
