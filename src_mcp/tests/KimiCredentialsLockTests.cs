@@ -265,6 +265,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TheTreeHold_OutlivesItsOpener_WhileAChildLives()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
         var home = _dir.At("owned", "kh-x");
         Directory.CreateDirectory(home);
         var tree = In(() => KimiCredentialsLock.TreePathFor(Persons));
@@ -313,6 +314,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
         var home = _dir.At("owned", "kh-p");
         Directory.CreateDirectory(home);
         var (shim, grandchild) = await ShimChild.StartAsync("tree-probed", Locks, Persons, home);
@@ -330,6 +332,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TheGateAlone_DoesNotOutliveItsOpener_SoItIsNotWhatKeepsTheTreeSafe()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
         var (shim, grandchild) = await ShimChild.StartAsync("gate", Locks, Persons, _dir.At("owned", "kh-y"));
         try
         {

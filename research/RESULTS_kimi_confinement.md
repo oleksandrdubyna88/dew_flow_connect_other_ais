@@ -908,3 +908,26 @@ themselves (no `fs` call): `Grep` of `/mnt/c/Windows/System32` was NOT stopped b
 - The `ATTRIB` on the credentials folder: `chmod` or time change is not separable with `inotify`.
 - Folders left for the owner to remove by hand (nothing was deleted): everything under `/tmp/testsToDelete-wsl-kimi-r1/` —
   `home/`, `os/`, `os-b/`, `os-c/`, `os-d/`, `os-e/` (the canary), `os-xdg/`, `xdgcache/`, `repo/`, `outside/`, `locks/`, `logs/`.
+
+## 30. L-N1 — .NET's inheritable hold on Linux is SHARED, and the descriptor IS inherited (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL8; A2 §3)
+
+The question: `HeldFile.Take(path, inheritable: true)` opens with `FileShare.None | FileShare.Inheritable`. On Unix .NET turns a share mode into an advisory `flock`. Is the combined mode still an EXCLUSIVE lock, and does the descriptor reach a child started after the take? Not a Kimi cell: a test, in real child processes (`FakeCli hold-file` for the bare primitive, `FakeCli tree-hold` for the product's `KimiCredentialsLock.HoldTree`), on the `ubuntu-latest` job of `ci.yml`.
+
+**Prediction** (from `SafeFileHandle.Unix.cs`, .NET v10.0.11, read before any run): `LOCK_EX` only when `share == FileShare.None` exactly, otherwise `LOCK_SH`; `O_CLOEXEC` only when `Inheritable` is absent. So (a) exclusive: FAIL; (b) inherited: hold.
+
+**Observed.**
+
+| Run | Arm | Result |
+|---|---|---|
+| CI run 38923199105, job `build · test · family checks` (the primitive, `HeldFileInheritableOnLinuxTests`) | (a) non-inheritable take beside an inheritable hold is Busy | green |
+| same | (a) a SECOND inheritable take is Busy (S-K4) | **RED**: `Expected string to be "busy" … because a second take of an inheritable hold succeeded — the lock is shared, not exclusive (S-K4), but "taken"` |
+| same | (b) the hold outlives its opener's `SIGKILL` while a child started after the take lives (S-K5) | green |
+| CI run 38929393936 (`TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` over `HoldTree`, A2's test commit before the Linux key existed) | all arms | red for the key, not for L-N1: the shim answered `Unusable … cannot be named by its handle` (the Linux key was empty); the lifted `KimiCredentialsLockTests` skips failed the same way |
+
+Both predictions held: the inheritable take is a SHARED lock (a second shim on the same sign-in would have been let in — two refreshers of a rotating token), and the descriptor is inherited.
+
+**Decision (A2 §3.3, row "red / any").** `HeldFile.Take(path, inheritable: true)` on Linux is native: `open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)` — no `O_CLOEXEC` — then `flock(LOCK_EX|LOCK_NB)`, through `LibraryImport("libc")`, in `LinuxHeldFile`, behind the unchanged `Hold` union (`EWOULDBLOCK` → `Busy`, any other errno → `Unusable`). A `FileStream` built over the descriptor takes no second lock, so .NET's own non-inheritable `LOCK_EX|LOCK_NB` probes refuse against a native holder and the native take refuses against a .NET one. Every other take, on every host, stays .NET's. The `HeldFile` remark says so.
+
+**After the native take** (CI run 38960351979, the first with all of A2; ubuntu job): `HeldFileInheritableOnLinuxTests` (3), `TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` (3) and the three lifted `KimiCredentialsLockTests` (`TheTreeHold_OutlivesItsOpener_WhileAChildLives`, `AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold`, `TheGateAlone_DoesNotOutliveItsOpener_…`) were green, with `TwoSpellingsOfOneFolder_GiveOneKey_…` (S-K3), `ABindMountedSpelling_IsTheSameKey` (S-K11) and every `KimiLockRetirementTests` arm. The two ubuntu failures of that run were this work's own and are fixed in the next commit: the Linux listing read `ESRCH` from a process that exited mid-read as "unreadable", and `JunctionsUnix.MakeLink` did not make a missing parent folder.
+
+What the hold covers on Linux is unchanged from §29: the shim and `kimi`, the direct child that inherited the descriptor; not a grandchild `kimi` starts the ordinary way (L-K5). That is enough while the refresher is `kimi` itself (L-K4); what the hold cannot see, A3's survivor marker must.
