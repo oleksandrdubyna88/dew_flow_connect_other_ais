@@ -73,8 +73,10 @@ with both runs reported). Plus:
   "trailing positional parameter". JSON `planSource`, absent when null (`WhenWritingNull`). An older extension ignores the
   member (`parseLog` reads field by field); the Team server reads neither `--log` nor the session file.
 - **C3 — the line.** Committed: `<path> @ <commit7> · blob <blob7> · <bytes> bytes`; text: `pasted planText @ <commit7> ·
-  <bytes> bytes` (`@ <commit7>` omitted when the commit is empty — E1 fills it for both origins, so only an unusable record
-  lacks it); `<bytes>` grouped by three with a plain space (`98 304`), by a pure function, never `toLocaleString`. The
+  text <textId> · <bytes> bytes` (`textId` is 16 hex, so two pastes of one size stay apart; `@ <commit7>` omitted when the
+  commit is empty — E1 fills it for both origins). `<commit7>`/`<blob7>` are `slice(0, 7)` of a string value — a
+  non-string is unusable, a shorter one is shown whole; `<bytes>` must be a non-negative safe integer (else unusable),
+  grouped by three with a plain space (`98 304`) by a pure function, never `toLocaleString`. The
   row's *What* already shows a committed round's FILE NAME (E1, `PlanSources.SubjectOf`); the line adds the path, the
   commit and the blob. Decided here: D16 named only the committed form, and a text round deserves a line too — it is
   "what was reviewed".
@@ -99,7 +101,7 @@ with both runs reported). Plus:
   keeps the same value.
 - **Test scenarios** (`ThePlanSourceIsStepTwentyThreeTests.cs`, real SQLite; RED: step present, bind writes `''`):
   `ThePlanSource_IsTheTwentyThirdStep_AppendedNeverInserted` (index 22, `Steps.Length ≥ 23`) ·
-  `ADatabaseAtStepTwentyTwo_OpensAtTheHead_WithEveryRowNotRecorded` · `ACommittedPlanRound_WritesItsSourceAsJson` (round
+  `ADatabaseAtStepTwentyTwo_OpensAtTheHead_WithEveryRowNotRecorded_ThenRecordsAPlanRound` (the migrate-then-write path) · `ACommittedPlanRound_WritesItsSourceAsJson` (round
   trip through `ServerJsonContext` equals the record) · `APastedPlanRound_WritesOriginText` · `ACodeRound_WritesNothing` ·
   `TheSameRoundRecordedTwice_KeepsOneRowAndOneValue` · `AReadOnlyReader_OnAStepTwentyTwoFile_LeavesItAtTwentyTwo` · both
   preview databases still reach the head.
@@ -121,8 +123,9 @@ with both runs reported). Plus:
   absent (a malformed row never fails the page). `Rounds(...)` (`:544`) chains it after `RoundChangesLog.Attach` — the one
   call; the SQL ladder is not given a fourth text. `research/architecture.md` § *A field added to the round list*
   (`:754`): one more field, same rule. `research/module_server.md`: a `--log` paragraph after the size one (`:3471-3484`).
-- **Brief.** Bind the ids the way `RoundChangesLog` does — widen its `BindIds` (`:122`) to `internal` and call it, never a
-  second copy and never string concatenation of values into the SQL text.
+- **Brief.** Bind the ids the way `RoundChangesLog` does — move its `BindIds` (`:122`) once into a small shared internal
+  Store helper that both readers call (no cross-reader coupling, no second copy), never string concatenation of values
+  into the SQL text.
 - **Test scenarios** (`TheLogNamesEachPlansSourceTests.cs`, the `TheLogNamesEachRoundsSizeTests` shape):
   `ARoundAfterTheStep_CarriesItsSource` · `ARoundBeforeTheStep_CarriesNone` (row with `''`) ·
   `AMalformedColumn_IsAbsentNotAnError` · `EachSourceLandsOnItsOwnRound_AcrossPages` (30 rounds, two pages of 15) ·
@@ -142,7 +145,7 @@ with both runs reported). Plus:
 - **Scope.** `rounds.ts`: `interface PlanSourceRecord { origin; commit; path; blob; bytes; textId }` — the session file's
   camelCase names, all optional, read defensively — and `readonly planSource?: PlanSourceRecord` on `RoundRecord`
   (`:51-93`); a pure exported `reviewedFrom(source)` beside `calledBy` (`:148`) → C3's string, or `''` when absent or
-  unusable (no or unknown `origin`, a non-numeric `bytes`, a committed record without `path`). `roundsLog.ts`:
+  unusable (no or unknown `origin`, `bytes` not a non-negative safe integer, a committed record without `path`). `roundsLog.ts`:
   `LogRow.reviewedFrom: string` beside `calledBy` (`:153`), set in `rowFrom` beside `:519`, `''` for a conversation row
   (`:384`); a `reviewedFromHtml(reviewedFrom, escape)` exported beside `askedByHtml` (`:462`) and embedded by
   `toString()` beside it (`:1637`), returning `<div class="reviewer source">…</div>` or `''`; `detail(row)` (`:1733`)
@@ -152,7 +155,7 @@ with both runs reported). Plus:
   consultant correction; E1 § 10: the line depends on the session-file field only). `escape` every value: `path` is
   caller-chosen text. No new action, so no new button (D16).
 - **Test scenarios.** `rounds.test.ts`: `reviewedFrom` for a committed source (`98 304 bytes`), a text source with and
-  without a commit, `undefined`, an object missing `origin`, `bytes: "x"`. `roundsLog.test.ts`: the row carries the string
+  without a commit (its `textId` shown), a short `commit`, `undefined`, an object missing `origin`, `bytes: "x"`. `roundsLog.test.ts`: the row carries the string
   (the `:514` shape); a round without the field carries `''`; `reviewedFromHtml` escapes a hostile path and answers `''`
   for `''` (the `:556-575` shape). `bundledPage.test.ts` (the `:173` shape): opening a row with `planSource` shows the
   line; opening one without shows no `source` element.
@@ -204,8 +207,9 @@ in-flight state, so no sweep.
 - **No step test to relax.** The 2026-10-15 text relaxed step 21's `== 21`; step 22's PR already did that, and step 22's
   own test was written with `≥`. What a new step must extend instead is `ThePairsThemselvesTests`' drop list.
 - **`LoggedRound.PlanSource` is an init property**, not a trailing positional parameter (C2) — the shape step 22 chose for
-  `Size`; the reader is an `Attach` in `RoundPlanSources.cs` chained after `RoundChangesLog.Attach`, binding ids the way
-  that file does.
+  `Size`; the reader is an `Attach` in `RoundPlanSources.cs` chained after `RoundChangesLog.Attach`, binding ids through a helper
+  shared with that file. After the gate (2026-10-16): the text line carries `textId`; hash slicing and `bytes` validation
+  are stated; S1 tests migrate-then-write.
 - **E1 as shipped:** `PlanSource` lives in `core/Rounds/PlanSource.cs`; `PlanSources.Stamp` fills `Commit` for both
   origins and stamps plan rounds only; a committed round's subject is its file name. C1 and C3 follow those facts.
 - **The line is a function the page runs** (`reviewedFromHtml`, the `askedByHtml` precedent), so it is tested directly
