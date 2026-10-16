@@ -25,8 +25,6 @@ public sealed class TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests : IDis
         _person.Dispose();
     }
 
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
-
     /// <summary>A scratch holding <c>kh-0123456789</c> with a junction, a <c>sessions/</c> folder with a file, and a <c>vh-</c> folder.</summary>
     private (RoundScratch Scratch, KimiPlaces Places) ScratchWithAKimiHome()
     {
@@ -44,7 +42,7 @@ public sealed class TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests : IDis
     [Fact]
     public void TheScratch_IsGone_TheJunctionWentFirst_AndThePersonsFolderKeepsEveryFile()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var (scratch, _) = ScratchWithAKimiHome();
         var before = _person.Hash();
         var metALink = new List<string>();
@@ -67,7 +65,7 @@ public sealed class TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests : IDis
     [Fact]
     public void ALossOnTheUnlink_IsNoted_AndTheScratchIsKept_NotDeletedUnderAHomeThatIsNotKnownToBeSafe()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var (scratch, places) = ScratchWithAKimiHome();
         var lost = Path.Combine(_person.Credentials, "kimi-code.json");
         KimiHome.AfterUnlink = _ =>
@@ -91,7 +89,7 @@ public sealed class TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests : IDis
     [Fact]
     public void AHomeUnderALiveTree_IsNeverUnlinked_AndTheScratchIsKept()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var (scratch, places) = ScratchWithAKimiHome();
         using var held = ((Hold.Taken)HeldFile.Take(Path.Combine(places.OwnedRoot, KimiCredentialsLock.HomeHoldName))).Stream;
 

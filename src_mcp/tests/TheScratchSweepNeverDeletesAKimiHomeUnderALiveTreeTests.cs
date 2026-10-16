@@ -28,7 +28,7 @@ public sealed class TheScratchSweepNeverDeletesAKimiHomeUnderALiveTreeTests : ID
     [Fact]
     public void AnOldScratchWhoseKimiHomeIsUnderALiveTree_IsKept_JunctionIntact_AndRemovedOnceTheTreeEnds()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
+        using var standIn = WindowsStandIn.Begin();
         var scratch = Directory.CreateDirectory(_root.At("coai-answers-x")).FullName;
         var places = _person.PlacesAt(Path.Combine(scratch, "kh-0123456789"));
         KimiHome.Made(HostKind.Windows, places, _person.ExpectedConfig()).Should().BeEmpty();

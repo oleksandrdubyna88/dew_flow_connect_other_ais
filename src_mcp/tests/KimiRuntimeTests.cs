@@ -243,4 +243,44 @@ public sealed class KimiRuntimeTests : IDisposable
         runtime.VersionWarning("kimi, version 2.1.1").Should().BeEmpty();
         runtime.VersionWarning("nothing printed").Should().BeEmpty();
     }
+
+    // ---------- the launch as it starts ----------
+
+    [Theory]
+    [InlineData("no-flag")]
+    [InlineData("flag-is-last")]
+    public void ALaunchWhoseArgvHasNoDeadlineToSet_IsLeftAsItWas(string row)
+    {
+        var invocation = Built();
+        var arguments = row == "no-flag" ? ["--ask-acp", "--profile", "kimi"] : new[] { "--ask-acp", "--deadline-seconds" };
+        var odd = invocation with { Request = invocation.Request with { Arguments = arguments } };
+
+        var launched = ((IReviewerRuntime)Runtime()).ForLaunch(odd);
+
+        launched.Should().BeSameAs(odd, "there is no value to replace, so nothing is invented");
+    }
+
+    [Fact]
+    public async Task ALaunchThatNamesNoOwnedHome_IsRefusedByTheLaunchControl_BeforeAnythingIsLooked()
+    {
+        var invocation = Built();
+        var without = invocation with { Request = invocation.Request with { Arguments = [.. invocation.Request.Arguments.Where(a => a != "--home" && a != KimiEnvironment.FlagOf(invocation.Request, "--home"))] } };
+
+        var turn = await Runtime().TakeTurnAsync(without, new ScriptedKimi(), TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("names no owned home (--home)").And.Contain("(D19)");
+    }
+
+    [Fact]
+    public async Task ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn()
+    {
+        using var rooted = KimiCredentialsLock.RootFor(_dir.At("locks"));
+        Directory.CreateDirectory(Path.Combine(PersonsBin, ".."));
+        var launcher = new ScriptedKimi();
+
+        var turn = await Runtime().TakeTurnAsync(Built(), launcher, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("not signed in to Kimi Code", "the person's config.toml is the first thing the control reads after the host, the tools, the model and the environment pass");
+        launcher.Requests.Should().BeEmpty("nothing was started: this is a refusal before the version is asked");
+    }
 }

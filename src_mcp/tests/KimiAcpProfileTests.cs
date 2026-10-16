@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using FluentAssertions;
 using Xunit;
@@ -81,5 +82,33 @@ public sealed class KimiAcpProfileTests
         AcpProfiles.Find(AcpProfiles.All, "KIMI").Should().BeOfType<KimiAcpProfile>();
         AcpProfiles.Find(AcpProfiles.All, "vibe").Should().BeNull("Vibe is not an ACP profile — its CLI flags plus the snapshot are its blocks (§8 of the plan)");
         AcpProfiles.Names(AcpProfiles.All).Should().Equal(["kimi"]);
+    }
+
+    private static AcpAsk AskOn(string root, string bin) => new("kimi.exe", Path.GetTempPath(), "kimi-code/k3-256k", "x", TimeSpan.FromSeconds(2), root, bin);
+
+    [Fact]
+    public void TheAgentIsStartedInTheBuiltEnvironment_AndTheLaunchControlsOwnCheckAdmitsIt()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "testsToDelete-profile-owned");
+        var bin = Path.Combine(Path.GetTempPath(), "testsToDelete-profile-bin");
+        var ask = AskOn(root, bin);
+
+        var request = _profile.AgentRequest(ask);
+
+        request.Arguments.Should().Equal("acp");
+        request.InheritsEnvironment.Should().BeFalse("nothing is inherited — the minimal names and the built seven");
+        request.Environment[KimiEnvironment.HomeVariable].Should().Be(Path.Combine(root, "home"));
+        request.Environment[KimiEnvironment.NoUpdateVariable].Should().Be("1");
+        request.Environment["PATH"].Should().StartWith(bin, "the person's tool folder comes first");
+        _profile.AgentRefusal(request, ask).Should().BeEmpty("the same check the launch control applies admits what the profile built");
+    }
+
+    [Fact]
+    public void ARequestThatWasNotBuilt_IsRefusedByTheSameCheck()
+    {
+        var ask = AskOn(Path.Combine(Path.GetTempPath(), "testsToDelete-profile-owned"), Path.Combine(Path.GetTempPath(), "testsToDelete-profile-bin"));
+        var inherited = _profile.AgentRequest(ask) with { InheritsEnvironment = true };
+
+        _profile.AgentRefusal(inherited, ask).Should().Contain("was not built with coai's own environment");
     }
 }

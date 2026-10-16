@@ -31,8 +31,6 @@ public sealed class KimiLaunchControlTests : IDisposable
 
     private IDisposable Rooted() => KimiCredentialsLock.RootFor(Locks);
 
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "Kimi runs on Windows hosts only (D18)");
-
     private static ProcessRequest Request(KimiPlaces places, string model = KimiModels.Default) =>
         KimiEnvironment.Built(
             new ProcessRequest(places.Executable, ["--ask-acp", "--profile", "kimi", "--model", model, "--home", places.OwnedRoot, "--persons-bin", places.PersonsBin], places.Home),
@@ -72,7 +70,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [MemberData(nameof(Refusals))]
     public async Task TheLaunchControl_InOrder_StartsNothingOnARefusal(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         var host = HostKind.Windows;
@@ -135,7 +133,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task AFolderTheKernelCannotName_IsRefusedWithTheKeySentence_AndStartsNothing()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         var fake = new FakeKimi();
@@ -161,7 +159,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task TheTurnHoldsTheHomeAndTheLock_UntilTheLaunchIsRead()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
 
@@ -181,7 +179,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task TwoLaunchesOnOneSignIn_WaitOnEachOther_AndOnTwoSignInsDoNot()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var ct = TestContext.Current.CancellationToken;
         var one = _person.Places("kh-one");
@@ -208,7 +206,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task AWaitCutByTheToken_GivesTheHomesTurnBack()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         Directory.CreateDirectory(Locks);
@@ -227,7 +225,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task TheVersionIsAskedInTheBuiltEnvironmentOnTheOwnedHome()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         var fake = new FakeKimi("2.1.1");
@@ -249,7 +247,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task TheVersionProbe_GetsTheLaunchRequestsPath_NotThisProcesses()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         var marker = Path.Combine(_person.Folder, "only-in-the-launch-request");
@@ -271,7 +269,7 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task AnUnmeasuredKimi_LaunchesWithTheWarning()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
 
@@ -287,25 +285,28 @@ public sealed class KimiLaunchControlTests : IDisposable
     [InlineData("cannot start")]
     public async Task AVersionlessKimi_IsRefused_AndGivesEverythingBack(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         var fake = row == "exit" ? new FakeKimi(exit: 1) : new FakeKimi(throws: new Win32Exception("The system cannot find the file specified"));
 
         var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
 
-        turn.Refusal.Should().Contain(row == "exit" ? "answered no version (exit 1)" : "could not be started").And.Contain(row == "exit" ? "boom" : "https://code.kimi.com/kimi-code/install.ps1");
+        turn.Refusal.Should().Contain(row == "exit" ? "answered no version (exit 1)" : "could not be started").And.Contain(row == "exit" ? "boom" : InstallScript);
         turn.CliMissing.Should().Be(row == "cannot start", "a Kimi the OS cannot start is cli-not-found with the install cure (PLAN_vibe_live_round_fixes D5), one that started and answered nothing is the launch control's own verdict");
         VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse();
         HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse();
     }
+
+    /// <summary>The cure a launch that could not start names, for THIS machine's host: Kimi's own PowerShell installer on Windows, its shell script elsewhere.</summary>
+    private static string InstallScript => OperatingSystem.IsWindows() ? "https://code.kimi.com/kimi-code/install.ps1" : "https://code.kimi.com/kimi-code/install.sh";
 
     // ---------- S2.31 ----------
 
     [Fact]
     public async Task TheShapeIsCheckedAgainAfterTheVersion_AndAThrowGivesEverythingBack()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
         var fake = new FakeKimi { WhileTheVersionIsAsked = _ => File.WriteAllText(Path.Combine(places.Home, "mcp.json"), "{}") };
@@ -330,10 +331,10 @@ public sealed class KimiLaunchControlTests : IDisposable
     [Fact]
     public async Task AfterALaunch_TheHomeGoes_AndThePersonsFolderIsWhole_AndNothingOfTheirsIsEverWritten()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var before = _person.Hash();
-        var places = KimiPlaces.Resolve(Path.Combine(_person.Folder, "owned", "kh-s"), HostKind.Windows, _person.Env, _person.Profile, File.Exists);
+        var places = _person.Places("kh-s");
 
         var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi(), TestContext.Current.CancellationToken);
         turn.Refusal.Should().BeEmpty();
@@ -344,5 +345,24 @@ public sealed class KimiLaunchControlTests : IDisposable
 
         Directory.Exists(places.OwnedRoot).Should().BeFalse();
         _person.Hash().Should().Equal(before, "the fake person's folder: every name, byte and attribute as before");
+    }
+
+    // ---------- S2.31, the shape before the version ----------
+
+    [Fact]
+    public async Task AHomeTamperedWith_IsRefusedBeforeTheVersionIsAsked_AndGivesEverythingBack()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.MadeHome("kh-tampered");
+        File.WriteAllText(places.Config, "default_model = \"something-else\"\n");
+        var fake = new FakeKimi();
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("config.toml is not what coai writes");
+        fake.Started.Should().BeEmpty("the shape is judged before Kimi's own --version is run on the home");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse();
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse();
     }
 }

@@ -22,8 +22,6 @@ public sealed class KimiHomeTests : IDisposable
 
     public void Dispose() => _person.Dispose();
 
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "the owned home is a Windows shape (D18 pins the other hosts in S1.4)");
-
     private byte[] Expected()
     {
         var slot = ((SlotRead.Found)KimiPersonsConfig.ReadFile(_person.PersonsConfig)).Slot;
@@ -55,7 +53,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void AFreshHome_IsMade_WithTheJunctionTheConfigAndAnEmptyOs()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var before = _person.Hash();
         var places = Places;
 
@@ -82,7 +80,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void AnExistingHome_IsNotWrittenToAgain()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         File.WriteAllText(places.Config, "tampered");
 
@@ -93,7 +91,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void AnOwnedRootThatIsALink_IsRefused_NothingMade()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = _person.Places("kh-linked");
         var elsewhere = Path.Combine(_person.Folder, "elsewhere");
         Directory.CreateDirectory(elsewhere);
@@ -116,7 +114,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void AMadeHome_Passes_AndAHomeKimiWroteDataInto_Passes()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         var expected = Expected();
 
@@ -138,7 +136,7 @@ public sealed class KimiHomeTests : IDisposable
     [InlineData(4096, true)]
     public void ADeviceId_IsAdmittedOnlyAsAShortFile(int bytes, bool refused)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         Write(Path.Combine(places.Home, "device_id"), new string('a', bytes));
 
@@ -157,7 +155,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void ADeviceIdThatIsAFolder_IsRefused()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         Directory.CreateDirectory(Path.Combine(places.Home, "device_id"));
 
@@ -176,7 +174,7 @@ public sealed class KimiHomeTests : IDisposable
     [MemberData(nameof(Forbidden))]
     public async Task EveryForbiddenName_RefusesNamingThePath(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         var path = Path.Combine(places.Home, row.Replace('/', Path.DirectorySeparatorChar));
         if (row == "cache/x/link")
@@ -204,7 +202,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void ABinFolder_RefusesWithTheRipgrepCure()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         Write(Path.Combine(places.Home, "bin", "rg.exe"));
 
@@ -219,7 +217,7 @@ public sealed class KimiHomeTests : IDisposable
     [InlineData("elsewhere")]
     public async Task ACredentialsThatIsReal_Absent_OrElsewhere_Refuses(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         DirectoryLink.Remove(places.Link);
         if (row == "real")
@@ -251,7 +249,7 @@ public sealed class KimiHomeTests : IDisposable
     [InlineData("a re-login")]
     public void AConfigWhoseBytesDiffer_RefusesWithTheReLoginCure(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         var expected = Expected();
         switch (row)
@@ -278,7 +276,7 @@ public sealed class KimiHomeTests : IDisposable
     [InlineData("home is a link")]
     public async Task AnOsFolderThatReceivedAFile_OrIsMissing_OrAHomeThatIsALink_Refuses(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         switch (row)
         {
@@ -308,7 +306,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void ARootHoldingMoreThanHomeAndOs_IsJudgedOnHomeAndOsAlone()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         Write(Path.Combine(places.OwnedRoot, "tree", "Parser.cs"));
         Write(Path.Combine(places.OwnedRoot, "coai-conversation.txt"));
@@ -320,7 +318,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void AHomeNobodyCanRead_IsRefusedRatherThanStartedOn()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         using var hold = File.Open(places.Config, FileMode.Open, FileAccess.Read, FileShare.None);
 
@@ -344,7 +342,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void TheDisposal_RemovesTheJunctionFirst_VerifiesTheTarget_ThenTheRest()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var before = _person.Hash();
         var places = Made();
         Write(Path.Combine(places.Home, "sessions", "x"));
@@ -369,7 +367,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void AVerificationThatFails_StopsTheDisposal_WithTheSentence()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         Write(Path.Combine(places.Home, "sessions", "x"));
         var lost = Path.Combine(_person.Credentials, "kimi-code.json");
@@ -400,7 +398,7 @@ public sealed class KimiHomeTests : IDisposable
     [InlineData("credentials is real")]
     public void AHomeWhoseJunctionIsGone_OrWhoseCredentialsIsReal_GoesWhole(string row)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var before = _person.Hash();
         var places = Made();
         DirectoryLink.Remove(places.Link);
@@ -428,7 +426,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void DisposeAllUnder_FindsTheFolderItselfAndEveryKhChild()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var before = _person.Hash();
         var folder = Path.Combine(_person.Folder, "conversation");
         var places = new[] { folder, Path.Combine(folder, "kh-aaaaaaaaaa") }.Select(root => new KimiPlaces(root, _person.PersonsHome, _person.Bin, [], string.Empty, "kimi")).ToList();
@@ -473,7 +471,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public async Task AKhChildThatIsALink_IsNeverUnlinkedThrough()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var outside = await OutsideHomeAsync();
         var folder = Path.Combine(_person.Folder, "conversation");
         Directory.CreateDirectory(folder);
@@ -495,7 +493,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public async Task AHomeFolderThatIsALink_IsNeverUnlinkedThrough()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var outside = await OutsideHomeAsync();
         var root = Path.Combine(_person.Folder, "owned", "kh-linkedhome");
         Directory.CreateDirectory(root);
@@ -515,7 +513,7 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void ADisposalUnderALiveTree_IsStopped_AndTheHomeIsKept()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var before = _person.Hash();
         var places = Made();
         var finished = Made("kh-b");
@@ -550,11 +548,59 @@ public sealed class KimiHomeTests : IDisposable
     [Fact]
     public void ATreeFileNobodyCanOpen_IsNotKnownToBeFree()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var places = Made();
         Directory.CreateDirectory(Path.Combine(places.OwnedRoot, KimiCredentialsLock.HomeHoldName));
 
         KimiHome.Dispose(places.OwnedRoot, _ => { }).Should().BeOfType<Disposal.Stopped>("a kept home costs a beat where a wrong unlink costs a sign-in");
         OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue();
+    }
+    // ---------- the refusals and stops no other row reaches ----------
+
+    [Fact]
+    public void AnOwnedRootThatCannotBeMade_IsASentence_NotAThrow()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = _person.Places("kh-in-the-way");
+        Directory.CreateDirectory(Path.GetDirectoryName(places.OwnedRoot)!);
+        File.WriteAllText(places.OwnedRoot, "a file where the owned root should be");
+
+        var made = KimiHome.Made(HostKind.Windows, places, Expected());
+
+        made.Should().Contain("could not be made").And.Contain(places.OwnedRoot);
+        File.ReadAllText(places.OwnedRoot).Should().Be("a file where the owned root should be", "what was there is untouched");
+    }
+
+    [Fact]
+    public void AHomeWithoutItsHomeFolder_IsRefusedByName()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        GitScratch.DeleteEvenIfReadOnly(places.Home);
+
+        KimiHome.Refusal(places, Expected()).Should().Contain("has no home/ folder").And.Contain(places.OwnedRoot);
+    }
+
+    [Fact]
+    public void ALinkThatIsPutBackWhileTheJunctionIsUnlinked_StopsTheDisposal_NothingMoreDeleted()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        Write(Path.Combine(places.Home, "sessions", "x"));
+        KimiHome.AfterUnlink = link => Junctions.Make(HostKind.Windows, link, _person.Credentials).Should().BeEmpty("the link is put back, as a Kimi refreshing the sign-in might");
+        try
+        {
+            var disposal = KimiHome.Dispose(places.OwnedRoot, _ => { });
+
+            disposal.Should().BeOfType<Disposal.Stopped>().Which.Reason.Should().Contain("still exists after its unlink");
+        }
+        finally
+        {
+            KimiHome.AfterUnlink = null;
+            DirectoryLink.Remove(places.Link);
+        }
+
+        File.Exists(Path.Combine(places.Home, "sessions", "x")).Should().BeTrue("nothing more was deleted");
+        File.Exists(Path.Combine(_person.Credentials, "kimi-code.json")).Should().BeTrue("the person's folder is whole");
     }
 }

@@ -32,9 +32,6 @@ public sealed class JunctionsTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private static void OnWindows() =>
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "a directory junction is made on Windows only (D18 pins the other hosts in S1.4)");
-
     /// <summary>A file in the person's folder, read-only as the real ones are.</summary>
     private string Person(string name, bool readOnly = true)
     {
@@ -61,6 +58,9 @@ public sealed class JunctionsTests : IDisposable
         Directory.EnumerateFileSystemEntries(Target).Select(Path.GetFileName).Should().BeEquivalentTo(names);
     }
 
+    /// <summary>The root a long absolute path starts with, in THIS host's spelling.</summary>
+    private static string HostRoot => OperatingSystem.IsWindows() ? @"C:\" : "/";
+
     private bool NothingIsAt(string path) =>
         !File.Exists(path) && !Directory.Exists(path) && !OwnedPaths.IsLinkIfThere(path);
 
@@ -69,7 +69,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void AJunctionIsMade_AndReadsBackAsItsTarget()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var secret = Person("secret.json");
 
         var answer = Junctions.Make(HostKind.Windows, Link, Target);
@@ -90,7 +90,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public async Task TheProductsJunction_IsWhatMklinkMakes()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the oracle is mklink's junction, which only Windows has");
         Person("secret.json");
         var mine = _dir.At("product-link");
         var theirs = _dir.At("mklink-link");
@@ -127,7 +127,7 @@ public sealed class JunctionsTests : IDisposable
     [InlineData("too-long-for-the-buffer", "a junction's reparse point can name")]
     public async Task ARefusalBeforeAnythingIsMade(string kind, string sentence)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         Person("secret.json");
         var target = Target;
         var link = Link;
@@ -148,8 +148,8 @@ public sealed class JunctionsTests : IDisposable
             case "link-is-a-folder": Directory.CreateDirectory(link); break;
             case "link-is-a-file": await File.WriteAllTextAsync(link, "x", TestContext.Current.CancellationToken); break;
             case "link-is-a-link": await DirectoryLink.MakeAsync(new ProcessLauncher(), link, Target); break;
-            case "too-long": target = @"C:\" + new string('a', 33_000); break;
-            case "too-long-for-the-buffer": target = @"C:\" + new string('a', 4_997); break;
+            case "too-long": target = HostRoot + new string('a', 33_000); break;
+            case "too-long-for-the-buffer": target = HostRoot + new string('a', 4_997); break;
             default: throw new ArgumentOutOfRangeException(nameof(kind), kind, "a row this test does not know");
         }
 
@@ -176,7 +176,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void ATargetThatExistsButOverflowsTheReparseBuffer_IsRefusedBeforeAnythingIsMade()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "a 5 000-character folder cannot be made off Windows (PATH_MAX); the arithmetic is pinned by ATargetOverTheReparseBound_IsRefusedByItsLength_OnEveryHost");
         // A REAL folder whose path overflows a reparse point's 16 KiB (M2 of the E4.1 review): the 32 000-character ceiling the
         // first draft had let it through to the kernel; the refusal now knows the real bound.
         var deep = Target;
@@ -198,7 +198,7 @@ public sealed class JunctionsTests : IDisposable
     [InlineData("a-nul-in-the-name")]
     public void AMakeThatCannotCreateItsFolder_SaysSo_AndLeavesNothingBehind(string kind)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         Person("secret.json");
         var link = kind == "a-file-for-a-parent" ? _dir.At("a-file", "link") : _dir.At("a\0b");
         File.WriteAllText(_dir.At("a-file"), "x");
@@ -215,7 +215,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void AMappedNetworkDrive_IsNotALocalDrive()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "a drive letter is a Windows spelling; ADrivePath_IsLocalWhenItIsRootedOnAFixedOrRemovableDrive asks the same on every host");
         Person("secret.json");
 
         var refusal = Junctions.Refusal(HostKind.Windows, Link, Target, _ => DriveType.Network);
@@ -228,7 +228,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void ALinkThatCannotBeTakenBackOut_SaysSo()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         Person("secret.json");
         var sibling = _dir.At("somewhere-else");
         Directory.CreateDirectory(sibling);
@@ -247,7 +247,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public async Task TheProductsJunction_HasMklinksRawReparseBytes()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the oracle is fsutil's dump of mklink's reparse point; the layout itself is pinned by TheReparseBuffer_IsTheMountPointLayout_ByteForByte");
         Person("secret.json");
         var mine = _dir.At("product-link");
         var theirs = _dir.At("mklink-link");
@@ -294,24 +294,25 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void TheReadBackIsNormalised()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         Person("secret.json");
-        var spelled = Target.ToUpperInvariant() + Path.DirectorySeparatorChar;
+        // The case half is Windows' (a case-sensitive file system keeps FOLDER and folder apart); the trailing separator is every host's.
+        var spelled = (OperatingSystem.IsWindows() ? Target.ToUpperInvariant() : Target) + Path.DirectorySeparatorChar;
 
         var answer = Junctions.Make(HostKind.Windows, Link, spelled);
-        var again = Junctions.Make(HostKind.Windows, _dir.At("second"), Target, _ => spelled.ToLowerInvariant());
+        var again = Junctions.Make(HostKind.Windows, _dir.At("second"), Target, _ => OperatingSystem.IsWindows() ? spelled.ToLowerInvariant() : spelled);
 
         answer.Should().BeEmpty();
         again.Should().BeEmpty("SameFolder ignores case and the trailing separator on Windows");
         OwnedPaths.IsLinkIfThere(Link).Should().BeTrue();
         OwnedPaths.IsLinkIfThere(_dir.At("second")).Should().BeTrue();
-        Junctions.SameFolder(Target, Target.ToUpperInvariant() + @"\").Should().BeTrue();
+        Junctions.SameFolder(Target, spelled).Should().BeTrue();
     }
 
     [Fact]
     public void AReadBackThatNamesAnotherFolder_UnlinksAndRefuses()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         Person("secret.json");
         var sibling = _dir.At("somewhere-else");
         Directory.CreateDirectory(sibling);
@@ -330,7 +331,7 @@ public sealed class JunctionsTests : IDisposable
     [InlineData("GitScratch.DeleteEvenIfReadOnly")]
     public void ADisposalOfAHomeMadeWithTheProductsJunction_LeavesThePersonsFolderWhole(string deleter)
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         // Two folders of this test, both testsToDelete-: the person's must outlive the deletion of the home to be looked at,
         // and TempDir.Dispose — the tests' own path — removes its folder whole.
         using var persons = TempDir.For("testsToDelete-junc-persons-");
@@ -368,7 +369,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void ATempDirWhoseLinkLostItsTarget_ThrowsOnTheWayOut_NeverALeftover()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var scope = TempDir.For("testsToDelete-junc-lost-");
         try
         {
@@ -408,7 +409,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void AnAncestorThatIsALink_IsAdmitted_AndTheJunctionKeepsTheSpelling()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var target = ThroughAnAncestorLink();
 
         Junctions.Refusal(HostKind.Windows, Link, target).Should().BeEmpty("a relocated profile is an ordinary machine");
@@ -424,7 +425,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void AnAncestorWhoseResolutionLeavesTheLocalDrives_IsRefused_AndNothingIsMade()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var target = ThroughAnAncestorLink();
 
         var refusal = Junctions.Make(HostKind.Windows, Link, target, Junctions.Target, _ => { }, _ => @"\\server\share\x\credentials");
@@ -436,7 +437,7 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public void ATargetThatCannotBeNamedByItsHandle_IsRefused_AndNothingIsMade()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var target = ThroughAnAncestorLink();
 
         var refusal = Junctions.Make(HostKind.Windows, Link, target, Junctions.Target, _ => { }, _ => string.Empty);
@@ -448,11 +449,107 @@ public sealed class JunctionsTests : IDisposable
     [Fact]
     public async Task ATargetThatItselfIsALink_StaysRefused()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         Person("secret.json");
         var viaLink = _dir.At("target-is-link");
         await DirectoryLink.MakeAsync(new ProcessLauncher(), viaLink, Target);
 
         Junctions.Refusal(HostKind.Windows, Link, viaLink).Should().Contain("is itself a link");
+    }
+    // ---------- the decisions that need no kernel: the arithmetic, the buffer's layout, the spelling of a local path ----------
+
+    /// <summary>A target path of exactly <paramref name="characters"/> characters, spelled as an absolute path of THIS host.</summary>
+    private static string Spelled(int characters)
+    {
+        var root = OperatingSystem.IsWindows() ? @"C:\" : "/";
+
+        return root + new string('a', characters - root.Length);
+    }
+
+    /// <summary>The longest target whose two names still fit a reparse point's 16 KiB: 16 + 2(n+4) + 2 + 2n + 2 = 16 384, so n = 4 089.</summary>
+    private const int MostCharacters = 4089;
+
+    [Fact]
+    public void ATargetOverTheReparseBound_IsRefusedByItsLength_OnEveryHost()
+    {
+        var target = Spelled(MostCharacters + 1);
+
+        var refusal = Junctions.Refusal(HostKind.Windows, Link, target, _ => DriveType.Fixed, _ => target);
+
+        refusal.Should().Contain($"the target path is {MostCharacters + 1} characters").And.Contain($"more than the {MostCharacters} a junction's reparse point can name");
+        Junctions.ReparseSize(target).Should().BeGreaterThan(16 * 1024);
+    }
+
+    [Fact]
+    public void ATargetAtTheReparseBound_PassesTheLength_AndIsRefusedForNotExisting()
+    {
+        var target = Spelled(MostCharacters);
+
+        var refusal = Junctions.Refusal(HostKind.Windows, Link, target, _ => DriveType.Fixed, _ => target);
+
+        Junctions.ReparseSize(target).Should().Be(16 * 1024, "the bound is exact: one more character overflows");
+        refusal.Should().Be($"{target} does not exist", "the length check passed, and the existence check is the next in line");
+    }
+
+    [Fact]
+    public void TheReparseBuffer_IsTheMountPointLayout_ByteForByte()
+    {
+        const string target = @"C:\persons\credentials";
+
+        var buffer = Junctions.ReparseBuffer(target);
+
+        buffer.Length.Should().Be(Junctions.ReparseSize(target));
+        System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(0)).Should().Be(0xA0000003, "IO_REPARSE_TAG_MOUNT_POINT");
+        System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(4)).Should().Be((ushort)(buffer.Length - 8), "ReparseDataLength: everything after the first eight bytes");
+        System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(6)).Should().Be(0, "reserved");
+        var substituteAt = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(8));
+        var substituteBytes = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(10));
+        var printAt = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(12));
+        var printBytes = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(14));
+        substituteAt.Should().Be(0);
+        printAt.Should().Be((ushort)(substituteBytes + 2), "the print name follows the substitute name and its NUL");
+        Encoding.Unicode.GetString(buffer, 16 + substituteAt, substituteBytes).Should().Be(@"\??\" + target, "the NT prefix belongs to the substitute name only");
+        Encoding.Unicode.GetString(buffer, 16 + printAt, printBytes).Should().Be(target);
+        buffer[^2..].Should().Equal(new byte[] { 0, 0 }, "the print name is NUL-terminated");
+    }
+
+    [Theory]
+    [InlineData(@"C:\x", DriveType.Fixed, true)]
+    [InlineData("C:/x", DriveType.Fixed, true)]
+    [InlineData(@"D:\x", DriveType.Removable, true)]
+    [InlineData(@"C:\x", DriveType.Network, false)]
+    [InlineData(@"C:\x", DriveType.Unknown, false)]
+    [InlineData(@"C:\x", DriveType.NoRootDirectory, false)]
+    [InlineData(@"\server\share\k", DriveType.Fixed, false)]
+    [InlineData(@"\?\C:\x", DriveType.Fixed, false)]
+    [InlineData("C:", DriveType.Fixed, false)]
+    [InlineData(@"relative\x", DriveType.Fixed, false)]
+    [InlineData(@"1:\x", DriveType.Fixed, false)]
+    public void ADrivePath_IsLocalWhenItIsRootedOnAFixedOrRemovableDrive(string path, DriveType drive, bool local)
+    {
+        List<string> asked = [];
+
+        Junctions.IsLocalDrivePath(path, root =>
+        {
+            asked.Add(root);
+
+            return drive;
+        }).Should().Be(local);
+
+        asked.Should().AllBe(path[..Math.Min(3, path.Length)], "the drive is asked by its root, never by the whole path");
+    }
+
+    [Theory]
+    [InlineData("/home/someone/.kimi-code/credentials", true)]
+    [InlineData("/net/server/share/k", false)]
+    [InlineData("/misc/x", false)]
+    [InlineData("/Network/x", false)]
+    [InlineData("//server/share/k", false)]
+    [InlineData("relative/x", false)]
+    public void OffWindows_APathIsLocalWhenItIsRootedAndNotUnderAnAutomountFolder(string path, bool local)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the Unix rule is the one a non-Windows host applies; Windows applies the drive rule above");
+
+        Junctions.IsLocal(path, _ => DriveType.Fixed).Should().Be(local);
     }
 }

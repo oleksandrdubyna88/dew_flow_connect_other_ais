@@ -90,7 +90,15 @@ internal sealed class KimiFixture : IDisposable
     public KimiPlaces Places(string rootName = "kh-x") => PlacesAt(Path.Combine(Folder, "owned", rootName));
 
     /// <summary>The places for an owned root ANYWHERE (a runtime picks its own: <c>kh-</c> + a hash, inside the round's scratch), resolved the same way.</summary>
-    public KimiPlaces PlacesAt(string ownedRoot) => KimiPlaces.Resolve(ownedRoot, HostKind.Windows, Env, Profile, File.Exists);
+    public KimiPlaces PlacesAt(string ownedRoot) =>
+        OperatingSystem.IsWindows() ? KimiPlaces.Resolve(ownedRoot, HostKind.Windows, Env, Profile, File.Exists) : LinuxPlacesAt(ownedRoot);
+
+    /// <summary>
+    /// The same places spelled with THIS host's separators — <c>Resolve</c> joins with backslashes for a Windows host whatever machine asks, which off
+    /// Windows names no folder a test can make. The fields are what <c>Resolve</c> gives for this fixture (the person's tools sit in their one bin).
+    /// </summary>
+    private KimiPlaces LinuxPlacesAt(string ownedRoot) =>
+        new(ownedRoot, PersonsHome, Bin, [], string.Empty, Path.Combine(Bin, "kimi.exe"));
 
     /// <summary>The bytes of the <c>config.toml</c> coai writes for this person and <paramref name="model"/> — what a launch's validation compares the home's against.</summary>
     public byte[] ExpectedConfig(string model = KimiModels.Default)

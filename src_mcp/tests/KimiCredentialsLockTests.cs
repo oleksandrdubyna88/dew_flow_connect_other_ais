@@ -41,8 +41,6 @@ public sealed class KimiCredentialsLockTests : IDisposable
         return read();
     }
 
-    private static void OnWindows() => Assert.SkipUnless(OperatingSystem.IsWindows(), "the lock key is the handle's final path, which is Windows-only (D18)");
-
     // ---------- S2.41 ----------
 
     public static TheoryData<string> Spellings => ["upper", "trailing", "slashes", "dotdot", "alias"];
@@ -71,7 +69,8 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [MemberData(nameof(Spellings))]
     public async Task TheLockKey_IsTheFoldersIdentity_NotItsSpelling(string row)
     {
-        OnWindows();
+        Assert.SkipWhen(row == "upper" && !OperatingSystem.IsWindows(), "a case-sensitive file system keeps FOLDER and folder apart — they are two folders there");
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var spelled = await Spelled(row);
 
@@ -132,7 +131,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TwoLaunchesOnOneSignIn_WaitOnEachOther_AndOnTwoSignInsDoNot()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var other = _dir.At("persons2", "credentials");
         Directory.CreateDirectory(other);
@@ -151,7 +150,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TheDefaultRoot_IsOutsideTheHomesFoldersAndTemp_AndItsWaitIsCutByTheToken()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         var normalised = KimiCredentialsLock.Root.Replace('\\', '/');
         normalised.Should().EndWith("/coai-mcp/kimi-locks");
         ConsultantHomes.All.Should().OnlyContain(homes => !normalised.Contains("/" + homes + "/") && !normalised.EndsWith("/" + homes),
@@ -173,7 +172,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task ARootThatIsAFile_IsUnusable()
     {
-        OnWindows();
+        using var standIn = WindowsStandIn.Begin();
         File.WriteAllText(Locks, "not a folder");
         using var rooted = Rooted();
 
@@ -245,7 +244,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TheTreeHold_OutlivesItsOpener_WhileAChildLives()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)");
         var home = _dir.At("owned", "kh-x");
         Directory.CreateDirectory(home);
         var tree = In(() => KimiCredentialsLock.TreePathFor(Persons));
@@ -294,7 +293,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)");
         var home = _dir.At("owned", "kh-p");
         Directory.CreateDirectory(home);
         var (shim, grandchild) = await StartShimAsync("tree-probed", Locks, Persons, home);
@@ -312,7 +311,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task TheGateAlone_DoesNotOutliveItsOpener_SoItIsNotWhatKeepsTheTreeSafe()
     {
-        OnWindows();
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)");
         var (shim, grandchild) = await StartShimAsync("gate", Locks, Persons, _dir.At("owned", "kh-y"));
         try
         {
@@ -328,5 +327,97 @@ public sealed class KimiCredentialsLockTests : IDisposable
             await EndAsync(grandchild);
             await EndAsync(shim);
         }
+    }
+    // ---------- the tree hold's decisions, with the NON-inheriting take (no test holds an inheritable handle) ----------
+
+    private static readonly TimeSpan Brief = TimeSpan.FromMilliseconds(80);
+
+    private static Hold Take(string path, TimeSpan within) => HeldFile.TakeWithin(path, within);
+
+    private string HomeRoot() => Directory.CreateDirectory(_dir.At("owned", "kh-tree")).FullName;
+
+    [Fact]
+    public void TheTreeHold_TakesTheSignInsFileAndTheHomesFile_AndDisposingReleasesBoth()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var home = HomeRoot();
+
+        var holding = KimiCredentialsLock.TakeTreeThrough(Persons, home, Brief, Take);
+
+        var taken = holding.Should().BeOfType<TreeHolding.Taken>().Subject;
+        var signIn = KimiCredentialsLock.TreePathFor(Persons);
+        var homes = Path.Combine(home, KimiCredentialsLock.HomeHoldName);
+        HeldFile.Probe(signIn).Should().Be(LockProbe.Held, "the sign-in's tree file is held");
+        KimiCredentialsLock.HomeProbe(home).Should().Be(LockProbe.Held, "a disposal asks the home's file, and the sign-in's folder is never opened");
+        taken.Hold.Dispose();
+        taken.Hold.Dispose();
+        HeldFile.Probe(signIn).Should().Be(LockProbe.Free);
+        HeldFile.Probe(homes).Should().Be(LockProbe.Free, "disposing is once, and releases both");
+    }
+
+    [Fact]
+    public void ATreeHoldOnAFolderTheKernelCannotName_IsUnusable_AndMakesNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+
+        var holding = KimiCredentialsLock.TakeTreeThrough(_dir.At("persons", "never-made"), HomeRoot(), Brief, Take);
+
+        holding.Should().BeOfType<TreeHolding.Unusable>().Which.Cause.Message.Should().Contain("named by its handle");
+        Directory.Exists(Locks).Should().BeFalse("no lock file was made on a spelling");
+    }
+
+    [Fact]
+    public void ATreeHoldWhoseLockFolderCannotBeMade_IsUnusable_NotAThrow()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        File.WriteAllText(Locks, "not a folder");
+        using var rooted = Rooted();
+
+        KimiCredentialsLock.TakeTreeThrough(Persons, HomeRoot(), Brief, Take).Should().BeOfType<TreeHolding.Unusable>();
+    }
+
+    [Fact]
+    public void ATreeHoldOnASignInAnotherTreeHolds_IsBusy_AfterItsWait()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        Directory.CreateDirectory(Locks);
+        using var other = HeldFile.TryHold(KimiCredentialsLock.TreePathFor(Persons));
+        other.Should().NotBeNull("another tree holds this sign-in");
+
+        KimiCredentialsLock.TakeTreeThrough(Persons, HomeRoot(), Brief, Take).Should().BeOfType<TreeHolding.Busy>();
+    }
+
+    [Fact]
+    public void ATreeHoldWhoseHomeFileIsHeldElsewhere_IsUnusable_AndGivesTheSignInBack()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var home = HomeRoot();
+        using var other = HeldFile.TryHold(Path.Combine(home, KimiCredentialsLock.HomeHoldName));
+        other.Should().NotBeNull();
+
+        var holding = KimiCredentialsLock.TakeTreeThrough(Persons, home, Brief, Take);
+
+        holding.Should().BeOfType<TreeHolding.Unusable>().Which.Cause.Message.Should().Contain("held by another process");
+        HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free, "the first file is released when the second cannot be had");
+    }
+
+    [Fact]
+    public void ATreeHoldWhoseFileCannotBeOpened_IsUnusable_WhicheverFileItWas()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var home = HomeRoot();
+        var broken = new IOException("no access to the lock");
+
+        var firstFile = KimiCredentialsLock.TakeTreeThrough(Persons, home, Brief, (_, _) => new Hold.Unusable(broken));
+        var secondFile = KimiCredentialsLock.TakeTreeThrough(Persons, home, Brief, (path, within) => path.EndsWith(KimiCredentialsLock.HomeHoldName, StringComparison.Ordinal) ? new Hold.Unusable(broken) : Take(path, within));
+
+        firstFile.Should().BeOfType<TreeHolding.Unusable>().Which.Cause.Should().BeSameAs(broken);
+        secondFile.Should().BeOfType<TreeHolding.Unusable>().Which.Cause.Should().BeSameAs(broken);
+        HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free, "the sign-in's file taken first was given back");
     }
 }
