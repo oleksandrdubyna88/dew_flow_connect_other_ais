@@ -31,6 +31,8 @@ const VIBE: Vendor = {
 
 /** The newest coai-mcp released without Vibe on Linux (`.release-please-manifest.json` says 0.57.0 when this was written). */
 const BEFORE_LINUX = '0.57.0';
+/** What the server means about a native Linux host: refused for now, measured on WSL2 only (DL1) — said the same everywhere in English. */
+const NATIVE_REFUSED = 'On a native Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only';
 const KNOWN = (version: string) => ({ kind: 'known' as const, version, remembered: false, updateOffered: false });
 const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', ...parts);
 
@@ -188,7 +190,10 @@ test('the Vibe hint names Windows, WSL2 from 0.58.0, the .env sign-in, and that 
   assert.ok(hint.includes(VIBE_ON_LINUX_SINCE), `the hint does not name coai-mcp ${VIBE_ON_LINUX_SINCE}: ${hint}`);
   assert.ok(hint.includes(VIBE_RUNTIME_SINCE), 'the runtime gate stays in the hint');
   assert.ok(hint.includes('~/.vibe/.env') && hint.includes('vibe --setup'), 'the sign-in file and the command that makes it');
-  assert.match(hint, /Native Linux: measured on WSL2 only for now/u);
+  assert.ok(hint.includes(NATIVE_REFUSED), `the hint does not say what the server means about a native Linux host: ${hint}`);
+  assert.doesNotMatch(hint, /Native Linux: measured/u, 'the garbled form of that sentence');
+  // A Windows window must not point the row at wsl.exe: WSL2 runs it only when coai-mcp itself runs there.
+  assert.ok(hint.includes('when coai-mcp itself runs there (a VS Code window attached to WSL)'), hint);
 });
 
 // ---------------------------------------------------------------- the install note, per host
@@ -204,10 +209,11 @@ test('⤓ for Vibe on WSL2 says Vibe runs there from 0.58.0 and where the sign-i
   assert.match(note, /▶/u, 'the note still names the button that opens Vibe’s own terminal');
 });
 
-test('⤓ for Vibe on native Linux says it is measured on WSL2 only for now', () => {
+test('⤓ for Vibe on native Linux says coai-mcp refuses it for now: measured on WSL2 only', () => {
   const note = vendorInstall(VIBE, 'linux', 'linux').note;
 
-  assert.match(note, /measured on WSL2 only/u);
+  assert.ok(note.includes(NATIVE_REFUSED), note);
+  assert.doesNotMatch(note, /Native Linux: measured/u, 'the garbled form of that sentence');
   assert.doesNotMatch(note, /Vibe runs on this side/u, 'a native host is not told Vibe runs here');
   assert.match(note, /keyring is invisible to coai/u);
   assert.match(note, /vibe --setup/u);
@@ -264,20 +270,39 @@ test('every host gets the same command, and only the note differs', () => {
 
 /** What each language must say about Vibe on Linux — the same four facts, in its own words. */
 const SAID: Record<string, readonly string[]> = {
-  en: ['WSL2', '0.58.0', '~/.vibe/.env', '`vibe --setup`', 'never copies', 'keyring', 'Native Linux'],
-  de: ['WSL2', '0.58.0', '~/.vibe/.env', '`vibe --setup`', 'kopiert sie nie', 'Schlüsselbund', 'Natives Linux'],
-  es: ['WSL2', '0.58.0', '~/.vibe/.env', '`vibe --setup`', 'nunca lo copia', 'llavero', 'Linux nativo'],
-  ru: ['WSL2', '0.58.0', '~/.vibe/.env', '`vibe --setup`', 'никогда не копирует', 'связке ключей', 'нативном Linux'],
-  uk: ['WSL2', '0.58.0', '~/.vibe/.env', '`vibe --setup`', 'ніколи не копіює', 'в’язці ключів', 'нативному Linux'],
+  en: ['WSL2', VIBE_ON_LINUX_SINCE, '~/.vibe/.env', '`vibe --setup`', 'never copies', 'keyring',
+    'when coai-mcp itself runs there (a VS Code window attached to WSL)', NATIVE_REFUSED],
+  de: ['WSL2', VIBE_ON_LINUX_SINCE, '~/.vibe/.env', '`vibe --setup`', 'kopiert sie nie', 'Schlüsselbund',
+    'wenn coai-mcp selbst dort läuft (ein mit WSL verbundenes VS-Code-Fenster)', 'Auf einem nativen Linux-Host lehnt coai-mcp Vibe vorerst ab — es ist nur unter WSL2 gemessen'],
+  es: ['WSL2', VIBE_ON_LINUX_SINCE, '~/.vibe/.env', '`vibe --setup`', 'nunca lo copia', 'llavero',
+    'cuando el propio coai-mcp se ejecuta allí (una ventana de VS Code conectada a WSL)', 'En un host Linux nativo coai-mcp rechaza Vibe por ahora — solo está medido en WSL2'],
+  ru: ['WSL2', VIBE_ON_LINUX_SINCE, '~/.vibe/.env', '`vibe --setup`', 'никогда не копирует', 'связке ключей',
+    'когда сам coai-mcp работает там (окно VS Code, подключённое к WSL)', 'На нативном Linux-хосте coai-mcp пока отклоняет Vibe — он измерен только на WSL2'],
+  uk: ['WSL2', VIBE_ON_LINUX_SINCE, '~/.vibe/.env', '`vibe --setup`', 'ніколи не копіює', 'в’язці ключів',
+    'коли сам coai-mcp працює там (вікно VS Code, під’єднане до WSL)', 'На нативному Linux-хості coai-mcp поки відхиляє Vibe — він виміряний лише на WSL2'],
 };
 
 /** The sentences this release replaced, per language: none may survive anywhere in the help. */
 const GONE: Record<string, readonly string[]> = {
-  en: ['on Windows only for now, because Linux, WSL and macOS are not measured yet', 'Vibe runs only on Windows for now'],
-  de: ['vorerst nur unter Windows aus, weil Linux, WSL und macOS noch nicht gemessen sind', 'Vibe läuft vorerst nur unter Windows'],
-  es: ['por ahora solo en Windows, porque Linux, WSL y macOS aún no están medidos', 'Por ahora Vibe solo funciona en Windows'],
-  ru: ['пока запускает его только на Windows, потому что Linux, WSL и macOS ещё не измерены', 'Пока Vibe работает только в Windows'],
-  uk: ['поки запускає його лише на Windows, бо Linux, WSL і macOS ще не виміряні', 'Поки що Vibe працює лише у Windows'],
+  en: ['on Windows only for now, because Linux, WSL and macOS are not measured yet', 'Vibe runs only on Windows for now',
+    'Native Linux is measured on WSL2 only for now', '(native Linux and macOS are refused for now)'],
+  de: ['vorerst nur unter Windows aus, weil Linux, WSL und macOS noch nicht gemessen sind', 'Vibe läuft vorerst nur unter Windows',
+    'Natives Linux ist vorerst nur unter WSL2 gemessen', '(natives Linux und macOS werden vorerst abgelehnt)'],
+  es: ['por ahora solo en Windows, porque Linux, WSL y macOS aún no están medidos', 'Por ahora Vibe solo funciona en Windows',
+    'Linux nativo está medido por ahora solo en WSL2', '(Linux nativo y macOS se rechazan por ahora)'],
+  ru: ['пока запускает его только на Windows, потому что Linux, WSL и macOS ещё не измерены', 'Пока Vibe работает только в Windows',
+    'На нативном Linux он пока измерен только на WSL2', '(нативный Linux и macOS пока отклоняются)'],
+  uk: ['поки запускає його лише на Windows, бо Linux, WSL і macOS ще не виміряні', 'Поки що Vibe працює лише у Windows',
+    'На нативному Linux його поки виміряно лише на WSL2', '(нативний Linux і macOS поки відхиляються)'],
+};
+
+/** The question-consultant article's one sentence about the host a Vibe row runs on, per language. */
+const QUESTION_ROW: Record<string, readonly string[]> = {
+  en: ['on WSL2 from coai-mcp 0.58.0 (on a native Linux host or macOS coai-mcp refuses it for now)'],
+  de: ['unter WSL2 ab coai-mcp 0.58.0 (auf einem nativen Linux-Host und unter macOS lehnt coai-mcp es vorerst ab)'],
+  es: ['en WSL2, desde coai-mcp 0.58.0 (en un host Linux nativo y en macOS coai-mcp lo rechaza por ahora)'],
+  ru: ['в WSL2 — начиная с coai-mcp 0.58.0 (на нативном Linux-хосте и на macOS coai-mcp пока его отклоняет)'],
+  uk: ['в WSL2 — починаючи з coai-mcp 0.58.0 (на нативному Linux-хості та на macOS coai-mcp поки його відхиляє)'],
 };
 
 test('the five languages say the same about Vibe on Linux: WSL2 from 0.58.0, the .env sign-in, never copied, native Linux not yet', () => {
@@ -303,7 +328,8 @@ test('the question-consultant help names Vibe on WSL2 from 0.58.0 in every langu
       ...Object.values(bodyFor(article, language).body),
       ...Object.values(bodyFor(HELP_ARTICLES.find((one) => one.id === 'choose-reviewers')!, language).body),
     ].join(' ');
-    assert.ok(everything.includes('WSL2') && everything.includes('0.58.0'), `the ${language} help says nothing about WSL2 and 0.58.0 for a Vibe row`);
+    assert.ok(everything.includes('WSL2') && everything.includes(VIBE_ON_LINUX_SINCE), `the ${language} help says nothing about WSL2 and ${VIBE_ON_LINUX_SINCE} for a Vibe row`);
+    assert.ok(QUESTION_ROW[language]!.every((phrase) => everything.includes(phrase)), `the ${language} question-consultant help does not say what is refused for a Vibe row: ${QUESTION_ROW[language]}`);
     for (const old of GONE[language]!) {
       assert.ok(!everything.includes(old), `the ${language} help still says: ${old}`);
     }

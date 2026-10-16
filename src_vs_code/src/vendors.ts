@@ -293,7 +293,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
   // `runtimeSince.ts`).
   {
     label: 'Mistral Vibe',
-    hint: `Mistral’s own Vibe CLI on your Mistral subscription, signed in as itself — no key in the vault. coai-mcp runs it on Windows, and on WSL2 from coai-mcp ${VIBE_ON_LINUX_SINCE}: there the sign-in is ~/.vibe/.env, made by vibe --setup, which coai links into its own homes and never copies. Native Linux: measured on WSL2 only for now. It needs coai-mcp ${VIBE_RUNTIME_SINCE} or later.`,
+    hint: `Mistral’s own Vibe CLI on your Mistral subscription, signed in as itself — no key in the vault. coai-mcp runs it on Windows, and on WSL2 from coai-mcp ${VIBE_ON_LINUX_SINCE} when coai-mcp itself runs there (a VS Code window attached to WSL): there the sign-in is ~/.vibe/.env, made by vibe --setup, which coai links into its own homes and never copies. On a native Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only. It needs coai-mcp ${VIBE_RUNTIME_SINCE} or later.`,
     id: 'vibe',
     runtime: 'vibe',
     model: VIBE_MODELS[0]!.id,

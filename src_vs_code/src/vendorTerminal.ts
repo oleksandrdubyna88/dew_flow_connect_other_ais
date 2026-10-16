@@ -508,8 +508,8 @@ const VIBE_NOTE_WSL =
   VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ` Vibe runs on this side, WSL2, from coai-mcp ${VIBE_ON_LINUX_SINCE}.`;
 
 const VIBE_NOTE_LINUX =
-  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' Native Linux: measured on WSL2 only for now, so coai-mcp refuses a Vibe row on '
-  + 'this side until it is measured here.';
+  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' On a native Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only — '
+  + 'so a Vibe row is refused on this side.';
 
 const VIBE_NOTE_MACOS =
   VIBE_SCRIPT_NOTE + ' coai-mcp does not run Vibe on macOS — nothing is measured there — so a reviewer on this side '
