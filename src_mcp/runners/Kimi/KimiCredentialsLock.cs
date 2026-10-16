@@ -77,8 +77,10 @@ public static class KimiCredentialsLock
 
     private static readonly AsyncLocal<Action<string>?> _beforeTheHomeHold = new();
 
+    // DoNotVerify: off Windows .NET answers "" for a folder that does not exist yet (a fresh account has no ~/.local/share), and the path would have been a
+    // RELATIVE one. The folder is made by MadeRoot before anything is taken in it.
     private static readonly string DefaultRoot = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-mcp", "kimi-locks");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify), "coai-mcp", "kimi-locks");
 
     /// <summary>Where the locks live; the product's default unless <see cref="RootFor"/> says otherwise on this async flow.</summary>
     public static string Root => _root.Value ?? DefaultRoot;

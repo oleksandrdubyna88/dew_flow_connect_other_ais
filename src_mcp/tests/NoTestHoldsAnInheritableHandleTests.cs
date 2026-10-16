@@ -17,7 +17,15 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class NoTestHoldsAnInheritableHandleTests
 {
-    private static readonly Regex Forbidden = new(@"\bHoldTree\s*\(|inheritable\s*:\s*true|FileShare\.Inheritable", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    /// <summary>
+    /// <c>HoldTree(</c>; the named argument <c>inheritable: true</c>; <c>FileShare.Inheritable</c>; and the same request spelled POSITIONALLY —
+    /// <c>Take(path, true)</c> / <c>TakeWithin(path, within, true)</c>, a literal <c>true</c> as the last argument, with at most one level of
+    /// call among the arguments (<c>TakeWithin(Path.Combine(a, b), within, true)</c>). A <c>true</c> that closes some other call is not matched.
+    /// </summary>
+    private static readonly Regex Forbidden = new(
+        @"\bHoldTree\s*\(|inheritable\s*:\s*true|FileShare\.Inheritable|\b(?:TakeWithin|Take)\s*\((?:[^()]|\([^()]*\))*,\s*true\s*\)",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
 
     private static IEnumerable<string> TestSources()
     {
@@ -52,6 +60,12 @@ public sealed class NoTestHoldsAnInheritableHandleTests
         Forbidden.IsMatch("var again = KimiCredentialsLock.HoldTree(Persons, home, TimeSpan.FromSeconds(1));").Should().BeTrue();
         Forbidden.IsMatch("HeldFile.Take(path, inheritable: true);").Should().BeTrue();
         Forbidden.IsMatch("new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.Inheritable)").Should().BeTrue();
+        Forbidden.IsMatch("var held = HeldFile.TakeWithin(p, w, true);").Should().BeTrue("a positional true is the same request as inheritable: true");
+        Forbidden.IsMatch("HeldFile.Take(path, true);").Should().BeTrue();
+        Forbidden.IsMatch("HeldFile.TakeWithin(Path.Combine(home, name), TimeSpan.FromSeconds(1), true)").Should().BeTrue("a nested call among the arguments does not hide it");
         Forbidden.IsMatch("HeldFile.TakeWithin(path, TimeSpan.FromSeconds(1));").Should().BeFalse("the non-inheriting take is what a test uses");
+        Forbidden.IsMatch("HeldFile.Take(path);").Should().BeFalse();
+        Forbidden.IsMatch("HeldFile.TakeWithin(path, within, false);").Should().BeFalse("an explicit false is not a request to inherit");
+        Forbidden.IsMatch("hold.Should().Be(true); var x = Take(a); Check(b, true);").Should().BeFalse("a true that belongs to another call is not this one");
     }
 }

@@ -370,10 +370,14 @@ public sealed class JunctionsTests : IDisposable
     public void ATempDirWhoseLinkLostItsTarget_ThrowsOnTheWayOut_NeverALeftover()
     {
         using var standIn = WindowsStandIn.Begin();
+        // The person's folder is NOT inside the tree being deleted (E4.1 deviation 17: two TempDirs). Inside it, whether the deleter meets the link before the
+        // folder it points at is the file system's enumeration order — NTFS happens to sort "home" before "persons", ext4 hashes names — and a target deleted
+        // first is simply gone, which is not a loss anybody can see (PR #817's Linux job, 2026-10-16).
+        using var person = TempDir.For("testsToDelete-junc-lost-person-");
         var scope = TempDir.For("testsToDelete-junc-lost-");
         try
         {
-            var persons = scope.At("persons");
+            var persons = person.At("persons");
             Directory.CreateDirectory(persons);
             File.WriteAllText(Path.Combine(persons, "kimi-code.json"), "{}");
             Junctions.Make(HostKind.Windows, scope.At("home", "credentials"), persons).Should().BeEmpty();
@@ -520,8 +524,10 @@ public sealed class JunctionsTests : IDisposable
     [InlineData(@"C:\x", DriveType.Network, false)]
     [InlineData(@"C:\x", DriveType.Unknown, false)]
     [InlineData(@"C:\x", DriveType.NoRootDirectory, false)]
-    [InlineData(@"\server\share\k", DriveType.Fixed, false)]
-    [InlineData(@"\?\C:\x", DriveType.Fixed, false)]
+    [InlineData(@"\\server\share\k", DriveType.Fixed, false)]
+    [InlineData(@"\\?\C:\x", DriveType.Fixed, false)]
+    [InlineData(@"\\.\C:\x", DriveType.Fixed, false)]
+    [InlineData(@"\\?\UNC\server\share\k", DriveType.Fixed, false)]
     [InlineData("C:", DriveType.Fixed, false)]
     [InlineData(@"relative\x", DriveType.Fixed, false)]
     [InlineData(@"1:\x", DriveType.Fixed, false)]

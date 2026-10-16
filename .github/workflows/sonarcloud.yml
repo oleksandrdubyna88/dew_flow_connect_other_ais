@@ -158,7 +158,7 @@ jobs:
       #     bytes out.
       #
       #   sonar.coverage.exclusions + src_mcp/runners/Files/JunctionsNative.cs, src_mcp/runners/Kimi/HostProcessListNative.cs
-      #     The two Windows-only NATIVE SHELLS of the Kimi runtime (E4 of research/PLAN_vibe_and_kimi_runtimes_E4.md), the same method as
+      #     The two Windows-only NATIVE SHELLS of the Kimi runtime (E4 of todo/PLAN_vibe_and_kimi_runtimes_E4.md), the same method as
       #     `PrivateFolderWindowsNative` above. `JunctionsNative` is the kernel call that turns an empty folder into a junction
       #     (CreateFileW + DeviceIoControl FSCTL_SET_REPARSE_POINT), the handle-final-path call and the drive-type question;
       #     `HostProcessListNative` is the toolhelp snapshot (CreateToolhelp32Snapshot, Process32First/Next) that lists the host's processes so the shim can see the
