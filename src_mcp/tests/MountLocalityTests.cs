@@ -19,7 +19,57 @@ public sealed class MountLocalityTests
     private const string DataWin =
         @"600 523 0:210 / /data/win rw,relatime - 9p D:\134 rw,aname=drvfs;path=D:\;uid=1000;gid=1000;symlinkroot=/mnt/,cache=0x5,access=client,msize=65536,trans=fd,rfd=6,wfd=6" + "\n";
 
-    private static string Refusal(string table, string target) => MountLocality.Refusal(target, target, () => table);
+    /// <summary>The text rule alone: no kernel answer (the paths here do not exist).</summary>
+    private static string Refusal(string table, string target) => MountLocality.Refusal(target, target, () => table, _ => new MountIdentity.NotAsked());
+
+    private static string Refusal(string table, string target, MountIdentity kernel) => MountLocality.Refusal(target, target, () => table, _ => kernel);
+
+    private const string Ext4Linux = "601 523 8:97 / /data/linux rw,relatime - ext4 /dev/sdh rw\n";
+
+    /// <summary>A drvfs mounted LATER over <c>/data</c>: it hides the ext4 at <c>/data/linux</c>.</summary>
+    private const string DrvfsOverData =
+        @"700 523 0:230 / /data rw,relatime - 9p D:\134 rw,aname=drvfs;path=D:\;uid=1000;gid=1000;symlinkroot=/mnt/,cache=0x5,access=client,msize=65536,trans=fd,rfd=6,wfd=6" + "\n";
+
+    [Fact]
+    public void ADrvfsMountedOverAnExt4One_IsStillRefused_TheKernelNamesTheMountThatReallyHoldsThePath()
+    {
+        var table = Root + Ext4Linux + DrvfsOverData;
+        var path = "/data/linux/kimi/credentials";
+
+        Refusal(table, path).Should().BeEmpty("the TEXT rule picks the hidden ext4 — the fail-OPEN this test pins");
+        Refusal(table, path, new MountIdentity.Mounted(700, 0, 230)).Should().Contain("is on a Windows filesystem").And.Contain("9p mounted at /data", "the kernel says the file is on mount 700, the drvfs");
+        Refusal(table, path, new MountIdentity.Mounted(601, 8, 97)).Should().BeEmpty("the ext4 is the mount that really holds it when nothing is laid over it");
+    }
+
+    [Fact]
+    public void AMountTheTableDoesNotList_OrAKernelThatCannotAnswer_Refuses()
+    {
+        Refusal(Root + Ext4Linux, "/data/linux/x", new MountIdentity.Mounted(9999, 8, 97)).Should().Contain("cannot prove which mount holds").And.Contain("mount 9999").And.Contain("refused");
+        Refusal(Root + Ext4Linux, "/data/linux/x", new MountIdentity.Unreadable("statx answered errno 13")).Should().Contain("cannot prove which mount holds").And.Contain("errno 13").And.Contain("refused");
+    }
+
+    [Fact]
+    public void WithoutAMountId_TheDeviceMustAgreeWithTheTextRule_ElseRefused()
+    {
+        var table = Root + Ext4Linux + DrvfsOverData;
+
+        Refusal(table, "/data/linux/x", new MountIdentity.Device(0, 230)).Should().Contain("cannot prove which mount holds").And.Contain("0:230").And.Contain("refused", "the device is the drvfs's, the text names the ext4");
+        Refusal(table, "/data/linux/x", new MountIdentity.Device(8, 97)).Should().BeEmpty("the device agrees with the ext4 the text names");
+    }
+
+    [Fact]
+    public void TheRealKernel_NamesTheMountOfARealFolder_AndItIsInTheRealTable()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "statx and /proc/self/mountinfo are Linux's");
+        using var dir = TempDir.For("testsToDelete-mountid-");
+
+        var identity = MountLocality.Identify(dir.Path);
+        var held = MountTable.Find(MountTable.Parse(File.ReadAllText(MountLocality.MountInfoPath)), dir.Path, identity);
+
+        identity.Should().BeOfType<MountIdentity.Mounted>("every kernel from 5.8 fills stx_mnt_id; an older one answers Device");
+        held.Should().BeOfType<MountHolder.Found>().Which.Entry.Id.Should().Be(((MountIdentity.Mounted)identity).MountId, "the id statx names is a line of the real mountinfo");
+        MountLocality.Identify(dir.At("never-made")).Should().BeOfType<MountIdentity.Unreadable>("a path that does not exist proves no mount");
+    }
 
     [Fact]
     public void ADrvfsMountOutsideMnt_IsRefused_AndTheExt4Root_IsAdmitted()
@@ -58,8 +108,8 @@ public sealed class MountLocalityTests
     {
         var table = Root + DataWin;
 
-        MountLocality.Refusal("/home/me/link", "/data/win/real", () => table).Should().StartWith("/home/me/link is on a Windows filesystem", "the sentence names the target the person gave; the mount is the real path's");
-        MountLocality.Refusal("/data/win/link", "/home/me/real", () => table).Should().BeEmpty("a link under a drvfs mount whose real folder is on ext4 is on ext4");
+        MountLocality.Refusal("/home/me/link", "/data/win/real", () => table, _ => new MountIdentity.NotAsked()).Should().StartWith("/home/me/link is on a Windows filesystem", "the sentence names the target the person gave; the mount is the real path's");
+        MountLocality.Refusal("/data/win/link", "/home/me/real", () => table, _ => new MountIdentity.NotAsked()).Should().BeEmpty("a link under a drvfs mount whose real folder is on ext4 is on ext4");
     }
 
     [Fact]

@@ -75,19 +75,98 @@ public sealed class LivenessCheckTests
     }
 
     [Fact]
-    public void AStartThatCannotBeReadAnyMore_IsGone_NotUnknown() =>
-        Linux(new FakeProcReads().With(500, "S"), _ => null).Should().Be(new Liveness.Gone("exited"));
+    public void AStartThatCannotBeRead_OfAProcessThatStillRuns_IsUnknown_NotGone() =>
+        Linux(new FakeProcReads().With(500, "S"), _ => null).Should().Be(new Liveness.Unknown("start time unreadable"), "a null StartedAt is every failure — including one for a process that is alive");
+
+    [Fact]
+    public void AStartThatCannotBeRead_IsGone_WhenTheStatIsReadAgainAndTheProcessIsNotThere()
+    {
+        var proc = new FakeProcReads().With(500, "S");
+
+        Linux(proc, _ =>
+        {
+            proc.Stats.Remove(500);
+
+            return null;
+        }).Should().Be(new Liveness.Gone("no such process"), "the process left between the first read and the start-time read, and the second read of the stat proves it");
+    }
+
+    [Fact]
+    public void AStartThatCannotBeRead_IsGone_WhenTheStatIsReadAgainAndTheEntryHasExited()
+    {
+        var proc = new FakeProcReads().With(500, "S");
+
+        Linux(proc, _ =>
+        {
+            proc.With(500, "Z");
+
+            return null;
+        }).Should().Be(new Liveness.Gone("exited (zombie)"));
+    }
+
+    [Fact]
+    public void TheStartTime_IsReadOnce_OnEveryPath()
+    {
+        var reads = 0;
+        Func<int, DateTime?> counted = _ =>
+        {
+            reads++;
+
+            return Started;
+        };
+
+        Linux(new FakeProcReads().With(500, "S"), counted);
+        reads.Should().Be(1, "Linux: one read of the start time");
+
+        reads = 0;
+        LivenessCheck.Elsewhere(Member(), counted, _ => false);
+        reads.Should().Be(1, "elsewhere: it was read twice, once to test for null and once to use");
+    }
+
+    // ---------- exact start ticks: one read of the stat line, one exact comparison ----------
+
+    private static Liveness Exact(FakeProcReads proc, ulong ticks) => LivenessCheck.Linux(Member(), ticks, proc);
+
+    [Fact]
+    public void ExactTicks_TheSameStartTicks_IsAlive_AnyOtherIsAReusedPid()
+    {
+        var proc = new FakeProcReads().With(500, "S");
+
+        Exact(proc, 4000).Should().BeOfType<Liveness.Alive>("the fake line's starttime is 4000");
+        Exact(proc, 3999).Should().BeOfType<Liveness.Gone>().Which.Why.Should().Contain("the pid is reused").And.Contain("4000", "ONE tick apart is another process — no slack");
+        Exact(proc, 4001).Should().BeOfType<Liveness.Gone>();
+    }
+
+    [Fact]
+    public void ExactTicks_StillSeeAGoneProcess_AnExitedEntry_AndAnUnreadableStat()
+    {
+        Exact(new FakeProcReads(), 4000).Should().Be(new Liveness.Gone("no such process"));
+        Exact(new FakeProcReads().With(500, "Z"), 4000).Should().Be(new Liveness.Gone("exited (zombie)"));
+        var proc = new FakeProcReads();
+        proc.Stats[500] = () => throw new UnauthorizedAccessException("EACCES");
+        Exact(proc, 4000).Should().BeOfType<Liveness.Unknown>();
+    }
+
+    [Fact]
+    public void ExactTicks_AStatLineWithoutTheTicks_IsUnknown_NeverASilentMatch()
+    {
+        var proc = new FakeProcReads();
+        proc.Stats[500] = () => "500 (worker) S 1 500 500";
+
+        Exact(proc, 4000).Should().BeOfType<Liveness.Unknown>().Which.Reason.Should().Contain("start ticks");
+    }
 
     [Fact]
     public void AReusedPid_IsGone_NamingTheStranger() =>
         Linux(new FakeProcReads().With(500, "S"), _ => Started + TimeSpan.FromHours(2)).Should().BeOfType<Liveness.Gone>().Which.Why.Should().Contain("the pid is reused");
 
     [Fact]
-    public void OffLinux_StartedAtAloneDecides()
+    public void OffLinux_AnUnreadableStart_IsGoneOnlyWhenTheAbsenceIsProvable()
     {
-        LivenessCheck.Elsewhere(Member(), _ => null).Should().BeOfType<Liveness.Gone>();
-        LivenessCheck.Elsewhere(Member(), _ => Started).Should().BeOfType<Liveness.Alive>();
-        LivenessCheck.Elsewhere(Member(), _ => Started + TimeSpan.FromHours(1)).Should().BeOfType<Liveness.Gone>().Which.Why.Should().Contain("reused");
+        LivenessCheck.Elsewhere(Member(), _ => null, _ => true).Should().Be(new Liveness.Gone("no such process"));
+        LivenessCheck.Elsewhere(Member(), _ => null, _ => false).Should().BeOfType<Liveness.Unknown>("a process another account owns refuses its start time exactly as an absent one does");
+        LivenessCheck.Elsewhere(Member(), _ => Started, _ => true).Should().BeOfType<Liveness.Alive>();
+        LivenessCheck.Elsewhere(Member(), _ => Started + TimeSpan.FromHours(1), _ => false).Should().BeOfType<Liveness.Gone>().Which.Why.Should().Contain("reused");
     }
 
     [Fact]

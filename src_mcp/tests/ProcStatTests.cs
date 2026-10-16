@@ -18,11 +18,26 @@ public sealed class ProcStatTests
 
     [Fact]
     public void APlainLine_IsPidNameStateAndParent() =>
-        Line($"1234 (bash) S 1 {Tail}").Should().Be(new ProcStatLine(1234, "bash", "S", 1));
+        Line($"1234 (bash) S 1 {Tail}").Should().Be(new ProcStatLine(1234, "bash", "S", 1, StartTicks: 4000));
+
+    [Fact]
+    public void TheStartTicks_AreField22_OfTheSameLine()
+    {
+        Line($"1234 (bash) S 1 {Tail}").StartTicks.Should().Be(4000, "field 22 of the kernel's line: 'starttime', in ticks after boot");
+        Line("1234 (a b) S 1 1234 1234 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 18446744073709551615 9 9", 1234).StartTicks.Should().Be(ulong.MaxValue);
+        Line("1234 (bash) S 1 1234", 1234).StartTicks.Should().Be(0, "a line that stops short of field 22 carries no ticks — never a guess");
+    }
 
     [Fact]
     public void ANameWithSpaces_IsOneName() =>
-        Line($"42 (Web Content) R 7 {Tail}", 42).Should().Be(new ProcStatLine(42, "Web Content", "R", 7));
+        Line($"42 (Web Content) R 7 {Tail}", 42).Should().Be(new ProcStatLine(42, "Web Content", "R", 7, StartTicks: 4000));
+
+    [Theory]
+    [InlineData("99 (bash) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 4000 1")]
+    [InlineData("x (bash) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 4000 1")]
+    [InlineData("1234x (bash) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 4000 1")]
+    public void ALineWhoseLeadingPidIsNotTheOneItWasReadFor_IsUnreadable(string text) =>
+        ProcStat.Parse(1234, text).Should().BeOfType<ProcStatRead.Unreadable>("the leading field of /proc/1234/stat is 1234; a line from another process is not this one's");
 
     [Theory]
     [InlineData("a)b")]
@@ -30,7 +45,7 @@ public sealed class ProcStatTests
     [InlineData("x) S 5 (y")]
     [InlineData("tab\tname")]
     public void ANameWithBrackets_IsCutAtTheLastClosingBracket_AndTheFieldsAreCountedFromThere(string comm) =>
-        Line($"42 ({comm}) S 9 {Tail}", 42).Should().Be(new ProcStatLine(42, comm, "S", 9), "the parent is 9, not the 5 inside the name");
+        Line($"42 ({comm}) S 9 {Tail}", 42).Should().Be(new ProcStatLine(42, comm, "S", 9, StartTicks: 4000), "the parent is 9, not the 5 inside the name");
 
     [Fact]
     public void AnEmptyName_IsAnEmptyName() =>
@@ -90,7 +105,7 @@ public sealed class ProcStatTests
         ProcStat.ReadFor(12, proc).Should().BeOfType<ProcStatRead.Gone>("ENOENT: the process ended before the read");
         ProcStat.ReadFor(99, proc).Should().BeOfType<ProcStatRead.Gone>("its directory is not there");
         ProcStat.ReadFor(13, proc).Should().BeOfType<ProcStatRead.Unreadable>("a line it cannot parse is not evidence of anything");
-        ProcStat.ReadFor(14, proc).Should().Be(new ProcStatRead.Read(new ProcStatLine(14, "ok", "S", 1)));
+        ProcStat.ReadFor(14, proc).Should().Be(new ProcStatRead.Read(new ProcStatLine(14, "ok", "S", 1, StartTicks: 4000)));
     }
 
     [Fact]
@@ -102,6 +117,7 @@ public sealed class ProcStatTests
 
         line.Pid.Should().Be(Environment.ProcessId);
         line.Comm.Should().NotBeEmpty();
+        line.StartTicks.Should().BeGreaterThan(0, "the real kernel's field 22 is the process's start in ticks after boot");
         line.State.Should().BeOneOf("R", "S", "D");
         ProcStat.ReadFor(int.MaxValue, ProcReads.Real).Should().BeOfType<ProcStatRead.Gone>("no process has that number");
         ProcReads.Real.Pids().Should().Contain(Environment.ProcessId);
