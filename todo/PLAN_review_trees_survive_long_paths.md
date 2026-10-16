@@ -217,3 +217,32 @@ units on any runner, with ≤ 40-unit components, and the test asserts that leng
 - [ ] `module_server.md` and `module_runners.md` document the escape hatch; `todo/README.md` row moved
       on promotion.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+
+## Stories
+
+Three stories, no epics, in build order; each needs the one before. The gate runs ONCE over the whole branch
+(one `review_code`), not per story. Cornerstones: 1 of 1 — S1.
+
+**S1 — every git call on a tree coai made carries `core.longpaths` (CORNERSTONE).** Expensive if wrong: a
+seam missed for `status` or `remove` leaves a review tree that reads dirty and can never be removed (P7/P8),
+and a runner with system-wide `core.longpaths` hides the miss — so S1 owns the whole lifecycle of BOTH trees.
+Changes: new `TreeGit.cs` (D1, D2); `WorktreeManager.Git`, `ReviewTreeRoot.GitAsync` and
+`SubmodulePopulator.OneAsync` call `TreeGit.Argv`; no other launcher. Tests: step-1 RED for T1 first; T1 (with
+its `longpaths=false` control and the recording-launcher assertion), T2 (with its submodule variant), T5; B1
+red→green; positional fake launchers fixed to match by content. Done when: T1, T2, T5 green on Windows, T5 on
+Linux/macOS, B1 recorded, suite green, DoD rows 1-2 ticked. Who: Fable spec, Sonnet code, Opus review.
+
+**S2 — a round-tree add that still fails names the path, its length and git's reason.** Changes: new pure
+`WorktreeFailure.Sentence` (D4; one constant `WindowsMaxPathUnits`) replaces the bare `FatalLine` at
+`WorktreeManager.cs:128`; `git_failed` stays. Tests: step-1 RED for T3 recorded first (after S1: without the
+flag P11's `Invalid argument` is never reached); T3; T4 (P2/P3/P11 verbatim, no match → exactly `FatalLine`,
+the `é` case); B2 red→green; `WorktreeManagerTests.cs:349` still passes. Done when: T3 green on Windows,
+T4 on every OS, B2 recorded, DoD row 4 ticked. Who: Opus scenarios+brief, Sonnet code, Opus review.
+
+**S3 — the escape hatch is documented and the plan becomes a record.** Changes (D6, no code): one sentence
+each in `research/module_server.md:6343` and `research/module_runners.md`'s worktree section — a shorter LOCAL
+root buys ceiling unit-for-unit for a git that ignores the flag; `COAI_ROUND_WORKTREES` moves the ROUND root
+only, `COAI_REVIEW_ROOT` the review root. Tests: none new; whole suite on Windows and in CI over the finished
+branch; the PR body carries the step-1 RED messages and B1/B2 red→green. Done when: D3 confirmed (nothing
+renamed), DoD rows 3 and 5-7 ticked, `plan-lifecycle.mjs` clean, `review_code` at `proceed`, plan promoted
+with its deviations (promote-plan skill). Who: Opus scenarios+brief, Sonnet code, Opus review.
