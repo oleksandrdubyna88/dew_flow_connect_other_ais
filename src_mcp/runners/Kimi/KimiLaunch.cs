@@ -151,7 +151,10 @@ public static class KimiLaunch
             ? string.Empty
             : $"the Kimi sign-in folder '{places.Credentials}' is not on a local drive — coai reads and links the sign-in from a local drive only, and never connects out to a network or roaming location (D19)";
 
-    /// <summary>Everything that can be said before any lock is taken, in order — the first refusal wins; the config bytes the home must hold otherwise.</summary>
+    /// <summary>
+    /// Everything that can be said before any lock is taken — and before any FILE of the person's is read — in order; the first refusal
+    /// wins; the config bytes the home must hold otherwise.
+    /// </summary>
     private static Prepared Prepare(HostKind host, ProcessRequest request, KimiPlaces places)
     {
         var first = FirstOf(
@@ -159,12 +162,23 @@ public static class KimiLaunch
             () => places.ToolsRefusal,
             () => LocalHome(places),
             () => ModelRefusal(ModelOf(request)),
-            () => KimiEnvironment.Refusal(request, places));
-        if (first.Length > 0)
-        {
-            return Prepared.Refuse(first);
-        }
+            () => KimiEnvironment.Refusal(request, places),
+            () => PersonsHomeElsewhere(places));
 
+        return first.Length > 0 ? Prepared.Refuse(first) : Slotted(host, request, places);
+    }
+
+    /// <summary>
+    /// Where the person's HOME really is, asked BEFORE their <c>config.toml</c> is read from it (the E5.3 review's M1 of decision j): an ancestor of
+    /// <c>~\.kimi-code</c> swapped for a link to a share since the last turn would otherwise be read from — once — before the refusal. Asked only of a
+    /// folder that exists, so a sign-out that removed it keeps its own sentence (<c>KimiPersonsConfig.ReadFile</c>'s "not signed in").
+    /// </summary>
+    private static string PersonsHomeElsewhere(KimiPlaces places) =>
+        Directory.Exists(places.PersonsHome) ? Junctions.ResolvedRefusal(places.PersonsHome) : string.Empty;
+
+    /// <summary>The person's slot read — the first read of anything of theirs — then the render and the home.</summary>
+    private static Prepared Slotted(HostKind host, ProcessRequest request, KimiPlaces places)
+    {
         var slot = KimiPersonsConfig.ReadFile(places.PersonsConfig);
 
         return slot is SlotRead.Found found ? Rendered(host, ModelOf(request), places, found.Slot) : Prepared.Refuse(((SlotRead.Refused)slot).Reason);

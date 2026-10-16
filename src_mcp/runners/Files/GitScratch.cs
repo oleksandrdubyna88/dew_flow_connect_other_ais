@@ -72,9 +72,10 @@ public static class GitScratch
 
     /// <summary>
     /// The links of a folder before anything else in it — D19's order ("the junction first"), so that a link whose target lost a
-    /// file stops the deletion BEFORE the folder's own files are gone, not after the ones that sort ahead of it by name.
+    /// file stops the deletion BEFORE the folder's own files are gone, not after the ones that sort ahead of it by name. Public since
+    /// E5.3's review (M5): a one-shot home's owner deletes its folder's top-level entries one by one and keeps this order.
     /// </summary>
-    private static IEnumerable<string> LinksFirst(IEnumerable<string> entries) =>
+    public static IEnumerable<string> LinksFirst(IEnumerable<string> entries) =>
         entries.OrderByDescending(Snapshots.SnapshotLinks.IsLink);
 
     /// <summary>

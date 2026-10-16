@@ -230,7 +230,8 @@ public static class VibeHomes
             return false;
         }
 
-        foreach (var entry in Directory.EnumerateFileSystemEntries(folder).Where(entry => !IsTheLock(entry)))
+        // The shared deleter's order at this level too: a link before its sibling folders (D19), so a lost target stops the end first.
+        foreach (var entry in GitScratch.LinksFirst(Directory.EnumerateFileSystemEntries(folder).Where(entry => !IsTheLock(entry))))
         {
             io.Delete(entry);
         }

@@ -136,6 +136,7 @@ public sealed class AOneShotKimiHomeIsDisposedJunctionFirstTests : IDisposable
         }
 
         Directory.Exists(folder).Should().BeTrue("nothing more was deleted after the stop");
+        File.Exists(Path.Combine(folder, VibeHomes.LockName)).Should().BeTrue("a kept folder keeps its lock file (R4)");
         File.Exists(places.Config).Should().BeTrue();
         File.Exists(Path.Combine(places.Home, "sessions", "index.jsonl")).Should().BeTrue();
         _warned.Where(said => !said.StartsWith("made ", StringComparison.Ordinal)).Should().ContainSingle()
@@ -251,6 +252,43 @@ public sealed class AOneShotKimiHomeIsDisposedJunctionFirstTests : IDisposable
         ThePersonsFolderIsWhole(before);
     }
 
+    /// <summary>
+    /// The E5.3 review's M5: a one-shot folder's TOP-LEVEL entries keep the shared deleter's order — a link before any sibling folder
+    /// (D19's "the junction first"), so a link whose target lost a name stops the end before the folder's own entries are gone.
+    /// </summary>
+    [Fact]
+    public void AOneShotOwner_UnlinksATopLevelLink_BeforeItsSiblingFolders()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var folder = Directory.CreateDirectory(VibeHomes.OneShotIn(_root, "11ab5f1e")).FullName;
+        var target = Directory.CreateDirectory(_root.At("elsewhere")).FullName;
+        File.WriteAllText(Path.Combine(target, "precious.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(folder, "aa-folder", "logs"));
+        File.WriteAllText(Path.Combine(folder, "aa-folder", "logs", "x"), "x");
+        var link = Path.Combine(folder, "zz-link");
+        Junctions.Make(HostKind.Windows, link, target).Should().BeEmpty();
+        var locked = ((Hold.Taken)HeldFile.Take(Path.Combine(folder, VibeHomes.LockName))).Stream;
+        var deleted = new List<string>();
+        var home = new OneShotHome(folder, locked, _warned.Add)
+        {
+            Io = HomeIo.Real with
+            {
+                Delete = entry =>
+                {
+                    deleted.Add(entry);
+                    GitScratch.DeleteEntry(entry);
+                },
+            },
+        };
+
+        home.Dispose();
+
+        deleted.Should().HaveCountGreaterThan(2, "the link, the folder and the one-shot folder itself");
+        deleted.IndexOf(link).Should().Be(0, "the link goes first, as the shared deleter orders a folder's entries — but \"{0}\" went before it", Path.GetFileName(deleted[0]));
+        File.Exists(Path.Combine(target, "precious.txt")).Should().BeTrue("the target of the link is untouched");
+        Directory.Exists(folder).Should().BeFalse();
+    }
+
     // ---------- S5.3.14, this story's collectors ----------
 
     /// <summary>
@@ -283,8 +321,19 @@ public sealed class AOneShotKimiHomeIsDisposedJunctionFirstTests : IDisposable
             KimiHome.AfterUnlink = null;
         }
 
-        _warned.Add(Junctions.ResolvedRefusal(_person.Credentials));
+        // The decision-j sentence, PRODUCED: the seam leads the fake person's sign-in off the local drives (a local folder resolves to itself and says nothing).
+        var before = Junctions.Shell;
+        Junctions.StandIn(new ResolvingJunctionShell(before, _person.Credentials, @"\\server\share\.kimi-code\credentials"));
+        try
+        {
+            _warned.Add(Junctions.ResolvedRefusal(_person.Credentials));
+        }
+        finally
+        {
+            Junctions.StandIn(before);
+        }
 
+        _warned.Should().Contain(said => said.Contains("resolves to", StringComparison.Ordinal), "the decision-j sentence must be among what the detector reads, or the arm does not cover it");
         _warned.Should().NotBeEmpty("the collectors saw the owner's warn and the sweep's");
         _warned.Should().NotContain(said => said.Contains(KimiFixture.RefreshCanary, StringComparison.Ordinal) || said.Contains(KimiFixture.ApiKeyCanary, StringComparison.Ordinal));
         File.ReadAllText(Path.Combine(_person.Credentials, "kimi-code-env-x.json")).Should().Contain(KimiFixture.RefreshCanary, "the control: the canary is served where the detector looks");

@@ -262,17 +262,6 @@ public sealed class AConversationsKimiHomeTests : IDisposable
 
     // ---------- S5.3.15 ----------
 
-    /// <summary>The OS as the test needs it: every answer the real one gives, except where the final path of ONE folder leads.</summary>
-    private sealed class Resolving(IJunctionShell inner, string credentials, string leadsTo) : IJunctionShell
-    {
-        public string FinalDirectory(string path) =>
-            Junctions.SameFolder(path, credentials) ? leadsTo : inner.FinalDirectory(path);
-
-        public DriveType DriveOf(string root) => inner.DriveOf(root);
-
-        public string SetReparsePoint(string link, string target) => inner.SetReparsePoint(link, target);
-    }
-
     [Fact]
     public async Task AnAncestorOfTheSignIn_ResolvingOffTheLocalDrives_RefusesTurnTwo_BeforeAnyLock()
     {
@@ -286,7 +275,7 @@ public sealed class AConversationsKimiHomeTests : IDisposable
         var lockFiles = Directory.EnumerateFiles(Locks).Count();
         var kimi = new FakeKimi();
         var before = Junctions.Shell;
-        Junctions.StandIn(new Resolving(before, _person.Credentials, @"\\server\share\.kimi-code\credentials"));
+        Junctions.StandIn(new ResolvingJunctionShell(before, _person.Credentials, @"\\server\share\.kimi-code\credentials"));
         LaunchTurn turn2;
         try
         {
@@ -303,6 +292,40 @@ public sealed class AConversationsKimiHomeTests : IDisposable
         Directory.EnumerateFiles(Locks).Count().Should().Be(lockFiles, "a refused turn makes no file under kimi-locks: the check runs BEFORE any lock");
         VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse();
         HeldFile.IsHeld(KimiCredentialsLock.PathFor(_person.Credentials)).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The E5.3 review's M1: the person's HOME is where their <c>config.toml</c> is read from, so where ITS ancestors lead is asked before
+    /// that read — a swapped ancestor gets no read from the share, not one. The recorder is the config held exclusively: a read that ran
+    /// would answer its own failure, never decision j's sentence.
+    /// </summary>
+    [Fact]
+    public async Task ThePersonsHomeResolvingOffTheLocalDrives_IsRefusedBeforeTheirConfigIsRead()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        using var place = await PlaceAsync(ConsultationStore.NewId());
+        var runtime = Runtime();
+        var invocation = Invocation(runtime, place.Folder);
+        var kimi = new FakeKimi();
+        using var configHeld = File.Open(_person.PersonsConfig, FileMode.Open, FileAccess.Read, FileShare.None);
+        var before = Junctions.Shell;
+        Junctions.StandIn(new ResolvingJunctionShell(before, _person.PersonsHome, @"\\server\share\.kimi-code"));
+        LaunchTurn turn;
+        try
+        {
+            turn = await TurnAsync(runtime, invocation, kimi, TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            Junctions.StandIn(before);
+        }
+
+        turn.Refusal.Should().Contain("resolves to", "the refusal that wins says which check ran first: the resolved check, never the config read")
+            .And.Contain(@"\\server\share\.kimi-code").And.Contain("D19");
+        kimi.Started.Should().BeEmpty();
+        Directory.Exists(Locks).Should().BeFalse("no lock file: the check runs before any lock");
+        VibeHomeTurns.Held(HomeOf(invocation)).Should().BeFalse();
     }
 
     // ---------- S5.3.16 ----------
@@ -366,8 +389,9 @@ public sealed class AConversationsKimiHomeTests : IDisposable
         var releasing = Task.Run(async () =>
         {
             await Task.Delay(1000, Ct);
-            elsewhere.Dispose();
+            // Stamped BEFORE the release: a launch that starts in the instant after the dispose must still read as after it.
             released = DateTime.UtcNow;
+            elsewhere.Dispose();
         }, Ct);
 
         var turn = await TurnAsync(runtime, invocation, new FakeKimi(), TimeSpan.FromSeconds(10));
