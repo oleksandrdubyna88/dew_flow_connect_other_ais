@@ -27,7 +27,8 @@
 >    E3.S4 waits only for the E1 follow-up in §8 (two fixture defects E3 cannot fix by reading differently).
 > 6. **No test uses a real date.** The fixtures use a synthetic clock (2000-01-01, one second per rank), and every
 >    clock in a test is taken from the fixture's own instants, never from `DateTime.UtcNow` (§4).
-> 7. **§6 records three new defects in the parent** (items 12–14). The parent itself is not edited here.
+> 7. **§6 records three new defects in the parent** (items 12–14). The parent itself is not edited here. *(Applied to the
+   parent by the main session on 2026-10-16, with the rest of §8.2 and the E1 follow-up recorded in its E1 entry.)*
 
 ## 1. The goal, and where this epic stops
 
@@ -1092,7 +1093,7 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
 |---|---|
 | a three-line message counts once | E3.S4 tests 1–3 and 45 (`c03`, F11 accepted) |
 | a resumed agent is one launch | E3.S4 test 5 (`c14`) |
-| meta without transcript, `Agent` call with neither, a torn MIDDLE line → `partial: <why>`, reading on; a torn LAST line → NOT partial, counted in `Diagnostics.TornTails` (S4-1, parent §16 D22); **a meta with no `model` → `observed`, counted in `Diagnostics.MetasWithoutModel`** (S4-17, F6 — the parent's done-when says `partial` and is to be edited, §8.2) | E3.S4 tests 20, 22 (`c05`), 24 (`c04`), 25, 26 (mutations) |
+| meta without transcript, `Agent` call with neither, a torn MIDDLE line → `partial: <why>`, reading on; a torn LAST line → NOT partial, counted in `Diagnostics.TornTails` (S4-1, parent §16 D22); **a meta with no `model` → `observed`, counted in `Diagnostics.MetasWithoutModel`** (S4-17, F6 — the parent's done-when said `partial`; edited 2026-10-16, §8.2) | E3.S4 tests 20, 22 (`c05`), 24 (`c04`), 25, 26 (mutations) |
 | no `effort` → `unknown` | E3.S4 tests 10 (a `SetEffort` mutation — `c08`'s only effort-less line is synthetic, F10), 11, 44 |
 | persistence off → `unobserved: transcript not found` | E3.S2, carried through by E3.S4 test 30 |
 | the registry beats the variable, recorded | E3.S2 |
@@ -1112,7 +1113,8 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
 > - 2 is strengthened by Q3: the last line is not always the maximum.
 > - 11 is partly closed: E1 shipped `c04`, `c05` and `c11` for three of the partial causes. A torn line is still a
 >   mutation.
-> - Items 12–14 are new.
+> - Items 12–14 are new. **Settled 2026-10-16** by §8.2's edits to the parent: 12 → §5 and D7; 13 → §5, the §12 test
+>   row and the E3 done-when; 14 → the E1 epic goal.
 
 1. **The budget does not fit a real session.** E5's cap is 64 MB, and §11 step 0 measures read time "over a 14 MB
    transcript". This session's main transcript is 14.8 MB, but its `subagents/` folder is **63 MB**, 77 MB in all. A
@@ -1231,6 +1233,9 @@ Not asked of E1: a `torn-last-line` fixture (it cannot pass E1's JSON guard; S4-
 fixture (`PutMultibyte` covers it), an older metaless layout (Q1: not on disk).
 
 ### 8.2 Parent-plan edits Fable endorses (recorded here; the parent is edited by the main session)
+
+*Applied to the parent 2026-10-16, all five rows; the §12 test row "a meta with no `model`" was changed with them, and
+the E1 follow-up of §8 is recorded in the parent's E1 entry.*
 
 | Where in the parent | Today | Change to | Why |
 |---|---|---|---|
