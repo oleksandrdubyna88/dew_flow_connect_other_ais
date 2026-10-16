@@ -1097,7 +1097,7 @@ Rejected, with the reasons recorded:
   `--kimi-clear-marker` one-shot mode — its `Classify` arm and dispatch in `src_mcp/src/Program.cs` and its entry, with its exit
   codes, in `.agents/PROJECT.md`'s one-shot list (F16); DL10 (the extracted `/proc` reader, `HostProcessList` on Linux answering a
   closed union).
-- **Done when.** S-K1–S-K7, S-K11–S-K16, S-K21 and S-K22 green on the Linux CI job without the stand-in, and S-K18's Busy-sentence
+- **Done when.** S-K1–S-K7, S-K11–S-K16, S-K19 (DL7's lock-file retirement), S-K21 and S-K22 green on the Linux CI job without the stand-in, and S-K18's Busy-sentence
   and clear-mode arms (exit 0 / 74 / 75, the marker kept over a living or unverifiable member); L-N1, L-N2 (all arms) and L-N3
   recorded; the `KimiCredentialsLockTests` skips lifted on Linux; `ReaderBarrierTests` and `GaugeReaderCrashHarnessTests` green
   unchanged after the move; `--kimi-clear-marker` listed in `.agents/PROJECT.md` with its exit codes; **and E4's gate met** —
