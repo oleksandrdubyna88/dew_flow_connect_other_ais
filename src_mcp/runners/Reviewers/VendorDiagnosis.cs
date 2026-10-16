@@ -106,7 +106,8 @@ public static class VendorDiagnosis
         // this sentence on stderr and in its export. Its sign-in lives in the OS keyring (§12), not in the home coai gives it,
         // so the cure is Vibe's own setup, once, as the user coai runs as. Reached through Vibe's test switch, not a real
         // signed-out machine, whose wording is not measured.
-        ("Missing MISTRAL_API_KEY environment variable",
+        // WINDOWS' sentence: the sign-in is in the keyring. On Linux and WSL the cure is per host (`MistralSignedOutOffWindows`, DL2).
+        (MistralMarker,
             "Vibe is installed but not signed in for this user — run `vibe --setup` once in a terminal (the sign-in is kept in " +
             "the operating system's keyring, which every coai launch of Vibe reads).",
             DiagnosisKind.Refused),
@@ -170,22 +171,46 @@ public static class VendorDiagnosis
     /// The same table and the same order as <see cref="For"/>, which is now this and nothing else: two
     /// readings of one sentence that could disagree are how a cure and a classification would drift.
     /// </remarks>
-    public static Diagnosis? Classify(string text, bool? wsl = null)
+    public static Diagnosis? Classify(string text, bool? wsl = null) =>
+        Classify(text, wsl switch { true => HostKind.Wsl, false => HostKind.Windows, null => HostKinds.Current });
+
+    /// <summary>
+    /// <see cref="Classify(string, bool?)"/> for a stated HOST (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a cure that differs
+    /// by platform — Vibe's sign-in is in the keyring on Windows and in <c>~/.vibe/.env</c> elsewhere — needs more than WSL-or-not.
+    /// The old signature routes through this one (<c>true</c> is WSL, <c>false</c> Windows, <c>null</c> this machine's own host).
+    /// </summary>
+    public static Diagnosis? Classify(string text, HostKind host)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
 
-        if (UnreachableLocalEngine(text, wsl ?? UnderWsl.Value) is { } engine)
+        if (UnreachableLocalEngine(text, host == HostKind.Wsl) is { } engine)
         {
             return new Diagnosis(DiagnosisKind.EngineUnreachable, engine);
         }
 
         var known = Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase));
 
-        return known.Sentence is { } sentence ? new Diagnosis(known.Kind, sentence) : null;
+        return known.Sentence is not null ? new Diagnosis(known.Kind, CureOn(known.Marker, known.Sentence, host)) : null;
     }
+
+    /// <summary>Vibe's signed-out marker (§11 of research/RESULTS_vibe_confinement.md; L-V1 on WSL): the same words on every host.</summary>
+    private const string MistralMarker = "Missing MISTRAL_API_KEY environment variable";
+
+    /// <summary>
+    /// The cure for a recognised sentence on this host. Only Vibe's differs: off Windows its sign-in is the file <c>~/.vibe/.env</c>, which
+    /// coai LINKS into its own homes and never copies — and a sign-in kept in a desktop keyring is invisible to coai's launches, whose built
+    /// environment carries no D-Bus session (<c>ProcessEnvironment.MinimalUnix</c>).
+    /// </summary>
+    private static string CureOn(string marker, string sentence, HostKind host) =>
+        marker == MistralMarker && host != HostKind.Windows ? MistralSignedOutOffWindows : sentence;
+
+    internal const string MistralSignedOutOffWindows =
+        "Vibe is installed but not signed in for this user — run `vibe --setup` in a terminal on this side; the sign-in is ~/.vibe/.env, "
+        + "which coai links into its own homes and never copies. A sign-in kept in a desktop keyring is invisible to coai's launches — "
+        + "their built environment carries no D-Bus session (ProcessEnvironment.MinimalUnix) — so coai needs ~/.vibe/.env.";
 
     /// <summary>Whether this server runs inside a WSL distro — the side a consultation's health file names.</summary>
     public static bool OnWsl => UnderWsl.Value;
@@ -231,19 +256,7 @@ public static class VendorDiagnosis
     }
 
     /// <summary>Whether this kernel is WSL, asked once.</summary>
-    private static readonly Lazy<bool> UnderWsl = new(() =>
-    {
-        try
-        {
-            return OperatingSystem.IsLinux()
-                   && File.Exists("/proc/version")
-                   && NamesWsl(File.ReadAllText("/proc/version"));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    });
+    private static readonly Lazy<bool> UnderWsl = new(() => NamesWsl(ProcVersion.Text));
 
     /// <summary>
     /// Whether a <c>/proc/version</c> banner is WSL's.

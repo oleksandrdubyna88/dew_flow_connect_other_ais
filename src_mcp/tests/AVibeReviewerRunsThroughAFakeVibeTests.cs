@@ -184,14 +184,13 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"), default, _launcher, Logger.None, Noticing.None);
     }
 
-    [Fact]
-    public async Task ACodeRound_StartsTheVibeReviewerInTheSnapshot_AndTheSnapshotIsGoneWithTheRound()
+    /// <summary>The code-round flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service, a fake Vibe as a real child process, the .env link made against a fake person's file.</summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task ACodeRound_StartsTheVibeReviewerInTheSnapshot_AndTheSnapshotIsGoneWithTheRound(string mode)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal");
-        }
-
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var (repo, data) = await RepositoryAsync();
         var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
@@ -220,20 +219,20 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         vibeHome.Should().StartWith(Path.Combine(homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "D1: never under TEMP");
         (vibeHome.Length - homes.Length).Should().BeLessThanOrEqualTo(24, "what the layout costs beyond the root (`/coai-vh/<8>/<6>`) fits the Windows budget at the default root");
         Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the round's homes folder was deleted when the round ended");
+        flow.AssertLinked(mode);
     }
 
     /// <summary>
     /// The owner's decision of 2026-10-13: a Vibe version nobody measured is RUN, and the round's record of the reviewer says
     /// so — <c>reviewerStates[].warning</c>, what the rounds view reads — beside an answer counted as any other.
     /// </summary>
-    [Fact]
-    public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning()
+    /// <summary>The plan-round flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8).</summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning(string mode)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal");
-        }
-
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         var (repo, data) = await RepositoryAsync();
         Steer(Clean, version: "2.27.0");
         var service = Service(data);
@@ -249,5 +248,23 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         reviewer.GetProperty("status").GetString().Should().Be("done");
         reviewer.TryGetProperty("warning", out var warning).Should().BeTrue($"the reviewer's state carries the warning: {reviewer}");
         warning.GetString().Should().Contain("2.27.0").And.Contain("2.26.1");
+        flow.AssertLinked(mode);
+    }
+
+    /// <summary>S-V17 through the whole plan-round flow: a NATIVE Linux host is refused, with the WSL2-only sentence, before the fake Vibe is started — on every machine, the host being given.</summary>
+    [Fact]
+    public async Task APlanRoundOnANativeLinuxHost_IsRefused_NamingWsl2Only_AndNothingIsStarted()
+    {
+        using var linux = VibeHost.Using(new VibeHost(HostKind.Linux, WslGeneration.None, VibeSignIn.None));
+        var (repo, data) = await RepositoryAsync();
+        var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
+        Steer(Clean, recordDir: record);
+        var service = Service(data);
+        await service.OpenAsync(repo, "feature");
+
+        var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
+
+        planned.GetProperty("reviewers").GetString().Should().Contain("WSL2 only", "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
+        Directory.GetFiles(record, "*.argv").Should().BeEmpty("the refusal comes before any process of Vibe's starts");
     }
 }

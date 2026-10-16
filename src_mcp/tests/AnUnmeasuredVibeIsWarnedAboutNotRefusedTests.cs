@@ -1,4 +1,6 @@
+using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -26,10 +28,23 @@ public sealed class AnUnmeasuredVibeIsWarnedAboutNotRefusedTests
         health.Warning.Should().Contain("2.27.0").And.Contain("2.26.1").And.Contain("vibe-home-manifest.mjs").And.Contain("probe-vibe-confinement.mjs");
     }
 
-    [Fact]
-    public async Task TheMeasuredVersion_CarriesNoWarning()
+    /// <summary>Measured is per PLATFORM (DL3): 2.26.1 is measured on win32 and linux, so the host is given — a macOS runner has no entry of its own and would rightly warn.</summary>
+    [Theory]
+    [InlineData(HostKind.Windows)]
+    [InlineData(HostKind.Wsl)]
+    public async Task TheMeasuredVersion_CarriesNoWarning(HostKind host)
     {
+        using var given = VibeHost.Using(new VibeHost(host, WslGeneration.Wsl2, VibeSignIn.None));
+
         (await ProbeAsync("python.exe C:\\Users\\p\\.local\\bin\\vibe 2.26.1\r\n")).Warning.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AHostWithNoEntryOfItsOwn_WarnsEvenForTheMeasuredVersion_NamingWhereItWasMeasured()
+    {
+        using var given = VibeHost.Using(VibeHost.Of(HostKind.MacOs));
+
+        (await ProbeAsync("python.exe C:\\Users\\p\\.local\\bin\\vibe 2.26.1\r\n")).Warning.Should().Contain("2.26.1 (win32)").And.Contain("2.26.1 (linux)");
     }
 
     [Fact]

@@ -281,7 +281,48 @@ public sealed class VibeRuntimeTests : IDisposable
     {
         VibeRuntime.InstalledExecutableFor(HostKind.Windows, @"C:\Users\p", path => installed && path == @"C:\Users\p\.local\bin\vibe.exe")
             .Should().Be(expected);
-        VibeRuntime.InstalledExecutableFor(HostKind.Linux, "/home/p", _ => true).Should().Be("vibe", "nothing has run Vibe on Linux (D18)");
+        VibeRuntime.InstalledExecutableFor(HostKind.MacOs, "/Users/p", _ => true).Should().Be("vibe", "nothing was measured on macOS");
+    }
+
+    private const string Home = "/home/p";
+
+    /// <summary>The environment of a Linux host — only what a row sets.</summary>
+    private static Func<string, string?> Env(params (string Name, string Value)[] set) => name => set.Where(pair => pair.Name == name).Select(pair => pair.Value).FirstOrDefault();
+
+    /// <summary>
+    /// S-V11 (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>), one row per step of the precedence on WSL. The row's own CLI path wins before
+    /// any of this is asked (<c>VibeRuntime.Build</c>); what is asked here is what the row did NOT set. Every candidate counts only when its
+    /// file is THERE, so each arm's `exists` is the list of files the machine has.
+    /// </summary>
+    [Theory]
+    [InlineData("/home/p/.local/bin/vibe", "", "", "/home/p/.local/bin/vibe")]
+    [InlineData("/uv/bin/vibe|/home/p/.local/bin/vibe", "/uv/bin", "", "/uv/bin/vibe")]
+    [InlineData("/home/p/.local/bin/vibe", "/uv/bin", "", "/home/p/.local/bin/vibe")]
+    [InlineData("/xdg/bin/vibe|/home/p/.local/bin/vibe", "", "/xdg/bin", "/xdg/bin/vibe")]
+    [InlineData("/home/p/.local/bin/vibe", "relative/bin", "", "/home/p/.local/bin/vibe")]
+    [InlineData("", "", "", "vibe")]
+    public void OnWsl_TheDefaultExecutable_FollowsUvsOwnOrder_ThenThePath(string existing, string uvToolBinDir, string xdgBinHome, string expected)
+    {
+        var files = existing.Split('|', StringSplitOptions.RemoveEmptyEntries);
+
+        VibeRuntime.InstalledExecutableFor(HostKind.Wsl, Home, Env(("UV_TOOL_BIN_DIR", uvToolBinDir), ("XDG_BIN_HOME", xdgBinHome)), files.Contains)
+            .Should().Be(expected, $"expected {expected}, got something else (the machine has: {existing})");
+    }
+
+    [Fact]
+    public void OnWsl_AnXdgDataHomeNamesItsSiblingBinFolder_AfterTheTwoVariablesAndBeforeTheHome()
+    {
+        VibeRuntime.InstalledExecutableFor(HostKind.Wsl, Home, Env(("XDG_DATA_HOME", "/data/share")), new[] { "/data/bin/vibe", "/home/p/.local/bin/vibe" }.Contains)
+            .Should().Be("/data/bin/vibe", "uv derives its bin folder from $XDG_DATA_HOME/../bin before $HOME/.local/bin");
+    }
+
+    [Fact]
+    public void OnWsl_TheRowsOwnCliPath_WinsOverEverythingTheDefaultFinds()
+    {
+        var invocation = new VibeRuntime("vibe", HostKind.Wsl, VibePathBudget.None, VibeSignIn.None, WslGeneration.Wsl2)
+            .Build(RoleCatalog.ArchitectureRole, "p", "/w", "/s.json", "/out", new ReviewerSettings("vibe") { ExecutablePath = "/opt/my/vibe" });
+
+        invocation.Request.Executable.Should().Be("/opt/my/vibe");
     }
 }
 
@@ -292,13 +333,49 @@ public sealed class VibeRuntimeTests : IDisposable
 public sealed class VibeLaunchRulesTests
 {
     [Theory]
-    [InlineData(HostKind.Linux)]
-    [InlineData(HostKind.Wsl)]
     [InlineData(HostKind.MacOs)]
     [InlineData(HostKind.Other)]
-    public void AnyHostButWindows_IsRefused_NamingThePlan(HostKind host)
+    public void AHostNothingWasMeasuredOn_IsRefused_NamingThePlanAndTheTwoMeasuredHosts(HostKind host)
     {
-        VibeLaunch.HostRefusal(host, "vibe").Should().Contain("D18").And.Contain(HostKinds.Word(host));
+        VibeLaunch.HostRefusal(host, "vibe", WslGeneration.None).Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("Windows and WSL2 only");
+    }
+
+    /// <summary>S-V17 (DL1): D18 lifts for WSL2 only. A native Linux host is refused with the sentence that says it is measured on WSL2 only.</summary>
+    [Fact]
+    public void ANativeLinuxHost_IsRefused_WithTheWsl2OnlySentence()
+    {
+        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.None).Should().Contain("DL1").And.Contain("WSL2 only").And.Contain("not yet on a native Linux host",
+            "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
+    }
+
+    [Fact]
+    public void AWsl2Host_IsAdmitted()
+    {
+        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", WslGeneration.Wsl2).Should().BeEmpty();
+    }
+
+    /// <summary>S-V17: a WSL1 kernel reads as <see cref="HostKind.Wsl"/> and is refused with the WSL1 variant of the sentence — and its cure.</summary>
+    [Theory]
+    [InlineData(WslGeneration.Wsl1)]
+    [InlineData(WslGeneration.None)]
+    public void AWsl1Host_IsRefused_WithTheWsl1Sentence(WslGeneration generation)
+    {
+        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("WSL2 only").And.Contain("this is WSL1").And.Contain("wsl --set-version",
+            "a WSL1 banner was admitted as WSL2");
+    }
+
+    /// <summary>S-V17: three real /proc/version banners through the generation predicate — only the first is WSL2, so only it starts.</summary>
+    [Theory]
+    [InlineData("Linux version 5.15.167.4-microsoft-standard-WSL2 (root@1234) (gcc (GCC) 11.2.0) #1 SMP", WslGeneration.Wsl2, true)]
+    [InlineData("Linux version 4.4.0-19041-Microsoft (Microsoft@Microsoft.com) (gcc version 5.4.0 (GCC)) #1237-Microsoft Sat Sep 11 14:32:00 PST 2021", WslGeneration.Wsl1, false)]
+    [InlineData("Linux version 6.8.0-45-generic (buildd@lcy02-amd64-001) (x86_64-linux-gnu-gcc-13) #45-Ubuntu SMP", WslGeneration.None, false)]
+    [InlineData("", WslGeneration.None, false)]
+    public void OnlyAWsl2Banner_StartsVibe(string banner, WslGeneration generation, bool starts)
+    {
+        WslGenerations.Of(banner).Should().Be(generation, "a WSL1 banner was admitted as WSL2");
+        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(banner));
+
+        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(starts);
     }
 
     [Theory]
@@ -308,13 +385,13 @@ public sealed class VibeLaunchRulesTests
     [InlineData(@"\\wsl$\Ubuntu\home\p\.local\bin\vibe")]
     public void AWslBridge_OnWindows_IsTheLinuxSide_AndRefused(string executable)
     {
-        VibeLaunch.HostRefusal(HostKind.Windows, executable).Should().Contain("D18");
+        VibeLaunch.HostRefusal(HostKind.Windows, executable, WslGeneration.None).Should().Contain("D18");
     }
 
     [Fact]
     public void AWindowsVibe_OnWindows_IsNotRefusedByTheHost()
     {
-        VibeLaunch.HostRefusal(HostKind.Windows, @"C:\Users\p\.local\bin\vibe.exe").Should().BeEmpty();
+        VibeLaunch.HostRefusal(HostKind.Windows, @"C:\Users\p\.local\bin\vibe.exe", WslGeneration.None).Should().BeEmpty();
     }
 
     private static ProcessRequest TheBuiltOne() =>

@@ -38,8 +38,16 @@ namespace CoaiMcp.Runners.Vibe;
 /// the export's <c>active_model</c> (<see cref="Disowned"/>) — an alias Vibe does not know exits 0 on its routed default
 /// (§11).</para>
 /// </remarks>
-public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget = null) : IReviewerRuntime
+public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget = null, VibeSignIn? signIn = null, WslGeneration? wsl = null) : IReviewerRuntime
 {
+    /// <summary>
+    /// What this adapter's launches are judged against (<see cref="VibeLaunch.TakeAsync"/>), resolved ONCE, where the adapter is made.
+    /// An adapter given a <see cref="HostKind"/> directly (a test) carries NO sign-in unless it is given one — it never reads the
+    /// person's own <c>~/.vibe/.env</c> — and is on WSL2 only when it is told so or this very kernel is; the product's adapter takes
+    /// <see cref="VibeHost.Current"/>, which resolves both from the machine.
+    /// </summary>
+    private readonly VibeHost _host = new(host, wsl ?? (host == HostKind.Wsl ? WslGenerations.Current : WslGeneration.None), signIn ?? VibeSignIn.None);
+
     /// <summary>
     /// Resolved ONCE, where the adapter is made: the PROCESS's platform budget (<see cref="VibePathBudget.ForThisProcess"/>), not
     /// the <paramref name="host"/> a test injects — so a test that builds a Windows adapter on ubuntu is not judged by a Windows
@@ -47,9 +55,15 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// </summary>
     private readonly VibePathBudget _budget = budget ?? VibePathBudget.ForThisProcess;
 
-    /// <summary>The adapter for this machine's host.</summary>
+    /// <summary>The adapter for this machine's host — or the host a scenario's flow gave it (<see cref="VibeHost.Using"/>).</summary>
     public VibeRuntime(string id = "vibe")
-        : this(id, HostKinds.Current)
+        : this(id, VibeHost.Current)
+    {
+    }
+
+    /// <summary>The adapter for a stated host: its kind, its WSL generation and the person's sign-in.</summary>
+    public VibeRuntime(string id, VibeHost host, VibePathBudget? budget = null)
+        : this(id, host.Kind, budget, host.SignIn, host.Wsl)
     {
     }
 
@@ -59,12 +73,16 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     public string Provider => id;
 
     /// <summary>
-    /// <c>vibe</c> where <c>uv tool install mistral-vibe</c> puts it (<c>%USERPROFILE%\.local\bin\vibe.exe</c>) when it is
-    /// there, else bare <c>vibe</c> for the PATH — the <c>agy</c> rule: an MCP server started before the install has a PATH
-    /// without the tool folder. Windows only: Vibe is refused anywhere else (D18).
+    /// <c>vibe</c> where <c>uv tool install mistral-vibe</c> puts it when it is there, else bare <c>vibe</c> for the PATH — the
+    /// <c>agy</c> rule: an MCP server started before the install has a PATH without the tool folder, and the VS Code server's often lacks
+    /// <c>~/.local/bin</c>. See <see cref="InstalledExecutableFor(HostKind, string, Func{string, string?}, Func{string, bool})"/> for the order.
     /// </summary>
     public string DefaultExecutable =>
-        InstalledExecutableFor(host, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), File.Exists);
+        InstalledExecutableFor(host, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.GetEnvironmentVariable, IsInstalledFile);
+
+    /// <summary>A file that exists and, off Windows, carries an execute bit: what a candidate must be to count (DL5 — a stray file named <c>vibe</c> is not an install).</summary>
+    private static bool IsInstalledFile(string path) =>
+        File.Exists(path) && (OperatingSystem.IsWindows() || (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0);
 
     /// <summary>D6: Vibe reads only its working folder (§10, §16), and loads its configuration from it — so a copy.</summary>
     public bool NeedsASanitisedSnapshot => true;
@@ -72,17 +90,58 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// <summary>D17: every launch writes a session into a coai-owned <c>VIBE_HOME</c>.</summary>
     public bool KeepsAHome => true;
 
-    /// <summary><see cref="DefaultExecutable"/> for a given host, profile and file test — pure.</summary>
+    /// <summary><see cref="InstalledExecutableFor(HostKind, string, Func{string, string?}, Func{string, bool})"/> in an environment that sets nothing — the Windows rule needs none.</summary>
+    public static string InstalledExecutableFor(HostKind host, string userProfile, Func<string, bool> exists) =>
+        InstalledExecutableFor(host, userProfile, _ => null, exists);
+
+    /// <summary>
+    /// <see cref="DefaultExecutable"/> for a given host, profile, environment and file test — pure. The row's own CLI path is first and is
+    /// not asked here (<see cref="Build"/>); this answers what the row did NOT set.
+    /// </summary>
     /// <remarks>
-    /// The Windows path is spelled with backslashes whatever OS runs the code, never <c>Path.Combine</c> — the Kimi profile's
-    /// test went red on Linux and macOS CI for exactly that (research/module_tests.md, 2026-10-12).
+    /// <para><b>Windows:</b> <c>%USERPROFILE%\.local\bin\vibe.exe</c> when it is there, else bare <c>vibe</c>.</para>
+    /// <para><b>WSL (and a Linux host):</b> (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>) the folders <c>uv tool install</c> puts an
+    /// executable in, in UV'S OWN order — <c></c>, <c></c>, <c>/../bin</c>, <c>~/.local/bin</c>
+    /// (<c>uv tool dir --bin</c>, read from uv 0.13.0's own help) — each counting only when <c>vibe</c> is THERE and executable; then
+    /// bare <c>vibe</c> (the <c>PATH</c> walk); then the install cure when starting it fails. <b>The installer's folder comes before
+    /// <c>PATH</c></b>: the server's <c>PATH</c> often lacks <c>~/.local/bin</c>, and when both hold a <c>vibe</c> the one in uv's folder is the
+    /// one the panel's install and update buttons maintain — a <c>PATH</c> hit may be an older or foreign install. A person who wants
+    /// another <c>vibe</c> sets the row's CLI path, which wins.</para>
+    /// <para>Paths are spelled with <c>/</c> or <c>\</c> by the host's own rule, never <c>Path.Combine</c> — a Windows path is judged the same
+    /// on a Linux test host (the Kimi profile's test went red on Linux and macOS CI for exactly that, research/module_tests.md, 2026-10-12).</para>
     /// </remarks>
-    public static string InstalledExecutableFor(HostKind host, string userProfile, Func<string, bool> exists)
+    public static string InstalledExecutableFor(HostKind host, string userProfile, Func<string, string?> environment, Func<string, bool> exists) => host switch
+    {
+        HostKind.Windows => WindowsInstalled(userProfile, exists),
+        HostKind.Wsl or HostKind.Linux => UvToolFolders(userProfile, environment).Select(folder => $"{folder}/vibe").FirstOrDefault(exists) ?? "vibe",
+        _ => "vibe",
+    };
+
+    private static string WindowsInstalled(string userProfile, Func<string, bool> exists)
     {
         var installed = $@"{userProfile.TrimEnd('\\', '/')}\.local\bin\vibe.exe";
 
-        return host == HostKind.Windows && userProfile.Length > 0 && exists(installed) ? installed : "vibe";
+        return userProfile.Length > 0 && exists(installed) ? installed : "vibe";
     }
+
+    /// <summary>The ABSOLUTE folders uv installs executables into, most preferred first; one it was not told about is not in the list.</summary>
+    private static IEnumerable<string> UvToolFolders(string userProfile, Func<string, string?> environment)
+    {
+        var xdgData = Absolute(environment("XDG_DATA_HOME"));
+        string[] folders =
+        [
+            Absolute(environment("UV_TOOL_BIN_DIR")),
+            Absolute(environment("XDG_BIN_HOME")),
+            xdgData.Contains('/') ? $"{xdgData[..xdgData.LastIndexOf('/')]}/bin" : string.Empty,
+            userProfile.Length > 0 ? $"{userProfile.TrimEnd('/')}/.local/bin" : string.Empty,
+        ];
+
+        return folders.Where(folder => folder.Length > 0);
+    }
+
+    /// <summary>The folder with no trailing separator, when the variable names an absolute one — else empty (a relative <c>UV_TOOL_BIN_DIR</c> is cwd-relative, which a server's cwd is not the person's).</summary>
+    private static string Absolute(string? folder) =>
+        folder is { Length: > 0 } && folder.StartsWith('/') ? folder.TrimEnd('/') : string.Empty;
 
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
@@ -214,7 +273,7 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
 
     /// <summary>The one launch control (D8b, D10, D17, D18) — <see cref="VibeLaunch.TakeAsync"/>.</summary>
     public Task<LaunchTurn> TakeTurnAsync(ReviewerInvocation invocation, IProcessLauncher launcher, CancellationToken ct) =>
-        VibeLaunch.TakeAsync(host, invocation.Request, ExportFolderOf(invocation), launcher, _budget, ct);
+        VibeLaunch.TakeAsync(_host, invocation.Request, ExportFolderOf(invocation), launcher, _budget, ct);
 
     /// <summary>The last assistant message of <c>--output json</c>'s array (D7).</summary>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) => VibeStdout.Answer(result.StdOut);
@@ -226,7 +285,7 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// </summary>
     public string VersionWarning(string printedVersion) =>
         VibeHomeManifest.Builtin is VibeManifestLoad.Loaded { Manifest: var manifest }
-            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion))
+            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), _host.Platform)
             : string.Empty;
 
     /// <summary>The export's usage; unknown, never zero, when it is missing or null (D8, D9).</summary>

@@ -2986,8 +2986,9 @@ the consultant's launch and the question row are S3's.
 
 Mistral Vibe (`vibe`, the Python CLI, on the person's own Mistral subscription — its sign-in is in the OS keyring,
 research/RESULTS_vibe_confinement.md §12) reviews plans and code as a CLI row, runtime `vibe`. Every flag and every check
-cites the RESULTS cell it rests on — all Windows, 3 of 3, Vibe 2.26.1 — and nothing here claims anything for WSL or
-macOS: a launch on any host but Windows is refused (D18). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
+cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `todo/PLAN_kimi_and_vibe_on_linux.md`
+(2026-10-16), WSL2 (the scout's cells, n = 1, RESULTS §30): a launch on a Windows host or a **WSL2** host starts; a native Linux
+host, a WSL1 host, macOS and a Windows row naming `wsl.exe` are refused (D18, DL1). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
 refuses a `vibe` row by name); not in any default vendor list (D11).
 
 ```mermaid
@@ -3001,8 +3002,9 @@ sequenceDiagram
   R->>V: Build(role, prompt, snapshot root, …, OwnedScratch) — argv, built env, home vh-HASH in the round's scratch
   E->>V: ForLaunch: --time-limit from THIS launch's timeout, a fresh export folder vx-HASH
   E->>V: TakeTurnAsync (before EVERY launch)
-  V->>V: host is Windows (D18) · env is the built one (D17) · model on the curated list (D10) · home made, not a link
-  V->>V: take the home's turn (serialised) · the home's SHAPE (no hooks.toml, config.toml, agents/, tools/, link, trust entry)
+  V->>V: host is Windows or WSL2 (D18, DL1) · env is the built one (D17) · model on the curated list (D10) · home made, not a link
+  V->>V: take the home's turn (serialised) · the home's SHAPE (no hooks.toml, config.toml, agents/, tools/, no link but the one admitted .env, trust entry)
+  V->>V: a host that links the sign-in (WSL2): VibeSignInLink makes HOME/.env -> the person's ~/.vibe/.env (DL2)
   V->>P: vibe --version (same built env, same home)
   V->>V: a measured version: its plugin files by SHA-256, a mismatch refused · an unmeasured version: run, with a warning
   V-->>E: Refused(sentence) → NotStarted, nothing started  |  Holding(turn + export folder, warning)
@@ -3038,8 +3040,9 @@ sequenceDiagram
   scratch folder (`RoundScratch`), so one home per reviewer of the round, and a repair or a retry of that reviewer starts
   on the home its first launch left. Without an owned scratch (a caller that set none) the home falls back to the
   launch's own `coai-answers-*` folder, which the six-hour sweep removes.
-- **The launch control** (`VibeLaunch.TakeAsync`, through `IReviewerRuntime.TakeTurnAsync`), in this order: the host
-  (D18 — a non-Windows host, or a WSL bridge named as the executable, `wsl.exe` or `\\wsl$\…`); the environment is the
+- **The launch control** (`VibeLaunch.TakeAsync(VibeHost, …)`, through `IReviewerRuntime.TakeTurnAsync`), in this order: the host
+  (`HostRefusal(host, executable, wsl)`: Windows and WSL2 admitted; WSL1 refused with the WSL1 sentence, a native Linux host with the
+  WSL2-only sentence (DL1), macOS and `Other` with D18's; a Windows row naming a WSL bridge, `wsl.exe` or `\\wsl$\…`, still D18's); the environment is the
   built one; the model is on `VibeModels.Curated` (`mistral-medium-3.5`, `glm-5-3` — the two seen as `active_model`,
   §11/§17/§24 — because Vibe exits 0 on an alias it does not know, §11); the home is made when absent and is not a link;
   the home's TURN is taken (`VibeHomeTurns`, in-process, keyed by the full path, dropped when its last holder leaves);
@@ -3049,11 +3052,41 @@ sequenceDiagram
   must not reach the review (the risk consultation 6b4726a6 of 2026-10-13 found the unmeasured branch launched without
   this re-check); for a version WITH an entry in `shared/vibe-home-manifest.json` the home is then checked with the
   plugin files' hashes — a mismatch is tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
-  home; the next launch starts from an empty one). The manifest is read by VERSION alone and the verdict needs exactly ONE
-  entry (`VibeLaunch.Verdict`'s `[var entry]`), so the Linux entry of 2.26.1 (L-V7, E1 of `todo/PLAN_kimi_and_vibe_on_linux.md`,
-  2026-10-16) sits under a top-level `staged` key the C# does not read — measured: moved into `versions`, four `*Vibe*` tests go
-  red, a tampered Windows plugin file among them. E2 makes the entry per platform (DL3) and moves it with
-  `node scripts/vibe-home-manifest.mjs --unstage linux`.
+  home; the next launch starts from an empty one). **The manifest is per platform** (DL3): `VibeHomeEntry.Platform` (`win32` | `linux`,
+  as node spells it; an entry with no `platform` reads as `win32`), `VibeHomeManifest.For(version, platform)`, and the verdict still needs
+  exactly ONE entry — for the HOST's platform (`VibeHost.Platform`: Windows `win32`, WSL and Linux `linux`; in the product the process's own).
+  The Linux entry of 2.26.1 (L-V7, written by the script in WSL2: two fresh homes agreed on all 12 hashes, 11 differ from `win32`) waited
+  under `staged` until this change and was moved with `node scripts/vibe-home-manifest.mjs --unstage linux` in the same commit that made
+  the C# read the field (moved earlier, four `*Vibe*` tests went red, a tampered Windows plugin file among them). A version measured on
+  ANOTHER platform only is an unmeasured version here: run with the shared warning, which names every measured version with its platform
+  (`Known`: `2.26.1 (win32), 2.26.1 (linux)`). `logs/session/unified/.session-index.json` joined `varying` on every platform (session data).
+- **The sign-in is LINKED, never copied** (DL2; A1 spec; the cornerstone area): on a host that links one (`VibeSignIn.Links` — WSL2; never
+  Windows, where the sign-in is the keyring) the launch control makes `HOME/.env` → the person's `<VIBE_HOME or ~/.vibe>/.env` between the
+  first shape check and `--version` (`VibeSignInLink.Make`). In order: something already at the name → the right link (the same home's second
+  turn) is `Linked`, anything else is refused and never deleted; else the target is read through ONE descriptor (`RegularFiles.ReadOwned`,
+  ported from wsl_care's Linux leg: `open(O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC)`, then `statx` of THAT descriptor for type, owner = `geteuid`,
+  no group/other write bit, then at most 64 KiB, one byte more refused; a link, FIFO, socket or device is refused, never waited on) — missing →
+  `NoSignIn` (no link, Vibe runs signed out); then its variable NAMES are scanned (`DotenvNames.Judge`: python-dotenv's name grammar over BYTES,
+  a line break is CRLF, LF or a bare CR; four refusal kinds `NotText`/`NoBinding`/`OtherName`/`ByteOrderMark`, each refused by LINE NUMBER only —
+  never a name or a byte of any value; the buffer is zeroed after the scan); only `MISTRAL_API_KEY` is admitted, and a value python-dotenv
+  cannot parse is admitted (it binds nothing). The link is made at a path that does not exist and read back RAW (`FileInfo.LinkTarget`, never
+  resolved); a failed step removes what it made by its own name and the launch goes on signed out (`NotMade`) — never a copy; a leftover coai
+  cannot remove refuses the launch. `VibeHome.Judge` admits exactly that link (`AdmittedLink`: name `.env` at the top level, its raw target
+  string-equal to the expected absolute path); every other link, a `.env` file, a link below the top level, a link to a folder, and any link on
+  Windows is refused as before. The reason a link was not made rides as the launch's WARNING (`LaunchTurn.Warning`; the cure is keyed on Vibe's
+  own text and cannot see the launch control — a recorded deviation from the plan gate's F3). The `providers` probe makes no link (`--version`
+  needs no key). **The residual**, stated on `ReadOwned`: coai's judgement and Vibe's read are two opens; the mode rule leaves only the person's
+  own account (or root) able to swap the file between them. L-V8 (recorded, RESULTS §30.8): Vibe does not load a `.env` from its working
+  folder, so none joins the snapshot exclusions. **Deleters** (S-V10): the existing ones already unlink a file link by its own name; a Linux
+  test pins that the person's file keeps bytes, mode and mtime on every route.
+- **Where the host comes from.** `VibeHost(Kind, Wsl, SignIn)`: the product's adapter takes `VibeHost.Current` (this process: `HostKinds.Current`,
+  `WslGenerations.Current` — `NamesWsl2`: the banner holds `WSL2` or `microsoft-standard`; WSL1 is `NamesWsl` but not that — and
+  `VibeSignIn.ForThisProcess`); an adapter built with a `HostKind` (a test) carries NO sign-in and no WSL unless told, so a test never reads the
+  person's real `~/.vibe/.env`. A per-flow `AsyncLocal` seam (`VibeHost.Using`, the shape of `VibePathBudget.Using`) lets a scenario give the host
+  the real service's own `new VibeRuntime(id)` takes.
+- **The CLI is found where uv puts it** (DL5): the row's own path first; then, on WSL, the folders `uv tool install` uses, in uv's own order —
+  `$UV_TOOL_BIN_DIR`, `$XDG_BIN_HOME`, `$XDG_DATA_HOME/../bin`, `~/.local/bin` (read from `uv tool dir --bin`, uv 0.13.0), each only when
+  `vibe` is there and executable; then bare `vibe` (the `PATH` walk); a failed start carries the install cure.
 - **A version nobody measured is RUN, with a warning** (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse —
   set it up once and it must work if it can"; it replaced the refusal S2 first shipped). Its home's shape is still
   checked before its `--version` starts, so a forbidden name, a link, a trust entry, a `config.toml`, `hooks.toml`,
@@ -3106,14 +3139,17 @@ sequenceDiagram
   fresh `coai-answers-*` folder as its home, deleted after the probe (a crash leaves it to the six-hour sweep). A
   capability of the adapter, never an `if` on a vendor name in the probe.
 - **Diagnosis** (`VendorDiagnosis`): Vibe's not-signed-in sentence (`Missing MISTRAL_API_KEY environment variable`, §11
-  arm a2) → `vibe --setup`, kind `Refused`; the Rust CLI's `unexpected argument '--time-limit'` (§3) → named as the
+  arm a2) → `vibe --setup`, kind `Refused` — and its cure is per HOST (`Classify(text, HostKind)`; the `bool?` spelling routes through it): the
+  keyring on Windows; off Windows `~/.vibe/.env` (which coai links and never copies) and the case that a sign-in kept in a desktop keyring is
+  invisible to coai's launches (no D-Bus session in the built environment); the Rust CLI's `unexpected argument '--time-limit'` (§3) → named as the
   unmeasured CLI, kind `UnknownOption`. The install cure is Mistral's own README's (D16): `uv tool install
   mistral-vibe` (with uv's own installer when uv is missing) where `linux` is false, Mistral's script
   `curl -LsSf https://mistral.ai/vibe/install.sh | bash` on Linux.
 
 Tests: `VibeRuntimeTests`, `VibeLaunchRulesTests`, `VibeHomeTests`, `VibeHomeManifestTests`, `VibeLaunchControlTests`,
 `AVibeRowReviewsInTheRoundsSnapshotTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `VibeIsDiagnosedInItsOwnWordsTests`,
-`TheVibeProbeLeavesThePersonsHomeAloneTests`
+`TheVibeProbeLeavesThePersonsHomeAloneTests`, `DotenvNamesTests`, `RegularFilesTests`, `VibeSignInLinkTests`,
+`AVibeLaunchOnWslLinksTheSignInTests`, `ADeleterLeavesTheVibeSignInUntouchedTests`
 — listed in [module_tests.md](module_tests.md).
 
 ## The Vibe consultant — `VibeConsultant` (2026-10-13, S3 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
