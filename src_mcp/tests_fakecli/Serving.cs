@@ -40,7 +40,7 @@ static class Serving
     /// </summary>
     public static int RunShy(string pidFile, int answerAfterMs, string answer)
     {
-        File.WriteAllLines(pidFile, [Environment.ProcessId.ToString()]);
+        WritePidFile(pidFile, [Environment.ProcessId.ToString()]);
         using var asked = new ManualResetEventSlim();
         using var eof = new ManualResetEventSlim();
         var reading = new Thread(() =>
@@ -92,10 +92,24 @@ static class Serving
             started.Add(Process.Start(info)!.Id.ToString());
         }
 
-        File.WriteAllLines(pidFile, started);
+        WritePidFile(pidFile, started);
         Thread.Sleep(quitAfterMs);
 
         return 0;
+    }
+
+    /// <summary>
+    /// Writes a pid file WHOLE OR NOT AT ALL: the lines go to a sibling temp name, and only the finished file is moved onto the
+    /// real one — so a test polling <c>File.Exists</c> and then reading can never meet it half-written. One
+    /// <c>File.WriteAllLines</c> straight to the name held it open for write while it existed: on Windows the poll's
+    /// <c>File.ReadAllLines</c> then threw a sharing violation (CI run 38853192407, <c>TheDescendantsOfALiveServer_AreListedWithTheirStartTimes</c>,
+    /// about 1 run in 90), and on Linux the same poll could read half the file. Each pid file is written once, so the move never overwrites.
+    /// </summary>
+    internal static void WritePidFile(string pidFile, IEnumerable<string> lines)
+    {
+        var writing = pidFile + ".tmp-" + Environment.ProcessId;
+        File.WriteAllLines(writing, lines);
+        File.Move(writing, pidFile);
     }
 
     /// <summary>The <c>app-server</c> argv: steered by the file in the temp directory, or the defaults.</summary>
@@ -120,7 +134,7 @@ static class Serving
 
         if (steering.PidFile.Length > 0)
         {
-            File.WriteAllLines(steering.PidFile, started);
+            WritePidFile(steering.PidFile, started);
         }
 
         if (steering.AuthRewrite.Length > 0 && Environment.GetEnvironmentVariable("CODEX_HOME") is { Length: > 0 } home)
