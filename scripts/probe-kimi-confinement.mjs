@@ -57,6 +57,12 @@
 //   M-K9e  the exclusion list is complete: the M-K9 kit plus every other documented project path, each with a canary
 //   M-K7b  one answered turn per curated id (k3, kimi-for-coding); the highspeed 401 re-run once
 //   M-K5b  /usage after a session/load on the same cwd: cumulative or per turn
+//
+// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5 — for E4's L-K cells): `kimi` and the shim without `.exe`
+// (`<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi`, DL5), the credentials link a directory SYMLINK removed by `unlink` of its own name
+// (DL6), the built environment MinimalUnix with HOME alone redirected (DL11), the canaries `python3`, and the ACP client's agent
+// in its own process group so its end reaches the group (lib/kimi.mjs). No Kimi cell is run by E1: these arms are tested by the
+// lib tests only, and every Kimi cell waits for the owner's yes with no other `kimi` running (the refresh token rotates).
 //   M-K14  (the refresh race) is NOT here — it runs later (plan §6, the owner's answer of 2026-10-13).
 //   --admit config,device_id,…   pre-admits owned-home candidates when M-K11 is not in --cells (M-K11 decides them itself)
 import { randomBytes } from 'node:crypto';
@@ -65,7 +71,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { files, fwd, run } from './lib/vibe.mjs';
+import { files, fwd, pythonCommand, run } from './lib/vibe.mjs';
 import {
   CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
   parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
@@ -90,7 +96,7 @@ const armFilter = flag('--arms', '').split(',').filter(Boolean);
 const wanted = (a) => armFilter.length === 0 || armFilter.some((s) => a.arm.includes(s));
 const reparse = flag('--reparse', '');
 const here = dirname(fileURLToPath(import.meta.url));
-const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', 'coai-mcp.exe');
+const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', process.platform === 'win32' ? 'coai-mcp.exe' : 'coai-mcp');
 const kimi = flag('--kimi', '') || KIMI_EXE;
 const model = flag('--model', DEFAULT_MODEL);
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
@@ -109,7 +115,7 @@ if (!reparse && (!existsSync(shim) || !existsSync(kimi))) {
   console.error(`refusing: shim ${shim} exists=${existsSync(shim)}, kimi ${kimi} exists=${existsSync(kimi)}`);
   process.exit(65);
 }
-const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(realpathSync.native(tmpdir()), 'kcp-'));
+const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kcp-'));
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Kimi's design), so it is held
 // to characters that need no quoting beyond the double quotes the command puts around it (the Vibe probe's rule).
 if (!/^[A-Za-z0-9 _\-.:\\/~()]+$/u.test(scratch)) {
@@ -185,7 +191,7 @@ function versionLaunch(home, cwd, env = builtEnv({ home })) {
 }
 
 const MARK = (n) => `OSPREY-${n}`;
-const pySnippet = (path) => `python -c "open('${fwd(path)}','w').write('x')"`;
+const pySnippet = (path) => `${pythonCommand()} -c "open('${fwd(path)}','w').write('x')"`;
 
 // ---------------------------------------------------------------------------------------------------------------- arms
 

@@ -8,10 +8,14 @@
 // The person's home is sacred: nothing here writes into ~/.kimi-code — the only writes into it are Kimi's own, through the
 // junction (the token refresh, RESULTS §11). A junction is removed by its OWN name (rmdirSync on the link), never through it;
 // after every disposal the target folder must still hold the files it held.
+//
+// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md): the "junction" is a directory SYMLINK there (DL6), removed by `unlink` of its
+// own name (rmdir refuses a symlink, ENOTDIR — measured red on WSL first); the built environment is MinimalUnix and the OS-home
+// redirect is HOME alone (DL11). Every platform fact takes the platform as an argument.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, win32 } from 'node:path';
-import { files, fwd, minimalWindowsEnv } from './vibe.mjs';
-import { OWNED_HOME, OWNED_OS, fileHash, junction } from './kimi.mjs';
+import { basename, dirname, join, posix, win32 } from 'node:path';
+import { files, fwd, minimalEnv, removeDirLink } from './vibe.mjs';
+import { OWNED_HOME, OWNED_OS, fileHash, homeBin, junction } from './kimi.mjs';
 
 /** What M-K11 (a) may admit into an owned home, one at a time, in the plan's order (§5) — the junction is always there. */
 export const CANDIDATES = ['config', 'config-models', 'device_id', 'region', 'migrations', 'bin'];
@@ -77,7 +81,7 @@ export function makeOwnedHome(home, real, admitted, { defaultModel }) {
   const holds = [];
   const link = junction(join(home, 'credentials'), join(real, 'credentials'));
   if (link.length > 0) return { holds, junctionError: link };
-  if (!isLink(join(home, 'credentials'))) return { holds, junctionError: 'credentials is not a link after mklink' };
+  if (!isLink(join(home, 'credentials'))) return { holds, junctionError: 'credentials is not a link after it was made' };
   holds.push('credentials (junction)');
   const copy = (rel) => {
     const from = join(real, rel);
@@ -95,7 +99,7 @@ export function makeOwnedHome(home, real, admitted, { defaultModel }) {
   if (admitted.includes('device_id')) copy('device_id');
   if (admitted.includes('region')) copy('region');
   if (admitted.includes('migrations')) copy('migrations-effort.json');
-  if (admitted.includes('bin')) for (const f of ['rg.exe', 'fd.exe']) copy(join('bin', f));
+  if (admitted.includes('bin')) for (const f of homeBin()) copy(join('bin', f));
   return { holds, junctionError: '' };
 }
 
@@ -108,8 +112,8 @@ export function disposeOwnedHome(home, real, namesBefore) {
   const link = join(home, 'credentials');
   const result = { home, linkRemoved: false, targetIntact: false, homeGone: false };
   if (isLink(link)) {
-    rmdirSync(link);
-    if (isLink(link) || existsSync(link)) throw new Error(`${link} still exists after rmdir — nothing else was deleted`);
+    removeDirLink(link);
+    if (isLink(link) || existsSync(link)) throw new Error(`${link} still exists after its removal — nothing else was deleted`);
     result.linkRemoved = true;
   } else if (existsSync(link)) {
     throw new Error(`${link} is a real folder, not a junction — nothing was deleted`);
@@ -172,13 +176,32 @@ export function realHomeVerdict(diff, { owned }) {
  * D19's environment, built and never inherited: ProcessEnvironment.Minimal (lib/vibe.mjs's copy of the C# list) plus
  * exactly `KIMI_CODE_HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1` (documented by Kimi: "fully disable the update preflight",
  * docs/en/configuration/env-vars.md). `pin: false` is M-K13's control; `profile` redirects `USERPROFILE`/`HOME`/
- * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*`. `personsBin` puts the person's tool folder first on PATH.
+ * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*` (on Linux `HOME` alone, DL11).
+ * `personsBin` puts the person's tool folder first on PATH. `platform` picks the arm (this process's by default) and `parent`
+ * is the environment the minimal names are taken from.
  */
-export function builtEnv({ home, pin = true, profile = '', personsBin = '' }) {
-  const env = { ...minimalWindowsEnv(), NoDefaultCurrentDirectoryInExePath: '1', KIMI_CODE_HOME: home };
+export function builtEnv({ home, pin = true, profile = '', personsBin = '', platform = process.platform, parent = process.env }) {
+  return platform === 'win32' ? windowsBuiltEnv({ home, pin, profile, personsBin, parent }) : unixBuiltEnv({ home, pin, profile, personsBin, parent });
+}
+
+/**
+ * The Linux arm (DL11 of todo/PLAN_kimi_and_vibe_on_linux.md): MinimalUnix plus the same two variables; the OS-home redirect is
+ * `HOME` alone (Kimi derives its XDG folders from it — the Unix minimal set carries no XDG_*); the person's bin first on a
+ * `:`-separated PATH. No Windows name, and no NoDefaultCurrentDirectoryInExePath (a Windows-only variable).
+ */
+function unixBuiltEnv({ home, pin, profile, personsBin, parent }) {
+  const env = { ...minimalEnv('linux', parent), KIMI_CODE_HOME: home };
+  if (pin) env.KIMI_CODE_NO_AUTO_UPDATE = '1';
+  if (personsBin) env.PATH = [personsBin, env.PATH ?? ''].filter(Boolean).join(':');
+  if (profile) env.HOME = profile;
+  return env;
+}
+
+function windowsBuiltEnv({ home, pin, profile, personsBin, parent }) {
+  const env = { ...minimalEnv('win32', parent), NoDefaultCurrentDirectoryInExePath: '1', KIMI_CODE_HOME: home };
   if (pin) env.KIMI_CODE_NO_AUTO_UPDATE = '1';
   // The person's tool folder FIRST (KimiEnvironment.BuiltPath): the rg and fd Kimi's Grep and Glob run are theirs, found before any other.
-  if (personsBin) env.PATH = [personsBin, env.PATH ?? process.env.PATH ?? ''].join(';');
+  if (personsBin) env.PATH = [personsBin, env.PATH ?? parent.PATH ?? ''].join(';');
   if (profile) {
     // A WINDOWS environment is being built, so the profile is read as a Windows path whatever host this runs on: node's default
     // `path` on Linux knows no drive letter, and HOMEDRIVE came out empty there (red on the Linux CI job, 2026-10-16).
@@ -192,8 +215,9 @@ export function builtEnv({ home, pin = true, profile = '', personsBin = '' }) {
  * The shim's own environment for a turn on the owned root `root`, as the runtime hands it (E4.3, KimiRuntime): KIMI_CODE_HOME the root's
  * `home/`, every OS-home name the root's empty `os/`, the person's `bin` first on PATH, the auto-update pin on.
  */
-export function shimEnv({ root, personsBin, pin = true }) {
-  return builtEnv({ home: join(root, OWNED_HOME), profile: join(root, OWNED_OS), personsBin, pin });
+export function shimEnv({ root, personsBin, pin = true, platform = process.platform, parent = process.env }) {
+  const p = platform === 'win32' ? join : posix.join;
+  return builtEnv({ home: p(root, OWNED_HOME), profile: p(root, OWNED_OS), personsBin, pin, platform, parent });
 }
 
 /** The product's layout (E4.2): `<root>/home` (KIMI_CODE_HOME, 0700) beside an empty `<root>/os`. Returns the three paths. */

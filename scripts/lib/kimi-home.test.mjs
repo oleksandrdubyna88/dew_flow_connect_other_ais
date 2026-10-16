@@ -4,18 +4,18 @@
 // canary takes out exactly what it put in, and Kimi's config and reports parse. Runs nothing of Kimi's; makes folders and
 // links only under this user's own temp folder, and removes them.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { MINIMAL_WINDOWS } from './vibe.mjs';
+import { MINIMAL_UNIX, MINIMAL_WINDOWS } from './vibe.mjs';
 import {
-  CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, inventory, makeAgentsCanary, minimalConfigToml,
-  modelAlias, outputTokens, parseUsageLine, personsOauth, realHomeVerdict, removeAgentsCanary,
+  CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, inventory, makeAgentsCanary, makeOwnedHome, minimalConfigToml,
+  modelAlias, outputTokens, parseUsageLine, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv,
 } from './kimi-home.mjs';
 
 const WINDOWS = process.platform === 'win32';
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'kimi-home-test-'));
+const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-home-test-'));
 after(() => rmSync(base, { recursive: true, force: true }));
 
 /** A fake person's home: credentials/ holding two files, one of them read-only. */
@@ -63,13 +63,50 @@ test('the inventory names the junction without entering it', { skip: !WINDOWS &&
   unlinkSync(join(home, 'credentials'));
 });
 
+test('on Linux the disposal unlinks the credentials SYMLINK by its own name and the person\'s files are untouched', { skip: WINDOWS && 'the Windows arm is the junction test above' }, () => {
+  const real = fakeReal('real-linux-1');
+  const home = join(base, 'home-linux-1');
+  mkdirSync(home);
+  symlinkSync(join(real, 'credentials'), join(home, 'credentials'), 'dir');
+  writeFileSync(join(home, 'session_index.jsonl'), '');
+  const before = credentialNames(real);
+  const r = disposeOwnedHome(home, real, before);
+  assert.deepEqual([r.linkRemoved, r.targetIntact, r.homeGone], [true, true, true]);
+  assert.deepEqual(credentialNames(real), before);
+  assert.equal(readFileSync(join(real, 'credentials', 'kimi-code-env-abc.json'), 'utf8'), '{"refresh_token":"r1"}');
+});
+
+test('on Linux the owned home\'s credentials is a SYMLINK to the person\'s folder, made at a path that did not exist', { skip: WINDOWS && 'the Windows arm makes a junction through cmd.exe' }, () => {
+  const real = fakeReal('real-linux-2');
+  writeFileSync(join(real, 'config.toml'), '[providers."managed:kimi-code"]\nbase_url = "https://b"\n\n[providers."managed:kimi-code".oauth]\nkey = "oauth/k"\noauth_host = "https://a"\n');
+  const home = join(base, 'home-linux-2');
+  const made = makeOwnedHome(home, real, ['config'], { defaultModel: 'kimi-code/k3-256k' });
+  assert.equal(made.junctionError, '');
+  assert.equal(lstatSync(join(home, 'credentials')).isSymbolicLink(), true);
+  assert.equal(readlinkSync(join(home, 'credentials')), join(real, 'credentials'));
+  assert.equal(inventory(home).credentials, '(junction)', 'the link is named, never entered');
+  disposeOwnedHome(home, real, credentialNames(real));
+});
+
+test('the Linux built environment is MinimalUnix + the two variables, PATH joined with ":", and the OS home is HOME alone (DL11)', () => {
+  const env = builtEnv({ home: '/r/home', profile: '/r/os', personsBin: '/p/bin', platform: 'linux', parent: { PATH: '/usr/bin', HOME: '/home/u', USER: 'u', APPDATA: 'x' } });
+  assert.deepEqual(Object.keys(env).filter((k) => !MINIMAL_UNIX.includes(k)).sort(), ['KIMI_CODE_HOME', 'KIMI_CODE_NO_AUTO_UPDATE']);
+  assert.equal(env.HOME, '/r/os');
+  assert.equal(env.PATH, '/p/bin:/usr/bin');
+  for (const name of ['USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'NoDefaultCurrentDirectoryInExePath', 'APPDATA']) assert.equal(name in env, false, name);
+  const shim = shimEnv({ root: '/r', personsBin: '/p/bin', platform: 'linux', parent: { PATH: '/usr/bin' } });
+  assert.equal(shim.KIMI_CODE_HOME, '/r/home');
+  assert.equal(shim.HOME, '/r/os');
+  assert.ok(shim.PATH.startsWith('/p/bin:'), shim.PATH);
+});
+
 test('the built environment is the minimal set plus exactly the two variables; the pin can be dropped; a profile redirects every home variable', () => {
-  const env = builtEnv({ home: 'C:\\h\\kh' });
+  const env = builtEnv({ home: 'C:\\h\\kh', platform: 'win32' });
   const extra = Object.keys(env).filter((k) => !MINIMAL_WINDOWS.includes(k));
   assert.deepEqual(extra.sort(), ['KIMI_CODE_HOME', 'KIMI_CODE_NO_AUTO_UPDATE', 'NoDefaultCurrentDirectoryInExePath']);
   assert.equal(env.KIMI_CODE_NO_AUTO_UPDATE, '1');
-  assert.equal('KIMI_CODE_NO_AUTO_UPDATE' in builtEnv({ home: 'C:\\h', pin: false }), false);
-  const redirected = builtEnv({ home: 'C:\\h', profile: 'C:\\t\\run\\profile' });
+  assert.equal('KIMI_CODE_NO_AUTO_UPDATE' in builtEnv({ home: 'C:\\h', pin: false, platform: 'win32' }), false);
+  const redirected = builtEnv({ home: 'C:\\h', profile: 'C:\\t\\run\\profile', platform: 'win32' });
   assert.equal(redirected.USERPROFILE, 'C:\\t\\run\\profile');
   assert.equal(redirected.HOME, 'C:\\t\\run\\profile');
   assert.equal(redirected.HOMEDRIVE, 'C:');

@@ -21,6 +21,12 @@
 // waited for, not killed.
 //
 //   node scripts/probe-kimi-tree-hold.mjs [--shim <coai-mcp.exe>] [--scratch <dir>] [--repeats 3] [--arms normal,normal-tools,killed,killed-rg]
+//
+// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5; the cells it serves are E4's L-K4/L-K6): the process list is read from
+// /proc (lib/proc.mjs — pid, parent, comm; read-only), a lock file's state is asked of flock(1) — .NET turns FileShare.None into
+// an advisory flock there, which a plain open does not see — the shim is `coai-mcp` without `.exe`, the sign-in link is a
+// symlink (DL6), the shim's environment is MinimalUnix with HOME alone redirected (DL11), and the killed-rg arm searches /usr.
+// The rule about another `kimi` is the same and matters more: the refresh token rotates (D19).
 import { spawn, spawnSync } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -29,7 +35,10 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { SYSTEM32, minimalWindowsEnv } from './lib/vibe.mjs';
 import { DEFAULT_MODEL, KIMI_EXE, REAL_HOME, scratchRefusal } from './lib/kimi.mjs';
-import { credentialNames, disposeOwnedHome, makeOwnedHome } from './lib/kimi-home.mjs';
+import { credentialNames, disposeOwnedHome, makeOwnedHome, shimEnv } from './lib/kimi-home.mjs';
+import { FLOCK, linuxProcesses, lockState } from './lib/proc.mjs';
+
+const WINDOWS = process.platform === 'win32';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -45,21 +54,22 @@ const ARMS = {
   killed: { prompt: 'Reply with exactly: OK', killed: true, after: 'kimi' },
   // A pattern no file holds, over a big read-only tree, so `rg` runs for seconds — long enough to kill the shim while it is alive.
   'killed-rg': {
-    prompt: String.raw`Use your Grep tool to search for the text zzqxjv-no-such-text-anywhere recursively in the folder C:\Windows\System32 (a case-insensitive plain search is fine). Report only how many matches there were.`,
+    prompt: `Use your Grep tool to search for the text zzqxjv-no-such-text-anywhere recursively in the folder ${WINDOWS ? String.raw`C:\Windows\System32` : '/usr'} (a case-insensitive plain search is fine). Report only how many matches there were.`,
     killed: true,
     after: 'rg',
   },
 };
 const here = dirname(fileURLToPath(import.meta.url));
-const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', 'coai-mcp.exe');
+const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', WINDOWS ? 'coai-mcp.exe' : 'coai-mcp');
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const armNames = flag('--arms', Object.keys(ARMS).join(',')).split(',').filter(Boolean);
 if (armNames.some((a) => !(a in ARMS)) || !Number.isInteger(repeats) || repeats <= 0) {
   console.error(`usage: probe-kimi-tree-hold.mjs [--shim <exe>] [--scratch <dir>] [--repeats N] [--arms ${Object.keys(ARMS).join(',')}]`);
   process.exit(65);
 }
-if (process.platform !== 'win32' || !existsSync(shim) || !existsSync(KIMI_EXE) || !existsSync(join(REAL_HOME, 'credentials'))) {
-  console.error(`refusing: needs Windows, the built shim (${shim}: ${existsSync(shim)}), kimi (${existsSync(KIMI_EXE)}) and a signed-in ${REAL_HOME}/credentials`);
+const SUPPORTED = WINDOWS || process.platform === 'linux';
+if (!SUPPORTED || (!WINDOWS && !FLOCK) || !existsSync(shim) || !existsSync(KIMI_EXE) || !existsSync(join(REAL_HOME, 'credentials'))) {
+  console.error(`refusing: needs Windows or Linux (with flock(1): ${WINDOWS || Boolean(FLOCK)}), the built shim (${shim}: ${existsSync(shim)}), kimi (${existsSync(KIMI_EXE)}) and a signed-in ${REAL_HOME}/credentials`);
   process.exit(65);
 }
 const scratch = flag('--scratch', '') || mkdtempSync(join(realpathSync.native(tmpdir()), `testsToDelete-kimi-mk15-${randomBytes(3).toString('hex')}-`));
@@ -83,6 +93,7 @@ const now = () => performance.now();
  * the cmdlet and the string are the same in 5.1 as in pwsh 7.
  */
 function listProcesses() {
+  if (!WINDOWS) return linuxProcesses();
   const r = spawnSync(SYSTEM32(String.raw`WindowsPowerShell\v1.0\powershell.exe`), ['-NoProfile', '-NonInteractive', '-Command',
     'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }'], { encoding: 'utf8', timeout: 30_000 });
   return String(r.stdout ?? '').split(/\r?\n/u).filter(Boolean).map((line) => {
@@ -130,8 +141,12 @@ async function noOtherKimi(label) {
 
 // ------------------------------------------------------------------------------------------------------ the lock files
 
-/** Held / Free / Absent by trying to OPEN the file: a file held with FileShare.None refuses every other open (a sharing violation, EBUSY). */
+/**
+ * Held / Free / Absent. Windows: by trying to OPEN the file — a file held with FileShare.None refuses every other open (a sharing
+ * violation, EBUSY). Linux: a plain open always succeeds (the lock is an advisory flock), so flock(1) is asked (lib/proc.mjs).
+ */
 function probe(path) {
+  if (!WINDOWS) return lockState(path);
   try {
     closeSync(openSync(path, 'r'));
     return 'Free';
@@ -156,8 +171,12 @@ const credentialShape = () => credentialNames(REAL_HOME).map((n) => {
 
 const credentialsBefore = credentialNames(REAL_HOME);
 
-/** The shim's own environment, as the runtime would build it: Minimal + the seven built names, the person's bin first on PATH. */
+/**
+ * The shim's own environment, as the runtime would build it: Minimal + the seven built names, the person's bin first on PATH.
+ * On Linux it is lib/kimi-home.mjs's Linux arm (MinimalUnix, KIMI_CODE_HOME, the pin, HOME → os alone, `:` on PATH — DL11).
+ */
 function shimEnvironment(root) {
+  if (!WINDOWS) return shimEnv({ root, personsBin: join(REAL_HOME, 'bin') });
   const os = join(root, 'os');
   // The environment is a Windows one: its drive is read as a Windows path, whatever host runs this file.
   const { root: drive } = win32.parse(os);
