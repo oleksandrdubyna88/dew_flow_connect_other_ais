@@ -24,6 +24,7 @@ import { consultPromptWrite } from '../consultPrompt';
 import { consultantBody } from '../consultantView';
 import { HELP } from '../help';
 import { missingTitle } from '../pathFindings';
+import { useRefusal } from '../modelCardFields';
 import { badEndpoint, endpointAnswer, endpointConflict } from '../consultantWrite';
 import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
@@ -660,8 +661,14 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
   // which has to be drawable before the server is installed — so it is a mirror, and this is the
   // list the agreement test holds against the C#.
   // `api` since PLAN_one_model_catalog.md D9 (E2.3) — the server reads the same shared file; `vibe` since S3 of
-  // PLAN_vibe_and_kimi_runtimes.md, when coai-mcp gained the Vibe consultant.
-  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api', 'vibe']);
+  // PLAN_vibe_and_kimi_runtimes.md, when coai-mcp gained the Vibe consultant; `kimi` since S5 (E5.4 seeds it, E5.7 offers it).
+  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
+});
+
+test('S5.7.5 kimiIsOfferedAsAConsultant: a Kimi card may be ticked consultant and question consultant', () => {
+  // E5.7 decision 4: no picker code — the generated CONSULTING (from features.consultant, E5.4's seed) enables both ticks.
+  assert.equal(useRefusal('consultant', 'kimi'), '');
+  assert.equal(useRefusal('qconsult', 'kimi'), '');
 });
 
 // ---------------------------------------------------------------------------------------------
