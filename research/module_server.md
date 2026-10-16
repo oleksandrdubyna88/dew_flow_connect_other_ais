@@ -3492,8 +3492,21 @@ writes no nulls) and a reader treats absent as *no line count*, never 0 — `Rou
 reader, not `Columns.Number`, which would turn the NULL into 0. `whole.from` is `rounds.base_ref` (the resolved base — a
 backfill never recomputes it), `delta.from` is `delta_from`, `origin` is `size_origin` (`live`/`backfill`). The Team server
 reads neither the session file nor `--log`; the extension's parser ignores members it does not know
-(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts`/`roundsLog.ts` are byte-identical to
-`extension-v0.75.0`'s, so that parser is the released one).
+(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts` is byte-identical to `extension-v0.75.0`'s, so that
+parser is the released one).
+
+**`--log` names each plan round's source** (story E2.S2 of `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract
+C2). `LoggedRound` gains a second init property, `PlanSource` (`Core.Rounds.PlanSource?`, JSON `planSource`: `origin`, `commit`,
+`path`, `blob`, `bytes`, `textId`), absent when null. `RoundsQuery.Rounds` chains `RoundPlanSources.Attach` (its own file, the
+`RoundChangesLog` shape) after `RoundChangesLog.Attach` — one call; the SQL ladder gains no fourth text. It runs ONE query per page,
+`SELECT id, plan_source FROM rounds WHERE plan_source <> '' AND id IN (SELECT value FROM json_each($ids))`, only when the page has
+ids and `HasColumn(db, "rounds", "plan_source")` — a step-22 file is asked, answers with no query, is logged exactly as before
+and stays at twenty-two. The page's ids are bound by `PageIds.Bind`, the helper `RoundChangesLog` used to hold privately and
+both readers now share. **Not recorded is never empty:** an empty column, JSON that does not parse (the `JsonException` catch
+wraps each row's deserialise ONLY, never the query, so a missing column is still loud) and an `origin` other than `commit`/`text`
+all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
+ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
+(`module_extension.md`).
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 

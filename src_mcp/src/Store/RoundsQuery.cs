@@ -111,6 +111,9 @@ public sealed record LoggedRound(
     /// <c>removed</c> are ABSENT from the JSON, and a reader takes absent as "no line count" — never 0.
     /// </remarks>
     public Core.Context.RoundSize? Size { get; init; }
+
+    /// <summary>What a PLAN round reviewed (step 23; an init property like <see cref="Size"/>); null is "not recorded".</summary>
+    public Core.Rounds.PlanSource? PlanSource { get; init; }
 }
 
 
@@ -541,7 +544,7 @@ public static class RoundsQuery
                 Text(rows, "note")));
         }
 
-        return RoundChangesLog.Attach(db, rounds, ids);
+        return RoundPlanSources.Attach(db, RoundChangesLog.Attach(db, rounds, ids), ids);
     }
 
     /// <summary>
