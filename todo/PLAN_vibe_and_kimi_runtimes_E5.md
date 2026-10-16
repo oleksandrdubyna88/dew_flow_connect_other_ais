@@ -1,9 +1,9 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.3 implemented 2026-10-16; E5.4–E5.7 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 implemented 2026-10-16; E5.5–E5.7 not started on this branch.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
-> each, and its fixes are in. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
 > its security judgement. The plan gate passed (proceed), and its findings are folded in (§"Plan gate 2026-10-16").
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 >
@@ -971,6 +971,43 @@ homes live, in all five languages.
 20. **The sweep's and the owner's kept-home sentences, fixed here:** the one-shot sweep says `one-shot Vibe homes: {folder} is kept this pass: {said}`
     (the `DeleteIfDue` shape), the owner `the Kimi home in {folder} is kept: {reason}; the scratch sweep takes it once its tree has ended` (decision g's
     words). Both carry the `Stopped` sentence unparaphrased (R4) — paths and entry names, never a byte (R11, pinned).
+
+**E5.4 as built (Opus, 2026-10-16) — where it deviates from the spec above:**
+
+21. **A dropped session's cure names the sweep, not `close_consult`** (decision 11, S5.4.15). The record of a dropped conversation is `failed`, and
+    `ConsultationClosing.Refusal` refuses to close a failed record ("produced no advice — there is no outcome to record"), so the widened sentence the spec
+    gave would send the caller into a refusal. `ConsultFailure.ConversationDropped.Cure` now reads "start a new consultation — this one has ended, and whatever
+    coai kept for it (a consultant's home) goes with the next sweep"; D20's sweep takes a failed record's folder on its next beat, junction-first (S5.4.15
+    asserts it through `SweepConsultations`). Shared by every vendor's dropped conversation; the sentence is true for one that keeps no home too.
+22. **S5.4.16 needed a code change, shared by every vendor.** A `launch-refused` turn (`KimiLaunch` — or Vibe's control — said no; nothing was launched)
+    ENDED the record (`failed`). `ConsultationFailing.Terminal` now returns a conversation that had already gone on to the status it had before `asking`
+    (`TurnFailure.StatusBefore`, passed from the service's pre-`asking` record through `ConsultationFailedTurns.Decided`) — `open` or `interrupted`, the handle
+    kept, the failure kind and cure recorded beside it; a FIRST turn refused so is ended as before (no conversation to keep). The rule
+    `RefusedBeforeTheLaunch` already applied to an adapter's own refusal. The call is given back and the ledger line written as for any failure, and the answer
+    still says "do not retry this consultation" — right for the re-login, whose cure is a new consultation.
+23. **A product seam for the service arms: `KimiSeams.Using(host, seams)`**, per async flow (the `VibePathBudget.Using` precedent). The service builds
+    `new KimiRuntime(id)` by name, from the real profile and `HostKinds.Current`; the seam lets a test hand it `KimiFixture`'s person and the measured host, so
+    the real launch control, a real junction and a real gate file run under `ConsultationService`. `null` in the product. With it the service arms run on every
+    OS through `WindowsStandIn` (Vibe's service scenarios run on Windows only); only Windows was run here.
+24. **Decision 12 overturned an existing pin.** `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` asserted a report below what
+    was billed bills 0/0 — the very flat row decision 12 forbids. It became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative` (the totals moved on, the
+    cached and reasoning counts did not: those are floored). The rule is public, `ConsultationUsage.IsAReset`, beside the floor.
+25. **S5.4.14's pure arm is in `CumulativeUsageTests`** (`ConsultStoryTwoGateTests.cs`, the existing class for `Less`), not a new `ConsultationUsageTests`.
+26. **The reds.** The pure and adapter rows were watched red against stubs (`KimiConsultant` returning the bare reviewer request; `Less` unchanged). The
+    service rows S5.4.7–S5.4.10, S5.4.14 (service), S5.4.18–S5.4.20 went green on arrival — the code landed with the adapter rows — and were given teeth by
+    a temporary break of the deciding line (`UsageIsCumulative = false`; `DroppedTheConversation` false; the invocation's `Model` emptied; `OwnedScratch`
+    emptied before `inner.Build`; `IsAReset` off; the gate keyed apart through `KimiCredentialsLock.Final`), each run red and reverted. S5.4.15's predicted red
+    ("launched 3 times") could not be produced: there is no restart path to break (`ConsultantTurn` follows up only a launch that answered nothing, never a
+    terminal one), so its teeth are the handle (*… to be empty …, but found "0d6a…"*) and the cure (by nature, deviation 21). S5.4.16 was red by nature.
+27. **S5.4.17's collectors** are every Serilog line of the service (all levels, not only warnings) and every name under the data directory (the homes root
+    included, never entering a link), taken before and after `close_consult`, beside the replies, the record files and the ledger. The control arm is a played
+    answer that carries the canary — seen in the reply and the record.
+28. **S5.4.18 runs in two checkouts.** Two consultations in ONE checkout serialise on the service's `RepositoryLock` before any gate, so the peak would be 1 for
+    the wrong reason. The teeth run shows nothing but the gate serialises the two: keyed apart, the peak is 2.
+29. **Decision 9 in two halves.** The seed and the generated `src_vs_code/src/featureAvailability.generated.ts` (and `featureAvailability.test.ts`'s frozen
+    list) changed here, at the coordinator's word; `consultant.test.ts`'s `CONSULTING` list and `kimiRuntime.test.ts` ("neither a consultant") are E5.7's, and
+    stay red on this branch until E5.7 merges.
+30. **`KimiReport.SessionId` is a trailing, defaulted field** (one construction site, `From`), so nothing else changed shape (decision 3).
 
 ### E5.1–E5.2 as built (Opus, 2026-10-16)
 

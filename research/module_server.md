@@ -7312,3 +7312,40 @@ sequenceDiagram
   entries does not follow one — pinned by `PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` (the person's folder's and its file's descriptors byte-equal).
 - **Not in E5.3:** `KimiConsultant` and the service arms (E5.4) — the record left open on a re-login refusal, two consultations through `ConsultationService`, the two-turn
   canary; renames of `VibeHomes`/`OneShotHome`/`coai-vh`/`VibeHomeTurns` (decision i, the operator's).
+
+### A Kimi consultation through the service — E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+
+The runners' half — `KimiConsultant`, its registration, the seam — is in [module_runners.md](module_runners.md), *The Kimi consultant*. The server needed no new
+branch for Kimi: the place (`ConsultantPlaces.ForConversationAsync`) already makes `coai-kimi\<id>` with its snapshot for a runtime that declares
+`NeedsASanitisedSnapshot` and `HomesFolder`, and hands `OwnedScratch = place.Folder`; the adapter roots the home at `<folder>\kh-<10 hex>` (S5.4.20). What changed
+is shared by every vendor:
+
+```mermaid
+stateDiagram-v2
+  [*] --> asking: turn 1 (new record)
+  asking --> open: answered — billed Less(total, Billed)
+  open --> asking: follow-up, --session id
+  asking --> open: launch-refused (KimiLaunch said no; nothing launched) — failure recorded beside it
+  asking --> failed: session_lost → conversation-dropped, handle cleared
+  open --> closed: close_consult — RemoveNow, junction-first
+  failed --> [*]: the next sweep takes the home (D20)
+```
+
+- **A counter that restarted is billed whole** (decision 12, `ConsultationUsage.IsAReset` in the core, used by `Less`): a CAPTURED report whose input OR output total
+  is below what the record already billed bills the report itself, every field — never the flat zero the floor gave. Both totals are judged together; an uncaptured
+  report (`Usage.Unknown`) is never a reset, so its turn is billed unknown and the next captured share carries its spend (decision 4's stated limit). The rule is shared:
+  antigravity, the other cumulative vendor, reads the same way. `ConsultationBilling.ThisTurnsShare` and `ReplyCost` are unchanged callers.
+- **A launch coai's own control refused leaves a conversation as it was** (E5.3 decision c; S5.4.16). `ConsultationFailing.Terminal` returns a `launch-refused` failure on a
+  record that had already gone on (`TurnFailure.StatusBefore` `open` or `interrupted`, passed from the service's pre-`asking` record through
+  `ConsultationFailedTurns.Decided`) to that status, with the failure kind and cure recorded beside it and the handle kept — nothing was launched, so nothing about the
+  conversation went wrong (the rule `RefusedBeforeTheLaunch` already applied to an adapter's own refusal). A first turn refused so is ended as before. For Kimi this is the
+  re-login between turns (D19's "config.toml is not what coai writes … (a re-login)"): the record stays `open`, and `close_consult` then removes `coai-kimi\<id>`
+  junction-first. The call is given back and the ledger line is written as for any failure.
+- **A dropped session is refused with its cure, never restarted** (decision 11). `session_lost` → `ConsultFailure.ConversationDropped` → the record `failed`, its handle
+  cleared, not resumable. The cure now reads "start a new consultation — this one has ended, and whatever coai kept for it (a consultant's home) goes with the next sweep":
+  `close_consult` refuses a failed record (`ConsultationClosing.Refusal`), so the spec's "close_consult this one" would send the caller into a refusal; the D20 sweep takes a
+  failed record's folder on its next beat, junction-first.
+- **One sign-in, one shim** (decision k, S5.4.18–S5.4.19): two consultations in two checkouts on one sign-in, started together through the service, never overlap — the
+  gate file is the only thing that serialises them (with it keyed apart, the peak is 2) — and a gate another process holds delays the shim until its release.
+
+Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §31).

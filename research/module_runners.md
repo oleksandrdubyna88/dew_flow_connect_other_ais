@@ -3710,3 +3710,44 @@ sequenceDiagram
 Not covered by a test: a live load through the released binary (owed after the code, RESULTS §31), and the probe's M-K16 cell as a `--cells` arm (it ran on a
 scratch driver outside the repository, so it cannot be re-run from the repository yet). Tests: `AskAcpSessionTests`,
 `AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo`, and `scripts/lib/kimi.test.mjs` (S5.1.1–S5.1.2) — listed in [module_tests.md](module_tests.md).
+
+## The Kimi consultant — `KimiConsultant` (2026-10-16, E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
+new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
+still refused by the capability matrix until E5.6).
+
+```mermaid
+flowchart LR
+  L[ConsultantLaunch<br/>Workdir = coai-kimi/id/tree<br/>OwnedScratch = coai-kimi/id<br/>Handle = sessionId or empty] --> B[KimiConsultant.Build]
+  B -->|MustBeLaunchable · model = row's or KimiModels.Default| R[KimiRuntime.Build<br/>role consult · cwd = the snapshot]
+  R --> Q["--ask-acp --profile kimi --model m --cwd tree --home coai-kimi/id/kh-&lt;10 hex&gt; … [--session id]"]
+  Q -->|adapter = KimiRuntime| X[executor → KimiLaunch.TakeAsync → the shim]
+  X --> P[report] -->|sessionId| H[ReadHandle]
+  P -->|end = session_lost| D[DroppedTheConversation]
+  P -->|usage = the SESSION's totals| U[UsageIsCumulative → ConsultationUsage.Less]
+```
+
+- **Composed, never a second builder** (decision 1). `Build` validates the launch (`ConsultantLaunches.MustBeLaunchable`), resolves the model (the row's, else
+  `KimiModels.Default`, so the shim, the invocation's `Model` and the ledger name the same one — E4 decision 75), calls `inner.Build(RoleOf(launch), prompt, cwd, "",
+  OutputDir, settings)` and appends `AcpWords.SessionFlag <handle>` LAST when the launch carries a handle. The invocation's adapter is `inner`, so the executor asks
+  `KimiLaunch` (the host, the tools, the model, the built environment, the sign-in, the home's shape, the gate) exactly as for a reviewer. A planned launch goes through
+  `ConsultantLaunches.ForQuestion` (idempotent on Kimi's built environment) and stands where its plan says — E5.6's business.
+- **The cwd and the home are both required** (decision 2). The cwd is `Workdir` — the conversation's ONE stable snapshot (D6; a loaded session resolves paths against the
+  folder it was made in, M-K5) — and the home is `KimiHome.HomeFor(OwnedScratch, …)` = `<folder>\kh-<10 hex>`, never the folder itself (E5.3 decision a). A missing
+  `Workdir` or `OwnedScratch` is an `ArgumentException` naming it: never the checkout, never TEMP or the answers folder (D19).
+- **Memory, handle, usage, drop** (decisions 3–5). `Memory = VendorRemembers`; `ReadHandle` is `KimiReport.SessionId` — the report's `sessionId`, which `KimiReport`
+  now reads (a trailing, defaulted field: widened, not copied) — when `ConsultantHandle.IsWellFormed`, else empty. `UsageIsCumulative = true` (M-K5b): the service bills
+  each turn `ConsultationUsage.Less` of the session's total. `DroppedTheConversation` is the report's END word `AcpWords.SessionLostWord` — never its `reason`, never the
+  agent's text, so a reason that SAYS `session_lost` is not a drop.
+- **Declared, not decided by name** (decisions 6–7): `NeedsASanitisedSnapshot = true`, `HomesFolder = ConsultantHomes.Kimi`; `Toolbox` names `Read` inside the copy and
+  `Grep`/`Glob`, says writes and shell commands are refused, and never calls `Grep` or `Glob` bounded (M-K6: they read the disk directly).
+- **A test's seam for a runtime built BY NAME** — `KimiSeams.Using(host, seams)`, per async flow (the `VibePathBudget.Using` precedent): `new KimiRuntime(id)` reads
+  `KimiSeams.ForThisFlow` (this machine's host and seams unless a test stood in), so a scenario that drives the real `ConsultationService` runs the real launch control
+  over a fake person on any OS. `null` in the product; nothing else reads it.
+- **The limitation rows** (decision 8, `shared/consultant-limitations.json`): Windows `unconfined` — `Read` bounded to coai's copy, `Grep`/`Glob` read any file this user
+  can, every write and shell command refused — `measured` 2026-10-13 on kimi 2.1.1 (M-K6, M-K3, M-K4, M-K5, M-K5b); Linux, WSL and macOS `unmeasured` with a `source`
+  naming D18, as Vibe's rows do.
+
+Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
+(S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
