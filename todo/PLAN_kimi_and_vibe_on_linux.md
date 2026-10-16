@@ -40,7 +40,10 @@ and Kimi's refresh token rotates (a second launch could sign him out).
    A native Linux host (`HostKind.Linux`) stays refused, with a sentence saying it is measured on WSL2 only, until one native-Linux
    run of L-V9 is recorded (DL1; the plan gate, F10).
 2. The same for a Kimi row, after its WSL cells are recorded: the owned `KIMI_CODE_HOME`, the sign-in by link, the refresher lock,
-   the tree hold, the teardown that leaves no grandchild, the wait for the person's own `kimi`.
+   the tree hold, the teardown that leaves no grandchild, the wait for the person's own `kimi`. One limit, stated (cadence consult
+   8df043b8): if the shim itself is `SIGKILL`ed, a descendant born after its last listing is not in the marker and may outlive the
+   turn — accepted because only `kimi` refreshes and an orphan `kimi` is caught by DL10's wait; a surviving non-`kimi` grandchild is
+   a leak, not a credential risk.
 3. Every action is a panel button: on Debian/Ubuntu (`apt-get`) and Fedora (`dnf`) the install button provisions what the launch
    needs (Kimi's `rg`/`fd`); on any other distribution it prints one generic instruction — *install ripgrep and fd with your
    distribution's package manager, or place them on PATH or in `~/.local/bin`* — and the card, the hint and the help say what the
@@ -341,7 +344,8 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   enough for its purpose, one refresher at a time, IF the refresher is `kimi` itself: **L-K4** checks that no descendant of `kimi acp`
   is another `kimi`. If one is, `ForeignKimiWatch`'s orphan rule (a `kimi` whose parent ended counts as the person's,
   `src_mcp/runners/Kimi/ForeignKimi.cs:32-36`) is the only net, and the plan goes back to the owner before E5 ships.
-  **L-K4 (RESULTS_kimi_confinement §29): no descendant of `kimi acp` was another `kimi`; only the agent held the inherited lock
+  **L-K4 (RESULTS_kimi_confinement §29): in the measured tree (Grep turns; Kimi's sub-agents, background shell and MCP servers not
+  run), no descendant of `kimi acp` was another `kimi`; only the agent held the inherited lock
   descriptor** (`rg` and a transient `env` child held nothing). The premise holds; L-N1 (.NET's share mode on Linux) is still owed.
 
 - **DL9 — The teardown on Linux: the shim is a child SUBREAPER and ends its own descendants by identity.** The parent plan's S4
@@ -366,7 +370,10 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     against .NET 10's `ProcessWaitState.Unix.cs`): .NET reaps the children it started through its own SIGCHLD handling, and a
     `waitpid(-1)` that takes the status of a child the runtime still tracks can end in the runtime's `FailFast`, not only in a wrong
     exit code — and "the shim starts nothing but the agent" is a fact about today's code, not a guarantee. So every step of the
-    confirmation loop reaps exactly the descendants it LISTED in state `Z` whose pid is not the agent's (`waitid(P_PID, pid, …,
+    confirmation loop reaps exactly the descendants it LISTED in state `Z` whose pid is not one the shim STARTED (the launcher keeps
+    the set of pids it started through `Process.Start` — today only the agent — and the drain excludes all of them, so a future probe
+    child stays .NET's to reap; the L-N2 test starts a second managed child that exits with 17 during the drain and asserts its
+    managed wait still sees 17) (`waitid(P_PID, pid, …,
     WEXITED | WNOHANG)` each): a reparented orphan is never a `Process` object, and a pid coai did not list is never touched. The
     L-N2 test asserts the agent's own exit code survives the drain. (2) `ProcessTree.Descendants`, when used for the confirmation, drops an entry that has exited — the rule `IsAlive` already
     applies (`Exited` / `ExitedEntry`, `src_mcp/runners/Processes/ProcessTree.cs:202-211`: state `Z` or `X` with no thread but the
