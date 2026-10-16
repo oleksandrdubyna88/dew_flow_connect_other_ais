@@ -178,9 +178,24 @@ export function calledBy(caller: CallerDeclaration | undefined): string {
   return `${client}${version === '' ? '' : ` ${version}`} · ${model}`;
 }
 
-/** The first seven characters of a hash — shown whole when shorter — or `undefined` for a value that is not a string. */
+/** A hash as git writes it: hex, long enough to name an object, no longer than a SHA-256. */
+const HASH = /^[0-9a-f]{7,64}$/iu;
+
+/**
+ * A hash as shown: its first seven characters. The empty string stays empty — a segment with nothing to say is not printed —
+ * and anything else that is not a hex string is `undefined`, which makes the whole line unusable.
+ */
 function shortHash(value: unknown): string | undefined {
-  return typeof value === 'string' ? value.slice(0, 7) : undefined;
+  if (value === '') {
+    return '';
+  }
+
+  return typeof value === 'string' && HASH.test(value.trim()) ? value.trim().slice(0, 7) : undefined;
+}
+
+/** A member of an object read off a disk, by name — `Reflect.get`, so no type assertion stands in for validating it. */
+function member(source: object, key: string): unknown {
+  return Reflect.get(source, key);
 }
 
 /** A size the server could have measured: a non-negative safe integer, never `"x"`, a fraction or a negative. */
@@ -208,39 +223,45 @@ function segment(prefix: string, value: string): string {
  * <p>The empty answer is the load-bearing one, as it is for `calledBy`: a round from before the field, a code round and a
  * server this build does not know all read as "not recorded", and a half-sentence built from what happened to be there would be
  * a claim about a plan nobody wrote down. The file is JSON off a disk five processes write, so every member is checked: an
- * unknown or missing `origin`, a hash that is not a string, `bytes` that is not a non-negative safe integer, and a committed
- * round without its path are all unusable.</p>
+ * unknown or missing `origin`, a hash that is not hex of seven to sixty-four characters (an EMPTY one is left out), `bytes` that is
+ * not a non-negative safe integer, a committed round without its path and a pasted one without its text id are all unusable.
+ * The parameter is `unknown` for that reason: nothing here has been validated yet, and a type assertion would only say it had.</p>
  */
-export function reviewedFrom(source: PlanSourceRecord | undefined): string {
+export function reviewedFrom(source: unknown): string {
   return typeof source !== 'object' || source === null ? '' : lineOf(source);
 }
 
-function lineOf(source: PlanSourceRecord): string {
-  const commit = shortHash(source.commit);
+function lineOf(source: object): string {
+  const commit = shortHash(member(source, 'commit'));
+  const bytes = member(source, 'bytes');
 
-  return commit === undefined || !isByteCount(source.bytes)
+  return commit === undefined || !isByteCount(bytes)
     ? ''
-    : lineByOrigin(source, commit === '' ? '' : ` @ ${commit}`, ` · ${groupedBytes(source.bytes)} bytes`);
+    : lineByOrigin(source, commit === '' ? '' : ` @ ${commit}`, ` · ${groupedBytes(bytes)} bytes`);
 }
 
 /** The origin decides the shape of the line; an origin this build does not know has none. */
-function lineByOrigin(source: PlanSourceRecord, at: string, size: string): string {
-  switch (source.origin) {
+function lineByOrigin(source: object, at: string, size: string): string {
+  switch (member(source, 'origin')) {
     case 'text': return pastedLine(source, at, size);
     case 'commit': return committedLine(source, at, size);
     default: return '';
   }
 }
 
-function pastedLine(source: PlanSourceRecord, at: string, size: string): string {
-  return typeof source.textId === 'string' ? `pasted planText${at}${segment('· text ', source.textId)}${size}` : '';
+/** A pasted plan needs its text id — an empty one is not a line with a hole in it, it is no line. */
+function pastedLine(source: object, at: string, size: string): string {
+  const textId = member(source, 'textId');
+
+  return typeof textId === 'string' && textId !== '' ? `pasted planText${at} · text ${textId}${size}` : '';
 }
 
-function committedLine(source: PlanSourceRecord, at: string, size: string): string {
-  const blob = shortHash(source.blob);
+function committedLine(source: object, at: string, size: string): string {
+  const path = member(source, 'path');
+  const blob = shortHash(member(source, 'blob'));
 
-  return typeof source.path === 'string' && source.path !== '' && blob !== undefined
-    ? `${source.path}${at}${segment('· blob ', blob)}${size}`
+  return typeof path === 'string' && path !== '' && blob !== undefined
+    ? `${path}${at}${segment('· blob ', blob)}${size}`
     : '';
 }
 

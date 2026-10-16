@@ -357,9 +357,6 @@ const pasted = (over: Partial<PlanSourceRecord> = {}): PlanSourceRecord => ({
   origin: 'text', commit: 'c'.repeat(40), path: '', blob: '', bytes: 512, textId: 'fedcba9876543210', ...over,
 });
 
-/** JSON off a disk five processes write: whatever it is, it is not a `PlanSourceRecord`. */
-const sourceOffDisk = (value: unknown): PlanSourceRecord | undefined => value as PlanSourceRecord | undefined;
-
 test('a committed plan round says its file, the commit, the blob and the size', () => {
   assert.equal(reviewedFrom(committed()), 'todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes');
 });
@@ -373,8 +370,24 @@ test('a pasted plan whose commit is empty leaves the commit out rather than prin
   assert.equal(reviewedFrom(pasted({ commit: '' })), 'pasted planText · text fedcba9876543210 · 512 bytes');
 });
 
-test('a hash shorter than seven characters is shown whole, not padded', () => {
-  assert.equal(reviewedFrom(committed({ commit: 'abc', blob: 'de' })), 'todo/PLAN_x.md @ abc · blob de · 98 304 bytes');
+test('a hash is hex, trimmed, and shown as its first seven characters — uppercase kept', () => {
+  assert.equal(reviewedFrom(committed({ commit: ' ABCDEF1234 ', blob: '0123456' })), 'todo/PLAN_x.md @ ABCDEF1 · blob 0123456 · 98 304 bytes');
+});
+
+test('an empty blob leaves its segment out, as an empty commit leaves out the @', () => {
+  assert.equal(reviewedFrom(committed({ blob: '' })), 'todo/PLAN_x.md @ aaaaaaa · 98 304 bytes');
+});
+
+test('a hash that is not hex of a plausible length makes the whole line unusable', () => {
+  assert.equal(reviewedFrom(committed({ commit: 'abc' })), '', 'shorter than seven');
+  assert.equal(reviewedFrom(committed({ commit: 'a'.repeat(65) })), '', 'longer than a hash can be');
+  assert.equal(reviewedFrom(committed({ commit: 'zzzzzzzz' })), '', 'not hex');
+  assert.equal(reviewedFrom(committed({ commit: '<img src=x>' })), '', 'markup is not a hash');
+  assert.equal(reviewedFrom(committed({ blob: 'not-a-blob' })), '', 'a blob that is not hex');
+});
+
+test('a pasted plan with an empty text id is unusable, not a line with a hole in it', () => {
+  assert.equal(reviewedFrom(pasted({ textId: '' })), '');
 });
 
 test('the size is grouped by three with a plain space, and zero is a size', () => {
@@ -385,19 +398,19 @@ test('the size is grouped by three with a plain space, and zero is a size', () =
 
 test('a source nobody recorded reads as no line at all', () => {
   assert.equal(reviewedFrom(undefined), '');
-  assert.equal(reviewedFrom(sourceOffDisk(null)), '');
-  assert.equal(reviewedFrom(sourceOffDisk('commit')), '', 'a bare string is not a source');
+  assert.equal(reviewedFrom(null), '');
+  assert.equal(reviewedFrom('commit'), '', 'a bare string is not a source');
 });
 
 test('a source that cannot be trusted reads as no line, never a half-sentence', () => {
-  assert.equal(reviewedFrom(sourceOffDisk({ commit: COMMIT, bytes: 1 })), '', 'no origin');
+  assert.equal(reviewedFrom({ commit: COMMIT, bytes: 1 }), '', 'no origin');
   assert.equal(reviewedFrom(committed({ origin: 'ftp' })), '', 'an origin this build does not know');
-  assert.equal(reviewedFrom(sourceOffDisk({ ...committed(), bytes: 'x' })), '', 'bytes that is not a number');
+  assert.equal(reviewedFrom({ ...committed(), bytes: 'x' }), '', 'bytes that is not a number');
   assert.equal(reviewedFrom(committed({ bytes: -1 })), '', 'a negative size');
   assert.equal(reviewedFrom(committed({ bytes: 1.5 })), '', 'a fractional size');
   assert.equal(reviewedFrom(committed({ bytes: 2 ** 60 })), '', 'a size past the safe integers');
-  assert.equal(reviewedFrom(sourceOffDisk({ ...committed(), commit: 7 })), '', 'a commit that is not a string');
-  assert.equal(reviewedFrom(sourceOffDisk({ ...committed(), blob: null })), '', 'a blob that is not a string');
+  assert.equal(reviewedFrom({ ...committed(), commit: 7 }), '', 'a commit that is not a string');
+  assert.equal(reviewedFrom({ ...committed(), blob: null }), '', 'a blob that is not a string');
   assert.equal(reviewedFrom(committed({ path: '' })), '', 'a committed round without its path');
-  assert.equal(reviewedFrom(sourceOffDisk({ ...pasted(), textId: 7 })), '', 'a text id that is not a string');
+  assert.equal(reviewedFrom({ ...pasted(), textId: 7 }), '', 'a text id that is not a string');
 });

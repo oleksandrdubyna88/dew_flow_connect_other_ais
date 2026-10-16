@@ -13,7 +13,7 @@
 before any story. E6 carries no cornerstone AREA (the parent's `## Epics`, *"an arithmetic §8 fixes as exact-cell tests"*), so
 no story here is marked; the parent's ledger reads `Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2` (parent §16 D21).
 
-**Inputs E6 reads, and from whom.** E6 depends on E5.S2 (step 24 (step 23 was taken by the plan-gate E2, 2026-10-16)) and E2.S3 (step 22), on E4.S4 for contributors and on
+**Inputs E6 reads, and from whom.** E6 depends on E5.S2 (step 24; step 23 was taken by the plan-gate E2, 2026-10-16) and E2.S3 (step 22), on E4.S4 for contributors and on
 E5.S6 for `shared/model-display-vectors.json`. None of their schema steps exists today
 (`Schema.cs:31-37` ends at step 21, `TheRoundsKey`, `:614-616`), so the names below are the parent's (§7, §11 step 4) and
 **the coder of E6.S1 opens `Schema.cs` steps 22 and 24 as E2 and E5 shipped them (step 23 was taken by the plan-gate E2, 2026-10-16) and uses THEIR names** — where they differ
@@ -142,7 +142,7 @@ Not a cornerstone.
      only as `InWindow = false` context.
   6. *A step-21 file* (`OlderFile` stopped before step 22): rounds read, authors `NotRecorded`, size not recorded,
      `EffortRecorded = false`; the file's SHA-256 and `PRAGMA user_version` (21) unchanged afterwards.
-  7. *A step-22 or step-23 file* (stopped before 24 (step 23 was taken by the plan-gate E2, 2026-10-16)): size read, authors `NotRecorded`.
+  7. *A step-22 or step-23 file* (stopped before 24; step 23 was taken by the plan-gate E2, 2026-10-16): size read, authors `NotRecorded`.
   8. *Missing database* → `[]`, the data directory holds no `coai.db` afterwards.
   9. *No text crosses*: a sentinel (`SENTINEL-7f3a`) written into `plan_text`, `agent_log`, `subject`, `note`, and every
      finding's `title/why/fix/reason` → no `RoundFacts.ToString()` of the read contains it; companion (`testing.md`, *a
@@ -152,7 +152,7 @@ Not a cornerstone.
   `f.title` into a field → scenario 9; use `<=` for `until` → scenario 4.
 - **Done when.** Scenarios 1–9 green, the four break-its observed; the reader is read-only (scenario 6) and text-free
   (scenario 9); suite green.
-- **Depends on.** E2.S3 (step 22), E5.S2 (step 24 (step 23 was taken by the plan-gate E2, 2026-10-16)), E4.S4 (contributors), E5.S6 (the vectors file). **Model:** brief Opus → code Sonnet → review Opus → fixes Sonnet.
+- **Depends on.** E2.S3 (step 22), E5.S2 (step 24; step 23 was taken by the plan-gate E2, 2026-10-16), E4.S4 (contributors), E5.S6 (the vectors file). **Model:** brief Opus → code Sonnet → review Opus → fixes Sonnet.
 
 ---
 

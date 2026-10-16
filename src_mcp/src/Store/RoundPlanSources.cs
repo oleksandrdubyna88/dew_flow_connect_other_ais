@@ -21,40 +21,48 @@ namespace CoaiMcp.Store;
 /// </remarks>
 public static class RoundPlanSources
 {
-    /// <summary>The page's rounds, each carrying what it reviewed when it has a source — the page's own ids, in the page's own order.</summary>
-    public static List<LoggedRound> Attach(SqliteConnection db, List<LoggedRound> rounds, IReadOnlyList<long> ids)
+    /// <summary>
+    /// The rounds, each carrying what it reviewed when it has a source — correlated by the round's OWN id
+    /// (<see cref="PageIds.Of"/>), never by its position, so a reordered or filtered list still attaches each source to its round.
+    /// </summary>
+    public static List<LoggedRound> Attach(SqliteConnection db, List<LoggedRound> rounds)
     {
-        var sources = Read(db, ids);
+        var sources = Read(db, [.. rounds.Select(PageIds.Of)]);
 
-        return [.. rounds.Select((round, at) => sources.TryGetValue(ids[at], out var source) ? round with { PlanSource = source } : round)];
+        return [.. rounds.Select(round => sources.TryGetValue(PageIds.Of(round), out var source) ? round with { PlanSource = source } : round)];
     }
 
     /// <summary>The ids the page asked about, with the source each recorded plan round holds.</summary>
     public static IReadOnlyDictionary<long, PlanSource> Read(SqliteConnection db, IReadOnlyCollection<long> roundIds)
     {
-        var sources = new Dictionary<long, PlanSource>();
         if (roundIds.Count == 0 || !RoundsQuery.HasColumn(db, "rounds", "plan_source"))
         {
-            return sources;
+            return new Dictionary<long, PlanSource>();
         }
 
+        return Stored(db, roundIds)
+            .SelectMany(row => Parsed(row.Json).Select(source => (row.Id, Source: source)))
+            .ToDictionary(row => row.Id, row => row.Source);
+    }
+
+    /// <summary>The page's non-empty columns as (id, JSON) — the query only; parsing is each row's own affair.</summary>
+    private static List<(long Id, string Json)> Stored(SqliteConnection db, IReadOnlyCollection<long> ids)
+    {
         using var read = db.CreateCommand();
         read.CommandText = """
             SELECT id, plan_source
             FROM rounds
             WHERE plan_source <> '' AND id IN (SELECT value FROM json_each($ids))
             """;
-        PageIds.Bind(read, roundIds);
+        PageIds.Bind(read, ids);
         using var rows = read.ExecuteReader();
+        var stored = new List<(long Id, string Json)>();
         while (rows.Read())
         {
-            foreach (var source in Parsed(Columns.Text(rows, "plan_source")))
-            {
-                sources[Columns.Id(rows, "id")] = source;
-            }
+            stored.Add((Columns.Id(rows, "id"), Columns.Text(rows, "plan_source")));
         }
 
-        return sources;
+        return stored;
     }
 
     /// <summary>One source, or none: the row's JSON when it parses and names an origin this build knows.</summary>

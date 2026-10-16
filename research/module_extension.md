@@ -6460,14 +6460,15 @@ on both sides assert the same strings against the same inputs.
 
 **An opened PLAN round also says what it reviewed (2026-10-16, story E2.S3 of
 `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C3).** `RoundRecord.planSource`
-(`PlanSourceRecord` — `origin`, `commit`, `path`, `blob`, `bytes`, `textId`, all optional, read defensively) is the
+(`PlanSourceRecord` — `origin`, `commit`, `path`, `blob`, `bytes`, `textId`, all optional; `reviewedFrom` takes `unknown` and reads members with `Reflect.get`, so no type assertion stands in for validation) is the
 session file's copy of what E1 stamped on the round. `reviewedFrom(source)` in `rounds.ts` turns it into one line —
 `todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes` for a committed plan, `pasted planText @ ccccccc · text
 fedcba9876543210 · 512 bytes` for a pasted one (the text id is shown whole so two pastes of one size stay apart; `@ commit`
 is left out when the commit is empty) — and `LogRow.reviewedFrom` carries it into the page. The hashes are `slice(0, 7)`
-of a STRING (a shorter one is shown whole); `bytes` must be a non-negative safe integer and is grouped by three with a plain
+of a trimmed hex STRING; `bytes` must be a non-negative safe integer and is grouped by three with a plain
 space by a pure function, never `toLocaleString`. **Anything unusable reads as the empty string** — an unknown or missing
-`origin`, a hash that is not a string, bad `bytes`, a committed round without its path — and an empty line renders nothing:
+`origin`, a hash that is not hex of seven to sixty-four characters (an EMPTY one is simply left out), bad `bytes`, a committed
+round without its path, a pasted one without its text id — and an empty line renders nothing:
 a round from before the field, a code round and a server this build does not know all say "not recorded", never a
 half-sentence.
 

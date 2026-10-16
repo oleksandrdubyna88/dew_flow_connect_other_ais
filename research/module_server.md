@@ -3482,7 +3482,7 @@ rest.
 
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
-`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's ids to `RoundChangesLog.Attach` (its own file, the
+`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's rounds to `RoundChangesLog.Attach` (which finds each round's id in its own cursor) (its own file, the
 `QuestionConsultLog` shape, on the read-only connection `Read` already opened), which answers with TWO grouped reads per page —
 `rounds` for the states, `round_changes` for the cells — never one per round. **Absent means not recorded:** a round with no
 `size` member predates step 22, is a plan/document round, or never had a size written; a file still at step 21 is asked for
@@ -3502,7 +3502,9 @@ C2). `LoggedRound` gains a second init property, `PlanSource` (`Core.Rounds.Plan
 `SELECT id, plan_source FROM rounds WHERE plan_source <> '' AND id IN (SELECT value FROM json_each($ids))`, only when the page has
 ids and `HasColumn(db, "rounds", "plan_source")` — a step-22 file is asked, answers with no query, is logged exactly as before
 and stays at twenty-two. The page's ids are bound by `PageIds.Bind`, the helper `RoundChangesLog` used to hold privately and
-both readers now share. **Not recorded is never empty:** an empty column, JSON that does not parse (the `JsonException` catch
+both readers now share. **Rounds are matched to what is attached by their OWN id, never by list position:** `Attach(db, rounds)`
+(this reader's and `RoundChangesLog.Attach`'s alike) takes each round's id from its cursor (`PageIds.Of`, `started_utc|id`), so
+a reordered or filtered list still gets each source and size on its own round (`ARoundList_InAnotherOrder_OrFiltered_…`). **Not recorded is never empty:** an empty column, JSON that does not parse (the `JsonException` catch
 wraps each row's deserialise ONLY, never the query, so a missing column is still loud) and an `origin` other than `commit`/`text`
 all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this

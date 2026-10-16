@@ -627,9 +627,5 @@ test('a hostile path cannot put markup on the page', () => {
     'and the row carrying it into the page is escaped there too');
 });
 
-test('the page embeds the reviewed-from builder by assignment, so the tested function is the run one', () => {
-  const html = roundsLogHtml(rowsFrom([session([round({ stage: 'PlanReview', planSource: PLAN_SOURCE })])], NOW), [], 'n');
-  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
-
-  assert.ok(script.includes('var reviewedFromHtml = ' + reviewedFromHtml.toString()), 'bound by assignment, as askedByHtml is');
-});
+// That the page EMBEDS the builder and DRAWS the line is asserted where the page runs — `bundledPage.test.ts`, "opening a plan
+// round shows what it reviewed" — over the bundled, minified page, not by matching its source text here.

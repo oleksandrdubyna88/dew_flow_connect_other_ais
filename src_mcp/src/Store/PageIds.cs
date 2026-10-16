@@ -14,4 +14,12 @@ internal static class PageIds
     /// </summary>
     internal static void Bind(SqliteCommand command, IReadOnlyCollection<long> ids) =>
         command.Parameters.AddWithValue("$ids", "[" + string.Join(',', ids) + "]");
+
+    /// <summary>
+    /// The database id of a logged round, read from the round's OWN cursor (<c>started_utc|id</c>) — so a reader that attaches
+    /// something to a page correlates by what each round says it is, never by where it happens to sit in a list. 0 when the
+    /// cursor does not carry one, which matches no row.
+    /// </summary>
+    internal static long Of(LoggedRound round) =>
+        long.TryParse(round.Cursor[(round.Cursor.LastIndexOf('|') + 1)..], out var id) ? id : 0L;
 }

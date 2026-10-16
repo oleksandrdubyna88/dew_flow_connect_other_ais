@@ -508,11 +508,9 @@ public static class RoundsQuery
         read.Parameters.AddWithValue("$limit", limit);
         using var rows = read.ExecuteReader();
         var rounds = new List<LoggedRound>();
-        var ids = new List<long>();
         while (rows.Read())
         {
             var id = Big(rows, "id");
-            ids.Add(id);
             var started = Text(rows, "started_utc");
             var vendor = Text(rows, "caller_vendor");
             var client = Text(rows, "caller_client");
@@ -544,7 +542,7 @@ public static class RoundsQuery
                 Text(rows, "note")));
         }
 
-        return RoundPlanSources.Attach(db, RoundChangesLog.Attach(db, rounds, ids), ids);
+        return RoundPlanSources.Attach(db, RoundChangesLog.Attach(db, rounds));
     }
 
     /// <summary>

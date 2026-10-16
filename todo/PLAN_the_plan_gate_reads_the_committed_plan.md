@@ -255,6 +255,6 @@ Cornerstones: 1 of 1 — E1.S2
   `''` always in the projection write → the round trip of a committed plan round goes red (story E2.S1).
 - **Done when.** A step-22 database opens at step 23 and a read-only `--log` on a step-22 file still answers; a round
   recorded before the step reads *not recorded* in `--log`; a round recorded after it shows commit, path, blob and bytes;
-  `bundledPage.test.ts` shows the line for a round with `planSource` and nothing without; B10 and B11 observed red then
+  `bundledPage.test.ts` shows the line for a round with `planSource` and nothing without; B10, B11 and B16 observed red then
   green; `CoaiMcp.Tests.exe` and `npm test` green; the step number checked against `main` at merge; both documents of this
   plan promoted together.

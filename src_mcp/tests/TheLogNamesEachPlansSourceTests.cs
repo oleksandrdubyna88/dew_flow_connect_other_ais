@@ -140,6 +140,22 @@ public sealed class TheLogNamesEachPlansSourceTests : IDisposable
     }
 
     [Fact]
+    public void ARoundList_InAnotherOrder_OrFiltered_StillGetsEachSourceOnItsOwnRound()
+    {
+        Record([.. Enumerable.Range(1, 6).Select(n => Round(n, CommittedAt(n)))]);
+        var page = RoundsQuery.Read(_dir).Rounds.Select(r => r with { PlanSource = null }).ToList();
+        var shuffled = page.Where(r => r.Number != 3).OrderBy(r => r.Number % 2).ThenBy(r => r.Number).ToList();
+
+        using var db = new SqliteConnection($"Data Source={Database};Pooling=False;Mode=ReadOnly");
+        db.Open();
+        var attached = RoundPlanSources.Attach(db, shuffled);
+
+        attached.Select(r => r.Number).Should().Equal(shuffled.Select(r => r.Number), "attaching changes no round and no order");
+        attached.Should().OnlyContain(r => r.PlanSource == CommittedAt(r.Number),
+            "each source is found by the round's own id — a list in another order, or one round short, is not paired by position");
+    }
+
+    [Fact]
     public void AStepTwentyTwoFile_IsLoggedAsBefore()
     {
         var steps = Schema.Steps[..Array.IndexOf(Schema.Steps, Schema.ThePlanSource)];

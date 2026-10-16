@@ -33,12 +33,15 @@ public static class RoundChangesLog
         return states.ToDictionary(state => state.Key, state => SizeOf(state.Key, state.Value, cells));
     }
 
-    /// <summary>The page's rounds, each carrying its own size when it has one — the page's own ids, in the page's own order.</summary>
-    public static List<LoggedRound> Attach(SqliteConnection db, List<LoggedRound> rounds, IReadOnlyList<long> ids)
+    /// <summary>
+    /// The rounds, each carrying its own size when it has one — correlated by the round's OWN id (<see cref="PageIds.Of"/>), never
+    /// by its position, so a reordered or filtered list still attaches each size to its round.
+    /// </summary>
+    public static List<LoggedRound> Attach(SqliteConnection db, List<LoggedRound> rounds)
     {
-        var sizes = Read(db, ids);
+        var sizes = Read(db, [.. rounds.Select(PageIds.Of)]);
 
-        return [.. rounds.Select((round, at) => sizes.TryGetValue(ids[at], out var size) ? round with { Size = size } : round)];
+        return [.. rounds.Select(round => sizes.TryGetValue(PageIds.Of(round), out var size) ? round with { Size = size } : round)];
     }
 
     private sealed record StateRow(string Whole, string Delta, string DeltaFrom, string Origin, string BaseRef);

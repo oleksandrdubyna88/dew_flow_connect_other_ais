@@ -133,7 +133,7 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
   are written by the table's own `UPDATE`, so its `ON CONFLICT` list stays as it is. Copy the test file
   `src_mcp/tests/TheRoundKeyIsStepTwentyOneTests.cs` as the shape of the migration tests (its `MakeAt`, `Shape`, preview forks).
 - **Tests (RED first; new `TheRoundsAuthorsAreStepTwentyFourTests` + `RoundAuthorsTableTests`):**
-  - The step is the last and appended, never inserted; a database at E2's step (and one at step 21) opens at the head and its
+  - The step is the last and appended, never inserted; a database at step 23 (and one at step 22 or 21) opens at the head and its
     older rounds read state `''` and zero rows; a migrated database opens again unchanged.
   - Both preview forks still reach the head (`TheRoundKeyIsStepTwentyOneTests.cs:134-150`).
   - `RecordRound` with an `observed` snapshot writes the columns and the rows in order; recorded twice → `SELECT *` of
