@@ -9,7 +9,7 @@
 // junction (the token refresh, RESULTS §11). A junction is removed by its OWN name (rmdirSync on the link), never through it;
 // after every disposal the target folder must still hold the files it held.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, parse } from 'node:path';
+import { basename, dirname, join, win32 } from 'node:path';
 import { files, fwd, minimalWindowsEnv } from './vibe.mjs';
 import { OWNED_HOME, OWNED_OS, fileHash, junction } from './kimi.mjs';
 
@@ -180,7 +180,9 @@ export function builtEnv({ home, pin = true, profile = '', personsBin = '' }) {
   // The person's tool folder FIRST (KimiEnvironment.BuiltPath): the rg and fd Kimi's Grep and Glob run are theirs, found before any other.
   if (personsBin) env.PATH = [personsBin, env.PATH ?? process.env.PATH ?? ''].join(';');
   if (profile) {
-    const { root, dir, base } = parse(profile);
+    // A WINDOWS environment is being built, so the profile is read as a Windows path whatever host this runs on: node's default
+    // `path` on Linux knows no drive letter, and HOMEDRIVE came out empty there (red on the Linux CI job, 2026-10-16).
+    const { root, dir, base } = win32.parse(profile);
     Object.assign(env, { USERPROFILE: profile, HOME: profile, HOMEDRIVE: root.replace(/[\\/]+$/u, ''), HOMEPATH: `${dir.slice(root.length - 1)}\\${base}`.replace(/^\\+/u, '\\') });
   }
   return env;

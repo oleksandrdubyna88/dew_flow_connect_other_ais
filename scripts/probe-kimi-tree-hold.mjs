@@ -24,10 +24,10 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, parse } from 'node:path';
+import { dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import { minimalWindowsEnv } from './lib/vibe.mjs';
+import { SYSTEM32, minimalWindowsEnv } from './lib/vibe.mjs';
 import { DEFAULT_MODEL, KIMI_EXE, REAL_HOME, scratchRefusal } from './lib/kimi.mjs';
 import { credentialNames, disposeOwnedHome, makeOwnedHome } from './lib/kimi-home.mjs';
 
@@ -77,9 +77,13 @@ const now = () => performance.now();
 
 // ------------------------------------------------------------------------------------------------------ processes (read-only)
 
-/** Every live process as { pid, ppid, name } — a LISTING; nothing here ends a process. */
+/**
+ * Every live process as { pid, ppid, name } — a LISTING; nothing here ends a process. Windows PowerShell by its FIXED path under
+ * System32 and never a bare name, so no folder of the PATH (which a person's own tools can write to) decides what runs (S4036);
+ * the cmdlet and the string are the same in 5.1 as in pwsh 7.
+ */
 function listProcesses() {
-  const r = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+  const r = spawnSync(SYSTEM32(String.raw`WindowsPowerShell\v1.0\powershell.exe`), ['-NoProfile', '-NonInteractive', '-Command',
     'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }'], { encoding: 'utf8', timeout: 30_000 });
   return String(r.stdout ?? '').split(/\r?\n/u).filter(Boolean).map((line) => {
     const [pid, ppid, ...name] = line.split(',');
@@ -155,7 +159,8 @@ const credentialsBefore = credentialNames(REAL_HOME);
 /** The shim's own environment, as the runtime would build it: Minimal + the seven built names, the person's bin first on PATH. */
 function shimEnvironment(root) {
   const os = join(root, 'os');
-  const { root: drive } = parse(os);
+  // The environment is a Windows one: its drive is read as a Windows path, whatever host runs this file.
+  const { root: drive } = win32.parse(os);
   const bin = join(REAL_HOME, 'bin');
   const base = minimalWindowsEnv();
   const parentPath = base.PATH ?? process.env.PATH ?? '';
