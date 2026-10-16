@@ -292,7 +292,7 @@ public sealed class VibeRuntimeTests : IDisposable
     /// <summary>
     /// S-V11 (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>), one row per step of the precedence on WSL. The row's own CLI path wins before
     /// any of this is asked (<c>VibeRuntime.Build</c>); what is asked here is what the row did NOT set. Every candidate counts only when its
-    /// file is THERE, so each arm's xists is the list of files the machine has.
+    /// file is THERE, so each arm's `exists` is the list of files the machine has.
     /// </summary>
     [Theory]
     [InlineData("/home/p/.local/bin/vibe", "", "", "/home/p/.local/bin/vibe")]

@@ -266,4 +266,5 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
         planned.GetProperty("reviewers").GetString().Should().Contain("WSL2 only", "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
         Directory.GetFiles(record, "*.argv").Should().BeEmpty("the refusal comes before any process of Vibe's starts");
-    }}
+    }
+}

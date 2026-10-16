@@ -53,7 +53,7 @@ public sealed class VibeIsDiagnosedInItsOwnWordsTests
         var windows = VendorDiagnosis.Classify(SignedOut, HostKind.Windows)!.Cure;
 
         windows.Should().Contain("vibe --setup").And.Contain("operating system's keyring").And.NotContain("~/.vibe/.env", "on Windows the sign-in is in the Credential Manager, which every launch reads");
-        VendorDiagnosis.Classify(SignedOut, wsl: false)!.Cure.Should().Be(windows, "the old bool spelling means Windows-or-not, and alse still gets the Windows sentence");
+        VendorDiagnosis.Classify(SignedOut, wsl: false)!.Cure.Should().Be(windows, "the old bool spelling means Windows-or-not, and `false` still gets the Windows sentence");
         VendorDiagnosis.Classify(SignedOut, wsl: true)!.Cure.Should().Be(VendorDiagnosis.Classify(SignedOut, HostKind.Wsl)!.Cure);
     }
 
