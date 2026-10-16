@@ -84,6 +84,13 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   for now — it is measured on WSL2 and not yet on a native Linux host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md)"*. It lifts when
   at least one native-Linux run of L-V9 is recorded (§5, L-V10). The `linux` limitation rows say exactly that; the `wsl` rows name the
   WSL2 cells. The host refusal becomes per runtime and per stage: Vibe admits WSL from E2, Kimi from E6 (WSL only, by the same rule).
+  **WSL1 is not WSL2** (cadence consult a3933362, verified against the code): `VendorDiagnosis.NamesWsl`
+  (`src_mcp/runners/Reviewers/VendorDiagnosis.cs:256-258`) answers yes for ANY banner holding `microsoft` or `WSL`, so a WSL1
+  kernel (`4.4.0-…-Microsoft`, a syscall translation layer with no real `/proc` process tree or `flock` semantics of its own) reads
+  as `HostKind.Wsl` today. "Measured on WSL2" must mean WSL2: the runtime admission asks a second, narrower predicate —
+  `NamesWsl2` (the banner holds `WSL2`, or `microsoft-standard`, case-insensitive) — and a WSL1 kernel is refused with the
+  native-Linux sentence's WSL1 variant (*"…measured on WSL2, and this is WSL1"*). `NamesWsl` itself is NOT narrowed: its other
+  callers (the networking cure) are right for both generations.
 
 - **DL2 — Vibe's sign-in on Linux is a SYMLINK `$VIBE_HOME/.env → <person's Vibe home>/.env`, the one link an owned Vibe home
   may hold.** *Security / authentication.* The alternatives, each rejected with its reason:
@@ -125,11 +132,19 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     reads them. Three refusals, never one:
     - a line that does not bind a name — a bare word with no `=` (python-dotenv keeps it with NO value and sets nothing from it, and
       it is how a key pasted on its own line looks), a line starting with `=`, a line python-dotenv itself cannot parse — refuses
-      with a GENERIC sentence that quotes nothing from the file but the line number. A quoted value that continues on the next line
-      is a valid python-dotenv form that coai, which never reads a value, cannot follow: its continuation lines do not bind a name,
-      so it refuses the same way with the cure *keep each variable on one line* — the safe direction, stated;
-    - a bound name other than the admitted one refuses with the names listed when they are identifiers (`[A-Za-z_][A-Za-z0-9_]*`) —
-      a name of any other shape is said by its line number only, so a key someone typed before an `=` is never echoed;
+      with a GENERIC sentence that quotes nothing from the file but the line number;
+    - a bound name other than the admitted one refuses by its LINE NUMBER only, never by the name (cadence consult a3933362,
+      verified with python-dotenv 1.2.2 from Vibe 2.26.1's own environment): coai reads physical lines with no quote state, so a
+      line it reads as `NAME=…` may be the CONTINUATION of a quoted value — `MISTRAL_API_KEY="dummy` + `LEAK_CANARY=ending"` binds
+      ONE name, `MISTRAL_API_KEY`, and echoing `LEAK_CANARY` would print value text. The cure names the forbidden-prefix rule
+      (*a `VIBE_*` or any other variable in that file is refused*) without naming what was found;
+    - **multi-line quoted values — what coai can and cannot say** (corrected by the same consult; the gate text claimed a refusal
+      it could not deliver): a continuation line shaped like a binding refuses (above — the safe direction); a continuation shaped
+      like a comment or blank (`MISTRAL_API_KEY="dummy` + `#ending"`) is ADMITTED, and that is sound for admission, not only
+      tolerated: every binding python-dotenv makes starts on a physical line, coai reads every physical line, so no name can be
+      bound that coai did not see (`MISTRAL_API_KEY="a` + `"` + `VIBE_X=1` binds `VIBE_X` on its own line, and coai refuses it).
+      What coai cannot do is SAY "keep each variable on one line" reliably, so that sentence is not promised; the
+      whole-file vectors (L-V6b) pin all three shapes;
     - the cure for both (owner question Q2): keep only `MISTRAL_API_KEY=…` in that file.
 
     A test pins that no sentence, log line or exception message holds a byte of any value;
@@ -397,7 +412,7 @@ a built environment, nothing written into `~/.vibe` or `~/.kimi-code` by the pro
 | L-V6 | Which variable NAMES the owner's `~/.vibe/.env` holds (names only, values never read out). | free | E2 (DL2's admitted set) |
 | L-V7 | `scripts/vibe-home-manifest.mjs --write` in WSL: the `linux` entry; a second fresh home agrees on every hash. | 2 tiny turns | E2 (DL3) |
 | L-V8 | Does Vibe load a `.env` from its WORKING folder? (A bogus `MISTRAL_API_KEY` in the cwd, no home `.env`: still L-V1's "Missing" → it does not.) Code reading of Vibe's package first. | free | E2 (snapshot exclusion) **and E3's release** — 0.58.0 is not tagged before it is recorded |
-| L-V6b | python-dotenv — the version in Vibe 2.26.1's own tool environment — over DL2's fixed set of lines: the names it binds, written as `shared/dotenv-name-vectors.json`. No `.env` of the owner's is read. | free | E2 (DL2's grammar) |
+| L-V6b | python-dotenv — the version in Vibe 2.26.1's own tool environment — over DL2's fixed set of lines AND whole files (the three multi-line shapes of DL2), written as `shared/dotenv-name-vectors.json`: per vector the names python-dotenv binds, and coai's expected verdict (admitted, or refused at line N with no file text). No `.env` of the owner's is read. | free | E2 (DL2's grammar) |
 | L-V9 | L-V1, L-V2/3, L-V4 re-run through the ported probe, 3 of 3. | ~10 turns | E3 (release) |
 | L-V10 | L-V9 once on a NATIVE Linux host (not WSL). | ~10 turns | lifting DL1's native-Linux refusal — not this release |
 | L-N1 | .NET on Linux: `HeldFile.Take(…, inheritable: true)` excludes a second take (inheritable or not), and a child started after it holds the lock after the parent's SIGKILL. A test in the Linux CI job, in a child process (no test holds an inheritable handle in the host). | free | E5 (DL8) |
@@ -474,7 +489,10 @@ Each red is the assertion message the test fails with before the fix.
   `  MISTRAL_API_KEY=v  # note` and `'MISTRAL_API_KEY'=v`. Red: `"python-dotenv binds MISTRAL_API_KEY from 'MISTRAL_API_KEY = "v"'
   but coai refused the line as unreadable"`. *Given* a bare key on its own line, a line beginning with `=`, or a quoted value that
   continues on the next line, *then* refused with the generic sentence naming the line number and nothing from the file. Red:
-  `"the refusal echoed text from the .env: 'sk-test-…'"`.
+  `"the refusal echoed text from the .env: 'sk-test-…'"`. *Given* the whole files `MISTRAL_API_KEY="dummy` + `LEAK_CANARY=ending"`, *then*
+  refused at line 2 and the sentence holds neither `LEAK_CANARY` nor `ending`; `MISTRAL_API_KEY="dummy` + `#ending"`, *then* admitted
+  (python-dotenv binds one name); `MISTRAL_API_KEY="a` + `"` + `VIBE_X=1`, *then* refused at line 3. Red: `"the refusal named
+  LEAK_CANARY, which is value text"`.
 - S-V14 *Given* `~/.vibe/.env` is a FIFO, a socket, or a file whose owner is another uid, *when* the link maker judges it, *then*
   refused through the descriptor without blocking (the test's FIFO has no writer). Red: `"the judgement blocked on a FIFO"` /
   `"a file owned by uid … was admitted"`.
@@ -487,7 +505,9 @@ Each red is the assertion message the test fails with before the fix.
   Red: `"an entry without a platform was not read as win32"` / `"a Windows 2.26.1 launch changed: …"`.
 - S-V17 (F10) *Given* a NATIVE Linux host (`HostKind.Linux`) and a Vibe row, *then* refused before anything starts, the sentence
   saying Vibe is measured on WSL2 only; *given* `HostKind.Wsl`, *then* it starts. Red: `"a native Linux host should still be refused
-  with the WSL2-only sentence, but Vibe started"`.
+  with the WSL2-only sentence, but Vibe started"`. A Theory over three `/proc/version` banners — WSL2 (`…-microsoft-standard-WSL2`),
+  WSL1 (`4.4.0-19041-Microsoft`), native (`…-generic`) — through `NamesWsl2` and the admission: only the first starts. Red: `"a WSL1
+  banner was admitted as WSL2"`.
 
 **Kimi (E5, E6)**
 
@@ -807,7 +827,9 @@ Also owed from the gate's commands: the cadence consultation for E1–E3 before 
 - **Scope.** `scripts/lib/{vibe,kimi,kimi-home}.mjs`, `probe-vibe-confinement.mjs`, `probe-kimi-confinement.mjs`,
   `probe-kimi-tree-hold.mjs`, `vibe-home-manifest.mjs` (§5's lines); their tests; `shared/vibe-home-manifest.json`;
   `research/RESULTS_vibe_confinement.md` (a Linux section). No product C#.
-- **Done when.** The ported scripts pass their tests on both OSes; the three cells recorded; the manifest's `linux` entry committed
+- **Done when.** The ported scripts pass their tests on both OSes; the three cells recorded; L-V6b's vectors committed (lines
+  AND the three whole-file multi-line shapes, each with python-dotenv's names and coai's expected verdict) — DL2's grammar contract
+  is settled here, before E2 starts; the manifest's `linux` entry committed
   (or, if L-V7 disagrees, its absence recorded with both hash sets).
 
 ### E2 — Vibe on a Linux host · M · **authentication / security** (the key-file link) — built on Fable · depends on E1
