@@ -13,6 +13,13 @@ namespace CoaiMcp.Server;
 /// <summary>The consultant check's own decisions — its budget, its deadlines, its question, and how its canary is read. Pure.</summary>
 public static class ConsultantCheck
 {
+    /// <summary>
+    /// The folder, in the check's scratch, a consultant that keeps a home and reads a copy is given — <c>&lt;root&gt;\own</c>. The home a root-less
+    /// check hands its adapter is one level DOWN from the scratch root, so <see cref="ConsultCheckScratch.Delete"/> disposes this folder's Kimi
+    /// homes by name (E5.3 judgement R6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>).
+    /// </summary>
+    public const string OwnName = "own";
+
     /// <summary>The most a check's turn may take, whatever the reviewer timeout says: a check is a probe, not a consultation.</summary>
     public static readonly TimeSpan BudgetCap = TimeSpan.FromMinutes(4);
 
@@ -258,8 +265,8 @@ internal sealed class ConsultantCheckTurn(
         return Judged(turn with { Checking = turn.Checking with { Confinement = ready.Confinement } }, turned, broken, killedAs());
     }
 
-    /// <summary>The folder, in the check's scratch, a consultant that keeps a home and reads a copy is given.</summary>
-    private const string OwnName = "own";
+    /// <summary>The folder, in the check's scratch, a consultant that keeps a home and reads a copy is given (<see cref="ConsultantCheck.OwnName"/>).</summary>
+    private const string OwnName = ConsultantCheck.OwnName;
 
     /// <summary>The launch a consultation's first turn would get, in the scratch repository — or in its copy (D6).</summary>
     private async Task<ConsultantLaunch> LaunchAsync(Turn turn, ConsultantPlace place, string homeFolder, CancellationToken ct)
