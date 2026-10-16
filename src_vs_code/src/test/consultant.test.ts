@@ -11,6 +11,7 @@ import {
   DEFAULT_CONSULT,
   ResolvedConsultant,
   consultSettingsFrom,
+  consultantRuntimeSkewNote,
   consultantSkewNote,
   isDefaultConsult,
   resolveConsultant,
@@ -603,6 +604,49 @@ test('the note is silent when nothing on the wire is a definition — a legacy e
 
   assert.equal(consultantSkewNote(OLDER, legacyOnly, vendorsFrom([LUNA_ROW])), '');
   assert.equal(consultantSkewNote(OLDER, DEFAULT_CONSULT, []), '');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The consultant-runtime gate (E5.7 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): a NOTE, never a withheld entry
+
+/** A Claude Code caller pointed at a Kimi consultant of its own — a definition, so it crosses as itself. */
+const ON_KIMI = { consultants: { claude: { vendor: 'my-kimi', runtime: 'kimi', model: 'kimi-code/k3-256k' } }, vendors: [] };
+
+test('S5.7.2 anOlderServerIsNamedOnTheConsultantSection: 0.57.0 cannot consult on kimi, and the section says so', () => {
+  const kimi = consultSettingsFrom(reader(ON_KIMI));
+
+  assert.equal(consultantRuntimeSkewNote('0.57.0', kimi),
+    'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.58.0 or later — the MCP server tab.');
+  assert.equal(consultantRuntimeSkewNote('0.58.0', kimi), '', 'the release that consults on kimi is not nagged');
+  assert.equal(consultantRuntimeSkewNote('', kimi), '', 'a server nobody has versioned is not behind');
+
+  const codex = consultSettingsFrom(reader({ consultants: { claude: { vendor: 'codex', runtime: 'codex', model: '' } }, vendors: [] }));
+  assert.equal(consultantRuntimeSkewNote('0.57.0', codex), '', 'every server consults on codex');
+});
+
+test('the note names a runtime once however many callers are on it, and each runtime an older server cannot consult on', () => {
+  const both = consultSettingsFrom(reader({
+    consultants: {
+      claude: { vendor: 'my-kimi', runtime: 'kimi', model: '' },
+      codex: { vendor: 'my-kimi', runtime: 'kimi', model: '' },
+      gemini: { vendor: 'my-vibe', runtime: 'vibe', model: '' },
+    },
+    vendors: [],
+  }));
+  const note = consultantRuntimeSkewNote('0.53.0', both);
+
+  assert.equal(note.split('cannot consult on kimi').length - 1, 1, `kimi is named more than once: ${note}`);
+  assert.match(note, /cannot consult on vibe; update it to 0\.54\.0/u);
+  assert.equal(consultantRuntimeSkewNote('0.54.0', both).includes('vibe'), false, 'from 0.54.0 only kimi is behind');
+});
+
+test('S5.7.3 theEntryStillCrosses: an older server is handed the kimi consultant, never the shipped pair in its place', () => {
+  // Decision 2: an older server REFUSES a consultant on a runtime it cannot consult with, by name. Withholding the entry would
+  // make it consult with the shipped default pair instead — silently, which is worse than the refusal.
+  const crossed = JSON.parse(envBlock(settingsFrom(reader(ON_KIMI)), [], '0.57.0')['COAI_CONSULTANTS'] ?? '{}') as Record<string, Record<string, unknown>>;
+
+  assert.equal(crossed['claude']?.['runtime'], 'kimi');
+  assert.equal(crossed['claude']?.['vendor'], 'my-kimi');
 });
 
 // ---------------------------------------------------------------------------------------------

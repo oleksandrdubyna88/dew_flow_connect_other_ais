@@ -166,6 +166,22 @@ test('the tab carries a banner for a server known to be older than QCONSULT_SINC
   assert.ok(!page([]).html.includes(`update it to ${QCONSULT_SINCE}`), 'an unknown version is not an old one');
 });
 
+test('S5.7.2 a question row on kimi says the installed server cannot consult on it — and the row is still drawn, and still switchable', () => {
+  // E5.7 decision 2: a note beside the row, never a row taken away — the server refuses it by name, which the person can act on.
+  const at = (version: string): Parameters<typeof panelState>[1] => ({ server: { kind: 'known', version, remembered: false, updateOffered: false } });
+  const kimi = row('my-kimi', { vendor: 'my-kimi', runtime: 'kimi' });
+  const said = 'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.58.0 or later';
+
+  const older = page([kimi], at('0.57.0'));
+  assert.ok(older.html.includes(said), 'the row on kimi does not say the installed server cannot consult on it');
+  assert.ok(older.controls.some((one) => one.dataset['setting'] === 'qconsultRowEnabled' && one.dataset['caller'] === 'my-kimi'),
+    'the row is withheld rather than named');
+
+  assert.ok(!page([kimi], at('0.58.0')).html.includes('cannot consult on kimi'), 'the release that consults on kimi is not nagged');
+  assert.ok(!page([kimi]).html.includes('cannot consult on kimi'), 'an unknown version is not an old one');
+  assert.ok(!page([row('c')], at('0.57.0')).html.includes('cannot consult on'), 'a claude row on 0.57.0 has nothing to say');
+});
+
 // ---------- a root of the other operating system (operator, 2026-10-09) ----------
 
 const WINDOWS_PLACES: RootPlaces = {

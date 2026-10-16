@@ -990,6 +990,19 @@ test('an older server that would consult through the reviewer row anyway is call
     'and neither is one where no consultant is defined — the row runs on both halves');
 });
 
+test('S5.7.2 a consultant on a runtime the installed server cannot consult on is named in the Consultant section', () => {
+  // E5.7 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 2: the sentence is `consultantRuntimeSkewNote`'s, tested where it lives;
+  // this is that it reaches the page, in the section it is about, only when it is due.
+  const stored: Record<string, unknown> = { consultants: { claude: { vendor: 'my-kimi', runtime: 'kimi', model: '' } } };
+  const onKimi = settingsFrom((section) => stored[section]);
+  const known = (version: string): PanelState['server'] => ({ kind: 'known', version, remembered: true, updateOffered: false });
+
+  const section = consultantSection(everyPageHtml(state({ settings: onKimi, server: known('0.57.0') }), 'n0nce'));
+  assert.ok(section.includes('The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.58.0 or later'),
+    'the Consultant section does not name the server that cannot consult on kimi');
+  assert.ok(!everyPageHtml(state({ settings: onKimi, server: known('0.58.0') }), 'n0nce').includes('cannot consult on kimi'));
+});
+
 /**
  * The Prompts section draws the catalog a ROUND will run, not the five this product ships.
  *
