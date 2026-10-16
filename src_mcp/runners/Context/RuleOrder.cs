@@ -73,7 +73,7 @@ public sealed record RuleOrder
     /// carriage returns. The tail is still a lottery by design: what would make a rule reach EVERY
     /// reviewer is a place in the tier (<see cref="TierRules"/>), rule modularization or the resolver.
     /// <c>research/RESULTS_rules_selection_budget.md</c> carries the numbers and
-    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules</c> fails the day this
+    /// <c>StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> fails the day this
     /// changes.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix

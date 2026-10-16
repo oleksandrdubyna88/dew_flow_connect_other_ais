@@ -31,7 +31,7 @@ rotates by branch instead.
 |---|---|
 | Mounted rule files (`common`, `csharp`, `rust`, `typescript`) | **32** |
 | Their total size | **272 121 bytes** |
-| A round's whole-file budget (`RuleFiles.DefaultBudgetBytes`) | **80 000 bytes** |
+| A round's whole-file budget (`RuleFiles.DefaultBudgetBytes`) | **80 000 bytes** on 2026-09-15 (90 000 since 2026-10-16) |
 | Share that can fit | **~29 %** |
 
 Selection is whole-file — half a rule is a rule cut mid-sentence — so the ORDER decides what a reviewer
@@ -169,10 +169,13 @@ renamed here, to `TheRotatedTail_CurrentlyFitsAtMostOneRule` and
 ## RE-MEASURED, 2026-10-16 — the operator raised the budget to 90 000 bytes
 
 > **Subject:** this repository at `origin/main` `2d98f2f8`, conventions pin `e29883f8`. **Harness:** the
-> production collector (`RuleFiles.Collect`) over the real mounted corpus, driven by a throw-away test
-> (not kept: `StageRulesTests` pins the facts below), 3 000 branch names (`feat/branch-<i>` and
-> `fix/issue-<i>-thing`), the same run at 80 000 and at 90 000. Windows checkout (CRLF on disk); the
-> collector normalises line endings, so the numbers are the same on Linux.
+> production collector (`RuleFiles.Collect`) over the real mounted corpus, driven by a throw-away loop
+> (not kept): for `i` in 0..2999 collect with `RuleOrder.ForBranch(name)`, name = `feat/branch-<i>` for even
+> `i` and `fix/issue-<i>-thing` for odd, at 80 000 and at 90 000, counting the mount rules that are not in
+> `RuleOrder.TierRules`. Windows checkout (CRLF on disk); the collector normalises line endings, so the
+> numbers are the same on Linux. The pieces that matter are kept as tests (below); the 3 000-name
+> distribution is the only figure with no test of its own — the first hundred names of the same loop are
+> pinned (at most 3, at least 1).
 
 **Why.** The budget above is the 2026-09-15 figure. The corpus and this repository's own files grew
 (`.agents/PROJECT.md` 7 452 -> 10 331 bytes; conventions pin moved on), and the base plus the eight tier
@@ -200,10 +203,23 @@ outside the tier, so it is drawn, not owed, and it is drawn on about one branch 
 that must reach every reviewer belongs in `RuleOrder.TierRules`; that is a separate decision and it spends
 budget (4 706 bytes of the 10 056 left).
 
-**What is pinned.** `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules` (the bound, measured
-maximum 3), `TheRotatedTail_IsReachableAtTheNinetyKilobyteBudget` (at least 1 — "at most 3" alone is
-satisfied by 0, the 80 000 state), and `TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (`fix/x` and
-`feat/e5` draw it; `main` and `feat/a` do not), plus `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`.
+**What is pinned, and how to reproduce it.** Run the built test executable, no `dotnet test`:
+`src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*.StageRulesTests"` (and
+`--filter-class "*.RuleFilesTests"` for the number itself).
+- `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
+- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` — **the measuring test and the
+  drift guard**: base 17 883 + tier 62 061 = 79 944. Its failure message prints the three numbers it found,
+  so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
+  the figures in this file are re-measured from that message. The unit is the collector's own: characters of
+  the line-ending-normalised text.
+- `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` — on `canary/the-tail` the tail is exactly
+  `common/gpu-lease.md`, `csharp/nuget-packages.md`, `common/durable-status.md` (in that order), and none of the
+  first hundred branch names of the loop above reaches more than three.
+- `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` — none of those hundred reaches fewer than one
+  ("at most 3" alone is satisfied by 0, the 80 000 state).
+- `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` — `fix/x` and `feat/e5` draw it,
+  `main` and `feat/a` do not.
+
 The old canary was named `TheRotatedTail_CurrentlyFitsAtMostOneRule`.
 
 **What this supersedes.** The "80 000", "1 328 spare", "77 562 / 2 438" and "1 of 24" figures above are the

@@ -133,9 +133,12 @@ sequenceDiagram
 
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
-  `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules` (the measured maximum),
-  `TheRotatedTail_IsReachableAtTheNinetyKilobyteBudget` (at least one) and
-  `TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` pin the facts and fail the day they change;
+  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` (the measuring test and drift
+  guard: 17 883 + 62 061),
+  `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
+  the measured maximum elsewhere),
+  `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
+  `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` pin the facts and fail the day they change;
   `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` pins the number itself.
   `string.GetHashCode` is unusable here: .NET randomises it per process,
   so it would differ between two rounds on one machine. Measured basis:

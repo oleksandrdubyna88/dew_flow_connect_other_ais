@@ -175,7 +175,7 @@ public static class RuleFiles
     /// the same base and tier leave 10 056 bytes for the rotated tail, which takes one to three rules a
     /// round (mean 1.78 over 3 000 branch names). Measured in
     /// `research/RESULTS_rules_selection_budget.md`; the canary that pins it is
-    /// `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules`.</para>
+    /// `StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`.</para>
     /// </remarks>
     public const int DefaultBudgetBytes = 90_000;
 
@@ -408,7 +408,7 @@ public static class RuleFiles
     /// worse half of this fix, because the budget would then be honest about bytes nobody wanted.</para>
     /// <para><b>Why it went unseen for a day.</b> Every job in <c>ci.yml</c> is
     /// <c>ubuntu-latest</c>; the only Windows legs are the release matrix. So
-    /// <c>TheRotatedTail_CurrentlyFitsAtMostThreeRules</c> — the one check that can see this — ran on a
+    /// <c>AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> — the one check that can see this — ran on a
     /// tag and nowhere else, and the release of <c>mcp-v0.29.0</c> is where it surfaced.</para>
     /// </remarks>
     private static string? Read(string path)
