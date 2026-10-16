@@ -74,6 +74,40 @@ public sealed class McpContractTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task ToolsList_PublishesReviewPlansPlanArguments_AsOptional_AndNoLongerClaimsACheckout()
+    {
+        // E1.S5: `planText` became one of two ways to name the plan, so it cannot be required; and the description said a
+        // reviewer reads "a read-only checkout", which the plan stage stopped giving. Over the wire, because the schema
+        // is built by the SDK from the C# signature — a default value is what makes an argument optional.
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var tools = await RoundTrip(server, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+            var plan = tools.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+                .Single(t => t.GetProperty("name").GetString() == "review_plan");
+
+            var schema = plan.GetProperty("inputSchema");
+            schema.GetProperty("required").EnumerateArray().Select(r => r.GetString()).Should().BeEquivalentTo(["repoPath", "branch"]);
+            schema.GetProperty("properties").EnumerateObject().Select(p => p.Name)
+                .Should().Contain(["planText", "committedPlan", "expectedCommit"]);
+            var description = plan.GetProperty("description").GetString()!;
+            description.Should().Contain("committedPlan").And.Contain("expectedCommit").And.Contain("END OF PLAN");
+            description.Should().NotContain("read-only checkout");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
     /// <summary>
     /// The prompt is advertised, and asking for it yields a message addressed to the assistant.
     /// </summary>

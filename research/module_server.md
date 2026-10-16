@@ -10,7 +10,7 @@
 |---|---|---|
 | `providers` | `PanelService.ProvidersAsync` — CLI probe + vault state | never; it reports |
 | `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session, stamp the caller | repo/branch unresolvable |
-| `review_plan` | `RunStageAsync` with one `PlanCritique` per provider | no session; round awaiting resolve |
+| `review_plan` | `PlanInputs.PrepareAsync`, then `RunStageAsync` with one `PlanCritique` per provider; the plan is `planText` OR `committedPlan` (+ `expectedCommit`) | no session; round awaiting resolve; both plan inputs or neither; `expectedCommit` alone, malformed or stale; any unreadable committed plan (see *The plan gate reads a committed plan*) |
 | `review_code` | `RunStageAsync` with the four code roles per provider — `Conventions` first | **no plan round reached `proceed`** |
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
@@ -1615,6 +1615,40 @@ flowchart TD
   as clean; a branch checked out in ANOTHER worktree is "not compared".
 - **Credential-shaped names** use the one table in `CredentialFiles` and the one sentence
   (`CredentialFiles.NamedSentence`, shared with `review_feature`'s `planPath`).
+
+### How `review_plan` takes it (E1.S5)
+
+`Tools.cs` publishes `planText`, `committedPlan` and `expectedCommit` as OPTIONAL (C# defaults — without one the SDK
+makes an argument required); only `repoPath` and `branch` are required. `PanelService.ReviewPlanAsync` has three
+overloads: the two string ones (every older caller) wrap the text in a `PlanInput` and delegate to the third, which runs
+`PlanInputs.PrepareAsync` BEFORE the claim, the begin and any round number:
+
+```mermaid
+sequenceDiagram
+    participant T as Tools.cs review_plan
+    participant P as PanelService.ReviewPlanAsync
+    participant I as PlanInputs.PrepareAsync
+    participant R as CommittedPlanReader
+    participant E as RoundEngine.RunStageAsync
+    T->>P: PlanInput(text, committedPlan, expectedCommit)
+    P->>I: input, branch, resolve seam
+    I->>I: both / neither / expectedCommit alone / malformed → Refused
+    I->>I: resolve branch → tip (WorktreeException → Refused)
+    I->>I: expectedCommit differs from tip → Refused naming both
+    I->>R: ReadGuardedAsync(tip, path)
+    R-->>I: Accepted(PlanSource, Text, Note) or Refused
+    I-->>P: Ready(Text, Head = tip, Source, SourceLine, Unreviewed) or Refused
+    P->>E: StageRun { Head = tip, PlanSource }
+    P-->>T: Refused → Error(sentence), no round
+```
+
+- `committedPlan` made only of whitespace counts as absent; `planText` is judged exactly as before (empty is absent).
+  A pasted plan takes no resolve and no git.
+- The tip is resolved ONCE and becomes the round's `Head`: the engine resolves `stage.Head`, so the plan text, the
+  cadence outline read under the claim and the round's `head_sha` are one commit even if the branch moves.
+  `PanelService.TipResolver` is the test seam that proves it.
+- The prompt's source line is `(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)`;
+  the "working tree was not compared" note rides `RoundWork.Unreviewed`, so it lands on the reviewer line.
 
 ## Flow of one stage
 

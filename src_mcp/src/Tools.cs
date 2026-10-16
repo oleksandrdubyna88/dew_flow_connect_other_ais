@@ -78,16 +78,27 @@ internal static class Tools
         yield return McpServerTool.Create(
             // The cadence's four arguments are optional, with C# defaults — the `resolve` lesson: without
             // one the SDK publishes an argument as REQUIRED (research/PLAN_consult_on_a_cadence.md).
-            async (string repoPath, string branch, string planText,
+            // `planText`, `committedPlan` and `expectedCommit` are optional WITH C# defaults, for the same reason as the cadence's
+            // four: without one the SDK publishes an argument as required. Exactly one of the first two is wanted — a refusal says so.
+            async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null,
                    string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
-                await (await host.CurrentAsync()).ReviewPlanAsync(repoPath, branch, planText, Cadence(plan, epic, riskItems, riskNote)),
+                await (await host.CurrentAsync()).ReviewPlanAsync(
+                    repoPath, branch, new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty),
+                    Cadence(plan, epic, riskItems, riskNote)),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
                 Title = "Send the plan to every enabled provider for independent critique",
                 Description = """
-                    The plan gate. One reviewer per enabled provider reads `planText` (pass the plan
-                    document verbatim) plus a read-only checkout, and answers findings. The reply
+                    The plan gate. One reviewer per enabled provider reads the plan and nothing else (no checkout), and
+                    answers findings. Give the plan ONE way: `planText` (the plan document, verbatim) or `committedPlan`
+                    (the repo-relative path of a plan file that is COMMITTED — the server reads it from git at the
+                    branch's tip, so a large plan never passes through you). `committedPlan` is refused, before any
+                    round is spent, when the file is not in that commit, is not a regular UTF-8 text file of 1 byte to
+                    256 KiB, is a credential-shaped name, or is edited or staged in the checkout; commit it first.
+                    `expectedCommit` (40 hex, only with `committedPlan`) refuses the round if the branch tip moved.
+                    Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
+                    whole does not count as answering. The reply
                     carries the merged, de-duplicated findings, the honest reviewer count, the
                     verdict (proceed | revise | continue_anyway | good_enough | call_human |
                     escalated) and what to do next. Then record decisions with `resolve` — every

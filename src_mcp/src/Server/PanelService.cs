@@ -28,6 +28,10 @@ public sealed class PanelService
     private readonly SessionStore _store;
     private readonly ArtifactStore _artifacts;
     private readonly WorktreeManager _worktrees;
+
+    /// <summary>A test's own answer to "which commit is this branch at" — what proves a plan round runs on the commit the plan was read at.</summary>
+    internal Func<string, string, Task<string>>? TipResolver { get; init; }
+
     private readonly ContextAssembler _context;
     private readonly RosterBuilder _roster;
     private readonly RoundCommands _commands;
@@ -616,7 +620,14 @@ public sealed class PanelService
     /// <param name="cadence">What the caller declared about the consultation cadence — the plan, the epic, the
     /// risk answer (<c>research/PLAN_consult_on_a_cadence.md</c>). Checked under the claim; a false declaration is
     /// refused, and the facts shape the orders the reply carries.</param>
-    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default)
+    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default) =>
+        ReviewPlanAsync(repoPath, branch, new PlanInput(planText, string.Empty, string.Empty), cadence, ct);
+
+    /// <summary>The same gate for a plan named either way: its text, or a committed file the server reads itself.</summary>
+    /// <remarks>
+    /// A refusal of the input is answered HERE, before the claim, the begin and any round number — see <see cref="PlanInputs"/>.
+    /// </remarks>
+    internal async Task<string> ReviewPlanAsync(string repoPath, string branch, PlanInput input, CadenceArgs cadence, CancellationToken ct = default)
     {
         var trace = new CadenceTrace();
         // The same guard the code stage has had, for the same reason: a round that launches no
@@ -625,14 +636,20 @@ public sealed class PanelService
         if (_settings.Rounds.EnabledRolesOf(Stage.PlanReview).Count == 0)
         {
             _log.Warning("review_plan refused: every plan role is switched off");
-            return Task.FromResult(Error(NoRolesRefusal(Stage.PlanReview)));
+            return Error(NoRolesRefusal(Stage.PlanReview));
+        }
+
+        var prepared = await PlanInputs.PrepareAsync(input, repoPath, branch, TipResolver ?? _worktrees.ResolveShaAsync, _launcher, ct);
+        if (prepared is not PlanInputOutcome.Ready plan)
+        {
+            return Error(((PlanInputOutcome.Refused)prepared).Sentence);
         }
 
         // No floor here on purpose. A three-line plan is a BAD plan, and saying so is the reviewers'
         // job — refusing it at the gate does their work for them and takes away the one round that
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
-        return _engine.RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound,
+        return await _engine.RunStageAsync(repoPath, branch, plan.Text, new StageRun(RoundMachine.BeginPlanRound,
             NeedsWorktree: false, Stage: Stage.PlanReview, ReadsCheckout: false,
             async (session, workingDir, _, roundToken) =>
             {
@@ -650,8 +667,8 @@ public sealed class PanelService
                 _log.Information(
                     "context for review: plan {PlanBytes} bytes (id {TextId}); rules {RulesBytes} bytes, "
                     + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
-                    System.Text.Encoding.UTF8.GetByteCount(planText),
-                    DocumentRules.ArtifactIdOf(planText),
+                    System.Text.Encoding.UTF8.GetByteCount(plan.Text),
+                    DocumentRules.ArtifactIdOf(plan.Text),
                     rules.Bytes,
                     rules.MatchedCount(StageRules.Plan),
                     StageRules.Plan.Length,
@@ -676,7 +693,7 @@ public sealed class PanelService
                     _roster.BuildWork(
                         roles, workingDir,
                         RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
-                            + PlanSection.Compose(planText, string.Empty),
+                            + PlanSection.Compose(plan.Text, plan.SourceLine),
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
@@ -684,9 +701,12 @@ public sealed class PanelService
                         deal: _settings.DealPlanLenses,
                         codexTiers: tiers,
                         // The round's own scratch (D17's homes); a plan round mounts no checkout, so no snapshot.
-                        scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken)));
+                        scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken))).WithUnreviewed(plan.Unreviewed);
             })
         {
+            // The ONE commit the plan was read at: the engine resolves this, so the plan, the cadence outline and the record agree.
+            Head = plan.Head,
+            PlanSource = plan.Source,
             RolesPerVendor = 1,
             Cadence = trace,
             // The plan stage refuses only what the declaration itself gets wrong; which groups are owed
