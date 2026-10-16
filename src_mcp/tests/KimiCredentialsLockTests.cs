@@ -151,6 +151,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
         (await Sudo(ct, "mount", "--bind", _dir.At("a"), mount)).Should().Be(0, "the bind mount was made");
         try
         {
+            KimiCredentialsLock.KeyFor(real).Should().NotBeEmpty("the folder has a key at all — two empty keys are not 'the same key'");
             KimiCredentialsLock.KeyFor(Path.Combine(mount, "real")).Should().Be(KimiCredentialsLock.KeyFor(real), "a bind-mounted spelling of one sign-in folder gave a second lock key");
         }
         finally

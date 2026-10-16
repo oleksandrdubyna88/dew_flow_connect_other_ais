@@ -87,7 +87,42 @@ public static class KimiLaunch
             return LaunchTurn.Refused(LockRefusal((Hold.Unusable)gate, places.Credentials), RefusalCause.LaunchControl);
         }
 
+        var survivors = await SurvivorsAsync(places, taken, turn, ct);
+        if (survivors.Length > 0)
+        {
+            return LaunchTurn.Refused(survivors, RefusalCause.LaunchControl);
+        }
+
         return await InsideAsync(places, request, prepared.Expected, new Attempt(turn, taken.Stream), launcher, ct);
+    }
+
+    /// <summary>
+    /// The A2-A3 seam (<see cref="IKimiSurvivors"/>), asked with the gate held: a free lock is not a free sign-in while a survivor marker stands. The sentence when one does — both holds given back — or empty; a
+    /// throw or a cancellation gives them back before it propagates.
+    /// </summary>
+    private static async Task<string> SurvivorsAsync(KimiPlaces places, Hold.Taken gate, IDisposable turn, CancellationToken ct)
+    {
+        try
+        {
+            var standing = await KimiSurvivors.Gate.BlockedAsync(KimiCredentialsLock.MarkerPathFor(places.Credentials), ct);
+            if (standing.Length > 0)
+            {
+                Given(gate, turn);
+            }
+
+            return standing;
+        }
+        catch
+        {
+            Given(gate, turn);
+            throw;
+        }
+    }
+
+    private static void Given(Hold.Taken gate, IDisposable turn)
+    {
+        gate.Stream.Dispose();
+        turn.Dispose();
     }
 
     /// <summary>The gate, taken with the home's turn already held: a throw or a cancellation gives the turn back before it propagates.</summary>

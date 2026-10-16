@@ -1,3 +1,5 @@
+using System.Runtime.Versioning;
+
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
@@ -26,6 +28,8 @@ namespace CoaiMcp.Runners.Files;
 /// while the hold is open inherits it, redirected or not — which is also why no TEST ever holds one in the test host (S2.43 holds it
 /// in a child). <see cref="FileShare.Inheritable"/> is not a share mode but the <c>bInheritHandle</c> of the handle's security
 /// attributes, so the open stays exclusive.</para>
+/// <para><b>On Linux the inheritable take is native</b> (<see cref="LinuxHeldFile"/>): <c>open</c> without <c>O_CLOEXEC</c> and <c>flock(LOCK_EX|LOCK_NB)</c>, because .NET's combined share mode was measured to take a
+/// SHARED lock there (L-N1, CI run 38923199105; <c>research/RESULTS_kimi_confinement.md</c> §30) — a second inheritable take succeeded. Every other take, inheritable or not, on any host, is .NET's.</para>
 /// </remarks>
 public static class HeldFile
 {
@@ -44,7 +48,10 @@ public static class HeldFile
     /// other <see cref="IOException"/> is the share-mode refusal a held file answers with — on Windows a sharing
     /// violation, on Unix the advisory <c>flock</c> .NET takes.
     /// </remarks>
-    public static Hold Take(string path, bool inheritable = false)
+    public static Hold Take(string path, bool inheritable = false) =>
+        inheritable && OperatingSystem.IsLinux() ? LinuxHeldFile.TakeInheritable(path) : TakenByDotNet(path, inheritable);
+
+    private static Hold TakenByDotNet(string path, bool inheritable)
     {
         try
         {
@@ -60,16 +67,61 @@ public static class HeldFile
         }
     }
 
-    /// <summary>STUB (A2 §2.4) — built red-first: <see cref="TakeWithin"/>, with the hook run once after the open.</summary>
+    /// <summary>The most times a taker whose file was unlinked under it retakes the new one before it refuses.</summary>
+    public const int MostRetakes = 3;
+
+    /// <summary>
+    /// Linux: <see cref="TakeWithin"/>, and then verified — the file taken is still THE file at <paramref name="path"/> (<c>fstat</c> of the descriptor against <c>statx</c> of the path,
+    /// <see cref="FileStatus.SameFileAs"/>). A mismatch means a retirement sweep unlinked the file between the open and the lock, so the taker holds an inode nobody else will ever open — two holders of one
+    /// sign-in; it releases and takes again, at most <see cref="MostRetakes"/> times, then refuses. Elsewhere exactly <see cref="TakeWithin"/>: a file held open on Windows cannot be unlinked.
+    /// </summary>
     public static Hold TakeVerified(string path, TimeSpan within, bool inheritable = false) => TakeVerified(path, within, inheritable, null);
 
-    internal static Hold TakeVerified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen)
+    /// <summary>The same, with a hook told the path right after each open and lock, so a test can unlink the file in the window the guard exists for.</summary>
+    internal static Hold TakeVerified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen) =>
+        OperatingSystem.IsLinux() ? Verified(path, within, inheritable, afterOpen) : TakeWithin(path, within, inheritable);
+
+    [SupportedOSPlatform("linux")]
+    private static Hold Verified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen)
+    {
+        for (var attempt = 0; attempt < MostRetakes; attempt++)
+        {
+            var (hold, replaced) = Attempted(path, within, inheritable, afterOpen);
+            if (!replaced)
+            {
+                return hold;
+            }
+        }
+
+        return new Hold.Unusable(new IOException($"the lock file {path} was replaced under its holder three times in a row — refused"));
+    }
+
+    /// <summary>One take and its verification: the hold, and whether the file was replaced under it (the hold is then already given back).</summary>
+    [SupportedOSPlatform("linux")]
+    private static (Hold Hold, bool Replaced) Attempted(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen)
     {
         var hold = TakeWithin(path, within, inheritable);
-        afterOpen?.Invoke(path);
+        if (hold is not Hold.Taken taken)
+        {
+            return (hold, false);
+        }
 
-        return hold;
+        afterOpen?.Invoke(path);
+        if (StillTheFile(taken.Stream, path))
+        {
+            return (hold, false);
+        }
+
+        taken.Stream.Dispose();
+
+        return (hold, true);
     }
+
+    [SupportedOSPlatform("linux")]
+    private static bool StillTheFile(FileStream stream, string path) =>
+        LinuxStatx.OfHandle(stream.SafeFileHandle, LinuxStatx.StatxBasic) is StatxRead.Read held
+        && LinuxStatx.OfPath(path, LinuxStatx.AtSymlinkNoFollow, LinuxStatx.StatxBasic) is StatxRead.Read named
+        && held.Status.SameFileAs(named.Status);
 
     /// <summary>
     /// Whether somebody holds the file RIGHT NOW — asked by trying the exclusive open, non-blocking, and letting
