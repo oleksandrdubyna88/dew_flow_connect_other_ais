@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.77.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.76.0...extension-v0.77.0) (2026-10-16)
+
+
+### Features
+
+* **kimi:** Kimi Code as a coai reviewer, on the person's live sign-in, never endangering it ([#817](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/817)) ([45decee](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/45decee37251f83f0f6910b9632f0e63b40fabfb))
+
 ## [0.76.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.75.0...extension-v0.76.0) (2026-10-15)
 
 
