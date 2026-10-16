@@ -170,12 +170,21 @@ public static class KimiLaunch
         return slot is SlotRead.Found found ? Rendered(host, ModelOf(request), places, found.Slot) : Prepared.Refuse(((SlotRead.Refused)slot).Reason);
     }
 
-    /// <summary>The slot is read: the credentials folder, the model block and the render, then the home made.</summary>
+    /// <summary>
+    /// The slot is read: the credentials folder — there, and where its ancestors REALLY lead still a local drive (E5.3 decision j: the make-time
+    /// check of <c>Junctions</c>, re-asked before EVERY turn, because a conversation's home lives for hours and the junction keeps only a spelling;
+    /// before any lock, so a refused turn makes no file under <c>kimi-locks</c>) — then the model block and the render, then the home made.
+    /// </summary>
     private static Prepared Rendered(HostKind host, string model, KimiPlaces places, KimiOauthSlot slot)
     {
         if (!Directory.Exists(places.Credentials))
         {
             return Prepared.Refuse($"not signed in to Kimi Code — {places.PersonsHome} has no credentials folder; run `kimi login` in a terminal and try again");
+        }
+
+        if (Junctions.ResolvedRefusal(places.Credentials) is { Length: > 0 } elsewhere)
+        {
+            return Prepared.Refuse(elsewhere);
         }
 
         var expected = ExpectedConfig(model, places, slot);
