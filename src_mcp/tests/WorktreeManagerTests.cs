@@ -392,6 +392,30 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
         removal.Result.ExitCode.Should().Be(0, $"git itself removes the tree: {removal.Result.StdErr}");
     }
 
+    /// <summary>
+    /// A failure the flag cannot cure — one path COMPONENT of 256 units, past NTFS's own 255 — still
+    /// says WHICH path git could not write, how long it is and why, instead of only "Could not reset
+    /// index file", which names the index and reads like a corrupt repository.
+    /// </summary>
+    [Fact]
+    public async Task AnAddThatStillFailsNamesThePathAndTheReason()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), DeepCommit.WindowsOnly);
+        var relative = $"a/{new string('c', 252)}.txt";
+        var sha = await DeepCommit.CommitAsync(_launcher, _repo, relative);
+
+        var add = () => _manager.AddAsync(_repo, sha, "s1", round: 1);
+
+        var said = (await add.Should().ThrowAsync<WorktreeException>()).Which.Message;
+        var treeRoot = Path.Combine(_storage, "coai-wt-s1-r1-");
+        var fileLength = treeRoot.Length + 8 + 1 + relative.Length;
+        said.Should().Contain(treeRoot, "the message names the tree the file was to land in");
+        said.Should().Contain(relative.Replace('/', '\\'), "and the file itself");
+        said.Should().Contain($"({fileLength} characters)");
+        said.Should().Contain("Invalid argument", "git's own reason, which is not the long-path one");
+        said.Should().Contain("Could not reset index file", "git's verdict stays beside it");
+    }
+
     /// <summary>git without long paths cannot check this commit out — so a pass above is the flag's doing.</summary>
     private async Task TheFixtureNeedsTheFlag(string sha)
     {
