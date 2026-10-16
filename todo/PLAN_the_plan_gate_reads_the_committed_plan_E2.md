@@ -45,7 +45,7 @@ database and keeps its `PlanSource` in its session file.
 | The rounds log reads the SESSION FILE: `SessionFile`/`RoundRecord` imported; a row built per round | `src_vs_code/src/roundsLog.ts:20`, `rowFrom` `:466-527` (`subject` `:501`) |
 | The detail-line precedent: `calledBy(round.caller)` → `LogRow.calledBy` → `askedByHtml(calledBy, escape)`, exported and embedded by `toString()`, called in `detail(row)` before the early returns | `src_vs_code/src/rounds.ts:148-159`; `roundsLog.ts:153`, `:384`, `:519`, `:462-464`, `:1637`, `:1733-1745` |
 | `RoundRecord` (TS) optional fields; `roundsLog.ts` 2 376 lines, `rounds.ts` 516 | `src_vs_code/src/rounds.ts:51-93` |
-| Tests to mirror: the row field; the line function itself; the page as it SHIPS | `src_vs_code/src/test/roundsLog.test.ts:514-546`, `:556-575`; `bundledPage.test.ts:173-180` |
+| Tests to mirror: the row field; the line function itself; the page as it SHIPS | `src_vs_code/src/test/roundsLog.test.ts:511-546`, `:556-578`; `bundledPage.test.ts:173-180` |
 | An older extension reading a `--log` page that carries a new member | `src_vs_code/src/test/anOlderExtensionReadsALogPageCarryingASize.test.ts` |
 | Where the module doc lists schema steps; the `--log` seam rule; the asked-by line | `research/module_server.md:3446-3484`; `research/architecture.md:754`; `research/module_extension.md:6426-6459` |
 
@@ -55,7 +55,7 @@ E1's §3 applies (tests first, RED on the assertion; the MTP executable, never `
 with both runs reported). Plus:
 
 - **Extension**: `cd src_vs_code && npm ci && npm test`; the page is checked as it ships (`bundledPage.test.ts`).
-- **No new lines in `RoundsDb.cs` or `RoundsQuery.cs` beyond one column in the upsert, one bind, and one call** — the
+- **No new lines in `RoundsDb.cs` or `RoundsQuery.cs` beyond one column in the upsert, one bind, one call, and one init property** — the
   read lives in a new file through the read-only connection, as `RoundChangesLog` does.
 - **Not recorded is never empty.** `''` in the column, an absent field in JSON, no line on the page.
 - **The step number is 23** (index 22, `user_version` 23) — `main` holds 22 steps and no other step-adding PR is open on
@@ -103,7 +103,7 @@ with both runs reported). Plus:
   `ThePlanSource_IsTheTwentyThirdStep_AppendedNeverInserted` (index 22, `Steps.Length ≥ 23`) ·
   `ADatabaseAtStepTwentyTwo_OpensAtTheHead_WithEveryRowNotRecorded_ThenRecordsAPlanRound` (the migrate-then-write path) · `ACommittedPlanRound_WritesItsSourceAsJson` (round
   trip through `ServerJsonContext` equals the record) · `APastedPlanRound_WritesOriginText` · `ACodeRound_WritesNothing` ·
-  `TheSameRoundRecordedTwice_KeepsOneRowAndOneValue` · `AReadOnlyReader_OnAStepTwentyTwoFile_LeavesItAtTwentyTwo` · both
+  `TheSameRoundRecordedTwice_KeepsOneRowAndOneValue` (the stored JSON equals the record AFTER the second record, which pins the `ON CONFLICT` entry) · `AReadOnlyReader_OnAStepTwentyTwoFile_LeavesItAtTwentyTwo` · both
   preview databases still reach the head.
 - **Break-its.** **B16** bind `''` always → `ACommittedPlanRound_WritesItsSourceAsJson` red.
 - **Done when.** Scenarios, `TheRoundKeyIsStepTwentyOneTests`, `TheRoundsSizeIsStepTwentyTwoTests`,
@@ -119,8 +119,10 @@ with both runs reported). Plus:
   `src/Store/RoundPlanSources.cs`, the `RoundChangesLog` shape: `Attach(SqliteConnection db, List<LoggedRound> rounds,
   IReadOnlyList<long> ids)` → the page's rounds, each `with { PlanSource = … }` when it has one; one
   `SELECT id, plan_source FROM rounds WHERE plan_source <> '' AND id IN (SELECT value FROM json_each($ids))` per page,
-  run ONLY when `HasColumn(db, "rounds", "plan_source")`; JSON that does not parse, or parses with no `origin`, maps to
-  absent (a malformed row never fails the page). `Rounds(...)` (`:544`) chains it after `RoundChangesLog.Attach` — the one
+  run ONLY when `ids.Count > 0` and `HasColumn(db, "rounds", "plan_source")`; JSON that does not parse, a null result,
+  or an `origin` that is neither `commit` nor `text` maps to absent (a malformed row never fails the page). The
+  `JsonException` catch wraps each row's deserialise ONLY, never the query — a wider catch would swallow *no such column*
+  and hollow out B10. `Rounds(...)` (`:544`) chains it after `RoundChangesLog.Attach` — the one
   call; the SQL ladder is not given a fourth text. `research/architecture.md` § *A field added to the round list*
   (`:754`): one more field, same rule. `research/module_server.md`: a `--log` paragraph after the size one (`:3471-3484`).
 - **Brief.** Bind the ids the way `RoundChangesLog` does — move its `BindIds` (`:122`) once into a small shared internal
@@ -129,9 +131,10 @@ with both runs reported). Plus:
 - **Test scenarios** (`TheLogNamesEachPlansSourceTests.cs`, the `TheLogNamesEachRoundsSizeTests` shape):
   `ARoundAfterTheStep_CarriesItsSource` · `ARoundBeforeTheStep_CarriesNone` (row with `''`) ·
   `AMalformedColumn_IsAbsentNotAnError` · `EachSourceLandsOnItsOwnRound_AcrossPages` (30 rounds, two pages of 15) ·
-  `AStepTwentyTwoFile_IsLoggedAsBefore` (`OneShotProcess`: exit 0, rounds present, no `planSource` key, file still at
-  22). `anOlderExtensionReadsALogPageCarryingASize.test.ts` gains one case: a plan round carrying `planSource` parses and
-  renders as before.
+  `AStepTwentyTwoFile_IsLoggedAsBefore` (`OneShotProcess`, `--log --paged` — only the paged mode exits 74: exit 0, rounds present, no `planSource` key, file still at
+  22). `anOlderExtensionReadsALogPageCarryingASize.test.ts` gains one case: a plan round carrying `planSource` parses —
+  this proves the RELEASED `parseLog` only (`roundsDb.ts` stays unchanged); S3 changes `rounds.ts`/`roundsLog.ts`, so
+  the file's byte-identity comment (`:13-15`) is narrowed to `roundsDb.ts` in the same commit.
 - **Break-its.** **B10** remove the `HasColumn` guard → `AStepTwentyTwoFile_IsLoggedAsBefore` red (no such column, exit
   74).
 - **Done when.** Scenarios, `RoundsQueryTests`, `TheLogNamesEachRoundsSizeTests`, `LogCliScenarioTests` green; `npm test`
@@ -150,14 +153,20 @@ with both runs reported). Plus:
   (`:384`); a `reviewedFromHtml(reviewedFrom, escape)` exported beside `askedByHtml` (`:462`) and embedded by
   `toString()` beside it (`:1637`), returning `<div class="reviewer source">…</div>` or `''`; `detail(row)` (`:1733`)
   puts it right after the asked-by line, before the early returns, so a row written without reviewer detail still shows
-  it. `research/module_extension.md`: the asked-by section (`:6426-6459`) gains the line.
+  it; a `.reviewer.source` CSS rule beside `.reviewer.asked` (`roundsLog.ts:1451`). `LogRow` gains a required field, so
+  the five fixtures that build one gain `reviewedFrom: ''`: `chatRows.test.ts:45`, `roundsCsv.test.ts:28`,
+  `roundsExport.test.ts:26`, `roundsLogBusyMark.test.ts:26`, `roundsLogPaging.test.ts:37`. The CSV export
+  (`roundsCsv.ts:119-123`) does NOT gain a column in this epic — decided, named in `module_extension.md`.
+  `research/module_extension.md`: the asked-by section (`:6426-6459`) gains the line.
 - **Brief.** Do not read the database for this — the row is built from the session file (parent `## Epics`, the
   consultant correction; E1 § 10: the line depends on the session-file field only). `escape` every value: `path` is
-  caller-chosen text. No new action, so no new button (D16).
+  caller-chosen text. `reviewedFromHtml` is embedded by `toString()` into a minified bundle, so it uses only its
+  parameters; the formatting (slicing, byte grouping) stays host-side in `reviewedFrom`. No new action, so no new button
+  (D16).
 - **Test scenarios.** `rounds.test.ts`: `reviewedFrom` for a committed source (`98 304 bytes`), a text source with and
   without a commit (its `textId` shown), a short `commit`, `undefined`, an object missing `origin`, `bytes: "x"`. `roundsLog.test.ts`: the row carries the string
-  (the `:514` shape); a round without the field carries `''`; `reviewedFromHtml` escapes a hostile path and answers `''`
-  for `''` (the `:556-575` shape). `bundledPage.test.ts` (the `:173` shape): opening a row with `planSource` shows the
+  (the `:511` shape); a round without the field carries `''`; `reviewedFromHtml` escapes a hostile path and answers `''`
+  for `''` (the `:556-578` shape). `bundledPage.test.ts` (the `:173` shape): opening a row with `planSource` shows the
   line; opening one without shows no `source` element.
 - **Break-its.** **B11** render the line for an absent `planSource` (drop the non-empty test) → the "shows nothing" case
   red.
@@ -198,6 +207,8 @@ in-flight state, so no sweep.
 - [ ] B10, B11, B16 observed red then green; `CoaiMcp.Tests.exe` and `npm test` green.
 - [ ] The step number checked against `main` at merge; `module_server.md`, `module_extension.md`, `architecture.md`
       updated; `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+- [ ] The parent's status line and its `## Epics` E2 section updated (E1 merged, step 23, init property, B16), so the
+      joint promotion is consistent; E1's status line says merged.
 - [ ] The parent, E1's and this document promoted together.
 
 ## 10. Revised against `main`, 2026-10-16 — what changed since 2026-10-15
@@ -209,7 +220,8 @@ in-flight state, so no sweep.
 - **`LoggedRound.PlanSource` is an init property**, not a trailing positional parameter (C2) — the shape step 22 chose for
   `Size`; the reader is an `Attach` in `RoundPlanSources.cs` chained after `RoundChangesLog.Attach`, binding ids through a helper
   shared with that file. After the gate (2026-10-16): the text line carries `textId`; hash slicing and `bytes` validation
-  are stated; S1 tests migrate-then-write.
+  are stated; S1 tests migrate-then-write. From the author's own review: the five `LogRow` fixtures, the per-row
+  `JsonException` catch, `--paged` for B10, the CSS rule, the CSV decision, and the parent's update in the DoD.
 - **E1 as shipped:** `PlanSource` lives in `core/Rounds/PlanSource.cs`; `PlanSources.Stamp` fills `Commit` for both
   origins and stamps plan rounds only; a committed round's subject is its file name. C1 and C3 follow those facts.
 - **The line is a function the page runs** (`reviewedFromHtml`, the `askedByHtml` precedent), so it is tested directly
