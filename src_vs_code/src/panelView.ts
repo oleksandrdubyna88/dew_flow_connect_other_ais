@@ -85,7 +85,7 @@ import { vaultKeyOf } from './vaultKey';
 import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
-import { hostFamily, isLinuxSide } from './hostSide';
+import { hostFamily, type HostKind, hostKindOfPlatform, hostPlatform } from './hostSide';
 import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
@@ -192,6 +192,13 @@ export interface PanelState {
    * test names it, so a page is the same on any machine.
    */
   readonly hostFamily?: PathFamily | undefined;
+  /**
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — read from the kernel once by the host
+   * (`hostKind`). It decides what a Vibe card says about the host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md): "update
+   * coai-mcp" on WSL2 only, a refusal on WSL1 and a native host. Absent is this extension host's own platform's, which on a
+   * Linux platform is a native host — the answer that only ever refuses; a test names it so a page is the same on any machine.
+   */
+  readonly hostKind?: HostKind | undefined;
   /**
    * The ids of the reviewer rows whose CLI path this side skips as the other side's — `otherSideClis`, decided by the host
    * with the disk (`pathForThisSide`), because this page's modules ask none. Absent draws no note.
@@ -1139,6 +1146,14 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 /**
+ * The host the page is drawn for: the kind the window read from its kernel, else this platform's own. ONE source — never
+ * mixed with the path family, which cannot tell WSL from a desktop Linux or either from a Mac.
+ */
+export function hostKindOfState(state: Pick<PanelState, 'hostKind'>): HostKind {
+  return state.hostKind ?? hostKindOfPlatform(hostPlatform());
+}
+
+/**
  * What each Models card needs beyond its row (PLAN_one_model_catalog.md E3.2).
  */
 export function cardContextFor(state: PanelState): (vendor: Vendor) => CardContext {
@@ -1149,6 +1164,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   const serverVersion = state.server.kind === 'known' ? state.server.version : '';
   // The host's disk and drive, in the family the page is drawn for (a test names it; absent is this host's).
   const family = state.hostFamily ?? hostFamily();
+  const host = hostKindOfState(state);
   const otherSides = state.otherSideClis ?? [];
   // Once for the page: every card draws one field or two by the same decision (E4.1, E2's `twoPathFields`).
   const sides = pathSidesOf(state.sides, family);
@@ -1167,7 +1183,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`runtimeOnServer` decides whether there is one).
-    runtimeNote: runtimeSkewNote(serverVersion, [v], isLinuxSide(family)),
+    runtimeNote: runtimeSkewNote(serverVersion, [v], host),
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),

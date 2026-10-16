@@ -5,10 +5,11 @@ import { test } from 'node:test';
 
 import { catalogHtml } from '../catalogPage';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
-import { hostIsWsl, isLinuxSide } from '../hostSide';
+import { type HostKind, hostKind, hostKindOf, hostKindOfPlatform } from '../hostSide';
 import { cardContextFor, type PanelState } from '../panelView';
 import { ON_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
-import { vendorInstall, vendorUpdate } from '../vendorTerminal';
+import { vendorInstall, vendorUpdate, vibeNoteFor } from '../vendorTerminal';
+import { namesWsl2 } from '../wslNetwork';
 import { DEFAULT_VENDORS, VENDOR_PRESETS, type Vendor } from '../vendors';
 import { pageTree } from './pageTree';
 import { panelState, runPanel } from './panelPageHarness';
@@ -51,61 +52,130 @@ test('a Linux or WSL side whose server is older than 0.58.0 does not run Vibe; a
   assert.equal(runtimeOnLinuxSide('kimi', '0.57.0'), true, 'Kimi has no Linux entry yet — this release says nothing about it');
 });
 
-test('the card on a Linux side says "update coai-mcp to run Vibe here" for an older server, and only there', () => {
-  const note = runtimeSkewNote(BEFORE_LINUX, [VIBE], true);
+// ---------------------------------------------------------------- the host kind (DL1): WSL2, WSL1, native Linux
 
-  assert.match(note, /update coai-mcp to run Vibe here/iu);
+const WSL2_BANNER = 'Linux version 6.18.33.2-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP';
+const WSL1_BANNER = 'Linux version 4.4.0-19041-Microsoft (Microsoft@Microsoft.com) (gcc version 5.4.0) #1-Microsoft';
+const NATIVE_BANNER = 'Linux version 5.15.0-91-generic (buildd@lcy02) (gcc) #101-Ubuntu SMP';
+
+for (const [banner, wsl2] of [
+  [WSL2_BANNER, true],
+  ['6.18.33.2-microsoft-standard-WSL2', true],
+  ['5.15.90.1-MICROSOFT-STANDARD-WSL2', true],
+  ['5.10.16.3-microsoft-standard', true],
+  [WSL1_BANNER, false],
+  ['4.4.0-19041-Microsoft', false],
+  [NATIVE_BANNER, false],
+  ['', false],
+] as const) {
+  test(`namesWsl2 reads "${banner.slice(0, 40)}" as ${wsl2 ? 'WSL2' : 'not WSL2'}`, () => {
+    assert.equal(namesWsl2(banner), wsl2, 'the same rule as the server’s NamesWsl2: WSL2 or microsoft-standard, any case');
+  });
+}
+
+test('the host kind is WSL2, WSL1 or native Linux by the kernel banner, and Windows and macOS are what they are', () => {
+  assert.equal(hostKindOf('linux', WSL2_BANNER), 'wsl2');
+  assert.equal(hostKindOf('linux', WSL1_BANNER), 'wsl1', 'a WSL1 kernel is not WSL2: it has no real process tree');
+  assert.equal(hostKindOf('linux', NATIVE_BANNER), 'linux');
+  assert.equal(hostKindOf('linux', ''), 'linux', 'a banner nobody could read is a native host: it only ever refuses');
+  assert.equal(hostKindOf('win32', WSL2_BANNER), 'windows', 'a Windows host is Windows whatever a banner would say');
+  assert.equal(hostKindOf('darwin', ''), 'darwin');
+  assert.equal(hostKindOfPlatform('linux'), 'linux');
+});
+
+test('the host kind of THIS host reads the banner only on Linux, and an unreadable banner never rejects', async () => {
+  assert.equal(await hostKind('linux', async () => WSL2_BANNER), 'wsl2');
+  assert.equal(await hostKind('linux', async () => WSL1_BANNER), 'wsl1');
+  assert.equal(await hostKind('linux', async () => NATIVE_BANNER), 'linux');
+  assert.equal(await hostKind('linux', async () => { throw new Error('no /proc/version'); }), 'linux');
+  assert.equal(await hostKind('win32', async () => WSL2_BANNER), 'windows');
+  assert.equal(await hostKind('darwin', async () => WSL2_BANNER), 'darwin');
+  assert.equal(await hostKind('freebsd', async () => WSL2_BANNER), 'wsl2', 'an unknown platform narrows to linux, as hostPlatform says');
+});
+
+// ---------------------------------------------------------------- the card's note, by host kind
+
+const ANY_SERVER = [BEFORE_LINUX, VIBE_ON_LINUX_SINCE, '0.58.1', '1.0.0', ''] as const;
+const UPDATE = /update coai-mcp to run Vibe here/iu;
+
+test('WSL2: a server older than 0.58.0 is told to update, a newer or unknown one is not', () => {
+  const note = runtimeSkewNote(BEFORE_LINUX, [VIBE], 'wsl2');
+
+  assert.match(note, UPDATE);
   assert.ok(note.includes(BEFORE_LINUX), 'it names the server the person has');
   assert.ok(note.includes(VIBE_ON_LINUX_SINCE), 'it names the release that runs Vibe here');
-  assert.equal(runtimeSkewNote(BEFORE_LINUX, [VIBE], false), '', 'on Windows an 0.57.0 server runs Vibe: no note');
+  assert.equal(runtimeSkewNote(VIBE_ON_LINUX_SINCE, [VIBE], 'wsl2'), '');
+  assert.equal(runtimeSkewNote('0.58.1', [VIBE], 'wsl2'), '');
+  assert.equal(runtimeSkewNote('', [VIBE], 'wsl2'), '', 'an unknown server is not called old');
+});
+
+test('a native Linux host is told it is refused at EVERY server version — updating coai-mcp would not help', () => {
+  for (const version of ANY_SERVER) {
+    const note = runtimeSkewNote(version, [VIBE], 'linux');
+
+    assert.doesNotMatch(note, UPDATE, `server "${version}": an update note on a host 0.58.0 still refuses`);
+    assert.match(note, /native Linux host/u, `server "${version}"`);
+    assert.match(note, /measured on WSL2 only/u, `server "${version}"`);
+  }
+});
+
+test('WSL1 is told it is refused at every server version, and the cure is wsl --set-version <distro> 2', () => {
+  for (const version of ANY_SERVER) {
+    const note = runtimeSkewNote(version, [VIBE], 'wsl1');
+
+    assert.doesNotMatch(note, UPDATE, `server "${version}"`);
+    assert.match(note, /WSL1/u, `server "${version}"`);
+    assert.ok(note.includes('`wsl --set-version <distro> 2`'), `server "${version}": ${note}`);
+  }
+});
+
+test('Windows, macOS and the old call shape get no note about the host; a server that does not know Vibe keeps its own, once', () => {
+  for (const host of ['windows', 'darwin'] as const) {
+    for (const version of ANY_SERVER) {
+      assert.equal(runtimeSkewNote(version, [VIBE], host), '', `${host} at "${version}"`);
+    }
+  }
   assert.equal(runtimeSkewNote(BEFORE_LINUX, [VIBE]), '', 'the old call shape is the Windows one');
-  assert.equal(runtimeSkewNote(VIBE_ON_LINUX_SINCE, [VIBE], true), '');
-  assert.equal(runtimeSkewNote('', [VIBE], true), '', 'an unknown server is not called old');
-  assert.equal(runtimeSkewNote(BEFORE_LINUX, [{ ...VIBE, enabled: false }], true), '', 'a switched-off row is not refused at launch');
-  assert.equal(runtimeSkewNote(BEFORE_LINUX, DEFAULT_VENDORS, true), '', 'codex and antigravity are untouched');
+
+  for (const host of ['wsl2', 'wsl1', 'linux'] as const) {
+    const note = runtimeSkewNote('0.52.0', [VIBE], host);
+    assert.ok(note.includes(VIBE_RUNTIME_SINCE), `${host}: the runtime gate speaks first`);
+    assert.doesNotMatch(note, /run Vibe here|native Linux host|WSL1/u, `${host}: one note for one row`);
+  }
 });
 
-test('a server that does not know Vibe at all keeps its own sentence on a Linux side — one note, not two', () => {
-  const note = runtimeSkewNote('0.52.0', [VIBE], true);
-
-  assert.ok(note.includes(VIBE_RUNTIME_SINCE), 'the runtime gate speaks first');
-  assert.doesNotMatch(note, /run Vibe here/iu);
-});
-
-test('only a Linux or WSL host is a Linux side: Windows and macOS are not', () => {
-  assert.equal(isLinuxSide('posix', 'linux'), true);
-  assert.equal(isLinuxSide('windows', 'win32'), false);
-  assert.equal(isLinuxSide('posix', 'darwin'), false, 'macOS stays refused whatever the server — updating coai-mcp would not help');
-});
-
-test('whether this host is WSL is asked only on Linux, and an unanswered question is "no"', async () => {
-  assert.equal(await hostIsWsl('linux', async () => true), true);
-  assert.equal(await hostIsWsl('linux', async () => false), false);
-  assert.equal(await hostIsWsl('linux', async () => { throw new Error('no /proc/version'); }), false);
-  assert.equal(await hostIsWsl('win32', async () => true), false, 'a Windows host is not a WSL one whatever /proc/version would say');
-  assert.equal(await hostIsWsl('darwin', async () => true), false);
+test('a switched-off row and the other reviewers are untouched on every host', () => {
+  for (const host of ['windows', 'wsl2', 'wsl1', 'linux', 'darwin'] as const) {
+    assert.equal(runtimeSkewNote(BEFORE_LINUX, [{ ...VIBE, enabled: false }], host), '', `${host}: a switched-off row is not refused at launch`);
+    assert.equal(runtimeSkewNote(BEFORE_LINUX, DEFAULT_VENDORS, host), '', `${host}: codex and antigravity are untouched`);
+  }
 });
 
 function stateWith(overrides: Partial<PanelState>): PanelState {
   return { ...panelState('reviewers'), vendors: [DEFAULT_VENDORS[0]!, VIBE], ...overrides };
 }
 
-test('the Vibe card on a WSL side shows the update sentence for a 0.57.0 server, and not on a Windows side', () => {
-  const wsl = stateWith({ server: KNOWN(BEFORE_LINUX), hostFamily: 'posix' });
-  const windows = stateWith({ server: KNOWN(BEFORE_LINUX), hostFamily: 'windows' });
+test('the Vibe card says what its HOST kind says: update on WSL2, a refusal on native Linux and WSL1, nothing on Windows', () => {
+  const on = (hostKindOfWindow: HostKind, version = BEFORE_LINUX) => stateWith({ server: KNOWN(version), hostKind: hostKindOfWindow });
 
-  assert.match(cardContextFor(wsl)(VIBE).runtimeNote, /update coai-mcp to run Vibe here/iu);
-  assert.equal(cardContextFor(windows)(VIBE).runtimeNote, '');
+  assert.match(cardContextFor(on('wsl2'))(VIBE).runtimeNote, UPDATE);
+  assert.equal(cardContextFor(on('windows'))(VIBE).runtimeNote, '');
+  assert.equal(cardContextFor(on('wsl2', VIBE_ON_LINUX_SINCE))(VIBE).runtimeNote, '');
+  for (const version of [BEFORE_LINUX, VIBE_ON_LINUX_SINCE]) {
+    assert.match(cardContextFor(on('linux', version))(VIBE).runtimeNote, /native Linux host/u, `native Linux at ${version}`);
+    assert.match(cardContextFor(on('wsl1', version))(VIBE).runtimeNote, /WSL1/u, `WSL1 at ${version}`);
+  }
 
-  const page = runPanel(wsl, { html: catalogHtml(wsl, 'test-nonce', 'models') });
+  const wsl2 = on('wsl2');
+  const page = runPanel(wsl2, { html: catalogHtml(wsl2, 'test-nonce', 'models') });
   const card = pageTree(page.html).one((node) => node.dataset['modelCard'] === 'vibe', 'the Vibe card');
-  assert.match(card.text(), /update coai-mcp to run Vibe here/iu, 'the person reads it on the card');
-});
+  assert.match(card.text(), UPDATE, 'the person reads it on the card');
 
-test('the Vibe card on a WSL side is quiet once the server is 0.58.0', () => {
-  const state = stateWith({ server: KNOWN(VIBE_ON_LINUX_SINCE), hostFamily: 'posix' });
-
-  assert.equal(cardContextFor(state)(VIBE).runtimeNote, '');
+  const native = on('linux', VIBE_ON_LINUX_SINCE);
+  const nativePage = runPanel(native, { html: catalogHtml(native, 'test-nonce', 'models') });
+  const nativeCard = pageTree(nativePage.html).one((node) => node.dataset['modelCard'] === 'vibe', 'the Vibe card');
+  assert.doesNotMatch(nativeCard.text(), UPDATE, 'a native Linux card never tells a person to update');
+  assert.match(nativeCard.text(), /native Linux host/u);
 });
 
 // ---------------------------------------------------------------- the card hint
@@ -124,7 +194,7 @@ test('the Vibe hint names Windows, WSL2 from 0.58.0, the .env sign-in, and that 
 // ---------------------------------------------------------------- the install note, per host
 
 test('⤓ for Vibe on WSL2 says Vibe runs there from 0.58.0 and where the sign-in is kept', () => {
-  const note = vendorInstall(VIBE, 'linux', true).note;
+  const note = vendorInstall(VIBE, 'linux', 'wsl2').note;
 
   assert.ok(note.includes(VIBE_ON_LINUX_SINCE) && note.includes('WSL2'), note);
   assert.ok(note.includes('~/.vibe/.env') && note.includes('vibe --setup'), note);
@@ -135,9 +205,10 @@ test('⤓ for Vibe on WSL2 says Vibe runs there from 0.58.0 and where the sign-i
 });
 
 test('⤓ for Vibe on native Linux says it is measured on WSL2 only for now', () => {
-  const note = vendorInstall(VIBE, 'linux', false).note;
+  const note = vendorInstall(VIBE, 'linux', 'linux').note;
 
-  assert.match(note, /measured on WSL2 only for now/u);
+  assert.match(note, /measured on WSL2 only/u);
+  assert.doesNotMatch(note, /Vibe runs on this side/u, 'a native host is not told Vibe runs here');
   assert.match(note, /keyring is invisible to coai/u);
   assert.match(note, /vibe --setup/u);
   assert.doesNotMatch(note, /operating system’s keyring, which every coai launch/u, 'that sentence is Windows’s truth only');
@@ -152,10 +223,41 @@ test('⤓ for Vibe on macOS says nothing is measured there, and on Windows is un
   assert.doesNotMatch(windows, /WSL2|\.env/u);
 });
 
-test('WSL2 and native Linux get the same command, and ⟳ carries the same note as ⤓', () => {
-  assert.equal(vendorInstall(VIBE, 'linux', true).command, vendorInstall(VIBE, 'linux', false).command);
-  assert.equal(vendorUpdate(VIBE, 'linux', '2.26.1', true).note, vendorInstall(VIBE, 'linux', true).note);
-  assert.equal(vendorUpdate(VIBE, 'linux', '2.26.1', false).note, vendorInstall(VIBE, 'linux', false).note);
+test('⤓ for Vibe on WSL1 says it is WSL1 and names the cure: wsl --set-version <distro> 2', () => {
+  const note = vendorInstall(VIBE, 'linux', 'wsl1').note;
+
+  assert.match(note, /WSL1/u);
+  assert.ok(note.includes('`wsl --set-version <distro> 2`'), note);
+  assert.doesNotMatch(note, /Vibe runs on this side/u, 'a WSL1 host is not told Vibe runs here');
+  assert.match(note, /vibe --setup/u, 'the sign-in is still said');
+});
+
+const PLATFORM_OF: Readonly<Record<HostKind, 'win32' | 'linux' | 'darwin'>> = {
+  windows: 'win32', wsl2: 'linux', wsl1: 'linux', linux: 'linux', darwin: 'darwin',
+};
+
+test('the note ⤓ and ⟳ show is vibeNoteFor(host) for every host kind, and the five are five different notes', () => {
+  const hosts = Object.keys(PLATFORM_OF) as HostKind[];
+
+  for (const host of hosts) {
+    assert.equal(vendorInstall(VIBE, PLATFORM_OF[host], host).note, vibeNoteFor(host), `⤓ on ${host}`);
+    assert.equal(vendorUpdate(VIBE, PLATFORM_OF[host], '2.26.1', host).note, vibeNoteFor(host), `⟳ on ${host}`);
+  }
+  // wsl1 and linux each name their own cure; a table that mapped two hosts to one note would hide a wrong one.
+  assert.equal(new Set(hosts.map((host) => vibeNoteFor(host))).size, hosts.length);
+});
+
+test('a caller that names no host gets its platform’s own: Linux alone is a native host, never WSL2', () => {
+  assert.equal(vendorInstall(VIBE, 'linux').note, vibeNoteFor('linux'));
+  assert.notEqual(vendorInstall(VIBE, 'linux').note, vibeNoteFor('wsl2'));
+  assert.equal(vendorInstall(VIBE, 'win32').note, vibeNoteFor('windows'));
+  assert.equal(vendorInstall(VIBE, 'darwin').note, vibeNoteFor('darwin'));
+});
+
+test('every host gets the same command, and only the note differs', () => {
+  const commands = new Set((['wsl2', 'wsl1', 'linux'] as const).map((host) => vendorInstall(VIBE, 'linux', host).command));
+
+  assert.equal(commands.size, 1);
 });
 
 // ---------------------------------------------------------------- the help, in five languages

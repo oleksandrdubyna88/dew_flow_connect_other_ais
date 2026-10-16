@@ -96,7 +96,7 @@ import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
-import { hostExecutableSide, hostFamily, hostIsWsl, hostPlatform, Platform } from './hostSide';
+import { hostExecutableSide, hostFamily, hostKind, type HostKind, hostPlatform, Platform } from './hostSide';
 import { cliBoxFamily, cliPathRefusal, vendorFieldWrite } from './cliPathSave';
 import type { DroppedValue } from './cliPathKeep';
 import { otherSideDataDirectories } from './otherSideValues';
@@ -464,6 +464,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The newest published Team-server version, shown to admins only. Read-only: it is deployed. */
   private latestTeamServer = '';
   private latestCheckedAt = 0;
+  /**
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — asked of the kernel ONCE, when the panel is
+   * made, and never rejecting (`hostKind`). The Models cards read it through the state (a Vibe card on a native Linux host
+   * says it is refused, never "update coai-mcp"), and ⤓ / ⟳ read it for their note.
+   */
+  private readonly hostKindHere: Promise<HostKind> = hostKind();
   /** Each vendor's installed and published CLI version, and when they were last read. */
   private cliStatus: Record<string, CliStatus> = {};
   private cliCheckedAt = 0;
@@ -1405,6 +1411,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
       askingClaude: this.claudeProbes.looking,
       server,
+      hostKind: await this.hostKindHere,
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
       // Read from globalState on EVERY render (E2.2): a side another window stamped appears at the next repaint.
@@ -1930,7 +1937,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async openCliTerminal(
     id: string,
     verb: 'install' | 'update',
-    commandFor: (vendor: Vendor, platform: Platform, underWsl?: boolean) => VendorInstall,
+    commandFor: (vendor: Vendor, platform: Platform, host: HostKind) => VendorInstall,
   ): Promise<void> {
     const vendor = this.vendorsHere().find((v) => v.id === id);
     if (vendor === undefined) {
@@ -1940,9 +1947,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // The extension HOST's platform, which is the one that matters here: the terminal this opens
     // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
     // doctrine and its narrowing now live, in one place — this used to be one of three copies.
-    // WSL is a Linux host to the extension, and Vibe's note differs between WSL2 and a native Linux box (DL1 of
-    // todo/PLAN_kimi_and_vibe_on_linux.md), so this terminal's own side is asked once, here.
-    const install = commandFor(vendor, hostPlatform(), await hostIsWsl());
+    // WSL is a Linux host to the extension, and Vibe's note differs between WSL2, WSL1 and a native Linux box (DL1 of
+    // todo/PLAN_kimi_and_vibe_on_linux.md): the host kind is asked of this window once (`hostKindHere`) and `commandFor`
+    // REQUIRES it, so a dropped argument is a compile error rather than the native-Linux note shown on WSL.
+    const install = commandFor(vendor, hostPlatform(), await this.hostKindHere);
     if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await notifyAndAsk({

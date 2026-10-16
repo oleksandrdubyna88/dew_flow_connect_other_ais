@@ -53,6 +53,16 @@ export function isWsl(procVersion: string): boolean {
   return /microsoft|wsl/i.test(procVersion);
 }
 
+/**
+ * Whether the banner is a WSL2 kernel — the narrower question Vibe's host rule asks (DL1 of
+ * todo/PLAN_kimi_and_vibe_on_linux.md). {@link isWsl} is right for the networking cure, which holds for both generations;
+ * it is wrong for "measured on WSL2", because a WSL1 kernel (`4.4.0-…-Microsoft`) is a syscall translation layer with no
+ * real process tree. The same rule as the server's `NamesWsl2`: the banner holds `WSL2` or `microsoft-standard`, any case.
+ */
+export function namesWsl2(procVersion: string): boolean {
+  return /WSL2|microsoft-standard/i.test(procVersion);
+}
+
 /** The `networkingMode` set in the `[wsl2]` section, or `none`. */
 export function networkingModeOf(text: string): ConfiguredMode {
   const value = valueInSection(text.split(/\r?\n/)).toLowerCase();
@@ -133,10 +143,15 @@ export function previewOf(text: string, maxLines = 40): string {
 
 /** Whether the process is running under WSL. False on anything that cannot answer. */
 export async function runningUnderWsl(): Promise<boolean> {
+  return isWsl(await readProcVersion());
+}
+
+/** This kernel's banner, or the empty string on anything that cannot answer (a Windows host has no /proc/version). */
+export async function readProcVersion(): Promise<string> {
   try {
-    return isWsl(await readFile('/proc/version', 'utf8'));
+    return await readFile('/proc/version', 'utf8');
   } catch {
-    return false;
+    return '';
   }
 }
 

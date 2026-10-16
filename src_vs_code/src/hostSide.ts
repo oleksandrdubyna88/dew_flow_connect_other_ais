@@ -1,5 +1,5 @@
 import { familyOf, installedFileProbe, systemDriveOf, type ExecutableSide, type PathFamily } from './pathFamily';
-import { runningUnderWsl } from './wslNetwork';
+import { isWsl, namesWsl2, readProcVersion, runningUnderWsl } from './wslNetwork';
 
 /**
  * Which side this extension host is on, and what it can reach from there.
@@ -136,22 +136,55 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
 }
 
 /**
- * Whether a side is a Linux or WSL one — the sides whose coai-mcp refuses a runtime until its `*_ON_LINUX_SINCE` release
- * (`runtimeSince.ts`). A POSIX family is not enough: a Mac is POSIX too, and updating coai-mcp does not make it run Vibe, so
- * the card must not say it does. Pure — the family is what the page is drawn for, the platform this host's.
+ * Which host this extension runs on, as far as a Vibe row cares (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md): WSL2 runs it,
+ * a native Linux host and WSL1 are refused, macOS is not measured, Windows is as it always was. One union, one source —
+ * `process.platform` alone cannot tell WSL from a desktop Linux, and a POSIX path family cannot tell either from a Mac.
  */
-export function isLinuxSide(family: PathFamily, platform: Platform = hostPlatform()): boolean {
-  return family === 'posix' && platform !== 'darwin';
+export type HostKind = 'windows' | 'wsl2' | 'wsl1' | 'linux' | 'darwin';
+
+/**
+ * The host kind from what is known without asking the disk: Windows and macOS are what they say, and a Linux host is taken
+ * to be a native one — the safe answer, since it only ever shows a refusal. {@link hostKindOf} narrows it by the banner.
+ */
+export function hostKindOfPlatform(platform: Platform): HostKind {
+  if (platform === 'win32') {
+    return 'windows';
+  }
+
+  return platform === 'darwin' ? 'darwin' : 'linux';
 }
 
 /**
- * Whether THIS host is a WSL one — the question a Vibe note needs, because WSL2 runs Vibe and a native Linux host is
- * refused for now (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md). It is {@link windowsReach}'s own answer — `interop` is
- * "Linux, and WSL" — so the WSL question is asked in one place, and it never rejects.
+ * The host kind from the platform and this kernel's banner — pure. Only a Linux host reads the banner: WSL2 is the banner
+ * naming `WSL2` or `microsoft-standard`, WSL1 any other that still names Microsoft or WSL, and the rest is native Linux.
  */
-export async function hostIsWsl(
+export function hostKindOf(platform: Platform, procVersion: string): HostKind {
+  const kind = hostKindOfPlatform(platform);
+  if (kind !== 'linux' || !isWsl(procVersion)) {
+    return kind;
+  }
+
+  return namesWsl2(procVersion) ? 'wsl2' : 'wsl1';
+}
+
+/**
+ * {@link hostKindOf} for THIS host, reading the banner itself — injected for the tests, and it never rejects: a banner that
+ * cannot be read is an empty one, which is a native Linux host (a refusal, never a promise).
+ */
+export async function hostKind(
   platform: string = process.platform,
-  underWsl: () => Promise<boolean> = runningUnderWsl,
-): Promise<boolean> {
-  return (await windowsReach(platform, underWsl)).kind === 'interop';
+  readBanner: () => Promise<string> = readProcVersion,
+): Promise<HostKind> {
+  const here = hostPlatform(platform);
+
+  return here === 'linux' ? hostKindOf(here, await bannerOf(readBanner)) : hostKindOfPlatform(here);
+}
+
+/** The banner, with every way of not reading it collapsed into the empty one. */
+async function bannerOf(readBanner: () => Promise<string>): Promise<string> {
+  try {
+    return await readBanner();
+  } catch {
+    return '';
+  }
 }
