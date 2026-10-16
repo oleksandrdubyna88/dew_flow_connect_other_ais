@@ -7,9 +7,9 @@
 > wrote, mapped there. §2 says that instants are an ORDER (E1's fixtures run on a synthetic rank clock) and that a row's
 > model is the model that ANSWERED (RESULTS Q2). S1 gains the Q7/Q8 rules. S3 gains the answered-model rule. S4's card
 > reference moves. S5 is rewritten against the twenty shipped fixtures `c01`–`c20`: it names which test uses which case,
-> and what no fixture can show. §8.3 lists the edits other documents need. §9 lists what contradicts Fable's S2 spec, for
-> Fable to confirm; the spec itself is not changed. §10 is the risk-consultation brief owed before E4's code round. Nothing
-> is implemented, so the status stays.
+> and what no fixture can show. §8.3 lists the edits other documents need. §9 lists what contradicted Fable's S2 spec;
+> **Fable amended S2 the same day** (§S2.2a decides F1–F5 and E5's §8 items) and §9 stays as the record of the questions.
+> §10 is the risk-consultation brief owed before E4's code round. Nothing is implemented, so the status stays.
 >
 > Scope: `src_mcp/core/Authors/` (new, pure) and `src_mcp/tests/` (new test classes). No schema step, no
 > call site, no I/O — those are E5's. Related docs: [module_server.md](../research/module_server.md),
@@ -924,7 +924,7 @@ and `rounds[]` with `number`, `startedUtc`, `completedUtc`, `status` and `headSh
 caller per round. E1 wrote no expectation files: the manifest holds counts only. So the cells below are a hand-read of
 the fixtures (2026-10-16), and they go into the test as data (measurement.md rule 2: the hand-read IS the check). The
 reader is E3's `CallerTranscript`, which is not on main yet. The materialiser is E3.S4's
-`CallerTranscriptFixture.Materialise`, with the two requirements of §8.3 item 6.
+`CallerTranscriptFixture.Materialise`, with the two requirements of §8.3 item 6 (closed by E3.S4's 2026-10-16 amendment).
 
 **Rules every S5 test follows.**
 
@@ -956,7 +956,7 @@ below means `ambiguous · no evidence` unless the row says otherwise.
 |---|---|---|---|---|
 | `c01` | background-agent-across-round-start | H, I, R | Round 1's window holds main's one message and two of the background agent's messages, and 1 launch. No write: all ambiguous (agents 2, launches 1, turns 3). One message has lines on both sides of the start: it is placed by its FIRST line, and its tokens are the maximum over every line, after the start included (D8). With the extension, round 2 holds the agent's two later messages and 0 launches | a write (the agent only reads). Builder: S2 case 2 |
 | `c02`, `c03` | message-as-several-lines, message-last-line-below-max | H, I | Round 1 holds main's one message only. The agent's first line comes after the start: no launch and no message of the agent in round 1 (S2 decision 8: a launch requested before the start whose first line follows it belongs to the next window) | the token rule itself is E3's; its message lies after round 1's start |
-| `c04` | meta-without-model | H, I | Round 1 holds main 1 + the agent 1 message, 1 launch, all ambiguous. The agent's `Requested` is the line's (the meta has no alias) and its `Model` is `claude-sonnet-5-5`. The window state is the state E3 gives (`partial: meta without model` as E3.S4 stands; see §8.3 item 2) | a row: there is no write, so the model shows only on placements |
+| `c04` | meta-without-model | H, I | Round 1 holds main 1 + the agent 1 message, 1 launch, all ambiguous. The agent's `Requested` is the line's (the meta has no alias) and its `Model` is `claude-sonnet-5-5`. The window state is `observed`: a meta without `model` is E3's `Diagnostics.MetasWithoutModel` count, never a reason (E3 S4-17; §S2.2a F4) | a row: there is no write, so the model shows only on placements |
 | `c05` | missing-child-transcripts | H, I | Round 1 is `partial: agent call without transcript, meta without transcript`. There are two unobserved launches at main's message instant (all three `Agent` calls sit in one message; E3 S4-8), 1 launch (the agent whose file exists), and no tokens and no launch placement for the missing two | — |
 | `c06` | model-switch-in-window | H, I | Main has two messages on `claude-opus-5-5`, then `claude-fable-5-1`: two placements, each carrying its own model. The only write goes into `scratch` → outside → ambiguous, and no row | the model switch on a ROW: the ambiguous totals carry no model (§8.3 item 7). Builder: S2 case 3, S3 `ARowIsOne…`. This is also the shape a `model_refusal_fallback` takes |
 | `c07` | nested-agents | H, I | Main's message comes before open → `before-open`. Round 1: 2 launches (= the manifest's `agentFiles`, not its 3 `agentToolUses`). The depth-2 agent's parent is the depth-1 agent, not main. The depth-2 meta has no alias → its `Requested` is from its lines, its `Model` is `claude-sonnet-5-5`. No write → no `child of`; all ambiguous | `child of` on data: no fixture has a subagent parent that writes. Builder: S2 `OnlyASubagentParentPropagatesTests` |
@@ -1035,7 +1035,8 @@ hand-read.
 - [ ] `CoaiMcp.Tests.exe` green; `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
 - [ ] (added 2026-10-16) Every S5 cell is backed by its `c01`–`c20` case, and the cells are named as hand-reads; no test
       asserts a duration, a date or a token magnitude read from a fixture; the order fact is green.
-- [ ] (added 2026-10-16) Fable answered every item of §9 before S2's code, and each answer is in S2 or in the parent's §16.
+- [x] (added 2026-10-16) Fable answered every item of §9 before S2's code, and each answer is in S2 or in the parent's §16.
+      *(Done 2026-10-16: §S2.2a.)*
 - [ ] (added 2026-10-16) The risk consultation of §10 was taken, verified and closed (`close_consult`) before the epic's
       code round, and what it changed is recorded.
 
@@ -1086,8 +1087,10 @@ hand-read.
 
 ### 8.1 Reference drift — the lines to read on main `59463d73`
 
-The S2 text is Fable's and is not edited. Where it cites a line that has moved, read the right-hand column. The other
-stories are corrected in place.
+The S2 text is Fable's. Fable's 2026-10-16 amendment corrected its `RoundEngine.cs` anchors in S2's scope and decision 3
+(§S2.2a, E5 §8.7); four S2 citations still carry the old numbers — `SessionStore.cs:248` and `:594-597` in S2's scope,
+`RoundEngine.cs:895` in case 2 and in §S2.11's first plant — and for those, read the right-hand column. The other stories
+are corrected in place.
 
 | Cited (where) | On main | What is there |
 |---|---|---|
@@ -1109,7 +1112,7 @@ is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`),
 
 | RESULTS | Measured | Here |
 |---|---|---|
-| Q2 | metas with `model`: 100 % only on 2.1.283–2.1.285 (Windows) and 2.1.300; otherwise 70–98 % on Windows and as low as 32 % on WSL. `effort` on ≥ 99.5 % of assistant lines | §2: counts are grouped on the model that answered. S3 has the rule and its test: an empty meta alias never blanks a model. The state E3 gives such a meta is §8.3 item 2 |
+| Q2 | metas with `model`: 100 % only on 2.1.283–2.1.285 (Windows) and 2.1.300; otherwise 70–98 % on Windows and as low as 32 % on WSL. `effort` on ≥ 99.5 % of assistant lines | §2: counts are grouped on the model that answered. S3 has the rule and its test: an empty meta alias never blanks a model. Such a meta is `observed`, counted in E3's `Diagnostics.MetasWithoutModel` (E3 S4-17; §8.3 item 2, closed) |
 | Q4 | one `message.id`'s lines span p50 1.7–1.9 s, p99 50–52 s, max 2.01 h; the instant used for attribution is the id's FIRST line | placement by the first line (E3 S4-8) agrees with the windows. But a placed message's tokens include its lines after the start (D8), and a write on a late line gets the first line's instant (§9 F1, F2). S5's replay facts are written for this |
 | Q7 | Windows: 587 `Agent` tool uses against 778 metas, and the 191 extra are exactly the nested metas (depth 2–3). WSL: 844 against 857, 17 nested, 4 tool uses with no meta (refused launches) | launches come from `ObservedAgent`, one per `agentId`, depth 1 and nested alike — never from a count of `Agent` tool uses (S5 `c07`: 2 launches, 3 tool uses). Rule 5 climbs subagent parents recursively. S1 refuses a looping chain, and an empty parent propagates nothing. A refused launch (error result, no meta) reaches E4 as NOTHING: no launch, no unobserved launch, and the window stays `observed` (`c11`). An `Agent` call with no meta whose result is not an error is E3's `agent call without transcript` → `partial` (`c05`) |
 | Q8 | every write path is absolute. Windows: backslashes 90 %, mixed separators, drive case as typed. WSL: `/` only. Writes under `cwd`: 0 % / 5 % | S1's normalisation rules; no `cwd` anywhere (S2.4's break-it keeps it so) |
@@ -1118,15 +1121,15 @@ is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`),
 
 ### 8.3 Edits other documents need (not made here — this task edits only this document)
 
-1. **The parent**: the line references of §8.1, in its §6, §13, §16 (D1, D14, D17) and the E4/E5 scopes
-   (`RoundEngine.cs:483-491`, `:586`, `:605-625` → the projection block `:612-644`, `:893-902`, `:897` → `:902`;
-   `SessionStore.cs:248`, `:578-597`, `:586-600`; `RoundsDb.cs:923-945`; `rounds.ts:156`); and Fable's answers to §9,
-   when they come.
 > *2026-10-16, Fable:* items 2, 3 and 6 are **closed** by the E3.S4 amendment (`meta without model` is a count; `StraddleGuard`
 > is 3 h on an exact byte gate; the materialiser puts `.git` on `repo-*`/`other`, never `scratch`, folds separators on a
 > non-Windows host, and takes the submodule marker from a manifest `checkouts` list E1 owes). Item 4 is **owed by E1** as E3
 > §8 item 1 (re-cut c12/c17/c19 with results kept; manifest `checkouts`). Items 1, 5 and 7 stand.
 
+1. **The parent**: the line references of §8.1, in its §6, §13, §16 (D1, D14, D17) and the E4/E5 scopes
+   (`RoundEngine.cs:483-491`, `:586`, `:605-625` → the projection block `:612-644`, `:893-902`, `:897` → `:902`;
+   `SessionStore.cs:248`, `:578-597`, `:586-600`; `RoundsDb.cs:923-945`; `rounds.ts:156`); and Fable's answers to §9,
+   now in §S2.2a (and §S2.12's D6 note).
 2. **E3 (S4's reasons) and the parent's §5**: `partial: meta without model`. Q2 shows that a meta without `model` is what
    a launch that names no model normally writes — on some versions, up to 68 % of metas. By E3's own principle ("a reason
    is recorded when something was LOST or a COUNTED VALUE is uncertain"), nothing is lost: the request was "no model", and
@@ -1199,7 +1202,7 @@ Confirm, and correct the wording when S2 is next edited.
 
 The cadence named risk item **4/4.2** — epic 4, story E4.S2: *attribution decides what every number means*. Under
 `coai-consultant.md` trigger 7 this is a consultation of its own: `kind: risk`, `plan:
-todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`, `epics: "4"`. It is taken before E4's code round and
+todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`, `epics: "4/4.2"` (the piece as the cadence named it). It is taken before E4's code round and
 closed with `close_consult` after the advice is verified. Files to name: this document (§S2.2–§S2.6, §8, §9), the
 parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md`. The questions:
 
