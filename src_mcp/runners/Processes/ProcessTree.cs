@@ -166,29 +166,21 @@ public static class ProcessTree
         return alive;
     }
 
-    /// <summary>Every process on this Linux box, as pid → parent pid, read from <c>/proc</c>.</summary>
+    /// <summary>Every process on this Linux box, as pid → parent pid, read from <c>/proc</c> by the one <see cref="ProcStatReader"/>.</summary>
+    /// <remarks>A process that exited between the directory listing and its read, or one whose line cannot be read, is left out: nothing is known of it.</remarks>
     private static Dictionary<int, int> LinuxParents()
     {
         var parents = new Dictionary<int, int>();
         foreach (var directory in Directory.EnumerateDirectories("/proc"))
         {
-            if (!int.TryParse(Path.GetFileName(directory), out var pid))
+            if (int.TryParse(Path.GetFileName(directory), out var pid) && ProcStatReader.Read(pid) is ProcStatReading.Read { Stat: var stat })
             {
-                continue;
-            }
-
-            if (ParentOf(Path.Combine(directory, "stat")) is { } parent)
-            {
-                parents[pid] = parent;
+                parents[pid] = stat.Parent;
             }
         }
 
         return parents;
     }
-
-    /// <summary>The parent pid in one <c>/proc/&lt;pid&gt;/stat</c> line — the field after the state, which follows the bracketed name.</summary>
-    private static int? ParentOf(string statPath) =>
-        StatFields(statPath) is [_, var field, ..] && int.TryParse(field, out var parent) ? parent : null;
 
     /// <summary>
     /// True when the Linux process <paramref name="pid"/> has exited and only its table entry is left — a zombie
@@ -200,7 +192,7 @@ public static class ProcessTree
     /// still running" it is gone. Always false off Linux, where the start-time read already fails for an exited process.
     /// </remarks>
     private static bool Exited(int pid) =>
-        OperatingSystem.IsLinux() && StatFields($"/proc/{pid}/stat") is [var state, ..] && ExitedEntry(state, ThreadsOf(pid), pid);
+        OperatingSystem.IsLinux() && ProcStatReader.Read(pid) is ProcStatReading.Read { Stat.State: var state } && ExitedEntry(state, ThreadsOf(pid), pid);
 
     /// <summary>Whether a process table entry in <paramref name="state"/>, whose thread group lists <paramref name="threads"/>, has exited.</summary>
     /// <remarks>
@@ -221,25 +213,6 @@ public static class ProcessTree
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return [-1];
-        }
-    }
-
-    /// <summary>The fields of one <c>/proc/&lt;pid&gt;/stat</c> line AFTER the bracketed name: state, parent pid, …</summary>
-    /// <remarks>The name may itself hold spaces and brackets, so the fields are counted from the LAST closing bracket.</remarks>
-    /// <returns>Empty when the line is unreadable — the process exited between the listing and this read.</returns>
-    private static string[] StatFields(string statPath)
-    {
-        try
-        {
-            var stat = File.ReadAllText(statPath);
-            var afterName = stat.LastIndexOf(')');
-
-            return afterName < 0 ? [] : stat[(afterName + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // A process that exited between the directory listing and this read. Nothing to say about it.
-            return [];
         }
     }
 
