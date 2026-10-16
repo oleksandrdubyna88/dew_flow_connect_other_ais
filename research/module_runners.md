@@ -3530,6 +3530,40 @@ flowchart LR
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
   sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.
 
+## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
+
+Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **wired into nothing yet**: no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
+`AskAcpMode`, `ForeignKimi` or `HostProcessList` code calls them. Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
+
+| Piece | File (`src_mcp/runners/…`) | What it is | Tests |
+|---|---|---|---|
+| Mount table | `Files/MountTable.cs` | Ported: `Parse`, `Holding`, `MountEntry.IsDrvfs` over `/proc/self/mountinfo` (octal escapes decoded, super-options raw). `IsWholeDrive` is not ported. | `MountTableTests` (written fresh — wsl_care has none) |
+| Mount locality | `Files/MountLocality.cs` | DL6's rule: `Refusal(target, realPath, mountInfo)` — a drvfs mount (`9p` + `aname=drvfs`, `drvfs`, `virtiofs`) is refused wherever it is mounted; an unreadable table, or one no mount of which holds the path, is refused too. | `MountLocalityTests` (S-K12, everywhere) |
+| File status | `Files/FileStatus.cs`, `Files/LinuxStatx.cs` | `FileStatus` + `SameFileAs` verbatim; `LinuxStatx` is the one `statx` import (`"libc"`): `OfPath`, `OfHandle`, the offsets decoder, a closed `StatxRead`. An answer without the inode it was asked for is `Failed(0)`. `FolderIdentity`/`KeyFor` are the spec-driven half. | `FileStatusTests` |
+| `/proc` stat | `Processes/ProcStat.cs`, `Processes/ProcReads.cs` | The one `stat` reader: `ProcStat.Parse/ReadFor` → `Read` / `Gone` (ENOENT) / `Unreadable`, over the `IProcReads` seam (`ProcReads.Real`). `ProcessTree`'s parent walk and exited-entry rule read through it. | `ProcStatTests`, `TheTreeIsReadByIdentityTests` (unchanged) |
+| Liveness | `Processes/Liveness.cs` | `Alive` / `Gone(why)` / `Unknown(reason)`; only `Gone` is evidence that a process left. `CoaiMcp.Server.ProcessLiveness` (two-state, for the sweeps) is untouched. | `LivenessCheckTests` |
+| pidfd layer | `Processes/LinuxPidfd.cs` | `IPidfdCalls`; `LibcPidfdCalls` (ported); `RawSyscallPidfdCalls` (`syscall(434)` / `syscall(424)`, new); `PidfdLayer.Current` → `Wrapper` / `Raw` / `Missing` (ENOSYS → the plan's sentence), resolved once, with a per-flow `Using(...)` test seam (S-K21). | `PidfdLayerTests` |
+| By-identity signal | `Processes/TreeSignals.cs` | `Kill(members, calls)`: pin (`pidfd_open`) → check liveness on the pin → `SIGKILL` through the descriptor → close; `Sent` / `Gone` / `Unknown` / `Failed`. Never a signal by number. wsl_care's `ProcessIdentity(Pid, long StartTicks)` is not ported — coai's `ProcessIdentity(Pid, StartedUtc)` is the identity. | `PidfdLayerTests` |
+
+```mermaid
+flowchart LR
+  subgraph built["built, wired into nothing"]
+    MT[MountTable] --> ML[MountLocality]
+    LS[LinuxStatx] --> FS[FileStatus]
+    PR[ProcReads / IProcReads] --> PS[ProcStat]
+    PS --> LC[LivenessCheck]
+    PL[PidfdLayer] --> TS[TreeSignals]
+    LC --> TS
+  end
+  PS --> PT[ProcessTree - uses it]
+  LS --> PR
+```
+
+**L-N1 (`HeldFileInheritableOnLinuxTests`, `FakeCli hold-file`).** Three Linux-only tests, one per premise of DL8: (a) a non-inheritable take beside an inheritable hold is Busy; (a) a second inheritable take is Busy;
+(b) the hold outlives its opener's `SIGKILL` while a child started after the take lives. **Observed here: not yet — on Windows only, where the harness was proven green with the skip lifted.** From .NET's own source
+(`SafeFileHandle.Unix.cs`, v10.0.11): `LOCK_EX` only when `share == FileShare.None` exactly, so `None | Inheritable` is a SHARED `flock` — arm (a, second inheritable take) is predicted RED on Linux, arm (b)
+green (`O_CLOEXEC` is added only when `Inheritable` is absent). The ubuntu CI job decides; A2 §3.3 says what ships.
+
 ## The Kimi reviewer — `KimiRuntime` (2026-10-15, E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
 Kimi Code (`kimi`, on the person's own Kimi Code plan, signed in as itself) as a machine-only reviewer runtime, `kimi`. The adapter BUILDS the shim's request,
